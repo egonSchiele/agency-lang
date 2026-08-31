@@ -5,22 +5,17 @@ import { evalOutput, evalValue, setAgentName } from "std::statelog"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
 import { setSlashPalette } from "std::ui/cli"
-import {
-  clearMessages,
-  pushMessage,
-  repl,
-  clearScreen,
- } from "std::ui/cli"
+import { clearMessages, pushMessage, repl, clearScreen } from "std::ui/cli"
 
-import { brainByName, allBrains, brainFlagHelp } from "./brains/registry.agency"
+import { brainByName, allBrains } from "./brains/registry.agency"
 import { agentNameFor } from "./lib/agentName.agency"
-import { mergedPalette } from "./lib/commandPalette.agency"
 import { parseAgentArgs } from "./lib/args.agency"
+import { mergedPalette } from "./lib/commandPalette.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
 import { printPolicyHelp } from "./lib/policy.agency"
-import { chooseSession, startSession } from "./lib/resume.agency"
 import { installSessionHooks, startInteractive } from "./lib/repl.agency"
+import { chooseSession, startSession } from "./lib/resume.agency"
 import { pickModelsForAgent, maybeEnableMemory } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
@@ -34,7 +29,6 @@ import {
  } from "./lib/turn.agency"
 import { formatTurnFailure } from "./lib/utils.agency"
 import { resolveMaxToolCallRounds, getCapabilities } from "./shared.agency"
-
 
 // UI mode select — one-line swap between the alt-screen TUI and the
 // line-mode REPL. Both modules expose the same `repl` / `pushMessage`
@@ -72,7 +66,7 @@ It means that agent starts with an initial prompt already there to respond to. *
 node main() {
   // Parse CLI flags first — `parseArgs` exits on --help / --version /
   // usage errors, before any handlers or the TUI are installed.
-  const args = parseAgentArgs(brainFlagHelp())
+  const args = parseAgentArgs()
 
   // NOTE: --trace / --log / --agent-home are declared here only for
   // --help and so parseArgs accepts them. runBundledAgent extracts them from
@@ -127,7 +121,11 @@ node main() {
   let startAgent = ""
   if (resolvedStartTarget == null) {
     const validTargets = ["main", ...brain.startTargets].join(", ")
-    print(color.red("Unknown --agent value: ${requestedStartTarget}. Valid for the ${brain.name} brain: ${validTargets}"))
+    print(
+      color.red(
+        "Unknown --agent value: ${requestedStartTarget}. Valid for the ${brain.name} brain: ${validTargets}",
+      ),
+    )
     process.exit(1)
     return
   } else {
@@ -174,7 +172,11 @@ node main() {
   // One-shot runs are not saved, so a resume flag on one is a mistake
   // rather than something to ignore.
   if (isOneShot && (args.flags.continue || args.flags.resume != null)) {
-    print(color.red("--continue and --resume need an interactive session; one-shot runs are not saved."))
+    print(
+      color.red(
+        "--continue and --resume need an interactive session; one-shot runs are not saved.",
+      ),
+    )
     process.exit(1)
   }
   // Everything above is process-level: model resolution feeds the memory
@@ -184,7 +186,10 @@ node main() {
   if (!isOneShot) {
     installSessionHooks()
     setSlashPalette(mergedPalette())
-    startSession(chooseSession(args.flags.continue, args.flags.resume ?? null), brain)
+    startSession(
+      chooseSession(args.flags.continue, args.flags.resume ?? null),
+      brain,
+    )
   }
 
   if (isOneShot) {

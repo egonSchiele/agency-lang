@@ -1,0 +1,51 @@
+/*
+ * Tests for sessionFactsText: the identity block names the agent and its
+ * brain, lists the resolved models with the internal openai-responses
+ * provider demoted to the public name, and skips slots that did not
+ * resolve.
+ */
+import { sessionFactsText } from "../lib/grounding.agency"
+import { Resolved } from "../lib/models.agency"
+
+static const SLOTS: Record<string, Resolved> = {
+  main: {
+    model: "claude-sonnet-5",
+    provider: "anthropic",
+    via: "x"
+  },
+  reasoning: {
+    model: "gpt-5.6-sol",
+    provider: "openai-responses",
+    via: "x"
+  }
+}
+
+static const NO_ARGS: Record<string, any> = {}
+
+node namesTheAgentAndBrain(): boolean {
+  const text = sessionFactsText("coordinator", SLOTS, NO_ARGS)
+  const hasAgent = text.includes("Your Name: Agency agent")
+  const hasBrain = text.includes("Brain: coordinator")
+  return hasAgent && hasBrain
+}
+
+node listsModelsWithDemotedProvider(): boolean {
+  const text = sessionFactsText("coordinator", SLOTS, NO_ARGS)
+  const hasMain = text.includes("main model: claude-sonnet-5 (provider: anthropic)")
+  const hasReasoning = text.includes("reasoning model: gpt-5.6-sol (provider: openai)")
+  return hasMain && hasReasoning
+}
+
+node skipsUnresolvedSlots(): boolean {
+  const onlyMain: Record<string, Resolved> = {
+    main: {
+      model: "z-ai/glm-5.3",
+      provider: "openrouter",
+      via: "x"
+    }
+  }
+  const text = sessionFactsText("simple", onlyMain, NO_ARGS)
+  const hasMain = text.includes("main model: z-ai/glm-5.3 (provider: openrouter)")
+  const noReasoning = !text.includes("reasoning model:")
+  return hasMain && noReasoning
+}

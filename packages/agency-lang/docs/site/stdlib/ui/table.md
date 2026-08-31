@@ -144,6 +144,7 @@ table(
   footerDivider: boolean = true,
   rowDividers: boolean = false,
   columnDividers: boolean = true,
+  columnGap: number = 0,
   block: (TableBuilder) -> void = null,
 ): LayoutNode
 ```
@@ -154,7 +155,9 @@ Build a bordered table as a layout node. Pass the data form: `header`,
 
   @param title - Title shown in the top border
   @param titleColor - Color of the title text
-  @param borderStyle - Frame style
+  @param borderStyle - Frame style; "none" draws no outer frame, so the
+    cells render as plain aligned text (interior dividers still follow
+    their own flags)
   @param borderColor - Color of the border characters
   @param caption - Caption shown beneath the table
   @param cellPadding - Horizontal padding inside each cell, in cells
@@ -167,6 +170,9 @@ Build a bordered table as a layout node. Pass the data form: `header`,
   @param footerDivider - Draw a divider line above the footer
   @param rowDividers - Draw a divider between every body row
   @param columnDividers - Draw vertical dividers between columns
+  @param columnGap - Cells of blank space between adjacent columns when
+    columnDividers is false (the divider is the separator when it is on).
+    Keeps a gap even when a column grows past its minWidth.
 
 **Parameters:**
 
@@ -187,6 +193,7 @@ Build a bordered table as a layout node. Pass the data form: `header`,
 | footerDivider | `boolean` | true |
 | rowDividers | `boolean` | false |
 | columnDividers | `boolean` | true |
+| columnGap | `number` | 0 |
 | block | `(TableBuilder) => void` | null |
 
 **Returns:** [LayoutNode](layout.md#layoutnode)

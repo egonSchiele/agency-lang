@@ -12,7 +12,8 @@
 //      module that imports symbols its source no longer defines (#498).
 //      Handwritten `.js` helpers (no `.agency` sibling) are still copied.
 //   2. delete dest files whose source counterpart is gone — a deleted
-//      foo.agency takes its compiled foo.js with it;
+//      foo.agency takes its compiled foo.js with it — and any
+//      previously staged file under a `tests/` directory (see isTestPath);
 //   3. never touch dest/docs/ (owned by the stage-agent-docs recipe) and
 //      never delete a compiled .js whose .agency source survives.
 // Orphan safety is double-covered: this sync deletes orphans, and publish
@@ -37,11 +38,22 @@ function walk(dir, out = []) {
   return out;
 }
 
+// Agent test files (any `tests/` directory) are never staged: they are only
+// compiled by `agency test`, which runs them from the SOURCE tree under the
+// test harness. Staging them made `make` compile them outside the harness,
+// where `import test` is rejected, and shipped test code in dist.
+function isTestPath(rel) {
+  return rel.split(path.sep).includes("tests");
+}
+
 export function syncAgents(srcDir, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
   let copied = 0;
   for (const srcFile of walk(srcDir)) {
     const rel = path.relative(srcDir, srcFile);
+    if (isTestPath(rel)) {
+      continue;
+    }
     // Never stage a compiled `.js` whose `.agency` sibling lives in src:
     // it is stale build litter, and copying it would clobber the
     // compiler-owned dest output the incremental skip trusts (see rule 1).
@@ -57,6 +69,13 @@ export function syncAgents(srcDir, destDir) {
   for (const destFile of walk(destDir)) {
     const rel = path.relative(destDir, destFile);
     if (rel === "docs" || rel.startsWith(`docs${path.sep}`)) {
+      continue;
+    }
+    // Previously-staged test files (and their compiled outputs) are
+    // orphans under the no-tests rule, whether or not the source survives.
+    if (isTestPath(rel)) {
+      fs.unlinkSync(destFile);
+      deleted.push(rel);
       continue;
     }
     if (fs.existsSync(path.join(srcDir, rel))) {

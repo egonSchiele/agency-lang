@@ -1,0 +1,23 @@
+{
+  "sourceFile": "grounding.agency",
+  "tests": [
+    {
+      "nodeName": "namesTheAgentAndBrain",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "listsModelsWithDemotedProvider",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "skipsUnresolvedSlots",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

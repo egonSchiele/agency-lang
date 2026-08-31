@@ -18,12 +18,3 @@ export def brainByName(name: string): AgentBrain | null {
   }
   return null
 }
-
-/** The --brain flag description: each name with its one-line description. */
-export def brainFlagHelp(): string {
-  let lines: string[] = []
-  for (brain in allBrains()) {
-    lines.push("${brain.name}: ${brain.description}")
-  }
-  return "Which brain answers turns (default: coordinator). One of — ${lines.join("; ")}"
-}

@@ -5,7 +5,7 @@
 // stack vertically inside the frame.
 
 import { Block } from "./block.js";
-import { BORDER_CELLS, BorderStyle, bordered } from "./border.js";
+import { BorderStyle, borderCells, bordered, resolveBorderStyle } from "./border.js";
 import { LayoutNode } from "./nodes.js";
 import { growToWidth, renderNode } from "./render.js";
 import {
@@ -40,7 +40,10 @@ export function composeBox(node: LayoutNode): Block {
 function sizeBox(node: LayoutNode, ctx: SizingContext): LayoutNode {
   const own = resolveOwnWidth(node, ctx);
   const padding = nonNegativeInteger(node.attrs.padding);
-  const chrome = BORDER_CELLS + 2 * padding;
+  // A frameless box ("none") reserves no side-border cells, so its
+  // children get the full width the frame would have taken.
+  const style = resolveBorderStyle(node.attrs.borderStyle as string | undefined);
+  const chrome = borderCells(style) + 2 * padding;
   const inner = innerWidthAfterChrome(own, chrome);
   // Box children either occupy the inner width directly (single child)
   // or are wrapped in an implicit column, which itself fills the inner

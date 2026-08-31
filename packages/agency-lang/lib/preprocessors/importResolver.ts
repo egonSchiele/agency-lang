@@ -315,6 +315,11 @@ function resolveImportStatement(
       modulePath: node.modulePath,
       isAgencyImport: true,
     };
+    // Keep `testOnly` and `loc` from the source statement: the typechecker
+    // runs over this rebuilt AST in the test harness, and without them an
+    // `import test` of a non-exported symbol trips AG4010 with no location.
+    if (node.testOnly) importStmt.testOnly = true;
+    if (node.loc) importStmt.loc = node.loc;
     out.push(importStmt);
   }
 

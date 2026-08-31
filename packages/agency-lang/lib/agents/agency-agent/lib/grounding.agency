@@ -1,16 +1,21 @@
 /** @module
-  @summary The per-run grounding a brain gets: date, working directory,
-  and the project AGENTS.md. Harness-owned; brains only read it.
+  @summary The per-run grounding a brain gets: what the agent is, the
+  models the run resolved to, date, working directory, and the project
+  AGENTS.md. Harness-owned; brains only read it.
 */
 import { today } from "std::date"
 import { exists } from "std::shell"
 import { cwd } from "std::system"
 
+import { demoteProvider, getResolvedSlots } from "../shared.agency"
+import { parseAgentArgs } from "./args.agency"
+import { Resolved } from "./models.agency"
+
 export def loadAgentsMd(dir: string): string {
   """
-  Read `AGENTS.md` from `dir` if it exists and return it wrapped in a
-  <project_context> block ready to splice into a system prompt. Returns
-  an empty string if there is no AGENTS.md or it cannot be read.
+  Read `AGENTS.md` from `dir` if it exists and return its raw contents;
+  the caller wraps them in a <project_context> block. Returns an empty
+  string if there is no AGENTS.md or it cannot be read.
   """
   if (!exists("AGENTS.md", dir)) {
     return ""
@@ -19,20 +24,59 @@ export def loadAgentsMd(dir: string): string {
   if (isFailure(result)) {
     return ""
   }
-  return """
+  return result.value
+}
 
-  <project_context>
-  ${result.value}
-  </project_context>
+export def sessionFactsText(
+  brainName: string,
+  slots: Record<string, Resolved>,
+  flags: Record<string, any>,
+): string {
+  """
+  The identity block: what the agent is, which brain answers turns, and
+  the models the run resolved to. Pure — the slots come in as a
+  parameter — so tests can call it directly. The same resolved slots
+  feed the splash header, so the model names here always match what the
+  user saw at startup. Takes only the CLI flags, never the positional
+  prompt: this block sits above the user-message boundary, and user
+  text serialized into it would be a prompt-injection vector.
+  """
+  let modelLines = []
+  for (slot in ["main", "reasoning"]) {
+    const resolved = slots[slot]
+    if (resolved != null && resolved.model != "") {
+      modelLines.push(
+        "${slot} model: ${resolved.model} (provider: ${demoteProvider(resolved.provider)})",
+      )
+    }
+  }
+  return """
+  Your Name: Agency agent
+  Brain: ${brainName}
+  Models: ${modelLines.join("\n  ")}
+
+  The flags you were started with:
+  <flags>
+  ${JSON.stringify(flags, null, 2)}
+  </flags>
   """
 }
 
-export def groundingText(): string {
+export def groundingText(brainName: string): string {
   const projectContext = loadAgentsMd(cwd()) with approve
+  const args = parseAgentArgs()
+
   return """
 
   Current date: ${today()}
   Current working directory: ${cwd()}
+
+  <session_facts>
+  ${sessionFactsText(brainName, getResolvedSlots(), args.flags)}
+  </session_facts>
+
+  <project_context>
   ${projectContext}
+  </project_context>
   """
 }

@@ -16,7 +16,7 @@
 // both consume the same `ColumnLayout[]`, so a change to one stays in
 // sync with the other automatically.
 
-import { Style, styledWrapper, visualWidth } from "./ansi.js";
+import { Style, styledWrapper, visualWidth, wrapText } from "./ansi.js";
 import { Align, Block, above, beside, pad, padLine, styled } from "./block.js";
 import {
   BORDER_CELLS,
@@ -220,10 +220,28 @@ export function _tableChromeWidth(
   columnCount: number,
   cellPadding: number,
   columnDividers: boolean,
+  framed: boolean = true,
+  columnGap: number = 0,
 ): number {
   const padding = columnCount * 2 * cellPadding;
-  const dividers = columnDividers ? Math.max(0, columnCount - 1) : 0;
-  return BORDER_CELLS + padding + dividers;
+  const separators = Math.max(0, columnCount - 1) * _separatorWidth(columnDividers, columnGap);
+  return (framed ? BORDER_CELLS : 0) + padding + separators;
+}
+
+function _isFramed(attrs: Record<string, unknown>): boolean {
+  return resolveBorderStyle((attrs.borderStyle as string | undefined) ?? "rounded") !== "none";
+}
+
+// Cells between adjacent columns: the 1-cell `│` divider when
+// columnDividers is on, else `columnGap` spaces. One home for the rule so
+// the chrome math, the row renderer, and the divider line stay in sync.
+function _separatorWidth(columnDividers: boolean, columnGap: number): number {
+  return columnDividers ? 1 : columnGap;
+}
+
+function clampColumnGap(raw: unknown): number {
+  const value = (raw as number | undefined) ?? 0;
+  return Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
 }
 
 type TableSections = {
@@ -246,7 +264,13 @@ export function _resolveTableWidths(
   const cellPadding = clampCellPadding(attrs.cellPadding);
   const columnDividers = (attrs.columnDividers as boolean | undefined) ?? true;
   const sections: TableSections = { header, body, footer };
-  const chrome = _tableChromeWidth(columnCount, cellPadding, columnDividers);
+  const chrome = _tableChromeWidth(
+    columnCount,
+    cellPadding,
+    columnDividers,
+    _isFramed(attrs),
+    clampColumnGap(attrs.columnGap),
+  );
   const available = resolvedWidth !== undefined ? Math.max(0, resolvedWidth - chrome) : undefined;
 
   const plan = planColumns(columns, columnCount, sections);
@@ -309,9 +333,13 @@ function annotateCellsWithWrap(
   };
 }
 
-function _innerTableWidth(layouts: ColumnLayout[], columnDividers: boolean): number {
+function _innerTableWidth(
+  layouts: ColumnLayout[],
+  columnDividers: boolean,
+  columnGap: number,
+): number {
   const cellsW = layouts.reduce((s, l) => s + l.width + 2 * l.cellPadding, 0);
-  return cellsW + (columnDividers ? Math.max(0, layouts.length - 1) : 0);
+  return cellsW + Math.max(0, layouts.length - 1) * _separatorWidth(columnDividers, columnGap);
 }
 
 // Pad a cell to its column's content width with the column's
@@ -331,17 +359,19 @@ function _composeRowBlock(
   cells: Block[],
   layouts: ColumnLayout[],
   columnDividers: boolean,
+  columnGap: number,
   dividerChar: string,
   wrapBorder: (s: string) => string,
 ): Block {
   const rowHeight = cells.reduce((m, b) => Math.max(m, b.height), 1);
   const paddedCells = cells.map((b, c) => _layoutCell(b, layouts[c], rowHeight));
-  if (!columnDividers || paddedCells.length <= 1) {
+  const separator = columnDividers ? wrapBorder(dividerChar) : " ".repeat(columnGap);
+  if (separator === "" || paddedCells.length <= 1) {
     return paddedCells.reduce(beside, Block.empty());
   }
-  const dividerBlock = Block.of(Array(rowHeight).fill(wrapBorder(dividerChar)));
+  const separatorBlock = Block.of(Array(rowHeight).fill(separator));
   return paddedCells.reduce<Block>(
-    (acc, cell, i) => (i === 0 ? cell : beside(beside(acc, dividerBlock), cell)),
+    (acc, cell, i) => (i === 0 ? cell : beside(beside(acc, separatorBlock), cell)),
     Block.empty(),
   );
 }
@@ -354,14 +384,18 @@ function _composeRowBlock(
 function _composeDividerLine(
   layouts: ColumnLayout[],
   columnDividers: boolean,
+  columnGap: number,
   innerWidth: number,
   ch: BorderChars,
   wrapBorder: (s: string) => string,
+  framed: boolean,
 ): Block {
   const runs = layouts.map((l) => ch.h.repeat(l.width + 2 * l.cellPadding));
-  const inner = columnDividers ? runs.join(ch.cross) : runs.join("");
+  const joiner = columnDividers ? ch.cross : ch.h.repeat(columnGap);
+  const inner = runs.join(joiner);
   const padding = ch.h.repeat(Math.max(0, innerWidth - visualWidth(inner)));
-  return Block.of(wrapBorder(ch.leftTee + inner + padding + ch.rightTee));
+  const line = framed ? ch.leftTee + inner + padding + ch.rightTee : inner + padding;
+  return Block.of(wrapBorder(line));
 }
 
 // Tags that act as explicit opt-outs of header auto-bold. Agency's
@@ -474,11 +508,16 @@ export function composeTable(node: LayoutNode): Block {
   const cellPadding = clampCellPadding(attrs.cellPadding);
   const columns = (attrs.columns as ColumnSpec[] | null) ?? [];
   const columnDividers = (attrs.columnDividers as boolean) ?? true;
+  const columnGap = clampColumnGap(attrs.columnGap);
   const headerDivider = (attrs.headerDivider as boolean) ?? true;
   const footerDivider = (attrs.footerDivider as boolean) ?? true;
   const rowDividers = (attrs.rowDividers as boolean) ?? false;
   const borderStyleKey = resolveBorderStyle((attrs.borderStyle as string | undefined) ?? "rounded");
-  const ch = BORDER_CHARS[borderStyleKey];
+  const framed = borderStyleKey !== "none";
+  // Interior dividers (header / row / column) are governed by their own
+  // flags, so a frameless table still honours them; they borrow the
+  // light chars since "none" has no chars of its own.
+  const ch = BORDER_CHARS[framed ? borderStyleKey : "light"];
   const borderColor = (attrs.borderColor as string | undefined) ?? "";
   const titleColor = (attrs.titleColor as string | undefined) ?? "";
   const title = (attrs.title as string | undefined) ?? "";
@@ -514,9 +553,10 @@ export function composeTable(node: LayoutNode): Block {
 
   // A wide title may grow innerWidth beyond the cell grid; dividers and
   // row wrappers both honour that final width so everything lines up.
-  const cellsWidth = _innerTableWidth(layouts, columnDividers);
-  const titleFloor = resolved === undefined && title !== "" ? minWidthForTitle(title) : 0;
-  const resolvedInner = resolved !== undefined ? Math.max(0, resolved - BORDER_CELLS) : 0;
+  const cellsWidth = _innerTableWidth(layouts, columnDividers, columnGap);
+  const titleFloor = framed && resolved === undefined && title !== "" ? minWidthForTitle(title) : 0;
+  const resolvedInner =
+    resolved !== undefined ? Math.max(0, resolved - (framed ? BORDER_CELLS : 0)) : 0;
   const innerWidth = Math.max(cellsWidth, titleFloor, resolvedInner);
 
   // Build flat declarative list of section parts, then render each
@@ -526,42 +566,50 @@ export function composeTable(node: LayoutNode): Block {
     footerDivider,
     rowDividers,
   });
+  // Frameless rows still pad out to `innerWidth` so a resolved width or
+  // a wide divider keeps every line the same length.
+  const wrapRow = (rowBlock: Block): Block =>
+    framed
+      ? _wrapRowSides(rowBlock, innerWidth, ch, wrapBorder)
+      : Block.of(rowBlock.lines.map((l) => padLine(l, innerWidth, "start")));
   const renderPart = (part: SectionPart): Block =>
     part.kind === "divider"
-      ? _composeDividerLine(layouts, columnDividers, innerWidth, ch, wrapBorder)
-      : _wrapRowSides(
-          _composeRowBlock(part.cells, layouts, columnDividers, ch.v, wrapBorder),
-          innerWidth,
-          ch,
-          wrapBorder,
-        );
+      ? _composeDividerLine(layouts, columnDividers, columnGap, innerWidth, ch, wrapBorder, framed)
+      : wrapRow(_composeRowBlock(part.cells, layouts, columnDividers, columnGap, ch.v, wrapBorder));
   // A title that doesn't fit on the top edge gets wrapped inside the
   // frame as its own section. Same rule the box renderer uses (via
   // `placeTitle` in border.ts) — but only when the table has a resolved
-  // width; otherwise the table is free to grow to fit the title.
-  const placement =
-    resolved === undefined
+  // width; otherwise the table is free to grow to fit the title. With
+  // no frame there is no top edge, so a title always renders as its own
+  // row above the cells.
+  // In the resolved-width case the title wraps to innerWidth: nothing
+  // downstream shrinks an over-wide line, so an unwrapped title would
+  // push the table past its declared width.
+  const framelessTitle = resolved !== undefined ? wrapText(title, innerWidth) : title;
+  const placement = !framed
+    ? title === ""
+      ? { kind: "top" as const, title: "" }
+      : { kind: "wrapped" as const, block: styled(Block.of(framelessTitle), titleStyle) }
+    : resolved === undefined
       ? { kind: "top" as const, title }
       : placeTitle(title, innerWidth, titleStyle);
-  const titleRows =
-    placement.kind === "wrapped"
-      ? [_wrapRowSides(placement.block, innerWidth, ch, wrapBorder)]
-      : [];
+  const titleRows = placement.kind === "wrapped" ? [wrapRow(placement.block)] : [];
   const topTitle = placement.kind === "top" ? placement.title : "";
   const sectionBlocks = [...titleRows, ...sectionParts.map(renderPart)];
 
-  // Outer frame (top + bottom edges).
+  // Outer frame (top + bottom edges), skipped entirely for "none".
   const topEdge = Block.of(buildTopEdge(ch, innerWidth, wrapBorder, topTitle, titleStyle));
   const bottomEdge = Block.of(wrapBorder(ch.bl + ch.h.repeat(innerWidth) + ch.br));
-  const framed = [topEdge, ...sectionBlocks, bottomEdge].reduce(above, Block.empty());
+  const stacked = framed ? [topEdge, ...sectionBlocks, bottomEdge] : sectionBlocks;
+  const composed = stacked.reduce(above, Block.empty());
 
   // Optional caption below. Append directly via Block construction
   // (not `above`) — `_composeCaption` returns a trimmed-trailing-space
   // line, and routing it through `above` would re-pad it back out to
   // the framed width.
-  const captionBlock = _composeCaption(caption, framed.width);
+  const captionBlock = _composeCaption(caption, composed.width);
   const withCaption =
-    captionBlock === null ? framed : Block.of([...framed.lines, ...captionBlock.lines]);
+    captionBlock === null ? composed : Block.of([...composed.lines, ...captionBlock.lines]);
   return resolved !== undefined ? growToWidth(withCaption, resolved) : withCaption;
 }
 

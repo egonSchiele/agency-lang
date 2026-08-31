@@ -35,9 +35,12 @@ To compare brains, run twice with different `--brain` values and
 
 Three older tests predate this setup and run under the wrapper too: `fib`
 is an Agency coding task graded by its own harness, and `news` and
-`hollow-creek` are goal-judged questions. An unfiltered run covers all
-seven; to run only the terminal-bench-shaped tests, pass `--test` for
-each of the four below.
+`hollow-creek` are goal-judged questions. Two conversation tests,
+`identity` and `run-on-openrouter`, come from a real session where the
+agent could not say what it was or how to change its model: each asks
+the agent about itself and is goal-judged, with no workdir. An
+unfiltered run covers all nine; to run only the terminal-bench-shaped
+tests, pass `--test` for each of the four below.
 
 | test                | pattern from the benchmark                                                                    | must pass                                    |
 | ------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------- |

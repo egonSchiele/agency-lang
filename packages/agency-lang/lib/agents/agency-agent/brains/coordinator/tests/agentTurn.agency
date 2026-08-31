@@ -38,9 +38,11 @@ node respondsToAMessage(): string {
   return "${reply}|${threadHasSystemText("GROUNDING-MARKER-7f3a")}|${threadHasSystemText("Agency-language assistant")}"
 }
 
-node headerShowsBrain(): boolean {
+// The brain row moved behind --verbose; the default header renders
+// without it (and without any flag rows), but still renders.
+node headerOmitsBrainByDefault(): boolean {
   const header = getHeader("coordinator")
-  return header.includes("Brain") && header.includes("coordinator")
+  return !header.includes("Brain") && header.includes("Getting Started")
 }
 
 // End-to-end of the wired apply/read path (env-independent: empty settings, no
@@ -197,7 +199,8 @@ node reactSilentOnSameProvider(): boolean {
 }
 
 
-import { headerModelLines, getHeader } from "../../../lib/header.agency"
+import { getHeader } from "../../../lib/header.agency"
+import test { headerModelLines } from "../../../lib/header.agency"
 import { hostedModelInfo } from "std::llm"
 
 // The splash header lists the resolved main + reasoning models. The internal

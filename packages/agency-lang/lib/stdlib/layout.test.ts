@@ -187,6 +187,15 @@ describe("resolveSizes", () => {
     expect(resolved.children[0].attrs.wrapWidth).toBe(28);
   });
 
+  test('box borderStyle "none" reserves no frame cells for its child', () => {
+    const tree = node("box", { width: 30, borderStyle: "none" }, [
+      node("text", { content: "the quick brown fox" }),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    // Framed would be 28 (30 − 2 border cells); frameless keeps the full 30.
+    expect(resolved.children[0].attrs.wrapWidth).toBe(30);
+  });
+
   test("unsized container inherits constrained parent context", () => {
     const tree = node("box", { width: "full" }, [
       node("row", {}, [node("box", { width: "50%" }, []), node("box", { width: "50%" }, [])]),
@@ -501,6 +510,32 @@ describe("bordered (no title)", () => {
       ["┌──┐", "│aa│", "│b │", "└──┘"].join("\n"),
     );
   });
+  test('borderStyle "none" draws no frame, keeps padding and target width', () => {
+    expect(bordered(Block.of("hi"), { borderStyle: "none" }).toString()).toBe("hi");
+    expect(bordered(Block.of("hi"), { borderStyle: "none", padding: 1 }).toString()).toBe(
+      "    \n hi \n    ",
+    );
+    const sized = bordered(Block.of("hi"), { borderStyle: "none", targetWidth: 6 });
+    expect(sized.width).toBe(6);
+    expect(sized.toString()).toBe("hi    ");
+  });
+
+  test('borderStyle "none" renders a title as a plain first line', () => {
+    expect(bordered(Block.of("hi"), { borderStyle: "none", title: "T" }).toString()).toBe("T \nhi");
+  });
+
+  test('borderStyle "none" wraps an over-wide title to the target width', () => {
+    const out = bordered(Block.of("hi"), {
+      borderStyle: "none",
+      title: "a very long title",
+      targetWidth: 6,
+    });
+    expect(out.width).toBe(6);
+    for (const line of out.lines) {
+      expect(_internal.visualWidth(line)).toBeLessThanOrEqual(6);
+    }
+  });
+
   test("unknown borderStyle falls back to light + warns once", () => {
     const warns: string[] = [];
     const orig = console.warn;
@@ -1204,6 +1239,124 @@ describe("table — composeTable rendering", () => {
         body: [["1", "2"]],
       }),
     ).toBe("╭───╮\n" + "│A│B│\n" + "├─┼─┤\n" + "│1│2│\n" + "╰───╯");
+  });
+
+  test('borderStyle: "none" renders cells with no frame', () => {
+    expect(
+      renderTablePlain({
+        borderStyle: "none",
+        body: [
+          ["1", "2"],
+          ["3", "4"],
+        ],
+      }),
+    ).toBe(" 1 │ 2 \n" + " 3 │ 4 ");
+  });
+
+  test('borderStyle: "none" keeps interior dividers, drawn without end tees', () => {
+    expect(
+      renderTablePlain({
+        borderStyle: "none",
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    ).toBe(" A │ B \n" + "───┼───\n" + " 1 │ 2 ");
+  });
+
+  test("columnGap separates columns when dividers are off, even past minWidth", () => {
+    // The label column's content (15 cells) exceeds minWidth 13; without a
+    // gap the columns would run together.
+    expect(
+      renderTablePlain({
+        borderStyle: "none",
+        columnDividers: false,
+        cellPadding: 0,
+        columnGap: 1,
+        columns: [{ minWidth: 13 }, {}],
+        body: [
+          ["Brain", "coordinator"],
+          ["Reasoning Model", "claude-opus-4-8"],
+        ],
+      }),
+    ).toBe("Brain           coordinator    \n" + "Reasoning Model claude-opus-4-8");
+  });
+
+  test("columnGap also spaces the section divider line and framed rows", () => {
+    expect(
+      renderTablePlain({
+        columnDividers: false,
+        cellPadding: 0,
+        columnGap: 2,
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    ).toBe("╭────╮\n" + "│A  B│\n" + "├────┤\n" + "│1  2│\n" + "╰────╯");
+  });
+
+  test("columnGap is ignored while columnDividers is on", () => {
+    expect(
+      renderTablePlain({
+        columnGap: 3,
+        header: ["A", "B"],
+        body: [["1", "2"]],
+      }),
+    ).toBe("╭───────╮\n" + "│ A │ B │\n" + "├───┼───┤\n" + "│ 1 │ 2 │\n" + "╰───────╯");
+  });
+
+  test('borderStyle: "none" + columnDividers: false + cellPadding: 0 is bare aligned text', () => {
+    expect(
+      renderTablePlain({
+        borderStyle: "none",
+        columnDividers: false,
+        cellPadding: 0,
+        body: [
+          ["ID", "Alice"],
+          ["2", "B"],
+        ],
+      }),
+    ).toBe("IDAlice\n" + "2 B    ");
+  });
+
+  test('borderStyle: "none" title renders as its own row, no top edge', () => {
+    const out = renderTablePlain({
+      borderStyle: "none",
+      title: "T",
+      columnDividers: false,
+      body: [["1", "2"]],
+    });
+    expect(out).toBe("T     \n" + " 1  2 ");
+  });
+
+  test('borderStyle: "none" wraps an over-wide title to a fixed table width', () => {
+    const tree = tableNode({
+      borderStyle: "none",
+      width: 10,
+      title: "a very long table title",
+      body: [["x", "y"]],
+    });
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    const lines = renderTablePlain(resolved.attrs as Record<string, unknown>).split("\n");
+    for (const line of lines) {
+      expect(_internal.visualWidth(line)).toBeLessThanOrEqual(10);
+    }
+  });
+
+  test('borderStyle: "none" reserves no frame cells in width resolution', () => {
+    expect(_internal._tableChromeWidth(3, 1, true, false)).toBe(8);
+    // Fixed-width frameless table: every line pads to the full width,
+    // and the "full" column gets the 2 cells a frame would have taken.
+    // available = 20 - 0 border - 4 padding - 1 divider = 15; col0
+    // fixed=4, col1 "full" = 11.
+    const tree = tableNode({
+      borderStyle: "none",
+      width: 20,
+      columns: [{ width: 4 }, { width: "full" }],
+      body: [["a", "b"]],
+    });
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    expect(resolved.attrs.resolvedColumnWidths).toEqual([4, 11]);
+    const lines = renderTablePlain(resolved.attrs as Record<string, unknown>).split("\n");
+    expect(lines.map(_internal.visualWidth)).toEqual([20]);
   });
 
   test("borderStyle: heavy uses thick chars on outer border", () => {

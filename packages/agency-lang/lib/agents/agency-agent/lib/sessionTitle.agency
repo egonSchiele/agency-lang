@@ -56,6 +56,9 @@ static const MAX_TITLE_CHARS = 80
 /** The model's title as one plain line: whitespace runs collapsed,
   control characters dropped, cut to MAX_TITLE_CHARS. */
 export def cleanTitle(raw: string): string {
+  if (raw == null) {
+    return ""
+  }
   const oneLine = raw.replace(re/[\x00-\x1f\x7f]+/g, " ").replace(re/\s+/g, " ").trim()
   return oneLine.slice(0, MAX_TITLE_CHARS)
 }
@@ -74,9 +77,9 @@ export def titleFor(text: string): string {
 }
 
 def titleCall(text: string): string {
-  let out: Titled = { title: "" }
+  let out: Result<Titled> = failure("session title call did not run")
   thread(label: "sessionTitle", session: "sessionTitle") {
-    const titled: Titled = llm(
+    const titled: Titled! = llm(
       """
       Write a title for this conversation, at most eight words, as a
       short noun phrase a person could pick out of a list. No quotes,
@@ -89,5 +92,8 @@ def titleCall(text: string): string {
     )
     out = titled
   }
-  return cleanTitle(out.title)
+  return match(out) {
+    success(value) => cleanTitle(value.title)
+    failure(reason) => ""
+  }
 }

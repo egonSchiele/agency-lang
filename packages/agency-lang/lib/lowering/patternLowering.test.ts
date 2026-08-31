@@ -797,9 +797,24 @@ describe("effect patterns", () => {
     expect(access.chain).toEqual([{ kind: "property", name: "data" }]);
   });
 
-  // `is`-position effect patterns (`intr is std::read({ data })`, and the
-  // pure-boolean rejection) are tested in the parser suite once `_isRhsParser`
-  // is wired — see lib/parsers/effectPattern.test.ts.
+  it("binds through `if (intr is std::read({ data }))`", () => {
+    const lowered = lower(
+      `let intr = { effect: "std::read", data: 1 }\nif (intr is std::read({ data })) {\n  print(data)\n}`,
+    );
+    expect(lowered).toHaveLength(2);
+    const ifNode = lowered[1] as IfElse;
+    expect(ifNode.type).toBe("ifElse");
+    expect(effectEqualityFor(ifNode.condition)).toBeDefined();
+    const dataBind = ifNode.thenBody[0] as Assignment;
+    expect(dataBind.variableName).toBe("data");
+    expect((dataBind.value as ValueAccess).chain).toEqual([{ kind: "property", name: "data" }]);
+  });
+
+  it("rejects a binding in a pure-boolean `is` context", () => {
+    expect(() =>
+      lower(`let intr = { effect: "std::read" }\nlet x = intr is std::read({ data })`),
+    ).toThrow(PatternLoweringError);
+  });
 });
 
 describe("match metadata preservation (matchSource)", () => {

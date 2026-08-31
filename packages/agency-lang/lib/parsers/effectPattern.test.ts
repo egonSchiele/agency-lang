@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchPatternParser } from "./parsers.js";
+import { matchPatternParser, exprParser } from "./parsers.js";
 import { parseAgency } from "@/parser.js";
 import type { EffectPattern } from "../types/pattern.js";
 import { normalizeCode } from "@/index.js";
@@ -52,5 +52,27 @@ describe("effectPatternParser (via matchPatternParser)", () => {
     );
     expect(message).toContain("object pattern");
     expect(message).toContain("std::read({ data })");
+  });
+});
+
+describe("effect patterns after `is`", () => {
+  it("parses `intr is std::read` as a bare effect pattern", () => {
+    const result = exprParser("intr is std::read");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "isExpression",
+      pattern: { type: "effectPattern", effect: "std::read", binding: null },
+    });
+  });
+
+  it("parses `intr is std::read({ data })` with an object binding", () => {
+    const result = exprParser("intr is std::read({ data })");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result).toMatchObject({
+      type: "isExpression",
+      pattern: { type: "effectPattern", effect: "std::read", binding: { type: "objectPattern" } },
+    });
   });
 });

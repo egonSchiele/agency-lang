@@ -7340,6 +7340,11 @@ const _isRhsParser = (input: string): ParserResult<MatchPattern> => {
     booleanParser,
     unitLiteralParser,
     resultPatternParser,
+    // effectPatternParser MUST come before typePatternParser: after `is`, a
+    // bare identifier is a type reference, and typePatternParser would take
+    // `std` as a type name and strand `::read`. Safe unconditionally — the type
+    // grammar has no `::`, so an effect pattern can never shadow a type.
+    effectPatternParser,
     numberParser,
     _stringParser,
     typePatternParser,

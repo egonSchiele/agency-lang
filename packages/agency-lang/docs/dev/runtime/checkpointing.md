@@ -281,3 +281,9 @@ checks is maintained by the interrupt dispatcher, is inherited by
 branch stacks, and is deliberately never serialized: since no pause can
 exist while it is non-empty, a deserialized stack correctly starts with
 it empty.
+
+## Code fingerprints
+
+Every checkpoint records a source hash for each module it has a live frame
+in; a resume is refused when any of those modules has changed. See
+`docs/dev/runtime/checkpoint-code-fingerprints.md`.

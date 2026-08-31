@@ -506,3 +506,9 @@ from the frame instead of recomputed. As a backstop, frames are stamped
 with their owner's scope name at claim time, and a mismatched claim on
 replay throws a "Resume desync" error instead of silently corrupting
 state.
+
+## Code fingerprints on resume
+
+Before restoring state, `respondToInterrupts` refuses a checkpoint whose
+referenced modules have changed since it was created. See
+`docs/dev/runtime/checkpoint-code-fingerprints.md`.

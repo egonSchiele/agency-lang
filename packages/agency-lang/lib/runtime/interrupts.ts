@@ -8,6 +8,7 @@ import { runInBootstrapFrame } from "./asyncContext.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { reinstallRootBudget } from "./rootBudget.js";
+import { assertCodeUnchanged } from "./referencedModules.js";
 import { AgencyCancelledError, HandlerRecursionError, RestoreSignal } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
@@ -781,6 +782,11 @@ async function respondToInterruptsCore(
     );
   }
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
+  // Refuse before any state is restored: if the source of a module this
+  // checkpoint has a live frame in no longer matches the loaded code, resuming
+  // would replay against different statement numbering. The registry was
+  // populated when the (current) compiled modules were imported.
+  assertCodeUnchanged(checkpoint.moduleSourceHashes);
 
   // Resume always keeps interrupt.runId; the resolver ignores any supplied
   // traceId and applies only the per-invocation config projection.

@@ -107,6 +107,7 @@ export type { FetchMock } from "./fetchMock.js";
 export {
   ConcurrentInterruptError,
   CheckpointError,
+  CheckpointCodeChangedError,
   RestoreSignal,
   AgencyAbort,
   AgencyCancelledError,

@@ -92,10 +92,24 @@ before the binder / type parsers), lowering (`extractBindings`, `collectChecks`,
   code, so it names `.effect` rather than the arm the author wrote. This is the
   same class of edge as the type-pattern edges, and a known v1 limitation.
 
-- **Open set: always needs `_`.** Effect names are open, so an effect pattern
-  never makes a match exhaustive. The exhaustiveness checker treats an
-  interrupt scrutinee as open/unsupported — it stays silent rather than guess a
-  missing case, and an effect-pattern arm never counts as a catch-all.
+## Exhaustiveness
+
+An effect pattern pins the `effect` discriminant, so it behaves like the
+`{ effect: "app::read" }` object pattern it is sugar for
+(`matchExhaustiveness.ts`, `armDiscriminantValue`). What that means depends on
+the scrutinee's type:
+
+- Over a real inline handler param, which is re-typed to a discriminated union
+  keyed on `effect` (`handlerParamTyping.ts`), effect-pattern arms discriminate
+  the union: covering every effect makes the match exhaustive with no `_`, and
+  a missing effect is reported by name.
+- Over an open scrutinee (an `intr: any`, or a param the handler-typing pass
+  did not narrow), the match is open/unsupported territory — the checker stays
+  silent and requires nothing. Include a `_` there so an expression match does
+  not fall through to `undefined`.
+
+An effect-pattern arm never counts as a catch-all; only `_` and a bare binder
+do.
 
 ## Not covered here
 

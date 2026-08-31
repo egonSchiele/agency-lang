@@ -60,6 +60,22 @@ function objectPatternDiscriminantValue(
 }
 
 /**
+ * The discriminant value an un-guarded arm pins, whether it is written as an
+ * object pattern (`{ effect: "app::read" }`) or an effect pattern
+ * (`app::read` / `app::read({ data })`). An effect pattern is sugar for the
+ * object pattern that pins `effect` to the name, so it pins the `effect`
+ * discriminant and no other. A handler param is a discriminated union keyed on
+ * `effect` (handlerParamTyping.ts), so this is what lets effect-pattern arms
+ * count toward covering that union — without it every effect reads as missing.
+ */
+function armDiscriminantValue(cv: CaseValue, prop: string): string | number | boolean | null {
+  if (cv !== "_" && cv.type === "effectPattern") {
+    return prop === "effect" ? cv.effect : null;
+  }
+  return objectPatternDiscriminantValue(cv, prop);
+}
+
+/**
  * True when a pattern contains a type test somewhere INSIDE it — an element or
  * property carrying a `: Type` suffix.
  *
@@ -192,7 +208,7 @@ function coveredMemberKeys(arms: NormalizedArm[], prop: string): Set<string> {
   const covered = new Set<string>();
   for (const arm of arms) {
     if (arm.guarded) continue;
-    const pinnedValue = objectPatternDiscriminantValue(arm.caseValue, prop);
+    const pinnedValue = armDiscriminantValue(arm.caseValue, prop);
     if (pinnedValue !== null) covered.add(discriminatedMemberKey(prop, pinnedValue));
   }
   return covered;

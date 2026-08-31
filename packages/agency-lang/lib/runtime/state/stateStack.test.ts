@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { StateStack, State, BranchState } from "./stateStack.js";
+import { StateStack, State, BranchState, claimFrameForScope } from "./stateStack.js";
 import { _callbackImpl } from "../../stdlib/agency.js";
 import { CostGuard, GuardExceededError, TimeGuard } from "../guard.js";
 import { runInTestContext } from "../asyncContext.js";
@@ -839,5 +839,45 @@ describe("StateStack.setSavedDraft", () => {
     const stack = new StateStack();
     stack.stack.push(makeFrame());
     expect(() => stack.setSavedDraft("x")).toThrow(/module top level/);
+  });
+});
+
+describe("claimFrameForScope moduleId stamping", () => {
+  it("stamps moduleId alongside scopeName", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "mod.agency");
+    expect(frame.scopeName).toBe("main");
+    expect(frame.moduleId).toBe("mod.agency");
+  });
+
+  it("moduleId survives the State JSON round trip", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "mod.agency");
+    const revived = State.fromJSON(JSON.parse(JSON.stringify(frame.toJSON())));
+    expect(revived.moduleId).toBe("mod.agency");
+  });
+
+  it("backfills moduleId on a matching re-claim of a legacy frame", () => {
+    // A frame from a checkpoint written before moduleId existed: scopeName
+    // set, moduleId null.
+    const frame = new State({});
+    frame.scopeName = "main";
+    claimFrameForScope(frame, "main", "mod.agency");
+    expect(frame.moduleId).toBe("mod.agency");
+  });
+
+  it("throws the module-aware desync error on a same-scope, different-module re-claim", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "a.agency");
+    expect(() => claimFrameForScope(frame, "main", "b.agency")).toThrow(
+      /Resume desync: "main" in module "b.agency".*"main" in module "a.agency"/,
+    );
+  });
+
+  it("a matching same-module re-claim is a no-op", () => {
+    const frame = new State({});
+    claimFrameForScope(frame, "main", "mod.agency");
+    expect(() => claimFrameForScope(frame, "main", "mod.agency")).not.toThrow();
+    expect(frame.moduleId).toBe("mod.agency");
   });
 });

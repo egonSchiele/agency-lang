@@ -71,6 +71,7 @@ describe("stateJSONSchema", () => {
       threads: null,
       step: 0,
       scopeName: "main",
+      moduleId: "mod.agency",
       scopedCallbacks: [{ name: "cb", fn: null }],
       savedDraft: { value: { best: "so far" } },
     };
@@ -215,5 +216,69 @@ describe("Checkpoint.fromJSON round trip", () => {
     const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
     expect(revived).not.toBeNull();
     expect(revived!.signature).toBe("deadbeef");
+  });
+});
+
+describe("frame moduleId round trip", () => {
+  it("keeps a frame moduleId through Checkpoint.fromJSON", () => {
+    const original = {
+      id: 3,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      label: null,
+      pinned: false,
+      globals: { store: {}, initializedModules: [] },
+      stack: {
+        stack: [
+          {
+            args: {},
+            locals: {},
+            threads: null,
+            step: 0,
+            scopeName: "main",
+            moduleId: "mod.agency",
+          },
+        ],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+    };
+    const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
+    expect(revived).not.toBeNull();
+    expect(revived!.stack.stack[0].moduleId).toBe("mod.agency");
+  });
+});
+
+describe("moduleFingerprints round trip", () => {
+  it("keeps moduleFingerprints through Checkpoint.fromJSON", () => {
+    const original = {
+      id: 4,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      label: null,
+      pinned: false,
+      moduleFingerprints: {
+        "mod.agency": { hash: "abc123", compiledAt: "2026-08-30T00:00:00.000Z" },
+      },
+      globals: { store: {}, initializedModules: [] },
+      stack: {
+        stack: [],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+    };
+    const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
+    expect(revived).not.toBeNull();
+    expect(revived!.moduleFingerprints).toEqual({
+      "mod.agency": { hash: "abc123", compiledAt: "2026-08-30T00:00:00.000Z" },
+    });
   });
 });

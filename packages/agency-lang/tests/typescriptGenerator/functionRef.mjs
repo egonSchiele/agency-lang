@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -201,7 +202,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet");
+  claimFrameForScope(__stack, "greet", "functionRef.agency");
   if (!__globals()!.isInitialized("functionRef.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -350,7 +351,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "double");
+  claimFrameForScope(__stack, "double", "functionRef.agency");
   if (!__globals()!.isInitialized("functionRef.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -499,7 +500,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "applyToAll");
+  claimFrameForScope(__stack, "applyToAll", "functionRef.agency");
   if (!__globals()!.isInitialized("functionRef.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -677,7 +678,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main");
+  claimFrameForScope(__stack, "main", "functionRef.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "functionRef.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({

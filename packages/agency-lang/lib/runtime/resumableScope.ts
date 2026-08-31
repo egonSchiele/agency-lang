@@ -123,7 +123,7 @@ export async function withResumableScope<T>(
   const { stateStack, stack, threads } = setupFunction();
   // Hand-written claim (generated code claims in its preambles; this
   // helper is TypeScript and pulls a real frame via setupFunction).
-  claimFrameForScope(stack, opts.name);
+  claimFrameForScope(stack, opts.name, typeof moduleId === "string" ? moduleId : "");
 
   if (pin) {
     await ctx.checkpoints.createPinned(stateStack, ctx, {

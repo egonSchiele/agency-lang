@@ -519,7 +519,7 @@ export class BuildSession {
       ? initPlanForModule(this.currentClosure, absoluteInputFile)
       : undefined;
     const generatedCode = timed(`Generated code for ${absoluteInputFile}`, verbose, () =>
-      generateTypeScript(liftedProgram, config, info, moduleId, absoluteOutputFile, initPlan),
+      generateTypeScript(liftedProgram, config, info, moduleId, absoluteOutputFile, initPlan, true),
     );
     if (options?.ts) {
       fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");

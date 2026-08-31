@@ -1,0 +1,9 @@
+node main() {
+  const doubled = double(2)
+  const check = interrupt("proceed?")
+  return { result: doubled + double(3) }
+}
+
+def double(n: number): number {
+  return n * 2
+}

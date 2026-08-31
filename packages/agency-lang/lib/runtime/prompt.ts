@@ -154,7 +154,10 @@ const DEFAULT_TOOL_RESULT_CHARS = 100_000;
 function stringifyToolResult(result: any): string {
   if (typeof result === "string") return result;
   try {
-    return JSON.stringify(result);
+    const json = JSON.stringify(result);
+    // JSON.stringify returns undefined WITHOUT throwing for symbols,
+    // functions, and undefined itself; callers read .length off this.
+    return json === undefined ? String(result) : json;
   } catch {
     return String(result);
   }

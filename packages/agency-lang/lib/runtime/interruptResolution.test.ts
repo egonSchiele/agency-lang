@@ -130,6 +130,16 @@ describe("buildDecider", () => {
     expect(calls()).toBe(0);
   });
 
+  it("a policy reject rule's rejectMessage becomes the rejection value", async () => {
+    const { prompt, calls } = scriptedPrompt(["approve"]);
+    const policy: Policy = {
+      R: [{ action: "reject", rejectMessage: "Use safeBash instead" }],
+    };
+    const decide = buildDecider({ policy, interactive: true, prompt, valuePrompt });
+    expect(await decide(makeInterruptFor("R"))).toEqual(reject("Use safeBash instead"));
+    expect(calls()).toBe(0);
+  });
+
   it("policy propagate is unsettled: prompts when interactive, else rejects; never returns propagate", async () => {
     const policy: Policy = { P: [{ action: "propagate" }] };
     const { prompt } = scriptedPrompt(["approve"]);

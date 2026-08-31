@@ -113,14 +113,14 @@ export function setupFunction(): {
  *     a pre-existing gap, out of scope here (tracked separately).
  *
  * The root run-policy handler and root cost/time budget are installed here,
- * FIRST, before any user code runs, so EVERY fresh-run entry point (including
- * a served `/function/:name` call through runExportedFunction) is capped
- * identically — a served function must not run uncapped. Both installers are
- * root-only (no-op in IPC subprocesses, whose budgets the parent guard owns).
- * They must precede global init and top-level callback registration: those run
- * user code, and installing the policy handler after them let a top-level
- * `with approve` be the only handler in the chain — a full bypass of
- * --reject and of a host's InvocationOptions.policy (#966).
+ * before anything else. Global-init expressions and top-level `callback(...)`
+ * registration run user code, and a raise from that code must already see the
+ * root policy in the chain. Installing the policy handler after them let a
+ * top-level `with approve` be the only handler in the chain, which bypassed
+ * --reject and a host's InvocationOptions.policy (#966). Both installers are
+ * root-only (no-op in IPC subprocesses, whose budgets the parent guard owns)
+ * and shared by both fresh-run entry points, so nodes and served functions
+ * are capped identically.
  */
 async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
@@ -132,10 +132,7 @@ async function initFreshExecCtx(
 ): Promise<void> {
   const { initializeGlobals } = opts;
 
-  // Root policy handler (agency run --policy / --reject, or a serve host's
-  // InvocationOptions.policy) and root cost/time budget, installed before any
-  // user code so global-init expressions and top-level `callback(...)` blocks
-  // run under them (see the function comment; #966).
+  // Installed before any user code runs — see the function comment (#966).
   installRunPolicyHandler(execCtx, opts.policy);
   installRootBudget(execCtx.stateStack, execCtx.budget);
 
@@ -395,17 +392,13 @@ async function runNodeCore({
   // === Invocation started (context exists). A SINGLE lifecycle boundary covers
   // all remaining setup AND execution, so an already-aborted signal or a
   // bootstrap/setup failure still yields an outcome-with-usage and still runs
-  // cleanup. Handler/budget registration order (inside initFreshExecCtx) is
-  // unchanged. ===
+  // cleanup. ===
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeResult<any>>;
   try {
-    // Cross-module init, this module's globals, top-level callbacks, then the
-    // root run-policy handler and root cost/time budget — all inside
-    // initFreshExecCtx (see there for the full ordering rationale, e.g. the
-    // `node main() { route({ systemPrompt: foreignStatic }) }` foreign-static
-    // case), so nodes and served functions are bootstrapped and capped identically.
+    // Bootstrapped and capped inside initFreshExecCtx; see its comment for
+    // the ordering (root policy and budget first, then init).
     await initFreshExecCtx(execCtx, { initializeGlobals, policy: resolved.policy });
     // Externally-passed callbacks are stored on ctx; hook execution merges them
     // with scoped/top-level callbacks at call time.

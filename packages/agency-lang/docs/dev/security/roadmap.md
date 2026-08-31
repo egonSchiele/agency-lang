@@ -32,7 +32,10 @@ The flag is not a full ban on generating code: `vm.runInThisContext` and
 `getBuiltinModule`, which layer 1 refuses by name, so there is no path today —
 but layer 3 should not assume the flag alone closes every route to new code.
 
-Layer 3 (freeze intrinsics) still open.
+Layer 3 (freeze intrinsics) still open. Feasibility is answered and the
+implementation is planned: `docs/superpowers/specs/2026-08-30-ses-feasibility-investigation.md`
+and `docs/superpowers/plans/2026-08-30-ses-layer3-plan.md` (`lockdown()` first,
+Compartment as a gated spike).
 
 <https://github.com/egonSchiele/agency-lang/issues/971>. An identifier the compiler does not know is emitted verbatim, so
 `process.env.HOME`, `process.getBuiltinModule("fs")`, `fetch(...)`,
@@ -129,6 +132,11 @@ raise, so the parent's policy or handlers decide it
 (`tests/agency/subprocess/handler-reject-child-top-level.agency`).
 Test: `tests/agency-js/policy-top-level` pins both policy sources against a
 top-level `with approve`.
+Residual: `rewindFrom` (`lib/runtime/rewind.ts`) installs neither the policy
+handler nor the root budget, yet runs user code (`__initAllRegisteredCallbacks`
+and the replay itself) — the same bypass class. Reachable only from the local
+debugger, not from a remote checkpoint. Tracked in
+<https://github.com/egonSchiele/agency-lang/issues/800>.
 
 ### B2. The resume leg: raise-time policy shipped; checkpoint integrity open
 
@@ -248,6 +256,75 @@ is the place to start. No statelog issues are filed yet.
 - Before hosting strangers' code on the strength of the language, someone
   spends a day trying to break it with this list in hand.
 
+## F. Making the safe posture the default
+
+The layers in A1 are gated behind `--agency-only`. That gate exists because
+the layers are only sound for pure Agency code: a program that imports
+TypeScript has handed full ambient authority to that TypeScript, and no
+check on the Agency side changes what the imported code can do. So "apply
+the layers everywhere" really means "apply them to every pure-Agency
+program", and the three layers answer that question differently. These are
+direction decisions, not holes; none blocks the untrusted-code work above.
+
+### F1. Refuse `eval` and `Function` in all Agency source, no flag
+
+No legitimate Agency program names `eval`, `Function`, or `new Function` —
+Agency has splices and templates for metaprogramming, and code built from
+strings defeats the language's own model (it is invisible to interrupts,
+policies, and the hoisting that makes resume safe). Make these specific
+names a hard compile error in every compile, trusted or not. The machinery
+exists (the A1 bind-check, and AG4004 before it); this is scoping a small
+subset of it to always-on. Cheap, independent of everything else, and it
+can ship first. No issue yet.
+
+### F2. The bind-check becomes the default, warning first
+
+A bare `fetch(...)` or `process.env.HOME` in Agency source is a problem for
+its own author, not only for a runner of untrusted code: the effect bypasses
+the interrupt system, so the author's own policies and `--reject` never see
+it, and the call is not hoisted the way stdlib calls are, so a checkpoint
+resume can replay it. Direct global access quietly breaks the semantics the
+user chose Agency for. So the bind-check is the language's correct default
+posture, with today's permissive mode as the opt-out rather than the
+reverse. Existing programs lean on verbatim-emitted identifiers, so the
+path is warning-by-default for a release or two, then error-by-default with
+an explicit opt-out flag. No issue yet.
+
+### F3. Derive the runtime hardening from program purity, and settle B3 with it
+
+Layer 2's Node flag and layer 3's `lockdown()` apply to the whole child
+process, including every npm dependency the user's imported TypeScript
+pulls in — and that ecosystem is not clean under them (ajv compiles
+validators with `new Function`; polyfills patch prototypes). The SES
+investigation verified the Agency runtime and its own dependencies are
+lockdown-clean; it says nothing about arbitrary interop JS. So neither can
+be turned on universally without breaking working programs, for a benefit
+that mostly evaporates once interop JS shares the process anyway.
+
+The compiler already knows whether a program is pure Agency. A pure program
+can get the flag, and (once A1 layer 3 ships and soaks) the lockdown
+preload, automatically — no flag needed — while `--agency-only` remains the
+explicit assertion you make about someone else's code. Hardening that
+switches off when a JS import is added must be visible: a compile-time
+note, not silence.
+
+Resolve this together with B3 (#970), because the two questions are halves
+of one decision: F1 always-on, F2 default-on with an opt-out, runtime
+hardening derived from purity, and `--agency-only` (or an `--untrusted`
+rename) meaning pure Agency **plus** a propagate-everything root policy.
+That leaves the flag meaning what a user reading it assumes it means: this
+code is not trusted.
+
+## G. Resource limits on the child (no issue yet)
+
+`goal.md` keeps "one plain Node child per run, with an allowlisted
+environment and resource limits" as the unit that can be limited and
+killed — it is what caps a `while (true) {}` and a compromised run. The
+environment half is C4; nothing on this roadmap defines the limits half.
+Decide what the child gets by default (a wall-clock timeout, a memory cap
+via `--max-old-space-size`, kill-on-parent-exit) and where a host like
+statelog sets them per invocation. File an issue alongside C4.
+
 ## Status
 
 | Item | Issue | State |
@@ -263,3 +340,7 @@ is the place to start. No statelog issues are filed yet.
 | C3 `llm()` redirect; `--agency-only` ignores config | #969 | open |
 | C4 child env allowlist | — | not filed |
 | D statelog hosted execution | statelog #11 (containment only) | open |
+| F1 refuse `eval`/`Function` everywhere | — | not filed |
+| F2 bind-check default-on (warning first) | — | not filed |
+| F3 hardening from purity; settle with B3 | #970 | open |
+| G child resource limits | — | not filed |

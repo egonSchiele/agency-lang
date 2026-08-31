@@ -3,6 +3,7 @@
   "bareApprovedByPolicy": true,
   "propagateFailsClosed": true,
   "hostRejected": true,
+  "servedWithoutPolicy": true,
   "approvedWithoutPolicy": true,
   "bareFailsClosedWithoutPolicy": true
 }

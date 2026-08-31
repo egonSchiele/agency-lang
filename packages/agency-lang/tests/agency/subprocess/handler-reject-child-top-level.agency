@@ -1,10 +1,10 @@
 import { compile, run } from "std::agency"
 
-// The child auto-approves a TOP-LEVEL bash call. Child global init still
-// consults the parent's chain over IPC, so the parent's reject must win —
-// the subprocess counterpart of the #966 root-policy ordering fix. The
-// child hands back the raw result and the parent pins the exact rejection
-// message, so an unrelated bash failure cannot pass as a rejection.
+// The child auto-approves a top-level bash call. Child global init consults
+// the parent's chain over IPC, so the parent's reject must win (#966, the
+// subprocess side). The child hands back the raw result and the parent pins
+// the exact rejection message, so an unrelated bash failure cannot pass as
+// a rejection.
 node main() {
   const source = """
 import { bash } from "std::shell"

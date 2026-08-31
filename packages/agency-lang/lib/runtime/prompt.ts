@@ -1414,7 +1414,13 @@ export async function runPrompt(args: {
               // written inside the idempotent invoke step, never for the
               // interrupted outcome (that step re-runs on resume by design).
               self.runnerState.invokeOutcomes ??= {};
-              const priorOutcome: string | undefined = self.runnerState.invokeOutcomes[callSlug];
+              // Keyed by round + slug, NOT slug alone: the slug is unique
+              // only within a round (providers like Gemini return empty
+              // tool-call ids, so index-0 calls in every round share "0_"),
+              // and a cross-round collision would mistake a fresh call for
+              // a replay.
+              const outcomeKey = `round.${round}.tool.${callSlug}`;
+              const priorOutcome: string | undefined = self.runnerState.invokeOutcomes[outcomeKey];
               // A non-success invocation returned right after its invoke
               // step, with its answer already in the thread — nothing left
               // to do. A success falls through: its own steps no-op via
@@ -1578,7 +1584,7 @@ export async function runPrompt(args: {
                   // recorded outcome would short-circuit that re-run.
                   if (outcome.invokeOutcome !== "interrupted") {
                     noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
-                    self.runnerState.invokeOutcomes[callSlug] = outcome.invokeOutcome;
+                    self.runnerState.invokeOutcomes[outcomeKey] = outcome.invokeOutcome;
                   }
                   return outcome.interrupts;
                 });

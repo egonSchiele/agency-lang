@@ -32,5 +32,8 @@
       { "name": "pauseMe", "args": { "id": "pp1" } }
     ]
   },
-  { "return": "s6 done" }
+  { "return": "s6 done" },
+  { "toolCalls": [{ "name": "guardedTool", "args": { "id": "e1" }, "id": "" }] },
+  { "toolCalls": [{ "name": "guardedTool", "args": { "id": "e2" }, "id": "" }] },
+  { "return": "s7 done" }
 ]

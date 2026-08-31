@@ -33,5 +33,11 @@
     "result": "s6 done",
     "toolMessagesInFinalRequest": 2,
     "rejectionMessages": 1
+  },
+  "emptyIdRounds": {
+    "result": "s7 done",
+    "toolStarts": 2,
+    "toolMessagesInFinalRequest": 2,
+    "rejectionMessages": 2
   }
 }

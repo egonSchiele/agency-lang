@@ -5,6 +5,7 @@ import {
   destructiveReject,
   approvalResets,
   parallelRejectAndPause,
+  emptyIdRounds,
   respondToInterrupts,
   approve,
   reject,
@@ -133,6 +134,24 @@ const results = {};
     result: resumed.data,
     toolMessagesInFinalRequest: toolContents.length,
     rejectionMessages: toolContents.filter((c) => c.includes("Tool call rejected: no guardedTool"))
+      .length,
+  };
+}
+
+// Empty-id providers: round 1's call (slug "0_") is rejected; round 2's
+// fresh call shares the slug and must NOT be mistaken for a replay —
+// both calls run, both rejection messages reach the final request.
+{
+  const { state, callbacks } = makeCapture();
+  const result = await emptyIdRounds({ callbacks });
+  const toolContents = state.lastMessages
+    .filter((m) => m.role === "tool")
+    .map((m) => (typeof m.content === "string" ? m.content : JSON.stringify(m.content)));
+  results.emptyIdRounds = {
+    result: result.data,
+    toolStarts: state.toolStarts,
+    toolMessagesInFinalRequest: toolContents.length,
+    rejectionMessages: toolContents.filter((c) => c.startsWith("Tool call rejected: denied"))
       .length,
   };
 }

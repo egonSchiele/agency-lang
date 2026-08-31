@@ -192,4 +192,28 @@ describe("Checkpoint.fromJSON round trip", () => {
     expect(costGuards[0].toJSON()).toMatchObject({ kind: "cost", spent: 4, costLimit: 10 });
     expect(restored.stack[0].savedDraft).toEqual({ value: "best-so-far" });
   });
+
+  it("keeps the signature field through Checkpoint.fromJSON", () => {
+    const original = {
+      id: 1,
+      nodeId: "start",
+      moduleId: "mod.agency",
+      scopeName: "main",
+      stepPath: "0",
+      label: null,
+      pinned: false,
+      signature: "deadbeef",
+      globals: { store: {}, initializedModules: [] },
+      stack: {
+        stack: [],
+        mode: "serialize",
+        other: {},
+        deserializeStackLength: 0,
+        nodesTraversed: [],
+      },
+    };
+    const revived = Checkpoint.fromJSON(JSON.parse(JSON.stringify(original)));
+    expect(revived).not.toBeNull();
+    expect(revived!.signature).toBe("deadbeef");
+  });
 });

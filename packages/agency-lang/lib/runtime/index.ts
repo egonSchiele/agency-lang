@@ -124,6 +124,7 @@ export { _run } from "./ipc.js";
 
 export { CheckpointStore, RESULT_ENTRY_LABEL } from "./state/checkpointStore.js";
 export { Checkpoint } from "./state/checkpointStore.js";
+export { verifyCheckpointChecksum, CheckpointKeyTooShortError } from "./checkpointChecksum.js";
 
 export {
   setupNode,

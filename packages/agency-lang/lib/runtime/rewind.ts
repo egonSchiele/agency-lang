@@ -1,4 +1,5 @@
 import type { Checkpoint } from "./state/checkpointStore.js";
+import { signCheckpoint } from "./checkpointChecksum.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
@@ -14,6 +15,12 @@ export function applyOverrides(checkpoint: Checkpoint, overrides: Record<string,
   const frame = StateStack.lastFrameJSON(checkpoint.stack);
   for (const [key, value] of Object.entries(overrides)) {
     frame.locals[key] = value;
+  }
+  // Re-sign after the edit. Also runs on the served resume path with caller
+  // overrides — safe: a host verifies before responding, and the re-signed
+  // object is never returned to the caller.
+  if (checkpoint.signature !== undefined) {
+    signCheckpoint(checkpoint);
   }
 }
 

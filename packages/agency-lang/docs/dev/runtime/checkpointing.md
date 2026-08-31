@@ -281,3 +281,9 @@ checks is maintained by the interrupt dispatcher, is inherited by
 branch stacks, and is deliberately never serialized: since no pause can
 exist while it is non-empty, a deserialized stack correctly starts with
 it empty.
+
+## Integrity checksums
+
+When a signing key is configured, every checkpoint carries an embedded HMAC
+checksum a host can verify before resuming; the runtime itself never enforces
+it. See `docs/dev/runtime/checkpoint-integrity.md`.

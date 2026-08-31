@@ -99,3 +99,22 @@ agency debugger foo.agency --checkpoint <checkpoint-file>
 ```
 
 Note that you have to additionally give the source file.
+## Verifying checkpoint integrity
+
+You can verify that a checkpoint has not been tampered with. If you set the AGENCY_CHECKPOINT_KEY environment variable, Agency will embed a checksum into every checkpoint.
+
+```bash
+export AGENCY_CHECKPOINT_KEY=$(openssl rand -hex 32)
+```
+
+ You can verify the checkpoint like this:
+ 
+```ts
+import { verifyCheckpointChecksum } from "agency-lang";
+
+if (!verifyCheckpointChecksum(checkpoint)) {
+  // oops! Someone has edited this checkpoint. Refuse to resume
+}
+```
+
+This is strictly opt-in: you opt in to add the signature by setting the env var, and you need to manually check whether a checkpoint has been tampered with.

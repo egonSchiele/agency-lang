@@ -1,10 +1,11 @@
 import { basename } from "std::path"
 import { box, render } from "std::ui/layout"
+import { table } from "std::ui/table"
 
 import { figs } from "../images/images.agency"
 import { demoteProvider, getResolvedSlots } from "../shared.agency"
+import { parseAgentArgs } from "./args.agency"
 import { Resolved } from "./models.agency"
-
 
 def sample(arr: any[]): any {
   return arr[Math.floor(Math.random() * arr.length)]
@@ -25,12 +26,10 @@ def slotModelLabel(resolved: Resolved | null): string {
   return "${modelName} (${demoteProvider(resolved.provider)})"
 }
 
-/** The model-slot lines for the splash header: one padded
-  "<label>  <model> (<provider>)" per resolved slot. Shows the main (chat /
-  coordinator) and reasoning (oracle / explorer) slots so the user can confirm,
-  at startup, which models the run resolved to from their env / flags. Skips a
-  slot that didn't resolve. Exported for the header test. */
-export def headerModelLines(slots: Record<string, Resolved>): string[] {
+// The model-slot lines for the splash header: one padded
+// "<label>  <model> (<provider>)" per resolved slot. Skips a slot that
+// didn't resolve. Tests reach it via `import test`.
+def headerModelLines(slots: Record<string, Resolved>): string[] {
   let lines: string[] = []
   const mainLabel = slotModelLabel(slots["main"])
   if (mainLabel != "") {
@@ -43,9 +42,12 @@ export def headerModelLines(slots: Record<string, Resolved>): string[] {
   return lines
 }
 
+def heading(col: any, text: string) {
+  col.text(text, bold: true, fgColor: "cyan")
+}
+
 export def getHeader(brainName: string): string {
   const fig = sample(figs)
-  const modelLines = headerModelLines(getResolvedSlots())
   const data = box(
     title: "Agency",
     padding: 1,
@@ -61,19 +63,10 @@ export def getHeader(brainName: string): string {
           "Interactions use your API key. All costs are estimates. Actual costs may be higher.",
           dim: true,
         )
-        if (modelLines.length > 0) {
-          left.hline()
-          left.text("Models", bold: true, fgColor: "cyan")
-          for (line in modelLines) {
-            left.text(line, dim: true)
-          }
-        }
         left.hline()
-        left.text("Brain", bold: true, fgColor: "cyan")
-        left.text(brainName, dim: true)
-        left.hline()
-        left.text("Getting Started", bold: true, fgColor: "cyan")
+        heading(left, "Getting Started")
         left.text("/help for commands · /exit to quit", dim: true)
+        extendedInfo(left, brainName: brainName)
       }
       r.vline()
       r.column(width: "30%", align: "center") as right {
@@ -82,4 +75,83 @@ export def getHeader(brainName: string): string {
     }
   }
   return render(data, color: true)
+}
+
+def boolToString(b: boolean): string {
+  if (b) {
+    return "true"
+  }
+  return "false"
+}
+
+def extendedInfo(left, brainName: string) {
+  const slots = getResolvedSlots()
+  const args = parseAgentArgs()
+  left.hline()
+  /*  if (modelLines.length > 0) {
+    heading(left, "Models")
+    for (line in modelLines) {
+      left.text(line, dim: true)
+    }
+  }
+ */
+  const mainModel = slotModelLabel(slots["main"])
+  const reasoningModel = slotModelLabel(slots["reasoning"])
+
+  const argsTable = table(
+    borderStyle: "none",
+    columnDividers: false,
+    cellPadding: 0,
+    columnGap: 1,
+    columns: [{
+      minWidth: 13
+    }, {}],
+  ) as t {
+    if (mainModel != "") {
+      t.row(color.cyan("Main Model"), mainModel)
+    }
+    if (reasoningModel != "") {
+      t.row(color.cyan("Reasoning Model"), reasoningModel)
+    }
+    if (args.flags["max-cost"] != null) {
+      t.row(color.cyan("Max Cost"), "$${args.flags["max-cost"]}")
+    }
+    if (args.flags["max-time"] != null) {
+      t.row(color.cyan("Max Time"), args.flags["max-time"])
+    }
+
+    if (args.flags.verbose) {
+      t.row(color.cyan("Brain"), brainName)
+      t.row(
+        color.cyan("Interactive"),
+        boolToString(args.flags.interactive ?? false),
+      )
+      t.row(color.cyan("Print"), boolToString(args.flags.print ?? false))
+      t.row(color.cyan("Debug"), boolToString(args.flags.debug ?? false))
+      t.row(color.cyan("Verbose"), boolToString(args.flags.verbose ?? false))
+      t.row(color.cyan("Model"), args.flags.model ?? "")
+      t.row(color.cyan("Fast Model"), args.flags.fastmodel ?? "")
+      t.row(color.cyan("Slow Model"), args.flags.slowmodel ?? "")
+      t.row(color.cyan("Provider"), args.flags.provider ?? "")
+      t.row(color.cyan("Subagent"), args.flags.agent ?? "")
+      t.row(color.cyan("Policy"), args.flags.policy ?? "")
+      t.row(color.cyan("Agent Home"), args.flags["agent-home"] ?? "")
+      t.row(color.cyan("Working Dir"), args.flags.workdir ?? "")
+      t.row(color.cyan("Config"), args.flags.config ?? "")
+      t.row(color.cyan("Trace"), args.flags.trace ?? "")
+      t.row(color.cyan("Log"), args.flags.log ?? "")
+      t.row(
+        color.cyan("Max Tool Call Rounds"),
+        args.flags["max-tool-call-rounds"] ?? "",
+      )
+      t.row(
+        color.cyan("Max Tool Result Chars"),
+        args.flags["max-tool-result-chars"] ?? "",
+      )
+    }
+  }
+  left.text(render(argsTable))
+
+  //  heading(left, "Brain")
+  //  left.text(brainName, dim: true)
 }

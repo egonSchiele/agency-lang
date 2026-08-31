@@ -86,10 +86,10 @@ export def resolveBrainName(flag: string | null, settings: Settings): string {
   return DEFAULT_BRAIN
 }
 
-def buildBrainContext(interactive: boolean): BrainContext {
+def buildBrainContext(interactive: boolean, brainName: string): BrainContext {
   return {
     interactive: interactive,
-    grounding: groundingText()
+    grounding: groundingText(brainName)
   }
 }
 
@@ -116,7 +116,7 @@ export def runSession(interactive: boolean, body: () -> void raises <*>) {
     throw(NO_BRAIN)
     return
   }
-  const context = buildBrainContext(interactive)
+  const context = buildBrainContext(interactive, brain.name)
   const handler = policyHandlerFor(interactive)
   handle {
     brain.init(context)

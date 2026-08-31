@@ -130,6 +130,7 @@ export def table(
   footerDivider: boolean = true,
   rowDividers: boolean = false,
   columnDividers: boolean = true,
+  columnGap: number = 0,
   block: (TableBuilder) -> void = null,
 ): LayoutNode {
   """
@@ -139,7 +140,9 @@ export def table(
 
   @param title - Title shown in the top border
   @param titleColor - Color of the title text
-  @param borderStyle - Frame style
+  @param borderStyle - Frame style; "none" draws no outer frame, so the
+    cells render as plain aligned text (interior dividers still follow
+    their own flags)
   @param borderColor - Color of the border characters
   @param caption - Caption shown beneath the table
   @param cellPadding - Horizontal padding inside each cell, in cells
@@ -152,6 +155,9 @@ export def table(
   @param footerDivider - Draw a divider line above the footer
   @param rowDividers - Draw a divider between every body row
   @param columnDividers - Draw vertical dividers between columns
+  @param columnGap - Cells of blank space between adjacent columns when
+    columnDividers is false (the divider is the separator when it is on).
+    Keeps a gap even when a column grows past its minWidth.
   """
   const bodyArr: any[] = []
   if (body != null) {
@@ -189,7 +195,8 @@ export def table(
     headerDivider: headerDivider,
     footerDivider: footerDivider,
     rowDividers: rowDividers,
-    columnDividers: columnDividers
+    columnDividers: columnDividers,
+    columnGap: columnGap
   }
   if (width != null) {
     attrs.width = width

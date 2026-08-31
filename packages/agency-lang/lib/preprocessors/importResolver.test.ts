@@ -441,6 +441,22 @@ describe("resolveImports", () => {
     }
   });
 
+  it("import test keeps testOnly on the rebuilt statement", () => {
+    // The typechecker runs over the preprocessed AST in the test harness;
+    // if the rebuild drops testOnly, a non-exported import trips AG4010.
+    const program: AgencyProgram = {
+      type: "agencyProgram",
+      nodes: [testImport(["helper"], "./utils.agency")],
+    };
+    const symbolTable = table({
+      "/project/utils.agency": { helper: fn("helper", { exported: false }) },
+    });
+    const result = resolveImports(program, symbolTable, "/project/main.agency", {
+      allowTestImports: true,
+    });
+    expect((result.nodes[0] as ImportStatement).testOnly).toBe(true);
+  });
+
   it("import test bypasses the export check for a non-exported type in test mode", () => {
     const program: AgencyProgram = {
       type: "agencyProgram",

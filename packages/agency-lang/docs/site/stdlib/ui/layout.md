@@ -85,7 +85,7 @@ export type Alignment = "start" | "center" | "end"
 ### BorderStyle
 
 ```ts
-export type BorderStyle = "rounded" | "heavy" | "double" | "light"
+export type BorderStyle = "rounded" | "heavy" | "double" | "light" | "none"
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L55))
@@ -352,7 +352,9 @@ A bordered panel. Multiple children stack vertically inside it.
 
   @param title - Text shown in the top border (empty for none)
   @param titleColor - Color of the title text
-  @param borderStyle - The border character style
+  @param borderStyle - The border character style; "none" draws no
+    frame (padding and title still apply, the title as a plain first
+    line)
   @param borderColor - Color of the border
   @param padding - Cells of padding between the border and content
   @param width - Width as a column count, "X%" of the parent, or "full" for the whole terminal (root only)
@@ -405,4 +407,4 @@ Render a layout tree to a styled, multi-line string ready to print.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L470))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/ui/layout.agency#L472))

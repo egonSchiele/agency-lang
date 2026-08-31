@@ -49,6 +49,29 @@ describe("syncAgents", () => {
     );
   });
 
+  test("never stages tests/ directories, and removes previously staged ones", () => {
+    // Tests are only compiled by `agency test` from the source tree; staging
+    // them made `make` compile them outside the harness, where `import test`
+    // is rejected.
+    const src = tree({
+      "agency-agent/agent.agency": "src",
+      "agency-agent/tests/turn.agency": "test-src",
+      "agency-agent/tests/turn.test.json": "{}",
+      "agency-agent/brains/coordinator/tests/agentTurn.agency": "test-src",
+    });
+    const dest = tree({
+      "agency-agent/tests/turn.agency": "previously-staged",
+      "agency-agent/tests/turn.js": "previously-compiled",
+    });
+    syncAgents(src, dest);
+    expect(fs.readFileSync(path.join(dest, "agency-agent/agent.agency"), "utf-8")).toBe("src");
+    // Files are removed; the emptied directory itself may linger, which the
+    // directory compile treats as nothing to do.
+    expect(fs.existsSync(path.join(dest, "agency-agent/tests/turn.agency"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "agency-agent/tests/turn.js"))).toBe(false);
+    expect(fs.existsSync(path.join(dest, "agency-agent/brains/coordinator/tests"))).toBe(false);
+  });
+
   test("still copies handwritten .js helpers that have no .agency sibling", () => {
     const src = tree({ "agency-agent/toolWiring.js": "handwritten" });
     const dest = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "agency-stage-")), "dest");

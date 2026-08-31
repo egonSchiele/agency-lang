@@ -1,0 +1,5 @@
+{
+  "description": "The agent knows what it is. Asked its name and model, it answers from its session facts instead of saying it cannot know.",
+  "input": "Hi, what is your name and what model are you currently running on? Anthropic?",
+  "goal": "identifies itself as the Agency agent and names the concrete model (and its provider) it is running on; does not claim it cannot know or verify which model it runs on"
+}

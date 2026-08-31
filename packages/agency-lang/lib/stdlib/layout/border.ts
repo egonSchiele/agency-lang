@@ -8,7 +8,11 @@
 import { Style, styledWrapper, visualWidth, wrapText } from "./ansi.js";
 import { Align, Block, above, pad, padLine, styled } from "./block.js";
 
-export type BorderStyle = "rounded" | "heavy" | "double" | "light";
+export type BorderStyle = "rounded" | "heavy" | "double" | "light" | "none";
+
+// Styles that actually draw a frame. `"none"` renders no frame at all,
+// so it has no entry in `BORDER_CHARS`.
+export type FramedBorderStyle = Exclude<BorderStyle, "none">;
 
 export type BorderChars = {
   // Corners + edges of the outer frame.
@@ -27,7 +31,7 @@ export type BorderChars = {
   rightTee: string;
 };
 
-export const BORDER_CHARS: Record<BorderStyle, BorderChars> = {
+export const BORDER_CHARS: Record<FramedBorderStyle, BorderChars> = {
   rounded: {
     tl: "╭",
     tr: "╮",
@@ -77,6 +81,7 @@ export const BORDER_CHARS: Record<BorderStyle, BorderChars> = {
 const warnedUnknownStyles = new Set<string>();
 export function resolveBorderStyle(s: string | undefined): BorderStyle {
   if (s == null || s === "") return "rounded";
+  if (s === "none") return "none";
   // `Object.hasOwn` (not `in`) so we don't traverse the prototype
   // chain — otherwise `"__proto__" in BORDER_CHARS` is truthy and
   // would hand back `Object.prototype` to the renderer, which crashes
@@ -104,6 +109,13 @@ export type BorderOpts = {
 // Number of cells a single `│`-style side border takes (one on each
 // side, so a framed box is `BORDER_CELLS` wider than its inner content).
 export const BORDER_CELLS = 2;
+
+// Horizontal cells the frame of `style` occupies: 0 for `"none"`,
+// `BORDER_CELLS` otherwise. Width math in box and table goes through
+// this so a frameless container is genuinely narrower.
+export function borderCells(style: BorderStyle): number {
+  return style === "none" ? 0 : BORDER_CELLS;
+}
 
 // Minimum inner width required to fit a title embedded in the top edge.
 // The top edge is `tl + h + " Title " + h*N + tr` — so we need at least
@@ -149,11 +161,22 @@ function withPaddingApplied(block: Block, padding: number): Block {
 }
 
 export function bordered(block: Block, opts: BorderOpts): Block {
-  const borderChars = BORDER_CHARS[resolveBorderStyle(opts.borderStyle)];
+  const style = resolveBorderStyle(opts.borderStyle);
   const padding = opts.padding ?? 0;
   const titleText = opts.title ?? "";
   const padded = withPaddingApplied(block, padding);
 
+  // Frameless: padding still applies, and a title becomes a plain
+  // styled first line instead of living in a top edge.
+  if (style === "none") {
+    const titleStyle: Style = opts.titleColor ? { fgColor: opts.titleColor } : {};
+    const titled =
+      titleText === "" ? padded : above(styled(Block.of(titleText), titleStyle), padded);
+    if (opts.targetWidth === undefined) return titled;
+    return pad(titled, opts.targetWidth, titled.height, "start", "start");
+  }
+
+  const borderChars = BORDER_CHARS[style];
   if (opts.targetWidth !== undefined) {
     const innerWidth = Math.max(0, opts.targetWidth - BORDER_CELLS);
     const titleStyle: Style = opts.titleColor ? { fgColor: opts.titleColor } : {};

@@ -52,7 +52,7 @@ export type LayoutBuilder = {
 
 export type Alignment = "start" | "center" | "end"
 
-export type BorderStyle = "rounded" | "heavy" | "double" | "light"
+export type BorderStyle = "rounded" | "heavy" | "double" | "light" | "none"
 
 export type Width = number | "full" | string
 
@@ -434,7 +434,9 @@ export def box(
 
   @param title - Text shown in the top border (empty for none)
   @param titleColor - Color of the title text
-  @param borderStyle - The border character style
+  @param borderStyle - The border character style; "none" draws no
+    frame (padding and title still apply, the title as a plain first
+    line)
   @param borderColor - Color of the border
   @param padding - Cells of padding between the border and content
   @param width - Width as a column count, "X%" of the parent, or "full" for the whole terminal (root only)

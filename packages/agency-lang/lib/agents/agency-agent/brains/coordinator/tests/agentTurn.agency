@@ -197,7 +197,8 @@ node reactSilentOnSameProvider(): boolean {
 }
 
 
-import { headerModelLines, getHeader } from "../../../lib/header.agency"
+import { getHeader } from "../../../lib/header.agency"
+import test { headerModelLines } from "../../../lib/header.agency"
 import { hostedModelInfo } from "std::llm"
 
 // The splash header lists the resolved main + reasoning models. The internal

@@ -1,0 +1,5 @@
+{
+  "description": "Asked to run on a specific OpenRouter model, the agent gives the restart recipe instead of refusing, and cites no files the user cannot open.",
+  "input": "How can I run you on the GLM 5.3 model on open router?",
+  "goal": "explains how to restart the agent on an OpenRouter model (agency agent --provider openrouter with --model, or the /model command) with an OPENROUTER_API_KEY, and does not tell the user to read repo-internal or agent-bundled file paths (such as docs/dev/... or docs/misc/...)"
+}

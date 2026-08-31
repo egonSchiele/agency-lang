@@ -13,9 +13,9 @@ import { Resolved } from "./models.agency"
 
 export def loadAgentsMd(dir: string): string {
   """
-  Read `AGENTS.md` from `dir` if it exists and return it wrapped in a
-  <project_context> block ready to splice into a system prompt. Returns
-  an empty string if there is no AGENTS.md or it cannot be read.
+  Read `AGENTS.md` from `dir` if it exists and return its raw contents;
+  the caller wraps them in a <project_context> block. Returns an empty
+  string if there is no AGENTS.md or it cannot be read.
   """
   if (!exists("AGENTS.md", dir)) {
     return ""
@@ -30,14 +30,16 @@ export def loadAgentsMd(dir: string): string {
 export def sessionFactsText(
   brainName: string,
   slots: Record<string, Resolved>,
-  args: Record<string, any>,
+  flags: Record<string, any>,
 ): string {
   """
   The identity block: what the agent is, which brain answers turns, and
   the models the run resolved to. Pure — the slots come in as a
   parameter — so tests can call it directly. The same resolved slots
   feed the splash header, so the model names here always match what the
-  user saw at startup.
+  user saw at startup. Takes only the CLI flags, never the positional
+  prompt: this block sits above the user-message boundary, and user
+  text serialized into it would be a prompt-injection vector.
   """
   let modelLines = []
   for (slot in ["main", "reasoning"]) {
@@ -55,7 +57,7 @@ export def sessionFactsText(
 
   The flags you were started with:
   <flags>
-  ${JSON.stringify(args, null, 2)}
+  ${JSON.stringify(flags, null, 2)}
   </flags>
   """
 }
@@ -70,7 +72,7 @@ export def groundingText(brainName: string): string {
   Current working directory: ${cwd()}
 
   <session_facts>
-  ${sessionFactsText(brainName, getResolvedSlots(), args)}
+  ${sessionFactsText(brainName, getResolvedSlots(), args.flags)}
   </session_facts>
 
   <project_context>

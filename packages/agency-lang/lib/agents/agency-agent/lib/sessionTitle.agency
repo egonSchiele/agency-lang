@@ -77,6 +77,7 @@ export def titleFor(text: string): string {
 }
 
 def titleCall(text: string): string {
+  let out: Result<Titled> = failure("session title call did not run")
   thread(label: "sessionTitle", session: "sessionTitle") {
     const titled: Titled! = llm(
       """
@@ -91,7 +92,7 @@ def titleCall(text: string): string {
     )
     out = titled
   }
-  return match(titled) {
+  return match(out) {
     success(value) => cleanTitle(value.title)
     failure(reason) => ""
   }

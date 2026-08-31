@@ -1,8 +1,5 @@
-import {
-  brainByName,
-  allBrains,
-  brainFlagHelp,
- } from "../brains/registry.agency"
+import { brainByName, allBrains } from "../brains/registry.agency"
+import { brainFlagHelp } from "../lib/args.agency"
 
 node knownBrainResolves(): string {
   const brain = brainByName("coordinator")

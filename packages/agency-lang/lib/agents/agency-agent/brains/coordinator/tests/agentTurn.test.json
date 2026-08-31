@@ -297,7 +297,7 @@
       ]
     },
     {
-      "nodeName": "headerShowsBrain",
+      "nodeName": "headerOmitsBrainByDefault",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

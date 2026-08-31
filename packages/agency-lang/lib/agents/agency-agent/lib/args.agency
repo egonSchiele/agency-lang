@@ -3,6 +3,7 @@ import { parseArgs } from "std::args"
 
 import { allBrains } from "./../brains/registry.agency"
 
+/** The --brain flag description: each name with its one-line description. */
 export def brainFlagHelp(): string {
   let lines: string[] = []
   for (brain in allBrains()) {

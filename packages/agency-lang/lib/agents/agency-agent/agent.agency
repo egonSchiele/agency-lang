@@ -7,7 +7,7 @@ import { getCost } from "std::thread"
 import { setSlashPalette } from "std::ui/cli"
 import { clearMessages, pushMessage, repl, clearScreen } from "std::ui/cli"
 
-import { brainByName, allBrains, brainFlagHelp } from "./brains/registry.agency"
+import { brainByName, allBrains } from "./brains/registry.agency"
 import { agentNameFor } from "./lib/agentName.agency"
 import { parseAgentArgs } from "./lib/args.agency"
 import { mergedPalette } from "./lib/commandPalette.agency"

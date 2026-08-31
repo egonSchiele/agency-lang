@@ -187,6 +187,15 @@ describe("resolveSizes", () => {
     expect(resolved.children[0].attrs.wrapWidth).toBe(28);
   });
 
+  test('box borderStyle "none" reserves no frame cells for its child', () => {
+    const tree = node("box", { width: 30, borderStyle: "none" }, [
+      node("text", { content: "the quick brown fox" }),
+    ]);
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    // Framed would be 28 (30 − 2 border cells); frameless keeps the full 30.
+    expect(resolved.children[0].attrs.wrapWidth).toBe(30);
+  });
+
   test("unsized container inherits constrained parent context", () => {
     const tree = node("box", { width: "full" }, [
       node("row", {}, [node("box", { width: "50%" }, []), node("box", { width: "50%" }, [])]),

@@ -152,14 +152,13 @@ and respond directly. Don't pad replies with "happy to help",
 
 **Use ASCII diagrams when they clarify.** For control flow, state
 machines, pipelines, module relationships, or any "how do the parts
-fit together" answer, draw a small ASCII diagram in a fenced
-
-````text block. Boxes, arrows, and trees beat paragraphs for
-structural explanations:
+fit together" answer, draw a small ASCII diagram in a fenced text
+block. Boxes, arrows, and trees beat paragraphs for structural
+explanations:
 
 ```text
 parse → SymbolTable.build → preprocess → TypeScriptBuilder → printTs
-````
+```
 
 Keep diagrams small. Skip them where prose or code is clearer —
 diagrams earn their space by showing **relationships** or **flow**.

@@ -1,0 +1,18 @@
+// Fixture for issue #966: top-level code must run under the root policy
+// handler. Two top-level reads, both decided during global init:
+//
+//  - `withApprove` auto-approves itself. A root policy reject or propagate
+//    must win anyway, exactly as it does inside a node.
+//  - `bare` has no handler of its own. A root policy approve must resolve
+//    it; with no policy it fails closed ("Cannot create checkpoint").
+//
+// env() absorbs a denial and a failed raise, so both reads show up as
+// null in those cases and the run itself succeeds.
+import { env } from "std::system"
+
+const withApprove = env("POLICY_TOP_LEVEL_SECRET") with approve
+const bare = env("POLICY_TOP_LEVEL_BARE")
+
+export node readTop() {
+  return { withApprove: withApprove, bare: bare }
+}

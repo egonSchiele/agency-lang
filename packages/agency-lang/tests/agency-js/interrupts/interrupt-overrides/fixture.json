@@ -10,6 +10,7 @@
     "checkpoint": null,
     "neverStarted": false,
     "destructiveRan": false,
+    "rejected": true,
     "functionName": null,
     "args": null,
     "skippedFunctions": []

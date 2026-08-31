@@ -35,6 +35,7 @@ export function resultToObjectUnion(
           // Tool-failure classification (lib/runtime/result.ts).
           { key: "neverStarted", value: BOOLEAN_T },
           { key: "destructiveRan", value: BOOLEAN_T },
+          { key: "rejected", value: BOOLEAN_T },
           // runtime is `string | null` (result.ts); under nullish unification
           // the one nothing-value is `null`, so the surface type is `string | null`.
           {

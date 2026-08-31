@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -204,7 +205,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "add");
+  claimFrameForScope(__stack, "add", "docstrings.agency");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -362,7 +363,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet");
+  claimFrameForScope(__stack, "greet", "docstrings.agency");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -506,7 +507,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "calculateArea");
+  claimFrameForScope(__stack, "calculateArea", "docstrings.agency");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -669,7 +670,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "processData");
+  claimFrameForScope(__stack, "processData", "docstrings.agency");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -799,7 +800,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "versionedTool");
+  claimFrameForScope(__stack, "versionedTool", "docstrings.agency");
   if (!__globals()!.isInitialized("docstrings.agency")) {
     await __initializeGlobals(__ctx)
   }

@@ -114,6 +114,7 @@ const RESULT_FIELDS = new Set<string>([
   "args",
   "neverStarted",
   "destructiveRan",
+  "rejected",
   "success",
   "skippedFunctions",
 ]);

@@ -235,6 +235,7 @@ Other process docs:
 - `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle.
+- `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.
 - `docs/dev/runtime/checkpoint-integrity.md` — The optional HMAC checksum embedded in a checkpoint, and how a host verifies it.
 - `docs/dev/runtime/checkpointing.md` — Snapshotting execution state so a program can restore back to it later.
 - `docs/dev/runtime/concurrent-interrupts.md` — What happens when several concurrent execution paths interrupt at the same time.
@@ -276,17 +277,18 @@ Other process docs:
 - `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
 - `docs/dev/agents/agent-sessions.md` — Save and resume for `agency agent`: a checkpoint between turns, why it is taken from TypeScript after the turn's frames return, where the restore runs, and what a restore does not bring back.
 - `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
-- `docs/dev/agents/promptRunner.md` — The small control-flow helper behind `runPrompt`.
+- `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
 - `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind that argument.
-- `docs/dev/agents/tool-loop-guards.md` — The two refusals that stop a model wasting rounds: a repeated call, and an argument that is really tool-call markup.
+- `docs/dev/agents/tool-loop-guards.md` — The three refusals that stop a model wasting rounds: a repeated call, an argument that is really tool-call markup, and a call identical to one already rejected.
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
 - `docs/dev/agents/writing-rewrite-agent.md` — The rewrite agent over the writing reviewer: the passes loop, why a reviewer failure is not a clean pass, and how its eval suite shares the reviewer suite's files.
 
 ### Security
 
-- `docs/dev/security/goal.md` — The goal of running untrusted Agency code with no operating-system sandbox, why the language design makes that possible, and what it demands of the compiler.
+- `docs/dev/security/goal.md` — The goal: the language decides what runs (fine-grained interrupt policy) and a cheap capability-restricted process contains what slips past. The two motivations (agent code on my machine vs hosting strangers), and what the compiler-as-boundary demands.
 - `docs/dev/security/roadmap.md` — Every gap between today's code and that goal, grouped by which part of the argument it breaks, with the GitHub issue for each.
+- `docs/dev/security/hardening/README.md` — The done list: what hardening has shipped, grouped by whether it reinforces the policy (front door) or containment (back door), each linking its depth doc.
 
 ### Standard library
 

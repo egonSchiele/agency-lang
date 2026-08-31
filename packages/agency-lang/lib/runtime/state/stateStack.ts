@@ -91,6 +91,12 @@ export class State {
    *  resume replay is state corruption and throws. */
   scopeName: string | null = null;
 
+  /** The module the claimed scope belongs to; stamped together with
+   *  scopeName by claimFrameForScope. Empty string means a runtime builtin
+   *  with no user module (runPrompt, TS helpers); null means never claimed.
+   *  Keyed by the compile-time moduleId (the cwd-relative input path). */
+  moduleId: string | null = null;
+
   constructor(
     opts: {
       args?: Record<string, any>;
@@ -230,6 +236,7 @@ export class State {
       threads: this.threads ? deepClone(this.threads) : null,
       step: this.step,
       scopeName: this.scopeName,
+      moduleId: this.moduleId,
     };
     if (this.scopedCallbacks && this.scopedCallbacks.length > 0) {
       // Pass `fn` through as a reference — the outer serializer (with
@@ -280,6 +287,7 @@ export class State {
       step: json.step,
     });
     state.scopeName = json.scopeName ?? null;
+    state.moduleId = json.moduleId ?? null;
     if (json.scopedCallbacks && json.scopedCallbacks.length > 0) {
       state.scopedCallbacks = json.scopedCallbacks.map((cb) => ({
         name: cb.name,
@@ -318,6 +326,7 @@ export type StateJSON = {
   threads: ThreadStoreJSON | null;
   step: number;
   scopeName: string | null;
+  moduleId?: string | null;
   branches?: Record<string, BranchStateJSON>;
   scopedCallbacks?: Array<{ name: string; fn: any }>;
   savedDraft?: { value: any };
@@ -335,10 +344,32 @@ export type StateJSON = {
  *  to Failures at def boundaries and can be laundered downstream; the
  *  event is the signal that survives. Best-effort via the ALS pattern
  *  (no store in bare unit tests means no emit; the throw still fires). */
-export function claimFrameForScope(frame: State, scopeName: string): void {
+export function claimFrameForScope(frame: State, scopeName: string, moduleId: string): void {
   if (!scopeName) return;
   if (frame.scopeName === null || frame.scopeName === undefined) {
     frame.scopeName = scopeName;
+    frame.moduleId = moduleId;
+    return;
+  }
+  if (frame.scopeName === scopeName) {
+    if (frame.moduleId === null || frame.moduleId === undefined) {
+      // A frame from a checkpoint written before moduleId existed: backfill on
+      // the matching re-claim so the next checkpoint covers this module again.
+      frame.moduleId = moduleId;
+      return;
+    }
+    if (moduleId && frame.moduleId && frame.moduleId !== moduleId) {
+      const msg =
+        `Resume desync: "${scopeName}" in module "${moduleId}" tried to claim ` +
+        `the saved state of "${scopeName}" in module "${frame.moduleId}". This ` +
+        `is a compiler/runtime bug — please report it with the program that produced it.`;
+      agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: msg,
+        functionName: scopeName,
+      });
+      throw new Error(msg);
+    }
     return;
   }
   if (frame.scopeName !== scopeName) {

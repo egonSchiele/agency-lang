@@ -25,8 +25,8 @@ node main() {
   return h
 }
 `);
-    expect(out).toContain('claimFrameForScope(__stack, "helper")');
-    expect(out).toContain('claimFrameForScope(__stack, "main")');
+    expect(out).toContain('claimFrameForScope(__stack, "helper", ');
+    expect(out).toContain('claimFrameForScope(__stack, "main", ');
   });
 
   it("lifted block bodies claim their frames under the block name", () => {
@@ -39,7 +39,7 @@ def f(xs: number[]): number[] {
   return [scale(x) for x in xs]
 }
 `);
-    expect(out).toMatch(/claimFrameForScope\(__bstack, "__block_\d+"\)/);
+    expect(out).toMatch(/claimFrameForScope\(__bstack, "__block_\d+", /);
   });
 
   it("finalize closures do NOT claim (they run on the container frame)", () => {
@@ -56,6 +56,6 @@ def work(): string {
     // on work's frame and must not stamp a second name onto it.
     const claims = out.match(/claimFrameForScope\(/g) ?? [];
     expect(claims).toHaveLength(1);
-    expect(out).toContain('claimFrameForScope(__stack, "work")');
+    expect(out).toContain('claimFrameForScope(__stack, "work", ');
   });
 });

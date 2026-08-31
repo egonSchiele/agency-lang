@@ -1,0 +1,126 @@
+// A tool that raises an interrupt before doing its work. The interrupt
+// message carries the id so a handler can approve some calls and reject
+// others.
+def guardedTool(id: string): string {
+  const _ok = interrupt("run ${id}")
+  return "ran ${id}"
+}
+
+// Every interrupt is rejected with a reason. The reason must reach the
+// model as the tool result, and an identical retry must be refused
+// without raising another interrupt.
+node handlerRejects() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    return reject("no tools for you")
+  }
+  return out
+}
+
+// No handler: the interrupt pauses the run, and the test rejects it
+// interactively with a reason that must reach the model after resume.
+node interactiveReject() {
+  return llm("Use guardedTool.", { tools: [guardedTool] })
+}
+
+// Five consecutive rejections (different args each time, so the
+// identical-call gate never fires) remove the tool.
+node fiveRejectionsRemove() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    return reject("denied")
+  }
+  return out
+}
+
+// Replay safety: one tool of a parallel round is rejected while its
+// sibling pauses on an interrupt. The rejected branch's message and
+// bookkeeping are in the checkpoint; the resume replay must not push a
+// second tool message for it.
+def pauseMe(id: string): string {
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+node parallelRejectAndPause() {
+  let out = ""
+  handle {
+    out = llm("Use both tools.", { tools: [guardedTool, pauseMe] })
+  } with (intr) {
+    if (intr.message == "run pr1") {
+      return reject("no guardedTool")
+    }
+    return pass()
+  }
+  return out
+}
+
+// Providers like Gemini return empty tool-call ids, so the index-0 call
+// of EVERY round shares one slug. A rejection in round 1 must not make
+// round 2's fresh call look like a replay: both calls must run and both
+// rejection messages must reach the model.
+node emptyIdRounds() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool twice.", { tools: [guardedTool] })
+  } with (intr) {
+    return reject("denied ${intr.message}")
+  }
+  return out
+}
+
+// A destructive def commits destructiveRan at body entry, so a rejection
+// of its gate is NOT a clean rejection: it takes the destructive failure
+// tier (immediate removal), not the rejection path.
+destructive def destructiveGated(id: string): string {
+  const _ok = interrupt("run ${id}")
+  return "ran ${id}"
+}
+
+node destructiveReject() {
+  let out = ""
+  handle {
+    out = llm("Use destructiveGated.", { tools: [destructiveGated] })
+  } with (intr) {
+    return reject("stop")
+  }
+  return out
+}
+
+// The removal race: guardedTool has four consecutive rejections when a
+// parallel round makes two more calls. The handler rejects one (the
+// fifth strike, which removes the tool) and passes the other to the
+// user, pausing the run. The paused call started before the removal,
+// and removal takes effect only from the next round — so the user's
+// approval must still be honored on resume.
+node removalRace() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    if (intr.message == "run keep") {
+      return pass()
+    }
+    return reject("denied ${intr.message}")
+  }
+  return out
+}
+
+// An approved call resets the consecutive-rejection count: four
+// rejections, an approval, then more calls — the tool must survive.
+node approvalResets() {
+  let out = ""
+  handle {
+    out = llm("Use guardedTool.", { tools: [guardedTool] })
+  } with (intr) {
+    if (intr.message == "run ok" || intr.message == "run ok2") {
+      return approve()
+    }
+    return reject("denied ${intr.message}")
+  }
+  return out
+}

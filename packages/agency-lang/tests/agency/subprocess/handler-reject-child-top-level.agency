@@ -1,0 +1,39 @@
+import { compile, run } from "std::agency"
+
+// The child auto-approves a top-level bash call. Child global init consults
+// the parent's chain over IPC, so the parent's reject must win (#966, the
+// subprocess side). The child hands back the raw result and the parent pins
+// the exact rejection message, so an unrelated bash failure cannot pass as
+// a rejection.
+node main() {
+  const source = """
+import { bash } from "std::shell"
+
+const r = bash("echo child-top-level") with approve
+
+node main() {
+  return r
+}
+"""
+  const compileResult = compile(source)
+  if (isFailure(compileResult)) {
+    return "compile failed: " + compileResult.error
+  }
+
+  handle {
+    const result = run(compiled: compileResult.value, node: "main", args: {})
+    if (isFailure(result)) {
+      return "run failed: " + result.error
+    }
+    const childValue = result.value.data
+    if (childValue is failure(err)) {
+      return "top-level bash failed: ${err}"
+    }
+    return "top-level bash succeeded"
+  } with (data) {
+    if (data.effect == "std::run") {
+      return approve()
+    }
+    return reject()
+  }
+}

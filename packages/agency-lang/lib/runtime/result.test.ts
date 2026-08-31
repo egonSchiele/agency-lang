@@ -197,6 +197,7 @@ describe("failure", () => {
       checkpoint: null,
       neverStarted: false,
       destructiveRan: false,
+      rejected: false,
       functionName: null,
       args: null,
       skippedFunctions: [],
@@ -212,16 +213,23 @@ describe("failure", () => {
       checkpoint: null,
       neverStarted: false,
       destructiveRan: false,
+      rejected: false,
       functionName: null,
       args: null,
       skippedFunctions: [],
     });
   });
 
-  it("births neverStarted and destructiveRan false", () => {
+  it("births neverStarted, destructiveRan, and rejected false", () => {
     const f = failure("boom");
     expect(f.neverStarted).toBe(false);
     expect(f.destructiveRan).toBe(false);
+    expect(f.rejected).toBe(false);
+  });
+
+  it("honors an explicit rejected opt", () => {
+    const f = failure("no tools for you", { rejected: true });
+    expect(f.rejected).toBe(true);
   });
 
   it("honors explicit neverStarted and destructiveRan opts", () => {

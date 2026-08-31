@@ -1,6 +1,8 @@
 import { MessageJSON } from "smoltalk";
 import { signCheckpoint } from "../checkpointChecksum.js";
 import { CheckpointError } from "../errors.js";
+import { collectModuleFingerprints } from "../referencedModules.js";
+import type { ModuleFingerprint } from "../moduleFingerprintRegistry.js";
 import { deepClone } from "../utils.js";
 import type { RuntimeContext } from "./context.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
@@ -37,6 +39,7 @@ export type CheckpointArgs = {
   stepPath?: string;
   label?: string | null;
   pinned?: boolean;
+  moduleFingerprints?: Record<string, ModuleFingerprint>;
   signature?: string;
 };
 
@@ -50,6 +53,7 @@ export type CheckpointJSON = {
   stepPath: string;
   label: string | null;
   pinned: boolean;
+  moduleFingerprints?: Record<string, ModuleFingerprint>;
   signature?: string;
 };
 
@@ -63,6 +67,9 @@ export class Checkpoint implements SourceLocation {
   public stepPath: string;
   public label: string | null;
   public pinned: boolean;
+  /** Fingerprint + compile time of each module with a live frame, captured at
+   *  creation so a resume can refuse when the code changed. */
+  public moduleFingerprints?: Record<string, ModuleFingerprint>;
   /** HMAC checksum embedded at creation when a signing key is configured.
    *  Absent on unsigned checkpoints. See lib/runtime/checkpointChecksum.ts. */
   public signature?: string;
@@ -77,6 +84,7 @@ export class Checkpoint implements SourceLocation {
     this.stepPath = args.stepPath ?? "";
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
+    this.moduleFingerprints = args.moduleFingerprints;
     this.signature = args.signature;
   }
 
@@ -182,6 +190,9 @@ export class Checkpoint implements SourceLocation {
       label: this.label,
       pinned: this.pinned,
     };
+    if (this.moduleFingerprints !== undefined) {
+      json.moduleFingerprints = this.moduleFingerprints;
+    }
     if (this.signature !== undefined) {
       json.signature = this.signature;
     }
@@ -212,13 +223,20 @@ export class Checkpoint implements SourceLocation {
         "Cannot create checkpoint: no current node id in state stack. This error can happen if you call a function that throws an interrupt from the global namespace. Please use `const foo = funcName() with approve` syntax.",
       );
     }
-    const checkpoint = new Checkpoint({
-      stack: stateStack.toJSON(),
+    const stackJson = stateStack.toJSON();
+    const moduleFingerprints = collectModuleFingerprints(stackJson);
+    const args: CheckpointArgs = {
+      stack: stackJson,
       globals: ctx.globals.toJSON(),
       nodeId,
       ...opts,
-    });
-    // Keep this the last statement: the signature must cover every field.
+    };
+    if (Object.keys(moduleFingerprints).length > 0) {
+      args.moduleFingerprints = moduleFingerprints;
+    }
+    const checkpoint = new Checkpoint(args);
+    // Keep this the last statement: the signature must cover every field,
+    // moduleFingerprints included.
     signCheckpoint(checkpoint);
     return checkpoint;
   }

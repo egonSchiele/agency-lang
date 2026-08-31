@@ -3,6 +3,7 @@ import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.j
 import { buildCompilationUnit, type CompilationUnit } from "@/compilationUnit.js";
 import { AgencyConfig } from "@/config.js";
 import { TypeScriptBuilder } from "./typescriptBuilder.js";
+import { sha256Text } from "@/utils/hash.js";
 import { printTs } from "../ir/prettyPrint.js";
 import type { CompiledClosure } from "@/compiler/compileClosure.js";
 
@@ -61,6 +62,7 @@ export function generateTypeScript(
   moduleId?: string,
   outputFile?: string,
   initPlan?: InitPlanForModule,
+  fingerprint?: boolean,
 ): string {
   if (!moduleId) {
     throw new Error("moduleId is required for generateTypeScript");
@@ -70,5 +72,19 @@ export function generateTypeScript(
   const preprocessedProgram = preprocessor.preprocess();
   const builder = new TypeScriptBuilder(config, compilationUnit, moduleId, outputFile, initPlan);
   const ir = builder.build(preprocessedProgram);
-  return printTs(ir);
+  const code = printTs(ir);
+  if (!fingerprint) {
+    return code;
+  }
+  // Fingerprint the PRINTED output: it is what resume replays into, so it
+  // covers splice expansion, templates, and the compiler itself. Hash before
+  // appending the registration (a value cannot cover itself). The emitted
+  // bytes carry no timestamp — the registry derives "compiled at" from the
+  // artifact's mtime — so identical input emits identical bytes and
+  // incremental emit stays byte-identical to a force emit.
+  const hash = sha256Text(code);
+  return (
+    code +
+    `\n__registerModuleFingerprint(${JSON.stringify(moduleId)}, ${JSON.stringify(hash)}, import.meta.url);\n`
+  );
 }

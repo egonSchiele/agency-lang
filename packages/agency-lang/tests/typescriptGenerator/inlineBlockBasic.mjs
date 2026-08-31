@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -201,7 +202,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "twice");
+  claimFrameForScope(__stack, "twice", "inlineBlockBasic.agency");
   if (!__globals()!.isInitialized("inlineBlockBasic.agency")) {
     await __initializeGlobals(__ctx)
   }
@@ -382,7 +383,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main");
+  claimFrameForScope(__stack, "main", "inlineBlockBasic.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "inlineBlockBasic.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -411,7 +412,7 @@ const __self = __bstack.locals;
 const __bframe___block_0 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_0");
+claimFrameForScope(__bstack, "__block_0", "inlineBlockBasic.agency");
 
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "inlineBlockBasic.agency", scopeName: "__block_0" });
 try {

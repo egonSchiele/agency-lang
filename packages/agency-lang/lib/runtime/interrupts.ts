@@ -8,6 +8,7 @@ import { runInBootstrapFrame } from "./asyncContext.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { reinstallRootBudget } from "./rootBudget.js";
+import { assertCodeUnchanged } from "./referencedModules.js";
 import { AgencyCancelledError, HandlerRecursionError, RestoreSignal } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
@@ -781,6 +782,9 @@ async function respondToInterruptsCore(
     );
   }
   if (args.overrides) applyOverrides(checkpoint, args.overrides);
+  // A changed module would be replayed against different statement numbering;
+  // refuse before any state is restored.
+  assertCodeUnchanged(checkpoint.moduleFingerprints);
 
   // Resume always keeps interrupt.runId; the resolver ignores any supplied
   // traceId and applies only the per-invocation config projection.

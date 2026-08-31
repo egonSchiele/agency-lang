@@ -64,6 +64,10 @@ export const stateJSONSchema = z.object({
   // Accepts absent (external payloads validated pre-tripwire) and
   // normalizes to null so the parsed shape satisfies StateJSON.
   scopeName: z.string().nullable().optional().default(null),
+  // No .default(): injecting moduleId into a frame that did not carry it
+  // would change the canonical bytes of checkpoints signed before this field
+  // existed, making them verify false. Absent stays absent.
+  moduleId: z.string().nullable().optional(),
   branches: z.record(z.string(), branchStateJSONSchema).optional(),
   scopedCallbacks: z.array(z.object({ name: z.string(), fn: z.any() })).optional(),
   savedDraft: z.object({ value: z.any() }).optional(),
@@ -102,5 +106,8 @@ export const checkpointSchema = z.object({
   stepPath: z.string().optional().default(""),
   label: z.string().nullable().optional().default(null),
   pinned: z.boolean().optional().default(false),
+  moduleFingerprints: z
+    .record(z.string(), z.object({ hash: z.string(), compiledAt: z.string() }))
+    .optional(),
   signature: z.string().optional(),
 });

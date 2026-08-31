@@ -112,17 +112,15 @@ export function setupFunction(): {
  *     under the checkpoint's limit rather than a re-asserted host one. That is
  *     a pre-existing gap, out of scope here (tracked separately).
  *
- * The root run-policy handler and root cost/time budget are installed here, at
- * the end of bootstrap, so EVERY fresh-run entry point (including a served
- * `/function/:name` call through runExportedFunction) is capped identically —
- * a served function must not run uncapped. Both installers are root-only
- * (no-op in IPC subprocesses, whose budgets the parent guard owns). They sit
- * after global init and top-level callback registration, so they are outermost
- * before the entry NODE/FUNCTION body runs and cannot be bypassed there; the
- * small amount of user code that global-init expressions and top-level
- * `callback(...)` blocks can run during bootstrap still runs before the guards
- * exist (unchanged from before this hoist — runNode installed them after
- * bootstrap too).
+ * The root run-policy handler and root cost/time budget are installed here,
+ * before anything else. Global-init expressions and top-level `callback(...)`
+ * registration run user code, and a raise from that code must already see the
+ * root policy in the chain. Installing the policy handler after them let a
+ * top-level `with approve` be the only handler in the chain, which bypassed
+ * --reject and a host's InvocationOptions.policy (#966). Both installers are
+ * root-only (no-op in IPC subprocesses, whose budgets the parent guard owns)
+ * and shared by both fresh-run entry points, so nodes and served functions
+ * are capped identically.
  */
 async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
@@ -133,6 +131,10 @@ async function initFreshExecCtx(
   },
 ): Promise<void> {
   const { initializeGlobals } = opts;
+
+  // Installed before any user code runs — see the function comment (#966).
+  installRunPolicyHandler(execCtx, opts.policy);
+  installRootBudget(execCtx.stateStack, execCtx.budget);
 
   // initializeGlobals + callback registration both invoke Agency
   // code that goes through `__call` — and `__call` reads `ctx` /
@@ -192,18 +194,6 @@ async function initFreshExecCtx(
   // single topLevelCallbacks reset. Keep this in sync with the resume
   // (interrupts.ts) and rewind (rewind.ts) paths.
   await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
-
-  // Install the CLI-driven root policy handler (agency run --policy) and the
-  // root cost/time budget (--max-cost / --max-time, via env / RuntimeContext).
-  // Both are root-only (isIpcMode gate inside each installer): no-op in IPC
-  // subprocesses. Installed at the end of bootstrap, so they are the outermost
-  // handler/guard before the entry node/function body runs and cannot be
-  // bypassed there — and so BOTH fresh-run entry points (nodes and served
-  // functions) inherit them. (Global-init and top-level-callback code above
-  // runs before these exist; that's unchanged — runNode installed them here
-  // too, just after initFreshExecCtx returned.)
-  installRunPolicyHandler(execCtx, opts.policy);
-  installRootBudget(execCtx.stateStack, execCtx.budget);
 }
 
 /**
@@ -402,17 +392,13 @@ async function runNodeCore({
   // === Invocation started (context exists). A SINGLE lifecycle boundary covers
   // all remaining setup AND execution, so an already-aborted signal or a
   // bootstrap/setup failure still yields an outcome-with-usage and still runs
-  // cleanup. Handler/budget registration order (inside initFreshExecCtx) is
-  // unchanged. ===
+  // cleanup. ===
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeResult<any>>;
   try {
-    // Cross-module init, this module's globals, top-level callbacks, then the
-    // root run-policy handler and root cost/time budget — all inside
-    // initFreshExecCtx (see there for the full ordering rationale, e.g. the
-    // `node main() { route({ systemPrompt: foreignStatic }) }` foreign-static
-    // case), so nodes and served functions are bootstrapped and capped identically.
+    // Bootstrapped and capped inside initFreshExecCtx; see its comment for
+    // the ordering (root policy and budget first, then init).
     await initFreshExecCtx(execCtx, { initializeGlobals, policy: resolved.policy });
     // Externally-passed callbacks are stored on ctx; hook execution merges them
     // with scoped/top-level callbacks at call time.

@@ -27,6 +27,7 @@ import {
   deepFreeze as __deepFreeze,
   __UNINIT_STATIC, __readStatic,
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
+  registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
@@ -203,7 +204,7 @@ const __self = __setupData.self;
 const __ctx = getRuntimeContext().ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main");
+  claimFrameForScope(__stack, "main", "interrupt-assignment.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-assignment.agency", scopeName: "main", threads: __setupData.threads });
   try {
     await agencyStore.run({
@@ -231,9 +232,9 @@ if (__response) {
       __stack.locals.name = true;;
     }
   } else if (__response.type === "reject") {
-    // reject for tool calls handled separately
+    // rejected, halt
     
-    runner.halt({ messages: __threads(), data: failure("interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure(__response.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;
@@ -243,7 +244,7 @@ if (__response) {
   const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack(), { expectsValue: true });
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected") });
+    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;

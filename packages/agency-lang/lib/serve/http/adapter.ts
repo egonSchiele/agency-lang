@@ -7,7 +7,7 @@ import type {
 } from "../types.js";
 import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
-import { readCause } from "../../runtime/errors.js";
+import { readCause, CheckpointCodeChangedError } from "../../runtime/errors.js";
 import { formatBudgetExceeded } from "../../runtime/budgetExit.js";
 import type {
   ServedInvocationOutcome,
@@ -135,6 +135,12 @@ function errorResult(err: unknown, logger: Logger, what: string): RouteResult {
   if (cause?.kind === "guardTrip") {
     logger.error(`${what}: ${formatBudgetExceeded(cause)}`);
     return budgetExceeded(cause);
+  }
+  // A conflict with the deployed code, not a server fault; the fixed message
+  // is safe to surface.
+  if (err instanceof CheckpointCodeChangedError) {
+    logger.error(`${what}: ${err.message}`);
+    return { status: 409, body: { success: false, error: err.message } };
   }
   logger.error(`${what} threw: ${errorMessage(err)}`);
   return fail(TOOL_ERROR_MESSAGE);

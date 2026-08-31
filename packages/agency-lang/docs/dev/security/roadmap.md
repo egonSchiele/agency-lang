@@ -32,7 +32,10 @@ The flag is not a full ban on generating code: `vm.runInThisContext` and
 `getBuiltinModule`, which layer 1 refuses by name, so there is no path today —
 but layer 3 should not assume the flag alone closes every route to new code.
 
-Layer 3 (freeze intrinsics) still open.
+Layer 3 (freeze intrinsics) still open. Feasibility is answered and the
+implementation is planned: `docs/superpowers/specs/2026-08-30-ses-feasibility-investigation.md`
+and `docs/superpowers/plans/2026-08-30-ses-layer3-plan.md` (`lockdown()` first,
+Compartment as a gated spike).
 
 <https://github.com/egonSchiele/agency-lang/issues/971>. An identifier the compiler does not know is emitted verbatim, so
 `process.env.HOME`, `process.getBuiltinModule("fs")`, `fetch(...)`,
@@ -89,42 +92,49 @@ Fix, in three layers, cheapest first:
 Tests to add: the programs in the issue are refused under `--agency-only`;
 a positive control (`Math.floor`, `JSON.parse`, `arr.push`) still compiles.
 
-### A2. Review the JavaScript interop allowlist
+### A2. Review the JavaScript interop allowlist (#994)
 
 `JS_GLOBALS` in `lib/typeChecker/resolveCall.ts` was built to avoid false
 positives in interop code. It was never reviewed as a security list. Once A1 makes it load-bearing, review
 every entry: keep pure value helpers, remove anything that can reach the
 host (`Function`, `eval`, `globalThis`, `Reflect`, `Proxy`, `process`,
-`fetch`, `require`, `import`, `setTimeout` if it can run strings). No issue
-yet; file one when A1 starts.
+`fetch`, `require`, `import`, `setTimeout` if it can run strings).
 
-### A3. Compile-time code execution via splices
+### A3. Compile-time code execution via splices (#995)
 
 Known and documented (`docs/dev/language/splices.md`): `agency tc`, the
 language server, `ast`, `fmt`, `doc`, `preprocess`, and `interrupts` all run
 splice generators, and only `run`, `compile`, `typecheck`, and `test` offer
 `--refuse-splices`. The `recommended` policy approves
 `exec("agency tc ...")`, so untrusted code under that policy can reach a
-generator through the shell. The roadmap should decide
-whether `--refuse-splices` becomes the default for anything that is not an
-explicit build, and whether generators run through `compileSandboxed`.
-No issue yet.
+generator through the shell. Decide whether `--refuse-splices` becomes the
+default for anything that is not an explicit build, and whether generators
+run through `compileSandboxed`.
 
 ## B. The runner's handler is outermost and always present
 
-### B1. Top-level `with approve` runs before the root policy exists (#966)
+### B1. Top-level `with approve` runs before the root policy exists (#966) — FIXED
 
 <https://github.com/egonSchiele/agency-lang/issues/966>. `lib/runtime/node.ts`
-runs global init and imported modules' top-level code, then installs the
-policy handler. A top-level `const x = read(...) with approve` therefore has
-only the author's approve in the chain and succeeds under `--reject '*'`.
-The per-invocation host policy (`InvocationOptions.policy`, B2) installs at
-the same bootstrap site, so it shares this gap: a hosted module's top-level
-initializer runs before the host policy exists.
-Fix: install the root policy handler and root budget before any user code,
-including `__initAllRegistered`; check the resume path in `interrupts.ts`
-for the same ordering; add an agency-js test that a top-level read is
-rejected.
+used to run global init and imported modules' top-level code, then install
+the policy handler. A top-level `const x = read(...) with approve` therefore
+had only the author's approve in the chain and succeeded under `--reject '*'`.
+The per-invocation host policy (`InvocationOptions.policy`, B2) installed at
+the same bootstrap site, so it shared the gap.
+Fixed: `initFreshExecCtx` installs the root policy handler and root budget
+first, before any user code, including `__initAllRegistered`. The resume path
+(`respondToInterrupts` in `interrupts.ts`) already installed the policy before
+top-level callback re-registration. A `std::agency` subprocess never had the
+gap: child global init consults the parent's chain over IPC like any other
+raise, so the parent's policy or handlers decide it
+(`tests/agency/subprocess/handler-reject-child-top-level.agency`).
+Test: `tests/agency-js/policy-top-level` pins both policy sources against a
+top-level `with approve`.
+Residual: `rewindFrom` (`lib/runtime/rewind.ts`) installs neither the policy
+handler nor the root budget, yet runs user code (`__initAllRegisteredCallbacks`
+and the replay itself) — the same bypass class. Reachable only from the local
+debugger, not from a remote checkpoint. Tracked in
+<https://github.com/egonSchiele/agency-lang/issues/800>.
 
 ### B2. The resume leg: raise-time policy shipped; checkpoint integrity open
 
@@ -187,14 +197,41 @@ never loads config at all, which is why `--agency-only` happens to be
 immune, and why it also ignores the runner's own `agency.json`. Fix: load
 the runner's config through the normal path, refuse the tree's explicitly.
 
-### C4. The child's environment (no issue yet)
+### C4. The child's environment (#990)
 
 `withRootCarriers` (`lib/cli/childEnv.ts`) scrubs the four policy and
-budget variables from the child's environment and nothing else. A child
-running untrusted code should get an allowlist, not the parent's full
-environment minus four names; after A1 this matters less, but it is the
-right default and it is what statelog needs (see D). File an issue when C1
-to C3 are done.
+budget variables from the child's environment and nothing else, and
+`buildForkOptions` (`lib/runtime/ipc.ts`) passes `{ ...process.env }` to the
+`std::agency.run` child. So "the agent cannot read environment variables"
+is not true today. A child running untrusted code should get an allowlist,
+not the parent's full environment minus four names; after A1 this matters
+less, but it is the right default and it is what statelog needs (see D).
+
+### C5. Deny the child's OS capabilities with `--permission` (#989)
+
+The child that runs untrusted code has full filesystem, child-process,
+worker, and native-addon access from the operating system, regardless of
+the language layers. Node's permission model closes most of that with a
+spawn flag: `--permission --allow-fs-read=<cwd> --allow-fs-write=<cwd>` in
+`buildForkOptions` (`lib/runtime/ipc.ts`) and the `--agency-only` spawn
+(`sandboxRuntimeNodeArgs`, `lib/cli/commands.ts`) denies spawning a shell
+(which would regain every capability), loading a native addon, and starting
+a worker, and scopes the filesystem to the workdir. This is the containment
+floor from `goal.md`. Two limits: Node's permission model has no network
+flag (that is C6), and the child still performs approved out-of-workdir
+effects in-process, so full fs denial waits on brokering (layer 4). Ship
+the fs-in-workdir slice that does not break approved effects first.
+
+### C6. Network egress control for the child (#997)
+
+`--permission` (C5) cannot restrict the network — Node exposes no
+`--allow-net`. A child locked down for filesystem and process still has full
+outbound network. Deny it at the OS level (Landlock, Seatbelt, or a network
+namespace) so only brokered network effects reach out, and/or route
+`std::http` through an egress allowlist that blocks link-local metadata
+(169.254.169.254) and internal services. Overlaps D5 (the hosted case needs
+the egress allowlist regardless); full child-network denial depends on
+brokering (layer 4).
 
 ## D. Hosted execution (statelog)
 
@@ -236,25 +273,123 @@ is the place to start. No statelog issues are filed yet.
 
 - Every codegen, import-template, and effectful-stdlib change gets a test
   that would fail if the boundary broke.
-- `docs/dev/cli/test-cli-sandbox.md` currently claims code before the
-  handler "cannot raise an interrupt at all" and that under `--agency-only`
-  "every effect the code can perform is an interrupt". Both are false until
-  A1 and B1 land; correct the doc when they do, and not before.
+- `docs/dev/cli/test-cli-sandbox.md` currently claims that under
+  `--agency-only` "every effect the code can perform is an interrupt". That
+  is false until A1 lands; correct the doc when it does, and not before.
+  (Its claim about code running before the root handler was corrected when
+  B1 was fixed.)
 - Before hosting strangers' code on the strength of the language, someone
   spends a day trying to break it with this list in hand.
+
+## F. Making the safe posture the default
+
+The layers in A1 are gated behind `--agency-only`. That gate exists because
+the layers are only sound for pure Agency code: a program that imports
+TypeScript has handed full ambient authority to that TypeScript, and no
+check on the Agency side changes what the imported code can do. So "apply
+the layers everywhere" really means "apply them to every pure-Agency
+program", and the three layers answer that question differently. These are
+direction decisions, not holes; none blocks the untrusted-code work above.
+
+### F1. Refuse `eval` and `Function` in all Agency source, no flag (#991)
+
+No legitimate Agency program names `eval`, `Function`, or `new Function` —
+Agency has splices and templates for metaprogramming, and code built from
+strings defeats the language's own model (it is invisible to interrupts,
+policies, and the hoisting that makes resume safe). Make these specific
+names a hard compile error in every compile, trusted or not. The machinery
+exists (the A1 bind-check, and AG4004 before it); this is scoping a small
+subset of it to always-on. Cheap, independent of everything else, and it
+can ship first.
+
+### F2. The bind-check becomes the default, warning first (#992)
+
+A bare `fetch(...)` or `process.env.HOME` in Agency source is a problem for
+its own author, not only for a runner of untrusted code: the effect bypasses
+the interrupt system, so the author's own policies and `--reject` never see
+it, and the call is not hoisted the way stdlib calls are, so a checkpoint
+resume can replay it. Direct global access quietly breaks the semantics the
+user chose Agency for. So the bind-check is the language's correct default
+posture, with today's permissive mode as the opt-out rather than the
+reverse. Existing programs lean on verbatim-emitted identifiers, so the
+path is warning-by-default for a release or two, then error-by-default with
+an explicit opt-out flag.
+
+### F3. Derive the runtime hardening from program purity, and settle B3 with it
+
+Layer 2's Node flag and layer 3's `lockdown()` apply to the whole child
+process, including every npm dependency the user's imported TypeScript
+pulls in — and that ecosystem is not clean under them (ajv compiles
+validators with `new Function`; polyfills patch prototypes). The SES
+investigation verified the Agency runtime and its own dependencies are
+lockdown-clean; it says nothing about arbitrary interop JS. So neither can
+be turned on universally without breaking working programs, for a benefit
+that mostly evaporates once interop JS shares the process anyway.
+
+The compiler already knows whether a program is pure Agency. A pure program
+can get the flag, and (once A1 layer 3 ships and soaks) the lockdown
+preload, automatically — no flag needed — while `--agency-only` remains the
+explicit assertion you make about someone else's code. Hardening that
+switches off when a JS import is added must be visible: a compile-time
+note, not silence.
+
+Resolve this together with B3 (#970), because the two questions are halves
+of one decision: F1 always-on, F2 default-on with an opt-out, runtime
+hardening derived from purity, and `--agency-only` (or an `--untrusted`
+rename) meaning pure Agency **plus** a propagate-everything root policy.
+That leaves the flag meaning what a user reading it assumes it means: this
+code is not trusted.
+
+## G. Resource limits on the child (#993)
+
+`goal.md` keeps "one plain Node child per run, with an allowlisted
+environment and resource limits" as the unit that can be limited and
+killed — it is what caps a `while (true) {}` and a compromised run.
+`std::agency.run` already applies these limits to its children (wall-clock,
+heap, IPC payload, stdout, cost, depth); the `--agency-only` CLI child does
+not get the defaults. Decide what that child gets by default (a wall-clock
+timeout, a memory cap via `--max-old-space-size`, kill-on-parent-exit) and
+where a host like statelog sets them per invocation. The environment half is
+C4, the capability half is C5.
+
+## H. Full containment: effect brokering (#996)
+
+C5 and C6 restrict the child's capabilities, but the child still has to
+perform its own approved effects in-process, so it cannot be denied
+filesystem and network outright. Brokering removes that constraint: the
+child performs no effects, it only raises the interrupt; the parent performs
+each approved effect and passes the result back over IPC. Then the child can
+be denied all filesystem and network capability, because everything real
+happens in the parent after the policy said yes.
+
+Agency is well-suited to this because effects are already reified as
+interrupts that already cross the child-to-parent boundary for the approval
+decision (`lib/runtime/ipc.ts`). Brokering moves the *action* to the parent
+side of a message that already exists, for the enumerable set of effectful
+stdlib primitives (read, write, env, http, shell, run, ...). Comparable in
+size to the SES Compartment phase and bounded the same way. Prototype the
+streaming and large-payload IPC cases first. Not a prerequisite for C5/C6;
+it is what lets them become total denial rather than workdir-scoping.
 
 ## Status
 
 | Item | Issue | State |
 |---|---|---|
 | A1 JS globals reachable | #971 | open |
-| A2 review `JS_GLOBALS` | — | not filed |
-| A3 splice execution in non-build commands | — | not filed, known |
-| B1 top-level `with approve` before policy | #966 | open |
+| A2 review `JS_GLOBALS` | #994 | open |
+| A3 splice execution in non-build commands | #995 | open |
+| B1 top-level `with approve` before policy | #966 | fixed |
 | B2 raise-time host policy / checkpoint integrity | spec | policy shipped; integrity open |
 | B3 sandbox flags imply no policy | #970 | open |
 | C1 `node_modules` shadowing | #967 | open |
 | C2 provider modules from tree config | #968 | open |
 | C3 `llm()` redirect; `--agency-only` ignores config | #969 | open |
-| C4 child env allowlist | — | not filed |
+| C4 child env allowlist | #990 | open |
+| C5 deny child OS capabilities (`--permission`) | #989 | open |
+| C6 network egress control for the child | #997 | open |
 | D statelog hosted execution | statelog #11 (containment only) | open |
+| F1 refuse `eval`/`Function` everywhere | #991 | open |
+| F2 bind-check default-on (warning first) | #992 | open |
+| F3 hardening from purity; settle with B3 | #970 | open |
+| G child resource limits | #993 | open |
+| H effect brokering (full containment) | #996 | open |

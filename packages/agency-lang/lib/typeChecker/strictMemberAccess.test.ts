@@ -295,6 +295,24 @@ node main() {
   });
 });
 
+describe("rejected member on a narrowed failure", () => {
+  it("allows rejected on a narrowed failure", () => {
+    const { errors } = check(`
+def f(): Result { return failure("x") }
+def g(): string {
+  const r = f()
+  if (isFailure(r)) {
+    if (r.rejected) {
+      return "rejected"
+    }
+    return "failed"
+  }
+  return "ok"
+}`);
+    expect(errors).toEqual([]);
+  });
+});
+
 describe("skippedFunctions member on a narrowed failure", () => {
   it("allows skippedFunctions on a narrowed failure", () => {
     const { errors } = check(`

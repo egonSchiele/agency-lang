@@ -16,7 +16,7 @@
 // both consume the same `ColumnLayout[]`, so a change to one stays in
 // sync with the other automatically.
 
-import { Style, styledWrapper, visualWidth } from "./ansi.js";
+import { Style, styledWrapper, visualWidth, wrapText } from "./ansi.js";
 import { Align, Block, above, beside, pad, padLine, styled } from "./block.js";
 import {
   BORDER_CELLS,
@@ -582,10 +582,14 @@ export function composeTable(node: LayoutNode): Block {
   // width; otherwise the table is free to grow to fit the title. With
   // no frame there is no top edge, so a title always renders as its own
   // row above the cells.
+  // In the resolved-width case the title wraps to innerWidth: nothing
+  // downstream shrinks an over-wide line, so an unwrapped title would
+  // push the table past its declared width.
+  const framelessTitle = resolved !== undefined ? wrapText(title, innerWidth) : title;
   const placement = !framed
     ? title === ""
       ? { kind: "top" as const, title: "" }
-      : { kind: "wrapped" as const, block: styled(Block.of(title), titleStyle) }
+      : { kind: "wrapped" as const, block: styled(Block.of(framelessTitle), titleStyle) }
     : resolved === undefined
       ? { kind: "top" as const, title }
       : placeTitle(title, innerWidth, titleStyle);

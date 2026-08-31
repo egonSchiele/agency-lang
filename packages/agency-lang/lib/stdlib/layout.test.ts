@@ -524,6 +524,18 @@ describe("bordered (no title)", () => {
     expect(bordered(Block.of("hi"), { borderStyle: "none", title: "T" }).toString()).toBe("T \nhi");
   });
 
+  test('borderStyle "none" wraps an over-wide title to the target width', () => {
+    const out = bordered(Block.of("hi"), {
+      borderStyle: "none",
+      title: "a very long title",
+      targetWidth: 6,
+    });
+    expect(out.width).toBe(6);
+    for (const line of out.lines) {
+      expect(_internal.visualWidth(line)).toBeLessThanOrEqual(6);
+    }
+  });
+
   test("unknown borderStyle falls back to light + warns once", () => {
     const warns: string[] = [];
     const orig = console.warn;
@@ -1313,6 +1325,20 @@ describe("table — composeTable rendering", () => {
       body: [["1", "2"]],
     });
     expect(out).toBe("T     \n" + " 1  2 ");
+  });
+
+  test('borderStyle: "none" wraps an over-wide title to a fixed table width', () => {
+    const tree = tableNode({
+      borderStyle: "none",
+      width: 10,
+      title: "a very long table title",
+      body: [["x", "y"]],
+    });
+    const resolved = _internal.resolveSizes(tree, { cols: 80, rows: 24 });
+    const lines = renderTablePlain(resolved.attrs as Record<string, unknown>).split("\n");
+    for (const line of lines) {
+      expect(_internal.visualWidth(line)).toBeLessThanOrEqual(10);
+    }
   });
 
   test('borderStyle: "none" reserves no frame cells in width resolution', () => {

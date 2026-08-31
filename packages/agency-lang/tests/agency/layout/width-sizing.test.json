@@ -9,7 +9,7 @@
     {
       "nodeName": "testTableWidthAttr",
       "input": "",
-      "expectedOutput": "{\"type\":\"table\",\"attrs\":{\"title\":\"\",\"titleColor\":\"\",\"borderStyle\":\"rounded\",\"borderColor\":\"\",\"caption\":\"\",\"cellPadding\":1,\"columns\":null,\"header\":null,\"body\":[[\"x\"]],\"footer\":[],\"headerDivider\":true,\"footerDivider\":true,\"rowDividers\":false,\"columnDividers\":true,\"width\":24},\"children\":[]}",
+      "expectedOutput": "{\"type\":\"table\",\"attrs\":{\"title\":\"\",\"titleColor\":\"\",\"borderStyle\":\"rounded\",\"borderColor\":\"\",\"caption\":\"\",\"cellPadding\":1,\"columns\":null,\"header\":null,\"body\":[[\"x\"]],\"footer\":[],\"headerDivider\":true,\"footerDivider\":true,\"rowDividers\":false,\"columnDividers\":true,\"columnGap\":0,\"width\":24},\"children\":[]}",
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {

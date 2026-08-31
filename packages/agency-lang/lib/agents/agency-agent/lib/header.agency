@@ -133,6 +133,9 @@ def extendedInfo(left, brainName: string) {
       t.row(color.cyan("Fast Model"), args.flags.fastmodel ?? "")
       t.row(color.cyan("Slow Model"), args.flags.slowmodel ?? "")
       t.row(color.cyan("Provider"), args.flags.provider ?? "")
+      t.row(color.cyan("Local Model"), args.flags.local ?? "")
+      t.row(color.cyan("Continue"), boolToString(args.flags.continue ?? false))
+      t.row(color.cyan("Resume"), args.flags.resume ?? "")
       t.row(color.cyan("Subagent"), args.flags.agent ?? "")
       t.row(color.cyan("Policy"), args.flags.policy ?? "")
       t.row(color.cyan("Agent Home"), args.flags["agent-home"] ?? "")
@@ -142,11 +145,11 @@ def extendedInfo(left, brainName: string) {
       t.row(color.cyan("Log"), args.flags.log ?? "")
       t.row(
         color.cyan("Max Tool Call Rounds"),
-        args.flags["max-tool-call-rounds"] ?? "",
+        "${args.flags["max-tool-call-rounds"] ?? ""}",
       )
       t.row(
         color.cyan("Max Tool Result Chars"),
-        args.flags["max-tool-result-chars"] ?? "",
+        "${args.flags["max-tool-result-chars"] ?? ""}",
       )
     }
   }

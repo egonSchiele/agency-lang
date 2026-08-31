@@ -167,11 +167,14 @@ export function bordered(block: Block, opts: BorderOpts): Block {
   const padded = withPaddingApplied(block, padding);
 
   // Frameless: padding still applies, and a title becomes a plain
-  // styled first line instead of living in a top edge.
+  // styled first line instead of living in a top edge — wrapped to the
+  // target width, since nothing downstream shrinks an over-wide line.
   if (style === "none") {
     const titleStyle: Style = opts.titleColor ? { fgColor: opts.titleColor } : {};
+    const titleLines =
+      opts.targetWidth !== undefined ? wrapText(titleText, opts.targetWidth) : titleText;
     const titled =
-      titleText === "" ? padded : above(styled(Block.of(titleText), titleStyle), padded);
+      titleText === "" ? padded : above(styled(Block.of(titleLines), titleStyle), padded);
     if (opts.targetWidth === undefined) return titled;
     return pad(titled, opts.targetWidth, titled.height, "start", "start");
   }

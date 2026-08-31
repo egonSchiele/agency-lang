@@ -13,7 +13,7 @@ export def brainFlagHelp(): string {
 }
 
 export def parseAgentArgs() {
-  return parseArgs(
+  const args = parseArgs(
     {
       programName: "agency agent",
       description: "Agency language assistant — interactive REPL by default; one-shot when piped or passed a query / --print.",
@@ -92,6 +92,11 @@ export def parseAgentArgs() {
           optional: true,
           description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value for guided setup. Pins all slots to the local model; mutually exclusive with --model/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
         },
+        "local-model": {
+          type: "string",
+          optional: true,
+          description: "Deprecated alias for --local."
+        },
         trace: {
           type: "string",
           optional: true,
@@ -121,4 +126,10 @@ export def parseAgentArgs() {
       }
     },
   )
+  // Deprecated alias: --local-model means --local. Normalize here so
+  // every consumer reads only flags.local.
+  if (args.flags["local"] == null && args.flags["local-model"] != null) {
+    args.flags["local"] = args.flags["local-model"]
+  }
+  return args
 }

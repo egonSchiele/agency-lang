@@ -142,23 +142,25 @@ a trace it cannot complete. A failure on one directory is reported and the
 next one still uploads. Running the command twice is safe: events skip,
 annotations upsert.
 
-The result names the statelog batch page only when every uploaded run
-shares one batch id and one agent name, and that name passes
-`agentNameProblem`. An older trace may carry a name from before validation;
-`..` would be folded out of the URL, so no link is better than a wrong one.
+Runs upload through a bounded pool, and each one prints its line as it
+finishes (`reportProgress` in `EvalUploadDependencies`). The result names
+the statelog batch page (`/projects/evals/batch?id=<slug>&batch=<batch>`)
+only when every uploaded run shares one batch id; statelog keys the page
+by project and batch alone.
 
 The client, `lib/cli/statelog/evalUploadClient.ts`, is the seventh sealed
 statelog client (`docs/dev/hosting/statelog-clients.md`).
 
-## Agent names are URL segments
+## Agent names are labels
 
-`setAgentName` (`std::statelog`) names the agent a trace belongs to, and
-statelog puts that name in a path: `/evals/agents/<name>/batches/<batch>`.
-So the rule in `lib/statelog/agentName.ts` is: letters, digits, `.`, `_`,
-`-`, and `/` between segments; at most 200 characters; no empty, `.`, or
-`..` segment (a URL parser folds those away even when percent-encoded). An
-invalid name throws at the call site, inside or outside an Agency frame.
-The agency agent names itself `agency-agent/<brain>`
+`setAgentName` (`std::statelog`) names the agent a trace belongs to.
+Statelog treats the name as a filterable label on a batch, not a URL key:
+its evals pages are keyed by project and batch, and a batch whose runs
+carry no name shows no agent. The rule in `lib/statelog/agentName.ts` —
+letters, digits, `.`, `_`, `-`, and `/` between segments; at most 200
+characters; no empty, `.`, or `..` segment — keeps a name one clean token
+that stays intact wherever a URL carries it. An invalid name throws at
+the call site, inside or outside an Agency frame. The agency agent names itself `agency-agent/<brain>`
 (`lib/agents/agency-agent/lib/agentName.agency`) right after it picks its
 brain, so runs group per brain.
 

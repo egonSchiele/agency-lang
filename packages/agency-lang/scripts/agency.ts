@@ -67,7 +67,7 @@ import { runGradeCommand } from "@/cli/eval/grade.js";
 import { resolveRunStatelog } from "@/cli/eval/logs.js";
 import { evalLs } from "@/cli/eval/ls.js";
 import { evalRun } from "@/cli/eval/run.js";
-import { evalUpload, formatUploadResult } from "@/cli/eval/upload.js";
+import { evalUpload, formatUploadSummary } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
@@ -1023,8 +1023,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // The project in agency.json is the only target: no host or key flags here,
       // agency.json and $STATELOG_API_KEY own that.
       const target = resolveProjectTarget(getConfigContext(), {});
-      const result = await evalUpload(paths, target).catch(failProjectCommand);
-      for (const line of formatUploadResult(result)) console.log(line);
+      const result = await evalUpload(paths, target, {
+        reportProgress: (line) => console.log(line),
+      }).catch(failProjectCommand);
+      for (const line of formatUploadSummary(result)) console.log(line);
       if (result.runs.some((run) => run.status === "failed")) {
         process.exitCode = 1;
       }

@@ -14,6 +14,8 @@ export def builtinPalette(): Record<string, string> {
     "/local": "Switch to a local model",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",
+    "/skills": "List skills the agent has learned, by subagent",
+    "/toolbox": "List tools the agent has written, by subagent",
     "/mcp": "List configured MCP servers and their tools",
     "/paste": "Multi-line paste mode (Ctrl+D submits, Ctrl+C cancels)",
     "/help": "Show available slash commands"

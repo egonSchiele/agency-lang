@@ -1,0 +1,1 @@
+Non-markdown placeholder so git tracks this empty skills subdirectory; the scan must ignore it.

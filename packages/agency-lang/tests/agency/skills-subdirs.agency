@@ -1,0 +1,72 @@
+/*
+ * scanSkillsSubdirs groups a root's flat skills by immediate
+ * subdirectory (one scan interrupt for the whole root), and
+ * skillsToolFromEntries rebuilds a skills tool from entries without
+ * rescanning. The fixture holds two explorer skills, one research
+ * skill, and an empty directory.
+ */
+import { keys } from "std::object"
+import { scanSkillsSubdirs, skillsToolFromEntries } from "std::skills"
+
+def fixture(): string {
+  return "${__dirname}/skills-subdirs-fixture"
+}
+
+node scanGroupsBySubdir(): boolean {
+  const scanned = scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"]) with approve
+  const explorer = scanned["explorer"]
+  const research = scanned["research"]
+  if (explorer == undefined || research == undefined) {
+    return false
+  }
+  return explorer.length == 2 && research.length == 1 && scanned["empty"] == undefined
+}
+
+node scanRaisesOneInterrupt(): boolean {
+  let scans = 0
+  handle {
+    scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"])
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  return scans == 1
+}
+
+node toolFromEntriesListsThem(): boolean {
+  const scanned = scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"]) with approve
+  const tool = skillsToolFromEntries("${fixture()}/explorer", scanned["explorer"], "learned_skills_explorer")
+  return tool.description.includes("<name>repo-orientation</name>")
+      && tool.description.includes("<description>Orient in an unfamiliar repo</description>")
+}
+
+node missingRootYieldsEmpty(): boolean {
+  const scanned = scanSkillsSubdirs("${__dirname}/no-such-dir", ["explorer"]) with approve
+  return keys(scanned).length == 0
+}
+
+// A subdirectory name that is not a bare path segment would carry the
+// root's one approval outside the root (`../x`), so it fails before any
+// interrupt is raised — the user is never prompted for a scan that
+// would escape what they approved.
+node traversalSubdirFailsBeforeTheInterrupt(): boolean {
+  const bad = ["../escape", "a/b", "..", ".", ""]
+  for (sub in bad) {
+    let scans = 0
+    let result: any = null
+    handle {
+      result = scanSkillsSubdirs(fixture(), [sub])
+    } with (intr) {
+      if (intr.effect == "std::skills::skillsDir") {
+        scans = scans + 1
+      }
+      return approve()
+    }
+    if (!(result is failure) || scans != 0) {
+      return false
+    }
+  }
+  return true
+}

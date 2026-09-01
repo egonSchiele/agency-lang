@@ -206,7 +206,7 @@ export def skillsToolFromEntries(
   """
   Build the skills tool for `dir` from already-scanned entries. Pure: no
   reads, no interrupts. Callers that already hold a directory's entries
-  (a catalog updated after a save) use this to rebuild the tool without
+  (a cached catalog, say) use this to rebuild the tool without
   rescanning.
 
   @param dir - The directory the tool will read skills from

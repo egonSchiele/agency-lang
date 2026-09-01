@@ -33,6 +33,15 @@ export function _bundledDocsDir(): string {
 }
 
 /**
+ * tarsec's frontmatter serializer, the encode half of the parser
+ * `std::markdown` wraps: `parse(stringify(x))` deep-equals `x` for every
+ * flat string record it accepts. Throws on values the grammar cannot
+ * hold (a key it cannot spell, or a value no quote character can
+ * enclose); Agency callers wrap the call in `try`.
+ */
+export { stringifyFrontmatter as _stringifyFrontmatter } from "tarsec/parsers/markdown";
+
+/**
  * Absolute path to the skills we ship for one agent, under
  * `stdlib/agents/skills/<agent>`. Resolved through getStdlibDir for the
  * same reason as _docsDir: a path relative to the calling file works in the
@@ -44,15 +53,6 @@ export function _bundledDocsDir(): string {
  * trusted scan into an unprompted scan of somewhere else entirely. Confining
  * here keeps that trust argument true.
  */
-/**
- * tarsec's frontmatter serializer, the encode half of the parser
- * `std::markdown` wraps: `parse(stringify(x))` deep-equals `x` for every
- * flat string record it accepts. Throws on values the grammar cannot
- * hold (a key it cannot spell, or a value no quote character can
- * enclose); Agency callers wrap the call in `try`.
- */
-export { stringifyFrontmatter as _stringifyFrontmatter } from "tarsec/parsers/markdown";
-
 export function _agentSkillsDir(agent: string): string {
   const root = path.join(getStdlibDir(), "agents", "skills");
   const resolved = path.resolve(root, agent);

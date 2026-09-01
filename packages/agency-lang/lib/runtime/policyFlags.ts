@@ -45,8 +45,9 @@ function expandSetNames(names: string[], flag: string): string[] {
 }
 
 /** A set name this one probably meant: a case-only mismatch, or one edit
- *  (insert, delete, or replace) away. */
-function nearMissSetName(name: string, setNames: string[]): string | null {
+ *  (insert, delete, or replace) away. Also used by `agency effects` for
+ *  its unknown-name error. */
+export function nearMissSetName(name: string, setNames: string[]): string | null {
   const exact = setNames.find((s) => s.toLowerCase() === name.toLowerCase());
   if (exact !== undefined) {
     return exact;

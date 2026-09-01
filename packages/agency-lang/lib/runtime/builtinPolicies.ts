@@ -18,6 +18,7 @@ const AGENCY_SAFE_SUBCOMMANDS = [
   "definition",
   "diagnostics",
   "doc",
+  "effects",
   "literate",
 ];
 

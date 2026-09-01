@@ -10,6 +10,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/cli/cli-arguments.md` — How one command line carries both agency's own flags and the program's.
 - `docs/dev/cli/vendored-commander.md` — The vendored commander fork, what was changed in it, and the rules for keeping it in sync.
 - `docs/dev/cli/doc-cache.md` — The incremental cache behind `agency doc`, and how it decides a page is stale.
+- `docs/dev/cli/effects-command.md` — `agency effects`, which lists the capability sets and built-in policies the approval flags accept, and where its data comes from.
 - `docs/dev/cli/test-cli-sandbox.md` — The flag combination that makes it safe to run Agency code you do not trust.
 - `docs/dev/cli/debugger.md` — The interactive debugger: stepping, inspecting variables, and rewinding.
 - `docs/dev/cli/debugger-tests.md` — Driving the debugger headlessly in tests.

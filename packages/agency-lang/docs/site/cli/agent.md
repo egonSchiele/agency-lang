@@ -15,6 +15,23 @@ Launches the Agency language assistant agent — an LLM agent that knows about A
 
 This is a convenient way to get help with Agency without leaving your terminal.
 
+## Approval flags
+
+The agent asks before doing anything its policy does not already
+decide. Three flags shape that for a single session:
+
+```
+agency agent --policy with-writes
+agency agent --approve FileRead --reject Shell
+```
+
+`--policy` picks the base policy (a built-in name or a policy-file
+path); `--approve` and `--reject` overlay effects or capability-set
+names on top of it. None of these change your saved `policy.json`. See
+[the policy flags](/cli/policy#approving-and-rejecting-with-flags) for
+the details and [`agency effects`](/cli/effects) for the names they
+accept.
+
 ## Budget flags
 
 - `agency agent --max-cost <dollars>` — abort if the agent's LLM spend exceeds this many dollars. `0` means no paid spend (local models only); negative means no limit.

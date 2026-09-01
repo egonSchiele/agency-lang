@@ -258,6 +258,7 @@ export default defineConfig({
             { text: "coverage", link: "/cli/coverage" },
             { text: "debug", link: "/cli/debug" },
             { text: "doc", link: "/cli/doc" },
+            { text: "effects", link: "/cli/effects" },
             { text: "eval", link: "/cli/eval" },
             { text: "eval-judge", link: "/cli/eval-judge" },
             { text: "format", link: "/cli/format" },

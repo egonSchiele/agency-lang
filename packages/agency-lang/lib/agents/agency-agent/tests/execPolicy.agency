@@ -40,6 +40,11 @@ node minimalApprovesDoc(): boolean {
   return checkPolicy(minimalAutoApprovePolicy, execIntr("doc")).type == "approve"
 }
 
+node minimalApprovesEffects(): boolean {
+  // The discovery command reads only shipped metadata.
+  return checkPolicy(minimalAutoApprovePolicy, execIntr("effects")).type == "approve"
+}
+
 node doesNotApproveOtherSubcommands(): boolean {
   // `run` is not in the allow-list, so it must NOT be auto-approved.
   return checkPolicy(minimalAutoApprovePolicy, execIntr("run")).type != "approve"

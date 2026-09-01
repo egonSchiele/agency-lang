@@ -11,17 +11,6 @@ export function splitEffects(list: string | undefined): string[] {
   return list.split(/[\s,]+/).filter((s) => s.length > 0);
 }
 
-/** Overlay blanket rules from `--approve` / `--reject` flag values onto a
- *  base policy. Returns a new policy; `base` is not mutated.
- *
- *  Each affected effect's rule list is built in one construction so
- *  precedence is visible in the literal, not implied by statement order:
- *  reject rule, then approve rule, then the base's own rules.
- *  Reject-ahead-of-approve is how overlap resolves to reject under
- *  checkPolicy's first-match-wins — and you cannot break it by reordering
- *  statements.
- *
- *  Shared by `agency run` (via `resolveRunPolicy`) and the agent's flags. */
 /** Expand any built-in capability-set names in a flag's effect list to
  *  their member effects. A name with `::` is always a plain effect. A
  *  bare name that matches no set passes through as an effect name — bare
@@ -79,6 +68,19 @@ function withinOneEdit(a: string, b: string): boolean {
   return restA === restB;
 }
 
+/** Overlay blanket rules from `--approve` / `--reject` flag values onto a
+ *  base policy. Returns a new policy; `base` is not mutated. A flag value
+ *  holds effect names and capability-set names; sets expand to their
+ *  member effects (see expandSetNames).
+ *
+ *  Each affected effect's rule list is built in one construction so
+ *  precedence is visible in the literal, not implied by statement order:
+ *  reject rule, then approve rule, then the base's own rules.
+ *  Reject-ahead-of-approve is how overlap resolves to reject under
+ *  checkPolicy's first-match-wins — and you cannot break it by reordering
+ *  statements.
+ *
+ *  Shared by `agency run` (via `resolveRunPolicy`) and the agent's flags. */
 export function policyOverlayFromFlags(
   approve: string | undefined,
   reject: string | undefined,

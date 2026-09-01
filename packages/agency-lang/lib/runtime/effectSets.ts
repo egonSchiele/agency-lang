@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { parseAgency } from "../parser.js";
 import { getPackageRoot } from "../importPaths.js";
+import type { AgencyMultiLineComment, TypeAlias, UnionType, VariableType } from "../types.js";
 
 /** One built-in capability set from `stdlib/capabilities.agency`. */
 export type EffectSetInfo = {
@@ -30,34 +31,50 @@ let cache: Record<string, EffectSetInfo> | null = null;
  */
 export function builtinEffectSets(): Record<string, EffectSetInfo> {
   if (cache === null) {
-    cache = load();
+    const file = path.join(getPackageRoot(), "stdlib", "capabilities.agency");
+    cache = parseEffectSets(readFileSync(file, "utf-8"), file);
   }
   return cache;
 }
 
-function load(): Record<string, EffectSetInfo> {
-  const file = path.join(getPackageRoot(), "stdlib", "capabilities.agency");
-  const source = readFileSync(file, "utf-8");
+type RawSet = { name: string; doc: string; items: VariableType[] };
+
+/** Build the set table from Agency source. Exported for tests; production
+ *  use goes through `builtinEffectSets`. */
+export function parseEffectSets(source: string, origin: string): Record<string, EffectSetInfo> {
   const parsed = parseAgency(source);
   if (!parsed.success) {
-    throw new Error(`stdlib capabilities file failed to parse (${file}): ${parsed.message}`);
+    throw new Error(`stdlib capabilities file failed to parse (${origin}): ${parsed.message}`);
   }
 
   // Doc comments are standalone nodes after a bare parse (attachment to
   // the following declaration is the preprocessor's job, which we don't
   // run) — pair each doc comment with the effectSet declaration that
   // follows it.
-  type RawSet = { name: string; doc: string; items: any[] };
   const raw: RawSet[] = [];
   let pendingDoc = "";
-  for (const node of parsed.result.nodes as any[]) {
+  for (const node of parsed.result.nodes) {
     if (node.type === "multiLineComment") {
-      pendingDoc = node.isDoc && !node.isModuleDoc ? cleanDoc(node.content) : "";
+      const comment = node as AgencyMultiLineComment;
+      pendingDoc = comment.isDoc && !comment.isModuleDoc ? cleanDoc(comment.content) : "";
       continue;
     }
-    if (node.type === "typeAlias" && node.isEffectSet) {
-      const items = node.aliasedType?.types ?? [];
-      raw.push({ name: node.aliasName, doc: pendingDoc, items });
+    if (node.type === "typeAlias" && (node as TypeAlias).isEffectSet) {
+      const alias = node as TypeAlias;
+      // Only the `<a, b>` literal form is a member list. `<*>` parses to
+      // the `any` primitive; a set declared that way has no enumerable
+      // members and cannot be expanded, so refuse it at the source.
+      if (alias.aliasedType.type !== "unionType" || !alias.aliasedType.isEffectSet) {
+        throw new Error(
+          `effect set '${alias.aliasName}' in ${origin} is not a member list (<a, b>); ` +
+            `'${alias.aliasedType.type}' cannot be expanded`,
+        );
+      }
+      raw.push({
+        name: alias.aliasName,
+        doc: pendingDoc,
+        items: (alias.aliasedType as UnionType).types,
+      });
     }
     pendingDoc = "";
   }
@@ -72,7 +89,7 @@ function load(): Record<string, EffectSetInfo> {
     result[set.name] = {
       name: set.name,
       doc: set.doc,
-      members: resolveMembers(set, byName, []),
+      members: resolveMembers(set, byName, [], origin),
       composedOf: set.items
         .filter((item) => item.type === "typeAliasVariable")
         .map((item) => item.aliasName),
@@ -83,12 +100,13 @@ function load(): Record<string, EffectSetInfo> {
 
 /** Flatten one set's items to effect names, resolving nested sets. */
 function resolveMembers(
-  set: { name: string; items: any[] },
-  byName: Record<string, { name: string; items: any[] }>,
+  set: RawSet,
+  byName: Record<string, RawSet>,
   seen: string[],
+  origin: string,
 ): string[] {
   if (seen.includes(set.name)) {
-    throw new Error(`effect set cycle involving '${set.name}' in stdlib/capabilities.agency`);
+    throw new Error(`effect set cycle involving '${set.name}' in ${origin}`);
   }
   const members: string[] = [];
   for (const item of set.items) {
@@ -98,15 +116,15 @@ function resolveMembers(
     } else if (item.type === "typeAliasVariable") {
       // A bare label: a reference to another set in this file.
       const target = byName[item.aliasName];
-      if (!target) {
+      if (target === undefined) {
         throw new Error(
-          `effect set '${set.name}' references unknown set '${item.aliasName}' in stdlib/capabilities.agency`,
+          `effect set '${set.name}' references unknown set '${item.aliasName}' in ${origin}`,
         );
       }
-      members.push(...resolveMembers(target, byName, [...seen, set.name]));
+      members.push(...resolveMembers(target, byName, [...seen, set.name], origin));
     } else {
       throw new Error(
-        `effect set '${set.name}' has a member of unexpected shape '${item.type}' in stdlib/capabilities.agency`,
+        `effect set '${set.name}' has a member of unexpected shape '${item.type}' in ${origin}`,
       );
     }
   }

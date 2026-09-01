@@ -17,7 +17,8 @@ surprised us more than once.
 - Built-ins like `with-writes` are constructed at launch with the process
   cwd baked into their dir rules.
 - `--approve <effects>` / `--reject <effects>` (`agency run`,
-  `agency test`, and `agency agent`) take comma- or whitespace-separated
+  `agency test`, `agency remote call`, and
+  `agency agent`) take comma- or whitespace-separated
   effect names and overlay blanket rules ahead of whatever base the run
   resolved — the saved file, a built-in, or a `--policy` path — with
   reject rules ahead of approve rules, so under first-match-wins the

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { builtinEffectSets } from "./effectSets.js";
+import { builtinEffectSets, parseEffectSets } from "./effectSets.js";
 
 // These parse the REAL shipped stdlib/capabilities.agency, so they double
 // as drift tests: an edit to that file the walker misreads fails here.
@@ -56,5 +56,28 @@ describe("builtinEffectSets", () => {
   it("is safe against prototype-colliding lookups", () => {
     expect(sets["toString"]).toBeUndefined();
     expect(sets["__proto__"]).toBeUndefined();
+  });
+});
+
+describe("parseEffectSets", () => {
+  it("pairs a doc comment with the declaration that follows it", () => {
+    const sets = parseEffectSets(
+      `/** Everything filesystem. */\nexport effectSet Fs = <std::read, std::write>\n`,
+      "test",
+    );
+    expect(sets["Fs"].doc).toBe("Everything filesystem.");
+    expect(sets["Fs"].members).toEqual(["std::read", "std::write"]);
+  });
+
+  it("refuses a set declared as <*> (no enumerable members)", () => {
+    expect(() => parseEffectSets(`export effectSet Anything = <*>\n`, "test")).toThrow(
+      "cannot be expanded",
+    );
+  });
+
+  it("refuses a reference to an undeclared set", () => {
+    expect(() => parseEffectSets(`export effectSet A = <Missing>\n`, "test")).toThrow(
+      "unknown set 'Missing'",
+    );
   });
 });

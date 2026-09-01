@@ -66,6 +66,14 @@ export def parseAgentArgs() {
           optional: true,
           description: "Approval policy for this run: a built-in name (minimal, recommended, with-writes, approve-all) or a path to a policy JSON file. with-writes auto-approves file writes and git changes scoped to the current directory and its children; approve-all approves EVERY interrupt with no scoping (sandbox use only). Overrides the saved policy without persisting it. Pass --policy with no value to list the built-in policies."
         },
+        approve: {
+          type: "string",
+          description: "Comma-separated interrupt effects to auto-approve for this run (e.g. std::write,std::git::commit), ahead of the active policy's own rules. Session-only; never saved."
+        },
+        reject: {
+          type: "string",
+          description: "Comma-separated interrupt effects to auto-reject for this run. A reject outranks an approve for the same effect. Session-only; never saved."
+        },
         continue: {
           type: "boolean",
           description: "Resume the most recent saved session for this directory"

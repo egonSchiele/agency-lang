@@ -7,6 +7,7 @@ import {
   recommendedAutoApprovePolicy,
   builtinPolicy,
   builtinPolicyNames,
+  policyOverlayFromFlags,
   BUILTIN_POLICIES,
   Policy,
  } from "std::policy"
@@ -58,10 +59,15 @@ export def givePolicyChoice() {
 
 export def getPolicyForAgent(
   _policyArg: string,
+  approveArg: string,
+  rejectArg: string,
   interactive: boolean,
 ): { policyFile: string; sessionPolicy: Policy | null } {
   let policyFile = POLICY_PATH
   let sessionPolicy: Policy | null = null
+  // The resolved base policy's VALUE, kept alongside the file routing so
+  // the --approve/--reject overlay below has something to overlay onto.
+  let basePolicy: Policy | null = null
 
   if (_policyArg == "") {
     const policy = parsePolicyFile(POLICY_PATH)
@@ -69,9 +75,12 @@ export def getPolicyForAgent(
       if (f.status == "doesnt-exist") {
         if (interactive) {
           print(color.yellow("No existing policy found at ${POLICY_PATH}."))
-          setPolicy(POLICY_PATH, givePolicyChoice())
+          const chosen = givePolicyChoice()
+          setPolicy(POLICY_PATH, chosen)
+          basePolicy = chosen
         } else {
           setPolicy(POLICY_PATH, recommendedAutoApprovePolicy)
+          basePolicy = recommendedAutoApprovePolicy
         }
       } else {
         print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
@@ -79,31 +88,39 @@ export def getPolicyForAgent(
       }
     } else {
       setPolicy(POLICY_PATH, policy.value)
+      basePolicy = policy.value
     }
   } else {
     const builtin = builtinPolicy(_policyArg, cwd())
-    policyFile = match(builtin) {
-      null => {
-        const loaded = parsePolicyFile(_policyArg)
-        return match(loaded) {
-          success(_) => _policyArg
-          failure(f) => {
-            print(
-              color.red(
-              "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${f.status}).",
-            ),
-            )
-            process.exit(1)
-            return ""
-          }
-        }
-      }
-      _ => {
-        sessionPolicy = builtin
-        return SESSION_POLICY_PATH
+    if (builtin != null) {
+      sessionPolicy = builtin
+      basePolicy = builtin
+      policyFile = SESSION_POLICY_PATH
+    } else {
+      const loaded = parsePolicyFile(_policyArg)
+      if (loaded is failure(f)) {
+        print(
+          color.red(
+          "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${f.status}).",
+        ),
+        )
+        process.exit(1)
+      } else {
+        policyFile = _policyArg
+        basePolicy = loaded.value
       }
     }
   }
+
+  // --approve / --reject: blanket rules overlaid ahead of the base
+  // policy's own, via the same function `agency run`'s flags compile
+  // through. Session-only — the overlay is routed to SESSION_POLICY_PATH
+  // and never written to the saved policy.
+  if ((approveArg != "" || rejectArg != "") && basePolicy != null) {
+    sessionPolicy = policyOverlayFromFlags(approveArg, rejectArg, basePolicy)
+    policyFile = SESSION_POLICY_PATH
+  }
+
   return {
     policyFile: policyFile,
     sessionPolicy: sessionPolicy

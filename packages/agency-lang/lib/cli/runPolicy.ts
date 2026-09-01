@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "fs";
-import type { Policy, PolicyRule } from "@/runtime/policy.js";
+import type { Policy } from "@/runtime/policy.js";
 import { validatePolicy } from "@/runtime/policy.js";
 import { builtinPolicy, builtinPolicyNames } from "@/runtime/builtinPolicies.js";
+import { policyOverlayFromFlags } from "@/runtime/policyFlags.js";
 
 export type RunPolicyFlags = {
   policy?: string;
@@ -10,13 +11,6 @@ export type RunPolicyFlags = {
   interactive?: boolean;
   cwd: string;
 };
-
-// Split on commas and/or whitespace, so `--approve "std::read, std::ls"`,
-// `--approve std::read,std::ls`, and `--approve "std::read std::ls"` all work.
-function splitEffects(list: string | undefined): string[] {
-  if (!list) return [];
-  return list.split(/[\s,]+/).filter((s) => s.length > 0);
-}
 
 function loadBase(policy: string | undefined, cwd: string): Policy {
   if (!policy) return {};
@@ -67,26 +61,13 @@ export function resolveRunPolicy(flags: RunPolicyFlags): ResolvedRunPolicy | nul
   const hasAny = !!flags.policy || !!flags.approve || !!flags.reject || !!flags.interactive;
   if (!hasAny) return null;
 
-  const policy = loadBase(flags.policy, flags.cwd);
-
-  const approved = splitEffects(flags.approve);
-  const rejected = splitEffects(flags.reject);
-
-  // Build each affected effect's rule list in ONE construction so precedence
-  // is visible in the literal, not implied by statement order: reject rule,
-  // then approve rule, then the base's own rules. Reject-ahead-of-approve is
-  // how overlap resolves to reject under checkPolicy's first-match-wins — and
-  // you cannot break it by reordering statements.
-  const rejectRule: PolicyRule = { action: "reject" };
-  const approveRule: PolicyRule = { action: "approve" };
-  const affected = [...approved, ...rejected].filter((e, i, a) => a.indexOf(e) === i);
-  for (const effect of affected) {
-    policy[effect] = [
-      ...(rejected.includes(effect) ? [rejectRule] : []),
-      ...(approved.includes(effect) ? [approveRule] : []),
-      ...(policy[effect] ?? []),
-    ];
-  }
+  // The overlay semantics (rule order, reject-over-approve) live in
+  // policyOverlayFromFlags, shared with the agent's flags.
+  const policy = policyOverlayFromFlags(
+    flags.approve,
+    flags.reject,
+    loadBase(flags.policy, flags.cwd),
+  );
 
   return { policy, policyJson: JSON.stringify(policy), interactive: !!flags.interactive };
 }

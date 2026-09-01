@@ -1,0 +1,70 @@
+/*
+ * The --approve / --reject flags overlay session-only blanket rules onto
+ * whatever base policy the run resolved (a policy file here, or a
+ * built-in). Pure policy logic: no LLM, no prompting, and no touching the
+ * saved policy at POLICY_PATH (every case passes an explicit policy
+ * argument).
+ */
+import { checkPolicy } from "std::policy"
+
+import { SESSION_POLICY_PATH } from "../lib/config.agency"
+import { getPolicyForAgent } from "../lib/policy.agency"
+
+static const STUB = "${__dirname}/stubPolicy.json"
+
+def decide(policy: any, effect: string): string {
+  return checkPolicy(policy, { effect: effect, data: {} }).type
+}
+
+def label(cond: boolean, yes: string, no: string): string {
+  if (cond) {
+    return yes
+  }
+  return no
+}
+
+// Without flags, a --policy file routes as before: the file itself, no
+// in-memory session policy.
+node noFlagsKeepsFileRouting(): string[] {
+  const { policyFile, sessionPolicy } = getPolicyForAgent(STUB, "", "", false)
+  return [
+    label(policyFile == STUB, "file", "wrong-file"),
+    label(sessionPolicy == null, "no-session", "session"),
+  ]
+}
+
+// Flags overlay onto the file's policy: the flagged effects decide, the
+// file's own rules still apply, and the result routes to the session path
+// so the saved policy is never written.
+node flagsOverlayOntoFilePolicy(): string[] {
+  const { policyFile, sessionPolicy } = getPolicyForAgent(
+    STUB,
+    "myapp::allowed",
+    "myapp::denied",
+    false,
+  )
+  return [
+    label(policyFile == SESSION_POLICY_PATH, "session-path", "wrong-path"),
+    decide(sessionPolicy, "myapp::allowed"),
+    decide(sessionPolicy, "myapp::denied"),
+    decide(sessionPolicy, "test::stub"),
+    decide(sessionPolicy, "myapp::unmentioned"),
+  ]
+}
+
+// The same effect in both flags: reject wins.
+node rejectOutranksApprove(): string {
+  const { sessionPolicy } = getPolicyForAgent(STUB, "myapp::both", "myapp::both", false)
+  return decide(sessionPolicy, "myapp::both")
+}
+
+// Flags also overlay onto a built-in --policy, and the built-in's own
+// rules survive underneath.
+node flagsOverlayOntoBuiltin(): string[] {
+  const { policyFile, sessionPolicy } = getPolicyForAgent("minimal", "myapp::x", "", false)
+  return [
+    label(policyFile == SESSION_POLICY_PATH, "session-path", "wrong-path"),
+    decide(sessionPolicy, "myapp::x"),
+    decide(sessionPolicy, "std::memory::recall"),
+  ]
+}

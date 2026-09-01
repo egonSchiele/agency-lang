@@ -102,6 +102,7 @@ import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
 import { resolveRunPolicy } from "@/cli/runPolicy.js";
 import { interruptsCmd } from "@/cli/interrupts.js";
+import { effectsCmd } from "@/cli/effects.js";
 import {
   scheduleAdd,
   scheduleList,
@@ -440,7 +441,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         )
         .option(
           "--approve <effects>",
-          "Comma-separated interrupt effects or capability set names (e.g. FileRead) to auto-approve",
+          "Comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve",
         )
         .option(
           "--reject <effects>",
@@ -569,7 +570,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--policy <name|path>", "interrupt policy: a built-in or a policy JSON file")
     .option(
       "--approve <effects>",
-      "comma-separated interrupt effects or capability set names (e.g. FileRead) to auto-approve",
+      "comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve",
     )
     .option(
       "--reject <effects>",
@@ -1240,7 +1241,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option(
       "--approve <effects>",
-      "Comma-separated interrupt effects or capability set names (e.g. FileRead) to auto-approve in every test case",
+      "Comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve in every test case",
     )
     .option(
       "--reject <effects>",
@@ -2354,6 +2355,17 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action((file: string, options: { output?: string; existing?: string }) => {
       const config = getConfig();
       policyGen(config, file, options);
+    });
+
+  program
+    .command("effects")
+    .description("List the built-in effect sets and policies the approval flags accept")
+    .argument(
+      "[name]",
+      "A set name (FileRead), an effect name (std::read), or a built-in policy name to describe",
+    )
+    .action((name?: string) => {
+      effectsCmd(name);
     });
 
   program

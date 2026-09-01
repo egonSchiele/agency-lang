@@ -1,0 +1,85 @@
+/** @module
+  @summary The coordinator's two learning tools: teach a subagent a
+  skill (learnSkill) or have a tool written into its toolbox
+  (writeToolFor). Both validate the target, route the save through the
+  stdlib review pipelines, and record the result in the session
+  catalogs so the target's next invocation carries it.
+*/
+import { writeSkill } from "std::skills"
+import { writeTool } from "std::toolbox"
+
+import {
+  LEARN_TARGETS,
+  learnedSkillsRoot,
+  learnedToolsRoot,
+  recordLearnedSkill,
+  recordLearnedTool,
+ } from "../../lib/learned.agency"
+
+def unknownTarget(target: string): string {
+  return "Unknown target '${target}'. Valid targets: ${LEARN_TARGETS.join(", ")}."
+}
+
+export def learnSkill(
+  target: string,
+  name: string,
+  description: string,
+  body: string,
+): string {
+  """
+  Teach one subagent a skill it keeps permanently. Draft the skill from
+  what the user asked for, written for the target agent as the reader:
+  `description` is one line telling that agent when to reach for the
+  skill; `body` is the skill itself in markdown. The user reviews the
+  complete file before anything is saved and may accept, ask for a
+  revision (redraft with their feedback and call this again), or
+  reject.
+
+  @param target - Which subagent keeps the skill: code, research, explorer, oracle, review, writing, or rewrite
+  @param name - A short kebab-case skill name (lowercase letters, digits, hyphens)
+  @param description - One line telling the target agent when to use the skill
+  @param body - The skill content, markdown
+  """
+  if (!LEARN_TARGETS.includes(target)) {
+    return unknownTarget(target)
+  }
+  const dir = "${learnedSkillsRoot()}/${target}"
+  const outcome = writeSkill(dir, name, description, body)
+  if (outcome is failure(reason)) {
+    return "Not saved: ${reason}"
+  }
+  const value = outcome.value
+  if (value.revise != undefined) {
+    return "The user asked for a revision: ${value.revise}. Redraft the skill with that feedback and call learnSkill again."
+  }
+  recordLearnedSkill(target, value.saved)
+  return "Saved. The ${target} agent has the '${value.saved.name}' skill from its next invocation. /skills lists it."
+}
+
+export def writeToolFor(
+  target: string,
+  name: string,
+  purpose: string,
+  request: string,
+): string {
+  """
+  Have a reusable tool written into one subagent's toolbox. A coding
+  agent drafts the implementation against the request type, the draft is
+  reviewed, typechecked, and tested, and the user accepts, revises, or
+  rejects it before anything is saved. Takes several model calls.
+
+  @param target - Which subagent gets the tool: code, research, explorer, oracle, review, writing, or rewrite
+  @param name - The tool's name, e.g. hnTopStories
+  @param purpose - What the tool should do, in plain language
+  @param request - The tool's input type as Agency type text, e.g. { topics: string[]; maxItems: number }
+  """
+  if (!LEARN_TARGETS.includes(target)) {
+    return unknownTarget(target)
+  }
+  const written = writeTool(name, purpose, request, dir: "${learnedToolsRoot()}/${target}")
+  if (written is failure(reason)) {
+    return "Not saved: ${reason}"
+  }
+  recordLearnedTool(target, written.value)
+  return "Saved. The ${target} agent can call it as learned_${written.value.name} from its next invocation. /toolbox lists it."
+}

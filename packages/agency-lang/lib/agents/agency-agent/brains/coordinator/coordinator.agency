@@ -10,6 +10,7 @@ import { setMemoryId } from "std::memory"
 import { Attachment, systemMessage } from "std::thread"
 
 import { generateImageFile } from "../../lib/images.agency"
+import { learnSkill, writeToolFor } from "./learn.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { getCapabilities } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
@@ -40,6 +41,8 @@ static const mainAgentTools = [
   writingAgent,
   rewriteAgent,
   generateImageFile,
+  learnSkill,
+  writeToolFor,
 ]
 
 def coordinatorInit(context: BrainContext) {

@@ -1,0 +1,9 @@
+{
+  "sourceFile": "learn.agency",
+  "tests": [
+    { "nodeName": "unknownTargetListsValidNames", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "acceptedSkillUpdatesCatalog", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "reviseFlowsBackAsText", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "noBuiltinCodeToolUsesLearnedPrefix", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

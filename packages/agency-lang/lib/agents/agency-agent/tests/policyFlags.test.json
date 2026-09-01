@@ -19,6 +19,18 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "setExpansion",
+      "input": "",
+      "expectedOutput": "[\"approve\",\"approve\",\"propagate\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "bareNamePassthrough",
+      "input": "",
+      "expectedOutput": "\"approve\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "flagsOverlayOntoBuiltin",
       "input": "",
       "expectedOutput": "[\"session-path\",\"approve\",\"approve\"]",

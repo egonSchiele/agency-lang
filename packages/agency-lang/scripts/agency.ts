@@ -438,8 +438,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
           "--policy <name|path>",
           "Interrupt policy: a built-in (recommended|minimal|with-writes|approve-all) or a policy JSON file",
         )
-        .option("--approve <effects>", "Comma-separated interrupt effects to auto-approve")
-        .option("--reject <effects>", "Comma-separated interrupt effects to auto-reject")
+        .option(
+          "--approve <effects>",
+          "Comma-separated interrupt effects or capability set names (e.g. FileRead) to auto-approve",
+        )
+        .option(
+          "--reject <effects>",
+          "Comma-separated interrupt effects or capability set names to auto-reject",
+        )
         .option(
           "-i, --interactive",
           "Prompt on interrupts that surface unhandled (default: reject them)",
@@ -561,8 +567,14 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--function", "call a function instead of a node")
     .option("-i, --interactive", "prompt on surfaced interrupts (else report and exit)")
     .option("--policy <name|path>", "interrupt policy: a built-in or a policy JSON file")
-    .option("--approve <effects>", "comma-separated interrupt effects to auto-approve")
-    .option("--reject <effects>", "comma-separated interrupt effects to auto-reject")
+    .option(
+      "--approve <effects>",
+      "comma-separated interrupt effects or capability set names (e.g. FileRead) to auto-approve",
+    )
+    .option(
+      "--reject <effects>",
+      "comma-separated interrupt effects or capability set names to auto-reject",
+    )
     .option("--host <url>", "statelog host (overrides agency.json log.host)")
     .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
     .option("--api-key-env <name>", "env var to read the API key from (default: STATELOG_API_KEY)")
@@ -1228,11 +1240,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option(
       "--approve <effects>",
-      "Comma-separated interrupt effects to auto-approve in every test case",
+      "Comma-separated interrupt effects or capability set names (e.g. FileRead) to auto-approve in every test case",
     )
     .option(
       "--reject <effects>",
-      "Comma-separated interrupt effects to auto-reject in every test case ('*' rejects every effect)",
+      "Comma-separated interrupt effects or capability set names to auto-reject in every test case ('*' rejects every effect)",
     )
     .option(
       "--max-cost <dollars>",

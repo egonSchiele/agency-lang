@@ -68,11 +68,11 @@ export def parseAgentArgs() {
         },
         approve: {
           type: "string",
-          description: "Comma-separated interrupt effects to auto-approve for this run (e.g. std::write,std::git::commit), ahead of the active policy's own rules. Session-only; never saved."
+          description: "Comma-separated interrupt effects or capability set names to auto-approve for this run (e.g. std::write,std::git::commit or FileRead), ahead of the active policy's own rules. Session-only; never saved."
         },
         reject: {
           type: "string",
-          description: "Comma-separated interrupt effects to auto-reject for this run. A reject outranks an approve for the same effect. Session-only; never saved."
+          description: "Comma-separated interrupt effects or capability set names to auto-reject for this run. A reject outranks an approve for the same effect. Session-only; never saved."
         },
         continue: {
           type: "boolean",

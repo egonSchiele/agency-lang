@@ -112,10 +112,18 @@ export def getPolicyForAgent(
   }
 
   // --approve / --reject overlay: session-only, never written to the
-  // saved policy.
+  // saved policy. The overlay can throw (set expansion parses the
+  // shipped stdlib/capabilities.agency and refuses a broken install);
+  // surface that like a --policy error instead of letting it propagate.
   if ((approveArg != "" || rejectArg != "") && basePolicy != null) {
-    sessionPolicy = _policyOverlayFromFlags(approveArg, rejectArg, basePolicy)
-    policyFile = SESSION_POLICY_PATH
+    const overlaid = try _policyOverlayFromFlags(approveArg, rejectArg, basePolicy)
+    if (overlaid is failure(f)) {
+      print(color.red("Failed to apply --approve/--reject: ${f}"))
+      process.exit(1)
+    } else {
+      sessionPolicy = overlaid.value
+      policyFile = SESSION_POLICY_PATH
+    }
   }
 
   return {

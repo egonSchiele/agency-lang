@@ -58,6 +58,24 @@ node rejectOutranksApprove(): string {
   return decide(sessionPolicy, "myapp::both")
 }
 
+// A capability-set name in --approve expands to its member effects;
+// effects outside the set stay undecided.
+node setExpansion(): string[] {
+  const { sessionPolicy } = getPolicyForAgent(STUB, "FileRead", "", false)
+  return [
+    decide(sessionPolicy, "std::read"),
+    decide(sessionPolicy, "std::grep"),
+    decide(sessionPolicy, "std::write"),
+  ]
+}
+
+// A bare name matching no set still makes a working blanket rule (bare
+// effect names are legal in declarations).
+node bareNamePassthrough(): string {
+  const { sessionPolicy } = getPolicyForAgent(STUB, "confirm", "", false)
+  return decide(sessionPolicy, "confirm")
+}
+
 // Flags also overlay onto a built-in --policy, and the built-in's own
 // rules survive underneath.
 node flagsOverlayOntoBuiltin(): string[] {

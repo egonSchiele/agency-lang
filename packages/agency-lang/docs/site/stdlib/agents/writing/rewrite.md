@@ -28,6 +28,7 @@ writingRewriteAgent(
   maxTime: number = 10m,
   model: string = "",
   provider: string = "",
+  extraTools: any[] = [],
 ): Result<string>
 ```
 
@@ -46,6 +47,7 @@ Review prose and return it rewritten with the findings applied. If
   @param maxTime - Hard wall-clock cap for all rounds together
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 * Rewrites a piece of text according to the findings of a writing review.
  *
@@ -74,9 +76,10 @@ Review prose and return it rewritten with the findings applied. If
 | maxTime | `number` | 10m |
 | model | `string` | "" |
 | provider | `string` | "" |
+| extraTools | `any[]` | [] |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/writing/rewrite.agency#L86))

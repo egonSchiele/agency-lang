@@ -16,15 +16,23 @@ surprised us more than once.
   when that fails too.
 - Built-ins like `with-writes` are constructed at launch with the process
   cwd baked into their dir rules.
-- `--approve <effects>` / `--reject <effects>` (both `agency run` and
-  `agency agent`) take comma- or whitespace-separated effect names and
-  overlay blanket rules ahead of whatever base the run resolved — the
-  saved file, a built-in, or a `--policy` path — with reject rules ahead
-  of approve rules, so under first-match-wins the flags outrank the base
-  and a reject outranks an approve for the same effect. On the agent the
-  overlay is session-only; the saved policy file is never written. Both
-  commands build the overlay with `policyOverlayFromFlags`
-  (`lib/runtime/policyFlags.ts`).
+- `--approve <effects>` / `--reject <effects>` (`agency run`,
+  `agency test`, and `agency agent`) take comma- or whitespace-separated
+  effect names and overlay blanket rules ahead of whatever base the run
+  resolved — the saved file, a built-in, or a `--policy` path — with
+  reject rules ahead of approve rules, so under first-match-wins the
+  flags outrank the base and a reject outranks an approve for the same
+  effect. A bare name that exactly matches a built-in capability set
+  from `std::capabilities` (e.g. `FileRead`) expands to the set's member
+  effects; any other bare name stays a plain effect name, since bare
+  effect declarations are legal and the bare `interrupt("msg")` form
+  raises the effect named `unknown`. A user effect whose bare name
+  shadows a set is unreachable from the flags — namespace user effects.
+  On the agent the overlay is session-only; the saved policy file is
+  never written. Every command builds the overlay with
+  `policyOverlayFromFlags` (`lib/runtime/policyFlags.ts`); the set table
+  is parsed from `stdlib/capabilities.agency`
+  (`lib/runtime/effectSets.ts`).
 
 In a non-interactive run (`-p`), an effect no rule decides is
 auto-rejected with an explanatory message (`stdlib/policy.agency`) — there

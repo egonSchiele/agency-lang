@@ -174,8 +174,8 @@ node trickyDescriptionsRoundTrip(): boolean {
     { name: "numeric", description: "2024" },
     { name: "padded", description: " leading and trailing " },
   ]
-  for (c in cases) {
-    const ran = runWrite("${root}/explorer", c.name, c.description, "Body.")
+  for (tcase in cases) {
+    const ran = runWrite("${root}/explorer", tcase.name, tcase.description, "Body.")
     if (ran.outcome is failure) {
       return false
     }
@@ -185,10 +185,10 @@ node trickyDescriptionsRoundTrip(): boolean {
   if (entries == undefined || entries.length != cases.length) {
     return false
   }
-  for (c in cases) {
+  for (tcase in cases) {
     let found = false
     for (entry in entries) {
-      if (entry.name == c.name && entry.description == c.description) {
+      if (entry.name == tcase.name && entry.description == tcase.description) {
         found = true
       }
     }

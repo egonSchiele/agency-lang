@@ -674,6 +674,25 @@ describe("<agent-home> dir patterns", () => {
     }
   });
 
+  it("realpaths a symlinked agent home, matching the canonicalized dirs file effects report", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "policy-home-"));
+    const previous = process.env.AGENCY_AGENT_HOME;
+    try {
+      const real = path.join(base, "real-home");
+      mkdirSync(real);
+      const link = path.join(base, "linked-home");
+      symlinkSync(real, link);
+      process.env.AGENCY_AGENT_HOME = link;
+      // tmpdir() itself may sit behind a symlink (macOS /var), so the
+      // expectation canonicalizes the same way the expander must.
+      expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(`${realpathSync(real)}/skills/**`);
+    } finally {
+      if (previous === undefined) delete process.env.AGENCY_AGENT_HOME;
+      else process.env.AGENCY_AGENT_HOME = previous;
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
   it("`<agent-home>` means the agent home, resolved at match time", () => {
     const previous = process.env.AGENCY_AGENT_HOME;
     process.env.AGENCY_AGENT_HOME = "/tmp/agent-home-test";

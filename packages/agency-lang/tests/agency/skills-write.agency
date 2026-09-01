@@ -59,8 +59,10 @@ node acceptWritesTheFile(): boolean {
   if (raw is failure) {
     return false
   }
+  // A plain description is emitted bare: the serializer only quotes
+  // values the parser would otherwise coerce or misparse.
   return raw.value.includes("name: repo-orientation")
-      && raw.value.includes(`description: "Orient in an unfamiliar repo"`)
+      && raw.value.includes("description: Orient in an unfamiliar repo")
       && raw.value.includes("Read the README first.")
 }
 
@@ -126,10 +128,21 @@ node multilineDescriptionFails(): boolean {
   return ran.outcome is failure && ran.reviews == 0
 }
 
-node bodyStartingWithFenceFails(): boolean {
-  const dir = outDir("fence")
-  const ran = runWrite(dir, "fenced", "Fence body", "---\ninjected: true", { verdict: "accept" })
-  return ran.outcome is failure && ran.reviews == 0
+// A body starting with --- cannot reach the frontmatter: the block is
+// already closed by its own fence, so the body line is just markdown
+// and the next scan still sees the reviewed name and description.
+node bodyStartingWithFenceCannotInject(): boolean {
+  const root = outDir("fence")
+  const ran = runWrite("${root}/explorer", "fenced", "Fence body", "---\ninjected: true", { verdict: "accept" })
+  if (ran.outcome is failure) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
+  const entries = scanned["explorer"]
+  if (entries == undefined || entries.length != 1) {
+    return false
+  }
+  return entries[0].name == "fenced" && entries[0].description == "Fence body"
 }
 
 node badVerdictFails(): boolean {
@@ -155,8 +168,48 @@ node descriptionWithFlowSyntaxRoundTrips(): boolean {
   return entries[0].name == "beta-skill" && entries[0].description == "[Beta] Use when refactoring"
 }
 
-node doubleQuotedDescriptionFails(): boolean {
-  const dir = outDir("quoted")
-  const ran = runWrite(dir, "quoted", `a "best practice" guide`, "Body.", { verdict: "accept" })
+// The serializer battery: each of these descriptions hits a different
+// branch of the frontmatter grammar (quotes, a literal backslash-n, a
+// numeric-looking string, edge whitespace) and every one must read
+// back exactly as reviewed.
+node trickyDescriptionsRoundTrip(): boolean {
+  const root = outDir("tricky")
+  const cases = [
+    { name: "quotes", description: `a "best practice" guide, it's great` },
+    { name: "backslash", description: "literal \\n stays two characters" },
+    { name: "numeric", description: "2024" },
+    { name: "padded", description: " leading and trailing " },
+  ]
+  for (c in cases) {
+    const ran = runWrite("${root}/explorer", c.name, c.description, "Body.", { verdict: "accept" })
+    if (ran.outcome is failure) {
+      return false
+    }
+  }
+  const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
+  const entries = scanned["explorer"]
+  if (entries == undefined || entries.length != cases.length) {
+    return false
+  }
+  for (c in cases) {
+    let found = false
+    for (entry in entries) {
+      if (entry.name == c.name && entry.description == c.description) {
+        found = true
+      }
+    }
+    if (!found) {
+      return false
+    }
+  }
+  return true
+}
+
+// The one shape no quote character can hold: needs quoting (leading
+// space) but contains all three quote chars. Refused loudly before the
+// user is asked to review anything, never written silently wrong.
+node unrepresentableDescriptionFailsCleanly(): boolean {
+  const dir = outDir("unrepresentable")
+  const ran = runWrite(dir, "unrep", " \"d\" 's' `t`", "Body.", { verdict: "accept" })
   return ran.outcome is failure && ran.reviews == 0
 }

@@ -76,7 +76,7 @@ export type ModuleFacts = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L138))
 
 ### ToolMeta
 
@@ -95,7 +95,7 @@ export type ToolMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L145))
 
 ### ToolEntry
 
@@ -114,7 +114,7 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L157))
 
 ### WriteToolReview
 
@@ -129,7 +129,7 @@ export type WriteToolReview =
   | { verdict: "revise"; feedback: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L167))
 
 ## Effects
 
@@ -142,7 +142,19 @@ effect std::toolbox::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L112))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L113))
+
+### std::toolbox::recordUse
+
+```ts
+@alwaysUnder(dir)
+effect std::toolbox::recordUse {
+  dir: string;
+  name: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L124))
 
 ### std::toolbox::review
 
@@ -156,7 +168,7 @@ effect std::toolbox::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L129))
 
 ## Functions
 
@@ -184,7 +196,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L317))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L330))
 
 ### writeTool
 
@@ -236,7 +248,7 @@ Write a reusable tool into a toolbox directory. The coding agent drafts
 
 **Throws:** `std::mkdir`, `std::remove`, `std::toolbox::review`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L844))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L857))
 
 ### runTool
 
@@ -249,8 +261,10 @@ runTool(
 ```
 
 Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json records one more use and the time; it
-  does not record the result.
+  returned. The tool's meta.json records one more use and the time,
+  best-effort behind a `std::toolbox::recordUse` interrupt: a declined
+  or failed record never fails a run that succeeded. It does not record
+  the result.
 
   @param name - The tool's name under dir
   @param request - The tool's input, a value of its Request type
@@ -266,6 +280,6 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Returns:** `Result<Json>`
 
-**Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::write`
+**Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::toolbox::recordUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L933))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L952))

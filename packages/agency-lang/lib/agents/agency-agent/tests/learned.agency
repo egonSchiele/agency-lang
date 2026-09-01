@@ -1,22 +1,18 @@
 /*
  * The learned catalogs: lazy load with one skills-root scan interrupt,
- * in-place updates without a rescan, and per-agent tools/extras. Every
+ * invalidate-and-rescan after a save, and per-agent tools/extras. Every
  * node repoints the roots at the committed fixture FIRST and verifies
  * the repoint took, so a failing test can never touch the real
  * ~/.agency-agent (the issue #469 rule).
  */
-import test {
-  _setLearnedRoot,
-  _resetLearned,
- } from "../lib/learned.agency"
+import test { _setLearnedRoot } from "../lib/learned.agency"
 import {
+  invalidateLearned,
   learnedSkillsRoot,
   learnedSkillsToolFor,
   learnedToolsFor,
   learnedExtrasFor,
   learnedInventory,
-  recordLearnedSkill,
-  recordLearnedTool,
  } from "../lib/learned.agency"
 
 def fixtureRoot(): string {
@@ -50,7 +46,10 @@ node lazyLoadRaisesOneScanInterrupt(): boolean {
   return scans == 1 && first != null && second != null
 }
 
-node recordSkillVisibleWithoutRescan(): boolean {
+// The post-save path: a save calls invalidateLearned(), and the next
+// access rescans the directory (a second scan interrupt) instead of
+// serving the stale catalog.
+node invalidateForcesRescan(): boolean {
   if (!sandboxed()) {
     return false
   }
@@ -58,7 +57,7 @@ node recordSkillVisibleWithoutRescan(): boolean {
   let description = ""
   handle {
     learnedSkillsToolFor("explorer")
-    recordLearnedSkill("explorer", { name: "x", description: "d", location: "x.md" })
+    invalidateLearned()
     const tool = learnedSkillsToolFor("explorer")
     if (tool != null) {
       description = tool.description
@@ -69,7 +68,7 @@ node recordSkillVisibleWithoutRescan(): boolean {
     }
     return approve()
   }
-  return scans == 1 && description.includes("<name>x</name>") && description.includes("<name>repo-orientation</name>")
+  return scans == 2 && description.includes("<name>repo-orientation</name>")
 }
 
 node unknownAgentYieldsNullAndEmpty(): boolean {
@@ -85,22 +84,17 @@ node unknownAgentYieldsNullAndEmpty(): boolean {
   return skillsTool == null && tools.length == 0
 }
 
-node learnedToolNamePrefixed(): boolean {
+// Two properties off the real on-disk fixture toolbox: a healthy tool
+// (listTools gives it `broken: null`, which must pass the not-broken
+// filter) is offered as learned_<name>, and the committed tool whose
+// 63-character directory name would overflow the provider cap behind
+// the learned_ prefix is never offered.
+node learnedToolNamePrefixedAndOverlongExcluded(): boolean {
   if (!sandboxed()) {
     return false
   }
-  const entry: any = {
-    name: "hnTop",
-    dir: "${fixtureRoot()}/tools/research/hnTop",
-    module: {},
-    meta: {
-      purpose: "Fetch top stories",
-      request: "{ maxItems: number }"
-    }
-  }
   let names = ""
   handle {
-    recordLearnedTool("research", entry)
     const tools = learnedToolsFor("research")
     for (tool in tools) {
       names = "${names}${tool.name},"
@@ -118,10 +112,13 @@ node inventoryGroupsByAgent(): boolean {
     inventory = learnedInventory()
   } with approve
   const explorer = inventory["explorer"]
-  if (explorer == undefined) {
+  const research = inventory["research"]
+  if (explorer == undefined || research == undefined) {
     return false
   }
-  return explorer.skills.length == 1 && explorer.tools.length == 0 && inventory["code"] == undefined
+  // The overlong-named tool stays visible in the inventory (so /toolbox
+  // can show what is on disk) even though it is never offered as a tool.
+  return explorer.skills.length == 1 && explorer.tools.length == 0 && research.tools.length == 2 && inventory["code"] == undefined
 }
 
 node extrasForExplorerHasSkillsTool(): boolean {
@@ -147,22 +144,4 @@ node extrasForCodeEmpty(): boolean {
     extras = learnedExtrasFor("code")
   } with approve
   return extras.length == 0
-}
-
-// The first-learned-action ordering: the file is on disk before the
-// catalog ever loads, so the lazy scan already contains it and the
-// record must not add a second copy.
-node recordAfterLazyLoadDoesNotDuplicate(): boolean {
-  if (!sandboxed()) {
-    return false
-  }
-  let count = 0
-  handle {
-    recordLearnedSkill("explorer", { name: "repo-orientation", description: "Orient in an unfamiliar repo", location: "one.md" })
-    const tool = learnedSkillsToolFor("explorer")
-    if (tool != null) {
-      count = tool.description.split("<name>repo-orientation</name>").length - 1
-    }
-  } with approve
-  return count == 1
 }

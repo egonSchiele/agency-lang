@@ -52,18 +52,15 @@ export function readScopeRules(): PolicyRule[] {
   ];
 }
 
-// runTool records a use count in the tool's meta.json after every run.
-// Without this rule each learned-tool invocation prompts on that write —
-// and a headless run executes the tool, then reports failure when the
-// metadata write is rejected. Scoped to exactly that file under the
-// agent-home toolboxes; every other write still prompts.
-export function toolboxMetaWriteRules(): PolicyRule[] {
-  return [
-    {
-      match: { dir: `${AGENT_HOME}/tools/**`, filename: "meta.json" },
-      action: "approve",
-    },
-  ];
+// runTool records a use count in the tool's meta.json after every run,
+// behind the dedicated std::toolbox::recordUse effect. Approving the
+// effect (rather than a std::write rule on the file) approves only the
+// stdlib's own bookkeeping write; a raw write rule on meta.json could
+// be satisfied by ANY program landing arbitrary content there, which
+// listTools would then trust as the tool's purpose. Scoped to the
+// agent-home toolboxes; recordUse elsewhere still prompts.
+function toolboxRecordUseRules(): PolicyRule[] {
+  return [{ match: { dir: `${AGENT_HOME}/tools/**` }, action: "approve" }];
 }
 
 export const minimalAutoApprovePolicy: Policy = {
@@ -81,7 +78,6 @@ export const recommendedAutoApprovePolicy: Policy = {
   // through this same policy, so approving the launch grants nothing more.
   "std::run": approve,
   "std::read": readScopeRules(),
-  "std::write": toolboxMetaWriteRules(),
   "std::readBinary": readScopeRules(),
   "std::ls": readScopeRules(),
   "std::glob": readScopeRules(),
@@ -97,6 +93,7 @@ export const recommendedAutoApprovePolicy: Policy = {
   // A scan reads tool sources and meta.json under a directory, so it
   // takes the read scope.
   "std::toolbox::scan": readScopeRules(),
+  "std::toolbox::recordUse": toolboxRecordUseRules(),
   "std::notify": approve,
   "std::clipboardCopy": approve,
   "std::git::status": approve,
@@ -127,10 +124,7 @@ export function withWritesPolicy(baseDir: string): Policy {
   const cwdRule: PolicyRule[] = [{ match: { cwd: scope }, action: "approve" }];
   return {
     ...recommendedAutoApprovePolicy,
-    // The toolbox meta.json rule rides along: without it, with-writes
-    // would clobber recommended's std::write entry and learned-tool
-    // runs outside the cwd would prompt again.
-    "std::write": [...dirRule, ...toolboxMetaWriteRules()],
+    "std::write": dirRule,
     "std::writeBinary": dirRule,
     "std::edit": dirRule,
     "std::mkdir": dirRule,
@@ -160,7 +154,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills/tools (plus their meta.json use-count writes) and web/search; prompt for reads elsewhere, other writes, shell, and git changes.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, the agent home's learned skills/tools (plus the toolbox recordUse bookkeeping there) and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
   },
   {
     name: "minimal",

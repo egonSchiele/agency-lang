@@ -5,7 +5,12 @@
 */
 import { keys } from "std::object"
 
-import { LearnedInventory, learnedInventory } from "./learned.agency"
+import {
+  LEARNED_TOOL_PREFIX,
+  LearnedInventory,
+  learnedInventory,
+  maxLearnedToolName,
+ } from "./learned.agency"
 
 def skillsSection(agent: string, inventory: LearnedInventory): string {
   const entry = inventory[agent]
@@ -26,11 +31,13 @@ def toolsSection(agent: string, inventory: LearnedInventory): string {
   }
   let lines = ["${agent}:"]
   for (tool in entry.tools) {
-    let broken = ""
+    let note = ""
     if (tool.broken != undefined) {
-      broken = " (broken: ${tool.broken})"
+      note = " (broken: ${tool.broken})"
+    } else if (tool.name.length > maxLearnedToolName()) {
+      note = " (name too long to offer; rename the tool directory)"
     }
-    lines.push("  learned_${tool.name} — ${tool.meta.purpose}${broken}")
+    lines.push("  ${LEARNED_TOOL_PREFIX}${tool.name} — ${tool.meta.purpose}${note}")
   }
   return lines.join("\n")
 }

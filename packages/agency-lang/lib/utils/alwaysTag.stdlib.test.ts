@@ -129,6 +129,7 @@ const EXPECTED: Record<string, string[]> = {
   "std::skills::commandsDir": ["dir/**"],
   "std::skills::reviewSkill": ["dir/**"],
   "std::toolbox::scan": ["dir/**"],
+  "std::toolbox::recordUse": ["dir/**"],
   "std::toolbox::review": [],
   "std::memory::enableMemory": [],
   "std::memory::disableMemory": [],

@@ -14,7 +14,7 @@ import { exists } from "std::shell"
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
-import { _docsDir, _bundledDocsDir, _agentSkillsDir } from "agency-lang/stdlib-lib/skills.js"
+import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter } from "agency-lang/stdlib-lib/skills.js"
 
 
 /** @module
@@ -97,8 +97,10 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
 }
 
 // Providers cap tool-name length: OpenAI at 64 characters, Anthropic at 128.
-// Cap to the stricter 64 so a name is accepted everywhere.
-const MAX_TOOL_NAME_LEN = 64
+// Cap to the stricter 64 so a name is accepted everywhere. Exported so
+// callers that build prefixed tool names (e.g. the agent's learned_
+// tools) derive their own cap from this one instead of restating 64.
+export static const MAX_TOOL_NAME_LEN = 64
 
 // Cap on how many files one skills/commands scan will read.
 const MAX_SKILL_FILES = 500
@@ -306,6 +308,16 @@ export def scanSkillsSubdirs(
   @param root - The directory holding the subdirectories
   @param subdirs - The subdirectory names to scan
   """
+  // The one interrupt approves scanning under `root`, so every name must
+  // stay a single path segment: `../private` (or an absolute path, or a
+  // `a/b` compound) would carry the approval outside the directory the
+  // user said yes to. Checked before raising, so a bad caller fails
+  // without prompting anyone.
+  for (sub in subdirs) {
+    if (sub == "" || sub == "." || sub == ".." || sub.includes("/") || sub.includes("\\")) {
+      return failure("subdirectory name '${sub}' is not a bare directory name; scanSkillsSubdirs only scans direct subdirectories of its root")
+    }
+  }
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
     dir: root,
     layout: "flat"
@@ -386,24 +398,23 @@ export def writeSkill(
   if (!validSkillName(name)) {
     return failure("skill name '${name}' is invalid: use lowercase letters, digits, and hyphens, starting with a letter or digit")
   }
-  if (description.includes("\n") || description.includes("---")) {
-    return failure("the description must be one line and must not contain ---")
-  }
-  if (description.includes(`"`)) {
-    return failure(`the description must not contain double quotes; use single quotes instead`)
-  }
-  if (body.startsWith("---")) {
-    return failure("the body must not start with --- (it would extend the frontmatter)")
+  if (description.includes("\n")) {
+    return failure("the description must be one line")
   }
   const filename = "${name}.md"
   if (exists(filename, dir)) {
     return failure("a skill named ${name} already exists in ${dir}")
   }
-  // The description is double-quoted so YAML flow syntax in it (a
-  // leading `[` or quote) cannot make the frontmatter unparseable and
-  // silently drop the reviewed description on the next scan. The
-  // no-double-quotes check above is what makes the quoting safe.
-  const content = "---\nname: ${name}\ndescription: \"${description}\"\n---\n\n${body}\n"
+  // tarsec's serializer is the encode half of the parser `frontmatter`
+  // wraps, so whatever it emits reads back verbatim on the next scan —
+  // YAML flow syntax, quotes, or backslashes in the description cannot
+  // silently corrupt or drop the reviewed text. It throws on the rare
+  // value no quoting can hold; `try` turns that into a clean failure.
+  const fm = try _stringifyFrontmatter({ name: name, description: description })
+  if (fm is failure(fmErr)) {
+    return failure("the description cannot be written as frontmatter: ${fmErr}")
+  }
+  const content = "${fm.value}\n${body}\n"
   const answer = interrupt std::skills::reviewSkill(
     "Save this skill to ${dir}/${filename}?",
     { dir: dir, name: name, content: content },

@@ -312,6 +312,38 @@ node runToolRunsAndRecords(): boolean {
   return answer is success && answer.value == 42 && recorded
 }
 
+// Bookkeeping is best-effort: rejecting the recordUse interrupt must
+// not fail a run that succeeded. The count simply stays unrecorded.
+node rejectedRecordUseDoesNotFailTheRun(): boolean {
+  cleanup("addNine")
+  const written = runWrite("addNine", OUT, [{
+    verdict: "accept"
+  }])
+  if (written is failure) {
+    cleanup("addNine")
+    return false
+  }
+  let answer: Result = failure("not run")
+  handle {
+    answer = runTool("addNine", {
+      n: 41
+    }, OUT)
+  } with (intr) {
+    if (intr.effect == "std::toolbox::recordUse") {
+      return reject("no bookkeeping")
+    }
+    return approve()
+  }
+  const listed = listTools(OUT) with approve
+  let unrecorded = false
+  if (listed is success(entries)) {
+    const entry = find(entries, \candidate -> candidate.name == "addNine")
+    unrecorded = entry.meta.uses == 0
+  }
+  cleanup("addNine")
+  return answer is success && answer.value == 42 && unrecorded
+}
+
 // A refused write is not something a new draft can fix, so writeTool
 // stops after the first round instead of drafting maxRounds times. If it
 // looped, the error would read "gave up after".

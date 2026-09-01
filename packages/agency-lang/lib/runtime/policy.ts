@@ -177,13 +177,23 @@ export function expandAgentHomeDir(pattern: string, home: () => string = default
 
 function defaultAgentHome(): string {
   const override = process.env.AGENCY_AGENT_HOME;
-  if (override !== undefined && override !== "") {
-    // File effects canonicalize their dir to an absolute path before
-    // matching, so a relative override (./my-profile) must be resolved
-    // the same way or the pattern never matches.
-    return path.resolve(override);
+  const home =
+    override !== undefined && override !== ""
+      ? // File effects canonicalize their dir to an absolute path before
+        // matching, so a relative override (./my-profile) must be resolved
+        // the same way or the pattern never matches.
+        path.resolve(override)
+      : path.join(os.homedir(), ".agency-agent");
+  // Realpathed for the same reason the cwd is in resolveDotDirPattern: file
+  // effects realpath their payload dirs, so a symlinked home (macOS /tmp, a
+  // linked profile) must share that path identity or no rule ever matches.
+  try {
+    return realpathSync(home);
+  } catch {
+    // A home that does not exist yet (nothing learned) keeps its lexical
+    // spelling; there is nothing under it to match anyway.
+    return home;
   }
-  return path.join(os.homedir(), ".agency-agent");
 }
 
 function matchesRule(

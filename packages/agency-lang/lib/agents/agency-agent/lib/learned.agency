@@ -2,13 +2,16 @@
   @summary The session catalogs of learned content: skills the user
   taught a subagent and tools the agent wrote for one. Loaded lazily
   (one scan interrupt for the skills root; one toolbox scan per agent
-  directory that exists), held in module globals so a save this turn is
-  visible to the target subagent's next invocation without a rescan.
+  directory that exists) and held in module globals. A save calls
+  `invalidateLearned()`, so the next access rescans and picks it up —
+  the disk is the single source of truth, and the catalogs are only a
+  cache of it.
 */
 import { filter, map } from "std::array"
 import { keys } from "std::object"
 import { exists } from "std::shell"
 import {
+  MAX_TOOL_NAME_LEN,
   SkillEntry,
   scanSkillsSubdirs,
   skillsToolFromEntries,
@@ -31,7 +34,7 @@ export static const LEARN_TARGETS = [
 ]
 
 // Session-lived catalogs. Globals, not statics: the CLI agent is one
-// long-lived run, and a save must update these in place.
+// long-lived run, and a save must be able to invalidate these mid-session.
 let _skillEntries: Record<string, SkillEntry[]> | null = null
 let _toolEntries: Record<string, ToolEntry[]> | null = null
 // Test seam: repoints both roots at a sandbox. The production root is
@@ -40,11 +43,6 @@ let _rootOverride: string | null = null
 
 def _setLearnedRoot(root: string) {
   _rootOverride = root
-  _skillEntries = null
-  _toolEntries = null
-}
-
-def _resetLearned() {
   _skillEntries = null
   _toolEntries = null
 }
@@ -110,8 +108,8 @@ def loadToolEntries(): Record<string, ToolEntry[]> {
 export def learnedSkillsToolFor(agent: string): any | null {
   """
   The skills tool over one subagent's learned skills, or null when it
-  has none. Built from the session catalog, so a skill recorded this
-  turn appears without rescanning the directory.
+  has none. Built from the session catalog; a save this turn
+  invalidated the catalog, so the next build here rescans and lists it.
   """
   const entries = loadSkillEntries()[agent]
   if (entries == undefined || entries.length == 0) {
@@ -120,25 +118,41 @@ export def learnedSkillsToolFor(agent: string): any | null {
   return skillsToolFromEntries("${learnedSkillsRoot()}/${agent}", entries, "learned_skills_${agent}")
 }
 
-// One catalog entry as an LLM-callable tool. The `learned_` prefix is
-// what makes collision with a target's built-in tools impossible.
+// The prefix every learned tool is advertised under. It is what makes
+// collision with a target's built-in tools impossible: no built-in
+// tool's name starts with it.
+export static const LEARNED_TOOL_PREFIX = "learned_"
+
+export def maxLearnedToolName(): number {
+  """
+  The longest name a learned tool can have: the provider cap, minus the
+  learned_ prefix the tool is advertised under. Derived so the three
+  numbers (provider cap, prefix length, this cap) cannot drift apart.
+  """
+  return MAX_TOOL_NAME_LEN - LEARNED_TOOL_PREFIX.length
+}
+
+// One catalog entry as an LLM-callable tool.
 def learnedToolFromEntry(agent: string, entry: ToolEntry): any {
   const description = "${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}"
   const dir = "${learnedToolsRoot()}/${agent}"
-  return runTool.partial(name: entry.name, dir: dir).describe(description).rename("learned_${entry.name}")
+  return runTool.partial(name: entry.name, dir: dir).describe(description).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
 }
 
 export def learnedToolsFor(agent: string): any[] {
   """
   The LLM-callable tools from one subagent's learned toolbox, each
-  renamed `learned_<name>`. Broken entries stay in the inventory but are
-  never offered to the model.
+  renamed `learned_<name>`. Broken entries, and entries whose prefixed
+  name would exceed the provider cap (a tool dropped into the directory
+  by hand — writeToolFor refuses such names at write time), stay in the
+  inventory but are never offered to the model: one bad name would fail
+  every LLM call the target makes.
   """
   const entries = loadToolEntries()[agent]
   if (entries == undefined) {
     return []
   }
-  const usable = filter(entries, \entry -> entry.broken == undefined)
+  const usable = filter(entries, \entry -> entry.broken == undefined && entry.name.length <= maxLearnedToolName())
   return map(usable, \entry -> learnedToolFromEntry(agent, entry))
 }
 
@@ -152,42 +166,19 @@ export def learnedExtrasFor(agent: string): any[] {
   return [...skillsTools, ...learnedToolsFor(agent)]
 }
 
-export def recordLearnedSkill(agent: string, entry: SkillEntry) {
+export def invalidateLearned() {
   """
-  Add a just-saved skill to the session catalog, so the target agent's
-  next invocation lists it without a rescan. A no-op when the catalog
-  already holds the entry: when the save was the session's first learned
-  action, the lazy load above scans AFTER the file hit disk and has
-  already picked it up.
+  Drop both session catalogs, so the next access rescans the learned
+  directories. Called after every save. Rescanning instead of patching
+  the catalogs in place keeps the disk the single source of truth —
+  updating a cached record cannot drift from what a scan would see
+  (a stale entry surviving a delete-and-reteach, a duplicate, a push
+  into a copy the cache never held). Saves are rare and user-directed,
+  so the extra scan interrupt is cheap, and the same policy scope that
+  approved the first scan approves this one.
   """
-  const entries = loadSkillEntries()
-  if (entries[agent] == undefined) {
-    entries[agent] = []
-  }
-  const existing = filter(entries[agent], \known -> known.location == entry.location)
-  if (existing.length > 0) {
-    return
-  }
-  entries[agent].push(entry)
-}
-
-export def recordLearnedTool(agent: string, entry: ToolEntry) {
-  """
-  Add a just-written tool to the session catalog, so the target agent's
-  next invocation carries it without a rescan. A no-op when the catalog
-  already holds the name — a duplicate would produce two tools named
-  learned_<name> and trip the unique-tool-name check on the target's
-  next LLM call.
-  """
-  const entries = loadToolEntries()
-  if (entries[agent] == undefined) {
-    entries[agent] = []
-  }
-  const existing = filter(entries[agent], \known -> known.name == entry.name)
-  if (existing.length > 0) {
-    return
-  }
-  entries[agent].push(entry)
+  _skillEntries = null
+  _toolEntries = null
 }
 
 export type LearnedForAgent = {

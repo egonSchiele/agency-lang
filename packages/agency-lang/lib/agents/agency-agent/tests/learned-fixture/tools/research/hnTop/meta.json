@@ -1,0 +1,7 @@
+{
+  "purpose": "Fetch top stories",
+  "request": "{ maxItems: number }",
+  "createdAt": "2026-09-01T00:00:00Z",
+  "version": 1,
+  "uses": 0
+}

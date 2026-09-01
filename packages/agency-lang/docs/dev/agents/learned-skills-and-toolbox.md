@@ -45,23 +45,34 @@ overlay served through a second tool, `learned_skills_<agent>`.
 
 Session state sits in two module globals — a top-level `let`, not a
 `static const`. The CLI agent is one long-lived run, so a global lives
-for the whole session and, unlike a static, can be updated in place
+for the whole session and, unlike a static, can be dropped mid-session
 when something is saved (`docs/site/guide/global-vs-static.md`).
 
 Loading is lazy and interrupt-bounded: the skills catalog loads with
 ONE `std::skills::skillsDir` interrupt covering the whole skills root
 (`scanSkillsSubdirs` in `stdlib/skills.agency`, which takes the subagent
-names as a parameter — the record's keys are caller data, never
-directory names read off the disk — and scans each subdirectory with
-its own file cap); the toolbox catalog loads with one `listTools` scan
-per agent directory that exists. A missing root loads as an empty
-catalog with no interrupt, and a rejected scan caches an empty catalog
-rather than the Failure value. Saving updates the catalog in place
-(`recordLearnedSkill`, `recordLearnedTool`), which is why `writeSkill`
-returns the complete entry: nothing rescans after a save. The record
-functions skip an entry the catalog already holds — when the save was
-the session's first learned action, the lazy load runs after the file
-hit disk and has already picked it up.
+names as a parameter — each validated as a bare path segment, so a
+compound or `..` name can never carry the root's approval outside the
+root — and scans each subdirectory with its own file cap); the toolbox
+catalog loads with one `listTools` scan per agent directory that
+exists. A missing root loads as an empty catalog with no interrupt, and
+a rejected scan caches an empty catalog rather than the Failure value.
+
+The catalogs are only a cache of the disk, never a second copy of the
+truth: a save calls `invalidateLearned()` (both globals to null), and
+the next access rescans. An earlier design updated the catalogs in
+place after a save; it saved one scan interrupt per save and bought a
+whole class of cache-coherence bugs (a stale entry surviving a
+delete-and-reteach, duplicate entries, a record pushed into a copy the
+cache never held), so it was replaced. Saves are rare and
+user-directed, and the same policy scope that approved the first scan
+approves the rescan.
+
+Learned tools with an over-long name (one whose `learned_` prefix would
+break the 64-character provider cap — possible only for a directory
+dropped in by hand, since `writeToolFor` refuses such names) stay
+visible in the inventory but are never offered to the model: one bad
+name would fail every LLM call the target makes.
 
 Each subagent invocation calls `learnedExtrasFor(<wrapper name>)`
 inside the wrapper function body — never at module top level — and
@@ -80,10 +91,17 @@ built-in.
 
 `writeSkill(dir, name, description, body)` lives in `std::skills` so
 user-written agents get the same primitive. It composes the frontmatter
-itself (a raw-content parameter would let a description extend the
-frontmatter), validates the name against kebab-case rather than
-rewriting it, refuses duplicates before raising anything, then shows
-the complete file in a `std::skills::reviewSkill` interrupt. The
+through tarsec's `stringifyFrontmatter` (the encode half of the parser
+`std::markdown` wraps, added in tarsec 0.5.4 for exactly this: a
+hand-rolled encoder against a grammar it does not own kept producing
+silent read-back corruption — flow syntax, quote escapes, bare-numeric
+coercion). The serializer round-trips every value it accepts and throws
+on the rare one it cannot hold, which `writeSkill` surfaces as a clean
+failure. A raw-content parameter was rejected because a description
+could then extend the frontmatter. It validates the name against
+kebab-case rather than rewriting it, refuses duplicates before raising
+anything, then shows the complete file in a
+`std::skills::reviewSkill` interrupt. The
 handler answers accept (or bare `approve()`), revise-with-feedback —
 returned to the caller so the coordinator redrafts and tries again — or
 reject, which fails the call. Only an accepted draft touches disk, via
@@ -107,15 +125,20 @@ review interrupts; a stricter custom policy overrides the rule like any
 other. `docs/dev/agents/approval-policies.md` documents the
 placeholder.
 
-One narrow write rides along: `runTool` records a use count in the
-tool's `meta.json` after every run, and `recommended`/`with-writes`
-approve exactly that file under the agent-home toolboxes so a
-successful learned-tool run cannot end in a rejected metadata write.
-Other writes are NOT widened: saving a skill or publishing a tool raises the
-ordinary write interrupts on top of the review gate, and under
-with-writes (cwd-scoped) a home-directory write surfaces for explicit
-approval. For "the agent is permanently teaching itself something,"
-that double visibility is intended.
+`runTool`'s use-count bookkeeping has its own effect,
+`std::toolbox::recordUse`, approved under `recommended` for the
+agent-home toolboxes. A `std::write` rule scoped to `meta.json` was
+tried first and reverted: a dir+filename glob cannot tell the stdlib's
+own bookkeeping apart from ANY program writing arbitrary content into a
+tool's `meta.json`, whose `purpose`/`request` text `listTools` then
+trusts — so the rule was a content-injection hole. The dedicated effect
+approves only the mutation the stdlib composes, and it is best-effort:
+a declined `recordUse` never fails a run that succeeded. Writes are NOT
+widened: saving a skill or publishing a tool raises the ordinary write
+interrupts on top of the review gate, and under with-writes
+(cwd-scoped) a home-directory write surfaces for explicit approval. For
+"the agent is permanently teaching itself something," that double
+visibility is intended.
 
 The scope rules live in the shared `readScopeRules()`, so a non-agent
 `agency run --policy recommended` script gets them too; the built-in

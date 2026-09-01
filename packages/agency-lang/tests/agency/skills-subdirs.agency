@@ -46,3 +46,27 @@ node missingRootYieldsEmpty(): boolean {
   const scanned = scanSkillsSubdirs("${__dirname}/no-such-dir", ["explorer"]) with approve
   return keys(scanned).length == 0
 }
+
+// A subdirectory name that is not a bare path segment would carry the
+// root's one approval outside the root (`../x`), so it fails before any
+// interrupt is raised — the user is never prompted for a scan that
+// would escape what they approved.
+node traversalSubdirFailsBeforeTheInterrupt(): boolean {
+  const bad = ["../escape", "a/b", "..", ".", ""]
+  for (sub in bad) {
+    let scans = 0
+    let result: any = null
+    handle {
+      result = scanSkillsSubdirs(fixture(), [sub])
+    } with (intr) {
+      if (intr.effect == "std::skills::skillsDir") {
+        scans = scans + 1
+      }
+      return approve()
+    }
+    if (!(result is failure) || scans != 0) {
+      return false
+    }
+  }
+  return true
+}

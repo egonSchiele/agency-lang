@@ -2,29 +2,23 @@
   @summary The coordinator's two learning tools: teach a subagent a
   skill (learnSkill) or have a tool written into its toolbox
   (writeToolFor). Both validate the target, route the save through the
-  stdlib review pipelines, and record the result in the session
-  catalogs so the target's next invocation carries it.
+  stdlib review pipelines, and invalidate the session catalogs so the
+  target's next invocation rescans and carries the result.
 */
 import { writeSkill } from "std::skills"
 import { writeTool } from "std::toolbox"
 
 import {
   LEARN_TARGETS,
+  invalidateLearned,
   learnedSkillsRoot,
   learnedToolsRoot,
-  recordLearnedSkill,
-  recordLearnedTool,
+  maxLearnedToolName,
  } from "../../lib/learned.agency"
 
 def unknownTarget(target: string): string {
   return "Unknown target '${target}'. Valid targets: ${LEARN_TARGETS.join(", ")}."
 }
-
-// Providers cap tool names at 64 characters, and a learned tool is
-// advertised as `learned_<name>`, so the name itself gets what the
-// prefix leaves. Enforced here, where the prefix is known, rather than
-// in std::toolbox, which has no prefix.
-static const MAX_LEARNED_TOOL_NAME = 56
 
 export def learnSkill(
   target: string,
@@ -58,7 +52,7 @@ export def learnSkill(
   if (value.revise != undefined) {
     return "The user asked for a revision: ${value.revise}. Redraft the skill with that feedback and call learnSkill again."
   }
-  recordLearnedSkill(target, value.saved)
+  invalidateLearned()
   return "Saved. The ${target} agent has the '${value.saved.name}' skill from its next invocation. /skills lists it."
 }
 
@@ -82,13 +76,13 @@ export def writeToolFor(
   if (!LEARN_TARGETS.includes(target)) {
     return unknownTarget(target)
   }
-  if (name.length > MAX_LEARNED_TOOL_NAME) {
-    return "Not saved: the name must be at most ${MAX_LEARNED_TOOL_NAME} characters, because the tool is advertised as learned_${name} and providers cap tool names at 64."
+  if (name.length > maxLearnedToolName()) {
+    return "Not saved: the name must be at most ${maxLearnedToolName()} characters, because the tool is advertised as learned_${name} and providers cap tool names at 64."
   }
   const written = writeTool(name, purpose, request, dir: "${learnedToolsRoot()}/${target}")
   if (written is failure(reason)) {
     return "Not saved: ${reason}"
   }
-  recordLearnedTool(target, written.value)
+  invalidateLearned()
   return "Saved. The ${target} agent can call it as learned_${written.value.name} from its next invocation. /toolbox lists it."
 }

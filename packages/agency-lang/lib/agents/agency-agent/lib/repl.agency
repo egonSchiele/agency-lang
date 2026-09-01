@@ -17,6 +17,7 @@ import {
 
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
 import { HISTORY_PATH } from "./config.agency"
+import { skillsView, toolboxView } from "./learnedView.agency"
 import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
 import { diffResolved, Ctx } from "./resolution.agency"
@@ -242,13 +243,21 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /mcp, /rename, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /skills, /toolbox, /mcp, /rename, /paste, /help",
       )
       return true
     }
     "/settings" => {
       showCapabilities()
       editCapabilities()
+      return true
+    }
+    "/skills" => {
+      pushMessage(skillsView())
+      return true
+    }
+    "/toolbox" => {
+      pushMessage(toolboxView())
       return true
     }
     "/mcp" => mcpSlashCommand()

@@ -1,0 +1,7 @@
+{
+  "sourceFile": "learnedWiring.agency",
+  "tests": [
+    { "nodeName": "explorerGetsItsSkillsTool", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "codeGetsNothingFromThisFixture", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

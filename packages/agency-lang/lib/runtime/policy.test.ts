@@ -3,13 +3,14 @@ import {
   checkPolicy,
   resolveDotDirPattern,
   expandAgencyInstallDir,
+  expandAgentHomeDir,
   validatePolicy,
   escapeGlob,
 } from "./policy.js";
 import { getStdlibDir } from "../importPaths.js";
 import path from "path";
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, realpathSync } from "fs";
-import { tmpdir } from "os";
+import os, { tmpdir } from "os";
 import picomatch from "picomatch";
 
 describe("checkPolicy", () => {
@@ -612,6 +613,103 @@ describe("<agency> dir patterns", () => {
     };
     expect(expandAgencyInstallDir("<agency>/stdlib/**", unresolvable)).toBe("<agency>/stdlib/**");
     expect(expandAgencyInstallDir("/plain/**", unresolvable)).toBe("/plain/**");
+  });
+});
+
+describe("<agent-home> dir patterns", () => {
+  const read = (dir: string) => ({
+    effect: "std::read",
+    message: "m",
+    data: { dir, filename: "x" },
+    origin: "std::fs",
+  });
+  const policy = {
+    "std::read": [
+      {
+        match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" },
+        action: "approve" as const,
+      },
+    ],
+  };
+
+  it("expands to AGENCY_AGENT_HOME when set and non-empty", () => {
+    expect(expandAgentHomeDir("<agent-home>/skills/**", () => "/custom/home")).toBe(
+      "/custom/home/skills/**",
+    );
+  });
+
+  it("escapes glob characters in the resolved home", () => {
+    expect(expandAgentHomeDir("<agent-home>/skills/**", () => "/opt/v*1")).toBe(
+      "/opt/v\\*1/skills/**",
+    );
+  });
+
+  it("leaves a pattern without the token untouched", () => {
+    expect(expandAgentHomeDir("/plain/**", () => "/custom/home")).toBe("/plain/**");
+  });
+
+  it("a relative AGENCY_AGENT_HOME resolves to an absolute path (matching canonicalized dirs)", () => {
+    const previous = process.env.AGENCY_AGENT_HOME;
+    process.env.AGENCY_AGENT_HOME = "./my-profile";
+    try {
+      expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(
+        `${path.resolve("./my-profile")}/skills/**`,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.AGENCY_AGENT_HOME;
+      else process.env.AGENCY_AGENT_HOME = previous;
+    }
+  });
+
+  it("an empty AGENCY_AGENT_HOME counts as unset (falls back to ~/.agency-agent)", () => {
+    const previous = process.env.AGENCY_AGENT_HOME;
+    process.env.AGENCY_AGENT_HOME = "";
+    try {
+      expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(
+        `${path.join(os.homedir(), ".agency-agent")}/skills/**`,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.AGENCY_AGENT_HOME;
+      else process.env.AGENCY_AGENT_HOME = previous;
+    }
+  });
+
+  it("realpaths a symlinked agent home, matching the canonicalized dirs file effects report", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "policy-home-"));
+    const previous = process.env.AGENCY_AGENT_HOME;
+    try {
+      const real = path.join(base, "real-home");
+      mkdirSync(real);
+      const link = path.join(base, "linked-home");
+      symlinkSync(real, link);
+      process.env.AGENCY_AGENT_HOME = link;
+      // tmpdir() itself may sit behind a symlink (macOS /var), so the
+      // expectation canonicalizes the same way the expander must.
+      expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(`${realpathSync(real)}/skills/**`);
+    } finally {
+      if (previous === undefined) delete process.env.AGENCY_AGENT_HOME;
+      else process.env.AGENCY_AGENT_HOME = previous;
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("`<agent-home>` means the agent home, resolved at match time", () => {
+    const previous = process.env.AGENCY_AGENT_HOME;
+    process.env.AGENCY_AGENT_HOME = "/tmp/agent-home-test";
+    try {
+      expect(checkPolicy(policy, read("/tmp/agent-home-test/skills/explorer")).type).toBe(
+        "approve",
+      );
+      expect(checkPolicy(policy, read("/tmp/agent-home-test/tools/research/hnTop")).type).toBe(
+        "approve",
+      );
+      // The home itself and unrelated dirs: not covered.
+      expect(checkPolicy(policy, read("/tmp/agent-home-test")).type).toBe("propagate");
+      expect(checkPolicy(policy, read("/Users/someone")).type).toBe("propagate");
+    } finally {
+      if (previous === undefined) delete process.env.AGENCY_AGENT_HOME;
+      else process.env.AGENCY_AGENT_HOME = previous;
+    }
   });
 });
 

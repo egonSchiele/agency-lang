@@ -1,0 +1,85 @@
+/** @module
+  @summary Renders the /skills and /toolbox listings: everything the
+  agent has learned, grouped by subagent. Pure formatting over
+  learnedInventory(); repl.agency stays a dispatcher.
+*/
+import { keys } from "std::object"
+
+import {
+  LEARNED_TOOL_PREFIX,
+  LearnedInventory,
+  learnedInventory,
+  maxLearnedToolName,
+ } from "./learned.agency"
+
+def skillsSection(agent: string, inventory: LearnedInventory): string {
+  const entry = inventory[agent]
+  if (entry == undefined || entry.skills.length == 0) {
+    return ""
+  }
+  let lines = ["${agent}:"]
+  for (skill in entry.skills) {
+    lines.push("  ${skill.name} — ${skill.description}")
+  }
+  return lines.join("\n")
+}
+
+def toolsSection(agent: string, inventory: LearnedInventory): string {
+  const entry = inventory[agent]
+  if (entry == undefined || entry.tools.length == 0) {
+    return ""
+  }
+  let lines = ["${agent}:"]
+  for (tool in entry.tools) {
+    let note = ""
+    if (tool.broken != undefined) {
+      note = " (broken: ${tool.broken})"
+    } else if (tool.name.length > maxLearnedToolName()) {
+      note = " (name too long to offer; rename the tool directory)"
+    }
+    lines.push("  ${LEARNED_TOOL_PREFIX}${tool.name} — ${tool.meta.purpose}${note}")
+  }
+  return lines.join("\n")
+}
+
+def renderSections(
+  inventory: LearnedInventory,
+  section: (string, LearnedInventory) -> string,
+  emptyHint: string,
+): string {
+  let sections: string[] = []
+  for (agent in keys(inventory)) {
+    const rendered = section(agent, inventory)
+    if (rendered != "") {
+      sections.push(rendered)
+    }
+  }
+  if (sections.length == 0) {
+    return emptyHint
+  }
+  return sections.join("\n")
+}
+
+export def skillsView(): string {
+  """
+  The /skills listing: learned skills grouped by subagent, or a hint
+  when nothing has been learned yet.
+  """
+  return renderSections(
+    learnedInventory(),
+    skillsSection,
+    "No learned skills yet. Ask me to learn one for a subagent.",
+  )
+}
+
+export def toolboxView(): string {
+  """
+  The /toolbox listing: learned tools grouped by subagent, or a hint
+  when none have been written yet.
+  """
+  return renderSections(
+    learnedInventory(),
+    toolsSection,
+    "No learned tools yet. Ask me to write one for a subagent.",
+  )
+}

@@ -36,6 +36,7 @@ def applyFindings(
   findings: Feedback[],
   model: string,
   provider: string,
+  extraTools: any[],
 ): string {
   const findingLines = map(findings, \item -> "- ${item.feedback}").join("\n")
   let guidelinesSection = ""
@@ -64,7 +65,7 @@ ${findingLines}
 ${text}
 </text>
 """
-  return llm(prompt, llmOptions(model: model, provider: provider))
+  return llm(prompt, llmOptions(model: model, provider: provider, tools: extraTools))
 }
 
 /**
@@ -92,6 +93,7 @@ export def writingRewriteAgent(
   maxTime: number = 10m,
   model: string = "",
   provider: string = "",
+  extraTools: any[] = [],
 ): Result<string> {
   """
   Review prose and return it rewritten with the findings applied. If
@@ -109,6 +111,7 @@ export def writingRewriteAgent(
   @param maxTime - Hard wall-clock cap for all rounds together
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
+  @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   """
   let reviewFailure = ""
   const captured = guard(cost: maxCost, time: maxTime, label: "writingRewriteAgent") {
@@ -142,6 +145,7 @@ export def writingRewriteAgent(
             findings: findings,
             model: model,
             provider: provider,
+            extraTools: extraTools,
           )
         }
       }

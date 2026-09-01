@@ -1,5 +1,7 @@
 import picomatch from "picomatch";
 import { realpathSync } from "fs";
+import os from "os";
+import path from "path";
 import { z } from "zod";
 import { getPackageRoot } from "../importPaths.js";
 
@@ -158,6 +160,42 @@ export function expandAgencyInstallDir(
   return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeForGlob(resolved));
 }
 
+/** In a `dir` pattern, `<agent-home>` stands for the agent home directory
+ *  (`AGENCY_AGENT_HOME`, or `~/.agency-agent` when unset). The built-in
+ *  read scope uses it for the learned skills and toolbox directories, so a
+ *  saved policy keeps meaning "wherever the agent home is now". */
+export const AGENT_HOME_PLACEHOLDER = "<agent-home>";
+
+// Expanded at match time, like `<agency>`. An empty AGENCY_AGENT_HOME
+// counts as unset — the same guard the agent's config module documents
+// (issue #469) — so a set-but-empty var never turns the home into a
+// cwd-relative path. Exported for tests, which inject the home.
+export function expandAgentHomeDir(pattern: string, home: () => string = defaultAgentHome): string {
+  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) return pattern;
+  return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeForGlob(home()));
+}
+
+function defaultAgentHome(): string {
+  const override = process.env.AGENCY_AGENT_HOME;
+  const home =
+    override !== undefined && override !== ""
+      ? // File effects canonicalize their dir to an absolute path before
+        // matching, so a relative override (./my-profile) must be resolved
+        // the same way or the pattern never matches.
+        path.resolve(override)
+      : path.join(os.homedir(), ".agency-agent");
+  // Realpathed for the same reason the cwd is in resolveDotDirPattern: file
+  // effects realpath their payload dirs, so a symlinked home (macOS /tmp, a
+  // linked profile) must share that path identity or no rule ever matches.
+  try {
+    return realpathSync(home);
+  } catch {
+    // A home that does not exist yet (nothing learned) keeps its lexical
+    // spelling; there is nothing under it to match anyway.
+    return home;
+  }
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
@@ -185,12 +223,14 @@ function matchesRule(
       !raw &&
       key === "dir" &&
       picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
-    const viaInstall =
+    // Each expander is a no-op when its token is absent, so one composed
+    // check covers every placeholder — including a pattern mixing them.
+    const viaPlaceholders =
       !raw &&
       !viaDot &&
       key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), expandAgencyInstallDir(pattern));
-    if (!raw && !viaDot && !viaInstall) {
+      picomatch.isMatch(stripDotSlash(value), expandAgentHomeDir(expandAgencyInstallDir(pattern)));
+    if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }
   }

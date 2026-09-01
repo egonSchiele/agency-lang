@@ -120,18 +120,25 @@ the handler is installed, not from the type.
 
 There is a corollary about module statics. `registry.agency` imports every
 brain, and Agency initializes the whole import closure at startup
-(`docs/dev/compiler/init-topsort.md`), so every registered brain's top-level statics
-run whether or not that brain was selected. Two consequences:
+(`docs/dev/compiler/init-topsort.md`), so every registered brain's top-level
+statics run whether or not that brain was selected. Keep them free of
+side effects beyond the bundled reads (the coordinator's system prompts,
+the code subagent's skill files); `init` only validates that those reads
+succeeded, takes the grounding, and does other policy-neutral setup.
 
-1. Brain statics must do nothing effectful, with one exception: bundled
-   file reads (the coordinator's system prompts, the code subagent's skill
-   files) stay `static const ... with approve`, exactly as before the split.
-2. Those reads must *not* move into `init`. `init` runs inside the policy
-   handler, and an inner `with approve` cannot get past an outer policy, so
-   a read there would prompt the user under `--policy minimal` (which has no
-   `std::read` rule) or fail in a non-interactive run. `init` only validates
-   that the static reads succeeded, takes the grounding, and does other
-   policy-neutral setup.
+A historical note, because an earlier version of this doc said otherwise:
+statics running before the policy handler was a security hole, not a
+pattern — it was fixed by installing the root policy handler before any
+user code runs (#966, #987). Statics are policy-governed like all code.
+Every tool that touches the filesystem raises an interrupt; the
+concession for directory-of-files tools (`skillsDir`, the docs tools) is
+ONE scan interrupt up front whose approval covers the reads that follow,
+never zero interrupts and never one per file. Session-lived mutable
+state belongs in a module global (a top-level `let`), not a static — the
+CLI agent is one long-lived run, so a global lives for the session and
+can be updated in place; the learned catalogs
+(`docs/dev/agents/learned-skills-and-toolbox.md`) are the worked
+example.
 
 ## Adding a brain
 

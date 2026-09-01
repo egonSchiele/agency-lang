@@ -1,0 +1,52 @@
+/*
+ * /skills and /toolbox render the inventory grouped by subagent, with a
+ * hint when nothing has been learned. Roots repointed at the fixture
+ * FIRST and verified (the issue #469 rule).
+ */
+import test { _setLearnedRoot } from "../lib/learned.agency"
+import { learnedSkillsRoot } from "../lib/learned.agency"
+import { skillsView, toolboxView } from "../lib/learnedView.agency"
+
+def fixtureRoot(): string {
+  return "${__dirname}/learned-fixture"
+}
+
+def sandboxed(root: string): boolean {
+  _setLearnedRoot(root)
+  return learnedSkillsRoot() == "${root}/skills"
+}
+
+node skillsViewListsFixtureSkill(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let view = ""
+  handle {
+    view = skillsView()
+  } with approve
+  return view.includes("explorer:") && view.includes("repo-orientation — Orient in an unfamiliar repo")
+}
+
+node toolboxViewListsFixtureTool(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let view = ""
+  handle {
+    view = toolboxView()
+  } with approve
+  return view.includes("research:") && view.includes("learned_hnTop — Fetch top stories")
+}
+
+node emptyRootsShowHints(): boolean {
+  if (!sandboxed("${__dirname}/learned-fixture-missing")) {
+    return false
+  }
+  let skillsText = ""
+  let toolsText = ""
+  handle {
+    skillsText = skillsView()
+    toolsText = toolboxView()
+  } with approve
+  return skillsText.includes("No learned skills yet") && toolsText.includes("No learned tools yet")
+}

@@ -1,0 +1,147 @@
+/*
+ * The learned catalogs: lazy load with one skills-root scan interrupt,
+ * invalidate-and-rescan after a save, and per-agent tools/extras. Every
+ * node repoints the roots at the committed fixture FIRST and verifies
+ * the repoint took, so a failing test can never touch the real
+ * ~/.agency-agent (the issue #469 rule).
+ */
+import test { _setLearnedRoot } from "../lib/learned.agency"
+import {
+  invalidateLearned,
+  learnedSkillsRoot,
+  learnedSkillsToolFor,
+  learnedToolsFor,
+  learnedExtrasFor,
+  learnedInventory,
+ } from "../lib/learned.agency"
+
+def fixtureRoot(): string {
+  return "${__dirname}/learned-fixture"
+}
+
+// Repoint at the fixture and verify the repoint took. Returns false if
+// the sandbox is not in effect; every node checks this before anything
+// else.
+def sandboxed(): boolean {
+  _setLearnedRoot(fixtureRoot())
+  return learnedSkillsRoot() == "${fixtureRoot()}/skills"
+}
+
+node lazyLoadRaisesOneScanInterrupt(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let scans = 0
+  let first: any = null
+  let second: any = null
+  handle {
+    first = learnedSkillsToolFor("explorer")
+    second = learnedSkillsToolFor("explorer")
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  return scans == 1 && first != null && second != null
+}
+
+// The post-save path: a save calls invalidateLearned(), and the next
+// access rescans the directory (a second scan interrupt) instead of
+// serving the stale catalog.
+node invalidateForcesRescan(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let scans = 0
+  let description = ""
+  handle {
+    learnedSkillsToolFor("explorer")
+    invalidateLearned()
+    const tool = learnedSkillsToolFor("explorer")
+    if (tool != null) {
+      description = tool.description
+    }
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  return scans == 2 && description.includes("<name>repo-orientation</name>")
+}
+
+node unknownAgentYieldsNullAndEmpty(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let skillsTool: any = "unset"
+  let tools: any[] = ["unset"]
+  handle {
+    skillsTool = learnedSkillsToolFor("nope")
+    tools = learnedToolsFor("nope")
+  } with approve
+  return skillsTool == null && tools.length == 0
+}
+
+// Two properties off the real on-disk fixture toolbox: a healthy tool
+// (listTools gives it `broken: null`, which must pass the not-broken
+// filter) is offered as learned_<name>, and the committed tool whose
+// 63-character directory name would overflow the provider cap behind
+// the learned_ prefix is never offered.
+node learnedToolNamePrefixedAndOverlongExcluded(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let names = ""
+  handle {
+    const tools = learnedToolsFor("research")
+    for (tool in tools) {
+      names = "${names}${tool.name},"
+    }
+  } with approve
+  return names == "learned_hnTop,"
+}
+
+node inventoryGroupsByAgent(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let inventory: any = null
+  handle {
+    inventory = learnedInventory()
+  } with approve
+  const explorer = inventory["explorer"]
+  const research = inventory["research"]
+  if (explorer == undefined || research == undefined) {
+    return false
+  }
+  // The overlong-named tool stays visible in the inventory (so /toolbox
+  // can show what is on disk) even though it is never offered as a tool.
+  return explorer.skills.length == 1 && explorer.tools.length == 0 && research.tools.length == 2 && inventory["code"] == undefined
+}
+
+node extrasForExplorerHasSkillsTool(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let extras: any[] = []
+  handle {
+    extras = learnedExtrasFor("explorer")
+  } with approve
+  if (extras.length != 1) {
+    return false
+  }
+  return extras[0].description.includes("<name>repo-orientation</name>")
+}
+
+node extrasForCodeEmpty(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let extras: any[] = ["unset"]
+  handle {
+    extras = learnedExtrasFor("code")
+  } with approve
+  return extras.length == 0
+}

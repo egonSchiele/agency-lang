@@ -156,10 +156,13 @@ stops the tool before it has side effects. It then runs `main` through
 `runFile`, with `wallClock` set to the tool's own `maxTime` plus
 headroom, so the guard trips before the subprocess is killed. `runFile`
 clamps `wallClock` to an hour, so `writeTool` refuses a `maxTime` above
-an hour minus that headroom. It then rewrites `meta.json` with
-one more use and the time. If that write fails, the returned failure
-carries the tool's result in its message, since the tool has already
-run. Otherwise it returns the node's own `Result`.
+an hour minus that headroom. It then rewrites `meta.json` with one more
+use and the time, behind its own `std::toolbox::recordUse` interrupt
+(the write itself uses the interrupt-free `_write`, covered by that
+approval — the same pattern as a scan's reads). The bookkeeping is
+best-effort: the tool has already run, so a declined interrupt or a
+failed write never turns a successful run into a failure; the count
+simply stays unrecorded. It returns the node's own `Result`.
 
 ## Model calls and mocks
 

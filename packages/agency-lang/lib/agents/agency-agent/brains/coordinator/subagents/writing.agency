@@ -1,5 +1,7 @@
 import { writingReviewAgent } from "std::agents/writing/review"
 import { renderFeedback } from "std::agents/lib/feedback"
+
+import { learnedExtrasFor } from "../../../lib/learned.agency"
 import { setMemoryId } from "std::memory"
 
 // The review itself lives in std::agents/writing/review. That reviewer
@@ -18,7 +20,7 @@ export def writingAgent(userMsg: string): string {
   let reply = ""
   thread(label: "writing", summarize: true, session: "writing") {
     setMemoryId("writing")
-    reply = renderFeedback(writingReviewAgent(text: userMsg))
+    reply = renderFeedback(writingReviewAgent(text: userMsg, extraTools: learnedExtrasFor("writing")))
   }
   return reply
 }

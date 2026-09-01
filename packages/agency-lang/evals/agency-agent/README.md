@@ -38,8 +38,11 @@ is an Agency coding task graded by its own harness, and `news` and
 `hollow-creek` are goal-judged questions. Two conversation tests,
 `identity` and `run-on-openrouter`, come from a real session where the
 agent could not say what it was or how to change its model: each asks
-the agent about itself and is goal-judged, with no workdir. An
-unfiltered run covers all nine; to run only the terminal-bench-shaped
+the agent about itself and is goal-judged, with no workdir. A third
+conversation test, `learned-skill`, teaches the explorer subagent a
+skill mid-session and checks the explorer uses it; it depends on the
+approve-all policy covering the review interrupt and the home write. An
+unfiltered run covers all ten; to run only the terminal-bench-shaped
 tests, pass `--test` for each of the four below.
 
 | test                | pattern from the benchmark                                                                    | must pass                                    |

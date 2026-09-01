@@ -1,0 +1,8 @@
+{
+  "sourceFile": "learnedView.agency",
+  "tests": [
+    { "nodeName": "skillsViewListsFixtureSkill", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "toolboxViewListsFixtureTool", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "emptyRootsShowHints", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

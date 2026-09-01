@@ -17,8 +17,11 @@ describe("builtinPolicy", () => {
       expect(p![effect]).toEqual([
         { match: { dir: "{.,./**}" }, action: "approve" },
         { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
+        { match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" }, action: "approve" },
       ]);
     }
+    // No std::write rule at all: runTool's bookkeeping goes through the
+    // dedicated recordUse effect, never a write approval.
     expect(p!["std::write"]).toBeUndefined();
   });
 
@@ -27,6 +30,14 @@ describe("builtinPolicy", () => {
       builtinPolicy("recommended", "/tmp/base")!["std::read"],
     );
     expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::scan"]).toBeUndefined();
+  });
+
+  it("approves recordUse only under the agent-home toolboxes", () => {
+    const p = builtinPolicy("recommended", "/tmp/base");
+    expect(p!["std::toolbox::recordUse"]).toEqual([
+      { match: { dir: "<agent-home>/tools/**" }, action: "approve" },
+    ]);
+    expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::recordUse"]).toBeUndefined();
   });
 
   it("resolves 'minimal' with memory approved but reads absent", () => {
@@ -38,7 +49,7 @@ describe("builtinPolicy", () => {
   it("scopes 'with-writes' effects on their correct path fields", () => {
     const p = builtinPolicy("with-writes", "/work");
     const scope = "{/work,/work/**}";
-    // dir field
+    // dir field (write/edit/mkdir)
     expect(p!["std::write"]).toEqual([{ match: { dir: scope }, action: "approve" }]);
     // target field (remove) — a fat-fingered "dir" here would silently disable scoping
     expect(p!["std::remove"]).toEqual([{ match: { target: scope }, action: "approve" }]);

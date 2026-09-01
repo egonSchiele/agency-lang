@@ -1,0 +1,211 @@
+/** @module
+  @summary The session catalogs of learned content: skills the user
+  taught a subagent and tools the agent wrote for one. Loaded lazily
+  (one scan interrupt for the skills root; one toolbox scan per agent
+  directory that exists) and held in module globals. A save calls
+  `invalidateLearned()`, so the next access rescans and picks it up —
+  the disk is the single source of truth, and the catalogs are only a
+  cache of it.
+*/
+import { filter, map } from "std::array"
+import { keys } from "std::object"
+import { exists } from "std::shell"
+import {
+  MAX_TOOL_NAME_LEN,
+  SkillEntry,
+  scanSkillsSubdirs,
+  skillsToolFromEntries,
+ } from "std::skills"
+import { ToolEntry, listTools, runTool } from "std::toolbox"
+
+import { AGENCY_AGENT_DIR } from "../shared.agency"
+
+// Every subagent a skill or tool can be learned for. These are the
+// coordinator's wrapper names (the directory names under the learned
+// roots), not the stdlib agents' names.
+export static const LEARN_TARGETS = [
+  "code",
+  "research",
+  "explorer",
+  "oracle",
+  "review",
+  "writing",
+  "rewrite",
+]
+
+// Session-lived catalogs. Globals, not statics: the CLI agent is one
+// long-lived run, and a save must be able to invalidate these mid-session.
+let _skillEntries: Record<string, SkillEntry[]> | null = null
+let _toolEntries: Record<string, ToolEntry[]> | null = null
+// Test seam: repoints both roots at a sandbox. The production root is
+// the AGENCY_AGENT_DIR static, resolved once at startup.
+let _rootOverride: string | null = null
+
+def _setLearnedRoot(root: string) {
+  _rootOverride = root
+  _skillEntries = null
+  _toolEntries = null
+}
+
+def learnedRoot(): string {
+  const override = _rootOverride
+  if (override != null) {
+    return override
+  }
+  return AGENCY_AGENT_DIR
+}
+
+export def learnedSkillsRoot(): string {
+  return "${learnedRoot()}/skills"
+}
+
+export def learnedToolsRoot(): string {
+  return "${learnedRoot()}/tools"
+}
+
+def loadSkillEntries(): Record<string, SkillEntry[]> {
+  const loaded = _skillEntries
+  if (loaded != null) {
+    return loaded
+  }
+  // No skills root yet (nothing ever learned): no scan, no interrupt.
+  if (!exists(learnedSkillsRoot())) {
+    _skillEntries = {}
+    return {}
+  }
+  const scanned: any = scanSkillsSubdirs(learnedSkillsRoot(), LEARN_TARGETS)
+  // A rejected scan interrupt surfaces here as a Failure value. Cache an
+  // empty catalog instead: caching the Failure would make every later
+  // lookup read fields off it and a record push silently vanish.
+  if (scanned is failure) {
+    _skillEntries = {}
+    return {}
+  }
+  _skillEntries = scanned
+  return scanned
+}
+
+def loadToolEntries(): Record<string, ToolEntry[]> {
+  const loaded = _toolEntries
+  if (loaded != null) {
+    return loaded
+  }
+  let scanned: Record<string, ToolEntry[]> = {}
+  for (agent in LEARN_TARGETS) {
+    const dir = "${learnedToolsRoot()}/${agent}"
+    if (!exists(dir)) {
+      continue
+    }
+    const listed = listTools(dir)
+    if (listed is success(entries)) {
+      scanned[agent] = entries
+    }
+  }
+  _toolEntries = scanned
+  return scanned
+}
+
+export def learnedSkillsToolFor(agent: string): any | null {
+  """
+  The skills tool over one subagent's learned skills, or null when it
+  has none. Built from the session catalog; a save this turn
+  invalidated the catalog, so the next build here rescans and lists it.
+  """
+  const entries = loadSkillEntries()[agent]
+  if (entries == undefined || entries.length == 0) {
+    return null
+  }
+  return skillsToolFromEntries("${learnedSkillsRoot()}/${agent}", entries, "learned_skills_${agent}")
+}
+
+// The prefix every learned tool is advertised under. It is what makes
+// collision with a target's built-in tools impossible: no built-in
+// tool's name starts with it.
+export static const LEARNED_TOOL_PREFIX = "learned_"
+
+export def maxLearnedToolName(): number {
+  """
+  The longest name a learned tool can have: the provider cap, minus the
+  learned_ prefix the tool is advertised under. Derived so the three
+  numbers (provider cap, prefix length, this cap) cannot drift apart.
+  """
+  return MAX_TOOL_NAME_LEN - LEARNED_TOOL_PREFIX.length
+}
+
+// One catalog entry as an LLM-callable tool.
+def learnedToolFromEntry(agent: string, entry: ToolEntry): any {
+  const description = "${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}"
+  const dir = "${learnedToolsRoot()}/${agent}"
+  return runTool.partial(name: entry.name, dir: dir).describe(description).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
+}
+
+export def learnedToolsFor(agent: string): any[] {
+  """
+  The LLM-callable tools from one subagent's learned toolbox, each
+  renamed `learned_<name>`. Broken entries, and entries whose prefixed
+  name would exceed the provider cap (a tool dropped into the directory
+  by hand — writeToolFor refuses such names at write time), stay in the
+  inventory but are never offered to the model: one bad name would fail
+  every LLM call the target makes.
+  """
+  const entries = loadToolEntries()[agent]
+  if (entries == undefined) {
+    return []
+  }
+  const usable = filter(entries, \entry -> entry.broken == undefined && entry.name.length <= maxLearnedToolName())
+  return map(usable, \entry -> learnedToolFromEntry(agent, entry))
+}
+
+export def learnedExtrasFor(agent: string): any[] {
+  """
+  The learned additions to one subagent's tool list: its learned-skills
+  tool (when it has skills) followed by its learned tools.
+  """
+  const skillsTool = learnedSkillsToolFor(agent)
+  const skillsTools = if skillsTool == null then [] else [skillsTool]
+  return [...skillsTools, ...learnedToolsFor(agent)]
+}
+
+export def invalidateLearned() {
+  """
+  Drop both session catalogs, so the next access rescans the learned
+  directories. Called after every save. Rescanning instead of patching
+  the catalogs in place keeps the disk the single source of truth —
+  updating a cached record cannot drift from what a scan would see
+  (a stale entry surviving a delete-and-reteach, a duplicate, a push
+  into a copy the cache never held). Saves are rare and user-directed,
+  so the extra scan interrupt is cheap, and the same policy scope that
+  approved the first scan approves this one.
+  """
+  _skillEntries = null
+  _toolEntries = null
+}
+
+export type LearnedForAgent = {
+  skills: SkillEntry[];
+  tools: ToolEntry[]
+}
+
+export type LearnedInventory = Record<string, LearnedForAgent>
+
+export def learnedInventory(): LearnedInventory {
+  """
+  Everything the agent has learned, grouped by subagent. Agents with
+  nothing are omitted.
+  """
+  const skills = loadSkillEntries()
+  const tools = loadToolEntries()
+  let out: LearnedInventory = {}
+  for (agent in LEARN_TARGETS) {
+    const agentSkills = skills[agent] ?? []
+    const agentTools = tools[agent] ?? []
+    if (agentSkills.length == 0 && agentTools.length == 0) {
+      continue
+    }
+    out[agent] = {
+      skills: agentSkills,
+      tools: agentTools
+    }
+  }
+  return out
+}

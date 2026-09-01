@@ -18,9 +18,10 @@ import { llmOptions } from "std::agents/lib/shared"
 import { now, format } from "std::date"
 import { mkdir, remove, move } from "std::fs"
 import { ls, exists } from "std::shell"
+import { MAX_TOOL_NAME_LEN } from "std::skills"
 import { Json } from "std::validation"
 
-import { _read } from "agency-lang/stdlib-lib/builtins.js"
+import { _read, _write } from "agency-lang/stdlib-lib/builtins.js"
 import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
 
 /** @module
@@ -86,9 +87,9 @@ import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
 // skills directory.
 const MAX_TOOLS = 500
 
-// Providers cap tool names at 64 characters; std::skills truncates to the
-// same cap, this module refuses so a user-chosen name is never changed.
-const MAX_TOOL_NAME_LEN = 64
+// std::skills owns the provider tool-name cap (MAX_TOOL_NAME_LEN, 64).
+// std::skills truncates to it; this module refuses over-long names so a
+// user-chosen name is never changed.
 
 // Added to a tool's own time limit for the subprocess that runs it, so
 // the guard trips before the process is killed. runFile clamps wallClock
@@ -111,6 +112,18 @@ const META_FILE = "meta.json"
 @alwaysUnder(dir)
 effect std::toolbox::scan {
   dir: string
+}
+
+// runTool's use-count bookkeeping, as its own effect rather than a raw
+// std::write: the stdlib composes the written record itself, so
+// approving this effect approves one known, constrained mutation of the
+// tool's meta.json. A policy rule for it cannot be reused to land
+// arbitrary content in the file. The approval covers the write that
+// fulfils it, the way a scan's approval covers its reads.
+@alwaysUnder(dir)
+effect std::toolbox::recordUse {
+  dir: string;
+  name: string
 }
 
 effect std::toolbox::review {
@@ -922,12 +935,18 @@ export def writeTool(
 // ---- running a tool ----
 
 def recordUse(toolDir: string, name: string, meta: ToolMeta): Result {
+  return interrupt std::toolbox::recordUse("Record one use of this tool in its ${META_FILE}?", {
+    dir: toolDir,
+    name: name
+  })
   const used: ToolMeta = {
     ...meta,
     uses: meta.uses + 1,
     lastUsedAt: format(now())
   }
-  return write(META_FILE, JSON.stringify(used, null, 2), toolDir)
+  // The interrupt-free primitive: the recordUse approval covers this
+  // write, the same way a scan approval covers its reads.
+  return try _write(toolDir, META_FILE, JSON.stringify(used, null, 2))
 }
 
 export def runTool(
@@ -937,8 +956,10 @@ export def runTool(
 ): Result<Json> {
   """
   Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json records one more use and the time; it
-  does not record the result.
+  returned. The tool's meta.json records one more use and the time,
+  best-effort behind a `std::toolbox::recordUse` interrupt: a declined
+  or failed record never fails a run that succeeded. It does not record
+  the result.
 
   @param name - The tool's name under dir
   @param request - The tool's input, a value of its Request type
@@ -979,13 +1000,10 @@ export def runTool(
   if (ran is success(finished)) {
     result = finished.data
   }
-  // The tool has run and its effects have happened, so its result is
-  // never dropped: a failed record carries it in the message.
-  const recorded = recordUse(toolDir, name, meta.value)
-  if (recorded is failure(recordErr)) {
-    return failure(
-      "the tool ran and returned ${JSON.stringify(result)}, but ${META_FILE} could not be updated: ${recordErr}",
-    )
-  }
+  // Best-effort bookkeeping: the tool has run and its effects have
+  // happened, so a declined recordUse interrupt or a failed meta.json
+  // write must not turn a successful run into a failure. The use count
+  // is only a count.
+  recordUse(toolDir, name, meta.value)
   return result
 }

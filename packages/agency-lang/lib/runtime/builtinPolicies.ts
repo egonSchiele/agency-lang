@@ -1,5 +1,6 @@
 import {
   AGENCY_INSTALL_DIR_PLACEHOLDER as INSTALL,
+  AGENT_HOME_PLACEHOLDER as AGENT_HOME,
   type Policy,
   type PolicyRule,
   escapeGlob,
@@ -44,7 +45,23 @@ export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
     { match: { dir: `{${INSTALL}/stdlib/**,${INSTALL}/dist/**}` }, action: "approve" },
+    // The agent home's learned directories: skills the user taught the
+    // agent and tools it wrote, both saved only through review
+    // interrupts. Reading them back (including runTool's per-run scan)
+    // is inside the default scope; a stricter custom policy overrides.
+    { match: { dir: `{${AGENT_HOME}/skills/**,${AGENT_HOME}/tools/**}` }, action: "approve" },
   ];
+}
+
+// runTool records a use count in the tool's meta.json after every run,
+// behind the dedicated std::toolbox::recordUse effect. Approving the
+// effect (rather than a std::write rule on the file) approves only the
+// stdlib's own bookkeeping write; a raw write rule on meta.json could
+// be satisfied by ANY program landing arbitrary content there, which
+// listTools would then trust as the tool's purpose. Scoped to the
+// agent-home toolboxes; recordUse elsewhere still prompts.
+function toolboxRecordUseRules(): PolicyRule[] {
+  return [{ match: { dir: `${AGENT_HOME}/tools/**` }, action: "approve" }];
 }
 
 export const minimalAutoApprovePolicy: Policy = {
@@ -77,6 +94,7 @@ export const recommendedAutoApprovePolicy: Policy = {
   // A scan reads tool sources and meta.json under a directory, so it
   // takes the read scope.
   "std::toolbox::scan": readScopeRules(),
+  "std::toolbox::recordUse": toolboxRecordUseRules(),
   "std::notify": approve,
   "std::clipboardCopy": approve,
   "std::git::status": approve,
@@ -137,7 +155,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory (and the agency install's own docs and skills) and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, the agent home's learned skills/tools (plus the toolbox recordUse bookkeeping there) and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
   },
   {
     name: "minimal",

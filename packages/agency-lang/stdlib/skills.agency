@@ -1,5 +1,7 @@
 import { map } from "std::array"
+import { mkdir } from "std::fs"
 import { frontmatter } from "std::markdown"
+import { exists } from "std::shell"
 
 // `skillsDir` / `commandsDir` raise ONE approval interrupt up front
 // ("scan this directory for skills?"). Reading the matched files is part
@@ -12,7 +14,7 @@ import { frontmatter } from "std::markdown"
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
-import { _docsDir, _bundledDocsDir, _agentSkillsDir } from "agency-lang/stdlib-lib/skills.js"
+import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter } from "agency-lang/stdlib-lib/skills.js"
 
 
 /** @module
@@ -34,7 +36,7 @@ import { _docsDir, _bundledDocsDir, _agentSkillsDir } from "agency-lang/stdlib-l
   ```
 */
 
-type SkillEntry = {
+export type SkillEntry = {
   name: string;
   description: string;
   location: string
@@ -95,8 +97,13 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
 }
 
 // Providers cap tool-name length: OpenAI at 64 characters, Anthropic at 128.
-// Cap to the stricter 64 so a name is accepted everywhere.
-const MAX_TOOL_NAME_LEN = 64
+// Cap to the stricter 64 so a name is accepted everywhere. Exported so
+// callers that build prefixed tool names (e.g. the agent's learned_
+// tools) derive their own cap from this one instead of restating 64.
+export static const MAX_TOOL_NAME_LEN = 64
+
+// Cap on how many files one skills/commands scan will read.
+const MAX_SKILL_FILES = 500
 
 def sanitizeToolSegment(raw: string): string {
   """
@@ -193,32 +200,24 @@ effect std::skills::commandsDir {
   dir: string
 }
 
-def buildSkillsTool(
+export def skillsToolFromEntries(
   dir: string,
-  layout: "flat" | "standard",
+  entries: SkillEntry[],
   name: string = "",
-  recursive: boolean = false,
 ) {
-  let pattern = "*/SKILL.md"
-  if (layout == "flat") {
-    pattern = "*.{md,markdown}"
-    if (recursive) {
-      pattern = "**/*.{md,markdown}"
-    }
-  }
-  let lines: string[] = []
-  const pathsResult = try _glob(pattern, dir, 500, [])
-  if (pathsResult is success(paths)) {
-    lines = map(paths) as path {
-      const data = (try _read(dir, path, 0, 0) |> frontmatter) catch {}
-      let entry = flatEntry(path, data)
-      if (layout == "standard") {
-        entry = standardEntry(path, data)
-      }
-      return renderEntry(entry)
-    }
-  }
+  """
+  Build the skills tool for `dir` from already-scanned entries. Pure: no
+  reads, no interrupts. Callers that already hold a directory's entries
+  (a catalog updated after a save) use this to rebuild the tool without
+  rescanning.
 
+  @param dir - The directory the tool will read skills from
+  @param entries - The skills to list in the tool description
+  @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters; defaults to a name derived from `dir`.
+  """
+  const lines = map(entries) as entry {
+    return renderEntry(entry)
+  }
   const header = "Read a skill file from the skills directory '${dir}' by passing its <location> as `filename` to the tool. Available skills:\n<available_skills>\n"
   const footer = "\n</available_skills>"
   const description = header + lines.join("\n") + footer
@@ -235,6 +234,43 @@ def buildSkillsTool(
     }
   }
   return read.partial(dir: dir).describe(description).rename(toolName)
+}
+
+// The one scan pipeline every skills reader shares: glob (capped at
+// MAX_SKILL_FILES per directory), read each file with the interrupt-free
+// primitives (a scan interrupt's approval covers them), parse the
+// frontmatter (tolerating a file it cannot parse), and build the entry.
+def scanEntries(
+  dir: string,
+  pattern: string,
+  build: (string, any) -> SkillEntry,
+): SkillEntry[] {
+  const pathsResult = try _glob(pattern, dir, MAX_SKILL_FILES, [])
+  if (pathsResult is failure) {
+    return []
+  }
+  return map(pathsResult.value) as path {
+    const data = (try _read(dir, path, 0, 0) |> frontmatter) catch {}
+    return build(path, data)
+  }
+}
+
+def buildSkillsTool(
+  dir: string,
+  layout: "flat" | "standard",
+  name: string = "",
+  recursive: boolean = false,
+) {
+  let pattern = "*/SKILL.md"
+  let build = standardEntry
+  if (layout == "flat") {
+    pattern = "*.{md,markdown}"
+    build = flatEntry
+    if (recursive) {
+      pattern = "**/*.{md,markdown}"
+    }
+  }
+  return skillsToolFromEntries(dir, scanEntries(dir, pattern, build), name)
 }
 
 export def skillsDir(
@@ -255,6 +291,151 @@ export def skillsDir(
   })
 
   return buildSkillsTool(dir, layout, name)
+}
+
+export def scanSkillsSubdirs(
+  root: string,
+  subdirs: string[],
+): Record<string, SkillEntry[]> {
+  """
+  Scan named subdirectories of a root, each holding one agent's
+  flat-layout skills. Raises one `std::skills::skillsDir` interrupt for
+  the root; its approval covers the reads. Each subdirectory gets its
+  own MAX_SKILL_FILES scan; one with no markdown files (or that does not
+  exist) yields no entry. Taking the names as a parameter keeps the
+  record's keys caller-chosen data, never something read off the disk.
+
+  @param root - The directory holding the subdirectories
+  @param subdirs - The subdirectory names to scan
+  """
+  // The one interrupt approves scanning under `root`, so every name must
+  // stay a single path segment: `../private` (or an absolute path, or a
+  // `a/b` compound) would carry the approval outside the directory the
+  // user said yes to. Checked before raising, so a bad caller fails
+  // without prompting anyone.
+  for (sub in subdirs) {
+    if (sub == "" || sub == "." || sub == ".." || sub.includes("/") || sub.includes("\\")) {
+      return failure("subdirectory name '${sub}' is not a bare directory name; scanSkillsSubdirs only scans direct subdirectories of its root")
+    }
+  }
+  return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
+    dir: root,
+    layout: "flat"
+  })
+
+  let out: Record<string, SkillEntry[]> = {}
+  for (sub in subdirs) {
+    const entries = scanEntries("${root}/${sub}", "*.{md,markdown}", flatEntry)
+    if (entries.length > 0) {
+      out[sub] = entries
+    }
+  }
+  return out
+}
+
+@alwaysUnder(dir)
+effect std::skills::reviewSkill {
+  dir: string;
+  name: string;
+  content: string
+}
+
+/** The value a handler passes to approve() for std::skills::reviewSkill.
+  A bare approve() counts as accept. */
+export type SkillReview =
+  | { verdict: "accept" }
+  | { verdict: "revise"; feedback: string }
+
+export type WriteSkillOutcome = { saved: SkillEntry } | { revise: string }
+
+// Skill names: lowercase alphanumerics and hyphens, starting with a
+// letter or digit. Mirrors the bundled skills' kebab-case names.
+// Validated, never rewritten, so a user-chosen name is never changed.
+def validSkillName(name: string): boolean {
+  return name =~ re/^[a-z0-9][a-z0-9-]*$/
+}
+
+// What the reviewSkill handler answered. Checked in order: a rejected
+// interrupt arrives as a Failure and is returned as-is so the rejection
+// reason survives; a bare approve() arrives as null and counts as
+// accept. Mirrors the std::toolbox review validation in shape; shared
+// code would couple the two modules over a dozen lines.
+def validateReview(answer: any): Result<SkillReview> {
+  if (answer is failure) {
+    return answer
+  }
+  if (answer == null) {
+    return success({ verdict: "accept" })
+  }
+  if (answer.verdict == "accept") {
+    return success({ verdict: "accept" })
+  }
+  if (answer.verdict == "revise" && answer.feedback is string && answer.feedback != "") {
+    return success({ verdict: "revise", feedback: answer.feedback })
+  }
+  return failure("reviewSkill handler must approve with { verdict: \"accept\" }, { verdict: \"revise\", feedback: \"...\" }, or a bare approve()")
+}
+
+export def writeSkill(
+  dir: string,
+  name: string,
+  description: string,
+  body: string,
+): Result<WriteSkillOutcome> {
+  """
+  Save a skill file into a skills directory, after the user reviews it.
+  Composes the flat-layout markdown (frontmatter with name and
+  description, then the body), raises a `std::skills::reviewSkill`
+  interrupt showing the complete file, and only writes on acceptance. A
+  "revise" review returns the feedback instead of writing, so the caller
+  can redraft. A rejected interrupt fails the call.
+
+  @param dir - The skills directory to write into
+  @param name - The skill's name; also its filename. Lowercase letters, digits, and hyphens.
+  @param description - One line telling the reading agent when to use the skill
+  @param body - The skill's markdown body
+  """
+  if (!validSkillName(name)) {
+    return failure("skill name '${name}' is invalid: use lowercase letters, digits, and hyphens, starting with a letter or digit")
+  }
+  if (description.includes("\n")) {
+    return failure("the description must be one line")
+  }
+  const filename = "${name}.md"
+  if (exists(filename, dir)) {
+    return failure("a skill named ${name} already exists in ${dir}")
+  }
+  // tarsec's serializer is the encode half of the parser `frontmatter`
+  // wraps, so whatever it emits reads back verbatim on the next scan —
+  // YAML flow syntax, quotes, or backslashes in the description cannot
+  // silently corrupt or drop the reviewed text. It throws on the rare
+  // value no quoting can hold; `try` turns that into a clean failure.
+  const fm = try _stringifyFrontmatter({ name: name, description: description })
+  if (fm is failure(fmErr)) {
+    return failure("the description cannot be written as frontmatter: ${fmErr}")
+  }
+  const content = "${fm.value}\n${body}\n"
+  const answer = interrupt std::skills::reviewSkill(
+    "Save this skill to ${dir}/${filename}?",
+    { dir: dir, name: name, content: content },
+  )
+  const review = validateReview(answer)
+  if (review is failure) {
+    return review
+  }
+  const verdict = review.value
+  if (verdict.verdict == "revise") {
+    return success({ revise: verdict.feedback })
+  }
+  const made = mkdir(dir)
+  if (made is failure) {
+    return made
+  }
+  const wrote = write(filename, content, dir)
+  if (wrote is failure) {
+    return wrote
+  }
+  return success({ saved: { name: name, description: description, location: filename } })
 }
 
 export def docsSkill(
@@ -385,7 +566,7 @@ export def commandsDir(dir: string): any[] {
     dir: dir
   })
 
-  const pathsResult = try _glob("*.md", dir, 500, [])
+  const pathsResult = try _glob("*.md", dir, MAX_SKILL_FILES, [])
   if (pathsResult is success(paths)) {
     return map(paths) as p {
       const raw = try _read(dir, p, 0, 0) catch ""

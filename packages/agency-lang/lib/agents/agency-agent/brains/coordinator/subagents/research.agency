@@ -19,6 +19,8 @@ import { agencyResearcherAgent } from "std::agents/agency/researcher"
 import { researcherAgent } from "std::agents/researcher"
 import { memoryTools, planningTools } from "std::agents/lib/toolkits"
 import { setMemoryId } from "std::memory"
+
+import { learnedExtrasFor } from "../../../lib/learned.agency"
 import { highlight } from "std::syntax"
 
 export static const researchTools: any[] = [
@@ -55,14 +57,14 @@ export def researchAgent(userMsg: string, agencyTopic: boolean = false): string 
       question: userMsg,
       context: replStyle,
       session: "research",
-      extraTools: researchTools,
+      extraTools: [...researchTools, ...learnedExtrasFor("research")],
     )
   } else {
     result = researcherAgent(
       task: userMsg,
       context: replStyle,
       session: "research",
-      extraTools: researchTools,
+      extraTools: [...researchTools, ...learnedExtrasFor("research")],
     )
   }
   if (isFailure(result)) {

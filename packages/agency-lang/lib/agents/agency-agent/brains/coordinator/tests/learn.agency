@@ -1,0 +1,102 @@
+/*
+ * learnSkill / writeToolFor: target validation raises nothing; an
+ * accepted skill lands in the session catalog; a revision flows back as
+ * text. Roots are repointed at a sandbox under test-output FIRST and
+ * verified, so a failing test can never touch the real ~/.agency-agent
+ * (the issue #469 rule).
+ */
+import { map } from "std::array"
+import { remove } from "std::fs"
+
+import test { _setLearnedRoot } from "../../../lib/learned.agency"
+import {
+  learnedSkillsRoot,
+  learnedSkillsToolFor,
+ } from "../../../lib/learned.agency"
+import { learnSkill, writeToolFor } from "../learn.agency"
+import { codeTools } from "../subagents/code.agency"
+
+def sandboxRoot(node: string): string {
+  return "${__dirname}/test-output/learn/${node}"
+}
+
+// Repoint at a fresh sandbox and verify the repoint took.
+def sandboxed(node: string): boolean {
+  const root = sandboxRoot(node)
+  remove(root) with approve
+  _setLearnedRoot(root)
+  return learnedSkillsRoot() == "${root}/skills"
+}
+
+node unknownTargetListsValidNames(): boolean {
+  if (!sandboxed("unknown-target")) {
+    return false
+  }
+  let interrupts = 0
+  let skillReply = ""
+  let toolReply = ""
+  handle {
+    skillReply = learnSkill("nope", "a-skill", "desc", "body")
+    toolReply = writeToolFor("nope", "aTool", "purpose", "{ n: number }")
+  } with (intr) {
+    interrupts = interrupts + 1
+    return approve()
+  }
+  return interrupts == 0
+      && skillReply.includes("Unknown target 'nope'")
+      && skillReply.includes("explorer")
+      && toolReply.includes("Unknown target 'nope'")
+}
+
+node acceptedSkillUpdatesCatalog(): boolean {
+  if (!sandboxed("accepted")) {
+    return false
+  }
+  let reply = ""
+  let description = ""
+  handle {
+    reply = learnSkill("explorer", "repo-orientation", "Orient in an unfamiliar repo", "Read the README first.")
+    const tool = learnedSkillsToolFor("explorer")
+    if (tool != null) {
+      description = tool.description
+    }
+  } with (intr) {
+    if (intr.effect == "std::skills::reviewSkill") {
+      return approve({ verdict: "accept" })
+    }
+    return approve()
+  }
+  return reply.includes("Saved.")
+      && reply.includes("repo-orientation")
+      && description.includes("<name>repo-orientation</name>")
+}
+
+node reviseFlowsBackAsText(): boolean {
+  if (!sandboxed("revise")) {
+    return false
+  }
+  let reply = ""
+  let tool: any = "unset"
+  handle {
+    reply = learnSkill("explorer", "revised", "Will be revised", "Body.")
+    tool = learnedSkillsToolFor("explorer")
+  } with (intr) {
+    if (intr.effect == "std::skills::reviewSkill") {
+      return approve({ verdict: "revise", feedback: "make it shorter" })
+    }
+    return approve()
+  }
+  return reply.includes("make it shorter") && reply.includes("call learnSkill again") && tool == null
+}
+
+// The collision-freedom premise: no built-in code tool is named with the
+// learned_ prefix, so a learned_<name> rename can never shadow one.
+node noBuiltinCodeToolUsesLearnedPrefix(): boolean {
+  const names = map(codeTools, \tool -> "${tool.name}")
+  for (name in names) {
+    if (name.startsWith("learned_")) {
+      return false
+    }
+  }
+  return names.length > 0
+}

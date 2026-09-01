@@ -277,6 +277,7 @@ Other process docs:
 - `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
 - `docs/dev/agents/agent-sessions.md` — Save and resume for `agency agent`: a checkpoint between turns, why it is taken from TypeScript after the turn's frames return, where the restore runs, and what a restore does not bring back.
 - `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
+- `docs/dev/agents/learned-skills-and-toolbox.md` — Skills the user teaches a subagent and tools the agent writes for one: the home-directory storage, the session catalogs, the review interrupts, and the widened default read scope.
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
 - `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind that argument.

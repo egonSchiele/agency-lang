@@ -35,6 +35,11 @@ let _brain: AgentBrain | null = null
 // when absent. main() sets it; policyHandlerFor() reads it.
 let _policyArg: string = ""
 
+// The `--approve` / `--reject` arguments (effect lists), or "" when
+// absent. Session-only overlays on the resolved policy.
+let _approveArg: string = ""
+let _rejectArg: string = ""
+
 export def setBrain(brain: AgentBrain) {
   _brain = brain
 }
@@ -47,8 +52,10 @@ export def currentBrain(): AgentBrain | null {
 // runSession or runTurn.
 static const NO_BRAIN = "No brain selected: main() must call setBrain() first"
 
-export def setPolicyArg(arg: string) {
+export def setPolicyArg(arg: string, approve: string = "", reject: string = "") {
   _policyArg = arg
+  _approveArg = approve
+  _rejectArg = reject
 }
 
 export def resolveStartTarget(
@@ -95,7 +102,7 @@ def buildBrainContext(interactive: boolean, brainName: string): BrainContext {
 
 // Load (or initialize) the policy and return the installed CLI policy handler.
 def policyHandlerFor(interactive: boolean): any {
-  const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, interactive)
+  const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, _approveArg, _rejectArg, interactive)
   return cliPolicyHandler(
     file: policyFile,
     policy: sessionPolicy,

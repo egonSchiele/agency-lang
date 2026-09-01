@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "noFlagsKeepsFileRouting",
+      "input": "",
+      "expectedOutput": "[\"file\",\"no-session\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "flagsOverlayOntoFilePolicy",
+      "input": "",
+      "expectedOutput": "[\"session-path\",\"approve\",\"reject\",\"reject\",\"propagate\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejectOutranksApprove",
+      "input": "",
+      "expectedOutput": "\"reject\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "flagsOverlayOntoBuiltin",
+      "input": "",
+      "expectedOutput": "[\"session-path\",\"approve\",\"approve\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

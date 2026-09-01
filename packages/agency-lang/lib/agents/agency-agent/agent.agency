@@ -88,7 +88,11 @@ node main() {
     printPolicyHelp()
     process.exit(0)
   }
-  setPolicyArg(args.flags.policy ?? "")
+  setPolicyArg(
+    args.flags.policy ?? "",
+    approve: args.flags.approve ?? "",
+    reject: args.flags.reject ?? "",
+  )
 
   const brainName = resolveBrainName(args.flags.brain ?? null, loadSettings())
   const brain = brainByName(brainName)

@@ -15,6 +15,9 @@ import type { Policy } from "@/runtime/policy.js";
 // Built-in policies live in the runtime (single source of truth, shared with
 // the `agency run --policy` CLI resolver and the runtime handler); re-export
 // them so `std::policy` can surface the same set to Agency code (the agent).
+// The --approve / --reject overlay, shared with `agency run` (resolveRunPolicy).
+export { policyOverlayFromFlags as _policyOverlayFromFlags } from "@/runtime/policyFlags.js";
+
 export {
   builtinPolicy as _builtinPolicy,
   builtinPolicyNames as _builtinPolicyNames,

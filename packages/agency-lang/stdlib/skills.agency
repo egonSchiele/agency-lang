@@ -315,6 +315,11 @@ export def scanSkillsSubdirs(
     if (sub == "" || sub == "." || sub == ".." || sub.includes("/") || sub.includes("\\")) {
       return failure("subdirectory name '${sub}' is not a bare directory name; scanSkillsSubdirs only scans direct subdirectories of its root")
     }
+    // These would be inherited-property keys on the result record, not
+    // data. No agent directory may use them.
+    if (sub == "__proto__" || sub == "constructor" || sub == "prototype") {
+      return failure("subdirectory name '${sub}' is reserved")
+    }
   }
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
     dir: root,

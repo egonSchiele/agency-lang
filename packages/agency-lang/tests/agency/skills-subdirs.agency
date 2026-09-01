@@ -52,7 +52,7 @@ node missingRootYieldsEmpty(): boolean {
 // interrupt is raised — the user is never prompted for a scan that
 // would escape what they approved.
 node traversalSubdirFailsBeforeTheInterrupt(): boolean {
-  const bad = ["../escape", "a/b", "..", ".", ""]
+  const bad = ["../escape", "a/b", "..", ".", "", "__proto__", "constructor", "prototype"]
   for (sub in bad) {
     let scans = 0
     let result: any = null

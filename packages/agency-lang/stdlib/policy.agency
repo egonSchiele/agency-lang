@@ -19,7 +19,6 @@ import {
   _recommendedAutoApprovePolicy,
   _withWritesPolicy,
   _approveAllPolicy,
-  _policyOverlayFromFlags,
   _escapeGlob,
   _alwaysScopeFor,
   _allAlwaysScopes,
@@ -133,26 +132,6 @@ export def builtinPolicy(name: string, baseDir: string): Policy | null {
 export def builtinPolicyNames(): string[] {
   """The names accepted by builtinPolicy, e.g. for an approval prompt."""
   return _builtinPolicyNames()
-}
-
-/**
- * Overlay `--approve` / `--reject` flag values onto a base policy, and
- * return the combined policy (`base` is not mutated). Each flag value is a
- * comma- or whitespace-separated list of effect names. For every named
- * effect, a blanket rule is placed ahead of the base policy's own rules,
- * with reject ahead of approve, so under first-match-wins the flags
- * outrank the base and a reject outranks an approve for the same effect.
- * This is the same function `agency run`'s flags compile through, so both
- * commands' flags mean the same thing.
- */
-export def policyOverlayFromFlags(approve: string, reject: string, base: Policy): Policy {
-  """Overlay --approve / --reject effect lists as blanket rules ahead of a base policy's own rules. Reject outranks approve for the same effect; the base is not mutated.
-
-  @param approve - Comma- or whitespace-separated effect names to auto-approve, or "".
-  @param reject - Comma- or whitespace-separated effect names to auto-reject, or "".
-  @param base - The policy to overlay onto.
-  """
-  return _policyOverlayFromFlags(approve, reject, base)
 }
 
 /**

@@ -40,6 +40,12 @@ describe("policyOverlayFromFlags", () => {
     expect(base).toEqual({ "std::read": [{ action: "reject" }] });
   });
 
+  it("treats prototype-colliding names as ordinary effect keys", () => {
+    const out = policyOverlayFromFlags("toString,__proto__", undefined, {});
+    expect(out["toString"]).toEqual([{ action: "approve" }]);
+    expect(out["__proto__"]).toEqual([{ action: "approve" }]);
+  });
+
   it("returns an equal policy when both flags are empty", () => {
     const base: Policy = { "std::read": [{ action: "approve" }] };
     expect(policyOverlayFromFlags(undefined, "", base)).toEqual(base);

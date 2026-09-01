@@ -7,10 +7,10 @@ import {
   recommendedAutoApprovePolicy,
   builtinPolicy,
   builtinPolicyNames,
-  policyOverlayFromFlags,
   BUILTIN_POLICIES,
   Policy,
  } from "std::policy"
+import { _policyOverlayFromFlags } from "agency-lang/stdlib-lib/policy.js"
 import { cwd } from "std::system"
 import { ChoiceItem, chooseOption } from "std::ui"
 
@@ -65,8 +65,7 @@ export def getPolicyForAgent(
 ): { policyFile: string; sessionPolicy: Policy | null } {
   let policyFile = POLICY_PATH
   let sessionPolicy: Policy | null = null
-  // The resolved base policy's VALUE, kept alongside the file routing so
-  // the --approve/--reject overlay below has something to overlay onto.
+  // The resolved base policy value, for the --approve/--reject overlay below.
   let basePolicy: Policy | null = null
 
   if (_policyArg == "") {
@@ -112,12 +111,10 @@ export def getPolicyForAgent(
     }
   }
 
-  // --approve / --reject: blanket rules overlaid ahead of the base
-  // policy's own, via the same function `agency run`'s flags compile
-  // through. Session-only — the overlay is routed to SESSION_POLICY_PATH
-  // and never written to the saved policy.
+  // --approve / --reject overlay: session-only, never written to the
+  // saved policy.
   if ((approveArg != "" || rejectArg != "") && basePolicy != null) {
-    sessionPolicy = policyOverlayFromFlags(approveArg, rejectArg, basePolicy)
+    sessionPolicy = _policyOverlayFromFlags(approveArg, rejectArg, basePolicy)
     policyFile = SESSION_POLICY_PATH
   }
 

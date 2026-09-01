@@ -4,7 +4,10 @@
     { "nodeName": "scanGroupsBySubdir", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "scanRaisesOneInterrupt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "toolFromEntriesListsThem", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "missingRootYieldsEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "traversalSubdirFailsBeforeTheInterrupt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "missingRootYieldsEmptyEntries", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "objectPropertyNamesAreDataKeys", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "traversalSubdirFailsBeforeTheInterrupt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "allBadNamesReportedTogether", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "symlinkedSubdirIsNotScanned", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

@@ -5,21 +5,31 @@
  * rescanning. The fixture holds two explorer skills, one research
  * skill, and an empty directory.
  */
-import { keys } from "std::object"
-import { scanSkillsSubdirs, skillsToolFromEntries } from "std::skills"
+import { exec } from "std::shell"
+import { mkdir, remove } from "std::fs"
+import { scanSkillsSubdirs, skillsToolFromEntries, SkillEntry } from "std::skills"
 
 def fixture(): string {
   return "${__dirname}/skills-subdirs-fixture"
 }
 
+def scanFixture(subdirs: string[]): Record<string, SkillEntry[]> {
+  const scanned = scanSkillsSubdirs(fixture(), subdirs) with approve
+  if (scanned is failure) {
+    return {}
+  }
+  return scanned.value
+}
+
 node scanGroupsBySubdir(): boolean {
-  const scanned = scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"]) with approve
+  const scanned = scanFixture(["explorer", "research", "empty"])
   const explorer = scanned["explorer"]
   const research = scanned["research"]
-  if (explorer == undefined || research == undefined) {
+  const empty = scanned["empty"]
+  if (explorer == undefined || research == undefined || empty == undefined) {
     return false
   }
-  return explorer.length == 2 && research.length == 1 && scanned["empty"] == undefined
+  return explorer.length == 2 && research.length == 1 && empty.length == 0
 }
 
 node scanRaisesOneInterrupt(): boolean {
@@ -36,15 +46,30 @@ node scanRaisesOneInterrupt(): boolean {
 }
 
 node toolFromEntriesListsThem(): boolean {
-  const scanned = scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"]) with approve
+  const scanned = scanFixture(["explorer"])
   const tool = skillsToolFromEntries("${fixture()}/explorer", scanned["explorer"], "learned_skills_explorer")
   return tool.description.includes("<name>repo-orientation</name>")
       && tool.description.includes("<description>Orient in an unfamiliar repo</description>")
 }
 
-node missingRootYieldsEmpty(): boolean {
+// A missing root is a normal state (nothing learned yet): every
+// requested name is present, with no entries.
+node missingRootYieldsEmptyEntries(): boolean {
   const scanned = scanSkillsSubdirs("${__dirname}/no-such-dir", ["explorer"]) with approve
-  return keys(scanned).length == 0
+  if (scanned is failure) {
+    return false
+  }
+  return scanned.value["explorer"].length == 0
+}
+
+// The record has no prototype, so names that collide with Object
+// properties are plain data keys: a missing "__proto__" directory reads
+// as empty, not as something inherited.
+node objectPropertyNamesAreDataKeys(): boolean {
+  const scanned = scanFixture(["__proto__", "constructor", "toString"])
+  return scanned["__proto__"].length == 0
+      && scanned["constructor"].length == 0
+      && scanned["toString"].length == 0
 }
 
 // A subdirectory name that is not a bare path segment would carry the
@@ -52,7 +77,7 @@ node missingRootYieldsEmpty(): boolean {
 // interrupt is raised — the user is never prompted for a scan that
 // would escape what they approved.
 node traversalSubdirFailsBeforeTheInterrupt(): boolean {
-  const bad = ["../escape", "a/b", "..", ".", "", "__proto__", "constructor", "prototype"]
+  const bad = ["../escape", "a/b", "..", ".", ""]
   for (sub in bad) {
     let scans = 0
     let result: any = null
@@ -69,4 +94,40 @@ node traversalSubdirFailsBeforeTheInterrupt(): boolean {
     }
   }
   return true
+}
+
+// One failure names every offending subdirectory, so a caller hears
+// about all of them in one round.
+node allBadNamesReportedTogether(): boolean {
+  let result: any = null
+  handle {
+    result = scanSkillsSubdirs(fixture(), ["ok", "../one", "two/2"])
+  } with approve
+  if (result is failure(message)) {
+    const text = "${message}"
+    return text.includes("../one") && text.includes("two/2")
+  }
+  return false
+}
+
+// A symlinked subdirectory resolves outside the approved root, so the
+// scan refuses to follow it and the link reads as empty. Built entirely
+// under test-output: a root whose "linked" entry points at a sibling
+// directory holding a skill file.
+node symlinkedSubdirIsNotScanned(): boolean {
+  const base = "${__dirname}/test-output/skills-subdirs-symlink"
+  remove(base) with approve
+  mkdir("${base}/outside") with approve
+  mkdir("${base}/root") with approve
+  write("secret.md", "---\nname: secret\n---\nSecret.", "${base}/outside") with approve
+  exec("ln", ["-s", "${base}/outside", "${base}/root/linked"]) with approve
+  const scanned = scanSkillsSubdirs("${base}/root", ["linked"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["linked"]
+  if (entries == undefined) {
+    return false
+  }
+  return entries.length == 0
 }

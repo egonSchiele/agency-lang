@@ -7,10 +7,8 @@ import { mkdir, remove } from "std::fs"
 import { exists } from "std::shell"
 import { scanSkillsSubdirs, writeSkill, SkillEntry } from "std::skills"
 
-// The race test creates a file while writeSkill's save interrupt is
-// pending, from inside the handler. The interrupt-free primitive is the
-// honest simulation of another process: nothing about the handler's own
-// approval flow gets tangled in it.
+// The race test plants a file from inside the save handler; the
+// interrupt-free primitive stands in for another process doing it.
 import { _write } from "agency-lang/stdlib-lib/builtins.js"
 
 // A fresh directory per node: removed up front (the writeTool tests'
@@ -122,6 +120,18 @@ node invalidNameFails(): boolean {
   return ran.outcome is failure && ran.saves == 0
 }
 
+// Skill names feed derived tool names, so the provider cap applies at
+// save time — not as an ENAMETOOLONG after the user already approved.
+node overlongNameFails(): boolean {
+  const dir = outDir("overlong")
+  let name = "a"
+  while (name.length <= 64) {
+    name = name + "a"
+  }
+  const ran = runWrite(dir, name, "Too long", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}
+
 node multilineDescriptionFails(): boolean {
   const dir = outDir("multiline")
   const ran = runWrite(dir, "multiline", "line one\nline two", "Body.")
@@ -138,7 +148,10 @@ node bodyStartingWithFenceCannotInject(): boolean {
     return false
   }
   const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
-  const entries = scanned["explorer"]
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["explorer"]
   if (entries == undefined || entries.length != 1) {
     return false
   }
@@ -155,7 +168,10 @@ node descriptionWithFlowSyntaxRoundTrips(): boolean {
     return false
   }
   const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
-  const entries = scanned["explorer"]
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["explorer"]
   if (entries == undefined || entries.length != 1) {
     return false
   }
@@ -181,7 +197,10 @@ node trickyDescriptionsRoundTrip(): boolean {
     }
   }
   const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
-  const entries = scanned["explorer"]
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["explorer"]
   if (entries == undefined || entries.length != cases.length) {
     return false
   }

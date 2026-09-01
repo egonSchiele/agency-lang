@@ -7,8 +7,9 @@ description: "Give an LLM access to a directory of skills, and support Claude-Co
 
 Give an LLM access to a directory of skills, and support Claude-Code-style
   slash commands. `skillsDir` builds a tool that lets the model read skill
-  files on demand. `commandsDir` and `expandSlash` load prompt-template
-  commands and expand a user's `/command` into its body.
+  files on demand. `writeSkill` saves a new skill after approval.
+  `commandsDir` and `expandSlash` load prompt-template commands and expand
+  a user's `/command` into its body.
 
   ```ts
   import { skillsDir, commandsDir, expandSlash } from "std::skills"
@@ -33,7 +34,7 @@ export type SkillEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L40))
 
 ## Effects
 
@@ -72,7 +73,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L195))
 
 ### std::skills::commandsDir
 
@@ -83,7 +84,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L197))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L200))
 
 ### std::skills::save
 
@@ -96,7 +97,7 @@ effect std::skills::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L340))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L348))
 
 ## Functions
 
@@ -106,14 +107,15 @@ effect std::skills::save {
 skillsToolFromEntries(dir: string, entries: SkillEntry[], name: string = "")
 ```
 
-Build the skills tool for `dir` from already-scanned entries. Pure: no
-  reads, no interrupts. Callers that already hold a directory's entries
-  (a cached catalog, say) use this to rebuild the tool without
-  rescanning.
+Build the skills tool for `dir` from already-scanned entries.
 
   @param dir - The directory the tool will read skills from
   @param entries - The skills to list in the tool description
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters; defaults to a name derived from `dir`.
+
+* The pure build half of a skills tool: no reads, no interrupts. A
+ * caller that already holds a directory's entries (a cached catalog,
+ * say) can rebuild the tool without rescanning.
 
 **Parameters:**
 
@@ -123,7 +125,7 @@ Build the skills tool for `dir` from already-scanned entries. Pure: no
 | entries | `SkillEntry[]` |  |
 | name | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L209))
 
 ### skillsDir
 
@@ -151,23 +153,29 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L274))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L284))
 
 ### scanSkillsSubdirs
 
 ```ts
-scanSkillsSubdirs(root: string, subdirs: string[]): Record<string, SkillEntry[]>
+scanSkillsSubdirs(
+  root: string,
+  subdirs: string[],
+  maxFiles: number = 500,
+): Result<Record<string, SkillEntry[]>> raises <std::skills::skillsDir>
 ```
 
-Scan named subdirectories of a root, each holding one agent's
-  flat-layout skills. Raises one `std::skills::skillsDir` interrupt for
-  the root; its approval covers the reads. Each subdirectory gets its
-  own MAX_SKILL_FILES scan; one with no markdown files (or that does not
-  exist) yields no entry. Taking the names as a parameter keeps the
-  record's keys caller-chosen data, never something read off the disk.
+Scan named subdirectories of a root. Each subdirectory holds one
+  agent's flat-layout skills; the result maps every requested name to
+  its entries (empty when the subdirectory is empty or missing).
 
   @param root - The directory holding the subdirectories
   @param subdirs - The subdirectory names to scan
+  @param maxFiles - The most skill files to read per subdirectory
+
+* For an application with several subagents, each owning one skills
+ * subdirectory under a common root: read every subdirectory's skill
+ * files in one pass and group the entries by subdirectory name.
 
 **Parameters:**
 
@@ -175,12 +183,13 @@ Scan named subdirectories of a root, each holding one agent's
 |---|---|---|
 | root | `string` |  |
 | subdirs | `string[]` |  |
+| maxFiles | `number` | 500 |
 
-**Returns:** `Record<string, SkillEntry[]>`
+**Returns:** `Result<Record<string, SkillEntry[]>>`
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L294))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L309))
 
 ### writeSkill
 
@@ -190,19 +199,23 @@ writeSkill(
   name: string,
   description: string,
   body: string,
-): Result<SkillEntry>
+): Result<SkillEntry> raises <std::skills::save, std::mkdir, std::write>
 ```
 
-Save one skill file into a skills directory. Composes the flat-layout
-  markdown (frontmatter with name and description, then the body) and
-  raises a `std::skills::save` interrupt showing the complete file; an
-  approval writes it, a rejection fails the call. No feedback loop: this
-  is the plain primitive for saving a skill that is already final.
+Save one skill file into a skills directory, after approval. Composes
+  the flat-layout markdown (frontmatter with name and description, then
+  the body); a rejection writes nothing and fails the call.
 
   @param dir - The skills directory to write into
   @param name - The skill's name; also its filename. Lowercase letters, digits, and hyphens.
   @param description - One line telling the reading agent when to use the skill
   @param body - The skill's markdown body
+
+* The plain primitive for saving a skill that is already final: show
+ * the complete file in a `std::skills::save` interrupt, then write it.
+ * There is deliberately no feedback shape on that interrupt — any
+ * approval saves, and data carried on the approval is not consulted.
+ * A draft-revise-accept loop belongs in a caller built on top of this.
 
 **Parameters:**
 
@@ -217,7 +230,7 @@ Save one skill file into a skills directory. Composes the flat-layout
 
 **Throws:** `std::skills::save`, `std::mkdir`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L353))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L368))
 
 ### docsSkill
 
@@ -242,7 +255,7 @@ Build a docs tool for an LLM over the packaged Agency documentation.
 |---|---|---|
 | section | `\| "guide" \| "cli" \| "diagnostics" \| "stdlib" \| "agent"` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L410))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L426))
 
 ### bundledDocsDir
 
@@ -255,7 +268,7 @@ The directory holding the Agency docs that ship inside the package. A
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L431))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L447))
 
 ### agentSkill
 
@@ -275,7 +288,7 @@ Build a skills tool over the skills shipped for one agent. The returned
 |---|---|---|
 | agent | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L439))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L455))
 
 ### commandsDir
 
@@ -328,7 +341,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L527))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L543))
 
 ### expandSlash
 
@@ -367,4 +380,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L582))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L598))

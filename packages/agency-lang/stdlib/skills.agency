@@ -1,4 +1,4 @@
-import { map } from "std::array"
+import { filter, map } from "std::array"
 import { mkdir } from "std::fs"
 import { frontmatter } from "std::markdown"
 import { exists } from "std::shell"
@@ -21,8 +21,9 @@ import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter } fro
   @summary Give an LLM access to a directory of skills, and support Claude-Code-style slash commands.
   Give an LLM access to a directory of skills, and support Claude-Code-style
   slash commands. `skillsDir` builds a tool that lets the model read skill
-  files on demand. `commandsDir` and `expandSlash` load prompt-template
-  commands and expand a user's `/command` into its body.
+  files on demand. `writeSkill` saves a new skill after approval.
+  `commandsDir` and `expandSlash` load prompt-template commands and expand
+  a user's `/command` into its body.
 
   ```ts
   import { skillsDir, commandsDir, expandSlash } from "std::skills"
@@ -100,7 +101,9 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
 // Cap to the stricter 64 so a name is accepted everywhere.
 const MAX_TOOL_NAME_LEN = 64
 
-// Cap on how many files one skills/commands scan will read.
+// Cap on how many files one skills/commands scan will read. Parameter
+// defaults must be literals, so scanSkillsSubdirs spells its default
+// maxFiles as a literal 500 — keep the two in step.
 const MAX_SKILL_FILES = 500
 
 def sanitizeToolSegment(raw: string): string {
@@ -198,16 +201,18 @@ effect std::skills::commandsDir {
   dir: string
 }
 
+/**
+ * The pure build half of a skills tool: no reads, no interrupts. A
+ * caller that already holds a directory's entries (a cached catalog,
+ * say) can rebuild the tool without rescanning.
+ */
 export def skillsToolFromEntries(
   dir: string,
   entries: SkillEntry[],
   name: string = "",
 ) {
   """
-  Build the skills tool for `dir` from already-scanned entries. Pure: no
-  reads, no interrupts. Callers that already hold a directory's entries
-  (a cached catalog, say) use this to rebuild the tool without
-  rescanning.
+  Build the skills tool for `dir` from already-scanned entries.
 
   @param dir - The directory the tool will read skills from
   @param entries - The skills to list in the tool description
@@ -234,22 +239,36 @@ export def skillsToolFromEntries(
   return read.partial(dir: dir).describe(description).rename(toolName)
 }
 
-// The one scan pipeline every skills reader shares: glob (capped at
-// MAX_SKILL_FILES per directory), read each file with the interrupt-free
-// primitives (a scan interrupt's approval covers them), parse the
-// frontmatter (tolerating a file it cannot parse), and build the entry.
+// Read one directory of skills into entries: glob the layout's pattern,
+// read each match with the interrupt-free primitives (a scan
+// interrupt's approval covers them), and parse its frontmatter,
+// tolerating a file that does not parse. A non-empty `allowedPaths`
+// makes `_glob`'s symlink-aware containment check refuse a directory
+// that resolves outside of it.
 def scanEntries(
   dir: string,
-  pattern: string,
-  build: (string, any) -> SkillEntry,
+  layout: "flat" | "standard",
+  recursive: boolean,
+  maxFiles: number,
+  allowedPaths: string[],
 ): SkillEntry[] {
-  const pathsResult = try _glob(pattern, dir, MAX_SKILL_FILES, [])
+  let pattern = "*/SKILL.md"
+  if (layout == "flat") {
+    pattern = "*.{md,markdown}"
+    if (recursive) {
+      pattern = "**/*.{md,markdown}"
+    }
+  }
+  const pathsResult = try _glob(pattern, dir, maxFiles, allowedPaths)
   if (pathsResult is failure) {
     return []
   }
   return map(pathsResult.value) as path {
     const data = (try _read(dir, path, 0, 0) |> frontmatter) catch {}
-    return build(path, data)
+    if (layout == "standard") {
+      return standardEntry(path, data)
+    }
+    return flatEntry(path, data)
   }
 }
 
@@ -259,16 +278,7 @@ def buildSkillsTool(
   name: string = "",
   recursive: boolean = false,
 ) {
-  let pattern = "*/SKILL.md"
-  let build = standardEntry
-  if (layout == "flat") {
-    pattern = "*.{md,markdown}"
-    build = flatEntry
-    if (recursive) {
-      pattern = "**/*.{md,markdown}"
-    }
-  }
-  return skillsToolFromEntries(dir, scanEntries(dir, pattern, build), name)
+  return skillsToolFromEntries(dir, scanEntries(dir, layout, recursive, MAX_SKILL_FILES, []), name)
 }
 
 export def skillsDir(
@@ -291,49 +301,47 @@ export def skillsDir(
   return buildSkillsTool(dir, layout, name)
 }
 
+/**
+ * For an application with several subagents, each owning one skills
+ * subdirectory under a common root: read every subdirectory's skill
+ * files in one pass and group the entries by subdirectory name.
+ */
 export def scanSkillsSubdirs(
   root: string,
   subdirs: string[],
-): Record<string, SkillEntry[]> {
+  maxFiles: number = 500,
+): Result<Record<string, SkillEntry[]>> raises <std::skills::skillsDir> {
   """
-  Scan named subdirectories of a root, each holding one agent's
-  flat-layout skills. Raises one `std::skills::skillsDir` interrupt for
-  the root; its approval covers the reads. Each subdirectory gets its
-  own MAX_SKILL_FILES scan; one with no markdown files (or that does not
-  exist) yields no entry. Taking the names as a parameter keeps the
-  record's keys caller-chosen data, never something read off the disk.
+  Scan named subdirectories of a root. Each subdirectory holds one
+  agent's flat-layout skills; the result maps every requested name to
+  its entries (empty when the subdirectory is empty or missing).
 
   @param root - The directory holding the subdirectories
   @param subdirs - The subdirectory names to scan
+  @param maxFiles - The most skill files to read per subdirectory
   """
   // The one interrupt approves scanning under `root`, so every name must
-  // stay a single path segment: `../private` (or an absolute path, or a
-  // `a/b` compound) would carry the approval outside the directory the
-  // user said yes to. Checked before raising, so a bad caller fails
-  // without prompting anyone.
-  for (sub in subdirs) {
-    if (sub == "" || sub == "." || sub == ".." || sub.includes("/") || sub.includes("\\")) {
-      return failure("subdirectory name '${sub}' is not a bare directory name; scanSkillsSubdirs only scans direct subdirectories of its root")
-    }
-    // These would be inherited-property keys on the result record, not
-    // data. No agent directory may use them.
-    if (sub == "__proto__" || sub == "constructor" || sub == "prototype") {
-      return failure("subdirectory name '${sub}' is reserved")
-    }
+  // stay a single path segment; anything else would carry that approval
+  // outside the directory the user said yes to. Checked before raising,
+  // so a bad caller fails without prompting anyone.
+  const bad = filter(subdirs, \sub -> sub == "" || sub == "." || sub == ".." || sub.includes("/") || sub.includes("\\"))
+  if (bad.length > 0) {
+    return failure("not bare directory names: '${bad.join("', '")}'; scanSkillsSubdirs only scans direct subdirectories of its root")
   }
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
     dir: root,
     layout: "flat"
   })
 
-  let out: Record<string, SkillEntry[]> = {}
+  // Null-prototype record, so a name like "__proto__" is a plain data
+  // key (the groupBy pattern from std::index).
+  const out: Record<string, SkillEntry[]> = Object.create(null)
   for (sub in subdirs) {
-    const entries = scanEntries("${root}/${sub}", "*.{md,markdown}", flatEntry)
-    if (entries.length > 0) {
-      out[sub] = entries
-    }
+    // `[root]` makes the scan's containment check refuse a subdirectory
+    // that resolves outside the approved root — a symlink, say.
+    out[sub] = scanEntries("${root}/${sub}", "flat", false, maxFiles, [root])
   }
-  return out
+  return success(out)
 }
 
 @alwaysUnder(dir)
@@ -350,18 +358,23 @@ def validSkillName(name: string): boolean {
   return name =~ re/^[a-z0-9][a-z0-9-]*$/
 }
 
+/**
+ * The plain primitive for saving a skill that is already final: show
+ * the complete file in a `std::skills::save` interrupt, then write it.
+ * There is deliberately no feedback shape on that interrupt — any
+ * approval saves, and data carried on the approval is not consulted.
+ * A draft-revise-accept loop belongs in a caller built on top of this.
+ */
 export def writeSkill(
   dir: string,
   name: string,
   description: string,
   body: string,
-): Result<SkillEntry> {
+): Result<SkillEntry> raises <std::skills::save, std::mkdir, std::write> {
   """
-  Save one skill file into a skills directory. Composes the flat-layout
-  markdown (frontmatter with name and description, then the body) and
-  raises a `std::skills::save` interrupt showing the complete file; an
-  approval writes it, a rejection fails the call. No feedback loop: this
-  is the plain primitive for saving a skill that is already final.
+  Save one skill file into a skills directory, after approval. Composes
+  the flat-layout markdown (frontmatter with name and description, then
+  the body); a rejection writes nothing and fails the call.
 
   @param dir - The skills directory to write into
   @param name - The skill's name; also its filename. Lowercase letters, digits, and hyphens.
@@ -370,6 +383,9 @@ export def writeSkill(
   """
   if (!validSkillName(name)) {
     return failure("skill name '${name}' is invalid: use lowercase letters, digits, and hyphens, starting with a letter or digit")
+  }
+  if (name.length > MAX_TOOL_NAME_LEN) {
+    return failure("skill name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
   }
   if (description.includes("\n")) {
     return failure("the description must be one line")

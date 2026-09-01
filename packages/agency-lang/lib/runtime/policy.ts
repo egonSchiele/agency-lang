@@ -1,5 +1,7 @@
 import picomatch from "picomatch";
 import { realpathSync } from "fs";
+import os from "os";
+import path from "path";
 import { z } from "zod";
 import { getPackageRoot } from "../importPaths.js";
 
@@ -158,6 +160,29 @@ export function expandAgencyInstallDir(
   return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeForGlob(resolved));
 }
 
+/** In a `dir` pattern, `<agent-home>` stands for the agent home directory
+ *  (`AGENCY_AGENT_HOME`, or `~/.agency-agent` when unset). The built-in
+ *  read scope uses it for the learned skills and toolbox directories, so a
+ *  saved policy keeps meaning "wherever the agent home is now". */
+export const AGENT_HOME_PLACEHOLDER = "<agent-home>";
+
+// Expanded at match time, like `<agency>`. An empty AGENCY_AGENT_HOME
+// counts as unset — the same guard the agent's config module documents
+// (issue #469) — so a set-but-empty var never turns the home into a
+// cwd-relative path. Exported for tests, which inject the home.
+export function expandAgentHomeDir(pattern: string, home: () => string = defaultAgentHome): string {
+  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) return pattern;
+  return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeForGlob(home()));
+}
+
+function defaultAgentHome(): string {
+  const override = process.env.AGENCY_AGENT_HOME;
+  if (override !== undefined && override !== "") {
+    return override;
+  }
+  return path.join(os.homedir(), ".agency-agent");
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
@@ -190,7 +215,13 @@ function matchesRule(
       !viaDot &&
       key === "dir" &&
       picomatch.isMatch(stripDotSlash(value), expandAgencyInstallDir(pattern));
-    if (!raw && !viaDot && !viaInstall) {
+    const viaAgentHome =
+      !raw &&
+      !viaDot &&
+      !viaInstall &&
+      key === "dir" &&
+      picomatch.isMatch(stripDotSlash(value), expandAgentHomeDir(pattern));
+    if (!raw && !viaDot && !viaInstall && !viaAgentHome) {
       return false;
     }
   }

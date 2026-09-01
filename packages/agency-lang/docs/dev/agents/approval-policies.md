@@ -54,12 +54,21 @@ The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
   `{<agency>/stdlib/**,<agency>/dist/**}`. The docs tools (`agencyGuide`,
   `agencyStdlib`, ...) are `read` partially applied to
   `stdlib/docs/<section>`, and the bundled skills are read the same way, so
-  without this rule those tools return rejections in a headless run.
+  without this rule those tools return rejections in a headless run;
+- the agent home's learned directories, written as
+  `{<agent-home>/skills/**,<agent-home>/tools/**}`. This is a deliberate
+  widening of the default scope: the directories hold skills the user
+  taught the agent and tools it wrote, both saved only through review
+  interrupts, and reading them back (including `runTool`'s per-run scan of
+  a tool's directory) would otherwise prompt on every use and auto-reject
+  headless. A stricter custom policy overrides it like any other rule.
 
-Both rules are placeholders, not paths. `.` expands to the process cwd and
+All three rules are placeholders, not paths. `.` expands to the process cwd,
 `<agency>` to the directory the agency package is installed in
 (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
-`getPackageRoot`), each at match time. The copy the agent saves to
+`getPackageRoot`), and `<agent-home>` to `AGENCY_AGENT_HOME` or
+`~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `expandAgentHomeDir`; an empty
+env var counts as unset), each at match time. The copy the agent saves to
 `~/.agency-agent/policy.json` therefore pins neither the directory it was
 first run in nor the install path of one version. After an upgrade moves the
 package, the same rule still matches. A root that cannot be found (a bundled build

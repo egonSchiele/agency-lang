@@ -1,5 +1,6 @@
 import {
   AGENCY_INSTALL_DIR_PLACEHOLDER as INSTALL,
+  AGENT_HOME_PLACEHOLDER as AGENT_HOME,
   type Policy,
   type PolicyRule,
   escapeGlob,
@@ -43,6 +44,11 @@ export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
     { match: { dir: `{${INSTALL}/stdlib/**,${INSTALL}/dist/**}` }, action: "approve" },
+    // The agent home's learned directories: skills the user taught the
+    // agent and tools it wrote, both saved only through review
+    // interrupts. Reading them back (including runTool's per-run scan)
+    // is inside the default scope; a stricter custom policy overrides.
+    { match: { dir: `{${AGENT_HOME}/skills/**,${AGENT_HOME}/tools/**}` }, action: "approve" },
   ];
 }
 

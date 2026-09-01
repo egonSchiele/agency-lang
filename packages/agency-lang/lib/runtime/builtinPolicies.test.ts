@@ -17,6 +17,7 @@ describe("builtinPolicy", () => {
       expect(p![effect]).toEqual([
         { match: { dir: "{.,./**}" }, action: "approve" },
         { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
+        { match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" }, action: "approve" },
       ]);
     }
     expect(p!["std::write"]).toBeUndefined();

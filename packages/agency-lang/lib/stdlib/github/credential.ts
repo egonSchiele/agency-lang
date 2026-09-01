@@ -45,7 +45,7 @@ export async function resolveTokenFromSources(sources: CredentialSources): Promi
 const GH_AUTH_TOKEN_TIMEOUT_MS = 5000;
 
 async function ghAuthToken(): Promise<string | null> {
-  // Fixed literal argv, no shell, nothing model-supplied (spec section 3.3).
+  // Fixed literal argv, no shell, nothing model-supplied.
   const { stdout } = await execFileAsync("gh", ["auth", "token"], {
     timeout: GH_AUTH_TOKEN_TIMEOUT_MS,
   });
@@ -77,8 +77,8 @@ export async function _resolveAndCache(sources: CredentialSources): Promise<stri
 }
 
 /** The token for GitHub requests. Called ONLY by _githubRequest, after the
- *  operation's interrupt is approved — never from Agency (spec section 3.2:
- *  nothing reads the token without an approved interrupt in front of it). */
+ *  operation's interrupt is approved — never from Agency. The invariant:
+ *  nothing reads the token without an approved interrupt in front of it. */
 export async function resolveGithubToken(): Promise<string> {
   return _resolveAndCache({
     env: process.env,

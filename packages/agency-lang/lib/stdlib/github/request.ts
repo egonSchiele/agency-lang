@@ -5,10 +5,10 @@ import { isAbortError } from "../../runtime/errors.js";
 import { resolveGithubToken } from "./credential.js";
 import { githubFailureMessage, scrub } from "./errors.js";
 
-// Hard-coded in v1. GitHub Enterprise support (GITHUB_API_URL) is issue
+// Hard-coded on purpose. GitHub Enterprise support (GITHUB_API_URL) is issue
 // #1003, and when it lands the value must be read once per process — an
 // env-controlled base URL read per request would let a mid-run setEnv
-// redirect authenticated calls (spec section 7).
+// redirect authenticated calls to a host the attacker chose.
 export const GITHUB_API_BASE = "https://api.github.com";
 
 // GitHub requires a User-Agent naming the app; constant style per wikipedia.ts.
@@ -56,11 +56,11 @@ function buildUrl<Params>(endpoint: GithubEndpoint<Params, unknown>, params: Par
  * Run one declared endpoint. Called only from the endpoint bindings in
  * prs.ts/issues.ts, which are called only from Agency functions whose
  * interrupt has already been approved — so the token read below is always
- * downstream of an approval (spec section 3.2). The token lives only in this
- * frame, which contains no interrupt points, so no checkpoint can capture it.
+ * downstream of an approval. The token lives only in this frame, which
+ * contains no interrupt points, so no checkpoint can capture it.
  *
  * Uses the GLOBAL fetch on purpose: the fetchMocks test shim replaces
- * globalThis.fetch, and a saved reference would dodge it (spec section 8).
+ * globalThis.fetch, and a saved reference would dodge it.
  */
 export async function _githubRequest<Params, Out>(
   endpoint: GithubEndpoint<Params, Out>,
@@ -82,8 +82,6 @@ export async function _githubRequest<Params, Out>(
   }, url);
 }
 
-/** Headers are complete before the RequestInit is built, so nothing mutates
- *  an object another value already holds. */
 function buildRequestInit<Params>(
   endpoint: GithubEndpoint<Params, unknown>,
   params: Params,

@@ -23,7 +23,7 @@ function parseErrorBody(bodyText: string): { message: string; errors: string } {
   }
 }
 
-/** A failure message a model can act on, per status (spec section 7). */
+/** A failure message a model can act on, per status. */
 export function githubFailureMessage(
   status: number,
   headers: Headers,

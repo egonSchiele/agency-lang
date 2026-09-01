@@ -41,11 +41,11 @@ export function redactUrl(url: string): string {
 /**
  * The owner/repo pair a GitHub call operates on. An explicit pair wins with
  * no subprocess; empty defaults resolve from the `origin` remote of `cwd`
- * through the hardened git runner (_gitRun: absolute-cwd-only — an empty or
- * relative cwd throws rather than falling back to process.cwd(), env scrub,
- * timeout, output cap, abort signal). Throws on failure — callers raise
- * their interrupt AFTER this resolves, so the payload always shows the real
- * repository (spec section 5.1).
+ * through the hardened git runner, which refuses an empty or relative cwd
+ * rather than falling back to process.cwd() — a lost directory must never
+ * silently target a different repository, because this pair feeds interrupt
+ * payloads and the @always(owner, repo) approval scope. Callers must resolve
+ * BEFORE raising their interrupt, so the payload shows the real repository.
  */
 export async function _ghResolveRepo(owner: string, repo: string, cwd: string): Promise<RepoCoord> {
   if (owner !== "" && repo !== "") {

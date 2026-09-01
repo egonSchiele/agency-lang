@@ -3,9 +3,15 @@
  * never rewritten; a rejection writes nothing. Output goes under
  * test-output/ (gitignored), one directory per node so nodes never collide.
  */
-import { remove } from "std::fs"
+import { mkdir, remove } from "std::fs"
 import { exists } from "std::shell"
 import { scanSkillsSubdirs, writeSkill, SkillEntry } from "std::skills"
+
+// The race test creates a file while writeSkill's save interrupt is
+// pending, from inside the handler. The interrupt-free primitive is the
+// honest simulation of another process: nothing about the handler's own
+// approval flow gets tangled in it.
+import { _write } from "agency-lang/stdlib-lib/builtins.js"
 
 // A fresh directory per node: removed up front (the writeTool tests'
 // pattern) so re-runs never trip the duplicate-name refusal.
@@ -191,6 +197,33 @@ node trickyDescriptionsRoundTrip(): boolean {
     }
   }
   return true
+}
+
+node fileAppearingDuringApprovalIsNotOverwritten(): boolean {
+  const dir = outDir("race")
+  let outcome: Result<SkillEntry> = failure("not run")
+  handle {
+    outcome = writeSkill(dir, "sneaky", "A skill", "The reviewed body.")
+  } with (intr) {
+    if (intr.effect == "std::skills::save") {
+      // While the approval is pending, the same name appears on disk.
+      mkdir(dir) with approve
+      const planted = try _write(dir, "sneaky.md", "already here")
+      if (planted is failure) {
+        return reject("could not plant the racing file")
+      }
+      return approve()
+    }
+    return approve()
+  }
+  if (outcome is success) {
+    return false
+  }
+  const raw = read("sneaky.md", dir) with approve
+  if (raw is failure) {
+    return false
+  }
+  return raw.value == "already here"
 }
 
 // The one shape no quote character can hold: needs quoting (leading

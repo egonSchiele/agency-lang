@@ -392,7 +392,10 @@ export def writeSkill(
   if (made is failure) {
     return made
   }
-  const wrote = write(filename, content, dir)
+  // create-only, because the pre-interrupt duplicate check is stale by
+  // now: approval can take arbitrarily long, and the name may have
+  // appeared. Never overwrite.
+  const wrote = write(filename, content, dir, "create-only")
   if (wrote is failure) {
     return wrote
   }

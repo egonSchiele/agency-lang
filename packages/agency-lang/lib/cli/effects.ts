@@ -1,4 +1,5 @@
 import { builtinEffectSets, type EffectSetInfo } from "@/runtime/effectSets.js";
+import { ttyColor } from "@/utils/termcolors.js";
 import { nearMissSetName } from "@/runtime/policyFlags.js";
 import { BUILTIN_POLICIES, builtinPolicy, builtinPolicyNames } from "@/runtime/builtinPolicies.js";
 import type { Policy } from "@/runtime/policy.js";
@@ -10,7 +11,8 @@ type PolicyEntry = { name: string; description: string };
  * argument, list the built-in capability sets and policies. With a set
  * name, describe the set; with an effect name (contains `::`), name the
  * sets that include it; with a built-in policy name, print its resolved
- * policy. Plain text output.
+ * policy. Plain text, with `ttyColor` accents that noop when stdout is
+ * not a TTY.
  */
 export function effectsCmd(name?: string): void {
   let sets: Record<string, EffectSetInfo>;
@@ -60,7 +62,8 @@ export function firstSentence(doc: string): string {
 
 function twoColumn(rows: [string, string][]): string {
   const width = Math.max(...rows.map(([name]) => name.length)) + 2;
-  return rows.map(([name, text]) => `  ${name.padEnd(width)}${text}`).join("\n");
+  // Pad before coloring: ANSI codes would count toward padEnd's width.
+  return rows.map(([name, text]) => `  ${ttyColor.cyan(name.padEnd(width))}${text}`).join("\n");
 }
 
 export function renderEffectsList(
@@ -72,10 +75,10 @@ export function renderEffectsList(
   );
   const policyRows = policies.map((p) => [p.name, p.description] as [string, string]);
   return [
-    "Effect sets:",
+    ttyColor.bold("Effect sets:"),
     twoColumn(setRows),
     "",
-    "Built-in policies:",
+    ttyColor.bold("Built-in policies:"),
     twoColumn(policyRows),
     "",
     "Use a set or an effect name with --approve / --reject, a policy with --policy:",
@@ -86,13 +89,13 @@ export function renderEffectsList(
 }
 
 export function renderSetDetail(set: EffectSetInfo): string {
-  const lines = [set.name, "", set.doc, ""];
+  const lines = [ttyColor.bold(set.name), "", set.doc, ""];
   if (set.composedOf.length > 0) {
     lines.push(`${set.name} = ${set.composedOf.join(" + ")}`, "");
   }
-  lines.push("Member effects:");
+  lines.push(ttyColor.bold("Member effects:"));
   for (const member of set.members) {
-    lines.push(`  ${member}`);
+    lines.push(`  ${ttyColor.cyan(member)}`);
   }
   lines.push("");
   return lines.join("\n");
@@ -103,16 +106,16 @@ export function renderEffectLookup(effect: string, sets: Record<string, EffectSe
   if (containing.length === 0) {
     return `No built-in set includes ${effect}. It can still be named directly in --approve / --reject.\n`;
   }
-  const lines = [`Sets that include ${effect}:`];
+  const lines = [ttyColor.bold(`Sets that include ${effect}:`)];
   for (const set of containing) {
-    lines.push(`  ${set.name}`);
+    lines.push(`  ${ttyColor.cyan(set.name)}`);
   }
   lines.push("");
   return lines.join("\n");
 }
 
 export function renderPolicyDetail(name: string, description: string, policy: Policy): string {
-  return [name, "", description, "", JSON.stringify(policy, null, 2), ""].join("\n");
+  return [ttyColor.bold(name), "", description, "", JSON.stringify(policy, null, 2), ""].join("\n");
 }
 
 export function renderUnknownName(
@@ -124,6 +127,6 @@ export function renderUnknownName(
   const hint = near === null ? "" : ` Did you mean ${near}?`;
   return (
     `"${name}" is not a built-in effect set or policy.${hint} ` +
-    `Run \`agency effects\` for the full list; effect names contain "::" (e.g. std::read).`
+    `Run \`agency effects\` for the full list. Effect names (usually namespaced, like std::read, though bare names are legal too) can be passed to --approve / --reject directly.`
   );
 }

@@ -1,0 +1,5 @@
+{
+  "description": "The agent can learn a skill for a named subagent and use it in the same session. Relies on the suite's approve-all policy: the review interrupt and the home-directory write must be auto-approved in a headless run.",
+  "input": "Teach the explorer agent this skill, then use the explorer to answer: what should you do first in an unfamiliar repo? Skill: when dropped into a repo you have not seen, read the README and the directory layout first and produce a short orientation before answering anything else.",
+  "goal": "saves a skill targeted at the explorer subagent after review, and the explorer's answer reflects the taught content (read the README and layout first, produce an orientation); the reply confirms the skill was saved"
+}

@@ -13,6 +13,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
 - `docs/dev/agents/tool-loop-guards.md` — The three refusals that stop a model wasting rounds: a repeated call, an argument that is really tool-call markup, and a call identical to one already rejected.
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
+- `docs/dev/agents/learned-skills-and-toolbox.md` — Skills the user teaches a subagent and tools the agent writes for one: the home-directory storage, the session catalogs, the review interrupts, and the widened default read scope.
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
 - `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind that argument.

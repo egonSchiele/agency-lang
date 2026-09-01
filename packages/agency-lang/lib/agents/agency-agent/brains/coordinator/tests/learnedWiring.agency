@@ -1,0 +1,47 @@
+/*
+ * The learnedExtrasFor contract each wrapper wires in: an agent with a
+ * learned skill gets exactly one skills tool; an agent with nothing
+ * gets an empty list. Roots repointed at the committed fixture FIRST
+ * and verified (the issue #469 rule). A full subagent turn needs an
+ * LLM, so the eval suite covers end to end; this pins the seam.
+ */
+import test { _setLearnedRoot } from "../../../lib/learned.agency"
+import {
+  learnedSkillsRoot,
+  learnedExtrasFor,
+ } from "../../../lib/learned.agency"
+
+def fixtureRoot(): string {
+  return "${__dirname}/../../../tests/learned-fixture"
+}
+
+def sandboxed(): boolean {
+  _setLearnedRoot(fixtureRoot())
+  return learnedSkillsRoot() == "${fixtureRoot()}/skills"
+}
+
+node explorerGetsItsSkillsTool(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let extras: any[] = []
+  handle {
+    extras = learnedExtrasFor("explorer")
+  } with approve
+  if (extras.length != 1) {
+    return false
+  }
+  return extras[0].name == "learned_skills_explorer"
+      && extras[0].description.includes("<name>repo-orientation</name>")
+}
+
+node codeGetsNothingFromThisFixture(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let extras: any[] = ["unset"]
+  handle {
+    extras = learnedExtrasFor("code")
+  } with approve
+  return extras.length == 0
+}

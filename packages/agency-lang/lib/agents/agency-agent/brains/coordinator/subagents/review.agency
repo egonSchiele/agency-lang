@@ -1,6 +1,8 @@
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { reviewAgent as generalReviewAgent } from "std::agents/review"
 import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
+
+import { learnedExtrasFor } from "../../../lib/learned.agency"
 import { setMemoryId } from "std::memory"
 import { gitStatus, gitIsRepo } from "std::git"
 import { filter, map } from "std::array"
@@ -25,7 +27,7 @@ export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
     language, where that reviewer has nothing useful to say.
   """
   if (!agencyTask) {
-    const general = generalReviewAgent(work: userMsg, task: "Review this code.")
+    const general = generalReviewAgent(work: userMsg, task: "Review this code.", extraTools: learnedExtrasFor("review"))
     return renderFeedback(general)
   }
   return renderFeedback(review(userMsg))
@@ -42,7 +44,7 @@ export def review(userMsg: string): Result<Feedback[]> {
     let feedback: Result<Feedback[]> = success([])
 
     for (codeSnippet in snippets) {
-      feedback = mergeFeedback(feedback, agencyReviewAgent(codeSnippet.code))
+      feedback = mergeFeedback(feedback, agencyReviewAgent(codeSnippet.code, extraTools: learnedExtrasFor("review")))
     }
   }
   return feedback
@@ -90,7 +92,7 @@ export def reviewFiles(paths: string[]): Result<Feedback[]> raises <std::read> {
   for (path in paths) {
     const sourceResult = read(filename: path, useAgentCwd: true)
     if (sourceResult is success(source)) {
-      feedback = mergeFeedback(feedback, agencyReviewAgent(source))
+      feedback = mergeFeedback(feedback, agencyReviewAgent(source, extraTools: learnedExtrasFor("review")))
     }
   }
   return feedback

@@ -27,6 +27,7 @@ import { exec } from "std::shell"
 import { supervise } from "std::supervise"
 import { systemMessage } from "std::thread"
 
+import { learnedExtrasFor } from "../../../lib/learned.agency"
 import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { oracleAgent } from "./oracle.agency"
@@ -267,6 +268,7 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
     context: context,
     maxCost: ESCALATE_MAX_COST,
     maxTime: ESCALATE_MAX_TIME,
+    extraTools: learnedExtrasFor("code"),
   )
 }
 
@@ -520,7 +522,7 @@ def converse(
   originalUserMsg: string,
   agencyTask: boolean,
 ): string {
-  const tools = [...codeTools]
+  const tools = [...codeTools, ...learnedExtrasFor("code")]
   tools.push(escalate.partial(task: userMsg))
   let message = userMsg
   let attemptsLeft = 3

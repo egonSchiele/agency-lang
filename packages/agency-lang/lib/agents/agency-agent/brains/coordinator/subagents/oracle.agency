@@ -12,6 +12,7 @@
  */
 import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
+import { learnedExtrasFor } from "../../../lib/learned.agency"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 
 export def oracleAgent(userMsg: string): string {
@@ -42,6 +43,7 @@ export def oracleAgent(userMsg: string): string {
     model: getSlowModel(),
     provider: getSlowProvider(),
     session: "oracle",
+    extraTools: learnedExtrasFor("oracle"),
   )
   if (isFailure(result)) {
     return "The oracle could not finish: ${result.error}"

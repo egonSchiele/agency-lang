@@ -1,4 +1,6 @@
 import { writingRewriteAgent } from "std::agents/writing/rewrite"
+
+import { learnedExtrasFor } from "../../../lib/learned.agency"
 import { setMemoryId } from "std::memory"
 
 // The rewrite lives in std::agents/writing/rewrite. This wrapper only
@@ -31,7 +33,7 @@ export def rewriteAgent(userMsg: string): string {
   thread(label: "rewrite", summarize: true, session: "rewrite") {
     setMemoryId("rewrite")
     const request = splitRequest(userMsg)
-    const rewritten = writingRewriteAgent(text: request.text, task: request.task)
+    const rewritten = writingRewriteAgent(text: request.text, task: request.task, extraTools: learnedExtrasFor("rewrite"))
     reply = match(rewritten) {
       success(value) => value
       failure(err) => "rewrite failed: ${err}"

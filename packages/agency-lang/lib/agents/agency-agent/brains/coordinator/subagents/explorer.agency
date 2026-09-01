@@ -12,6 +12,7 @@
  */
 import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
+import { learnedExtrasFor } from "../../../lib/learned.agency"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 
 export def explorerAgent(userMsg: string): string {
@@ -47,6 +48,7 @@ export def explorerAgent(userMsg: string): string {
     model: getSlowModel(),
     provider: getSlowProvider(),
     session: "explorer",
+    extraTools: learnedExtrasFor("explorer"),
   )
   if (isFailure(result)) {
     return "The explorer could not finish: ${result.error}"

@@ -20,7 +20,10 @@ describe("builtinPolicy", () => {
         { match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" }, action: "approve" },
       ]);
     }
-    expect(p!["std::write"]).toBeUndefined();
+    // The one write rule is the narrow toolbox meta.json use-count write.
+    expect(p!["std::write"]).toEqual([
+      { match: { dir: "<agent-home>/tools/**", filename: "meta.json" }, action: "approve" },
+    ]);
   });
 
   it("scopes a toolbox scan like a read under 'recommended' and omits it under 'minimal'", () => {
@@ -39,8 +42,11 @@ describe("builtinPolicy", () => {
   it("scopes 'with-writes' effects on their correct path fields", () => {
     const p = builtinPolicy("with-writes", "/work");
     const scope = "{/work,/work/**}";
-    // dir field
-    expect(p!["std::write"]).toEqual([{ match: { dir: scope }, action: "approve" }]);
+    // dir field, with the toolbox meta.json rule riding along after it
+    expect(p!["std::write"]).toEqual([
+      { match: { dir: scope }, action: "approve" },
+      { match: { dir: "<agent-home>/tools/**", filename: "meta.json" }, action: "approve" },
+    ]);
     // target field (remove) — a fat-fingered "dir" here would silently disable scoping
     expect(p!["std::remove"]).toEqual([{ match: { target: scope }, action: "approve" }]);
     // src + dest fields (copy/move)

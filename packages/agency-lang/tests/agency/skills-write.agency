@@ -5,7 +5,7 @@
  */
 import { remove } from "std::fs"
 import { exists } from "std::shell"
-import { writeSkill, WriteSkillOutcome } from "std::skills"
+import { scanSkillsSubdirs, writeSkill, WriteSkillOutcome } from "std::skills"
 
 // A fresh directory per node: removed up front (the writeTool tests'
 // pattern) so re-runs never trip the duplicate-name refusal.
@@ -60,7 +60,7 @@ node acceptWritesTheFile(): boolean {
     return false
   }
   return raw.value.includes("name: repo-orientation")
-      && raw.value.includes("description: Orient in an unfamiliar repo")
+      && raw.value.includes(`description: "Orient in an unfamiliar repo"`)
       && raw.value.includes("Read the README first.")
 }
 
@@ -136,4 +136,27 @@ node badVerdictFails(): boolean {
   const dir = outDir("bad-verdict")
   const ran = runWrite(dir, "bad-verdict", "Bad verdict", "Body.", { verdict: "banana" })
   return ran.outcome is failure && !exists("bad-verdict.md", dir)
+}
+
+// The description survives a restart: YAML flow syntax in it (leading
+// bracket) must round-trip through the quoted frontmatter and the next
+// session's scan.
+node descriptionWithFlowSyntaxRoundTrips(): boolean {
+  const root = outDir("roundtrip")
+  const ran = runWrite("${root}/explorer", "beta-skill", "[Beta] Use when refactoring", "Body.", { verdict: "accept" })
+  if (ran.outcome is failure) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
+  const entries = scanned["explorer"]
+  if (entries == undefined || entries.length != 1) {
+    return false
+  }
+  return entries[0].name == "beta-skill" && entries[0].description == "[Beta] Use when refactoring"
+}
+
+node doubleQuotedDescriptionFails(): boolean {
+  const dir = outDir("quoted")
+  const ran = runWrite(dir, "quoted", `a "best practice" guide`, "Body.", { verdict: "accept" })
+  return ran.outcome is failure && ran.reviews == 0
 }

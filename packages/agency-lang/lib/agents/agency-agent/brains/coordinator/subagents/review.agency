@@ -43,8 +43,9 @@ export def review(userMsg: string): Result<Feedback[]> {
 
     let feedback: Result<Feedback[]> = success([])
 
+    const extras = learnedExtrasFor("review")
     for (codeSnippet in snippets) {
-      feedback = mergeFeedback(feedback, agencyReviewAgent(codeSnippet.code, extraTools: learnedExtrasFor("review")))
+      feedback = mergeFeedback(feedback, agencyReviewAgent(codeSnippet.code, extraTools: extras))
     }
   }
   return feedback
@@ -87,12 +88,15 @@ export def changedAgencyFiles(): string[] raises <std::git::status> {
   each file against the agent cwd; an unreadable path (e.g. a file `git status`
   lists as deleted) is skipped, so a stale path can never crash the review. No
   `task` is passed, so this is deterministic parse+typecheck with no LLM call. */
-export def reviewFiles(paths: string[]): Result<Feedback[]> raises <std::read> {
+export def reviewFiles(paths: string[]): Result<Feedback[]> raises <std::read, std::skills::skillsDir, std::toolbox::scan, std::ls, std::guard> {
+  // Hoisted: the extras cannot change mid-loop, and rebuilding them per
+  // file re-renders the skills tool and rewraps every learned tool.
+  const extras = learnedExtrasFor("review")
   let feedback: Result<Feedback[]> = success([])
   for (path in paths) {
     const sourceResult = read(filename: path, useAgentCwd: true)
     if (sourceResult is success(source)) {
-      feedback = mergeFeedback(feedback, agencyReviewAgent(source, extraTools: learnedExtrasFor("review")))
+      feedback = mergeFeedback(feedback, agencyReviewAgent(source, extraTools: extras))
     }
   }
   return feedback
@@ -102,6 +106,6 @@ export def reviewFiles(paths: string[]): Result<Feedback[]> raises <std::read> {
   agent changed this run (found via std::git), never the chat reply. Returns
   success([]) when no .agency files changed — the common case for Python / C /
   shell tasks — so `feedbackHasErrors` is false and the loop reaches `verify`. */
-export def reviewWrittenFiles(): Result<Feedback[]> raises <std::git::status, std::read> {
+export def reviewWrittenFiles(): Result<Feedback[]> raises <std::git::status, std::read, std::skills::skillsDir, std::toolbox::scan, std::ls, std::guard> {
   return reviewFiles(changedAgencyFiles())
 }

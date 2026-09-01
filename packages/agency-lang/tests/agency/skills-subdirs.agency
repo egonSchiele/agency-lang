@@ -13,7 +13,7 @@ def fixture(): string {
 }
 
 node scanGroupsBySubdir(): boolean {
-  const scanned = scanSkillsSubdirs(fixture()) with approve
+  const scanned = scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"]) with approve
   const explorer = scanned["explorer"]
   const research = scanned["research"]
   if (explorer == undefined || research == undefined) {
@@ -25,7 +25,7 @@ node scanGroupsBySubdir(): boolean {
 node scanRaisesOneInterrupt(): boolean {
   let scans = 0
   handle {
-    scanSkillsSubdirs(fixture())
+    scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"])
   } with (intr) {
     if (intr.effect == "std::skills::skillsDir") {
       scans = scans + 1
@@ -36,13 +36,13 @@ node scanRaisesOneInterrupt(): boolean {
 }
 
 node toolFromEntriesListsThem(): boolean {
-  const scanned = scanSkillsSubdirs(fixture()) with approve
+  const scanned = scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"]) with approve
   const tool = skillsToolFromEntries("${fixture()}/explorer", scanned["explorer"], "learned_skills_explorer")
   return tool.description.includes("<name>repo-orientation</name>")
       && tool.description.includes("<description>Orient in an unfamiliar repo</description>")
 }
 
 node missingRootYieldsEmpty(): boolean {
-  const scanned = scanSkillsSubdirs("${__dirname}/no-such-dir") with approve
+  const scanned = scanSkillsSubdirs("${__dirname}/no-such-dir", ["explorer"]) with approve
   return keys(scanned).length == 0
 }

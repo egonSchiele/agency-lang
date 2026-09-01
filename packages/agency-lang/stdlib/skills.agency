@@ -234,6 +234,25 @@ export def skillsToolFromEntries(
   return read.partial(dir: dir).describe(description).rename(toolName)
 }
 
+// The one scan pipeline every skills reader shares: glob (capped at
+// MAX_SKILL_FILES per directory), read each file with the interrupt-free
+// primitives (a scan interrupt's approval covers them), parse the
+// frontmatter (tolerating a file it cannot parse), and build the entry.
+def scanEntries(
+  dir: string,
+  pattern: string,
+  build: (string, any) -> SkillEntry,
+): SkillEntry[] {
+  const pathsResult = try _glob(pattern, dir, MAX_SKILL_FILES, [])
+  if (pathsResult is failure) {
+    return []
+  }
+  return map(pathsResult.value) as path {
+    const data = (try _read(dir, path, 0, 0) |> frontmatter) catch {}
+    return build(path, data)
+  }
+}
+
 def buildSkillsTool(
   dir: string,
   layout: "flat" | "standard",
@@ -241,24 +260,15 @@ def buildSkillsTool(
   recursive: boolean = false,
 ) {
   let pattern = "*/SKILL.md"
+  let build = standardEntry
   if (layout == "flat") {
     pattern = "*.{md,markdown}"
+    build = flatEntry
     if (recursive) {
       pattern = "**/*.{md,markdown}"
     }
   }
-  let entries: SkillEntry[] = []
-  const pathsResult = try _glob(pattern, dir, MAX_SKILL_FILES, [])
-  if (pathsResult is success(paths)) {
-    entries = map(paths) as path {
-      const data = (try _read(dir, path, 0, 0) |> frontmatter) catch {}
-      if (layout == "standard") {
-        return standardEntry(path, data)
-      }
-      return flatEntry(path, data)
-    }
-  }
-  return skillsToolFromEntries(dir, entries, name)
+  return skillsToolFromEntries(dir, scanEntries(dir, pattern, build), name)
 }
 
 export def skillsDir(
@@ -281,14 +291,20 @@ export def skillsDir(
   return buildSkillsTool(dir, layout, name)
 }
 
-export def scanSkillsSubdirs(root: string): Record<string, SkillEntry[]> {
+export def scanSkillsSubdirs(
+  root: string,
+  subdirs: string[],
+): Record<string, SkillEntry[]> {
   """
-  Scan a directory whose immediate subdirectories each hold one agent's
+  Scan named subdirectories of a root, each holding one agent's
   flat-layout skills. Raises one `std::skills::skillsDir` interrupt for
-  the root; its approval covers the reads. A missing root or a subdir
-  with no markdown files yields no entry for it.
+  the root; its approval covers the reads. Each subdirectory gets its
+  own MAX_SKILL_FILES scan; one with no markdown files (or that does not
+  exist) yields no entry. Taking the names as a parameter keeps the
+  record's keys caller-chosen data, never something read off the disk.
 
-  @param root - The directory holding one subdirectory per agent
+  @param root - The directory holding the subdirectories
+  @param subdirs - The subdirectory names to scan
   """
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
     dir: root,
@@ -296,30 +312,13 @@ export def scanSkillsSubdirs(root: string): Record<string, SkillEntry[]> {
   })
 
   let out: Record<string, SkillEntry[]> = {}
-  const pathsResult = try _glob("*/*.{md,markdown}", root, MAX_SKILL_FILES, [])
-  if (pathsResult is failure) {
-    return out
-  }
-  for (path in pathsResult.value) {
-    const scanned = scannedEntry(root, path)
-    if (out[scanned.sub] == undefined) {
-      out[scanned.sub] = []
+  for (sub in subdirs) {
+    const entries = scanEntries("${root}/${sub}", "*.{md,markdown}", flatEntry)
+    if (entries.length > 0) {
+      out[sub] = entries
     }
-    out[scanned.sub].push(scanned.entry)
   }
   return out
-}
-
-// One scanned path, parsed: which agent subdirectory it belongs to and
-// its skill entry. Keeps the grouping loop above to grouping only.
-def scannedEntry(root: string, path: string): { sub: string; entry: SkillEntry } {
-  const slash = path.indexOf("/")
-  const file = path.slice(slash + 1)
-  const data = (try _read(root, path, 0, 0) |> frontmatter) catch {}
-  return {
-    sub: path.slice(0, slash),
-    entry: flatEntry(file, data)
-  }
 }
 
 @alwaysUnder(dir)
@@ -390,6 +389,9 @@ export def writeSkill(
   if (description.includes("\n") || description.includes("---")) {
     return failure("the description must be one line and must not contain ---")
   }
+  if (description.includes(`"`)) {
+    return failure(`the description must not contain double quotes; use single quotes instead`)
+  }
   if (body.startsWith("---")) {
     return failure("the body must not start with --- (it would extend the frontmatter)")
   }
@@ -397,7 +399,11 @@ export def writeSkill(
   if (exists(filename, dir)) {
     return failure("a skill named ${name} already exists in ${dir}")
   }
-  const content = "---\nname: ${name}\ndescription: ${description}\n---\n\n${body}\n"
+  // The description is double-quoted so YAML flow syntax in it (a
+  // leading `[` or quote) cannot make the frontmatter unparseable and
+  // silently drop the reviewed description on the next scan. The
+  // no-double-quotes check above is what makes the quoting safe.
+  const content = "---\nname: ${name}\ndescription: \"${description}\"\n---\n\n${body}\n"
   const answer = interrupt std::skills::reviewSkill(
     "Save this skill to ${dir}/${filename}?",
     { dir: dir, name: name, content: content },

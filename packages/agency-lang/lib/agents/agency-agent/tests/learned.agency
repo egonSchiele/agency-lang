@@ -148,3 +148,21 @@ node extrasForCodeEmpty(): boolean {
   } with approve
   return extras.length == 0
 }
+
+// The first-learned-action ordering: the file is on disk before the
+// catalog ever loads, so the lazy scan already contains it and the
+// record must not add a second copy.
+node recordAfterLazyLoadDoesNotDuplicate(): boolean {
+  if (!sandboxed()) {
+    return false
+  }
+  let count = 0
+  handle {
+    recordLearnedSkill("explorer", { name: "repo-orientation", description: "Orient in an unfamiliar repo", location: "one.md" })
+    const tool = learnedSkillsToolFor("explorer")
+    if (tool != null) {
+      count = tool.description.split("<name>repo-orientation</name>").length - 1
+    }
+  } with approve
+  return count == 1
+}

@@ -178,7 +178,10 @@ export function expandAgentHomeDir(pattern: string, home: () => string = default
 function defaultAgentHome(): string {
   const override = process.env.AGENCY_AGENT_HOME;
   if (override !== undefined && override !== "") {
-    return override;
+    // File effects canonicalize their dir to an absolute path before
+    // matching, so a relative override (./my-profile) must be resolved
+    // the same way or the pattern never matches.
+    return path.resolve(override);
   }
   return path.join(os.homedir(), ".agency-agent");
 }
@@ -210,18 +213,14 @@ function matchesRule(
       !raw &&
       key === "dir" &&
       picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
-    const viaInstall =
+    // Each expander is a no-op when its token is absent, so one composed
+    // check covers every placeholder — including a pattern mixing them.
+    const viaPlaceholders =
       !raw &&
       !viaDot &&
       key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), expandAgencyInstallDir(pattern));
-    const viaAgentHome =
-      !raw &&
-      !viaDot &&
-      !viaInstall &&
-      key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), expandAgentHomeDir(pattern));
-    if (!raw && !viaDot && !viaInstall && !viaAgentHome) {
+      picomatch.isMatch(stripDotSlash(value), expandAgentHomeDir(expandAgencyInstallDir(pattern)));
+    if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }
   }

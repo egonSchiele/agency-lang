@@ -70,7 +70,19 @@ def loadSkillEntries(): Record<string, SkillEntry[]> {
   if (loaded != null) {
     return loaded
   }
-  const scanned = scanSkillsSubdirs(learnedSkillsRoot())
+  // No skills root yet (nothing ever learned): no scan, no interrupt.
+  if (!exists(learnedSkillsRoot())) {
+    _skillEntries = {}
+    return {}
+  }
+  const scanned: any = scanSkillsSubdirs(learnedSkillsRoot(), LEARN_TARGETS)
+  // A rejected scan interrupt surfaces here as a Failure value. Cache an
+  // empty catalog instead: caching the Failure would make every later
+  // lookup read fields off it and a record push silently vanish.
+  if (scanned is failure) {
+    _skillEntries = {}
+    return {}
+  }
   _skillEntries = scanned
   return scanned
 }
@@ -143,11 +155,18 @@ export def learnedExtrasFor(agent: string): any[] {
 export def recordLearnedSkill(agent: string, entry: SkillEntry) {
   """
   Add a just-saved skill to the session catalog, so the target agent's
-  next invocation lists it without a rescan.
+  next invocation lists it without a rescan. A no-op when the catalog
+  already holds the entry: when the save was the session's first learned
+  action, the lazy load above scans AFTER the file hit disk and has
+  already picked it up.
   """
   const entries = loadSkillEntries()
   if (entries[agent] == undefined) {
     entries[agent] = []
+  }
+  const existing = filter(entries[agent], \known -> known.location == entry.location)
+  if (existing.length > 0) {
+    return
   }
   entries[agent].push(entry)
 }
@@ -155,11 +174,18 @@ export def recordLearnedSkill(agent: string, entry: SkillEntry) {
 export def recordLearnedTool(agent: string, entry: ToolEntry) {
   """
   Add a just-written tool to the session catalog, so the target agent's
-  next invocation carries it without a rescan.
+  next invocation carries it without a rescan. A no-op when the catalog
+  already holds the name — a duplicate would produce two tools named
+  learned_<name> and trip the unique-tool-name check on the target's
+  next LLM call.
   """
   const entries = loadToolEntries()
   if (entries[agent] == undefined) {
     entries[agent] = []
+  }
+  const existing = filter(entries[agent], \known -> known.name == entry.name)
+  if (existing.length > 0) {
+    return
   }
   entries[agent].push(entry)
 }

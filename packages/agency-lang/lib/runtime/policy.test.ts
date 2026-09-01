@@ -648,6 +648,19 @@ describe("<agent-home> dir patterns", () => {
     expect(expandAgentHomeDir("/plain/**", () => "/custom/home")).toBe("/plain/**");
   });
 
+  it("a relative AGENCY_AGENT_HOME resolves to an absolute path (matching canonicalized dirs)", () => {
+    const previous = process.env.AGENCY_AGENT_HOME;
+    process.env.AGENCY_AGENT_HOME = "./my-profile";
+    try {
+      expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(
+        `${path.resolve("./my-profile")}/skills/**`,
+      );
+    } finally {
+      if (previous === undefined) delete process.env.AGENCY_AGENT_HOME;
+      else process.env.AGENCY_AGENT_HOME = previous;
+    }
+  });
+
   it("an empty AGENCY_AGENT_HOME counts as unset (falls back to ~/.agency-agent)", () => {
     const previous = process.env.AGENCY_AGENT_HOME;
     process.env.AGENCY_AGENT_HOME = "";

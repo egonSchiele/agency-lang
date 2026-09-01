@@ -127,6 +127,7 @@ const EXPECTED: Record<string, string[]> = {
   "mcp::call": ["server", "tool"],
   "std::skills::skillsDir": ["dir/**"],
   "std::skills::commandsDir": ["dir/**"],
+  "std::skills::reviewSkill": ["dir/**"],
   "std::toolbox::scan": ["dir/**"],
   "std::toolbox::review": [],
   "std::memory::enableMemory": [],

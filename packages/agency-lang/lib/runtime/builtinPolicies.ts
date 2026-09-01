@@ -52,6 +52,20 @@ export function readScopeRules(): PolicyRule[] {
   ];
 }
 
+// runTool records a use count in the tool's meta.json after every run.
+// Without this rule each learned-tool invocation prompts on that write —
+// and a headless run executes the tool, then reports failure when the
+// metadata write is rejected. Scoped to exactly that file under the
+// agent-home toolboxes; every other write still prompts.
+export function toolboxMetaWriteRules(): PolicyRule[] {
+  return [
+    {
+      match: { dir: `${AGENT_HOME}/tools/**`, filename: "meta.json" },
+      action: "approve",
+    },
+  ];
+}
+
 export const minimalAutoApprovePolicy: Policy = {
   "std::memory::remember": approve,
   "std::memory::forget": approve,
@@ -67,6 +81,7 @@ export const recommendedAutoApprovePolicy: Policy = {
   // through this same policy, so approving the launch grants nothing more.
   "std::run": approve,
   "std::read": readScopeRules(),
+  "std::write": toolboxMetaWriteRules(),
   "std::readBinary": readScopeRules(),
   "std::ls": readScopeRules(),
   "std::glob": readScopeRules(),
@@ -112,7 +127,10 @@ export function withWritesPolicy(baseDir: string): Policy {
   const cwdRule: PolicyRule[] = [{ match: { cwd: scope }, action: "approve" }];
   return {
     ...recommendedAutoApprovePolicy,
-    "std::write": dirRule,
+    // The toolbox meta.json rule rides along: without it, with-writes
+    // would clobber recommended's std::write entry and learned-tool
+    // runs outside the cwd would prompt again.
+    "std::write": [...dirRule, ...toolboxMetaWriteRules()],
     "std::writeBinary": dirRule,
     "std::edit": dirRule,
     "std::mkdir": dirRule,
@@ -142,7 +160,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory (and the agency install's own docs and skills) and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills/tools (plus their meta.json use-count writes) and web/search; prompt for reads elsewhere, other writes, shell, and git changes.",
   },
   {
     name: "minimal",

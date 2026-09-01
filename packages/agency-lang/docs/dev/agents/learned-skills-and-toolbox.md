@@ -50,12 +50,18 @@ when something is saved (`docs/site/guide/global-vs-static.md`).
 
 Loading is lazy and interrupt-bounded: the skills catalog loads with
 ONE `std::skills::skillsDir` interrupt covering the whole skills root
-(`scanSkillsSubdirs` in `stdlib/skills.agency`); the toolbox catalog
-loads with one `listTools` scan per agent directory that exists —
-absent directories are skipped with a plain `exists` check that raises
-nothing. Saving updates the catalog in place (`recordLearnedSkill`,
-`recordLearnedTool`), which is why `writeSkill` returns the complete
-entry: nothing ever rescans after a save, so no second interrupt.
+(`scanSkillsSubdirs` in `stdlib/skills.agency`, which takes the subagent
+names as a parameter — the record's keys are caller data, never
+directory names read off the disk — and scans each subdirectory with
+its own file cap); the toolbox catalog loads with one `listTools` scan
+per agent directory that exists. A missing root loads as an empty
+catalog with no interrupt, and a rejected scan caches an empty catalog
+rather than the Failure value. Saving updates the catalog in place
+(`recordLearnedSkill`, `recordLearnedTool`), which is why `writeSkill`
+returns the complete entry: nothing rescans after a save. The record
+functions skip an entry the catalog already holds — when the save was
+the session's first learned action, the lazy load runs after the file
+hit disk and has already picked it up.
 
 Each subagent invocation calls `learnedExtrasFor(<wrapper name>)`
 inside the wrapper function body — never at module top level — and
@@ -101,11 +107,30 @@ review interrupts; a stricter custom policy overrides the rule like any
 other. `docs/dev/agents/approval-policies.md` documents the
 placeholder.
 
-Writes are NOT widened: saving a skill or publishing a tool raises the
+One narrow write rides along: `runTool` records a use count in the
+tool's `meta.json` after every run, and `recommended`/`with-writes`
+approve exactly that file under the agent-home toolboxes so a
+successful learned-tool run cannot end in a rejected metadata write.
+Other writes are NOT widened: saving a skill or publishing a tool raises the
 ordinary write interrupts on top of the review gate, and under
 with-writes (cwd-scoped) a home-directory write surfaces for explicit
 approval. For "the agent is permanently teaching itself something,"
 that double visibility is intended.
+
+The scope rules live in the shared `readScopeRules()`, so a non-agent
+`agency run --policy recommended` script gets them too; the built-in
+policy descriptions disclose it. Layering them agent-side was
+considered and rejected: the policy handler flushes its whole
+in-memory policy to the user's `policy.json` on an "always" decision,
+so a session-layered rule would either leak into the saved file or
+force every default session's always-decisions onto the session-only
+path.
+
+Interactively, the review interrupts answer with approve (a bare
+approve counts as accept) or reject; the revise verdict is a
+structured answer only a handler or policy can give today. The
+coordinator still round-trips revisions by relaying the user's words
+and calling the tool again with a fresh draft.
 
 ## The user surface
 

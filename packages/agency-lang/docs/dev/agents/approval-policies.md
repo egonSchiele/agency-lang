@@ -62,6 +62,12 @@ The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
   interrupts, and reading them back (including `runTool`'s per-run scan of
   a tool's directory) would otherwise prompt on every use and auto-reject
   headless. A stricter custom policy overrides it like any other rule.
+  One write rides along: `runTool` records a use count in the tool's
+  `meta.json` after every run, so `recommended` (and `with-writes`,
+  which would otherwise clobber the entry) approve exactly that file
+  under `<agent-home>/tools/**`; every other write still prompts. The
+  shared scope reaches every `recommended` run, not only the agent —
+  the built-in policy descriptions disclose it.
 
 All three rules are placeholders, not paths. `.` expands to the process cwd,
 `<agency>` to the directory the agency package is installed in

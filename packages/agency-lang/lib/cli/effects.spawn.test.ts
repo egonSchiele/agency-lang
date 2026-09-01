@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { execFile } from "child_process";
+import { existsSync } from "fs";
 import { promisify } from "util";
 import path from "path";
 
@@ -17,7 +18,7 @@ async function effects(
   }
 }
 
-describe("agency effects", () => {
+describe.skipIf(!existsSync(CLI))("agency effects", () => {
   it("lists sets and built-in policies", async () => {
     const { code, stdout } = await effects();
     expect(code).toBe(0);

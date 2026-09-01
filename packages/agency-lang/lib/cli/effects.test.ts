@@ -28,6 +28,17 @@ describe("firstSentence", () => {
   it("returns a dot-less doc whole", () => {
     expect(firstSentence("No trailing dot")).toBe("No trailing dot");
   });
+
+  it("does not cut at an abbreviation mid-sentence", () => {
+    expect(firstSentence("Events (incl. calendar authorization).")).toBe(
+      "Events (incl. calendar authorization).",
+    );
+  });
+
+  it("renders the real Calendar doc whole", () => {
+    // The doc that motivated the boundary rule: "incl." must not truncate.
+    expect(firstSentence(sets["Calendar"].doc)).toContain("authorization)");
+  });
 });
 
 describe("renderEffectsList", () => {

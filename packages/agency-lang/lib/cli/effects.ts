@@ -48,11 +48,14 @@ export function effectsCmd(name?: string): void {
   process.exit(1);
 }
 
-/** The first sentence of a doc comment, newlines collapsed. */
+/** The first sentence of a doc comment, newlines collapsed. A period
+ *  counts as a boundary only when the next sentence begins (whitespace
+ *  then an uppercase letter), so an abbreviation mid-sentence — the
+ *  Calendar set's "(incl. calendar authorization)" — does not truncate. */
 export function firstSentence(doc: string): string {
   const flat = doc.replace(/\s+/g, " ").trim();
-  const dot = flat.indexOf(". ");
-  return dot === -1 ? flat : flat.slice(0, dot + 1);
+  const boundary = flat.match(/\.(?=\s+[A-Z])/);
+  return boundary?.index === undefined ? flat : flat.slice(0, boundary.index + 1);
 }
 
 function twoColumn(rows: [string, string][]): string {

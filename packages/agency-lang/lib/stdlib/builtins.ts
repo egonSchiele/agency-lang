@@ -256,8 +256,15 @@ async function _writeBytes(
     throw new Error(`Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`);
   }
   const filePath = await resolvePath(dir, filename);
-  if (mode === "create-only" && existsSync(filePath)) {
-    throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
+  if (mode === "create-only") {
+    if (existsSync(filePath)) {
+      throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
+    }
+    // The "wx" flag makes create-only atomic: a file created between the
+    // check above and this write fails the write instead of being
+    // overwritten. The check exists only for its friendlier message.
+    await writeFile(filePath, data, { flag: "wx" });
+    return true;
   }
   const doWrite = mode === "append" ? appendFile : writeFile;
   await doWrite(filePath, data);

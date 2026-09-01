@@ -1,0 +1,194 @@
+/** @module
+  @summary The session catalogs of learned content: skills the user
+  taught a subagent and tools the agent wrote for one. Loaded lazily
+  (one scan interrupt for the skills root; one toolbox scan per agent
+  directory that exists), held in module globals so a save this turn is
+  visible to the target subagent's next invocation without a rescan.
+*/
+import { filter, map } from "std::array"
+import { keys } from "std::object"
+import { exists } from "std::shell"
+import {
+  SkillEntry,
+  scanSkillsSubdirs,
+  skillsToolFromEntries,
+ } from "std::skills"
+import { ToolEntry, listTools, runTool } from "std::toolbox"
+
+import { AGENCY_AGENT_DIR } from "../shared.agency"
+
+// Every subagent a skill or tool can be learned for. These are the
+// coordinator's wrapper names (the directory names under the learned
+// roots), not the stdlib agents' names.
+export static const LEARN_TARGETS = [
+  "code",
+  "research",
+  "explorer",
+  "oracle",
+  "review",
+  "writing",
+  "rewrite",
+]
+
+// Session-lived catalogs. Globals, not statics: the CLI agent is one
+// long-lived run, and a save must update these in place.
+let _skillEntries: Record<string, SkillEntry[]> | null = null
+let _toolEntries: Record<string, ToolEntry[]> | null = null
+// Test seam: repoints both roots at a sandbox. The production root is
+// the AGENCY_AGENT_DIR static, resolved once at startup.
+let _rootOverride: string | null = null
+
+def _setLearnedRoot(root: string) {
+  _rootOverride = root
+  _skillEntries = null
+  _toolEntries = null
+}
+
+def _resetLearned() {
+  _skillEntries = null
+  _toolEntries = null
+}
+
+def learnedRoot(): string {
+  const override = _rootOverride
+  if (override != null) {
+    return override
+  }
+  return AGENCY_AGENT_DIR
+}
+
+export def learnedSkillsRoot(): string {
+  return "${learnedRoot()}/skills"
+}
+
+export def learnedToolsRoot(): string {
+  return "${learnedRoot()}/tools"
+}
+
+def loadSkillEntries(): Record<string, SkillEntry[]> {
+  const loaded = _skillEntries
+  if (loaded != null) {
+    return loaded
+  }
+  const scanned = scanSkillsSubdirs(learnedSkillsRoot())
+  _skillEntries = scanned
+  return scanned
+}
+
+def loadToolEntries(): Record<string, ToolEntry[]> {
+  const loaded = _toolEntries
+  if (loaded != null) {
+    return loaded
+  }
+  let scanned: Record<string, ToolEntry[]> = {}
+  for (agent in LEARN_TARGETS) {
+    const dir = "${learnedToolsRoot()}/${agent}"
+    if (!exists(dir)) {
+      continue
+    }
+    const listed = listTools(dir)
+    if (listed is success(entries)) {
+      scanned[agent] = entries
+    }
+  }
+  _toolEntries = scanned
+  return scanned
+}
+
+export def learnedSkillsToolFor(agent: string): any | null {
+  """
+  The skills tool over one subagent's learned skills, or null when it
+  has none. Built from the session catalog, so a skill recorded this
+  turn appears without rescanning the directory.
+  """
+  const entries = loadSkillEntries()[agent]
+  if (entries == undefined || entries.length == 0) {
+    return null
+  }
+  return skillsToolFromEntries("${learnedSkillsRoot()}/${agent}", entries, "learned_skills_${agent}")
+}
+
+// One catalog entry as an LLM-callable tool. The `learned_` prefix is
+// what makes collision with a target's built-in tools impossible.
+def learnedToolFromEntry(agent: string, entry: ToolEntry): any {
+  const description = "${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}"
+  const dir = "${learnedToolsRoot()}/${agent}"
+  return runTool.partial(name: entry.name, dir: dir).describe(description).rename("learned_${entry.name}")
+}
+
+export def learnedToolsFor(agent: string): any[] {
+  """
+  The LLM-callable tools from one subagent's learned toolbox, each
+  renamed `learned_<name>`. Broken entries stay in the inventory but are
+  never offered to the model.
+  """
+  const entries = loadToolEntries()[agent]
+  if (entries == undefined) {
+    return []
+  }
+  const usable = filter(entries, \entry -> entry.broken == undefined)
+  return map(usable, \entry -> learnedToolFromEntry(agent, entry))
+}
+
+export def learnedExtrasFor(agent: string): any[] {
+  """
+  The learned additions to one subagent's tool list: its learned-skills
+  tool (when it has skills) followed by its learned tools.
+  """
+  const skillsTool = learnedSkillsToolFor(agent)
+  const skillsTools = if skillsTool == null then [] else [skillsTool]
+  return [...skillsTools, ...learnedToolsFor(agent)]
+}
+
+export def recordLearnedSkill(agent: string, entry: SkillEntry) {
+  """
+  Add a just-saved skill to the session catalog, so the target agent's
+  next invocation lists it without a rescan.
+  """
+  const entries = loadSkillEntries()
+  if (entries[agent] == undefined) {
+    entries[agent] = []
+  }
+  entries[agent].push(entry)
+}
+
+export def recordLearnedTool(agent: string, entry: ToolEntry) {
+  """
+  Add a just-written tool to the session catalog, so the target agent's
+  next invocation carries it without a rescan.
+  """
+  const entries = loadToolEntries()
+  if (entries[agent] == undefined) {
+    entries[agent] = []
+  }
+  entries[agent].push(entry)
+}
+
+export type LearnedForAgent = {
+  skills: SkillEntry[];
+  tools: ToolEntry[]
+}
+
+export type LearnedInventory = Record<string, LearnedForAgent>
+
+export def learnedInventory(): LearnedInventory {
+  """
+  Everything the agent has learned, grouped by subagent. Agents with
+  nothing are omitted.
+  """
+  const skills = loadSkillEntries()
+  const tools = loadToolEntries()
+  let out: LearnedInventory = {}
+  for (agent in LEARN_TARGETS) {
+    const agentSkills = skills[agent] ?? []
+    const agentTools = tools[agent] ?? []
+    if (agentSkills.length == 0 && agentTools.length == 0) {
+      continue
+    }
+    out[agent] = {
+      skills: agentSkills,
+      tools: agentTools
+    }
+  }
+  return out
+}

@@ -1,0 +1,12 @@
+{
+  "sourceFile": "learned.agency",
+  "tests": [
+    { "nodeName": "lazyLoadRaisesOneScanInterrupt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "recordSkillVisibleWithoutRescan", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unknownAgentYieldsNullAndEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "learnedToolNamePrefixed", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "inventoryGroupsByAgent", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "extrasForExplorerHasSkillsTool", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "extrasForCodeEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

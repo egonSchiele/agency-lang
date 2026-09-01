@@ -66,6 +66,26 @@ You can also use *globs*. For example, here is a policy that allows users to rea
 }
 ```
 
+### `rejectMessage`
+
+You can provide a custom rejection message for a rule using the `rejectMessage` field.
+
+```json
+{
+    "std::write": [
+      { "action": "reject", "rejectMessage": "Writes are not allowed by this policy." }
+    ]
+}
+```
+
+This is the equivalent of:
+
+```ts
+return reject("Writes are not allowed by this policy.")
+```
+
+If the interrupt was raised by a tool call and get rejected, the reject message will be sent to the LLM. This is a good place to tell the LLM what to do instead.
+
 ## Running with a policy from the command line
 
 You can also apply policies on the command line, when running an Agency program using `agency run`.

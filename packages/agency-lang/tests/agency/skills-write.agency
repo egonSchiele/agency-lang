@@ -145,6 +145,13 @@ node multilineDescriptionFails(): boolean {
   return ran.outcome is failure && ran.saves == 0
 }
 
+// A carriage return is a line terminator too.
+node carriageReturnDescriptionFails(): boolean {
+  const dir = outDir("carriage")
+  const ran = runWrite(dir, "carriage", "line one\rline two", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}
+
 // A body starting with --- cannot reach the frontmatter: the block is
 // already closed by its own fence, so the body line is just markdown
 // and the next scan still sees the saved name and description.

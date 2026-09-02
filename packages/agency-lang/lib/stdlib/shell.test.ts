@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { __internal_exec, __internal_bash } from "./shell.js";
+import { __internal_exec, __internal_bash, _glob } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
@@ -201,5 +201,40 @@ describe("_exec / _bash reject a nonexistent cwd with a clear error", () => {
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout.trim()).toBe(fs.realpathSync(tmp));
+  });
+});
+
+describe("_glob symlink handling under allowedPaths", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-glob-symlink-"));
+    fs.mkdirSync(path.join(root, "real"));
+    fs.writeFileSync(path.join(root, "real", "a.md"), "a");
+    fs.symlinkSync(path.join(root, "real", "a.md"), path.join(root, "real", "link.md"));
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("lists symlinked entries when allowedPaths is not set", async () => {
+    const results = await _glob("*.md", path.join(root, "real"), 100, []);
+    expect(results.sort()).toEqual(["a.md", "link.md"]);
+  });
+
+  it("skips symlinked entries when allowedPaths is set", async () => {
+    const results = await _glob("*.md", path.join(root, "real"), 100, [root]);
+    expect(results).toEqual(["a.md"]);
+  });
+
+  it("refuses a symlinked search root when allowedPaths is set, even with an in-root target", async () => {
+    fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
+    await expect(_glob("*.md", path.join(root, "linked"), 100, [root])).rejects.toThrow(
+      /is a symlink/,
+    );
+    // Without allowedPaths the link is followed, as before.
+    const open = await _glob("*.md", path.join(root, "linked"), 100, []);
+    expect(open.sort()).toEqual(["a.md", "link.md"]);
   });
 });

@@ -9,6 +9,7 @@
     { "nodeName": "overlongNameFails", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "emptyDirFails", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "multilineDescriptionFails", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "carriageReturnDescriptionFails", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "bodyStartingWithFenceCannotInject", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "descriptionWithFlowSyntaxRoundTrips", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "trickyDescriptionsRoundTrip", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },

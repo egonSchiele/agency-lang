@@ -262,7 +262,7 @@ def scanEntries(
     return []
   }
   return map(pathsResult.value) as path {
-    const data = (try _read(dir, path, 0, 0) |> frontmatter) catch {}
+    const data = (try _read(dir, path, 0, 0, allowedPaths) |> frontmatter) catch {}
     if (layout == "standard") {
       return standardEntry(path, data)
     }
@@ -397,7 +397,7 @@ export def writeSkill(
   if (name.length > MAX_TOOL_NAME_LEN) {
     return failure("skill name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
   }
-  if (description.includes("\n")) {
+  if (description.includes("\n") || description.includes("\r")) {
     return failure("the description must be one line")
   }
   if (dir.trim() == "") {

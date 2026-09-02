@@ -143,6 +143,25 @@ node symlinkedSubdirIsNotScanned(): boolean {
   return group.entries.length == 0
 }
 
+// A symlinked subdirectory is refused even when its target sits inside
+// the root: the caller asked for a directory, not a link to one.
+node inRootSymlinkedSubdirIsNotScanned(): boolean {
+  const base = "${__dirname}/test-output/skills-subdirs-inroot-symlink"
+  remove(base) with approve
+  mkdir("${base}/root/real") with approve
+  write("real.md", "---\nname: real\n---\nReal.", "${base}/root/real") with approve
+  exec("ln", ["-s", "${base}/root/real", "${base}/root/linked"]) with approve
+  if (!exists("real.md", "${base}/root/linked")) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs("${base}/root", ["real", "linked"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  return scanned.value["real"].entries.length == 1
+      && scanned.value["linked"].entries.length == 0
+}
+
 // A symlinked FILE inside a legitimate subdirectory would also be read
 // from wherever it points; the scan skips symlinked entries instead.
 node symlinkedFileIsNotListed(): boolean {

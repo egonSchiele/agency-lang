@@ -7,6 +7,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
 import { resolvePath } from "./resolvePath.js";
+import { assertContained } from "./assertContained.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { FakeClock } from "../runtime/clock.js";
@@ -217,8 +218,16 @@ export async function _read(
   filename: string,
   offset?: number,
   limit?: number,
+  allowedPaths?: string[],
 ): Promise<string> {
   const filePath = await resolvePath(dir, filename);
+  // The symlink-aware containment the other primitives (`_glob`,
+  // `_grep`, `_ls`) already offer: with allowedPaths set, a path that
+  // resolves outside them — including through a symlink created after
+  // an earlier listing — is refused at read time.
+  if (allowedPaths && allowedPaths.length > 0) {
+    await assertContained(filePath, allowedPaths);
+  }
   const data = await readFile(filePath);
   const text = data.toString("utf8");
   const off = offset && offset > 0 ? offset : undefined;

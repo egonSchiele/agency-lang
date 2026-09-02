@@ -41,10 +41,17 @@ dangling symlink fails the open atomically — because the pre-interrupt
 check is stale by save time: approval can take arbitrarily long, and a
 file created in the meantime must never be overwritten.
 
-The `dir` in the interrupt payload is absolutized with the same
-resolution the write itself uses, so an always-scope rule saved from a
-save approval names one directory regardless of how the caller spelled
-it. An empty `dir` is refused before any prompt.
+The `dir` in the interrupt payload is absolutized (`~` expanded,
+resolved against the process cwd), so relative and `~`-led spellings
+produce the same payload and an always-scope rule saved from a save
+approval names one directory regardless of how the caller spelled it.
+One gap remains: the write that follows realpaths its directory
+(`prepareContainedPath`), and the save payload cannot — the directory
+may not exist until `mkdir` runs after approval. So a directory reached
+through a symlinked ancestor still yields two spellings (on macOS,
+`/tmp/skills` for the save and `/private/tmp/skills` for the write),
+and one always-scope rule will not cover both interrupts there. An
+empty `dir` is refused before any prompt.
 
 ## The trust argument for the subdir scan
 
@@ -57,11 +64,13 @@ approved:
 1. Every subdirectory name must be a bare path segment (no separators,
    no `..`, not empty), checked before the interrupt is raised; one
    failure names every offending entry.
-2. The scan passes the root as the glob's allowed path. The
-   symlink-aware containment check refuses a subdirectory that resolves
-   outside the root, and the glob skips symlinked entries whenever an
-   allowed path is set — so both a symlinked subdirectory and a
-   symlinked file inside a real one are ignored rather than followed.
+2. The scan passes the root as the glob's allowed path, which switches
+   the glob into refuse-symlinks mode: a symlinked subdirectory fails
+   the glob (even one whose target sits inside the root), and symlinked
+   entries inside a real subdirectory are left out of the results. The
+   file reads that follow re-check containment against the root at read
+   time, so a path swapped for a symlink after the listing is refused
+   too.
 
 ## The frontmatter round-trip
 

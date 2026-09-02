@@ -416,10 +416,26 @@ export async function _glob(
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
+  // With containment requested, the search root itself must not be a
+  // symlink either: `readdir` would follow it, even to a target that
+  // happens to be contained, and the caller asked for a directory, not
+  // a link to one. Refuse rather than follow (repo policy on symlinks).
+  if (allowedPaths && allowedPaths.length > 0) {
+    let rootStat: Awaited<ReturnType<typeof fs.lstat>> | null = null;
+    try {
+      rootStat = await fs.lstat(root);
+    } catch {
+      rootStat = null; // a missing dir yields an empty walk below
+    }
+    if (rootStat && rootStat.isSymbolicLink()) {
+      throw new Error(`glob refused: '${root}' is a symlink and allowedPaths is set`);
+    }
+  }
+
   await walkDir(root, async (full, st) => {
-    // A caller asking for containment gets none for a symlinked entry:
-    // the reads that follow a glob resolve the link wherever it points.
-    // Refuse rather than follow (repo policy on symlinks).
+    // The same rule for every entry inside: a symlinked file or
+    // directory is skipped, because the reads that follow a glob
+    // resolve the link wherever it points.
     if (allowedPaths && allowedPaths.length > 0 && st.isSymbolicLink()) {
       return true;
     }

@@ -305,7 +305,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the p
   @param pattern - The glob pattern to match
   @param dir - The directory to search in
   @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes
+  @param allowedPaths - Only allow searching under these path prefixes. When set, symlinks are refused rather than followed: a symlinked search dir fails the call, and symlinked entries are left out of the results.
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
 
 **Parameters:**

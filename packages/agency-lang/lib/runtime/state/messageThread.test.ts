@@ -315,3 +315,38 @@ describe("repair generation — markRepaired / isNewerThan", () => {
     expect(live.isNewerThan(snapshot)).toBe(false); // snapshot post-repair → fine
   });
 });
+
+describe("MessageThread.replaceAt", () => {
+  it("swaps the message and keeps its label", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("q"), "ask");
+    thread.push(smoltalk.assistantMessage("a"), "answer");
+    thread.replaceAt(1, smoltalk.assistantMessage("b"));
+    expect(thread.getMessages().map((message) => message.content)).toEqual(["q", "b"]);
+    expect(thread.labelAt(1)).toBe("answer");
+  });
+
+  it("refuses an index outside the thread", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("q"));
+    expect(() => thread.replaceAt(1, smoltalk.userMessage("x"))).toThrow();
+  });
+});
+
+describe("MessageThread.removeMatching", () => {
+  it("removes matching messages from the index on and keeps the other labels", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.systemMessage("keep: before the index"), "s0");
+    thread.push(smoltalk.userMessage("u1"), "u1");
+    thread.push(smoltalk.systemMessage("drop"), "s1");
+    thread.push(smoltalk.assistantMessage("a1"), "a1");
+    thread.push(smoltalk.systemMessage("drop too"), "s2");
+    thread.removeMatching(1, (message) => message.role === "system");
+    expect(thread.getMessages().map((message) => message.content)).toEqual([
+      "keep: before the index",
+      "u1",
+      "a1",
+    ]);
+    expect([0, 1, 2].map((index) => thread.labelAt(index))).toEqual(["s0", "u1", "a1"]);
+  });
+});

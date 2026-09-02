@@ -78,7 +78,7 @@ export type ModelCost = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L230))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L249))
 
 ### GuardFailureData
 
@@ -93,7 +93,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L274))
 
 ### ThreadMessage
 
@@ -104,7 +104,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L278))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L297))
 
 ### ThreadInfo
 
@@ -120,7 +120,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L283))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L302))
 
 ## Functions
 
@@ -365,6 +365,27 @@ True when the current message thread has no messages yet. Use it inside a
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L215))
 
+### ensureSystemMessage
+
+```ts
+ensureSystemMessage(msg: string)
+```
+
+Push `msg` as a system message unless the active thread already holds it.
+  Use it for an agent's persona: called twice from code on one thread, the
+  agent keeps one persona; called as a handoff, whose system messages are
+  removed when it hands back, it pushes the persona fresh on every dispatch.
+
+  @param msg - The system message
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| msg | `string` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L226))
+
 ### getTokens
 
 ```ts
@@ -375,7 +396,7 @@ Return the cumulative token count for the current execution branch.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L242))
 
 ### getModelCosts
 
@@ -393,7 +414,7 @@ Unlike the per-branch cost/token accessors, this reads process-wide
 
 **Returns:** `ModelCost[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L246))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L265))
 
 ### listThreads
 
@@ -426,7 +447,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L355))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L374))
 
 ### sessionThreadId
 
@@ -445,7 +466,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L408))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L427))
 
 ### currentThreadId
 
@@ -460,7 +481,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L416))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L435))
 
 ### getThread
 
@@ -492,4 +513,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L426))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L445))

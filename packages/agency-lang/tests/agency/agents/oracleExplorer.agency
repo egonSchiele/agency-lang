@@ -1,5 +1,6 @@
 import { oracleAgent, buildTools as oracleTools } from "std::agents/oracle"
 import { explorerAgent, buildTools as explorerTools } from "std::agents/explorer"
+import { getThread, currentThreadId } from "std::thread"
 
 def hasTool(tools: any[], name: string): boolean {
   return some(tools, \tool -> tool.name == name)
@@ -43,4 +44,25 @@ node neitherHasDuplicateToolNames(): boolean {
     }
   }
   return true
+}
+
+// From code the agents run on the caller's thread like any function.
+// Two calls push one persona and leave both replies where the caller
+// can read them.
+const WHOLE_THREAD = 1000
+
+node twoOracleCallsShareTheCallerThread(): boolean {
+  const first = oracleAgent(question: "is this plan sound")
+  const second = oracleAgent(question: "and the tests?")
+  const messages = getThread(currentThreadId(), 0, WHOLE_THREAD) catch []
+  const personas = filter(messages, \message -> message.role == "system")
+  const replies = filter(messages, \message -> message.role == "assistant")
+  return personas.length == 1 && replies.length == 2
+}
+
+node explorerFromCodeLandsOnTheCallerThread(): boolean {
+  const survey = explorerAgent(question: "summarize the parsers")
+  const messages = getThread(currentThreadId(), 0, WHOLE_THREAD) catch []
+  const replies = filter(messages, \message -> message.role == "assistant")
+  return replies.length == 1
 }

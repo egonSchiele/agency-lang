@@ -23,6 +23,41 @@
       "url": "https://api.github.com/repos/o/r/issues?*",
       "method": "GET",
       "return": []
+    },
+    {
+      "url": "https://api.github.com/repos/o/r/issues/9/comments",
+      "method": "POST",
+      "body": { "body": "should never land" },
+      "return": {
+        "id": 2,
+        "user": { "login": "agency-bot" },
+        "body": "should never land",
+        "created_at": "2026-09-01T00:00:00Z",
+        "html_url": "https://github.com/o/r/issues/9#issuecomment-2"
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/o/r/issues/9/comments",
+      "method": "POST",
+      "body": { "body": "hello from the test" },
+      "return": {
+        "id": 1,
+        "user": { "login": "agency-bot" },
+        "body": "hello from the test",
+        "created_at": "2026-09-01T00:00:00Z",
+        "html_url": "https://github.com/o/r/issues/9#issuecomment-1"
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/o/r/pulls/7/reviews",
+      "method": "POST",
+      "return": {
+        "id": 3,
+        "user": { "login": "agency-bot" },
+        "state": "APPROVED",
+        "body": "",
+        "submitted_at": "2026-09-01T00:00:00Z"
+      }
     }
   ],
   "tests": [
@@ -33,6 +68,10 @@
     { "nodeName": "defaultResolutionFillsPayload", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "payloadCarriesClampedPaging", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "badNumberFailsBeforeRaise", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "alwaysScopePinsOwnerAndRepo", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "alwaysScopePinsOwnerAndRepo", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "rejectedWritePostsNothing", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "approvedWritePostsBody", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "reviewPayloadCarriesComments", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "approveIsItsOwnEffect", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

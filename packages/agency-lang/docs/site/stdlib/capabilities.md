@@ -86,7 +86,7 @@ Anything that talks to the outside world over the network.
 
 ```ts
 /** Anything that talks to the outside world over the network. */
-export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::bluesky, std::wikidata, std::usaspending, std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::github::prList, std::github::prGet, std::github::prDiff, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueList, std::github::issueGet, std::github::issueCommentList, std::github::issueSearch>
+export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::bluesky, std::wikidata, std::usaspending, std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::github::prList, std::github::prGet, std::github::prDiff, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueList, std::github::issueGet, std::github::issueCommentList, std::github::issueSearch, std::github::prComment, std::github::prReviewComment, std::github::prReview, std::github::prApprove, std::github::issueCreate, std::github::issueComment, std::github::issueUpdate, std::github::issueLabel>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L45))
@@ -113,6 +113,50 @@ export effectSet GithubRead = <std::github::prList, std::github::prGet, std::git
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L51))
 
+### GithubReview
+
+Posting comments and reviews on GitHub pull requests.
+
+```ts
+/** Posting comments and reviews on GitHub pull requests. */
+export effectSet GithubReview = <std::github::prComment, std::github::prReviewComment, std::github::prReview, std::github::prApprove>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L54))
+
+### GithubIssueWrite
+
+Creating and editing GitHub issues.
+
+```ts
+/** Creating and editing GitHub issues. */
+export effectSet GithubIssueWrite = <std::github::issueCreate, std::github::issueComment, std::github::issueUpdate, std::github::issueLabel>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L57))
+
+### GithubWrite
+
+All GitHub mutations.
+
+```ts
+/** All GitHub mutations. */
+export effectSet GithubWrite = <GithubReview, GithubIssueWrite>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L60))
+
+### Github
+
+All GitHub access.
+
+```ts
+/** All GitHub access. */
+export effectSet Github = <GithubRead, GithubWrite>
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L63))
+
 ### DataFinance
 
 The std::data/finance connectors (macro + filings). Each also raises
@@ -126,7 +170,7 @@ The std::data/finance connectors (macro + filings). Each also raises
 export effectSet DataFinance = <std::fred, std::edgar, std::dbnomics>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L68))
 
 ### Messaging
 
@@ -137,7 +181,7 @@ Sending messages to people: email, SMS, and iMessage.
 export effectSet Messaging = <std::sendEmail, std::sendSms, std::sendIMessage>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L71))
 
 ### Secrets
 
@@ -148,7 +192,7 @@ Reading and writing credentials in the system keyring.
 export effectSet Secrets = <std::getSecret, std::setSecret, std::deleteSecret>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L74))
 
 ### Auth
 
@@ -159,7 +203,7 @@ OAuth-style authorization flows: granting, fetching, and revoking access.
 export effectSet Auth = <std::authorize, std::getAccessToken, std::revokeAuth>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L77))
 
 ### Calendar
 
@@ -170,7 +214,7 @@ Calendar access: listing and mutating events (incl. calendar authorization).
 export effectSet Calendar = <std::listEvents, std::createEvent, std::updateEvent, std::deleteEvent, std::authorizeCalendar>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L80))
 
 ### Memory
 
@@ -181,7 +225,7 @@ Agent long-term memory: recall, remember, forget, and enable/disable.
 export effectSet Memory = <std::memory::recall, std::memory::remember, std::memory::forget, std::memory::enableMemory, std::memory::disableMemory>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L83))
 
 ### NotesRead
 
@@ -192,7 +236,7 @@ Read-only Notes access: reading, searching, and listing.
 export effectSet NotesRead = <std::notes::read, std::notes::search, std::notes::list>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L86))
 
 ### NotesWrite
 
@@ -203,7 +247,7 @@ Notes mutation: creating, appending, and deleting.
 export effectSet NotesWrite = <std::notes::create, std::notes::append, std::notes::delete>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L89))
 
 ### Notes
 
@@ -214,4 +258,4 @@ All Notes access, reads and writes.
 export effectSet Notes = <NotesRead, NotesWrite>
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L80))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L92))

@@ -54,6 +54,20 @@ export async function _setSecret(key: string, value: string, service?: string): 
   }
 }
 
+/** Run a lookup command, bounded by `timeoutMs` when one is given. Without
+ *  a bound the call passes no options object at all, so callers and tests
+ *  that never asked for a timeout see the same execFile call as before. */
+function lookup(
+  command: string,
+  args: string[],
+  timeoutMs: number | undefined,
+): Promise<{ stdout: string; stderr: string }> {
+  if (timeoutMs === undefined) {
+    return execFileAsync(command, args);
+  }
+  return execFileAsync(command, args, { timeout: timeoutMs });
+}
+
 /**
  * Retrieve a secret from the system keyring.
  * Returns null if the secret doesn't exist.
@@ -70,14 +84,13 @@ export async function _getSecret(
 ): Promise<string | null> {
   if (!key) throw new Error("Keyring key must not be empty.");
   const svc = service || DEFAULT_SERVICE;
-  const options = timeoutMs === undefined ? {} : { timeout: timeoutMs };
 
   if (process.platform === "darwin") {
     try {
-      const { stdout } = await execFileAsync(
+      const { stdout } = await lookup(
         "security",
         ["find-generic-password", "-s", svc, "-a", key, "-w"],
-        options,
+        timeoutMs,
       );
       return stdout.trimEnd();
     } catch {
@@ -85,10 +98,10 @@ export async function _getSecret(
     }
   } else if (process.platform === "linux") {
     try {
-      const { stdout } = await execFileAsync(
+      const { stdout } = await lookup(
         "secret-tool",
         ["lookup", "service", svc, "account", key],
-        options,
+        timeoutMs,
       );
       return stdout.trimEnd();
     } catch {

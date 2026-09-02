@@ -120,8 +120,8 @@ node invalidNameFails(): boolean {
   return ran.outcome is failure && ran.saves == 0
 }
 
-// Skill names feed derived tool names, so the provider cap applies at
-// save time — not as an ENAMETOOLONG after the user already approved.
+// The name is also the filename, so its length is capped up front —
+// not as an ENAMETOOLONG after the user already approved.
 node overlongNameFails(): boolean {
   const dir = outDir("overlong")
   let name = "a"
@@ -129,6 +129,13 @@ node overlongNameFails(): boolean {
     name = name + "a"
   }
   const ran = runWrite(dir, name, "Too long", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}
+
+// An empty dir can never be written to, so it fails before any prompt
+// is spent — the same fail-before-prompting rule the name checks follow.
+node emptyDirFails(): boolean {
+  const ran = runWrite("", "empty-dir", "No directory", "Body.")
   return ran.outcome is failure && ran.saves == 0
 }
 
@@ -151,7 +158,7 @@ node bodyStartingWithFenceCannotInject(): boolean {
   if (scanned is failure) {
     return false
   }
-  const entries = scanned.value["explorer"]
+  const entries = scanned.value["explorer"].entries
   if (entries == undefined || entries.length != 1) {
     return false
   }
@@ -171,7 +178,7 @@ node descriptionWithFlowSyntaxRoundTrips(): boolean {
   if (scanned is failure) {
     return false
   }
-  const entries = scanned.value["explorer"]
+  const entries = scanned.value["explorer"].entries
   if (entries == undefined || entries.length != 1) {
     return false
   }
@@ -200,7 +207,7 @@ node trickyDescriptionsRoundTrip(): boolean {
   if (scanned is failure) {
     return false
   }
-  const entries = scanned.value["explorer"]
+  const entries = scanned.value["explorer"].entries
   if (entries == undefined || entries.length != cases.length) {
     return false
   }

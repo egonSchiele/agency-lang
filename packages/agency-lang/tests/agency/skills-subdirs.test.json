@@ -8,6 +8,7 @@
     { "nodeName": "objectPropertyNamesAreDataKeys", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "traversalSubdirFailsBeforeTheInterrupt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "allBadNamesReportedTogether", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "symlinkedSubdirIsNotScanned", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "symlinkedSubdirIsNotScanned", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "symlinkedFileIsNotListed", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

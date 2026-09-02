@@ -5,15 +5,15 @@
  * rescanning. The fixture holds two explorer skills, one research
  * skill, and an empty directory.
  */
-import { exec } from "std::shell"
+import { exec, exists } from "std::shell"
 import { mkdir, remove } from "std::fs"
-import { scanSkillsSubdirs, skillsToolFromEntries, SkillEntry } from "std::skills"
+import { scanSkillsSubdirs, skillsToolFromEntries, SkillGroup } from "std::skills"
 
 def fixture(): string {
   return "${__dirname}/skills-subdirs-fixture"
 }
 
-def scanFixture(subdirs: string[]): Record<string, SkillEntry[]> {
+def scanFixture(subdirs: string[]): Record<string, SkillGroup> {
   const scanned = scanSkillsSubdirs(fixture(), subdirs) with approve
   if (scanned is failure) {
     return {}
@@ -29,7 +29,10 @@ node scanGroupsBySubdir(): boolean {
   if (explorer == undefined || research == undefined || empty == undefined) {
     return false
   }
-  return explorer.length == 2 && research.length == 1 && empty.length == 0
+  if (explorer.dir != "${fixture()}/explorer") {
+    return false
+  }
+  return explorer.entries.length == 2 && research.entries.length == 1 && empty.entries.length == 0
 }
 
 node scanRaisesOneInterrupt(): boolean {
@@ -47,7 +50,10 @@ node scanRaisesOneInterrupt(): boolean {
 
 node toolFromEntriesListsThem(): boolean {
   const scanned = scanFixture(["explorer"])
-  const tool = skillsToolFromEntries("${fixture()}/explorer", scanned["explorer"], "learned_skills_explorer")
+  const explorer = scanned["explorer"]
+  // The group carries the scanned directory, which is exactly the `dir`
+  // the tool needs — never the root.
+  const tool = skillsToolFromEntries(explorer.dir, explorer.entries, "learned_skills_explorer")
   return tool.description.includes("<name>repo-orientation</name>")
       && tool.description.includes("<description>Orient in an unfamiliar repo</description>")
 }
@@ -59,7 +65,7 @@ node missingRootYieldsEmptyEntries(): boolean {
   if (scanned is failure) {
     return false
   }
-  return scanned.value["explorer"].length == 0
+  return scanned.value["explorer"].entries.length == 0
 }
 
 // The record has no prototype, so names that collide with Object
@@ -67,9 +73,9 @@ node missingRootYieldsEmptyEntries(): boolean {
 // as empty, not as something inherited.
 node objectPropertyNamesAreDataKeys(): boolean {
   const scanned = scanFixture(["__proto__", "constructor", "toString"])
-  return scanned["__proto__"].length == 0
-      && scanned["constructor"].length == 0
-      && scanned["toString"].length == 0
+  return scanned["__proto__"].entries.length == 0
+      && scanned["constructor"].entries.length == 0
+      && scanned["toString"].entries.length == 0
 }
 
 // A subdirectory name that is not a bare path segment would carry the
@@ -121,13 +127,43 @@ node symlinkedSubdirIsNotScanned(): boolean {
   mkdir("${base}/root") with approve
   write("secret.md", "---\nname: secret\n---\nSecret.", "${base}/outside") with approve
   exec("ln", ["-s", "${base}/outside", "${base}/root/linked"]) with approve
+  // Positive control: the link exists and the file is reachable through
+  // it, so an empty scan below can only mean the scan refused the link.
+  if (!exists("secret.md", "${base}/root/linked")) {
+    return false
+  }
   const scanned = scanSkillsSubdirs("${base}/root", ["linked"]) with approve
   if (scanned is failure) {
     return false
   }
-  const entries = scanned.value["linked"]
-  if (entries == undefined) {
+  const group = scanned.value["linked"]
+  if (group == undefined) {
     return false
   }
-  return entries.length == 0
+  return group.entries.length == 0
+}
+
+// A symlinked FILE inside a legitimate subdirectory would also be read
+// from wherever it points; the scan skips symlinked entries instead.
+node symlinkedFileIsNotListed(): boolean {
+  const base = "${__dirname}/test-output/skills-subdirs-symlink-file"
+  remove(base) with approve
+  mkdir("${base}/outside") with approve
+  mkdir("${base}/root/sub") with approve
+  write("secret.md", "---\nname: secret\n---\nSecret.", "${base}/outside") with approve
+  write("real.md", "---\nname: real\n---\nReal.", "${base}/root/sub") with approve
+  exec("ln", ["-s", "${base}/outside/secret.md", "${base}/root/sub/evil.md"]) with approve
+  // Positive control, as in the directory case above.
+  if (!exists("evil.md", "${base}/root/sub")) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs("${base}/root", ["sub"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["sub"].entries
+  if (entries == undefined || entries.length != 1) {
+    return false
+  }
+  return entries[0].name == "real"
 }

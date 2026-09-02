@@ -416,7 +416,13 @@ export async function _glob(
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
-  await walkDir(root, async (full) => {
+  await walkDir(root, async (full, st) => {
+    // A caller asking for containment gets none for a symlinked entry:
+    // the reads that follow a glob resolve the link wherever it points.
+    // Refuse rather than follow (repo policy on symlinks).
+    if (allowedPaths && allowedPaths.length > 0 && st.isSymbolicLink()) {
+      return true;
+    }
     const rel = toPosix(path.relative(root, full));
     if (re.test(rel)) {
       results.push(rel);

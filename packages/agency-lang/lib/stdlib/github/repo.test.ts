@@ -59,6 +59,8 @@ describe("_ghResolveRepo", () => {
     ["o", "re/po"],
     ["o", "r OR repo:other/private"],
     ["-dash-first", "r"],
+    ["dash-last-", "r"],
+    ["double--dash", "r"],
     ["", "r"],
   ])("refuses an explicit pair GitHub could not have issued: %s/%s", async (owner, repo) => {
     await expect(_ghResolveRepo(owner, repo, "")).rejects.toThrow();

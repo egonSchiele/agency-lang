@@ -4,14 +4,21 @@
 /** GitHub rejects per_page above 100. */
 export const GITHUB_MAX_PER_PAGE = 100;
 
+function wholeNumberAtLeastOne(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(Math.floor(value), 1);
+}
+
 /** perPage clamped into [1, GITHUB_MAX_PER_PAGE]. */
 export function _ghClampPerPage(perPage: number): number {
-  return Math.min(Math.max(Math.floor(perPage) || 1, 1), GITHUB_MAX_PER_PAGE);
+  return Math.min(wholeNumberAtLeastOne(perPage), GITHUB_MAX_PER_PAGE);
 }
 
 /** page clamped to a whole number of at least 1. */
 export function _ghClampPage(page: number): number {
-  return Math.max(Math.floor(page) || 1, 1);
+  return wholeNumberAtLeastOne(page);
 }
 
 /** Paging as the query fields GitHub expects. Endpoint declarations spread

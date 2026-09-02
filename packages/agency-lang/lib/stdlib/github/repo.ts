@@ -3,9 +3,9 @@ import { isAbortError } from "../../runtime/errors.js";
 
 export type RepoCoord = { owner: string; repo: string };
 
-// GitHub's own rules: a login is alphanumeric with inner hyphens; a
+// GitHub's own rules: a login is alphanumeric with single inner hyphens; a
 // repository name adds dots and underscores.
-const OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const OWNER_PATTERN = /^[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}$/;
 const REPO_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
 
 /** Throws unless both names are ones GitHub could have issued. The pair

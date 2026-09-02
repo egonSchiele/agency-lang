@@ -8,6 +8,8 @@ describe("paging clamps", () => {
     [-5, -5, "1", "1"],
     [30.7, 2.9, "30", "2"],
     [NaN, NaN, "1", "1"],
+    [Infinity, Infinity, "1", "1"],
+    [-Infinity, -Infinity, "1", "1"],
     [50, 3, "50", "3"],
   ])("perPage=%s page=%s -> per_page=%s page=%s", (perPage, page, wantPerPage, wantPage) => {
     expect(pagingQuery(perPage, page)).toEqual({ per_page: wantPerPage, page: wantPage });

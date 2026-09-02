@@ -38,9 +38,14 @@ is an Agency coding task graded by its own harness, and `news` and
 `hollow-creek` are goal-judged questions. Two conversation tests,
 `identity` and `run-on-openrouter`, come from a real session where the
 agent could not say what it was or how to change its model: each asks
-the agent about itself and is goal-judged, with no workdir. An
-unfiltered run covers all nine; to run only the terminal-bench-shaped
-tests, pass `--test` for each of the four below.
+the agent about itself and is goal-judged, with no workdir. A third
+conversation test, `packaging-decision`, comes from a session where the
+agent spent seven minutes and $2.50 surveying the codebase before
+answering an architecture question: it asks the same question over a
+small seeded repo and grades both the answer (position taken, grounded
+in the repo, readable) and the research spent reaching it (LLM calls,
+wall time, cost). An unfiltered run covers all ten; to run only the
+terminal-bench-shaped tests, pass `--test` for each of the four below.
 
 | test                | pattern from the benchmark                                                                    | must pass                                    |
 | ------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------- |

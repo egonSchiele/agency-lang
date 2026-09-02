@@ -1,0 +1,25 @@
+{
+  "name": "waypoint-lang",
+  "version": "0.9.2",
+  "description": "The Waypoint language: compiler, runtime, stdlib, CLI, and the built-in agent.",
+  "type": "module",
+  "bin": {
+    "waypoint": "dist/cli/main.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./runtime": "./dist/runtime/index.js",
+    "./stdlib/*": "./dist/stdlib/*.js"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}

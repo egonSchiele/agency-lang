@@ -46,17 +46,37 @@ export const VALID_CALLBACK_NAMES = [
 
 export type CallbackName = (typeof VALID_CALLBACK_NAMES)[number];
 
-/** Per-function retry-safety markers. Carried as one object from the AST
- *  through the symbol table and registries so adding a marker is a
- *  one-field change, not a parallel-boolean mirror pass across many files.
- *  Each field is present only when true. */
+/** The keywords that set a marker on a `def`, in the order the formatter
+ *  prints them. The parser accepts them in any order. */
+export const FUNCTION_MARKER_KEYWORDS = ["destructive", "idempotent", "handoff"] as const;
+export type FunctionMarkerKeyword = (typeof FUNCTION_MARKER_KEYWORDS)[number];
+
+/** Per-function markers. Carried as one object from the AST through the
+ *  symbol table and registries so adding a marker is a one-word change to
+ *  FUNCTION_MARKER_KEYWORDS plus a field here. Each field is present only
+ *  when true. */
 export type FunctionMarkers = {
   /** Re-running (or re-calling after a failure that started executing) may
    *  cause harm — the tool loop removes the tool if this ran. */
   destructive?: boolean;
   /** Re-calling with the same arguments has no additional effect. */
   idempotent?: boolean;
+  /** Called as a tool, the function continues the caller's conversation:
+   *  it runs on the caller's message thread and its tool-call bookkeeping
+   *  is replaced by a marker and a resume message. See
+   *  docs/dev/language/handoff-functions.md. */
+  handoff?: boolean;
 };
+
+/** The keywords set on `markers`, in print order. */
+export function markerKeywordsOf(markers: FunctionMarkers | undefined): FunctionMarkerKeyword[] {
+  return FUNCTION_MARKER_KEYWORDS.filter((keyword) => markers?.[keyword] === true);
+}
+
+/** A markers object with exactly `keywords` set. */
+export function markersFromKeywords(keywords: readonly FunctionMarkerKeyword[]): FunctionMarkers {
+  return Object.fromEntries(keywords.map((keyword) => [keyword, true]));
+}
 
 export type FunctionDefinition = BaseNode & {
   type: "function";

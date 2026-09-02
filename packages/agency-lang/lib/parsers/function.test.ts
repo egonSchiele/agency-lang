@@ -2193,6 +2193,32 @@ describe("functionParser with export keyword", () => {
 });
 
 describe("functionParser with destructive/idempotent markers", () => {
+  it("parses handoff def", () => {
+    const parsed = functionParser("handoff def explorer(q: string): string { return q }");
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.result.markers).toEqual({ handoff: true });
+    }
+  });
+
+  it("parses export + handoff in either order", () => {
+    for (const source of [
+      "export handoff def explorer(q: string): string { return q }",
+      "handoff export def explorer(q: string): string { return q }",
+    ]) {
+      const parsed = functionParser(source);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.result.exported).toBe(true);
+        expect(parsed.result.markers).toEqual({ handoff: true });
+      }
+    }
+  });
+
+  it("a def named handoff still parses", () => {
+    expect(functionParser("def handoff(): number { return 1 }").success).toBe(true);
+  });
+
   it("parses destructive def", () => {
     const r = functionParser("destructive def rm(p: string) { return 1 }");
     expect(r.success).toBe(true);

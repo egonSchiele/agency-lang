@@ -221,23 +221,16 @@ type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
 
 /**
  * Run `invoke` in a copy of the current ALS frame whose `threads` slot is
- * a fresh, empty ThreadStore. The tool body inherits the frame's `ctx`
- * and `stack` (the branch's per-tool-call stack, set up by
- * `runBatch.runInBranchAlsFrame`), which branch-aware cancellation and
- * per-branch state depend on. The `threads` slot must NOT be inherited:
- * if the body issues its own `llm()` call, that nested prompt would push
- * messages into the OUTER prompt's MessageThread, whose last message is
- * `assistant(tool_calls=[this tool])`, a shape OpenAI rejects with "An
- * assistant message with 'tool_calls' must be followed by tool
- * messages". So an ordinary tool invocation is a fresh conversation.
- * (A handoff function is the exception; see runInvokeStep.)
+ * a fresh, empty ThreadStore. The body keeps the frame's `ctx` and
+ * `stack`, which branch-aware cancellation and per-branch state depend
+ * on. It must not keep `threads`: an `llm()` call in the body would push
+ * onto the outer prompt's thread, whose last message is the assistant's
+ * tool call, a shape OpenAI rejects ("An assistant message with
+ * 'tool_calls' must be followed by tool messages"). A handoff function is
+ * the exception; see runInvokeStep.
  *
- * The store is bare, NOT `withDefaultActive`: the latter eagerly creates
- * and logs a default thread on every tool call, so a leaf tool that never
- * calls llm() (the common case) would emit a phantom `threadCreated
- * thread #0` in the trace. `getOrCreateActive` creates and logs the
- * default thread only if the body actually issues an llm()/userMessage()
- * call.
+ * The store is bare, not `withDefaultActive`, so a leaf tool that never
+ * calls llm() does not log a phantom default thread.
  */
 async function invokeOnFreshThreadStore<T>(
   ctx: RuntimeContext<GraphState>,
@@ -1127,16 +1120,15 @@ export async function runPrompt(args: {
             positionalArgs: [],
             namedArgs,
           });
-        // A handoff continues the caller's conversation. The branch frame
-        // already pointer-shares the caller's ThreadStore (pr.parallel
-        // passes shareThreads: true), and the .handoffMarker step rewrote
-        // the assistant message that carried this tool call, so nothing
-        // dangles: the body's llm() calls append to the caller's active
-        // thread. Every other tool gets a fresh store; see
-        // invokeOnFreshThreadStore for why.
+        // A handoff continues this prompt's conversation: the body's llm()
+        // calls append to `messages`, the thread that carries the marker.
+        // That is usually the active thread, but an async prompt runs on a
+        // subthread and explicit `messages` are not in the store at all,
+        // so bind the body to `messages` rather than to whatever is active.
+        // Every other tool gets a fresh store.
         const continuesCallerThread = !!handler.markers?.handoff;
         if (continuesCallerThread) {
-          toolResult = await invokeAsTool();
+          toolResult = await getRuntimeContext().threads.withActive(messages, invokeAsTool);
         } else {
           toolResult = await invokeOnFreshThreadStore(ctx, invokeAsTool);
         }
@@ -1313,15 +1305,11 @@ export async function runPrompt(args: {
 
     // Answer the model for one invoked call. An ordinary tool gets a
     // tool message paired with its tool_use. A handoff has no tool_use
-    // to pair with (the .handoffMarker step rewrote it), so it gets the
-    // user-role resume message instead, after the body's system
-    // messages are stripped. This is the ONE place that asks which of
-    // the two a call gets. `content` may be a structured value (an
-    // under-cap result passes through unstringified, and ToolMessage
-    // accepts it at runtime); the resume message needs text, so the
-    // handoff branch stringifies. The fallback start index strips
-    // nothing: a missing record must never reach back into the
-    // caller's own system prompt.
+    // (the .handoffMarker step rewrote it), so it gets the user-role
+    // resume message instead, after the body's system messages are
+    // stripped. `content` may be structured; the resume message needs
+    // text. A missing start index strips nothing rather than reaching
+    // back into the caller's own system prompt.
     const pushToolReply = (args: {
       content: any;
       toolCall: smoltalk.ToolCallJSON;
@@ -1629,21 +1617,13 @@ export async function runPrompt(args: {
               }
 
               // A handoff replaces the assistant message that carried
-              // its tool call with a marker, and remembers where the
-              // body's messages will start so finishHandoff can strip
-              // the body's system messages later. Both are durable: the
-              // thread in a mid-handoff checkpoint already holds the
-              // rewritten message and the body's messages, so a resumed
-              // pass must neither rewrite again nor recompute the start.
-              //
-              // applyHandoffMarker requires the thread to end on that
-              // assistant message. It does here: the handoff is the
-              // round's only call (the handoffNotAlone gate), so no
-              // intrinsic ack or sibling result sits after it, and the
-              // round boundary that delivers attachments, queued
-              // messages, and guard feedback runs after the tools, not
-              // before. Anything new that pushes between the request
-              // step and this step would surface as a throw here.
+              // its tool call with a marker and records where the body's
+              // messages start, so finishHandoff can strip the body's
+              // system messages. Both live in the checkpoint, so a
+              // resumed pass neither rewrites again nor recomputes the
+              // start. The thread ends on that assistant message here
+              // because the handoff is the round's only call and the
+              // round boundary runs after the tools.
               if (handler.markers?.handoff) {
                 self.runnerState.handoffStarts ??= {};
                 await b.step(`${invocationKey}.handoffMarker`, async () => {

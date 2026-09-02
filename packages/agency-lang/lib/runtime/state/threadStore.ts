@@ -273,6 +273,34 @@ export class ThreadStore {
     return id !== undefined ? this.threads[id] : undefined;
   }
 
+  /** Run `body` with `thread` active, then restore the previous active
+   *  thread. A thread this store does not know (one built from explicit
+   *  `messages`) is registered first. Nothing is pushed when `thread` is
+   *  already active, so a resumed call that re-enters here stays
+   *  balanced. */
+  async withActive<T>(thread: MessageThread, body: () => Promise<T>): Promise<T> {
+    if (this.active() === thread) {
+      return body();
+    }
+    const id = this.idOf(thread) ?? this.register(thread);
+    this.pushActive(id);
+    try {
+      return await body();
+    } finally {
+      this.popActive();
+    }
+  }
+
+  private idOf(thread: MessageThread): MessageThreadID | undefined {
+    return Object.keys(this.threads).find((id) => this.threads[id] === thread);
+  }
+
+  private register(thread: MessageThread): MessageThreadID {
+    const id = (this.counter++).toString();
+    this.threads[id] = thread;
+    return id;
+  }
+
   // Get the active thread, or create a new one, push it active, and return it.
   getOrCreateActive(): MessageThread {
     const existing = this.active();

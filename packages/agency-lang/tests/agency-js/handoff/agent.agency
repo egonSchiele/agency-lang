@@ -154,3 +154,25 @@ node objectResult() {
 node nestedPause() {
   return llm("Answer with the outer pausing agent.", { tools: [outerPausingAgent] })
 }
+
+// An async prompt runs on a subthread that is not the active thread. A
+// handoff inside it must land on that subthread, not on the main thread
+// the next llm() call reads.
+node asyncHandoff() {
+  const side = async llm("Answer with the subagent.", { tools: [subagent] })
+  const sideAnswer = await side
+  const mainAnswer = llm("What happened?")
+  return "${sideAnswer} / ${mainAnswer}"
+}
+
+// Explicit messages give the prompt a thread the store has never seen. A
+// handoff inside it must land on that thread.
+node explicitMessages() {
+  const options: any = {
+    tools: [subagent],
+    messages: [{ role: "user", content: "earlier context" }],
+  }
+  const first = llm("Answer with the subagent.", options)
+  const second = llm("What happened?")
+  return "${first} / ${second}"
+}

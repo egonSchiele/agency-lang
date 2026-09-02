@@ -3,8 +3,7 @@
 A `handoff def` is a function that, when a model calls it as a tool,
 continues the caller's conversation instead of starting its own. Its
 `llm()` calls append to the caller's message thread, and the tool-call
-bookkeeping is replaced by two plain messages. The spec is
-`2026-09-02-thread-sharing-invocation-spec.md` at the repo root.
+bookkeeping is replaced by two plain messages.
 
 ## Why
 
@@ -29,9 +28,12 @@ the body's messages can land on the caller's thread as valid history.
    thread length after the rewrite is recorded in
    `runnerState.handoffStarts[invocationKey]`.
 3. `runInvokeStep` calls the body without installing a fresh
-   `ThreadStore`. The body's `llm()` calls reach the caller's active
-   thread through the branch frame, which `pr.parallel` pointer-shares
-   (`shareThreads: true`).
+   `ThreadStore`. It runs the body under `ThreadStore.withActive` with
+   the prompt's own thread, the one carrying the marker. That is the
+   active thread for an ordinary prompt, a subthread for an `async`
+   prompt, and an unregistered thread for a prompt given explicit
+   `messages`; in every case the body's `llm()` calls land on the same
+   thread as the marker and the resume message.
 4. When the body returns, `finishHandoff` removes every system-role
    message from the recorded start index onward and pushes a user-role
    `[name finished. <result>]\nContinue with the user's request.`
@@ -55,12 +57,12 @@ function call. Functions are transparent to threads, so the body's
 `llm()` calls append to the caller's active thread, and nothing is
 stripped or handed back afterwards. The stdlib oracle and explorer used
 to isolate themselves with a `thread(...)` wrapper; that wrapper would
-opt them out of the handoff, so it is gone, and a from-code call now
+opt them out of the handoff, so it is gone, and a from-code call
 leaves the persona, the reads, and the answer on the caller's thread.
-This was decided on 2026-09-02 as a clean break. A caller who wants
-isolation writes `thread { oracleAgent(...) }`. The agents push their
-persona through `ensureSystemMessage` from `std::thread`, which skips
-the push when the active thread already holds it.
+A caller who wants isolation writes `thread { oracleAgent(...) }`. The
+agents push their persona through `ensureSystemMessage` from
+`std::thread`, which skips the push when the active thread already holds
+it.
 
 ## Resume
 
@@ -75,14 +77,7 @@ response, as for any tool. There is no orphaned tool call for
 
 - One handoff per round. A mixed round refuses the handoff and runs the
   siblings.
-- The marker carries the arguments as JSON with no cap. If a brief
-  turns out to be large enough to matter, cap it there.
-- An `llm()` call that passes explicit `messages`, or an `async` prompt
-  (which runs on a subthread that is not the active thread), holds a
-  thread that is not the store's active thread. A handoff inside such a
-  call lands the body's messages on the active thread and the marker
-  and resume on the call's own thread. Neither is invalid, but they are
-  not the same transcript.
+- The marker carries the arguments as JSON with no cap.
 - A served function (`agency serve`, HTTP or MCP) is invoked outside
   the tool loop, so a served handoff function is an ordinary call. Its
   docstring's promise to continue the conversation does not apply
@@ -99,7 +94,9 @@ response, as for any tool. There is no orphaned tool call for
 - `lib/runtime/handoff.ts` — marker, resume, and refusal text;
   `applyHandoffMarker`, `finishHandoff`.
 - `lib/runtime/prompt.ts` — the gate verdict, the `.handoffMarker`
-  step, the store skip in `runInvokeStep`, and `pushToolReply`.
+  step, the `withActive` binding in `runInvokeStep`, and
+  `pushToolReply`.
+- `lib/runtime/state/threadStore.ts` — `withActive`.
 - `tests/agency-js/handoff/` — the end-to-end suite.
 - `stdlib/agents/oracle.agency`, `explorer.agency`, and the coordinator
   wrappers under `lib/agents/agency-agent/brains/coordinator/subagents/`

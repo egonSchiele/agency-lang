@@ -15,6 +15,8 @@ import {
   handoffWithDraft,
   objectResult,
   nestedPause,
+  asyncHandoff,
+  explicitMessages,
   respondToInterrupts,
   approve,
   reject,
@@ -193,8 +195,7 @@ const results = {};
 
 // The same pause, rejected. The rejection is the leaf tool's, inside the
 // body, so it reaches the body's own model as a tool message and the
-// body still hands back normally. This pins the rejection route through
-// the loop that runs inside a handoff.
+// body still hands back normally.
 {
   const { state, callbacks } = makeCapture();
   const paused = await rejectInside({ callbacks });
@@ -267,8 +268,7 @@ const results = {};
 }
 
 // The body pushes a persona and then pauses. Stripping it after the
-// resume needs the start index recorded before the checkpoint, so this
-// is the test that the record survives the round trip.
+// resume needs the start index recorded before the checkpoint.
 {
   const { state, callbacks } = makeCapture();
   const paused = await pauseWithPersona({ callbacks });
@@ -369,6 +369,43 @@ const results = {};
     markers: count(final, "[dispatching"),
     resumes: count(final, "finished."),
     toolTexts: toolTexts(final),
+  };
+}
+
+// A handoff inside an async prompt lands on the prompt's subthread. The
+// main thread's next request must not see any of it.
+{
+  const { state, callbacks } = makeCapture();
+  const result = await asyncHandoff({ callbacks });
+  const final = last(state);
+  results.asyncHandoff = {
+    result: result.data,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    bodySawCaller: count(state.requests[1], "[dispatching subagent"),
+    asyncFinalRoles: roles(state.requests[2]),
+    mainThreadRoles: roles(final),
+    mainThreadSawHandoff: count(final, "[dispatching") + count(final, "async inner"),
+  };
+}
+
+// A handoff inside a prompt with explicit messages lands on that thread,
+// which the store had never seen. The active thread's next request must
+// not see any of it.
+{
+  const { state, callbacks } = makeCapture();
+  const result = await explicitMessages({ callbacks });
+  const final = last(state);
+  results.explicitMessages = {
+    result: result.data,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    bodySawExplicit:
+      count(state.requests[1], "earlier context") === 1 &&
+      count(state.requests[1], "[dispatching subagent") === 1,
+    explicitFinalRoles: roles(state.requests[2]),
+    activeThreadRoles: roles(final),
+    activeThreadSawHandoff: count(final, "[dispatching") + count(final, "explicit inner"),
   };
 }
 

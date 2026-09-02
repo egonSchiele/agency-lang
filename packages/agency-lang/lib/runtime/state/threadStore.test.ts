@@ -110,3 +110,51 @@ describe("ThreadStore.openSession", () => {
     expect(restored.sessions.coding).toBe(store.sessions.coding);
   });
 });
+
+describe("ThreadStore.withActive", () => {
+  it("runs the body with a registered thread active and restores the previous one", async () => {
+    const store = new ThreadStore();
+    const main = store.getOrCreateActive();
+    const side = store.createAndReturnSubthread();
+    expect(store.active()).toBe(main);
+    let seen: MessageThread | undefined;
+    await store.withActive(side, async () => {
+      seen = store.active();
+    });
+    expect(seen).toBe(side);
+    expect(store.active()).toBe(main);
+  });
+
+  it("registers a thread the store has never seen, and pops it afterwards", async () => {
+    const store = new ThreadStore();
+    const main = store.getOrCreateActive();
+    const foreign = new MessageThread();
+    await store.withActive(foreign, async () => {
+      expect(store.active()).toBe(foreign);
+    });
+    expect(store.active()).toBe(main);
+    expect(Object.values(store.threads)).toContain(foreign);
+  });
+
+  it("pushes nothing when the thread is already active", async () => {
+    const store = new ThreadStore();
+    const main = store.getOrCreateActive();
+    const depth = store.activeStack.length;
+    await store.withActive(main, async () => {
+      expect(store.activeStack.length).toBe(depth);
+    });
+    expect(store.active()).toBe(main);
+  });
+
+  it("restores the previous thread when the body throws", async () => {
+    const store = new ThreadStore();
+    const main = store.getOrCreateActive();
+    const side = store.createAndReturnSubthread();
+    await expect(
+      store.withActive(side, async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(store.active()).toBe(main);
+  });
+});

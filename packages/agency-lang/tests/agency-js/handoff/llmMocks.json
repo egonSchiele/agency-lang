@@ -75,5 +75,15 @@
   { "toolCall": { "name": "pauseMe", "args": { "id": "p4" } } },
   { "return": "deep paused" },
   { "return": "middle paused" },
-  { "return": "nestedPause done" }
+  { "return": "nestedPause done" },
+
+  { "toolCall": { "name": "subagent", "args": { "question": "a1" } } },
+  { "return": "async inner" },
+  { "return": "async done" },
+  { "return": "main sees" },
+
+  { "toolCall": { "name": "subagent", "args": { "question": "e1" } } },
+  { "return": "explicit inner" },
+  { "return": "explicit done" },
+  { "return": "second sees" }
 ]

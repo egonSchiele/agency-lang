@@ -1,6 +1,8 @@
 import { writingRewriteAgent } from "std::agents/writing/rewrite"
 import { setMemoryId } from "std::memory"
 
+import { announce } from "./announce.agency"
+
 // The rewrite lives in std::agents/writing/rewrite. This wrapper only
 // separates the prose from the request around it and adds the thread and
 // memory an agent turn needs.
@@ -27,6 +29,7 @@ export def rewriteAgent(userMsg: string): string {
 
   @param userMsg - the text to rewrite, and who it is for if known.
   """
+  announce("rewrite", userMsg)
   let reply = ""
   thread(label: "rewrite", summarize: true, session: "rewrite") {
     setMemoryId("rewrite")

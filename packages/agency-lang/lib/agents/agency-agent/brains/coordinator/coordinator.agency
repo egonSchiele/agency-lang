@@ -4,14 +4,14 @@
   and lib/) owns the CLI, the REPL, the policy handler, and the per-turn
   guard; this module only answers turns.
 */
-import { whatIAmDoing } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { setMemoryId } from "std::memory"
 import { Attachment, systemMessage } from "std::thread"
 
 import { generateImageFile } from "../../lib/images.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
-import { getCapabilities } from "../../shared.agency"
+import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
@@ -31,6 +31,9 @@ let first = true
 static const MAIN_PROMPT_LARGE = read("./prompts/main-large.md", __dirname) with approve
 static const MAIN_PROMPT_SMALL = read("./prompts/main-small.md", __dirname) with approve
 
+// The read-only file tools let the coordinator answer a question that
+// hinges on a few files from its own context, instead of paying for a
+// subagent dispatch. Bigger sweeps still go to the explorer.
 static const mainAgentTools = [
   researchAgent,
   codeAgent,
@@ -40,6 +43,7 @@ static const mainAgentTools = [
   writingAgent,
   rewriteAgent,
   generateImageFile,
+  ...readOnlyFileTools(),
 ]
 
 def coordinatorInit(context: BrainContext) {
@@ -78,18 +82,25 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
       systemMessage("${sysPrompt}${_context}")
       first = false
     }
-    const result = llm(
-      prompt,
-      {
-        memory: true,
-        tools: [
-          ...mainAgentTools,
-          ...getMcpTools(),
-          whatIAmDoing,
-          elapsedTime.partial(since: turnStart),
-        ]
-      },
-    )
+    // The coordinator runs on the slow (capable) slot: it holds the whole
+    // conversation and makes every routing decision, so it gets the
+    // strongest model the user configured. High-volume work still runs on
+    // the subagents' own slots.
+    const options: any = {
+      memory: true,
+      tools: [
+        ...mainAgentTools,
+        ...getMcpTools(),
+        whatIAmDoing,
+        elapsedTime.partial(since: turnStart),
+      ]
+    }
+    const slowModel = getSlowModel()
+    if (slowModel != "") {
+      options.model = slowModel
+      options.provider = getSlowProvider()
+    }
+    const result = llm(prompt, options)
   }
   return result
 }

@@ -2,51 +2,50 @@
  * The explorer, as the agency agent's coordinator sees it.
  *
  * The agent itself lives in std::agents/explorer, so users get the same
- * surveyor in their own agents. This wrapper supplies the two things that
- * are the agency agent's business and not the stdlib's: the slow-model slot
- * the user selected, and a shared session so repeated surveys in one run
- * continue a conversation rather than starting cold.
+ * surveyor in their own agents. This wrapper supplies the things that are
+ * the agency agent's business and not the stdlib's: the slow-model slot
+ * the user selected, a shared session so repeated surveys in one run
+ * continue a conversation rather than starting cold, and the coordinator's
+ * recent conversation as context so the brief doesn't have to restate it.
  *
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
  */
 import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
+import { getThread, listThreads } from "std::thread"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
+import { announce } from "./announce.agency"
+import { recentConversation } from "./context.agency"
 
 export def explorerAgent(userMsg: string): string {
   """
-  Ask the explorer — a read-only researcher on a stronger
-  reasoning model — to produce a broad, synthesizing answer about
-  the codebase or the bundled Agency docs.
+  Ask the explorer — a read-only researcher — to survey many files and
+  return a synthesized answer. Use it only when the answer genuinely
+  requires broad coverage:
 
-  Use this when the user asks a question whose answer requires
-  **reading many files and synthesizing**:
-
-  - "Summarize the Agency docs"
-  - "What are the main features of X?"
-  - "Give me a tour of module Y"
+  - "Summarize the Agency docs" / "give me a tour of module Y"
   - "How does Z work across the codebase?"
-  - "Walk me through the compilation pipeline"
 
-  Do NOT use this for:
-  - Targeted lookups (use `codeAgent` or just `grep`)
-  - Plan critique or bug diagnosis (use `oracleAgent`)
-  - External / web research (use `researchAgent`)
+  Do NOT use this when a handful of targeted reads would answer the
+  question — do those reads yourself with your own file tools. Do not
+  send it to "map the structure": name the specific questions you need
+  answered and the scope to cover ("all of docs/site/guide/", "the
+  lib/parsers/ module").
 
-  Pass a self-contained question — the explorer starts fresh and
-  does not see your conversation. Be explicit about the scope you
-  want covered ("all of docs/site/guide/", "the lib/parsers/
-  module") and the level of detail expected.
+  The explorer sees the recent conversation automatically, so state the
+  questions and scope rather than restating the discussion.
 
-  @param userMsg - the question, with the scope of coverage you
-    want covered
+  @param userMsg - the specific questions to answer and the scope to cover
   """
+  announce("explorer", userMsg)
   const result = stdExplorerAgent(
     question: userMsg,
+    context: recentConversation(),
     model: getSlowModel(),
     provider: getSlowProvider(),
     session: "explorer",
+    extraTools: [listThreads, getThread],
   )
   if (isFailure(result)) {
     return "The explorer could not finish: ${result.error}"

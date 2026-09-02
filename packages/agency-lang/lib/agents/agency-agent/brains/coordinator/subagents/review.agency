@@ -5,6 +5,8 @@ import { setMemoryId } from "std::memory"
 import { gitStatus, gitIsRepo } from "std::git"
 import { filter, map } from "std::array"
 
+import { announce } from "./announce.agency"
+
 // The review itself lives in std::agents/agency/review, so users get the
 // same reviewer. What is left here is the agent-shaped part: pulling code
 // snippets out of a chat message, and reviewing the .agency files the code
@@ -24,6 +26,7 @@ export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
     reviewer that parses and typechecks it. Leave it false for every other
     language, where that reviewer has nothing useful to say.
   """
+  announce("review", userMsg)
   if (!agencyTask) {
     const general = generalReviewAgent(work: userMsg, task: "Review this code.")
     return renderFeedback(general)

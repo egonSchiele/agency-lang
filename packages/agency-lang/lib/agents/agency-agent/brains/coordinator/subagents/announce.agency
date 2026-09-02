@@ -1,0 +1,17 @@
+/*
+ * Dispatch announcements.
+ *
+ * The harness prints one dim line when a subagent starts, so the user
+ * always sees where a turn's time is going. The prompt used to ask the
+ * model to narrate its dispatches; announcing here makes it automatic.
+ */
+
+/** Print one line telling the user which subagent is starting and the
+    gist of its brief. */
+export def announce(agentName: string, userMsg: string) {
+  let gist = userMsg.split("\n")[0]
+  if (gist.length > 100) {
+    gist = gist.slice(0, 100) + "…"
+  }
+  print(color.dim("→ ${agentName}: ${gist}"))
+}

@@ -1,0 +1,53 @@
+/*
+ * Conversation context for subagent dispatches.
+ *
+ * A dispatched subagent used to start blind: the coordinator had to
+ * paraphrase the conversation into the brief, and whatever the paraphrase
+ * dropped was gone. recentConversation() reads the tail of the active
+ * (coordinator) thread so a wrapper can pass it as the stdlib agent's
+ * `context` argument instead.
+ */
+import { getThread, listThreads } from "std::thread"
+
+// Per-message cap keeps one giant tool result from crowding out the rest
+// of the tail.
+static const MESSAGE_CHAR_LIMIT = 1500
+
+/** The last `maxMessages` messages of the active thread, formatted for a
+    subagent prompt. Returns "" when the thread cannot be read — a dispatch
+    must never fail because context sharing did. */
+export def recentConversation(maxMessages: number = 20): string {
+  const all = listThreads(lazySummarize: false)
+  if (isFailure(all)) {
+    return ""
+  }
+  let active: any = null
+  for (t in all.value) {
+    if (t.isActive) {
+      active = t
+    }
+  }
+  if (active == null) {
+    return ""
+  }
+  let offset = active.messageCount - maxMessages
+  if (offset < 0) {
+    offset = 0
+  }
+  const msgs = getThread(active.id, offset, maxMessages)
+  if (isFailure(msgs)) {
+    return ""
+  }
+  let lines: string[] = []
+  for (m in msgs.value) {
+    let content = "${m.content}"
+    if (content.length > MESSAGE_CHAR_LIMIT) {
+      content = content.slice(0, MESSAGE_CHAR_LIMIT) + " …[truncated]"
+    }
+    lines.push("[${m.role}] ${content}")
+  }
+  if (lines.length == 0) {
+    return ""
+  }
+  return "Recent conversation between the user and the coordinator, oldest first. Use it to resolve references in the question; the question itself is authoritative.\n\n" + lines.join("\n\n")
+}

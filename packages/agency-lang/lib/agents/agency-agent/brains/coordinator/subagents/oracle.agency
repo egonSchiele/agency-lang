@@ -2,46 +2,56 @@
  * The oracle, as the agency agent's coordinator sees it.
  *
  * The agent itself lives in std::agents/oracle, so users get the same
- * reviewer in their own agents. This wrapper supplies the two things that
- * are the agency agent's business and not the stdlib's: the slow-model slot
- * the user selected, and a shared session so repeated consults in one run
- * continue a conversation rather than starting cold.
+ * reviewer in their own agents. This wrapper supplies the things that are
+ * the agency agent's business and not the stdlib's: the slow-model slot
+ * the user selected, a shared session so repeated consults in one run
+ * continue a conversation rather than starting cold, the coordinator's
+ * recent conversation as context, and thread tools so the oracle can read
+ * other threads (such as an earlier explorer survey) instead of re-deriving
+ * their work.
  *
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
  */
 import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
+import { getThread, listThreads } from "std::thread"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
+import { announce } from "./announce.agency"
+import { recentConversation } from "./context.agency"
 
 export def oracleAgent(userMsg: string): string {
   """
-  Ask the oracle — a read-only senior reviewer on a stronger
-  reasoning model — for a second opinion on a hard problem. Call
-  this BEFORE acting when:
+  Ask the oracle — a read-only senior reviewer — for a second opinion
+  before acting on something that would be expensive to get wrong. Call
+  this when:
 
-  - You're about to execute a non-trivial plan and want it sanity-
-    checked ("is this a good plan? is there a simpler way?")
-  - You suspect existing code already solves the problem and want
-    a thorough search ("is there a helper for X in this repo?")
+  - You're about to execute a non-trivial plan or diff and a flaw would
+    be costly to undo
   - You're stuck on a bug after one or two failed attempts
-  - You want a critical review of a diff or design before showing
-    it to the user
+  - You suspect existing code already solves the problem and a targeted
+    look hasn't settled it
 
-  Pass a self-contained question with full context — the oracle
-  starts fresh and does not see your conversation. Include the
-  plan, the relevant file paths, what you've already tried, and
-  the specific question you want answered. The oracle returns a
-  written analysis.
+  Do NOT consult the oracle for conversational questions, opinions, or
+  advice the user asked *you* for — answer those yourself from what you
+  know and what you can read directly. A second opinion is worth its cost
+  when you're about to act, not when you're about to reply.
 
-  @param userMsg - the question, with all the context the oracle
-    needs to answer it
+  The oracle sees the recent conversation automatically and can read other
+  threads (an earlier explorer survey, for example), so don't restate the
+  discussion. State the specific question, the relevant file paths, and
+  what you've already tried.
+
+  @param userMsg - the specific question you want answered
   """
+  announce("oracle", userMsg)
   const result = stdOracleAgent(
     question: userMsg,
+    context: recentConversation(),
     model: getSlowModel(),
     provider: getSlowProvider(),
     session: "oracle",
+    extraTools: [listThreads, getThread],
   )
   if (isFailure(result)) {
     return "The oracle could not finish: ${result.error}"

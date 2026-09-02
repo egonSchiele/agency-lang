@@ -149,6 +149,8 @@ export type CommentInfo = z.infer<typeof CommentInfoSchema>;
 // --- Endpoint declarations ---------------------------------------------------
 // The complete list of PR endpoints this module can hit.
 
+export type ReviewComment = { path: string; line: number; body: string; side?: string };
+
 type RepoParams = { owner: string; repo: string };
 type PrParams = RepoParams & { number: number };
 type PagedPrParams = PrParams & { perPage: number; page: number };
@@ -272,6 +274,14 @@ export async function _ghPrReviewComments(
   return _githubRequest(prReviewComments, { owner, repo, number, perPage, page });
 }
 
+async function headShaOf(number: number, owner: string, repo: string): Promise<string> {
+  const pr = await _githubRequest(prGet, { owner, repo, number });
+  if (pr.headSha === "") {
+    throw new Error(`Could not resolve the head commit of PR #${number}`);
+  }
+  return pr.headSha;
+}
+
 // Two requests behind the one prChecks interrupt, because check runs are
 // keyed by commit SHA. The spec allows this: the extra read is not
 // model-controlled.
@@ -282,9 +292,122 @@ export async function _ghPrChecks(
   owner: string,
   repo: string,
 ): Promise<CheckRun[]> {
-  const pr = await _githubRequest(prGet, { owner, repo, number });
-  if (pr.headSha === "") {
-    throw new Error(`Could not resolve the head commit of PR #${number}`);
+  const sha = await headShaOf(number, owner, repo);
+  return _githubRequest(prCheckRuns, { owner, repo, sha, perPage, page });
+}
+
+// --- Write endpoints ---------------------------------------------------------
+
+// A top-level PR comment posts to the ISSUES endpoint, because GitHub models
+// a pull request as an issue. It is still its own effect (spec 5.4).
+const prComment: GithubEndpoint<PrParams & { body: string }, CommentInfo> = {
+  name: "POST /repos/{owner}/{repo}/issues/{number}/comments (PR comment)",
+  method: "POST",
+  path: (params) => `${repoPath(params.owner, params.repo)}/issues/${params.number}/comments`,
+  body: (params) => ({ body: params.body }),
+  response: CommentInfoSchema,
+};
+
+const prReviewCommentCreate: GithubEndpoint<
+  PrParams & { filePath: string; line: number; body: string; side: string; commitSha: string },
+  ReviewCommentInfo
+> = {
+  name: "POST /repos/{owner}/{repo}/pulls/{number}/comments",
+  method: "POST",
+  path: (params) => `${repoPath(params.owner, params.repo)}/pulls/${params.number}/comments`,
+  body: (params) => ({
+    path: params.filePath,
+    line: params.line,
+    side: params.side,
+    commit_id: params.commitSha,
+    body: params.body,
+  }),
+  response: ReviewCommentInfoSchema,
+};
+
+const prReviewCreate: GithubEndpoint<
+  PrParams & { event: string; body: string; comments: ReviewComment[] },
+  ReviewSummary
+> = {
+  name: "POST /repos/{owner}/{repo}/pulls/{number}/reviews",
+  method: "POST",
+  path: (params) => `${repoPath(params.owner, params.repo)}/pulls/${params.number}/reviews`,
+  body: (params) => ({
+    event: params.event,
+    body: params.body,
+    comments: params.comments.map((comment) => ({
+      path: comment.path,
+      line: comment.line,
+      side: comment.side ?? "RIGHT",
+      body: comment.body,
+    })),
+  }),
+  response: ReviewSummarySchema,
+};
+
+// --- Write bindings ----------------------------------------------------------
+
+export async function _ghPrComment(
+  number: number,
+  body: string,
+  owner: string,
+  repo: string,
+): Promise<CommentInfo> {
+  return _githubRequest(prComment, { owner, repo, number, body });
+}
+
+// An empty commitSha means one head-SHA lookup first: the module's second
+// sanctioned two-requests-one-interrupt case (spec 5.2).
+export async function _ghPrReviewComment(
+  number: number,
+  filePath: string,
+  line: number,
+  body: string,
+  side: string,
+  commitSha: string,
+  owner: string,
+  repo: string,
+): Promise<ReviewCommentInfo> {
+  const sha = commitSha === "" ? await headShaOf(number, owner, repo) : commitSha;
+  return _githubRequest(prReviewCommentCreate, {
+    owner,
+    repo,
+    number,
+    filePath,
+    line,
+    body,
+    side,
+    commitSha: sha,
+  });
+}
+
+export async function _ghPrReview(
+  number: number,
+  event: string,
+  body: string,
+  comments: ReviewComment[],
+  owner: string,
+  repo: string,
+): Promise<ReviewSummary> {
+  // The ReviewEvent type already excludes APPROVE; this is the backstop.
+  if (event === "APPROVE") {
+    throw new Error("To approve a pull request, use ghPrApprove. Approving is its own permission.");
   }
-  return _githubRequest(prCheckRuns, { owner, repo, sha: pr.headSha, perPage, page });
+  return _githubRequest(prReviewCreate, { owner, repo, number, event, body, comments });
+}
+
+export async function _ghPrApprove(
+  number: number,
+  body: string,
+  owner: string,
+  repo: string,
+): Promise<ReviewSummary> {
+  return _githubRequest(prReviewCreate, {
+    owner,
+    repo,
+    number,
+    event: "APPROVE",
+    body,
+    comments: [],
+  });
 }

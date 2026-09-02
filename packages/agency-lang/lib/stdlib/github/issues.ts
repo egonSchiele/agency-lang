@@ -178,3 +178,89 @@ export async function _ghIssueSearch(
 ): Promise<IssueSummary[]> {
   return _githubRequest(issueSearch, { scopedQuery, perPage, page });
 }
+
+// --- Write endpoints ---------------------------------------------------------
+
+const issueCreate: GithubEndpoint<
+  RepoParams & { title: string; body: string; labels: string[]; assignees: string[] },
+  IssueSummary
+> = {
+  name: "POST /repos/{owner}/{repo}/issues",
+  method: "POST",
+  path: (params) => `${repoPath(params.owner, params.repo)}/issues`,
+  body: (params) => {
+    const payload: Record<string, unknown> = { title: params.title, body: params.body };
+    if (params.labels.length > 0) {
+      payload.labels = params.labels;
+    }
+    if (params.assignees.length > 0) {
+      payload.assignees = params.assignees;
+    }
+    return payload;
+  },
+  response: IssueSummarySchema,
+};
+
+const issueCommentCreate: GithubEndpoint<IssueParams & { body: string }, CommentInfo> = {
+  name: "POST /repos/{owner}/{repo}/issues/{number}/comments",
+  method: "POST",
+  path: (params) => `${repoPath(params.owner, params.repo)}/issues/${params.number}/comments`,
+  body: (params) => ({ body: params.body }),
+  response: CommentInfoSchema,
+};
+
+const issueClose: GithubEndpoint<IssueParams & { reason: string }, IssueSummary> = {
+  name: "PATCH /repos/{owner}/{repo}/issues/{number}",
+  method: "PATCH",
+  path: (params) => `${repoPath(params.owner, params.repo)}/issues/${params.number}`,
+  body: (params) => ({ state: "closed", state_reason: params.reason }),
+  response: IssueSummarySchema,
+};
+
+const issueLabelAdd: GithubEndpoint<IssueParams & { labels: string[] }, string[]> = {
+  name: "POST /repos/{owner}/{repo}/issues/{number}/labels",
+  method: "POST",
+  path: (params) => `${repoPath(params.owner, params.repo)}/issues/${params.number}/labels`,
+  body: (params) => ({ labels: params.labels }),
+  response: z.array(RawLabel).transform((labels) => labels.map(labelName)),
+};
+
+// --- Write bindings ----------------------------------------------------------
+
+export async function _ghIssueCreate(
+  title: string,
+  body: string,
+  labels: string[],
+  assignees: string[],
+  owner: string,
+  repo: string,
+): Promise<IssueSummary> {
+  return _githubRequest(issueCreate, { owner, repo, title, body, labels, assignees });
+}
+
+export async function _ghIssueComment(
+  number: number,
+  body: string,
+  owner: string,
+  repo: string,
+): Promise<CommentInfo> {
+  return _githubRequest(issueCommentCreate, { owner, repo, number, body });
+}
+
+export async function _ghIssueClose(
+  number: number,
+  reason: string,
+  owner: string,
+  repo: string,
+): Promise<IssueSummary> {
+  return _githubRequest(issueClose, { owner, repo, number, reason });
+}
+
+export async function _ghIssueLabel(
+  number: number,
+  labels: string[],
+  owner: string,
+  repo: string,
+): Promise<string[]> {
+  return _githubRequest(issueLabelAdd, { owner, repo, number, labels });
+}

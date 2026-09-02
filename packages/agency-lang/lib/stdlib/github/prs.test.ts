@@ -9,6 +9,10 @@ import {
   _ghPrDiff,
   _ghPrReviews,
   _ghPrReviewComments,
+  _ghPrComment,
+  _ghPrReviewComment,
+  _ghPrReview,
+  _ghPrApprove,
 } from "./prs.js";
 
 afterEach(() => {
@@ -189,5 +193,111 @@ describe("PR endpoints", () => {
     await withCtx(() => _ghPrReviewComments(7, 25, 3, "o", "r"));
     expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/reviews?per_page=50&page=2");
     expect(String(spy.mock.calls[1][0])).toContain("/pulls/7/comments?per_page=25&page=3");
+  });
+});
+
+const rawComment = {
+  id: 1,
+  user: { login: "agency-bot" },
+  body: "hi",
+  created_at: "2026-09-01T00:00:00Z",
+  html_url: "https://github.com/o/r/pull/7#issuecomment-1",
+};
+
+const rawReviewComment = {
+  id: 2,
+  path: "a.ts",
+  line: 3,
+  user: { login: "agency-bot" },
+  body: "x",
+  html_url: "https://github.com/o/r/pull/7#discussion_r2",
+};
+
+const rawReview = {
+  id: 3,
+  user: { login: "agency-bot" },
+  state: "COMMENTED",
+  body: "overall",
+  submitted_at: "2026-09-01T00:00:00Z",
+};
+
+function sentBody(spy: ReturnType<typeof vi.spyOn>, call: number): unknown {
+  const init = spy.mock.calls[call][1] as RequestInit;
+  return JSON.parse(String(init.body));
+}
+
+describe("PR write endpoints", () => {
+  it("posts a top-level comment to the issues endpoint and maps the result", async () => {
+    stubToken();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(rawComment, 201));
+    const comment = await withCtx(() => _ghPrComment(7, "hi", "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/repos/o/r/issues/7/comments");
+    expect((spy.mock.calls[0][1] as RequestInit).method).toBe("POST");
+    expect(sentBody(spy, 0)).toEqual({ body: "hi" });
+    expect(comment.author).toBe("agency-bot");
+  });
+
+  it("resolves the head SHA first when no commitSha is given: two calls, in order", async () => {
+    stubToken();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(rawPr))
+      .mockResolvedValueOnce(jsonResponse(rawReviewComment, 201));
+    await withCtx(() => _ghPrReviewComment(7, "a.ts", 3, "x", "RIGHT", "", "o", "r"));
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(String(spy.mock.calls[0][0])).toContain("/pulls/7");
+    expect(String(spy.mock.calls[1][0])).toContain("/pulls/7/comments");
+    expect(sentBody(spy, 1)).toEqual({
+      path: "a.ts",
+      line: 3,
+      side: "RIGHT",
+      commit_id: "abc123",
+      body: "x",
+    });
+  });
+
+  it("makes exactly one call when commitSha is explicit", async () => {
+    stubToken();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse(rawReviewComment, 201));
+    await withCtx(() => _ghPrReviewComment(7, "a.ts", 3, "x", "LEFT", "def456", "o", "r"));
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(sentBody(spy, 0)).toMatchObject({ commit_id: "def456", side: "LEFT" });
+  });
+
+  it("submits a review with its inline comments, defaulting side to RIGHT", async () => {
+    stubToken();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(rawReview));
+    const review = await withCtx(() =>
+      _ghPrReview(7, "COMMENT", "overall", [{ path: "a.ts", line: 3, body: "x" }], "o", "r"),
+    );
+    expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/reviews");
+    expect(sentBody(spy, 0)).toEqual({
+      event: "COMMENT",
+      body: "overall",
+      comments: [{ path: "a.ts", line: 3, side: "RIGHT", body: "x" }],
+    });
+    expect(review.state).toBe("COMMENTED");
+  });
+
+  it("refuses event APPROVE without fetching", async () => {
+    stubToken();
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(withCtx(() => _ghPrReview(7, "APPROVE", "", [], "o", "r"))).rejects.toThrow(
+      /ghPrApprove/,
+    );
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("approves with event APPROVE", async () => {
+    stubToken();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ ...rawReview, state: "APPROVED" }));
+    const review = await withCtx(() => _ghPrApprove(7, "lgtm", "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/reviews");
+    expect(sentBody(spy, 0)).toMatchObject({ event: "APPROVE", body: "lgtm" });
+    expect(review.state).toBe("APPROVED");
   });
 });

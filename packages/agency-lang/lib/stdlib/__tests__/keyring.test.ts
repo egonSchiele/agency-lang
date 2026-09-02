@@ -151,6 +151,40 @@ describe("keyring (macOS)", () => {
     });
   });
 
+  describe("_getSecret with a timeout", () => {
+    // promisify(execFile) calls execFile(cmd, args, options, cb) when options
+    // are given, so these mocks take the callback from the last argument.
+    function answerLast(stdout: string): void {
+      mockExecFile.mockImplementation((...args: unknown[]) => {
+        const cb = args.at(-1) as (
+          err: Error | null,
+          result: { stdout: string; stderr: string },
+        ) => void;
+        cb(null, { stdout, stderr: "" });
+      });
+    }
+
+    it("passes the timeout to the subprocess", async () => {
+      answerLast("tok\n");
+      expect(await _getSecret("k", "svc", 1234)).toBe("tok");
+      expect(mockExecFile.mock.calls[0][2]).toEqual({ timeout: 1234 });
+    });
+
+    it("passes no options object when no timeout is given", async () => {
+      answerLast("tok");
+      await _getSecret("k");
+      expect(mockExecFile.mock.calls[0]).toHaveLength(3);
+    });
+
+    it("reads a lookup killed at the deadline as a miss", async () => {
+      mockExecFile.mockImplementation((...args: unknown[]) => {
+        const cb = args.at(-1) as (err: Error) => void;
+        cb(Object.assign(new Error("timed out"), { killed: true, signal: "SIGTERM" }));
+      });
+      expect(await _getSecret("k", "svc", 10)).toBeNull();
+    });
+  });
+
   describe("_deleteSecret", () => {
     it("returns true when deleted", async () => {
       const result = await _deleteSecret("my-key");

@@ -2215,6 +2215,19 @@ describe("functionParser with destructive/idempotent markers", () => {
     }
   });
 
+  it("parses handoff beside another marker in either order", () => {
+    for (const source of [
+      "handoff destructive def rm(p: string): string { return p }",
+      "destructive handoff def rm(p: string): string { return p }",
+    ]) {
+      const parsed = functionParser(source);
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.result.markers).toEqual({ destructive: true, handoff: true });
+      }
+    }
+  });
+
   it("a def named handoff still parses", () => {
     expect(functionParser("def handoff(): number { return 1 }").success).toBe(true);
   });

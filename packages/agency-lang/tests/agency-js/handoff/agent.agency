@@ -1,7 +1,7 @@
 // Handoff functions through the real tool loop, against a scripted
 // model. Each node dispatches one handoff and the test reads the
 // caller's thread back from the final request the model sees.
-import { systemMessage } from "std::thread"
+import { systemMessage, ensureSystemMessage } from "std::thread"
 
 // A leaf tool for the subagents to call.
 def lookup(key: string): string {
@@ -14,6 +14,13 @@ handoff def subagent(question: string): string {
 
 handoff def personaAgent(question: string): string {
   systemMessage("persona: be terse")
+  return llm("brief: ${question}")
+}
+
+// The stdlib agents' persona pattern: pushed only when the thread does
+// not already hold it.
+handoff def terseAgent(question: string): string {
+  ensureSystemMessage("persona: be terse")
   return llm("brief: ${question}")
 }
 
@@ -43,8 +50,21 @@ handoff def pausingAgent(question: string): string {
   return llm("brief: ${question}", { tools: [pauseMe] })
 }
 
+// Pushes a persona, then pauses. The persona must still be stripped
+// after the resume, which needs the recorded start index to survive
+// the checkpoint.
+handoff def pausingPersonaAgent(question: string): string {
+  systemMessage("persona: be patient")
+  return llm("brief: ${question}", { tools: [pauseMe] })
+}
+
 handoff def failingAgent(question: string): Result<string> {
   return failure("boom")
+}
+
+// Returns a structured value, so the resume message has to stringify it.
+handoff def objectAgent(question: string): any {
+  return { answer: "obj", n: 1 }
 }
 
 // Raises before doing anything, so rejecting it rejects the handoff
@@ -57,6 +77,11 @@ handoff def gatedAgent(question: string): string {
 // A handoff that offers a handoff.
 handoff def outerAgent(question: string): string {
   return llm("outer brief: ${question}", { tools: [subagent] })
+}
+
+// A handoff that offers a handoff that pauses.
+handoff def outerPausingAgent(question: string): string {
+  return llm("outer brief: ${question}", { tools: [pausingAgent] })
 }
 
 node basic() {
@@ -98,4 +123,34 @@ node rejectHandoff() {
 
 node nested() {
   return llm("Answer with the outer agent.", { tools: [outerAgent] })
+}
+
+node pauseWithPersona() {
+  return llm("Answer with the pausing persona agent.", { tools: [pausingPersonaAgent] })
+}
+
+node twoDispatches() {
+  return llm("Ask the terse agent twice.", { tools: [terseAgent] })
+}
+
+node twoHandoffs() {
+  return llm("Use both agents at once.", { tools: [subagent, personaAgent] })
+}
+
+// saveDraft is an intrinsic call; it counts toward the round like any
+// other call. It needs a def with a declared return type.
+def withDraft(): string {
+  return llm("Use the subagent and save a draft.", { tools: [subagent, saveDraft] })
+}
+
+node handoffWithDraft() {
+  return withDraft()
+}
+
+node objectResult() {
+  return llm("Answer with the object agent.", { tools: [objectAgent] })
+}
+
+node nestedPause() {
+  return llm("Answer with the outer pausing agent.", { tools: [outerPausingAgent] })
 }

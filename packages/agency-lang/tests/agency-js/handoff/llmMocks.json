@@ -42,5 +42,38 @@
   { "toolCall": { "name": "subagent", "args": { "question": "q10" } } },
   { "return": "deep answer" },
   { "return": "middle answer" },
-  { "return": "nested done" }
+  { "return": "nested done" },
+
+  { "toolCall": { "name": "pausingPersonaAgent", "args": { "question": "q12" } } },
+  { "toolCall": { "name": "pauseMe", "args": { "id": "p3" } } },
+  { "return": "persona paused answer" },
+  { "return": "pausePersona done" },
+
+  { "toolCall": { "name": "terseAgent", "args": { "question": "d1" } } },
+  { "return": "one" },
+  { "toolCall": { "name": "terseAgent", "args": { "question": "d2" } } },
+  { "return": "two" },
+  { "return": "twice done" },
+
+  { "toolCalls": [
+      { "name": "subagent", "args": { "question": "t1" } },
+      { "name": "personaAgent", "args": { "question": "t2" } }
+  ] },
+  { "return": "twoHandoffs done" },
+
+  { "toolCalls": [
+      { "name": "subagent", "args": { "question": "s1" } },
+      { "name": "saveDraft", "args": { "value": "draft" } }
+  ] },
+  { "return": "draft done" },
+
+  { "toolCall": { "name": "objectAgent", "args": { "question": "o1" } } },
+  { "return": "object done" },
+
+  { "toolCall": { "name": "outerPausingAgent", "args": { "question": "n1" } } },
+  { "toolCall": { "name": "pausingAgent", "args": { "question": "n2" } } },
+  { "toolCall": { "name": "pauseMe", "args": { "id": "p4" } } },
+  { "return": "deep paused" },
+  { "return": "middle paused" },
+  { "return": "nestedPause done" }
 ]

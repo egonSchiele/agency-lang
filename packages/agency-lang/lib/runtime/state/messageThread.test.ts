@@ -330,6 +330,8 @@ describe("MessageThread.replaceAt", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("q"));
     expect(() => thread.replaceAt(1, smoltalk.userMessage("x"))).toThrow();
+    expect(() => thread.replaceAt(-1, smoltalk.userMessage("x"))).toThrow();
+    expect(thread.getMessages().map((message) => message.content)).toEqual(["q"]);
   });
 });
 

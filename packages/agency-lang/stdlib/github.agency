@@ -1,9 +1,12 @@
 import { getAgentCwd } from "std::index"
+import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
+import { _ghClampPerPage, _ghClampPage, _ghCheckNumber } from "agency-lang/stdlib-lib/github/args.js"
 import {
-  _ghResolveRepo, _ghClampPerPage, _ghClampPage, _ghCheckNumber,
   _ghPrGet, _ghPrList, _ghPrDiff, _ghPrFiles, _ghPrReviews, _ghPrReviewComments, _ghPrChecks,
+ } from "agency-lang/stdlib-lib/github/prs.js"
+import {
   _ghIssueGet, _ghIssueList, _ghIssueComments, _ghIssueSearch, _ghScopedSearchQuery,
- } from "agency-lang/stdlib-lib/github/index.js"
+ } from "agency-lang/stdlib-lib/github/issues.js"
 
 /** @module
   @summary Typed GitHub tools for agents: read pull requests and issues, each operation behind its own interrupt effect.

@@ -1,6 +1,6 @@
 // The only surface stdlib/github.agency imports. credential.ts and request.ts
-// are deliberately absent: no .agency file can reach the token or send a raw
-// request, so "the token never becomes an Agency value" holds structurally.
+// are left out, so no .agency file can reach the token or send a raw request.
+// That keeps the token out of Agency values by construction.
 export { _ghResolveRepo } from "./repo.js";
 export * from "./prs.js";
 export * from "./issues.js";

@@ -411,6 +411,7 @@ export default defineConfig({
             },
             { text: "date", link: "/stdlib/date" },
             { text: "fs", link: "/stdlib/fs" },
+            { text: "github", link: "/stdlib/github" },
             { text: "http", link: "/stdlib/http" },
             { text: "image", link: "/stdlib/image" },
             { text: "index", link: "/stdlib/index" },

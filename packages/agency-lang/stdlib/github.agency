@@ -38,7 +38,6 @@ import {
 export type PrState = "open" | "closed" | "all"
 export type IssueState = "open" | "closed" | "all"
 
-export type RepoCoord = { owner: string; repo: string }
 export type PrSummary = {
   number: number;
   title: string;
@@ -71,7 +70,7 @@ export type IssueSummary = {
 export type CommentInfo = { id: number; author: string; body: string; createdAt: string; url: string }
 
 // Read effects. @always(owner, repo): an "approve always" answer pins to one
-// repository, never the whole account.
+// repository. Without the tag it would cover every repository the token can reach.
 @always(owner, repo)
 effect std::github::prGet { owner: string, repo: string, number: number }
 @always(owner, repo)
@@ -97,7 +96,7 @@ effect std::github::issueSearch { owner: string, repo: string, query: string, pe
 
 // ---- Reads -----------------------------------------------------------------
 // Every function resolves owner/repo BEFORE raising, so the payload names the
-// real repository and an "always" answer never pins ("", "").
+// real repository. Raising with the raw defaults would pin an "always" answer to ("", "").
 
 export idempotent def ghPrGet(number: number, owner: string = "", repo: string = ""): PrSummary raises <std::github::prGet> {
   """

@@ -26,7 +26,8 @@ describe("applyHandoffMarker", () => {
     expect(last.content).toBe(
       `I'll ask the explorer.\n\n${handoffMarkerText("explorer", { question: "why" })}`,
     );
-    expect(last.toJSON().toolCalls ?? []).toEqual([]);
+    const json = last.toJSON() as { toolCalls?: unknown[] };
+    expect(json.toolCalls ?? []).toEqual([]);
     expect(thread.labelAt(1)).toBe("main");
   });
 

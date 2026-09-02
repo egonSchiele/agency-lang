@@ -4,14 +4,13 @@ These stdlib functions produce side effects on the user's system, so CI cannot t
 
 ## GitHub (`std::github`)
 
-Every `std::github` function is tested against canned responses. Nothing runs
-against a real repository, because that needs a fixture account and a live
-token. The cases we want once we have one:
+Everything runs against canned responses; a real repository needs a fixture
+account and a live token.
 
-- a real 401 from an expired token, and that the cached token is dropped
-- a real rate-limit 403 with the reset headers GitHub sends
-- a real 422 from an inline review comment on a line outside the diff
-- a real 406 from `ghPrDiff` on a pull request over the diff size limit
+- a 401 from an expired token drops the cached token
+- a rate-limit 403 carries the reset headers GitHub sends
+- a 422 from an inline review comment on a line outside the diff
+- a 406 from `ghPrDiff` on a pull request over the diff size limit
 - `gh auth token` resolution on a machine logged in through the keyring
 
 ## Clipboard (`std::clipboard`)

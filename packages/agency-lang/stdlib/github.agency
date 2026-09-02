@@ -1,14 +1,36 @@
 import { getAgentCwd } from "std::index"
-import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
-import { _ghClampPerPage, _ghClampPage, _ghCheckNumber } from "agency-lang/stdlib-lib/github/args.js"
+
 import {
-  _ghPrGet, _ghPrList, _ghPrDiff, _ghPrFiles, _ghPrReviews, _ghPrReviewComments, _ghPrChecks,
-  _ghPrComment, _ghPrReviewComment, _ghPrReview, _ghPrApprove,
- } from "agency-lang/stdlib-lib/github/prs.js"
+  _ghClampPerPage,
+  _ghClampPage,
+  _ghCheckNumber,
+ } from "agency-lang/stdlib-lib/github/args.js"
 import {
-  _ghIssueGet, _ghIssueList, _ghIssueComments, _ghIssueSearch, _ghScopedSearchQuery,
-  _ghIssueCreate, _ghIssueComment, _ghIssueClose, _ghIssueLabel,
+  _ghIssueGet,
+  _ghIssueList,
+  _ghIssueComments,
+  _ghIssueSearch,
+  _ghScopedSearchQuery,
+  _ghIssueCreate,
+  _ghIssueComment,
+  _ghIssueClose,
+  _ghIssueLabel,
  } from "agency-lang/stdlib-lib/github/issues.js"
+import {
+  _ghPrGet,
+  _ghPrList,
+  _ghPrDiff,
+  _ghPrFiles,
+  _ghPrReviews,
+  _ghPrReviewComments,
+  _ghPrChecks,
+  _ghPrHeadSha,
+  _ghPrReviewComment,
+  _ghPrReview,
+  _ghPrApprove,
+  _ghCheckReview,
+ } from "agency-lang/stdlib-lib/github/prs.js"
+import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
 
 /** @module
   @summary Typed GitHub tools for agents: read and write pull requests and issues, each operation behind its own interrupt effect.
@@ -17,7 +39,9 @@ import {
   means to. Approving a pull request is its own effect, separate from
   reviewing it, so it can be forbidden by name. Every write puts the text it
   is about to post in the interrupt payload, since it goes out under the
-  approver's name. There is no function to create, update, or merge a pull
+  approver's name. GitHub treats a pull request as an issue, so the issue
+  tools (ghIssueComment, ghIssueClose, ghIssueLabel) take pull request
+  numbers too. There is no function to create, update, or merge a pull
   request.
   Every tool operates on one repository. With `owner` and `repo` left empty it
   uses the origin remote of the agent working directory, which `agency agent`
@@ -51,12 +75,21 @@ import {
 // issues.ts; keep the two in sync.
 
 export type PrState = "open" | "closed" | "all"
+
 export type IssueState = "open" | "closed" | "all"
 // APPROVE is left out on purpose: ghPrApprove is its own effect.
 export type ReviewEvent = "COMMENT" | "REQUEST_CHANGES"
+
 export type DiffSide = "LEFT" | "RIGHT"
+
 export type CloseReason = "completed" | "not_planned"
-export type ReviewComment = { path: string; line: number; body: string; side?: DiffSide }
+
+export type ReviewComment = {
+  path: string;
+  line: number;
+  body: string;
+  side?: DiffSide
+}
 
 export type PrListItem = {
   number: number;
@@ -70,6 +103,7 @@ export type PrListItem = {
   body: string;
   url: string
 }
+
 export type PrSummary = {
   number: number;
   title: string;
@@ -85,10 +119,39 @@ export type PrSummary = {
   deletions: number;
   changedFiles: number
 }
-export type PrFile = { path: string; status: string; additions: number; deletions: number; patch: string }
-export type ReviewSummary = { id: number; author: string; state: string; body: string; submittedAt: string }
-export type ReviewCommentInfo = { id: number; path: string; line: number | null; author: string; body: string; url: string }
-export type CheckRun = { name: string; status: string; conclusion: string | null; url: string }
+
+export type PrFile = {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch: string
+}
+
+export type ReviewSummary = {
+  id: number;
+  author: string;
+  state: string;
+  body: string;
+  submittedAt: string
+}
+
+export type ReviewCommentInfo = {
+  id: number;
+  path: string;
+  line?: number;
+  author: string;
+  body: string;
+  url: string
+}
+
+export type CheckRun = {
+  name: string;
+  status: string;
+  conclusion?: string;
+  url: string
+}
+
 export type IssueSummary = {
   number: number;
   title: string;
@@ -99,56 +162,169 @@ export type IssueSummary = {
   body: string;
   url: string
 }
-export type CommentInfo = { id: number; author: string; body: string; createdAt: string; url: string }
+
+export type CommentInfo = {
+  id: number;
+  author: string;
+  body: string;
+  createdAt: string;
+  url: string
+}
 
 // @always(owner, repo): an "approve always" answer pins to one repository
 // instead of every repository the token can reach.
 @always(owner, repo)
-effect std::github::prGet { owner: string, repo: string, number: number }
+effect std::github::prGet {
+  owner: string;
+  repo: string;
+  number: number
+}
 @always(owner, repo)
-effect std::github::prList { owner: string, repo: string, state: string, base: string, perPage: number, page: number }
+effect std::github::prList {
+  owner: string;
+  repo: string;
+  state: string;
+  base: string;
+  perPage: number;
+  page: number
+}
 @always(owner, repo)
-effect std::github::prDiff { owner: string, repo: string, number: number }
+effect std::github::prDiff {
+  owner: string;
+  repo: string;
+  number: number
+}
 @always(owner, repo)
-effect std::github::prFiles { owner: string, repo: string, number: number, perPage: number, page: number }
+effect std::github::prFiles {
+  owner: string;
+  repo: string;
+  number: number;
+  perPage: number;
+  page: number
+}
 @always(owner, repo)
-effect std::github::prReviewList { owner: string, repo: string, number: number, perPage: number, page: number }
+effect std::github::prReviewList {
+  owner: string;
+  repo: string;
+  number: number;
+  perPage: number;
+  page: number
+}
 @always(owner, repo)
-effect std::github::prReviewCommentList { owner: string, repo: string, number: number, perPage: number, page: number }
+effect std::github::prReviewCommentList {
+  owner: string;
+  repo: string;
+  number: number;
+  perPage: number;
+  page: number
+}
 @always(owner, repo)
-effect std::github::prChecks { owner: string, repo: string, number: number, perPage: number, page: number }
+effect std::github::prChecks {
+  owner: string;
+  repo: string;
+  number: number;
+  perPage: number;
+  page: number
+}
 @always(owner, repo)
-effect std::github::issueGet { owner: string, repo: string, number: number }
+effect std::github::issueGet {
+  owner: string;
+  repo: string;
+  number: number
+}
 @always(owner, repo)
-effect std::github::issueList { owner: string, repo: string, state: string, labels: string[], perPage: number, page: number }
+effect std::github::issueList {
+  owner: string;
+  repo: string;
+  state: string;
+  labels: string[];
+  perPage: number;
+  page: number
+}
 @always(owner, repo)
-effect std::github::issueCommentList { owner: string, repo: string, number: number, perPage: number, page: number }
+effect std::github::issueCommentList {
+  owner: string;
+  repo: string;
+  number: number;
+  perPage: number;
+  page: number
+}
 @always(owner, repo)
-effect std::github::issueSearch { owner: string, repo: string, query: string, perPage: number, page: number }
+effect std::github::issueSearch {
+  owner: string;
+  repo: string;
+  query: string;
+  perPage: number;
+  page: number
+}
 
 // Write effects carry the text about to be posted, so the approver sees it.
 @always(owner, repo)
-effect std::github::prComment { owner: string, repo: string, number: number, body: string }
+effect std::github::prReviewComment {
+  owner: string;
+  repo: string;
+  number: number;
+  path: string;
+  line: number;
+  body: string
+}
 @always(owner, repo)
-effect std::github::prReviewComment { owner: string, repo: string, number: number, path: string, line: number, body: string }
+effect std::github::prReview {
+  owner: string;
+  repo: string;
+  number: number;
+  event: string;
+  body: string;
+  comments: ReviewComment[]
+}
 @always(owner, repo)
-effect std::github::prReview { owner: string, repo: string, number: number, event: string, body: string, comments: ReviewComment[] }
+effect std::github::prApprove {
+  owner: string;
+  repo: string;
+  number: number;
+  body: string
+}
 @always(owner, repo)
-effect std::github::prApprove { owner: string, repo: string, number: number, body: string }
+effect std::github::issueCreate {
+  owner: string;
+  repo: string;
+  title: string;
+  body: string;
+  labels: string[];
+  assignees: string[]
+}
 @always(owner, repo)
-effect std::github::issueCreate { owner: string, repo: string, title: string, body: string, labels: string[], assignees: string[] }
+effect std::github::issueComment {
+  owner: string;
+  repo: string;
+  number: number;
+  body: string
+}
 @always(owner, repo)
-effect std::github::issueComment { owner: string, repo: string, number: number, body: string }
+effect std::github::issueUpdate {
+  owner: string;
+  repo: string;
+  number: number;
+  state: string;
+  reason: string
+}
 @always(owner, repo)
-effect std::github::issueUpdate { owner: string, repo: string, number: number, state: string, reason: string }
-@always(owner, repo)
-effect std::github::issueLabel { owner: string, repo: string, number: number, labels: string[] }
+effect std::github::issueLabel {
+  owner: string;
+  repo: string;
+  number: number;
+  labels: string[]
+}
 
 // ---- Reads -----------------------------------------------------------------
 // Every function checks its arguments and resolves owner/repo BEFORE raising,
 // so the payload shows exactly the request that will be sent.
 
-export idempotent def ghPrGet(number: number, owner: string = "", repo: string = ""): PrSummary raises <std::github::prGet> {
+export idempotent def ghPrGet(
+  number: number,
+  owner: string = "",
+  repo: string = "",
+): PrSummary raises <std::github::prGet> {
   """
   Read one pull request: title, state, author, branches, and body.
   @param number - The pull request number.
@@ -157,11 +333,22 @@ export idempotent def ghPrGet(number: number, owner: string = "", repo: string =
   """
   _ghCheckNumber(number)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prGet("Read pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number })
+  return interrupt std::github::prGet("Read pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number
+  })
   return _ghPrGet(number, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrList(state: PrState = "open", base: string = "", perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): PrListItem[] raises <std::github::prList> {
+export idempotent def ghPrList(
+  state: PrState = "open",
+  base: string = "",
+  perPage: number = 30,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): PrListItem[] raises <std::github::prList> {
   """
   List pull requests. Each item has no change counts; ghPrGet returns those.
   @param state - Filter by state: "open", "closed", or "all".
@@ -174,11 +361,22 @@ export idempotent def ghPrList(state: PrState = "open", base: string = "", perPa
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
-  return interrupt std::github::prList("List ${state} pull requests on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, state: state, base: base, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::prList("List ${state} pull requests on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    state: state,
+    base: base,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghPrList(state, base, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrDiff(number: number, owner: string = "", repo: string = ""): string raises <std::github::prDiff> {
+export idempotent def ghPrDiff(
+  number: number,
+  owner: string = "",
+  repo: string = "",
+): string raises <std::github::prDiff> {
   """
   Read the full unified diff of a pull request as one string. GitHub refuses
   this for very large pull requests; use ghPrFiles for those.
@@ -188,11 +386,21 @@ export idempotent def ghPrDiff(number: number, owner: string = "", repo: string 
   """
   _ghCheckNumber(number)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prDiff("Read the diff of pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number })
+  return interrupt std::github::prDiff("Read the diff of pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number
+  })
   return _ghPrDiff(number, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrFiles(number: number, perPage: number = 100, page: number = 1, owner: string = "", repo: string = ""): PrFile[] raises <std::github::prFiles> {
+export idempotent def ghPrFiles(
+  number: number,
+  perPage: number = 100,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): PrFile[] raises <std::github::prFiles> {
   """
   List the files a pull request changes, with per-file add/delete counts and patch hunks.
   @param number - The pull request number.
@@ -205,11 +413,23 @@ export idempotent def ghPrFiles(number: number, perPage: number = 100, page: num
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
-  return interrupt std::github::prFiles("List the changed files of pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::prFiles("List the changed files of pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghPrFiles(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrReviews(number: number, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): ReviewSummary[] raises <std::github::prReviewList> {
+export idempotent def ghPrReviews(
+  number: number,
+  perPage: number = 30,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): ReviewSummary[] raises <std::github::prReviewList> {
   """
   List the reviews on a pull request: verdicts, authors, and bodies.
   @param number - The pull request number.
@@ -222,11 +442,23 @@ export idempotent def ghPrReviews(number: number, perPage: number = 30, page: nu
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
-  return interrupt std::github::prReviewList("List reviews on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::prReviewList("List reviews on pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghPrReviews(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrReviewComments(number: number, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): ReviewCommentInfo[] raises <std::github::prReviewCommentList> {
+export idempotent def ghPrReviewComments(
+  number: number,
+  perPage: number = 30,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): ReviewCommentInfo[] raises <std::github::prReviewCommentList> {
   """
   List the inline review comments on a pull request, with file and line.
   @param number - The pull request number.
@@ -239,11 +471,23 @@ export idempotent def ghPrReviewComments(number: number, perPage: number = 30, p
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
-  return interrupt std::github::prReviewCommentList("List inline review comments on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::prReviewCommentList("List inline review comments on pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghPrReviewComments(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrChecks(number: number, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): CheckRun[] raises <std::github::prChecks> {
+export idempotent def ghPrChecks(
+  number: number,
+  perPage: number = 30,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): CheckRun[] raises <std::github::prChecks> {
   """
   List the CI check runs on the head commit of a pull request.
   @param number - The pull request number.
@@ -256,11 +500,21 @@ export idempotent def ghPrChecks(number: number, perPage: number = 30, page: num
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
-  return interrupt std::github::prChecks("Read CI check runs for pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::prChecks("Read CI check runs for pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghPrChecks(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
-export idempotent def ghIssueGet(number: number, owner: string = "", repo: string = ""): IssueSummary raises <std::github::issueGet> {
+export idempotent def ghIssueGet(
+  number: number,
+  owner: string = "",
+  repo: string = "",
+): IssueSummary raises <std::github::issueGet> {
   """
   Read one issue: title, state, author, labels, and body. Fails if the number
   belongs to a pull request; use ghPrGet for those.
@@ -270,11 +524,22 @@ export idempotent def ghIssueGet(number: number, owner: string = "", repo: strin
   """
   _ghCheckNumber(number)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::issueGet("Read issue #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number })
+  return interrupt std::github::issueGet("Read issue #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number
+  })
   return _ghIssueGet(number, coord.owner, coord.repo)
 }
 
-export idempotent def ghIssueList(state: IssueState = "open", labels: string[] = [], perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): IssueSummary[] raises <std::github::issueList> {
+export idempotent def ghIssueList(
+  state: IssueState = "open",
+  labels: string[] = [],
+  perPage: number = 30,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): IssueSummary[] raises <std::github::issueList> {
   """
   List issues, optionally filtered by labels. GitHub counts pull requests
   toward each page and this tool drops them, so a page can come back short or
@@ -290,11 +555,24 @@ export idempotent def ghIssueList(state: IssueState = "open", labels: string[] =
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
-  return interrupt std::github::issueList("List ${state} issues on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, state: state, labels: labels, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::issueList("List ${state} issues on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    state: state,
+    labels: labels,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghIssueList(state, labels, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
-export idempotent def ghIssueComments(number: number, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): CommentInfo[] raises <std::github::issueCommentList> {
+export idempotent def ghIssueComments(
+  number: number,
+  perPage: number = 30,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): CommentInfo[] raises <std::github::issueCommentList> {
   """
   List the comments on an issue.
   @param number - The issue number.
@@ -307,11 +585,23 @@ export idempotent def ghIssueComments(number: number, perPage: number = 30, page
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
-  return interrupt std::github::issueCommentList("List comments on issue #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::issueCommentList("List comments on issue #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghIssueComments(number, pageSize, pageNumber, coord.owner, coord.repo)
 }
 
-export idempotent def ghIssueSearch(query: string, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): IssueSummary[] raises <std::github::issueSearch> {
+export idempotent def ghIssueSearch(
+  query: string,
+  perPage: number = 30,
+  page: number = 1,
+  owner: string = "",
+  repo: string = "",
+): IssueSummary[] raises <std::github::issueSearch> {
   """
   Search issues and pull requests in one repository. The query must not
   contain a repo:, org:, or user: qualifier.
@@ -325,30 +615,29 @@ export idempotent def ghIssueSearch(query: string, perPage: number = 30, page: n
   const pageSize = _ghClampPerPage(perPage)
   const pageNumber = _ghClampPage(page)
   const scopedQuery = _ghScopedSearchQuery(coord.owner, coord.repo, query)
-  return interrupt std::github::issueSearch("Search issues on ${coord.owner}/${coord.repo}: ${query}", { owner: coord.owner, repo: coord.repo, query: scopedQuery, perPage: pageSize, page: pageNumber })
+  return interrupt std::github::issueSearch("Search issues on ${coord.owner}/${coord.repo}: ${query}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    query: scopedQuery,
+    perPage: pageSize,
+    page: pageNumber
+  })
   return _ghIssueSearch(scopedQuery, pageSize, pageNumber)
 }
 
 // ---- Writes ----------------------------------------------------------------
 // The mutation sits in a destructive block, so a retry never repeats it.
 
-export def ghPrComment(number: number, body: string, owner: string = "", repo: string = ""): CommentInfo raises <std::github::prComment> {
-  """
-  Post a top-level comment on a pull request.
-  @param number - The pull request number.
-  @param body - The comment text (markdown).
-  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
-  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
-  """
-  _ghCheckNumber(number)
-  const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prComment("Post a comment on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, body: body })
-  destructive {
-    return _ghPrComment(number, body, coord.owner, coord.repo)
-  }
-}
-
-export def ghPrReviewComment(number: number, path: string, line: number, body: string, side: DiffSide = "RIGHT", commitSha: string = "", owner: string = "", repo: string = ""): ReviewCommentInfo raises <std::github::prReviewComment> {
+export def ghPrReviewComment(
+  number: number,
+  path: string,
+  line: number,
+  body: string,
+  side: DiffSide = "RIGHT",
+  commitSha: string = "",
+  owner: string = "",
+  repo: string = "",
+): ReviewCommentInfo raises <std::github::prReviewComment> {
   """
   Post one inline review comment on a line of a pull request. For several
   comments at once, use ghPrReview: one call, one approval.
@@ -362,14 +651,44 @@ export def ghPrReviewComment(number: number, path: string, line: number, body: s
   @param repo - Repository name. Defaults to the origin remote of the agent working directory.
   """
   _ghCheckNumber(number)
+  _ghCheckNumber(line)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prReviewComment("Post an inline review comment on ${path}:${line} of pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, path: path, line: line, body: body })
+  return interrupt std::github::prReviewComment("Post an inline review comment on ${path}:${line} of pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    path: path,
+    line: line,
+    body: body
+  })
+  // The head-SHA read stays outside the destructive block: a failed read
+  // must not count as a failed mutation.
+  let sha = commitSha
+  if (sha == "") {
+    sha = _ghPrHeadSha(number, coord.owner, coord.repo)
+  }
   destructive {
-    return _ghPrReviewComment(number, path, line, body, side, commitSha, coord.owner, coord.repo)
+    return _ghPrReviewComment(
+      number,
+      path,
+      line,
+      body,
+      side,
+      sha,
+      coord.owner,
+      coord.repo,
+    )
   }
 }
 
-export def ghPrReview(number: number, event: ReviewEvent = "COMMENT", body: string = "", comments: ReviewComment[] = [], owner: string = "", repo: string = ""): ReviewSummary raises <std::github::prReview> {
+export def ghPrReview(
+  number: number,
+  event: ReviewEvent = "COMMENT",
+  body: string = "",
+  comments: ReviewComment[] = [],
+  owner: string = "",
+  repo: string = "",
+): ReviewSummary raises <std::github::prReview> {
   """
   Submit a review on a pull request: a verdict, an overall body, and any
   number of inline comments, in one call. To approve a pull request, use
@@ -382,14 +701,27 @@ export def ghPrReview(number: number, event: ReviewEvent = "COMMENT", body: stri
   @param repo - Repository name. Defaults to the origin remote of the agent working directory.
   """
   _ghCheckNumber(number)
+  _ghCheckReview(event, body, comments)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prReview("Submit a ${event} review with ${comments.length} inline comments on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, event: event, body: body, comments: comments })
+  return interrupt std::github::prReview("Submit a ${event} review with ${comments.length} inline comments on pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    event: event,
+    body: body,
+    comments: comments
+  })
   destructive {
     return _ghPrReview(number, event, body, comments, coord.owner, coord.repo)
   }
 }
 
-export def ghPrApprove(number: number, body: string = "", owner: string = "", repo: string = ""): ReviewSummary raises <std::github::prApprove> {
+export def ghPrApprove(
+  number: number,
+  body: string = "",
+  owner: string = "",
+  repo: string = "",
+): ReviewSummary raises <std::github::prApprove> {
   """
   Approve a pull request. This is a formal review approval that can satisfy
   branch protection and unblock a merge.
@@ -400,13 +732,25 @@ export def ghPrApprove(number: number, body: string = "", owner: string = "", re
   """
   _ghCheckNumber(number)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prApprove("APPROVE pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, body: body })
+  return interrupt std::github::prApprove("APPROVE pull request #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    body: body
+  })
   destructive {
     return _ghPrApprove(number, body, coord.owner, coord.repo)
   }
 }
 
-export def ghIssueCreate(title: string, body: string, labels: string[] = [], assignees: string[] = [], owner: string = "", repo: string = ""): IssueSummary raises <std::github::issueCreate> {
+export def ghIssueCreate(
+  title: string,
+  body: string,
+  labels: string[] = [],
+  assignees: string[] = [],
+  owner: string = "",
+  repo: string = "",
+): IssueSummary raises <std::github::issueCreate> {
   """
   Create an issue.
   @param title - The issue title.
@@ -417,55 +761,93 @@ export def ghIssueCreate(title: string, body: string, labels: string[] = [], ass
   @param repo - Repository name. Defaults to the origin remote of the agent working directory.
   """
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::issueCreate("Create issue \"${title}\" on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, title: title, body: body, labels: labels, assignees: assignees })
+  return interrupt std::github::issueCreate("Create issue \"${title}\" on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    title: title,
+    body: body,
+    labels: labels,
+    assignees: assignees
+  })
   destructive {
     return _ghIssueCreate(title, body, labels, assignees, coord.owner, coord.repo)
   }
 }
 
-export def ghIssueComment(number: number, body: string, owner: string = "", repo: string = ""): CommentInfo raises <std::github::issueComment> {
+export def ghIssueComment(
+  number: number,
+  body: string,
+  owner: string = "",
+  repo: string = "",
+): CommentInfo raises <std::github::issueComment> {
   """
-  Post a comment on an issue.
-  @param number - The issue number.
+  Post a comment on an issue or pull request.
+  @param number - The issue or pull request number.
   @param body - The comment text (markdown).
   @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
   @param repo - Repository name. Defaults to the origin remote of the agent working directory.
   """
   _ghCheckNumber(number)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::issueComment("Post a comment on issue #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, body: body })
+  return interrupt std::github::issueComment("Post a comment on issue #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    body: body
+  })
   destructive {
     return _ghIssueComment(number, body, coord.owner, coord.repo)
   }
 }
 
-export def ghIssueClose(number: number, reason: CloseReason = "completed", owner: string = "", repo: string = ""): IssueSummary raises <std::github::issueUpdate> {
+export def ghIssueClose(
+  number: number,
+  reason: CloseReason = "completed",
+  owner: string = "",
+  repo: string = "",
+): IssueSummary raises <std::github::issueUpdate> {
   """
-  Close an issue.
-  @param number - The issue number.
+  Close an issue or pull request.
+  @param number - The issue or pull request number.
   @param reason - Why it is closing: "completed" or "not_planned".
   @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
   @param repo - Repository name. Defaults to the origin remote of the agent working directory.
   """
   _ghCheckNumber(number)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::issueUpdate("Close issue #${number} on ${coord.owner}/${coord.repo} as ${reason}", { owner: coord.owner, repo: coord.repo, number: number, state: "closed", reason: reason })
+  return interrupt std::github::issueUpdate("Close issue #${number} on ${coord.owner}/${coord.repo} as ${reason}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    state: "closed",
+    reason: reason
+  })
   destructive {
     return _ghIssueClose(number, reason, coord.owner, coord.repo)
   }
 }
 
-export def ghIssueLabel(number: number, labels: string[], owner: string = "", repo: string = ""): string[] raises <std::github::issueLabel> {
+export def ghIssueLabel(
+  number: number,
+  labels: string[],
+  owner: string = "",
+  repo: string = "",
+): string[] raises <std::github::issueLabel> {
   """
-  Add labels to an issue. Returns the full label list after the change.
-  @param number - The issue number.
+  Add labels to an issue or pull request. Returns the full label list after the change.
+  @param number - The issue or pull request number.
   @param labels - The labels to add.
   @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
   @param repo - Repository name. Defaults to the origin remote of the agent working directory.
   """
   _ghCheckNumber(number)
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::issueLabel("Add labels ${JSON.stringify(labels)} to issue #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, labels: labels })
+  return interrupt std::github::issueLabel("Add labels ${JSON.stringify(labels)} to issue #${number} on ${coord.owner}/${coord.repo}", {
+    owner: coord.owner,
+    repo: coord.repo,
+    number: number,
+    labels: labels
+  })
   destructive {
     return _ghIssueLabel(number, labels, coord.owner, coord.repo)
   }

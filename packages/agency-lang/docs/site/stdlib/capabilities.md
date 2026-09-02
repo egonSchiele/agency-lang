@@ -86,7 +86,7 @@ Anything that talks to the outside world over the network.
 
 ```ts
 /** Anything that talks to the outside world over the network. */
-export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::bluesky, std::wikidata, std::usaspending, std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::github::prList, std::github::prGet, std::github::prDiff, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueList, std::github::issueGet, std::github::issueCommentList, std::github::issueSearch, std::github::prComment, std::github::prReviewComment, std::github::prReview, std::github::prApprove, std::github::issueCreate, std::github::issueComment, std::github::issueUpdate, std::github::issueLabel>
+export effectSet Network = <std::http::fetch, std::http::fetchJSON, std::http::fetchMarkdown, std::search, std::tavilySearch, std::weather, std::browserUse, std::wikipedia::article, std::wikipedia::search, std::wikipedia::summary, std::gdelt, std::fred, std::dbnomics, std::edgar, std::littlesis, std::yc, std::hackernews, std::bluesky, std::wikidata, std::usaspending, std::aws::s3::get, std::aws::s3::getBinary, std::aws::s3::put, std::aws::s3::putBinary, std::aws::s3::createBucket, std::github::prList, std::github::prGet, std::github::prDiff, std::github::prFiles, std::github::prReviewList, std::github::prReviewCommentList, std::github::prChecks, std::github::issueList, std::github::issueGet, std::github::issueCommentList, std::github::issueSearch, std::github::prReviewComment, std::github::prReview, std::github::prApprove, std::github::issueCreate, std::github::issueComment, std::github::issueUpdate, std::github::issueLabel>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L45))
@@ -119,7 +119,7 @@ Posting comments and reviews on GitHub pull requests.
 
 ```ts
 /** Posting comments and reviews on GitHub pull requests. */
-export effectSet GithubReview = <std::github::prComment, std::github::prReviewComment, std::github::prReview, std::github::prApprove>
+export effectSet GithubReview = <std::github::prReviewComment, std::github::prReview, std::github::prApprove>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L54))

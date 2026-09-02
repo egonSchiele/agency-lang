@@ -137,7 +137,6 @@ const EXPECTED: Record<string, string[]> = {
   "std::github::issueGet": ["owner", "repo"],
   "std::github::issueCommentList": ["owner", "repo"],
   "std::github::issueSearch": ["owner", "repo"],
-  "std::github::prComment": ["owner", "repo"],
   "std::github::prReviewComment": ["owner", "repo"],
   "std::github::prReview": ["owner", "repo"],
   "std::github::prApprove": ["owner", "repo"],

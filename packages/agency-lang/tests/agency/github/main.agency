@@ -206,7 +206,7 @@ node approveIsItsOwnEffect(): string {
     }
     return "FAIL prApprove went through under a review-only handler"
   } with (intr) {
-    if (intr.effect == "std::github::prReview" || intr.effect == "std::github::prComment") {
+    if (intr.effect == "std::github::prReview" || intr.effect == "std::github::issueComment") {
       return approve()
     }
     return reject()

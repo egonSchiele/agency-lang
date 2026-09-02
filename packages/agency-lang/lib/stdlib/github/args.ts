@@ -27,10 +27,11 @@ export function pagingQuery(perPage: number, page: number): Record<string, strin
   return { per_page: String(_ghClampPerPage(perPage)), page: String(_ghClampPage(page)) };
 }
 
-/** Throws unless `number` is a positive whole number: an issue or pull
- *  request number. The tool schema only checks that it is a number. */
-export function _ghCheckNumber(number: number): void {
-  if (!Number.isInteger(number) || number < 1) {
-    throw new Error(`Expected a positive whole issue or pull request number, got ${number}`);
+/** Throws unless the value is a positive whole number: an issue number, a
+ *  pull request number, or a diff line. The tool schema only checks that it
+ *  is a number. */
+export function _ghCheckNumber(value: number): void {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`Expected a positive whole number, got ${value}`);
   }
 }

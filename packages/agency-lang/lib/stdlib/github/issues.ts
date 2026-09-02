@@ -12,9 +12,10 @@ function labelName(label: z.infer<typeof RawLabel>): string {
   return typeof label === "string" ? label : (label.name ?? "");
 }
 
-// The issues endpoints also return pull requests, marked by a pull_request
-// field. ghIssueGet refuses one, ghIssueList drops them, and ghIssueSearch
-// keeps them (it promises both).
+// GitHub models a pull request as an issue, so the issues endpoints return
+// and accept pull request numbers. ghIssueGet refuses one, ghIssueList drops
+// them, and ghIssueSearch keeps them (it promises both). The issue writes
+// work on pull requests too, on purpose.
 const RawIssueSchema = z.object({
   number: z.number(),
   title: z.string(),

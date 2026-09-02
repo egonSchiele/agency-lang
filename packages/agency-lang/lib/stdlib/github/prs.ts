@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { _githubRequest, type GithubEndpoint } from "./request.js";
-import { pagingQuery } from "./args.js";
+import { pagingQuery, _ghCheckNumber } from "./args.js";
 
 export function repoPath(owner: string, repo: string): string {
   return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
@@ -274,7 +274,7 @@ export async function _ghPrReviewComments(
   return _githubRequest(prReviewComments, { owner, repo, number, perPage, page });
 }
 
-async function headShaOf(number: number, owner: string, repo: string): Promise<string> {
+export async function _ghPrHeadSha(number: number, owner: string, repo: string): Promise<string> {
   const pr = await _githubRequest(prGet, { owner, repo, number });
   if (pr.headSha === "") {
     throw new Error(`Could not resolve the head commit of PR #${number}`);
@@ -292,21 +292,11 @@ export async function _ghPrChecks(
   owner: string,
   repo: string,
 ): Promise<CheckRun[]> {
-  const sha = await headShaOf(number, owner, repo);
+  const sha = await _ghPrHeadSha(number, owner, repo);
   return _githubRequest(prCheckRuns, { owner, repo, sha, perPage, page });
 }
 
 // --- Write endpoints ---------------------------------------------------------
-
-// A top-level PR comment posts to the ISSUES endpoint, because GitHub models
-// a pull request as an issue. It is still its own effect (spec 5.4).
-const prComment: GithubEndpoint<PrParams & { body: string }, CommentInfo> = {
-  name: "POST /repos/{owner}/{repo}/issues/{number}/comments (PR comment)",
-  method: "POST",
-  path: (params) => `${repoPath(params.owner, params.repo)}/issues/${params.number}/comments`,
-  body: (params) => ({ body: params.body }),
-  response: CommentInfoSchema,
-};
 
 const prReviewCommentCreate: GithubEndpoint<
   PrParams & { filePath: string; line: number; body: string; side: string; commitSha: string },
@@ -347,17 +337,6 @@ const prReviewCreate: GithubEndpoint<
 
 // --- Write bindings ----------------------------------------------------------
 
-export async function _ghPrComment(
-  number: number,
-  body: string,
-  owner: string,
-  repo: string,
-): Promise<CommentInfo> {
-  return _githubRequest(prComment, { owner, repo, number, body });
-}
-
-// An empty commitSha means one head-SHA lookup first: the module's second
-// sanctioned two-requests-one-interrupt case (spec 5.2).
 export async function _ghPrReviewComment(
   number: number,
   filePath: string,
@@ -368,7 +347,6 @@ export async function _ghPrReviewComment(
   owner: string,
   repo: string,
 ): Promise<ReviewCommentInfo> {
-  const sha = commitSha === "" ? await headShaOf(number, owner, repo) : commitSha;
   return _githubRequest(prReviewCommentCreate, {
     owner,
     repo,
@@ -377,8 +355,24 @@ export async function _ghPrReviewComment(
     line,
     body,
     side,
-    commitSha: sha,
+    commitSha,
   });
+}
+
+/** Throws on a review GitHub would refuse, so the interrupt is never raised
+ *  for it: a REQUEST_CHANGES review with no body, or a comment whose line is
+ *  not a positive whole number. Pure. */
+export function _ghCheckReview(event: string, body: string, comments: ReviewComment[]): void {
+  // The ReviewEvent type already excludes APPROVE; this is the backstop.
+  if (event === "APPROVE") {
+    throw new Error("To approve a pull request, use ghPrApprove. Approving is its own permission.");
+  }
+  if (event === "REQUEST_CHANGES" && body.trim() === "") {
+    throw new Error("A REQUEST_CHANGES review needs a body saying what to change.");
+  }
+  for (const comment of comments) {
+    _ghCheckNumber(comment.line);
+  }
 }
 
 export async function _ghPrReview(
@@ -389,10 +383,7 @@ export async function _ghPrReview(
   owner: string,
   repo: string,
 ): Promise<ReviewSummary> {
-  // The ReviewEvent type already excludes APPROVE; this is the backstop.
-  if (event === "APPROVE") {
-    throw new Error("To approve a pull request, use ghPrApprove. Approving is its own permission.");
-  }
+  _ghCheckReview(event, body, comments);
   return _githubRequest(prReviewCreate, { owner, repo, number, event, body, comments });
 }
 

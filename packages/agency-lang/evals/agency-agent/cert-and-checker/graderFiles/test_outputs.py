@@ -59,10 +59,12 @@ def test_verification_file():
     digest = fingerprint.split("=", 1)[1].strip().replace(":", "").lower()
     assert digest in text.replace(":", "").lower(), "verification.txt does not hold the SHA-256 fingerprint"
     _before, after = cert_dates()
-    # openssl -dates pads a single-digit day with a space ("Dec  1"), where
-    # strftime("%d") zero-pads it ("Dec 01"); accept both.
-    openssl_style = f"{after:%b} {after.day:2d}"
-    assert after.strftime("%Y-%m-%d") in text or openssl_style in text, "verification.txt does not show the expiry date"
+    # openssl prints single-digit days space-padded ("Dec  1"), which
+    # neither strftime form matches; collapse runs of spaces and accept
+    # the unpadded day too.
+    collapsed = re.sub(r"[ \t]+", " ", text)
+    expiry_forms = [after.strftime("%Y-%m-%d"), after.strftime("%b %d"), f"{after.strftime('%b')} {after.day}"]
+    assert any(form in collapsed for form in expiry_forms), "verification.txt does not show the expiry date"
 
 
 def test_checker_runs_clean():

@@ -1,0 +1,1 @@
+Please check everything against docs/dev/contributing/anti-patterns.md. Does it contain any of these anti-patterns? Most particularly, are you writing declarative interfaces that neatly encapsulate complexity and imperative code?

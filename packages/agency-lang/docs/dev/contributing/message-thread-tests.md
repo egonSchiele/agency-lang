@@ -21,7 +21,16 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
 - Not in a thread, but one LLM call depends on the result of another LLM call.: tests/agency/threads/no-thread-dependent-call.agency
 - In a parallel thread, but one LLM call depends on the result of another LLM call. (test not yet written)
 
-- Another thought: what about tools? What if a func that assumed it will be threaded is called as a tool?
+- A function called as a tool gets a fresh thread store; a `handoff def` called as a tool continues the caller's thread. Cases, all in tests/agency-js/handoff:
+  - the body's messages land on the caller's thread, with the marker in place of the tool call and a resume message at the end (`basic`)
+  - system messages the body pushes are removed when it returns (`persona`)
+  - a handoff beside another call is refused (`notAlone`)
+  - `thread {}` inside the body still isolates (`threadInside`)
+  - `subthread {}` inside the body inherits the caller's history and does not flow back (`subthreadInside`)
+  - an interrupt inside the body resumes without a second marker (`pauseInside`), and a rejection inside the body reaches the body's own model (`rejectInside`)
+  - a failure return hands back with the error (`failureInside`), and a rejected handoff call hands back with the rejection (`rejectHandoff`)
+  - a handoff inside a handoff (`nested`)
+- A handoff function called from code runs on the caller's thread: tests/agency/agents/oracleExplorer.agency (`twoOracleCallsShareTheCallerThread`, `explorerFromCodeLandsOnTheCallerThread`)
 - If I do want to transfer message history to another node, how would I do that?
 
 - We also need to test messages being returned from an agent to JavaScript

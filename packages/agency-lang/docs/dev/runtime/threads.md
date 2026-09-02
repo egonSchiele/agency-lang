@@ -176,6 +176,8 @@ The isolation is not cosmetic. Without it, an `llm()` call inside a tool body wo
 
 The fresh store is lazy rather than `withDefaultActive`, so a leaf tool that never calls `llm()` does not emit a phantom `threadCreated` event.
 
+**Second exception — handoff functions** (`handoff def`): the tool loop does not install a fresh store for these. The assistant message carrying the tool call is rewritten into a marker first, so nothing dangles, and the body's `llm()` calls append to the caller's active thread. See `docs/dev/language/handoff-functions.md`.
+
 ---
 
 ## What happens if a variable is assigned to a thread?

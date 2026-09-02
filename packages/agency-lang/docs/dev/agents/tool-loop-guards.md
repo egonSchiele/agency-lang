@@ -1,11 +1,13 @@
-# Tool-loop guards: repeated calls, markup arguments, and rejected calls
+# Tool-loop guards: repeated calls, markup arguments, rejected calls, and handoffs beside other calls
 
-Three refusals in `runPrompt`'s tool loop that stop a model from wasting
-rounds: a repeated call, a markup argument, and a RETRY of an
+Four refusals in `runPrompt`'s tool loop that stop a model from wasting
+rounds: a repeated call, a markup argument, a RETRY of an
 already-rejected call (the first rejected call runs normally up to its
-interrupt; only the identical retry is refused). The repeat and markup
-helpers live in `lib/runtime/toolLoopGuards.ts`; the rejection
-bookkeeping lives in `prompt.ts` itself. All three refusals happen
+interrupt; only the identical retry is refused), and a handoff call that
+shares a round with another call. The repeat and markup helpers live in
+`lib/runtime/toolLoopGuards.ts`; the rejection bookkeeping lives in
+`prompt.ts` itself; the handoff text lives in `lib/runtime/handoff.ts`.
+All four refusals happen
 before the tool's `onToolCallStart` hook, so a refused call never runs,
 never fires hooks, and never counts toward `MAX_TOOL_FAILURES`. The
 model sees the refusal as an ordinary tool message, which is where it
@@ -110,10 +112,23 @@ own step, and persisted in `runnerState`. See "Resume re-runs the code
 between steps" in [`promptRunner.md`](promptRunner.md) for the rule and
 the incident behind it.
 
+## A handoff beside another call
+
+A `handoff def` rewrites the assistant message that carried its tool
+call into a marker (docs/dev/language/handoff-functions.md). A sibling
+call in the same round needs that message intact to pair its own tool
+result. So a handoff that shares a round with any other call, an
+intrinsic like `saveDraft` included, gets the `handoffNotAlone` verdict.
+The refusal goes out as a tool message, which is fine: in a mixed round
+the assistant message was never rewritten. The siblings run. The text
+tells the model to call the handoff again by itself.
+
 ## Tests
 
 - Pure helpers: `lib/runtime/toolLoopGuards.test.ts` (`markupArgument`,
   `repeatKey`, `noteRepeat`).
+- Handoffs: `tests/agency-js/handoff` scripts the mixed round
+  (`notAlone`) and a rejected handoff call (`rejectHandoff`).
 - Rejections: `tests/agency-js/tool-rejection` scripts a handler reject
   (reason + identical-retry gate), an interactive reject with a reason,
   five consecutive rejections removing the tool, an approval resetting

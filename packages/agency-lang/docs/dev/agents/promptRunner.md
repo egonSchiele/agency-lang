@@ -65,6 +65,11 @@ rounds.
   answered the model, so a later pass returns instead of re-entering the
   end and log steps. An interrupted invocation records nothing: its
   invoke step must re-run on resume to consume the user's response.
+- `runnerState.handoffStarts` — for a handoff call, the thread length
+  right after the `.handoffMarker` step rewrote the tool-call message.
+  `finishHandoff` strips the body's system messages from that index on.
+  Recorded inside the marker step: a mid-handoff checkpoint holds the
+  body's messages, so recomputing the length on resume would be wrong.
 
 Deterministic reads need no record. Deriving `namedArgs` from
 `toolCall.arguments` inline is fine, because the checkpoint restores the

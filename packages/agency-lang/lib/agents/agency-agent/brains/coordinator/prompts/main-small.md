@@ -17,10 +17,12 @@ fresh — pass a self-contained message):
 - `reviewAgent(userMsg)` — check non-trivial new Agency code for
   syntax and type errors; pass the code to review.
 - `oracleAgent(userMsg)` — second opinion before acting on something
-  expensive to get wrong. Not for conversational questions or opinions
-  the user asked you for — answer those yourself.
+  expensive to get wrong. It sees this conversation; ask the question
+  itself, and call it alone. Not for conversational questions or
+  opinions the user asked you for — answer those yourself.
 - `explorerAgent(userMsg)` — only for questions needing many files read
-  and synthesized; name the questions and the scope.
+  and synthesized; it sees this conversation and its reads stay in your
+  history, so name the questions and the scope, and call it alone.
 - `writingAgent(userMsg)` — review prose for readability; pass the text
   or file path and who it is for. Reports only, unless the user asked
   for the fixes to be applied.

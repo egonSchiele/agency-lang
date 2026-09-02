@@ -3,7 +3,6 @@ import process from "process";
 import { readFile, writeFile, appendFile } from "fs/promises";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
-import { existsSync } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
@@ -257,13 +256,17 @@ async function _writeBytes(
   }
   const filePath = await resolvePath(dir, filename);
   if (mode === "create-only") {
-    if (existsSync(filePath)) {
-      throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
+    // The "wx" flag makes create-only atomic: an existing file (or a
+    // dangling symlink at the target) fails the open itself, with no
+    // check-then-write window.
+    try {
+      await writeFile(filePath, data, { flag: "wx" });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
+      }
+      throw err;
     }
-    // The "wx" flag makes create-only atomic: a file created between the
-    // check above and this write fails the write instead of being
-    // overwritten. The check exists only for its friendlier message.
-    await writeFile(filePath, data, { flag: "wx" });
     return true;
   }
   const doWrite = mode === "append" ? appendFile : writeFile;

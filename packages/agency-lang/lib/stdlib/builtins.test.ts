@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, symlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { _write, _read } from "./builtins.js";
@@ -57,6 +57,16 @@ describe("_write mode parameter", () => {
     );
     // Original content must be untouched.
     expect(readFileSync(join(dir, target), "utf-8")).toBe("existing");
+  });
+
+  it("create-only mode refuses a dangling symlink at the target", async () => {
+    // A stat-based existence check says "absent" here; only the wx open
+    // flag refuses it. This pins the flag: dropping it turns the write
+    // into follow-the-link.
+    symlinkSync(join(dir, "no-such-file"), join(dir, target));
+    await expect(_write(dir, target, "should-fail", "create-only")).rejects.toThrow(
+      /already exists/,
+    );
   });
 
   it("rejects unknown mode strings with a clear message", async () => {

@@ -1,0 +1,277 @@
+/*
+ * writeSkill: the save interrupt gates every write; names are validated,
+ * never rewritten; a rejection writes nothing. Output goes under
+ * test-output/ (gitignored), one directory per node so nodes never collide.
+ */
+import { mkdir, remove } from "std::fs"
+import { exists } from "std::shell"
+import { scanSkillsSubdirs, writeSkill, SkillEntry } from "std::skills"
+
+// The race test plants a file from inside the save handler; the
+// interrupt-free primitive stands in for another process doing it.
+import { _write } from "agency-lang/stdlib-lib/builtins.js"
+
+// A fresh directory per node: removed up front (the writeTool tests'
+// pattern) so re-runs never trip the duplicate-name refusal.
+def outDir(node: string): string {
+  const dir = "${__dirname}/test-output/skills-write/${node}"
+  remove(dir) with approve
+  return dir
+}
+
+// Run writeSkill approving everything. Returns the outcome plus how many
+// save interrupts were raised.
+def runWrite(
+  dir: string,
+  name: string,
+  description: string,
+  body: string,
+): { outcome: Result<SkillEntry>; saves: number } {
+  let saves = 0
+  let outcome: Result<SkillEntry> = failure("not run")
+  handle {
+    outcome = writeSkill(dir, name, description, body)
+  } with (intr) {
+    if (intr.effect == "std::skills::save") {
+      saves = saves + 1
+    }
+    return approve()
+  }
+  return {
+    outcome: outcome,
+    saves: saves
+  }
+}
+
+node approveWritesTheFile(): boolean {
+  const dir = outDir("approve")
+  const ran = runWrite(dir, "repo-orientation", "Orient in an unfamiliar repo", "Read the README first.")
+  if (ran.outcome is failure) {
+    return false
+  }
+  const saved = ran.outcome.value
+  if (saved.name != "repo-orientation" || saved.location != "repo-orientation.md") {
+    return false
+  }
+  if (ran.saves != 1) {
+    return false
+  }
+  const raw = read("repo-orientation.md", dir) with approve
+  if (raw is failure) {
+    return false
+  }
+  // A plain description is emitted bare: the serializer only quotes
+  // values the parser would otherwise coerce or misparse.
+  return raw.value.includes("name: repo-orientation")
+      && raw.value.includes("description: Orient in an unfamiliar repo")
+      && raw.value.includes("Read the README first.")
+}
+
+// The save interrupt has no answer shape: any approval saves, and data
+// carried on it (such as a stale revise verdict) is not consulted.
+node approveDataIsIgnored(): boolean {
+  const dir = outDir("approve-data")
+  let outcome: Result<SkillEntry> = failure("not run")
+  handle {
+    outcome = writeSkill(dir, "with-data", "Approve with data", "Body.")
+  } with (intr) {
+    if (intr.effect == "std::skills::save") {
+      return approve({ verdict: "revise", feedback: "ignored" })
+    }
+    return approve()
+  }
+  if (outcome is failure) {
+    return false
+  }
+  return exists("with-data.md", dir)
+}
+
+node rejectWritesNothing(): boolean {
+  const dir = outDir("reject")
+  let outcome: Result<SkillEntry> = success({ name: "unset", description: "", location: "" })
+  handle {
+    outcome = writeSkill(dir, "rejected", "Will be rejected", "Body.")
+  } with (intr) {
+    if (intr.effect == "std::skills::save") {
+      return reject()
+    }
+    return approve()
+  }
+  if (outcome is success) {
+    return false
+  }
+  return !exists("rejected.md", dir)
+}
+
+node duplicateNameFails(): boolean {
+  const dir = outDir("duplicate")
+  const first = runWrite(dir, "twice", "First save", "Body.")
+  if (first.outcome is failure) {
+    return false
+  }
+  const second = runWrite(dir, "twice", "Second save", "Body.")
+  // The duplicate is refused before anyone is asked to approve a save.
+  return second.outcome is failure && second.saves == 0
+}
+
+node invalidNameFails(): boolean {
+  const dir = outDir("invalid-name")
+  // Kebab-case only: no uppercase or punctuation, and no leading,
+  // trailing, or doubled hyphens.
+  const bad = ["Repo Orientation!", "-repo", "repo-", "repo--orientation"]
+  for (name in bad) {
+    const ran = runWrite(dir, name, "Bad name", "Body.")
+    if (!(ran.outcome is failure) || ran.saves != 0) {
+      return false
+    }
+  }
+  return true
+}
+
+// The name is also the filename, so its length is capped up front —
+// not as an ENAMETOOLONG after the user already approved.
+node overlongNameFails(): boolean {
+  const dir = outDir("overlong")
+  let name = "a"
+  while (name.length <= 64) {
+    name = name + "a"
+  }
+  const ran = runWrite(dir, name, "Too long", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}
+
+// An empty dir can never be written to, so it fails before any prompt
+// is spent — the same fail-before-prompting rule the name checks follow.
+node emptyDirFails(): boolean {
+  const ran = runWrite("", "empty-dir", "No directory", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}
+
+node multilineDescriptionFails(): boolean {
+  const dir = outDir("multiline")
+  const ran = runWrite(dir, "multiline", "line one\nline two", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}
+
+// A carriage return is a line terminator too.
+node carriageReturnDescriptionFails(): boolean {
+  const dir = outDir("carriage")
+  const ran = runWrite(dir, "carriage", "line one\rline two", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}
+
+// A body starting with --- cannot reach the frontmatter: the block is
+// already closed by its own fence, so the body line is just markdown
+// and the next scan still sees the saved name and description.
+node bodyStartingWithFenceCannotInject(): boolean {
+  const root = outDir("fence")
+  const ran = runWrite("${root}/explorer", "fenced", "Fence body", "---\ninjected: true")
+  if (ran.outcome is failure) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["explorer"].entries
+  if (entries == undefined || entries.length != 1) {
+    return false
+  }
+  return entries[0].name == "fenced" && entries[0].description == "Fence body"
+}
+
+// The description survives a restart: YAML flow syntax in it (leading
+// bracket) must round-trip through the quoted frontmatter and the next
+// session's scan.
+node descriptionWithFlowSyntaxRoundTrips(): boolean {
+  const root = outDir("roundtrip")
+  const ran = runWrite("${root}/explorer", "beta-skill", "[Beta] Use when refactoring", "Body.")
+  if (ran.outcome is failure) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["explorer"].entries
+  if (entries == undefined || entries.length != 1) {
+    return false
+  }
+  return entries[0].name == "beta-skill" && entries[0].description == "[Beta] Use when refactoring"
+}
+
+// The serializer battery: each of these descriptions hits a different
+// branch of the frontmatter grammar (quotes, a literal backslash-n, a
+// numeric-looking string, edge whitespace) and every one must read
+// back exactly as saved.
+node trickyDescriptionsRoundTrip(): boolean {
+  const root = outDir("tricky")
+  const cases = [
+    { name: "quotes", description: `a "best practice" guide, it's great` },
+    { name: "backslash", description: "literal \\n stays two characters" },
+    { name: "numeric", description: "2024" },
+    { name: "padded", description: " leading and trailing " },
+  ]
+  for (tcase in cases) {
+    const ran = runWrite("${root}/explorer", tcase.name, tcase.description, "Body.")
+    if (ran.outcome is failure) {
+      return false
+    }
+  }
+  const scanned = scanSkillsSubdirs(root, ["explorer"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["explorer"].entries
+  if (entries == undefined || entries.length != cases.length) {
+    return false
+  }
+  for (tcase in cases) {
+    let found = false
+    for (entry in entries) {
+      if (entry.name == tcase.name && entry.description == tcase.description) {
+        found = true
+      }
+    }
+    if (!found) {
+      return false
+    }
+  }
+  return true
+}
+
+node fileAppearingDuringApprovalIsNotOverwritten(): boolean {
+  const dir = outDir("race")
+  let outcome: Result<SkillEntry> = failure("not run")
+  handle {
+    outcome = writeSkill(dir, "sneaky", "A skill", "The reviewed body.")
+  } with (intr) {
+    if (intr.effect == "std::skills::save") {
+      // While the approval is pending, the same name appears on disk.
+      mkdir(dir) with approve
+      const planted = try _write(dir, "sneaky.md", "already here")
+      if (planted is failure) {
+        return reject("could not plant the racing file")
+      }
+      return approve()
+    }
+    return approve()
+  }
+  if (outcome is success) {
+    return false
+  }
+  const raw = read("sneaky.md", dir) with approve
+  if (raw is failure) {
+    return false
+  }
+  return raw.value == "already here"
+}
+
+// The one shape no quote character can hold: needs quoting (leading
+// space) but contains all three quote chars. Refused loudly before
+// anyone is asked to approve a save, never written silently wrong.
+node unrepresentableDescriptionFailsCleanly(): boolean {
+  const dir = outDir("unrepresentable")
+  const ran = runWrite(dir, "unrep", " \"d\" 's' `t`", "Body.")
+  return ran.outcome is failure && ran.saves == 0
+}

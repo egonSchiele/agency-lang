@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, symlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { _write, _read } from "./builtins.js";
@@ -57,6 +57,16 @@ describe("_write mode parameter", () => {
     );
     // Original content must be untouched.
     expect(readFileSync(join(dir, target), "utf-8")).toBe("existing");
+  });
+
+  it("create-only mode refuses a dangling symlink at the target", async () => {
+    // A stat-based existence check says "absent" here; only the wx open
+    // flag refuses it. This pins the flag: dropping it turns the write
+    // into follow-the-link.
+    symlinkSync(join(dir, "no-such-file"), join(dir, target));
+    await expect(_write(dir, target, "should-fail", "create-only")).rejects.toThrow(
+      /already exists/,
+    );
   });
 
   it("rejects unknown mode strings with a clear message", async () => {
@@ -118,5 +128,36 @@ describe("_read offset/limit", () => {
     writeFileSync(join(dir, "tiny.txt"), lines, "utf-8");
     const out = await _read(dir, "tiny.txt", 0, 0);
     expect(out).toBe(lines);
+  });
+});
+
+describe("_read allowedPaths containment", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "agency-read-contained-"));
+    writeFileSync(join(root, "inside.md"), "inside");
+  });
+
+  afterEach(() => {
+    try {
+      rmSync(root, { recursive: true });
+    } catch (_) {
+      /* best effort */
+    }
+  });
+
+  it("reads a contained file and paginates as usual", async () => {
+    expect(await _read(root, "inside.md", 0, 0, [root])).toBe("inside");
+  });
+
+  it("refuses a symlink that resolves outside every allowed root", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "agency-read-outside-"));
+    writeFileSync(join(outside, "secret.md"), "secret");
+    symlinkSync(join(outside, "secret.md"), join(root, "evil.md"));
+    await expect(_read(root, "evil.md", 0, 0, [root])).rejects.toThrow();
+    // Without allowedPaths the link is followed, as before.
+    expect(await _read(root, "evil.md")).toBe("secret");
+    rmSync(outside, { recursive: true });
   });
 });

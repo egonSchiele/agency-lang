@@ -3,11 +3,12 @@ import process from "process";
 import { readFile, writeFile, appendFile } from "fs/promises";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
-import { existsSync } from "fs";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
 import { resolvePath } from "./resolvePath.js";
+import { expandPath } from "./expandPath.js";
+import { readContainedFile } from "../utils/readContainedFile.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { FakeClock } from "../runtime/clock.js";
@@ -218,10 +219,20 @@ export async function _read(
   filename: string,
   offset?: number,
   limit?: number,
+  allowedPaths?: string[],
 ): Promise<string> {
   const filePath = await resolvePath(dir, filename);
-  const data = await readFile(filePath);
-  const text = data.toString("utf8");
+  let text: string;
+  if (allowedPaths && allowedPaths.length > 0) {
+    // Descriptor-validated read: the bytes provably come from inside an
+    // allowed root, with no window in which a swap to a symlink can
+    // redirect the read (see readContainedFile). The first root that
+    // accepts the file wins; the last refusal is rethrown.
+    text = readContainedAny(filePath, allowedPaths);
+  } else {
+    const data = await readFile(filePath);
+    text = data.toString("utf8");
+  }
   const off = offset && offset > 0 ? offset : undefined;
   const lim = limit && limit > 0 ? limit : undefined;
   // Default: return the whole file. Only paginate (and emit a
@@ -240,6 +251,18 @@ export async function _read(
   return slice.join("\n") + trailing;
 }
 
+function readContainedAny(filePath: string, allowedRoots: string[]): string {
+  let lastErr: unknown = new Error("no allowed roots");
+  for (const root of allowedRoots) {
+    try {
+      return readContainedFile(expandPath(root), filePath);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
 const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;
 export type WriteMode = (typeof VALID_WRITE_MODES)[number];
 
@@ -256,8 +279,19 @@ async function _writeBytes(
     throw new Error(`Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`);
   }
   const filePath = await resolvePath(dir, filename);
-  if (mode === "create-only" && existsSync(filePath)) {
-    throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
+  if (mode === "create-only") {
+    // The "wx" flag makes create-only atomic: an existing file (or a
+    // dangling symlink at the target) fails the open itself, with no
+    // check-then-write window.
+    try {
+      await writeFile(filePath, data, { flag: "wx" });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
+      }
+      throw err;
+    }
+    return true;
   }
   const doWrite = mode === "append" ? appendFile : writeFile;
   await doWrite(filePath, data);

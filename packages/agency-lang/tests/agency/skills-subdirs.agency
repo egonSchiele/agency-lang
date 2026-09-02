@@ -1,0 +1,222 @@
+/*
+ * scanSkillsSubdirs groups a root's flat skills by immediate
+ * subdirectory (one scan interrupt for the whole root), and
+ * skillsToolFromEntries rebuilds a skills tool from entries without
+ * rescanning. The fixture holds two explorer skills, one research
+ * skill, and an empty directory.
+ */
+import { exec, exists } from "std::shell"
+import { mkdir, remove } from "std::fs"
+import { keys } from "std::object"
+import { scanSkillsSubdirs, skillsToolFromEntries, SkillGroup } from "std::skills"
+
+def fixture(): string {
+  return "${__dirname}/skills-subdirs-fixture"
+}
+
+def scanFixture(subdirs: string[]): Record<string, SkillGroup> {
+  const scanned = scanSkillsSubdirs(fixture(), subdirs) with approve
+  if (scanned is failure) {
+    return {}
+  }
+  return scanned.value
+}
+
+node scanGroupsBySubdir(): boolean {
+  const scanned = scanFixture(["explorer", "research", "empty"])
+  const explorer = scanned["explorer"]
+  const research = scanned["research"]
+  const empty = scanned["empty"]
+  if (explorer == undefined || research == undefined || empty == undefined) {
+    return false
+  }
+  if (explorer.dir != "${fixture()}/explorer") {
+    return false
+  }
+  return explorer.entries.length == 2 && research.entries.length == 1 && empty.entries.length == 0
+}
+
+node scanRaisesOneInterrupt(): boolean {
+  let scans = 0
+  handle {
+    scanSkillsSubdirs(fixture(), ["explorer", "research", "empty"])
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  return scans == 1
+}
+
+node toolFromEntriesListsThem(): boolean {
+  const scanned = scanFixture(["explorer"])
+  const explorer = scanned["explorer"]
+  // The group carries the scanned directory, which is exactly the `dir`
+  // the tool needs — never the root.
+  const tool = skillsToolFromEntries(explorer.dir, explorer.entries, "learned_skills_explorer")
+  return tool.description.includes("<name>repo-orientation</name>")
+      && tool.description.includes("<description>Orient in an unfamiliar repo</description>")
+}
+
+// A missing root is a normal state (nothing learned yet): every
+// requested name is present, with no entries.
+node missingRootYieldsEmptyEntries(): boolean {
+  const scanned = scanSkillsSubdirs("${__dirname}/no-such-dir", ["explorer"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  return scanned.value["explorer"].entries.length == 0
+}
+
+// The record has no prototype, so names that collide with Object
+// properties are plain data keys: a missing "__proto__" directory reads
+// as empty, not as something inherited.
+node objectPropertyNamesAreDataKeys(): boolean {
+  const scanned = scanFixture(["__proto__", "constructor", "toString"])
+  return scanned["__proto__"].entries.length == 0
+      && scanned["constructor"].entries.length == 0
+      && scanned["toString"].entries.length == 0
+}
+
+// A subdirectory name that is not a bare path segment would carry the
+// root's one approval outside the root (`../x`), so it fails before any
+// interrupt is raised — the user is never prompted for a scan that
+// would escape what they approved.
+node traversalSubdirFailsBeforeTheInterrupt(): boolean {
+  const bad = ["../escape", "a/b", "..", ".", ""]
+  for (sub in bad) {
+    let scans = 0
+    let result: any = null
+    handle {
+      result = scanSkillsSubdirs(fixture(), [sub])
+    } with (intr) {
+      if (intr.effect == "std::skills::skillsDir") {
+        scans = scans + 1
+      }
+      return approve()
+    }
+    if (!(result is failure) || scans != 0) {
+      return false
+    }
+  }
+  return true
+}
+
+// Nothing to scan means nothing to approve: no interrupt is raised.
+node emptySubdirListNeedsNoPrompt(): boolean {
+  let scans = 0
+  let result: any = null
+  handle {
+    result = scanSkillsSubdirs(fixture(), [])
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  if (!(result is success) || scans != 0) {
+    return false
+  }
+  return keys(result.value).length == 0
+}
+
+// An empty root can never be scanned, so it fails before any prompt.
+node emptyRootFails(): boolean {
+  let scans = 0
+  let result: any = null
+  handle {
+    result = scanSkillsSubdirs("", ["explorer"])
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  return result is failure && scans == 0
+}
+
+// One failure names every offending subdirectory, so a caller hears
+// about all of them in one round.
+node allBadNamesReportedTogether(): boolean {
+  let result: any = null
+  handle {
+    result = scanSkillsSubdirs(fixture(), ["ok", "../one", "two/2"])
+  } with approve
+  if (result is failure(message)) {
+    const text = "${message}"
+    return text.includes("../one") && text.includes("two/2")
+  }
+  return false
+}
+
+// A symlinked subdirectory resolves outside the approved root, so the
+// scan refuses to follow it and the link reads as empty. Built entirely
+// under test-output: a root whose "linked" entry points at a sibling
+// directory holding a skill file.
+node symlinkedSubdirIsNotScanned(): boolean {
+  const base = "${__dirname}/test-output/skills-subdirs-symlink"
+  remove(base) with approve
+  mkdir("${base}/outside") with approve
+  mkdir("${base}/root") with approve
+  write("secret.md", "---\nname: secret\n---\nSecret.", "${base}/outside") with approve
+  exec("ln", ["-s", "${base}/outside", "${base}/root/linked"]) with approve
+  // Positive control: the link exists and the file is reachable through
+  // it, so an empty scan below can only mean the scan refused the link.
+  if (!exists("secret.md", "${base}/root/linked")) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs("${base}/root", ["linked"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  const group = scanned.value["linked"]
+  if (group == undefined) {
+    return false
+  }
+  return group.entries.length == 0
+}
+
+// A symlinked subdirectory is refused even when its target sits inside
+// the root: the caller asked for a directory, not a link to one.
+node inRootSymlinkedSubdirIsNotScanned(): boolean {
+  const base = "${__dirname}/test-output/skills-subdirs-inroot-symlink"
+  remove(base) with approve
+  mkdir("${base}/root/real") with approve
+  write("real.md", "---\nname: real\n---\nReal.", "${base}/root/real") with approve
+  exec("ln", ["-s", "${base}/root/real", "${base}/root/linked"]) with approve
+  if (!exists("real.md", "${base}/root/linked")) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs("${base}/root", ["real", "linked"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  return scanned.value["real"].entries.length == 1
+      && scanned.value["linked"].entries.length == 0
+}
+
+// A symlinked FILE inside a legitimate subdirectory would also be read
+// from wherever it points; the scan skips symlinked entries instead.
+node symlinkedFileIsNotListed(): boolean {
+  const base = "${__dirname}/test-output/skills-subdirs-symlink-file"
+  remove(base) with approve
+  mkdir("${base}/outside") with approve
+  mkdir("${base}/root/sub") with approve
+  write("secret.md", "---\nname: secret\n---\nSecret.", "${base}/outside") with approve
+  write("real.md", "---\nname: real\n---\nReal.", "${base}/root/sub") with approve
+  exec("ln", ["-s", "${base}/outside/secret.md", "${base}/root/sub/evil.md"]) with approve
+  // Positive control, as in the directory case above.
+  if (!exists("evil.md", "${base}/root/sub")) {
+    return false
+  }
+  const scanned = scanSkillsSubdirs("${base}/root", ["sub"]) with approve
+  if (scanned is failure) {
+    return false
+  }
+  const entries = scanned.value["sub"].entries
+  if (entries == undefined || entries.length != 1) {
+    return false
+  }
+  return entries[0].name == "real"
+}

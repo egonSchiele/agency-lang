@@ -268,6 +268,7 @@ export async function _ls(
   // dir as `dir`". All policy lives in `resolveDir` so future rules
   // (env vars, normalization, etc.) propagate automatically.
   const root = await resolveDir(dir, allowedPaths ?? []);
+  await refuseSymlinkedRoot(root, allowedPaths);
   // Coerce the cap so a non-finite value (e.g. NaN) can't silently
   // disable the bound and reintroduce unbounded recursion. `0` (and any
   // value <= 0) is a valid request that yields an empty result.
@@ -338,6 +339,34 @@ const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "build", ".next", ".c
 
 type Visitor = (fullPath: string, stat: Awaited<ReturnType<typeof fs.lstat>>) => Promise<boolean>;
 
+/**
+ * With containment requested, a walk root that is itself a symlink is
+ * refused: `readdir` would follow it, even to a target that happens to
+ * be contained, and the caller asked for a directory, not a link to one
+ * (repo policy on symlinks). A missing root passes — the walk then
+ * yields nothing.
+ *
+ * Deliberately final-component only. A symlink among the root's
+ * ANCESTORS is the caller's own spelling of the directory being
+ * resolved normally — an allowedPaths approval names a directory, not
+ * a spelling, and the containment checks and descriptor-validated
+ * reads all realpath through the same ancestors. What must never be
+ * followed is a link the approver did not name: the root's final
+ * component (here) and the entries inside it (the visitor's skip).
+ */
+async function refuseSymlinkedRoot(root: string, allowedPaths?: string[]): Promise<void> {
+  if (!allowedPaths || allowedPaths.length === 0) return;
+  let rootStat: Awaited<ReturnType<typeof fs.lstat>> | null = null;
+  try {
+    rootStat = await fs.lstat(root);
+  } catch {
+    return;
+  }
+  if (rootStat.isSymbolicLink()) {
+    throw new Error(`refused: '${root}' is a symlink and allowedPaths is set`);
+  }
+}
+
 async function walkDir(root: string, visit: Visitor): Promise<void> {
   async function walk(current: string): Promise<boolean> {
     let entries: string[];
@@ -374,6 +403,7 @@ export async function _grep(
   // returned `file` paths are relative to `dir` so callers can hand
   // them to `read(file, dir)` directly.
   const root = await resolveDir(dir, allowedPaths ?? []);
+  await refuseSymlinkedRoot(root, allowedPaths);
   const re = new RegExp(pattern, flags || undefined);
   const results: GrepMatch[] = [];
 
@@ -412,11 +442,20 @@ export async function _glob(
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned paths are relative to `dir` so callers can hand them to
   // `read(path, dir)` directly without `basename(...)` gymnastics.
+  if (maxResults <= 0) return [];
   const root = await resolveDir(dir, allowedPaths ?? []);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
-  await walkDir(root, async (full) => {
+  await refuseSymlinkedRoot(root, allowedPaths);
+
+  await walkDir(root, async (full, st) => {
+    // The same rule for every entry inside: a symlinked file or
+    // directory is skipped, because the reads that follow a glob
+    // resolve the link wherever it points.
+    if (allowedPaths && allowedPaths.length > 0 && st.isSymbolicLink()) {
+      return true;
+    }
     const rel = toPosix(path.relative(root, full));
     if (re.test(rel)) {
       results.push(rel);

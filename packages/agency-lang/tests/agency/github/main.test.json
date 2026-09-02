@@ -1,0 +1,36 @@
+{
+  "sourceFile": "main.agency",
+  "fetchMocks": [
+    {
+      "url": "https://api.github.com/repos/o/r/pulls/7",
+      "method": "GET",
+      "return": {
+        "number": 7,
+        "title": "Add feature",
+        "state": "open",
+        "user": { "login": "alice" },
+        "base": { "ref": "main" },
+        "head": { "ref": "feat", "sha": "abc123" },
+        "draft": false,
+        "body": "the body",
+        "html_url": "https://github.com/o/r/pull/7",
+        "additions": 10,
+        "deletions": 2,
+        "changed_files": 3
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/o/r/issues?*",
+      "method": "GET",
+      "return": []
+    }
+  ],
+  "tests": [
+    { "nodeName": "rejectedReadFails", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "approvedReadReturnsTypedData", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "approvingOneEffectDoesNotApproveAnother", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "payloadCarriesResolvedRepo", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "defaultResolutionFillsPayload", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "alwaysScopePinsOwnerAndRepo", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

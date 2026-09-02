@@ -1,0 +1,103 @@
+import { ghPrGet, ghIssueList } from "std::github"
+import { setEnv, cwd } from "std::system"
+import { setAgentCwd } from "std::index"
+import { alwaysScopeFor, ScopedField } from "std::policy"
+
+// Every GitHub call here targets owner "o" / repo "r" and is served by
+// fetchMocks in main.test.json — no test can reach the real network.
+
+node rejectedReadFails(): string {
+  setEnv("GITHUB_TOKEN", "test-token") with approve
+  const pr = ghPrGet(7, owner: "o", repo: "r") with reject
+  if (isFailure(pr)) {
+    return "pass"
+  }
+  // The mock WOULD have served this request: reaching here means the
+  // rejection failed to block it.
+  return "FAIL rejection did not block the request"
+}
+
+node approvedReadReturnsTypedData(): string {
+  setEnv("GITHUB_TOKEN", "test-token") with approve
+  const pr = ghPrGet(7, owner: "o", repo: "r") with approve
+  if (isFailure(pr)) {
+    return "FAIL approved read failed: ${JSON.stringify(pr)}"
+  }
+  if (pr.number != 7 || pr.title != "Add feature" || pr.author != "alice" || pr.headSha != "abc123") {
+    return "FAIL wrong mapping: ${JSON.stringify(pr)}"
+  }
+  return "pass"
+}
+
+node approvingOneEffectDoesNotApproveAnother(): string {
+  setEnv("GITHUB_TOKEN", "test-token") with approve
+  handle {
+    const issues = ghIssueList(owner: "o", repo: "r")
+    if (isFailure(issues)) {
+      return "pass"
+    }
+    // The issues mock WOULD have served this: reaching here means the
+    // prGet-only handler approved a different effect.
+    return "FAIL issueList went through under a prGet-only handler"
+  } with (intr) {
+    if (intr.effect == "std::github::prGet") {
+      return approve()
+    }
+    return reject()
+  }
+}
+
+node payloadCarriesResolvedRepo(): string {
+  let sawOwner = ""
+  let sawRepo = ""
+  handle {
+    const pr = ghPrGet(7, owner: "o", repo: "r")
+  } with (intr) {
+    if (intr.effect == "std::github::prGet") {
+      sawOwner = intr.data.owner
+      sawRepo = intr.data.repo
+    }
+    // Reject so no request (and no credential read) is ever needed.
+    return reject()
+  }
+  if (sawOwner == "o" && sawRepo == "r") {
+    return "pass"
+  }
+  return "FAIL payload had owner=${sawOwner} repo=${sawRepo}"
+}
+
+node defaultResolutionFillsPayload(): string {
+  // No owner/repo passed: resolution reads the origin remote of the agent
+  // working directory (this repository) BEFORE the raise, so the payload
+  // must carry a non-empty pair — never ("", "").
+  setAgentCwd(cwd())
+  let sawOwner = ""
+  handle {
+    const pr = ghPrGet(1)
+  } with (intr) {
+    if (intr.effect == "std::github::prGet") {
+      sawOwner = intr.data.owner
+    }
+    return reject()
+  }
+  if (sawOwner != "") {
+    return "pass"
+  }
+  return "FAIL payload owner was empty"
+}
+
+node alwaysScopePinsOwnerAndRepo(): string {
+  // Importing std::github registered the @always scopes at JS-load
+  // (pattern: tests/agency/effect-always-registry).
+  const scope: ScopedField[] = alwaysScopeFor("std::github::prGet")
+  if (scope.length != 2) {
+    return "FAIL scope: ${JSON.stringify(scope)}"
+  }
+  if (scope[0].field != "owner" || scope[0].matchSubpaths) {
+    return "FAIL first field: ${JSON.stringify(scope)}"
+  }
+  if (scope[1].field != "repo" || scope[1].matchSubpaths) {
+    return "FAIL second field: ${JSON.stringify(scope)}"
+  }
+  return "pass"
+}

@@ -78,6 +78,16 @@ The interrupt payload's `dir` is absolutized, an empty root fails
 before any prompt, and an empty subdirectory list returns an empty
 record without raising the interrupt at all.
 
+The refusal is deliberately about names the approver never saw: the
+subdirectory names, the scanned directory's final component, and the
+entries inside it. A symlink among the approved root's own ancestors
+(`/tmp` on macOS, say) is just the caller's spelling resolving
+normally — the approval names the directory that path reaches, and the
+containment checks realpath through those ancestors consistently. An
+attacker who can replace an ancestor of the approved root controls the
+data's parent directory and is outside this (and every file effect's)
+threat model.
+
 ## The frontmatter round-trip
 
 The description is serialized with tarsec's `stringifyFrontmatter`

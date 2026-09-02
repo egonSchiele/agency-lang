@@ -345,6 +345,14 @@ type Visitor = (fullPath: string, stat: Awaited<ReturnType<typeof fs.lstat>>) =>
  * be contained, and the caller asked for a directory, not a link to one
  * (repo policy on symlinks). A missing root passes — the walk then
  * yields nothing.
+ *
+ * Deliberately final-component only. A symlink among the root's
+ * ANCESTORS is the caller's own spelling of the directory being
+ * resolved normally — an allowedPaths approval names a directory, not
+ * a spelling, and the containment checks and descriptor-validated
+ * reads all realpath through the same ancestors. What must never be
+ * followed is a link the approver did not name: the root's final
+ * component (here) and the entries inside it (the visitor's skip).
  */
 async function refuseSymlinkedRoot(root: string, allowedPaths?: string[]): Promise<void> {
   if (!allowedPaths || allowedPaths.length === 0) return;

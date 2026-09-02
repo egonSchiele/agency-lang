@@ -3,12 +3,9 @@
  * calls one as a tool, the tool loop keeps the body on the caller's
  * thread and replaces the tool-call bookkeeping with two plain messages:
  * an assistant-role marker where the tool call was, and a user-role
- * resume message when the body returns. See
+ * resume message when the body returns. These helpers only touch a
+ * MessageThread; prompt.ts decides when to call them. See
  * docs/dev/language/handoff-functions.md.
- *
- * These helpers only touch a MessageThread. Where they are called from,
- * and why each call sits inside an idempotent step, is prompt.ts's
- * business.
  */
 import * as smoltalk from "smoltalk";
 import type { MessageThread } from "./state/messageThread.js";

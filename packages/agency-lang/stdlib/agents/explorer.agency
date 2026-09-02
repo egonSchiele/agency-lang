@@ -146,6 +146,9 @@ def survey(
   )
 }
 
+/** Called from code, this runs on the caller's thread like any function:
+ *  the system prompt, the reads, and the answer stay there. Wrap the call
+ *  in `thread { ... }` for an isolated survey. */
 export handoff def explorerAgent(
   question: string,
   context: string = "",
@@ -161,14 +164,9 @@ export handoff def explorerAgent(
   many files. Reads widely before synthesizing, and cites what it read. It
   never changes anything.
 
-  Called as a tool, the explorer continues your conversation: it sees
-  everything said so far, and every file it reads stays in your history
-  when it hands back. Say how much ground to cover; the reads are yours to
-  keep afterwards, so scope the question.
-
-  Called from code, it runs on your current thread like any function, and
-  its system prompt, reads, and answer stay there. Wrap the call in
-  `thread { ... }` for an isolated survey.
+  The explorer continues your conversation: it sees everything said so
+  far, and every file it reads stays in your history when it hands back.
+  Say how much ground to cover, and scope the question tightly.
 
   @param question - The question, and the scope you want covered
   @param context - Extra material folded into the prompt, or ""

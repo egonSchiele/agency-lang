@@ -119,9 +119,9 @@ call into a marker (docs/dev/language/handoff-functions.md). A sibling
 call in the same round needs that message intact to pair its own tool
 result. So a handoff that shares a round with any other call, an
 intrinsic like `saveDraft` included, gets the `handoffNotAlone` verdict.
-The refusal goes out as a tool message, which is fine: in a mixed round
-the assistant message was never rewritten. The siblings run. The text
-tells the model to call the handoff again by itself.
+The refusal goes out as a tool message; in a mixed round the assistant
+message was never rewritten. The siblings run. The text tells the model
+to call the handoff again by itself.
 
 ## Tests
 

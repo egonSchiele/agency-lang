@@ -372,11 +372,12 @@ ensureSystemMessage(msg: string)
 ```
 
 Push `msg` as a system message unless the active thread already holds it.
-  Use it for an agent's persona: called twice from code on one thread, the
-  agent keeps one persona; called as a handoff, whose system messages are
-  removed when it hands back, it pushes the persona fresh on every dispatch.
 
   @param msg - The system message
+
+For an agent's persona. An agent called twice from code on one thread
+ *  keeps one persona; a handoff, whose system messages are removed when it
+ *  hands back, pushes the persona fresh on every dispatch.
 
 **Parameters:**
 
@@ -384,7 +385,7 @@ Push `msg` as a system message unless the active thread already holds it.
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L226))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L229))
 
 ### getTokens
 

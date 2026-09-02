@@ -49,14 +49,9 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
   design. Reads the code and returns a written analysis ending in a concrete
   recommendation. It never changes anything.
 
-  Called as a tool, the oracle continues your conversation: it sees
-  everything said so far, and its reading and reasoning stay in your
-  history when it hands back. Ask the question itself; there is no need to
-  restate the context.
-
-  Called from code, it runs on your current thread like any function, and
-  its system prompt, reads, and answer stay there. Wrap the call in
-  `thread { ... }` for an isolated consult.
+  The oracle continues your conversation: it sees everything said so far,
+  and its reading and reasoning stay in your history when it hands back.
+  Ask the question itself; there is no need to restate the context.
 
   @param question - The question
   @param context - Extra material folded into the prompt, or ""
@@ -65,6 +60,10 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+
+Called from code, this runs on the caller's thread like any function:
+ *  the system prompt, the reads, and the answer stay there. Wrap the call
+ *  in `thread { ... }` for an isolated consult.
 
 **Parameters:**
 
@@ -82,4 +81,4 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L124))

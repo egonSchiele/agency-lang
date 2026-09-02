@@ -110,8 +110,8 @@ export static const codeTools: any[] = [
   agencyCli,
   superpowersSkill,
   // A handoff: the oracle continues the coder's thread, so it sees the
-  // actual diff and build output rather than a restatement, and its
-  // reads stay in the coder's history. Intended.
+  // actual diff and build output, and its reads stay in the coder's
+  // history.
   oracleAgent,
 ]
 

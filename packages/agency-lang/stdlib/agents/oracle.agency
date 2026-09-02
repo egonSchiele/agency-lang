@@ -118,6 +118,9 @@ def consider(
   )
 }
 
+/** Called from code, this runs on the caller's thread like any function:
+ *  the system prompt, the reads, and the answer stay there. Wrap the call
+ *  in `thread { ... }` for an isolated consult. */
 export handoff def oracleAgent(
   question: string,
   context: string = "",
@@ -133,14 +136,9 @@ export handoff def oracleAgent(
   design. Reads the code and returns a written analysis ending in a concrete
   recommendation. It never changes anything.
 
-  Called as a tool, the oracle continues your conversation: it sees
-  everything said so far, and its reading and reasoning stay in your
-  history when it hands back. Ask the question itself; there is no need to
-  restate the context.
-
-  Called from code, it runs on your current thread like any function, and
-  its system prompt, reads, and answer stay there. Wrap the call in
-  `thread { ... }` for an isolated consult.
+  The oracle continues your conversation: it sees everything said so far,
+  and its reading and reasoning stay in your history when it hands back.
+  Ask the question itself; there is no need to restate the context.
 
   @param question - The question
   @param context - Extra material folded into the prompt, or ""

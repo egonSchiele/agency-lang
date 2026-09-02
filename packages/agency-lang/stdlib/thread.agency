@@ -223,12 +223,12 @@ export idempotent def threadIsNew(): boolean {
 // Enough to read any thread an agent runs on in one call.
 static const THREAD_READ_LIMIT = 100000
 
+/** For an agent's persona. An agent called twice from code on one thread
+ *  keeps one persona; a handoff, whose system messages are removed when it
+ *  hands back, pushes the persona fresh on every dispatch. */
 export def ensureSystemMessage(msg: string) {
   """
   Push `msg` as a system message unless the active thread already holds it.
-  Use it for an agent's persona: called twice from code on one thread, the
-  agent keeps one persona; called as a handoff, whose system messages are
-  removed when it hands back, it pushes the persona fresh on every dispatch.
 
   @param msg - The system message
   """

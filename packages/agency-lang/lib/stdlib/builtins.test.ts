@@ -130,3 +130,34 @@ describe("_read offset/limit", () => {
     expect(out).toBe(lines);
   });
 });
+
+describe("_read allowedPaths containment", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "agency-read-contained-"));
+    writeFileSync(join(root, "inside.md"), "inside");
+  });
+
+  afterEach(() => {
+    try {
+      rmSync(root, { recursive: true });
+    } catch (_) {
+      /* best effort */
+    }
+  });
+
+  it("reads a contained file and paginates as usual", async () => {
+    expect(await _read(root, "inside.md", 0, 0, [root])).toBe("inside");
+  });
+
+  it("refuses a symlink that resolves outside every allowed root", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "agency-read-outside-"));
+    writeFileSync(join(outside, "secret.md"), "secret");
+    symlinkSync(join(outside, "secret.md"), join(root, "evil.md"));
+    await expect(_read(root, "evil.md", 0, 0, [root])).rejects.toThrow();
+    // Without allowedPaths the link is followed, as before.
+    expect(await _read(root, "evil.md")).toBe("secret");
+    rmSync(outside, { recursive: true });
+  });
+});

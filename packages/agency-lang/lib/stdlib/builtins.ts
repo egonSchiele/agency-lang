@@ -7,7 +7,8 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
 import { resolvePath } from "./resolvePath.js";
-import { assertContained } from "./assertContained.js";
+import { expandPath } from "./expandPath.js";
+import { readContainedFile } from "../utils/readContainedFile.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { FakeClock } from "../runtime/clock.js";
@@ -221,15 +222,17 @@ export async function _read(
   allowedPaths?: string[],
 ): Promise<string> {
   const filePath = await resolvePath(dir, filename);
-  // The symlink-aware containment the other primitives (`_glob`,
-  // `_grep`, `_ls`) already offer: with allowedPaths set, a path that
-  // resolves outside them — including through a symlink created after
-  // an earlier listing — is refused at read time.
+  let text: string;
   if (allowedPaths && allowedPaths.length > 0) {
-    await assertContained(filePath, allowedPaths);
+    // Descriptor-validated read: the bytes provably come from inside an
+    // allowed root, with no window in which a swap to a symlink can
+    // redirect the read (see readContainedFile). The first root that
+    // accepts the file wins; the last refusal is rethrown.
+    text = readContainedAny(filePath, allowedPaths);
+  } else {
+    const data = await readFile(filePath);
+    text = data.toString("utf8");
   }
-  const data = await readFile(filePath);
-  const text = data.toString("utf8");
   const off = offset && offset > 0 ? offset : undefined;
   const lim = limit && limit > 0 ? limit : undefined;
   // Default: return the whole file. Only paginate (and emit a
@@ -246,6 +249,18 @@ export async function _read(
       ? `\n... [truncated: showing ${start}-${start + slice.length - 1} of ${lines.length} lines]`
       : "";
   return slice.join("\n") + trailing;
+}
+
+function readContainedAny(filePath: string, allowedRoots: string[]): string {
+  let lastErr: unknown = new Error("no allowed roots");
+  for (const root of allowedRoots) {
+    try {
+      return readContainedFile(expandPath(root), filePath);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
 }
 
 const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;

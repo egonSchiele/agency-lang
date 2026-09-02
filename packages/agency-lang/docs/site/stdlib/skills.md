@@ -56,32 +56,32 @@ export type SkillGroup = {
 
 ### std::skills::skillsDir
 
-* Build a tool that lets an LLM read skill files in `dir`. Supports two
- * layouts:
- *   - "standard" (default): each subdirectory of `dir` is one skill
- *     with a `SKILL.md` entrypoint. Frontmatter `name` / `description`
- *     are read; `name` defaults to the subdirectory name.
- *   - "flat": each `.md` / `.markdown` file directly under `dir` is one
- *     skill. Frontmatter `name` (or `title`) and `description` are read.
- *
- * The returned tool is `read` partially applied with `dir: dir`. Its
- * description lists every available skill so the LLM knows which
- * `location` to pass back as `filename`.
+Build a tool that lets an LLM read skill files in `dir`. Supports two
+layouts:
+  - "standard" (default): each subdirectory of `dir` is one skill with
+    a `SKILL.md` entrypoint. Frontmatter `name` / `description` are
+    read; `name` defaults to the subdirectory name.
+  - "flat": each `.md` / `.markdown` file directly under `dir` is one
+    skill. Frontmatter `name` (or `title`) and `description` are read.
+
+The returned tool is `read` partially applied with `dir: dir`. Its
+description lists every available skill so the LLM knows which
+`location` to pass back as `filename`.
 
 ```ts
 /**
- * Build a tool that lets an LLM read skill files in `dir`. Supports two
- * layouts:
- *   - "standard" (default): each subdirectory of `dir` is one skill
- *     with a `SKILL.md` entrypoint. Frontmatter `name` / `description`
- *     are read; `name` defaults to the subdirectory name.
- *   - "flat": each `.md` / `.markdown` file directly under `dir` is one
- *     skill. Frontmatter `name` (or `title`) and `description` are read.
- *
- * The returned tool is `read` partially applied with `dir: dir`. Its
- * description lists every available skill so the LLM knows which
- * `location` to pass back as `filename`.
- */
+Build a tool that lets an LLM read skill files in `dir`. Supports two
+layouts:
+  - "standard" (default): each subdirectory of `dir` is one skill with
+    a `SKILL.md` entrypoint. Frontmatter `name` / `description` are
+    read; `name` defaults to the subdirectory name.
+  - "flat": each `.md` / `.markdown` file directly under `dir` is one
+    skill. Frontmatter `name` (or `title`) and `description` are read.
+
+The returned tool is `read` partially applied with `dir: dir`. Its
+description lists every available skill so the LLM knows which
+`location` to pass back as `filename`.
+*/
 @alwaysUnder(dir)
 effect std::skills::skillsDir {
   dir: string;
@@ -113,7 +113,7 @@ effect std::skills::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L358))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L370))
 
 ## Functions
 
@@ -129,9 +129,9 @@ Build the skills tool for `dir` from already-scanned entries.
   @param entries - The skills to list in the tool description
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters; defaults to a name derived from `dir`.
 
-* The pure build half of a skills tool: no reads, no interrupts. A
- * caller that already holds a directory's entries (a cached catalog,
- * say) can rebuild the tool without rescanning.
+The pure build half of a skills tool: no reads, no interrupts. A caller
+that already holds a directory's entries (a cached catalog, say) can
+rebuild the tool without rescanning.
 
 **Parameters:**
 
@@ -188,11 +188,11 @@ Scan named subdirectories of a root. Each subdirectory holds one
   @param root - The directory holding the subdirectories
   @param subdirs - The subdirectory names to scan
 
-* For an application with several subagents, each owning one skills
- * subdirectory under a common root: read every subdirectory's skill
- * files in one pass and group the entries by subdirectory name. Each
- * group carries the scanned directory, which is what
- * `skillsToolFromEntries` needs as its `dir`.
+For an application with several subagents, each owning one skills
+subdirectory under a common root: read every subdirectory's skill files
+in one pass and group the entries by subdirectory name. Each group
+carries the scanned directory, which is what `skillsToolFromEntries`
+needs as its `dir`.
 
 **Parameters:**
 
@@ -227,11 +227,11 @@ Save one skill file into a skills directory, after approval. Composes
   @param description - One line telling the reading agent when to use the skill
   @param body - The skill's markdown body
 
-* The plain primitive for saving a skill that is already final: show
- * the complete file in a `std::skills::save` interrupt, then write it.
- * There is deliberately no feedback shape on that interrupt — any
- * approval saves, and data carried on the approval is not consulted.
- * A draft-revise-accept loop belongs in a caller built on top of this.
+The plain primitive for saving a skill that is already final: show the
+complete file in a `std::skills::save` interrupt, then write it. There
+is deliberately no feedback shape on that interrupt — any approval
+saves, and data carried on the approval is not consulted. A
+draft-revise-accept loop belongs in a caller built on top of this.
 
 **Parameters:**
 
@@ -246,7 +246,7 @@ Save one skill file into a skills directory, after approval. Composes
 
 **Throws:** `std::skills::save`, `std::mkdir`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L378))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L390))
 
 ### docsSkill
 
@@ -271,7 +271,7 @@ Build a docs tool for an LLM over the packaged Agency documentation.
 |---|---|---|
 | section | `\| "guide" \| "cli" \| "diagnostics" \| "stdlib" \| "agent"` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L443))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L455))
 
 ### bundledDocsDir
 
@@ -284,7 +284,7 @@ The directory holding the Agency docs that ship inside the package. A
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L464))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L476))
 
 ### agentSkill
 
@@ -304,7 +304,7 @@ Build a skills tool over the skills shipped for one agent. The returned
 |---|---|---|
 | agent | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L472))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L484))
 
 ### commandsDir
 
@@ -317,35 +317,35 @@ Discover .md files under `dir` and parse each as a slash-command
 
   @param dir - Directory containing command markdown files.
 
-* Discover Claude-Code-format slash commands under `dir`. Each `.md`
- * file becomes one command record `{ name, description, argHint, body }`.
- *
- * Pair with `expandSlash(msg, commands)` in your agent's per-turn
- * handler:
- *
- * ```ts
- * static const commands = commandsDir("${cwd()}/.claude/commands") with approve
- * def _runTurn(msg: string) {
- *   const prompt = expandSlash(msg, commands)
- *   const reply = llm(prompt, { tools })
- * }
- * ```
- *
- * `commandsDir` reads only the `description` and `argument-hint`
- * frontmatter fields. It silently ignores all other CC fields
- * (`allowed-tools`, `model`, `effort`, `context: fork`,
- * `disable-model-invocation`, `user-invocable`, `hooks`, `paths`,
- * `shell`, ...). `commandsDir` is a pure prompt-template loader, not an
- * executor.
- *
- * Files with no frontmatter still dispatch. `description` and
- * `argHint` default to `""` (never null/undefined). Missing or empty
- * `dir` returns `[]`.
- *
- * Relative `dir` resolves against the current working directory;
- * pass `__dirname` for a directory relative to the current Agency file.
- * For project-level commands (e.g. `.claude/commands` at the project
- * root), pass an absolute path: `"${cwd()}/.claude/commands"`.
+Discover Claude-Code-format slash commands under `dir`. Each `.md`
+file becomes one command record `{ name, description, argHint, body }`.
+
+Pair with `expandSlash(msg, commands)` in your agent's per-turn
+handler:
+
+```ts
+static const commands = commandsDir("${cwd()}/.claude/commands") with approve
+def _runTurn(msg: string) {
+  const prompt = expandSlash(msg, commands)
+  const reply = llm(prompt, { tools })
+}
+```
+
+`commandsDir` reads only the `description` and `argument-hint`
+frontmatter fields. It silently ignores all other CC fields
+(`allowed-tools`, `model`, `effort`, `context: fork`,
+`disable-model-invocation`, `user-invocable`, `hooks`, `paths`,
+`shell`, ...). `commandsDir` is a pure prompt-template loader, not an
+executor.
+
+Files with no frontmatter still dispatch. `description` and
+`argHint` default to `""` (never null/undefined). Missing or empty
+`dir` returns `[]`.
+
+Relative `dir` resolves against the current working directory;
+pass `__dirname` for a directory relative to the current Agency file.
+For project-level commands (e.g. `.claude/commands` at the project
+root), pass an absolute path: `"${cwd()}/.claude/commands"`.
 
 **Parameters:**
 
@@ -357,7 +357,7 @@ Discover .md files under `dir` and parse each as a slash-command
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L560))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L572))
 
 ### expandSlash
 
@@ -371,21 +371,21 @@ Expand a /command in `msg` into its command body. Returns the rendered
   @param msg - The raw input line (may have leading/trailing whitespace or newlines).
   @param commands - Array of command records to match against.
 
-* Expand a user-typed slash command against a `commandsDir` result.
- *
- * - If `msg` (after trimming) matches `/<name>` with optional
- *   whitespace + args, returns the rendered command body with
- *   `$ARGUMENTS` substituted.
- * - If the body has no `$ARGUMENTS` token and args were passed,
- *   appends `\n\nARGUMENTS: <raw>` so the LLM still sees the input
- *   (matches Claude Code).
- * - Otherwise returns `msg` unchanged — unknown `/foo` inputs fall
- *   through to the LLM as plain text, again matching CC.
- *
- * Args are split off at the first whitespace (space, tab, or
- * newline) after `/<name>`. `expandSlash` tolerates leading and
- * trailing whitespace on `msg`, so piped invocations (`echo /foo |
- * agency agent`, yielding `"/foo\n"`) dispatch correctly.
+Expand a user-typed slash command against a `commandsDir` result.
+
+- If `msg` (after trimming) matches `/<name>` with optional
+  whitespace + args, returns the rendered command body with
+  `$ARGUMENTS` substituted.
+- If the body has no `$ARGUMENTS` token and args were passed,
+  appends `\n\nARGUMENTS: <raw>` so the LLM still sees the input
+  (matches Claude Code).
+- Otherwise returns `msg` unchanged — unknown `/foo` inputs fall
+  through to the LLM as plain text, again matching CC.
+
+Args are split off at the first whitespace (space, tab, or
+newline) after `/<name>`. `expandSlash` tolerates leading and
+trailing whitespace on `msg`, so piped invocations (`echo /foo |
+agency agent`, yielding `"/foo\n"`) dispatch correctly.
 
 **Parameters:**
 
@@ -396,4 +396,4 @@ Expand a /command in `msg` into its command body. Returns the rendered
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L615))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L627))

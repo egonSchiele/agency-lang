@@ -116,8 +116,16 @@ node duplicateNameFails(): boolean {
 
 node invalidNameFails(): boolean {
   const dir = outDir("invalid-name")
-  const ran = runWrite(dir, "Repo Orientation!", "Bad name", "Body.")
-  return ran.outcome is failure && ran.saves == 0
+  // Kebab-case only: no uppercase or punctuation, and no leading,
+  // trailing, or doubled hyphens.
+  const bad = ["Repo Orientation!", "-repo", "repo-", "repo--orientation"]
+  for (name in bad) {
+    const ran = runWrite(dir, name, "Bad name", "Body.")
+    if (!(ran.outcome is failure) || ran.saves != 0) {
+      return false
+    }
+  }
+  return true
 }
 
 // The name is also the filename, so its length is capped up front —

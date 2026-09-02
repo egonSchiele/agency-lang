@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { __internal_exec, __internal_bash, _glob } from "./shell.js";
+import { __internal_exec, __internal_bash, _glob, _grep } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
@@ -236,5 +236,33 @@ describe("_glob symlink handling under allowedPaths", () => {
     // Without allowedPaths the link is followed, as before.
     const open = await _glob("*.md", path.join(root, "linked"), 100, []);
     expect(open.sort()).toEqual(["a.md", "link.md"]);
+  });
+});
+
+describe("symlinked-root refusal parity across walkers", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-walk-symlink-"));
+    fs.mkdirSync(path.join(root, "real"));
+    fs.writeFileSync(path.join(root, "real", "a.md"), "needle");
+    fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("_grep refuses a symlinked search root when allowedPaths is set", async () => {
+    await expect(_grep("needle", path.join(root, "linked"), "", 10, [root])).rejects.toThrow(
+      /is a symlink/,
+    );
+    const open = await _grep("needle", path.join(root, "linked"), "", 10, []);
+    expect(open.length).toBe(1);
+  });
+
+  it("_glob returns nothing for a non-positive maxResults", async () => {
+    expect(await _glob("*.md", path.join(root, "real"), 0, [])).toEqual([]);
+    expect(await _glob("*.md", path.join(root, "real"), -3, [])).toEqual([]);
   });
 });

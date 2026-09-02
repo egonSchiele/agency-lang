@@ -228,7 +228,7 @@ List entries in a directory. Each entry has name, path, type ("file", "dir", "sy
   @param dir - The directory to list
   @param recursive - Whether to walk subdirectories
   @param maxResults - Maximum number of entries to return
-  @param allowedPaths - Only allow listing directories under these prefixes
+  @param allowedPaths - Only allow listing directories under these prefixes. When set, a symlinked dir fails the call rather than being followed.
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
 
 **Parameters:**
@@ -268,7 +268,7 @@ Search for a regex pattern in files under a directory. Returns matches with file
   @param dir - The directory to search in
   @param flags - Regex flags
   @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes
+  @param allowedPaths - Only allow searching under these path prefixes. When set, a symlinked search dir fails the call rather than being followed.
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
 
 **Parameters:**

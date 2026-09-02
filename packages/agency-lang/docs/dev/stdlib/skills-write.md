@@ -68,9 +68,15 @@ approved:
    the glob into refuse-symlinks mode: a symlinked subdirectory fails
    the glob (even one whose target sits inside the root), and symlinked
    entries inside a real subdirectory are left out of the results. The
-   file reads that follow re-check containment against the root at read
-   time, so a path swapped for a symlink after the listing is refused
-   too.
+   file reads that follow go through a descriptor-validated read
+   (`readContainedFile`): the open refuses a final-component symlink,
+   and the opened descriptor itself is checked to sit inside the root —
+   so a path swapped for a symlink after the listing is refused with no
+   check-then-open window.
+
+The interrupt payload's `dir` is absolutized, an empty root fails
+before any prompt, and an empty subdirectory list returns an empty
+record without raising the interrupt at all.
 
 ## The frontmatter round-trip
 

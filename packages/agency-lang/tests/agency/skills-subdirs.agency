@@ -7,6 +7,7 @@
  */
 import { exec, exists } from "std::shell"
 import { mkdir, remove } from "std::fs"
+import { keys } from "std::object"
 import { scanSkillsSubdirs, skillsToolFromEntries, SkillGroup } from "std::skills"
 
 def fixture(): string {
@@ -100,6 +101,39 @@ node traversalSubdirFailsBeforeTheInterrupt(): boolean {
     }
   }
   return true
+}
+
+// Nothing to scan means nothing to approve: no interrupt is raised.
+node emptySubdirListNeedsNoPrompt(): boolean {
+  let scans = 0
+  let result: any = null
+  handle {
+    result = scanSkillsSubdirs(fixture(), [])
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  if (!(result is success) || scans != 0) {
+    return false
+  }
+  return keys(result.value).length == 0
+}
+
+// An empty root can never be scanned, so it fails before any prompt.
+node emptyRootFails(): boolean {
+  let scans = 0
+  let result: any = null
+  handle {
+    result = scanSkillsSubdirs("", ["explorer"])
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      scans = scans + 1
+    }
+    return approve()
+  }
+  return result is failure && scans == 0
 }
 
 // One failure names every offending subdirectory, so a caller hears

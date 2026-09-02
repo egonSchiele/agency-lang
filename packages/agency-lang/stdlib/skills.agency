@@ -177,18 +177,18 @@ def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
 }
 
 /**
- * Build a tool that lets an LLM read skill files in `dir`. Supports two
- * layouts:
- *   - "standard" (default): each subdirectory of `dir` is one skill
- *     with a `SKILL.md` entrypoint. Frontmatter `name` / `description`
- *     are read; `name` defaults to the subdirectory name.
- *   - "flat": each `.md` / `.markdown` file directly under `dir` is one
- *     skill. Frontmatter `name` (or `title`) and `description` are read.
- *
- * The returned tool is `read` partially applied with `dir: dir`. Its
- * description lists every available skill so the LLM knows which
- * `location` to pass back as `filename`.
- */
+Build a tool that lets an LLM read skill files in `dir`. Supports two
+layouts:
+  - "standard" (default): each subdirectory of `dir` is one skill with
+    a `SKILL.md` entrypoint. Frontmatter `name` / `description` are
+    read; `name` defaults to the subdirectory name.
+  - "flat": each `.md` / `.markdown` file directly under `dir` is one
+    skill. Frontmatter `name` (or `title`) and `description` are read.
+
+The returned tool is `read` partially applied with `dir: dir`. Its
+description lists every available skill so the LLM knows which
+`location` to pass back as `filename`.
+*/
 @alwaysUnder(dir)
 effect std::skills::skillsDir {
   dir: string;
@@ -200,10 +200,10 @@ effect std::skills::commandsDir {
 }
 
 /**
- * The pure build half of a skills tool: no reads, no interrupts. A
- * caller that already holds a directory's entries (a cached catalog,
- * say) can rebuild the tool without rescanning.
- */
+The pure build half of a skills tool: no reads, no interrupts. A caller
+that already holds a directory's entries (a cached catalog, say) can
+rebuild the tool without rescanning.
+*/
 export def skillsToolFromEntries(
   dir: string,
   entries: SkillEntry[],
@@ -307,12 +307,12 @@ export type SkillGroup = {
 }
 
 /**
- * For an application with several subagents, each owning one skills
- * subdirectory under a common root: read every subdirectory's skill
- * files in one pass and group the entries by subdirectory name. Each
- * group carries the scanned directory, which is what
- * `skillsToolFromEntries` needs as its `dir`.
- */
+For an application with several subagents, each owning one skills
+subdirectory under a common root: read every subdirectory's skill files
+in one pass and group the entries by subdirectory name. Each group
+carries the scanned directory, which is what `skillsToolFromEntries`
+needs as its `dir`.
+*/
 export def scanSkillsSubdirs(
   root: string,
   subdirs: string[],
@@ -326,6 +326,9 @@ export def scanSkillsSubdirs(
   @param root - The directory holding the subdirectories
   @param subdirs - The subdirectory names to scan
   """
+  if (root.trim() == "") {
+    return failure("root must not be empty")
+  }
   // The one interrupt approves scanning under `root`, so every name must
   // stay a single path segment; anything else would carry that approval
   // outside the directory the user said yes to. Checked before raising,
@@ -334,8 +337,16 @@ export def scanSkillsSubdirs(
   if (bad.length > 0) {
     return failure("not bare directory names: '${bad.join("', '")}'; scanSkillsSubdirs only scans direct subdirectories of its root")
   }
+  // Nothing to scan: no prompt is spent on it.
+  if (subdirs.length == 0) {
+    return success(Object.create(null))
+  }
+  // Absolutized so the interrupt payload — and any always-scope rule
+  // saved from it — names one directory regardless of the caller's
+  // spelling.
+  const absRoot = _resolveCwdPath(root)
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: root,
+    dir: absRoot,
     layout: "flat"
   })
 
@@ -343,12 +354,13 @@ export def scanSkillsSubdirs(
   // key (the groupBy pattern from std::index).
   const out: Record<string, SkillGroup> = Object.create(null)
   for (sub in subdirs) {
-    const subdir = "${root}/${sub}"
-    // `[root]` makes the scan's containment check refuse a subdirectory
-    // or file that resolves outside the approved root — a symlink, say.
+    const subdir = "${absRoot}/${sub}"
+    // `[absRoot]` makes the scan's containment check refuse a
+    // subdirectory or file that resolves outside the approved root — a
+    // symlink, say.
     out[sub] = {
       dir: subdir,
-      entries: scanEntries(subdir, "flat", false, MAX_SKILL_FILES, [root])
+      entries: scanEntries(subdir, "flat", false, MAX_SKILL_FILES, [absRoot])
     }
   }
   return success(out)
@@ -361,20 +373,20 @@ effect std::skills::save {
   content: string
 }
 
-// Skill names: lowercase alphanumerics and hyphens, starting with a
-// letter or digit. Mirrors the bundled skills' kebab-case names.
-// Validated, never rewritten, so a user-chosen name is never changed.
+// Skill names: kebab-case — lowercase alphanumeric segments separated
+// by single hyphens. Mirrors the bundled skills' names. Validated,
+// never rewritten, so a user-chosen name is never changed.
 def validSkillName(name: string): boolean {
-  return name =~ re/^[a-z0-9][a-z0-9-]*$/
+  return name =~ re/^[a-z0-9]+(-[a-z0-9]+)*$/
 }
 
 /**
- * The plain primitive for saving a skill that is already final: show
- * the complete file in a `std::skills::save` interrupt, then write it.
- * There is deliberately no feedback shape on that interrupt — any
- * approval saves, and data carried on the approval is not consulted.
- * A draft-revise-accept loop belongs in a caller built on top of this.
- */
+The plain primitive for saving a skill that is already final: show the
+complete file in a `std::skills::save` interrupt, then write it. There
+is deliberately no feedback shape on that interrupt — any approval
+saves, and data carried on the approval is not consulted. A
+draft-revise-accept loop belongs in a caller built on top of this.
+*/
 export def writeSkill(
   dir: string,
   name: string,
@@ -392,7 +404,7 @@ export def writeSkill(
   @param body - The skill's markdown body
   """
   if (!validSkillName(name)) {
-    return failure("skill name '${name}' is invalid: use lowercase letters, digits, and hyphens, starting with a letter or digit")
+    return failure("skill name '${name}' is invalid: use kebab-case, lowercase letters and digits separated by single hyphens")
   }
   if (name.length > MAX_TOOL_NAME_LEN) {
     return failure("skill name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
@@ -527,36 +539,36 @@ def stripFm(raw: string): string {
 }
 
 /**
- * Discover Claude-Code-format slash commands under `dir`. Each `.md`
- * file becomes one command record `{ name, description, argHint, body }`.
- *
- * Pair with `expandSlash(msg, commands)` in your agent's per-turn
- * handler:
- *
- * ```ts
- * static const commands = commandsDir("${cwd()}/.claude/commands") with approve
- * def _runTurn(msg: string) {
- *   const prompt = expandSlash(msg, commands)
- *   const reply = llm(prompt, { tools })
- * }
- * ```
- *
- * `commandsDir` reads only the `description` and `argument-hint`
- * frontmatter fields. It silently ignores all other CC fields
- * (`allowed-tools`, `model`, `effort`, `context: fork`,
- * `disable-model-invocation`, `user-invocable`, `hooks`, `paths`,
- * `shell`, ...). `commandsDir` is a pure prompt-template loader, not an
- * executor.
- *
- * Files with no frontmatter still dispatch. `description` and
- * `argHint` default to `""` (never null/undefined). Missing or empty
- * `dir` returns `[]`.
- *
- * Relative `dir` resolves against the current working directory;
- * pass `__dirname` for a directory relative to the current Agency file.
- * For project-level commands (e.g. `.claude/commands` at the project
- * root), pass an absolute path: `"${cwd()}/.claude/commands"`.
- */
+Discover Claude-Code-format slash commands under `dir`. Each `.md`
+file becomes one command record `{ name, description, argHint, body }`.
+
+Pair with `expandSlash(msg, commands)` in your agent's per-turn
+handler:
+
+```ts
+static const commands = commandsDir("${cwd()}/.claude/commands") with approve
+def _runTurn(msg: string) {
+  const prompt = expandSlash(msg, commands)
+  const reply = llm(prompt, { tools })
+}
+```
+
+`commandsDir` reads only the `description` and `argument-hint`
+frontmatter fields. It silently ignores all other CC fields
+(`allowed-tools`, `model`, `effort`, `context: fork`,
+`disable-model-invocation`, `user-invocable`, `hooks`, `paths`,
+`shell`, ...). `commandsDir` is a pure prompt-template loader, not an
+executor.
+
+Files with no frontmatter still dispatch. `description` and
+`argHint` default to `""` (never null/undefined). Missing or empty
+`dir` returns `[]`.
+
+Relative `dir` resolves against the current working directory;
+pass `__dirname` for a directory relative to the current Agency file.
+For project-level commands (e.g. `.claude/commands` at the project
+root), pass an absolute path: `"${cwd()}/.claude/commands"`.
+*/
 export def commandsDir(dir: string): any[] {
   """
   Discover .md files under `dir` and parse each as a slash-command
@@ -596,22 +608,22 @@ export def commandsDir(dir: string): any[] {
 }
 
 /**
- * Expand a user-typed slash command against a `commandsDir` result.
- *
- * - If `msg` (after trimming) matches `/<name>` with optional
- *   whitespace + args, returns the rendered command body with
- *   `$ARGUMENTS` substituted.
- * - If the body has no `$ARGUMENTS` token and args were passed,
- *   appends `\n\nARGUMENTS: <raw>` so the LLM still sees the input
- *   (matches Claude Code).
- * - Otherwise returns `msg` unchanged — unknown `/foo` inputs fall
- *   through to the LLM as plain text, again matching CC.
- *
- * Args are split off at the first whitespace (space, tab, or
- * newline) after `/<name>`. `expandSlash` tolerates leading and
- * trailing whitespace on `msg`, so piped invocations (`echo /foo |
- * agency agent`, yielding `"/foo\n"`) dispatch correctly.
- */
+Expand a user-typed slash command against a `commandsDir` result.
+
+- If `msg` (after trimming) matches `/<name>` with optional
+  whitespace + args, returns the rendered command body with
+  `$ARGUMENTS` substituted.
+- If the body has no `$ARGUMENTS` token and args were passed,
+  appends `\n\nARGUMENTS: <raw>` so the LLM still sees the input
+  (matches Claude Code).
+- Otherwise returns `msg` unchanged — unknown `/foo` inputs fall
+  through to the LLM as plain text, again matching CC.
+
+Args are split off at the first whitespace (space, tab, or
+newline) after `/<name>`. `expandSlash` tolerates leading and
+trailing whitespace on `msg`, so piped invocations (`echo /foo |
+agency agent`, yielding `"/foo\n"`) dispatch correctly.
+*/
 export def expandSlash(msg: string, commands: any[]): string {
   """
   Expand a /command in `msg` into its command body. Returns the rendered

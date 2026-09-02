@@ -52,6 +52,13 @@ export function githubFailureMessage(
       "(GitHub returns 404 for resources the token cannot see)."
     );
   }
+  if (status === 406) {
+    return (
+      `GitHub returned 406 for ${method} ${url}${detail}. ` +
+      "The response is not available in the requested format. For a pull request diff, " +
+      "this means the PR is over GitHub's diff size limit; read it page by page with ghPrFiles."
+    );
+  }
   if (status === 422) {
     const errorDetail = errors ? ` Details: ${errors}` : "";
     return `GitHub rejected the request as invalid (422)${detail}.${errorDetail}`;

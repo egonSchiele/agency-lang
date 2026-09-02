@@ -1,7 +1,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { z } from "zod";
 import { withCtx, jsonResponse, stubToken } from "./testUtils.js";
-import { _githubRequest, pagingQuery, GITHUB_API_BASE, type GithubEndpoint } from "./request.js";
+import { _githubRequest, GITHUB_API_BASE, type GithubEndpoint } from "./request.js";
+import { pagingQuery } from "./args.js";
 import { _resetGithubCredentialCacheForTests, _resolveAndCache } from "./credential.js";
 import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
 
@@ -54,16 +55,6 @@ const postEndpoint: GithubEndpoint<{ title: string }, { id: number }> = {
   body: (params) => ({ title: params.title }),
   response: z.object({ id: z.number() }),
 };
-
-describe("pagingQuery", () => {
-  it.each([
-    [30, 1, "30", "1"],
-    [500, 0, "100", "1"],
-    [0, -3, "1", "1"],
-  ])("clamps %d/%d", (perPage, page, wantPerPage, wantPage) => {
-    expect(pagingQuery(perPage, page)).toEqual({ per_page: wantPerPage, page: wantPage });
-  });
-});
 
 describe("_githubRequest", () => {
   it("sends auth, accept, api-version, and user-agent headers to the pinned base", async () => {
@@ -156,6 +147,7 @@ describe("_githubRequest", () => {
     const diffFailure = withCtx(() => _githubRequest(diffEndpoint, { n: 1 }));
     await expect(diffFailure).rejects.toThrow(/exceeds/);
     await expect(diffFailure).rejects.not.toThrow(/perPage/);
+    await expect(diffFailure).rejects.toThrow(/ghPrFiles/);
   });
 
   // The no-credential-means-no-fetch test lives in

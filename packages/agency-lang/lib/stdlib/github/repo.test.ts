@@ -54,6 +54,23 @@ describe("_ghResolveRepo", () => {
     // explicit pair short-circuits before any subprocess.
     expect(await _ghResolveRepo("o", "r", "")).toEqual({ owner: "o", repo: "r" });
   });
+  it.each([
+    ["own er", "r"],
+    ["o", "re/po"],
+    ["o", "r OR repo:other/private"],
+    ["-dash-first", "r"],
+    ["dash-last-", "r"],
+    ["double--dash", "r"],
+    ["", "r"],
+  ])("refuses an explicit pair GitHub could not have issued: %s/%s", async (owner, repo) => {
+    await expect(_ghResolveRepo(owner, repo, "")).rejects.toThrow();
+  });
+  it("accepts dots, underscores, and hyphens in a repo name", async () => {
+    expect(await _ghResolveRepo("my-org", "a.b_c-d", "")).toEqual({
+      owner: "my-org",
+      repo: "a.b_c-d",
+    });
+  });
   it("rejects a one-sided override", async () => {
     await expect(_ghResolveRepo("o", "", "")).rejects.toThrow(/both owner and repo/);
     await expect(_ghResolveRepo("", "r", "")).rejects.toThrow(/both owner and repo/);

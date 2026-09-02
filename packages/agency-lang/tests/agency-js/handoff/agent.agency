@@ -1,0 +1,101 @@
+// Handoff functions through the real tool loop, against a scripted
+// model. Each node dispatches one handoff and the test reads the
+// caller's thread back from the final request the model sees.
+import { systemMessage } from "std::thread"
+
+// A leaf tool for the subagents to call.
+def lookup(key: string): string {
+  return "value-of-${key}"
+}
+
+handoff def subagent(question: string): string {
+  return llm("brief: ${question}", { tools: [lookup] })
+}
+
+handoff def personaAgent(question: string): string {
+  systemMessage("persona: be terse")
+  return llm("brief: ${question}")
+}
+
+handoff def threadedAgent(question: string): string {
+  let answer = ""
+  thread {
+    answer = llm("brief: ${question}")
+  }
+  return answer
+}
+
+handoff def subthreadedAgent(question: string): string {
+  let answer = ""
+  subthread {
+    answer = llm("brief: ${question}")
+  }
+  return answer
+}
+
+// Raises with no handler in scope, so the run pauses inside the handoff.
+def pauseMe(id: string): string {
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+handoff def pausingAgent(question: string): string {
+  return llm("brief: ${question}", { tools: [pauseMe] })
+}
+
+handoff def failingAgent(question: string): Result<string> {
+  return failure("boom")
+}
+
+// Raises before doing anything, so rejecting it rejects the handoff
+// call itself at the outer loop.
+handoff def gatedAgent(question: string): string {
+  const _ok = interrupt("gate ${question}")
+  return llm("brief: ${question}")
+}
+
+// A handoff that offers a handoff.
+handoff def outerAgent(question: string): string {
+  return llm("outer brief: ${question}", { tools: [subagent] })
+}
+
+node basic() {
+  return llm("Answer with the subagent.", { tools: [subagent, lookup] })
+}
+
+node persona() {
+  return llm("Answer with the persona agent.", { tools: [personaAgent] })
+}
+
+node notAlone() {
+  return llm("Use both tools at once.", { tools: [subagent, lookup] })
+}
+
+node threadInside() {
+  return llm("Answer with the threaded agent.", { tools: [threadedAgent] })
+}
+
+node subthreadInside() {
+  return llm("Answer with the subthreaded agent.", { tools: [subthreadedAgent] })
+}
+
+node pauseInside() {
+  return llm("Answer with the pausing agent.", { tools: [pausingAgent] })
+}
+
+// Same shape as pauseInside; the test rejects instead of approving.
+node rejectInside() {
+  return llm("Answer with the pausing agent.", { tools: [pausingAgent] })
+}
+
+node failureInside() {
+  return llm("Answer with the failing agent.", { tools: [failingAgent] })
+}
+
+node rejectHandoff() {
+  return llm("Answer with the gated agent.", { tools: [gatedAgent] })
+}
+
+node nested() {
+  return llm("Answer with the outer agent.", { tools: [outerAgent] })
+}

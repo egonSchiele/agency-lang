@@ -1,0 +1,46 @@
+[
+  { "toolCall": { "name": "subagent", "args": { "question": "q1" } } },
+  { "toolCall": { "name": "lookup", "args": { "key": "k" } } },
+  { "return": "inner answer" },
+  { "return": "outer done" },
+
+  { "toolCall": { "name": "personaAgent", "args": { "question": "q2" } } },
+  { "return": "terse" },
+  { "return": "persona done" },
+
+  { "toolCalls": [
+      { "name": "subagent", "args": { "question": "q3" } },
+      { "name": "lookup", "args": { "key": "k3" } }
+  ] },
+  { "return": "notAlone done" },
+
+  { "toolCall": { "name": "threadedAgent", "args": { "question": "q4" } } },
+  { "return": "threaded answer" },
+  { "return": "thread done" },
+
+  { "toolCall": { "name": "subthreadedAgent", "args": { "question": "q5" } } },
+  { "return": "subthreaded answer" },
+  { "return": "subthread done" },
+
+  { "toolCall": { "name": "pausingAgent", "args": { "question": "q6" } } },
+  { "toolCall": { "name": "pauseMe", "args": { "id": "p1" } } },
+  { "return": "paused answer" },
+  { "return": "pause done" },
+
+  { "toolCall": { "name": "pausingAgent", "args": { "question": "q7" } } },
+  { "toolCall": { "name": "pauseMe", "args": { "id": "p2" } } },
+  { "return": "rejected answer" },
+  { "return": "reject done" },
+
+  { "toolCall": { "name": "failingAgent", "args": { "question": "q8" } } },
+  { "return": "failure done" },
+
+  { "toolCall": { "name": "gatedAgent", "args": { "question": "q11" } } },
+  { "return": "rejectHandoff done" },
+
+  { "toolCall": { "name": "outerAgent", "args": { "question": "q9" } } },
+  { "toolCall": { "name": "subagent", "args": { "question": "q10" } } },
+  { "return": "deep answer" },
+  { "return": "middle answer" },
+  { "return": "nested done" }
+]

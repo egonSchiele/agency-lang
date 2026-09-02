@@ -275,6 +275,8 @@ Other process docs:
 ### Agents (`agency agent`, the stdlib agents)
 
 - `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
+- `docs/dev/agents/harness-and-model.md` — How to divide credit between harness and model, the six tiers a fix can land in, and what a harness genuinely cannot do.
+- `docs/dev/agents/harness-guidelines.md` — The prescriptive companion: must-dos and must-nots for building and changing the agent harness.
 - `docs/dev/agents/agent-sessions.md` — Save and resume for `agency agent`: a checkpoint between turns, why it is taken from TypeScript after the turn's frames return, where the restore runs, and what a restore does not bring back.
 - `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.

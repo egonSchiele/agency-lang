@@ -701,6 +701,7 @@ export type ExportInfo = {
   effects: string[];
   destructive: boolean;
   idempotent: boolean;
+  handoff: boolean;
   reexportedFrom: string | null
 }
 
@@ -716,7 +717,7 @@ exports (lowering targets, not caller surface). `description` is the
 module doc comment's one-line summary. */
 export idempotent def describe(source: string): Result<ModuleInfo> {
   """
-  Describe what an Agency module exports: each exported function, node, type, const, and re-export, in source order, with its signature, docstring, transitive effect list, and destructive/idempotent markers. Anything marked @hidden is left out, as is anything whose name starts with an underscore - both are the same visibility rule `agency doc` applies, so this is the module surface a reader sees. Re-exports from std:: modules resolve to full entries; re-exports from relative paths cannot be read from a source string and come back with effects ["unknown"]. Use this instead of reading source when generating code shaped by a module - for example, one handler per effect its tools can raise.
+  Describe what an Agency module exports: each exported function, node, type, const, and re-export, in source order, with its signature, docstring, transitive effect list, and destructive/idempotent/handoff markers. Anything marked @hidden is left out, as is anything whose name starts with an underscore - both are the same visibility rule `agency doc` applies, so this is the module surface a reader sees. Re-exports from std:: modules resolve to full entries; re-exports from relative paths cannot be read from a source string and come back with effects ["unknown"]. Use this instead of reading source when generating code shaped by a module - for example, one handler per effect its tools can raise.
 
   @param source - Agency source code as a string
   """

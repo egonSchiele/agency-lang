@@ -17,11 +17,16 @@ import {
   nestedPause,
   asyncHandoff,
   explicitMessages,
+  callerSystemVisible,
+  twoAsyncHandoffs,
+  cancelledHandoff,
   respondToInterrupts,
   approve,
   reject,
+  __setLLMClient,
 } from "./agent.js";
 import { writeFileSync } from "fs";
+import { ToolCall } from "smoltalk";
 
 // Record every request the model sees, in order. The last request of a
 // node is the caller's final round, which shows the caller's thread
@@ -406,6 +411,153 @@ const results = {};
     explicitFinalRoles: roles(state.requests[2]),
     activeThreadRoles: roles(final),
     activeThreadSawHandoff: count(final, "[dispatching") + count(final, "explicit inner"),
+  };
+}
+
+// The caller's own system prompt is visible to the body and is still
+// there after the hand-back; the strip reaches only past the marker.
+{
+  const { state, callbacks } = makeCapture();
+  const result = await callerSystemVisible({ callbacks });
+  const final = last(state);
+  results.callerSystemVisible = {
+    result: result.data,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    bodySawCallerRules: count(state.requests[1], "caller rules"),
+    bodySawOwnPersona: count(state.requests[1], "persona: be terse"),
+    callerKeptRules: count(final, "caller rules"),
+    callerKeptPersona: count(final, "persona: be terse"),
+    roles: roles(final),
+  };
+}
+
+// The scenarios below need a model that answers by what it was asked,
+// because their requests interleave and a queue in call order would
+// hand the wrong script to the wrong prompt. `lastUserText` is the most
+// recent user message of the request.
+const USAGE = { inputTokens: 1, outputTokens: 1, cachedInputTokens: 0, totalTokens: 2 };
+const COST = { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" };
+const lastUserText = (config) => {
+  const json = config.messages.map((message) =>
+    typeof message.toJSON === "function" ? message.toJSON() : message,
+  );
+  const user = [...json].reverse().find((message) => message.role === "user");
+  return typeof user?.content === "string" ? user.content : "";
+};
+const answer = (output) => ({
+  success: true,
+  value: { output, toolCalls: [], model: "test", usage: USAGE, cost: COST },
+});
+const dispatch = (name, args) => ({
+  success: true,
+  value: {
+    output: null,
+    toolCalls: [new ToolCall(`call-${name}`, name, args)],
+    model: "test",
+    usage: USAGE,
+    cost: COST,
+  },
+});
+const parkUntilAbort = (config) =>
+  new Promise((resolve, reject) => {
+    const abortError = () => Object.assign(new Error("Request was aborted."), { name: "AbortError" });
+    const signal = config?.abortSignal;
+    if (!signal) {
+      reject(new Error("expected an abortSignal on the parked request"));
+      return;
+    }
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+    signal.addEventListener("abort", () => reject(abortError()));
+  });
+const answeringClient = (rules) => ({
+  async text(config) {
+    return rules(lastUserText(config), config);
+  },
+  async *textStream(config) {
+    const reply = await this.text(config);
+    yield { type: "done", result: reply.value };
+  },
+  async embed() {
+    return { success: false, error: "not implemented" };
+  },
+});
+
+// Two async prompts, each dispatching a handoff at the same time. Each
+// prompt's final request holds exactly its own body; the main thread
+// holds neither.
+{
+  __setLLMClient(
+    answeringClient((asked) => {
+      if (asked === "A" || asked === "B") {
+        return dispatch("subagent", { question: asked });
+      }
+      if (asked.startsWith("brief:")) {
+        return answer("inner");
+      }
+      if (asked.startsWith("[subagent finished")) {
+        return answer("async done");
+      }
+      return answer("main sees");
+    }),
+  );
+  const { state, callbacks } = makeCapture();
+  const result = await twoAsyncHandoffs({ callbacks });
+  const finals = state.requests.filter((messages) => count(messages, "[subagent finished") === 1);
+  const main = last(state);
+  results.twoAsyncHandoffs = {
+    result: result.data,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    asyncFinals: finals.length,
+    eachFinalHoldsOneBody: finals.every(
+      (messages) =>
+        roles(messages).join(",") === "user,assistant,user,assistant,user" &&
+        count(messages, "[dispatching subagent") === 1 &&
+        count(messages, "brief: " + text(messages[0])) === 1,
+    ),
+    mainThreadRoles: roles(main),
+    mainThreadSawHandoff: count(main, "[dispatching"),
+  };
+}
+
+// A race loser inside a handoff body. The winner is held until the
+// loser's body has pushed its persona and sent its request, so the abort
+// lands mid-body. The persona is gone from the loser's thread afterwards
+// and the marker stays as the record of the attempt.
+{
+  let releaseWinner = () => {};
+  const parkedRequestStarted = new Promise((resolve) => {
+    releaseWinner = resolve;
+  });
+  __setLLMClient(
+    answeringClient(async (asked, config) => {
+      if (asked === "fast") {
+        await parkedRequestStarted;
+        return answer("fast");
+      }
+      if (asked === "slow") {
+        return dispatch("parkingAgent", { question: "p" });
+      }
+      releaseWinner();
+      return parkUntilAbort(config);
+    }),
+  );
+  const { state, callbacks } = makeCapture();
+  const result = await cancelledHandoff({ callbacks });
+  const threads = Array.isArray(result.data) ? result.data : [];
+  const loser = threads.find((messages) => count(messages, "[dispatching parkingAgent") === 1);
+  results.cancelledHandoff = {
+    loserThreadFound: loser !== undefined,
+    parkedRequestSawPersona: state.requests.some(
+      (messages) => count(messages, "parked: p") === 1 && count(messages, "persona: be parked") === 1,
+    ),
+    loserKeptPersona: loser === undefined ? null : count(loser, "persona: be parked"),
+    loserKeptMarker: loser === undefined ? null : count(loser, "[dispatching parkingAgent"),
+    loserMarkedCancelled: loser === undefined ? null : count(loser, "[Response cancelled.]"),
   };
 }
 

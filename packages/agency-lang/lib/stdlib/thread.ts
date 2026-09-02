@@ -300,6 +300,19 @@ export async function _threadIsNew(): Promise<boolean> {
   return threads.get(activeId).messages.length === 0;
 }
 
+/** True when the active thread already holds a system message with
+ *  exactly this content. Reads the messages in place; nothing is copied. */
+export async function _threadHasSystemMessage(content: string): Promise<boolean> {
+  const { threads } = getRuntimeContext();
+  const active = threads.active();
+  if (active === undefined) {
+    return false;
+  }
+  return active.messages.some(
+    (message) => message.role === "system" && message.content === content,
+  );
+}
+
 export type ModelCost = ModelUsage;
 
 /**

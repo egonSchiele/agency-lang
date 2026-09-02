@@ -85,5 +85,9 @@
   { "toolCall": { "name": "subagent", "args": { "question": "e1" } } },
   { "return": "explicit inner" },
   { "return": "explicit done" },
-  { "return": "second sees" }
+  { "return": "second sees" },
+
+  { "toolCall": { "name": "personaAgent", "args": { "question": "c1" } } },
+  { "return": "ruled" },
+  { "return": "caller done" }
 ]

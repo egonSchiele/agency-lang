@@ -28,15 +28,13 @@ export function handoffResumeText(toolName: string, body: string): string {
 
 /**
  * Rewrite the assistant message that carried the handoff tool call: keep
- * its text, drop the tool call, append the marker. Returns the thread
- * length afterwards, which is the index of the first message the body
- * will push.
+ * its text, drop the tool call, append the marker.
  */
 export function applyHandoffMarker(
   thread: MessageThread,
   toolName: string,
   args: Record<string, unknown>,
-): number {
+): void {
   const messages = thread.getMessages();
   const index = messages.length - 1;
   const last = messages[index];
@@ -49,22 +47,62 @@ export function applyHandoffMarker(
   const marker = handoffMarkerText(toolName, args);
   const content = text === "" ? marker : `${text}\n\n${marker}`;
   thread.replaceAt(index, smoltalk.assistantMessage(content));
-  return messages.length;
+}
+
+/** The index of this dispatch's marker, searching from the end so the
+ *  newest dispatch of a tool wins. -1 when memory compaction has
+ *  summarized the marker away. */
+function markerIndex(
+  thread: MessageThread,
+  toolName: string,
+  args: Record<string, unknown>,
+): number {
+  const marker = handoffMarkerText(toolName, args);
+  const messages = thread.getMessages();
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (
+      message.role === "assistant" &&
+      typeof message.content === "string" &&
+      message.content.endsWith(marker)
+    ) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 /**
- * Close a handoff: remove the system messages the body pushed (its
- * persona is not useful to the caller afterwards and would grow the
- * context on every dispatch), then hand control back with a user-role
- * message that carries the body's result. A system message has no
- * partner to unpair, which is what makes removing it safe.
+ * Remove the system messages the body pushed: every system message after
+ * this dispatch's marker. Anchored on the marker rather than on a recorded
+ * position because memory compaction rewrites the thread and shifts every
+ * index. A marker that compaction summarized away took the body's earlier
+ * system messages with it, so there is nothing left to remove.
+ */
+export function stripHandoffSystemMessages(
+  thread: MessageThread,
+  toolName: string,
+  args: Record<string, unknown>,
+): void {
+  const index = markerIndex(thread, toolName, args);
+  if (index === -1) {
+    return;
+  }
+  thread.removeMatching(index + 1, (message) => message.role === "system");
+}
+
+/**
+ * Close a handoff: remove the body's system messages (its persona is not
+ * useful to the caller afterwards and would grow the context on every
+ * dispatch), then hand control back with a user-role message that carries
+ * the body's result.
  */
 export function finishHandoff(
   thread: MessageThread,
-  startIndex: number,
   toolName: string,
+  args: Record<string, unknown>,
   body: string,
 ): void {
-  thread.removeMatching(startIndex, (message) => message.role === "system");
+  stripHandoffSystemMessages(thread, toolName, args);
   thread.push(smoltalk.userMessage(handoffResumeText(toolName, body)));
 }

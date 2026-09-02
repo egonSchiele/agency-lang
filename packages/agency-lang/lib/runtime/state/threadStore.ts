@@ -273,22 +273,13 @@ export class ThreadStore {
     return id !== undefined ? this.threads[id] : undefined;
   }
 
-  /** Run `body` with `thread` active, then restore the previous active
-   *  thread. A thread this store does not know (one built from explicit
-   *  `messages`) is registered first. Nothing is pushed when `thread` is
-   *  already active, so a resumed call that re-enters here stays
-   *  balanced. */
-  async withActive<T>(thread: MessageThread, body: () => Promise<T>): Promise<T> {
-    if (this.active() === thread) {
-      return body();
-    }
+  /** A view of this store, sharing the registry, whose active thread is
+   *  `thread`. A thread this store does not know (one built from explicit
+   *  `messages`) is registered first. The view has its own active stack,
+   *  so concurrent callers never push and pop on each other. */
+  viewWithActive(thread: MessageThread): ThreadStore {
     const id = this.idOf(thread) ?? this.register(thread);
-    this.pushActive(id);
-    try {
-      return await body();
-    } finally {
-      this.popActive();
-    }
+    return this.restoreBranchView([id]);
   }
 
   private idOf(thread: MessageThread): MessageThreadID | undefined {

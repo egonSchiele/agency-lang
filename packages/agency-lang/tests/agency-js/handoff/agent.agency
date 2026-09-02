@@ -1,7 +1,7 @@
 // Handoff functions through the real tool loop, against a scripted
 // model. Each node dispatches one handoff and the test reads the
 // caller's thread back from the final request the model sees.
-import { systemMessage, ensureSystemMessage } from "std::thread"
+import { systemMessage, ensureSystemMessage, listThreads, getThread } from "std::thread"
 
 // A leaf tool for the subagents to call.
 def lookup(key: string): string {
@@ -84,6 +84,13 @@ handoff def outerPausingAgent(question: string): string {
   return llm("outer brief: ${question}", { tools: [pausingAgent] })
 }
 
+// Pushes a persona, then asks the model. The test parks that request
+// until a race abort fires.
+handoff def parkingAgent(question: string): string {
+  systemMessage("persona: be parked")
+  return llm("parked: ${question}")
+}
+
 node basic() {
   return llm("Answer with the subagent.", { tools: [subagent, lookup] })
 }
@@ -163,6 +170,38 @@ node asyncHandoff() {
   const sideAnswer = await side
   const mainAnswer = llm("What happened?")
   return "${sideAnswer} / ${mainAnswer}"
+}
+
+// The caller's own system prompt is live during the body and survives
+// the hand-back; only the body's system messages are removed.
+node callerSystemVisible() {
+  systemMessage("caller rules")
+  return llm("Answer with the persona agent.", { tools: [personaAgent] })
+}
+
+// Two async prompts each dispatch a handoff at the same time. Each
+// body must land on its own prompt's subthread.
+node twoAsyncHandoffs() {
+  const first = async llm("A", { tools: [subagent] })
+  const second = async llm("B", { tools: [subagent] })
+  const firstAnswer = await first
+  const secondAnswer = await second
+  const mainAnswer = llm("What happened?")
+  return "${firstAnswer} / ${secondAnswer} / ${mainAnswer}"
+}
+
+// A race whose loser is inside a handoff body. The abort unwinds the
+// body without a hand-back; the persona it pushed must not stay on the
+// loser's thread. Returns every thread's messages for the test to read.
+node cancelledHandoff(): any {
+  const winner = race([1, 2]) as item {
+    if (item == 1) {
+      return llm("fast")
+    }
+    return llm("slow", { tools: [parkingAgent] })
+  }
+  const infos = listThreads(lazySummarize: false) catch []
+  return map(infos, \info -> getThread(info.id, 0, 1000) catch [])
 }
 
 // Explicit messages give the prompt a thread the store has never seen. A

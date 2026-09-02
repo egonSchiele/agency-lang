@@ -35,6 +35,9 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
   - two handoffs in one round, and a handoff beside an intrinsic `saveDraft` call, are both refused (`twoHandoffs`, `handoffWithDraft`)
   - a structured return value is stringified into the resume message (`objectResult`)
   - a handoff inside an `async` prompt lands on the prompt's subthread, and one inside a prompt with explicit `messages` lands on that thread; the active thread sees neither (`asyncHandoff`, `explicitMessages`)
+  - the caller's own system prompt is visible to the body and survives the hand-back (`callerSystemVisible`)
+  - two async prompts each dispatch a handoff at the same time and neither disturbs the other's thread (`twoAsyncHandoffs`)
+  - a race-loser cancellation inside a handoff removes the body's persona and leaves the marker (`cancelledHandoff`)
   - every request in every scenario is checked for provider-valid shape: tool calls paired with tool results, never ending on an assistant message
 - A handoff function called from code runs on the caller's thread: tests/agency/agents/oracleExplorer.agency (`twoOracleCallsShareTheCallerThread`, `explorerFromCodeLandsOnTheCallerThread`)
 - If I do want to transfer message history to another node, how would I do that?

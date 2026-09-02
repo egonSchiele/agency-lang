@@ -24,22 +24,28 @@ the body's messages can land on the caller's thread as valid history.
    `handoffNotAlone` if any other call shares the round.
 2. The `.handoffMarker` step rewrites the last message on the thread,
    the assistant message carrying the tool call: its text is kept, the
-   tool call is dropped, and `[dispatching name: args]` is appended. The
-   thread length after the rewrite is recorded in
-   `runnerState.handoffStarts[invocationKey]`.
-3. `runInvokeStep` calls the body without installing a fresh
-   `ThreadStore`. It runs the body under `ThreadStore.withActive` with
-   the prompt's own thread, the one carrying the marker. That is the
-   active thread for an ordinary prompt, a subthread for an `async`
+   tool call is dropped, and `[dispatching name: args]` is appended.
+3. `runInvokeStep` runs the body in a frame whose thread store is a
+   view of the caller's store with the prompt's own thread active, the
+   thread carrying the marker (`ThreadStore.viewWithActive`). That is
+   the active thread for an ordinary prompt, a subthread for an `async`
    prompt, and an unregistered thread for a prompt given explicit
    `messages`; in every case the body's `llm()` calls land on the same
-   thread as the marker and the resume message.
+   thread as the marker. The view has its own active stack, so two
+   prompts running at once cannot disturb each other.
 4. When the body returns, `finishHandoff` removes every system-role
-   message from the recorded start index onward and pushes a user-role
+   message after this dispatch's marker and pushes a user-role
    `[name finished. <result>]\nContinue with the user's request.`
    The return value is always included, even when it repeats the body's
    last assistant message. A failure or rejection takes the same route
-   with the text an ordinary tool message would have carried.
+   with the text an ordinary tool message would have carried. A
+   cancelled body (Esc, a race loser, a timeout) gets no resume message;
+   its system messages are removed on the way out and the marker stays.
+
+The strip is anchored on the marker, not on a recorded position: memory
+compaction rewrites the thread and shifts every index, while the marker
+message survives as an object. A marker that compaction summarized away
+took the body's earlier system messages with it.
 
 The return value still reaches the code that awaited the call, through
 `setResultOnBranch`, unchanged.
@@ -49,6 +55,12 @@ The return value still reaches the code that awaited the call, through
 `thread {}` still isolates. `subthread {}` inherits the caller's history
 plus the marker and does not flow back. System messages the body pushes
 are scoped to the dispatch.
+
+The caller's own system messages are live during the body. The body's
+request sends the whole thread, so a subagent sees the caller's system
+prompt alongside its own persona. That is the point of continuing the
+conversation, and a subagent prompt that must not be read that way
+belongs in an ordinary tool.
 
 ## Called from code
 
@@ -68,10 +80,9 @@ it.
 
 A checkpoint taken inside a handoff holds the caller's thread with the
 marker and the body's messages so far. On resume the `.handoffMarker`
-step is skipped (it is in `completedSteps`), the start index comes back
-from `runnerState`, and the `.invoke` step re-runs to consume the user's
-response, as for any tool. There is no orphaned tool call for
-`threadRepair` to repair.
+step is skipped (it is in `completedSteps`) and the `.invoke` step
+re-runs to consume the user's response, as for any tool. There is no
+orphaned tool call for `threadRepair` to repair.
 
 ## Known limits
 
@@ -94,9 +105,8 @@ response, as for any tool. There is no orphaned tool call for
 - `lib/runtime/handoff.ts` — marker, resume, and refusal text;
   `applyHandoffMarker`, `finishHandoff`.
 - `lib/runtime/prompt.ts` — the gate verdict, the `.handoffMarker`
-  step, the `withActive` binding in `runInvokeStep`, and
-  `pushToolReply`.
-- `lib/runtime/state/threadStore.ts` — `withActive`.
+  step, `invokeOnThread`, and `pushToolReply`.
+- `lib/runtime/state/threadStore.ts` — `viewWithActive`.
 - `tests/agency-js/handoff/` — the end-to-end suite.
 - `stdlib/agents/oracle.agency`, `explorer.agency`, and the coordinator
   wrappers under `lib/agents/agency-agent/brains/coordinator/subagents/`

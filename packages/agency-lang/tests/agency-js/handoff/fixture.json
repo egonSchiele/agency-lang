@@ -265,5 +265,40 @@
       "user"
     ],
     "activeThreadSawHandoff": 0
+  },
+  "callerSystemVisible": {
+    "result": "caller done",
+    "requestCount": 3,
+    "allWellFormed": true,
+    "bodySawCallerRules": 1,
+    "bodySawOwnPersona": 1,
+    "callerKeptRules": 1,
+    "callerKeptPersona": 0,
+    "roles": [
+      "system",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user"
+    ]
+  },
+  "twoAsyncHandoffs": {
+    "result": "async done / async done / main sees",
+    "requestCount": 7,
+    "allWellFormed": true,
+    "asyncFinals": 2,
+    "eachFinalHoldsOneBody": true,
+    "mainThreadRoles": [
+      "user"
+    ],
+    "mainThreadSawHandoff": 0
+  },
+  "cancelledHandoff": {
+    "loserThreadFound": true,
+    "parkedRequestSawPersona": true,
+    "loserKeptPersona": 0,
+    "loserKeptMarker": 1,
+    "loserMarkedCancelled": 1
   }
 }

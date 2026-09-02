@@ -280,6 +280,7 @@ export const RESERVED_WORDS: readonly string[] = [
   "with",
   "destructive",
   "idempotent",
+  "handoff",
   "optimize",
   "class",
   "true",

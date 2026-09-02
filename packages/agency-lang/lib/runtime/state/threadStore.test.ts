@@ -111,50 +111,34 @@ describe("ThreadStore.openSession", () => {
   });
 });
 
-describe("ThreadStore.withActive", () => {
-  it("runs the body with a registered thread active and restores the previous one", async () => {
+describe("ThreadStore.viewWithActive", () => {
+  it("makes the thread active in the view and leaves the store's own stack alone", () => {
     const store = new ThreadStore();
     const main = store.getOrCreateActive();
     const side = store.createAndReturnSubthread();
-    expect(store.active()).toBe(main);
-    let seen: MessageThread | undefined;
-    await store.withActive(side, async () => {
-      seen = store.active();
-    });
-    expect(seen).toBe(side);
+    const view = store.viewWithActive(side);
+    expect(view.active()).toBe(side);
     expect(store.active()).toBe(main);
   });
 
-  it("registers a thread the store has never seen, and pops it afterwards", async () => {
+  it("registers a thread the store has never seen, in the shared registry", () => {
     const store = new ThreadStore();
-    const main = store.getOrCreateActive();
+    store.getOrCreateActive();
     const foreign = new MessageThread();
-    await store.withActive(foreign, async () => {
-      expect(store.active()).toBe(foreign);
-    });
-    expect(store.active()).toBe(main);
+    const view = store.viewWithActive(foreign);
+    expect(view.active()).toBe(foreign);
     expect(Object.values(store.threads)).toContain(foreign);
   });
 
-  it("pushes nothing when the thread is already active", async () => {
+  it("gives two callers independent active stacks over one registry", () => {
     const store = new ThreadStore();
-    const main = store.getOrCreateActive();
-    const depth = store.activeStack.length;
-    await store.withActive(main, async () => {
-      expect(store.activeStack.length).toBe(depth);
-    });
-    expect(store.active()).toBe(main);
-  });
-
-  it("restores the previous thread when the body throws", async () => {
-    const store = new ThreadStore();
-    const main = store.getOrCreateActive();
-    const side = store.createAndReturnSubthread();
-    await expect(
-      store.withActive(side, async () => {
-        throw new Error("boom");
-      }),
-    ).rejects.toThrow("boom");
-    expect(store.active()).toBe(main);
+    store.getOrCreateActive();
+    const first = store.createAndReturnSubthread();
+    const second = store.createAndReturnSubthread();
+    const viewA = store.viewWithActive(first);
+    const viewB = store.viewWithActive(second);
+    viewA.pushActive(viewA.createSubthread());
+    expect(viewB.active()).toBe(second);
+    expect(Object.keys(viewA.threads)).toEqual(Object.keys(viewB.threads));
   });
 });

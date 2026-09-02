@@ -37,6 +37,7 @@ import {
   _getTokens,
   _getModelCosts,
   _threadIsNew,
+  _threadHasSystemMessage,
  } from "agency-lang/stdlib-lib/thread.js"
 
 import { _installSlowInputImpl } from "agency-lang/stdlib-lib/builtins.js"
@@ -220,9 +221,6 @@ export idempotent def threadIsNew(): boolean {
   return _threadIsNew()
 }
 
-// Enough to read any thread an agent runs on in one call.
-static const THREAD_READ_LIMIT = 100000
-
 /** For an agent's persona. An agent called twice from code on one thread
  *  keeps one persona; a handoff, whose system messages are removed when it
  *  hands back, pushes the persona fresh on every dispatch. */
@@ -232,9 +230,7 @@ export def ensureSystemMessage(msg: string) {
 
   @param msg - The system message
   """
-  const messages = getThread(currentThreadId(), 0, THREAD_READ_LIMIT) catch []
-  const present = some(messages, \message -> message.role == "system" && message.content == msg)
-  if (!present) {
+  if (!_threadHasSystemMessage(msg)) {
     systemMessage(msg)
   }
 }

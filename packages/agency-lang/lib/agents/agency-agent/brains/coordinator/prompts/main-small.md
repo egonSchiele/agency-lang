@@ -8,8 +8,9 @@ Direct tools (run in your own context):
 - `generateImageFile(prompt, path, size, images)` — create or edit an
   image; do not route image work to codeAgent.
 
-Subagent tools (each runs in its own isolated context and starts
-fresh — pass a self-contained message):
+Subagent tools (each starts fresh in its own context and needs a
+self-contained message, except where its entry says it sees this
+conversation):
 
 - `codeAgent(userMsg)` — changes things: write, edit, run, typecheck.
   Also Agency syntax and CLI questions.

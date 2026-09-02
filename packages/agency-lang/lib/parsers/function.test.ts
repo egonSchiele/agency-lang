@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  RESERVED_WORDS,
   functionParser,
   functionParameterParser,
   docStringParser,
@@ -2228,8 +2229,9 @@ describe("functionParser with destructive/idempotent markers", () => {
     }
   });
 
-  it("a def named handoff still parses", () => {
+  it("a def named handoff still parses, and handoff is reserved for identifier holes", () => {
     expect(functionParser("def handoff(): number { return 1 }").success).toBe(true);
+    expect(RESERVED_WORDS).toContain("handoff");
   });
 
   it("parses destructive def", () => {

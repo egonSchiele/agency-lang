@@ -73,6 +73,34 @@ describe("PR endpoints", () => {
     );
   });
 
+  it("fails loudly when a get response lacks the change counts", async () => {
+    stubToken();
+    const { additions: _dropped, ...withoutAdditions } = rawPr;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(withoutAdditions));
+    await expect(withCtx(() => _ghPrGet(7, "o", "r"))).rejects.toThrow(
+      /pulls\/\{number\}.*expected shape.*additions/s,
+    );
+  });
+
+  it("maps a list item, which GitHub sends without change counts", async () => {
+    stubToken();
+    const { additions: _a, deletions: _d, changed_files: _c, ...rawListItem } = rawPr;
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([rawListItem]));
+    const [item] = await withCtx(() => _ghPrList("open", "", 30, 1, "o", "r"));
+    expect(item).toEqual({
+      number: 7,
+      title: "Add feature",
+      state: "open",
+      author: "alice",
+      base: "main",
+      head: "feat",
+      headSha: "abc123",
+      draft: false,
+      body: "the body",
+      url: "https://github.com/o/r/pull/7",
+    });
+  });
+
   it("clamps and forwards list paging, and omits an empty base", async () => {
     stubToken();
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([rawPr]));
@@ -140,6 +168,17 @@ describe("PR endpoints", () => {
     ]);
     expect(String(spy.mock.calls[0][0])).toContain("/pulls/7");
     expect(String(spy.mock.calls[1][0])).toContain("/commits/abc123/check-runs?per_page=50&page=2");
+  });
+
+  it("accepts a pending review, which has a null submitted_at", async () => {
+    stubToken();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse([
+        { id: 1, user: { login: "r" }, state: "PENDING", body: null, submitted_at: null },
+      ]),
+    );
+    const reviews = await withCtx(() => _ghPrReviews(7, 30, 1, "o", "r"));
+    expect(reviews).toEqual([{ id: 1, author: "r", state: "PENDING", body: "", submittedAt: "" }]);
   });
 
   it("pages reviews and review comments", async () => {

@@ -50,6 +50,12 @@ describe("githubFailureMessage", () => {
     expect(msg).toMatch(/repo.*scope/i);
   });
 
+  it("406 on a diff points at ghPrFiles", () => {
+    const msg = githubFailureMessage(406, headers(), "{}", "GET", "https://api.github.com/x");
+    expect(msg).toMatch(/406/);
+    expect(msg).toMatch(/ghPrFiles/);
+  });
+
   it("422 surfaces the errors array", () => {
     const body = JSON.stringify({
       message: "Validation Failed",

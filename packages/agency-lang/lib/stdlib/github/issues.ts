@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { _githubRequest, pagingQuery, type GithubEndpoint } from "./request.js";
+import { _githubRequest, type GithubEndpoint } from "./request.js";
+import { pagingQuery } from "./args.js";
 import { repoPath, RawUser, CommentInfoSchema, type CommentInfo } from "./prs.js";
 
 // Same schema policy as prs.ts: see the comment there.
@@ -12,8 +13,8 @@ function labelName(label: z.infer<typeof RawLabel>): string {
 }
 
 // The issues endpoints also return pull requests, marked by a pull_request
-// field. The list filters them out (ghIssueList promises issues); search
-// keeps them (ghIssueSearch promises both).
+// field. ghIssueGet refuses one, ghIssueList drops them, and ghIssueSearch
+// keeps them (it promises both).
 const RawIssueSchema = z.object({
   number: z.number(),
   title: z.string(),
@@ -45,6 +46,16 @@ function isPullRequest(raw: RawIssue): boolean {
 }
 
 const IssueSummarySchema = RawIssueSchema.transform(toIssueSummary);
+const IssueGetSchema = RawIssueSchema.transform((raw, ctx) => {
+  if (isPullRequest(raw)) {
+    ctx.addIssue({
+      code: "custom",
+      message: `#${raw.number} is a pull request, not an issue. Use ghPrGet to read it.`,
+    });
+    return z.NEVER;
+  }
+  return toIssueSummary(raw);
+});
 const IssueListSchema = z
   .array(RawIssueSchema)
   .transform((items) => items.filter((item) => !isPullRequest(item)).map(toIssueSummary));
@@ -67,7 +78,7 @@ const issueGet: GithubEndpoint<IssueParams, IssueSummary> = {
   name: "GET /repos/{owner}/{repo}/issues/{number}",
   method: "GET",
   path: (params) => `${repoPath(params.owner, params.repo)}/issues/${params.number}`,
-  response: IssueSummarySchema,
+  response: IssueGetSchema,
 };
 
 const issueList: GithubEndpoint<IssueListParams, IssueSummary[]> = {
@@ -95,9 +106,8 @@ const issueComments: GithubEndpoint<PagedIssueParams, CommentInfo[]> = {
   response: z.array(CommentInfoSchema),
 };
 
-// The search endpoint is account-global. Every query is confined to one
-// repository by _ghScopedSearchQuery, which runs before the raise so the
-// payload shows exactly the q that is sent.
+// The search endpoint is account-global; _ghScopedSearchQuery confines every
+// query to one repository.
 const issueSearch: GithubEndpoint<
   { scopedQuery: string; perPage: number; page: number },
   IssueSummary[]
@@ -114,9 +124,9 @@ const issueSearch: GithubEndpoint<
 
 // GitHub search unions repository qualifiers, so a user-supplied `repo:`
 // (or `org:`/`user:`, which widen the same way) would escape the repository
-// the interrupt was approved for. Negated forms (`-repo:`) are refused too,
-// to keep the rule simple to state.
-const SCOPE_QUALIFIER = /(^|\s)-?(repo|org|user):/i;
+// the interrupt was approved for. The word boundary catches a qualifier
+// after any punctuation, `(repo:` and `-repo:` included.
+const SCOPE_QUALIFIER = /\b(repo|org|user):/i;
 
 /** The search string ghIssueSearch sends: the user's query confined to one
  *  repository. Throws if the query carries its own repository qualifier. */

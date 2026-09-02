@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { _githubRequest, pagingQuery, type GithubEndpoint } from "./request.js";
+import { _githubRequest, type GithubEndpoint } from "./request.js";
+import { pagingQuery } from "./args.js";
 
 export function repoPath(owner: string, repo: string): string {
   return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
@@ -9,28 +10,28 @@ export function repoPath(owner: string, repo: string): string {
 export const RawUser = z.object({ login: z.string() }).nullable();
 
 // --- Response schemas --------------------------------------------------------
-// Each validates the raw GitHub payload and transforms it to the public shape;
-// the exported types are z.infer of the transforms, and they mirror the native
-// declarations in stdlib/github.agency — keep the two in sync. Field policy:
+// Each validates the raw GitHub payload and transforms it to the public shape.
+// The exported types are z.infer of the transforms and mirror the native
+// declarations in stdlib/github.agency; keep the two in sync. Field policy:
 // nullable/optional ONLY where GitHub documents it (default applied in the
 // transform); everything else required, so drift fails loudly.
 
-const PrSummarySchema = z
-  .object({
-    number: z.number(),
-    title: z.string(),
-    state: z.string(),
-    user: RawUser,
-    base: z.object({ ref: z.string() }),
-    head: z.object({ ref: z.string(), sha: z.string() }),
-    draft: z.boolean().optional(),
-    body: z.string().nullable(),
-    html_url: z.string(),
-    additions: z.number().optional(), // absent in list responses
-    deletions: z.number().optional(),
-    changed_files: z.number().optional(),
-  })
-  .transform((raw) => ({
+// The list endpoint returns a slimmer object than the get endpoint: no
+// additions, deletions, or changed_files. Hence two schemas and two types.
+const RawPrListItemSchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  state: z.string(),
+  user: RawUser,
+  base: z.object({ ref: z.string() }),
+  head: z.object({ ref: z.string(), sha: z.string() }),
+  draft: z.boolean().optional(),
+  body: z.string().nullable(),
+  html_url: z.string(),
+});
+
+function toPrListItem(raw: z.infer<typeof RawPrListItemSchema>) {
+  return {
     number: raw.number,
     title: raw.title,
     state: raw.state,
@@ -41,10 +42,22 @@ const PrSummarySchema = z
     draft: raw.draft ?? false,
     body: raw.body ?? "",
     url: raw.html_url,
-    additions: raw.additions ?? 0,
-    deletions: raw.deletions ?? 0,
-    changedFiles: raw.changed_files ?? 0,
-  }));
+  };
+}
+
+const PrListItemSchema = RawPrListItemSchema.transform(toPrListItem);
+export type PrListItem = z.infer<typeof PrListItemSchema>;
+
+const PrSummarySchema = RawPrListItemSchema.extend({
+  additions: z.number(),
+  deletions: z.number(),
+  changed_files: z.number(),
+}).transform((raw) => ({
+  ...toPrListItem(raw),
+  additions: raw.additions,
+  deletions: raw.deletions,
+  changedFiles: raw.changed_files,
+}));
 export type PrSummary = z.infer<typeof PrSummarySchema>;
 
 const PrFileSchema = z
@@ -70,7 +83,7 @@ const ReviewSummarySchema = z
     user: RawUser,
     state: z.string(),
     body: z.string().nullable(),
-    submitted_at: z.string().optional(), // absent on PENDING reviews
+    submitted_at: z.string().nullable().optional(), // null or absent on PENDING reviews
   })
   .transform((raw) => ({
     id: raw.id,
@@ -115,9 +128,7 @@ const CheckRunSchema = z
   }));
 export type CheckRun = z.infer<typeof CheckRunSchema>;
 
-// Lives here rather than issues.ts because a top-level PR comment posts to
-// the issues endpoint, so the PR-comment endpoint needs it too — and
-// issues.ts already imports from this file (one direction, no cycle).
+// Shared with issues.ts: a top-level PR comment is an issue comment on GitHub.
 export const CommentInfoSchema = z
   .object({
     id: z.number(),
@@ -150,7 +161,7 @@ const prGet: GithubEndpoint<PrParams, PrSummary> = {
   response: PrSummarySchema,
 };
 
-const prList: GithubEndpoint<PrListParams, PrSummary[]> = {
+const prList: GithubEndpoint<PrListParams, PrListItem[]> = {
   name: "GET /repos/{owner}/{repo}/pulls",
   method: "GET",
   path: (params) => `${repoPath(params.owner, params.repo)}/pulls`,
@@ -164,7 +175,7 @@ const prList: GithubEndpoint<PrListParams, PrSummary[]> = {
     }
     return query;
   },
-  response: z.array(PrSummarySchema),
+  response: z.array(PrListItemSchema),
 };
 
 const prDiff: GithubEndpoint<PrParams, string> = {
@@ -223,7 +234,7 @@ export async function _ghPrList(
   page: number,
   owner: string,
   repo: string,
-): Promise<PrSummary[]> {
+): Promise<PrListItem[]> {
   return _githubRequest(prList, { owner, repo, state, base, perPage, page });
 }
 
@@ -261,10 +272,9 @@ export async function _ghPrReviewComments(
   return _githubRequest(prReviewComments, { owner, repo, number, perPage, page });
 }
 
-// Two requests behind the one prChecks interrupt: check runs are keyed by
-// commit SHA, so the PR's head SHA has to be looked up first. The extra
-// request is read-only and not model-controlled; the model supplies only the
-// PR number the payload shows.
+// Two requests behind the one prChecks interrupt, because check runs are
+// keyed by commit SHA. The spec allows this: the extra read is not
+// model-controlled.
 export async function _ghPrChecks(
   number: number,
   perPage: number,

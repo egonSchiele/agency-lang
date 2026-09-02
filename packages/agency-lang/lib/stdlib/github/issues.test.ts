@@ -52,6 +52,15 @@ describe("issue endpoints", () => {
     );
   });
 
+  it("refuses to return a pull request as an issue", async () => {
+    stubToken();
+    const pr = { ...rawIssue, pull_request: { url: "https://api.github.com/x" } };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(pr));
+    await expect(withCtx(() => _ghIssueGet(42, "o", "r"))).rejects.toThrow(
+      /#42 is a pull request.*ghPrGet/s,
+    );
+  });
+
   it("forwards state, comma-joined labels, and clamped paging", async () => {
     stubToken();
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([rawIssue]));
@@ -141,6 +150,7 @@ describe("_ghScopedSearchQuery", () => {
     ["-repo:o/r secret"],
     ["org:other secret"],
     ["user:someone secret"],
+    ["crash OR (repo:other/private crash)"],
   ])("refuses a query with its own scope qualifier: %s", (query) => {
     expect(() => _ghScopedSearchQuery("o", "r", query)).toThrow(/repo:, org:, or user:/);
   });

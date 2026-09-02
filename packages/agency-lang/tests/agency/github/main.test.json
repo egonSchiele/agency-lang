@@ -31,6 +31,8 @@
     { "nodeName": "approvingOneEffectDoesNotApproveAnother", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "payloadCarriesResolvedRepo", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "defaultResolutionFillsPayload", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "payloadCarriesClampedPaging", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "badNumberFailsBeforeRaise", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "alwaysScopePinsOwnerAndRepo", "input": "", "expectedOutput": "\"pass\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

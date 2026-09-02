@@ -32,18 +32,6 @@ export type GithubEndpoint<Params, Out> = {
   response: z.ZodType<Out, any>;
 };
 
-/** GitHub rejects per_page above 100. */
-export const GITHUB_MAX_PER_PAGE = 100;
-
-/** Paging as the query fields GitHub expects, clamped (per_page in
- *  [1, GITHUB_MAX_PER_PAGE], page >= 1). Endpoint declarations spread this
- *  into their query objects. */
-export function pagingQuery(perPage: number, page: number): Record<string, string> {
-  const clampedPerPage = Math.min(Math.max(Math.floor(perPage) || 1, 1), GITHUB_MAX_PER_PAGE);
-  const clampedPage = Math.max(Math.floor(page) || 1, 1);
-  return { per_page: String(clampedPerPage), page: String(clampedPage) };
-}
-
 const SIZE_CAP_PATTERN = /exceeds \d+ bytes/;
 
 function buildUrl<Params>(endpoint: GithubEndpoint<Params, unknown>, params: Params): string {
@@ -125,13 +113,13 @@ async function readBodyText(
       throw e;
     }
     const message = scrub(String(e));
-    // Only a size-cap trip on a paginated endpoint gets the perPage advice.
-    // A mid-body network drop, or an oversized single-object response such
-    // as a PR diff, must not point the model at a fix that cannot help.
+    // Only a size-cap trip gets a remedy, and a smaller perPage is only a
+    // remedy on a paginated endpoint. The one non-paginated response that
+    // can be this large is a PR diff, whose remedy is ghPrFiles.
     if (SIZE_CAP_PATTERN.test(message)) {
       const remedy = paginated
         ? "Request fewer results per call (smaller perPage)."
-        : "This response is too large for Agency to hand back.";
+        : "This response is too large for Agency to hand back. For a pull request diff, read it page by page with ghPrFiles.";
       throw new Error(`${message}. ${remedy}`);
     }
     throw new Error(message);

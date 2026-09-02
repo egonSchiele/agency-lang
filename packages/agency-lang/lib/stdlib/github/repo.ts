@@ -3,6 +3,24 @@ import { isAbortError } from "../../runtime/errors.js";
 
 export type RepoCoord = { owner: string; repo: string };
 
+// GitHub's own rules: a login is alphanumeric with inner hyphens; a
+// repository name adds dots and underscores.
+const OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const REPO_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
+
+/** Throws unless both names are ones GitHub could have issued. The pair
+ *  feeds URL paths, the search query, and the @always approval scope, so a
+ *  name with a space or a `/` in it must never get that far. */
+function checkRepoCoord(coord: RepoCoord): RepoCoord {
+  if (!OWNER_PATTERN.test(coord.owner)) {
+    throw new Error(`"${coord.owner}" is not a valid GitHub owner name.`);
+  }
+  if (!REPO_PATTERN.test(coord.repo)) {
+    throw new Error(`"${coord.repo}" is not a valid GitHub repository name.`);
+  }
+  return coord;
+}
+
 function stripGitSuffix(repo: string): string {
   return repo.replace(/\.git$/, "");
 }
@@ -48,16 +66,15 @@ export function redactUrl(url: string): string {
 
 /**
  * The owner/repo pair a GitHub call operates on. An explicit pair wins with
- * no subprocess; empty defaults resolve from the `origin` remote of `cwd`
- * through the hardened git runner, which refuses an empty or relative cwd
- * rather than falling back to process.cwd() — a lost directory must never
- * silently target a different repository, because this pair feeds interrupt
- * payloads and the @always(owner, repo) approval scope. Callers must resolve
- * BEFORE raising their interrupt, so the payload shows the real repository.
+ * no subprocess; empty defaults resolve from the `origin` remote of `cwd`.
+ * The git runner refuses an empty or relative cwd rather than falling back
+ * to process.cwd(), so a lost directory can never silently target another
+ * repository. Callers resolve BEFORE raising their interrupt, so the payload
+ * and the @always(owner, repo) scope name the real repository.
  */
 export async function _ghResolveRepo(owner: string, repo: string, cwd: string): Promise<RepoCoord> {
   if (owner !== "" && repo !== "") {
-    return { owner, repo };
+    return checkRepoCoord({ owner, repo });
   }
   if (owner !== "" || repo !== "") {
     throw new Error(
@@ -84,5 +101,5 @@ export async function _ghResolveRepo(owner: string, repo: string, cwd: string): 
       `Could not parse a GitHub owner/repo from remote URL: ${redactUrl(url)}. Pass owner and repo explicitly.`,
     );
   }
-  return parsed;
+  return checkRepoCoord(parsed);
 }

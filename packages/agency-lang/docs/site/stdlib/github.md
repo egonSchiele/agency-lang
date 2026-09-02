@@ -7,9 +7,11 @@ description: "Typed GitHub tools for agents: read pull requests and issues, each
 
 Typed GitHub tools for agents. Each read (ghPrGet, ghIssueList, ...) raises
   its own effect, so a policy can approve exactly the operations it means to.
-  Every tool operates on one repository, defaulting to the origin remote of
-  the agent working directory; pass `owner` and `repo` to target another.
-  Approving an effect "always" pins the approval to that one repository.
+  Every tool operates on one repository. With `owner` and `repo` left empty it
+  uses the origin remote of the agent working directory, which `agency agent`
+  sets for you; under plain `agency run` nothing sets it, so pass both names
+  or call `setAgentCwd` first. Approving an effect "always" pins the approval
+  to that one repository.
 
   The credential comes from GITHUB_TOKEN / GH_TOKEN, then `gh auth token`,
   then the system keyring (setSecret("github-token", ...)). No tool ever
@@ -36,7 +38,7 @@ Typed GitHub tools for agents. Each read (ghPrGet, ghIssueList, ...) raises
 export type PrState = "open" | "closed" | "all"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L39))
 
 ### IssueState
 
@@ -44,7 +46,26 @@ export type PrState = "open" | "closed" | "all"
 export type IssueState = "open" | "closed" | "all"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L40))
+
+### PrListItem
+
+```ts
+export type PrListItem = {
+  number: number;
+  title: string;
+  state: string;
+  author: string;
+  base: string;
+  head: string;
+  headSha: string;
+  draft: boolean;
+  body: string;
+  url: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L42))
 
 ### PrSummary
 
@@ -66,7 +87,7 @@ export type PrSummary = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L54))
 
 ### PrFile
 
@@ -80,7 +101,7 @@ export type PrFile = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L69))
 
 ### ReviewSummary
 
@@ -94,7 +115,7 @@ export type ReviewSummary = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L70))
 
 ### ReviewCommentInfo
 
@@ -109,7 +130,7 @@ export type ReviewCommentInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L58))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L71))
 
 ### CheckRun
 
@@ -122,7 +143,7 @@ export type CheckRun = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L72))
 
 ### IssueSummary
 
@@ -139,7 +160,7 @@ export type IssueSummary = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L73))
 
 ### CommentInfo
 
@@ -153,7 +174,7 @@ export type CommentInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L83))
 
 ## Effects
 
@@ -168,7 +189,7 @@ effect std::github::prGet {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L88))
 
 ### std::github::prList
 
@@ -184,7 +205,7 @@ effect std::github::prList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L77))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L90))
 
 ### std::github::prDiff
 
@@ -197,7 +218,7 @@ effect std::github::prDiff {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L92))
 
 ### std::github::prFiles
 
@@ -212,7 +233,7 @@ effect std::github::prFiles {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L94))
 
 ### std::github::prReviewList
 
@@ -227,7 +248,7 @@ effect std::github::prReviewList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L83))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L96))
 
 ### std::github::prReviewCommentList
 
@@ -242,7 +263,7 @@ effect std::github::prReviewCommentList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L85))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L98))
 
 ### std::github::prChecks
 
@@ -257,7 +278,7 @@ effect std::github::prChecks {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L100))
 
 ### std::github::issueGet
 
@@ -270,7 +291,7 @@ effect std::github::issueGet {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L89))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L102))
 
 ### std::github::issueList
 
@@ -286,7 +307,7 @@ effect std::github::issueList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L104))
 
 ### std::github::issueCommentList
 
@@ -301,7 +322,7 @@ effect std::github::issueCommentList {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L93))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L106))
 
 ### std::github::issueSearch
 
@@ -316,7 +337,7 @@ effect std::github::issueSearch {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L108))
 
 ## Functions
 
@@ -332,8 +353,8 @@ ghPrGet(
 
 Read one pull request: title, state, author, branches, and body.
   @param number - The pull request number.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -347,7 +368,7 @@ Read one pull request: title, state, author, branches, and body.
 
 **Throws:** `std::github::prGet`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L101))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L114))
 
 ### ghPrList
 
@@ -359,16 +380,16 @@ ghPrList(
   page: number = 1,
   owner: string = "",
   repo: string = "",
-): PrSummary[] raises <std::github::prList>
+): PrListItem[] raises <std::github::prList>
 ```
 
-List pull requests.
+List pull requests. Each item has no change counts; ghPrGet returns those.
   @param state - Filter by state: "open", "closed", or "all".
   @param base - Only pull requests targeting this base branch ("" for any).
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -381,11 +402,11 @@ List pull requests.
 | owner | `string` | "" |
 | repo | `string` | "" |
 
-**Returns:** `PrSummary[]`
+**Returns:** `PrListItem[]`
 
 **Throws:** `std::github::prList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L113))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L127))
 
 ### ghPrDiff
 
@@ -397,10 +418,11 @@ ghPrDiff(
 ): string raises <std::github::prDiff>
 ```
 
-Read the full unified diff of a pull request as one string.
+Read the full unified diff of a pull request as one string. GitHub refuses
+  this for very large pull requests; use ghPrFiles for those.
   @param number - The pull request number.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -414,7 +436,7 @@ Read the full unified diff of a pull request as one string.
 
 **Throws:** `std::github::prDiff`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L144))
 
 ### ghPrFiles
 
@@ -432,8 +454,8 @@ List the files a pull request changes, with per-file add/delete counts and patch
   @param number - The pull request number.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -449,7 +471,7 @@ List the files a pull request changes, with per-file add/delete counts and patch
 
 **Throws:** `std::github::prFiles`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L158))
 
 ### ghPrReviews
 
@@ -467,8 +489,8 @@ List the reviews on a pull request: verdicts, authors, and bodies.
   @param number - The pull request number.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -484,7 +506,7 @@ List the reviews on a pull request: verdicts, authors, and bodies.
 
 **Throws:** `std::github::prReviewList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L154))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L175))
 
 ### ghPrReviewComments
 
@@ -502,8 +524,8 @@ List the inline review comments on a pull request, with file and line.
   @param number - The pull request number.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -519,7 +541,7 @@ List the inline review comments on a pull request, with file and line.
 
 **Throws:** `std::github::prReviewCommentList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L192))
 
 ### ghPrChecks
 
@@ -537,8 +559,8 @@ List the CI check runs on the head commit of a pull request.
   @param number - The pull request number.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -554,7 +576,7 @@ List the CI check runs on the head commit of a pull request.
 
 **Throws:** `std::github::prChecks`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L209))
 
 ### ghIssueGet
 
@@ -566,10 +588,11 @@ ghIssueGet(
 ): IssueSummary raises <std::github::issueGet>
 ```
 
-Read one issue: title, state, author, labels, and body.
+Read one issue: title, state, author, labels, and body. Fails if the number
+  belongs to a pull request; use ghPrGet for those.
   @param number - The issue number.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -583,7 +606,7 @@ Read one issue: title, state, author, labels, and body.
 
 **Throws:** `std::github::issueGet`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L196))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L226))
 
 ### ghIssueList
 
@@ -598,13 +621,16 @@ ghIssueList(
 ): IssueSummary[] raises <std::github::issueList>
 ```
 
-List issues, optionally filtered by labels.
+List issues, optionally filtered by labels. GitHub counts pull requests
+  toward each page and this tool drops them, so a page can come back short or
+  empty while later pages still hold issues. To page through every issue
+  exactly, use ghIssueSearch with "is:issue".
   @param state - Filter by state: "open", "closed", or "all".
   @param labels - Only issues carrying all of these labels ([] for any).
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -621,7 +647,7 @@ List issues, optionally filtered by labels.
 
 **Throws:** `std::github::issueList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L240))
 
 ### ghIssueComments
 
@@ -639,8 +665,8 @@ List the comments on an issue.
   @param number - The issue number.
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -656,7 +682,7 @@ List the comments on an issue.
 
 **Throws:** `std::github::issueCommentList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L260))
 
 ### ghIssueSearch
 
@@ -671,13 +697,12 @@ ghIssueSearch(
 ```
 
 Search issues and pull requests in one repository. The query must not
-  contain a repo:, org:, or user: qualifier; the repository is always the one
-  named by owner and repo.
+  contain a repo:, org:, or user: qualifier.
   @param query - GitHub search syntax, e.g. "crash in:title label:bug".
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
-  @param owner - Repository owner. Defaults to the origin remote of the current repo.
-  @param repo - Repository name. Defaults to the origin remote of the current repo.
+  @param owner - Repository owner. Defaults to the origin remote of the agent working directory.
+  @param repo - Repository name. Defaults to the origin remote of the agent working directory.
 
 **Parameters:**
 
@@ -693,4 +718,4 @@ Search issues and pull requests in one repository. The query must not
 
 **Throws:** `std::github::issueSearch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L237))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L277))

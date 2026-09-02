@@ -29,7 +29,12 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
   - `subthread {}` inside the body inherits the caller's history and does not flow back (`subthreadInside`)
   - an interrupt inside the body resumes without a second marker (`pauseInside`), and a rejection inside the body reaches the body's own model (`rejectInside`)
   - a failure return hands back with the error (`failureInside`), and a rejected handoff call hands back with the rejection (`rejectHandoff`)
-  - a handoff inside a handoff (`nested`)
+  - a handoff inside a handoff (`nested`), and a pause inside a nested handoff (`nestedPause`)
+  - a pause after the body pushed a persona, which needs the start index to survive the checkpoint (`pauseWithPersona`)
+  - the same agent dispatched twice pushes its persona fresh each time through `ensureSystemMessage` (`twoDispatches`)
+  - two handoffs in one round, and a handoff beside an intrinsic `saveDraft` call, are both refused (`twoHandoffs`, `handoffWithDraft`)
+  - a structured return value is stringified into the resume message (`objectResult`)
+  - every request in every scenario is checked for provider-valid shape: tool calls paired with tool results, never ending on an assistant message
 - A handoff function called from code runs on the caller's thread: tests/agency/agents/oracleExplorer.agency (`twoOracleCallsShareTheCallerThread`, `explorerFromCodeLandsOnTheCallerThread`)
 - If I do want to transfer message history to another node, how would I do that?
 

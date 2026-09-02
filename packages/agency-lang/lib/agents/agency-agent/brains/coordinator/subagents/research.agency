@@ -21,6 +21,8 @@ import { memoryTools, planningTools } from "std::agents/lib/toolkits"
 import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
 
+import { announce } from "../lib/announce.agency"
+
 export static const researchTools: any[] = [
   ...memoryTools(),
   ...planningTools(),
@@ -48,6 +50,7 @@ export def researchAgent(userMsg: string, agencyTopic: boolean = false): string 
     that reads the bundled Agency documentation. Leave it false for every
     other subject, including questions about other languages.
   """
+  announce("research", userMsg)
   setMemoryId("research")
   let result: Result<string> = success("")
   if (agencyTopic) {

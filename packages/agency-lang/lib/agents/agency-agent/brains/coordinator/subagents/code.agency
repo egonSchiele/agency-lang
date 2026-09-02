@@ -29,6 +29,7 @@ import { systemMessage } from "std::thread"
 
 import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
+import { announce } from "../lib/announce.agency"
 import { oracleAgent } from "./oracle.agency"
 import {
   reviewWrittenFiles,
@@ -373,6 +374,7 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
     routes to the agents that know the language. Leave it false for every
     other language.
   """
+  announce("code agent", userMsg)
   const originalUserMsg = userMsg
   const decision = triage(userMsg)
   if (routeFor(decision) == "planner") {

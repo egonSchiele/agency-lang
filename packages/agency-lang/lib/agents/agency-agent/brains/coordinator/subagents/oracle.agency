@@ -13,30 +13,33 @@
 import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
+import { announce } from "../lib/announce.agency"
 
 export def oracleAgent(userMsg: string): string {
   """
-  Ask the oracle — a read-only senior reviewer on a stronger
-  reasoning model — for a second opinion on a hard problem. Call
-  this BEFORE acting when:
+  Ask the oracle — a read-only senior reviewer — for a second opinion
+  before acting on something that would be expensive to get wrong. Call
+  this when:
 
-  - You're about to execute a non-trivial plan and want it sanity-
-    checked ("is this a good plan? is there a simpler way?")
-  - You suspect existing code already solves the problem and want
-    a thorough search ("is there a helper for X in this repo?")
+  - You're about to execute a non-trivial plan or diff and a flaw would
+    be costly to undo
   - You're stuck on a bug after one or two failed attempts
-  - You want a critical review of a diff or design before showing
-    it to the user
+  - You suspect existing code already solves the problem and a targeted
+    look hasn't settled it
 
-  Pass a self-contained question with full context — the oracle
-  starts fresh and does not see your conversation. Include the
-  plan, the relevant file paths, what you've already tried, and
-  the specific question you want answered. The oracle returns a
-  written analysis.
+  Do NOT consult the oracle for conversational questions, opinions, or
+  advice the user asked *you* for — answer those yourself from what you
+  know and what you can read directly. A second opinion is worth its cost
+  when you're about to act, not when you're about to reply.
+
+  Pass a self-contained question — the oracle does not see your
+  conversation. Include the specific question, the relevant file paths,
+  and what you've already tried.
 
   @param userMsg - the question, with all the context the oracle
     needs to answer it
   """
+  announce("oracle", userMsg)
   const result = stdOracleAgent(
     question: userMsg,
     model: getSlowModel(),

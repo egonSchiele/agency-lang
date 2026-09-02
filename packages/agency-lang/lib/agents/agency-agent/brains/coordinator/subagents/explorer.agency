@@ -13,35 +13,30 @@
 import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
+import { announce } from "../lib/announce.agency"
 
 export def explorerAgent(userMsg: string): string {
   """
-  Ask the explorer — a read-only researcher on a stronger
-  reasoning model — to produce a broad, synthesizing answer about
-  the codebase or the bundled Agency docs.
+  Ask the explorer — a read-only researcher — to survey many files and
+  return a synthesized answer. Use it only when the answer genuinely
+  requires broad coverage:
 
-  Use this when the user asks a question whose answer requires
-  **reading many files and synthesizing**:
-
-  - "Summarize the Agency docs"
-  - "What are the main features of X?"
-  - "Give me a tour of module Y"
+  - "Summarize the Agency docs" / "give me a tour of module Y"
   - "How does Z work across the codebase?"
-  - "Walk me through the compilation pipeline"
 
-  Do NOT use this for:
-  - Targeted lookups (use `codeAgent` or just `grep`)
-  - Plan critique or bug diagnosis (use `oracleAgent`)
-  - External / web research (use `researchAgent`)
+  Do NOT use this when a handful of targeted reads would answer the
+  question — do those reads yourself with your own file tools. Do not
+  send it to "map the structure": name the specific questions you need
+  answered and the scope to cover ("all of docs/site/guide/", "the
+  lib/parsers/ module").
 
-  Pass a self-contained question — the explorer starts fresh and
-  does not see your conversation. Be explicit about the scope you
-  want covered ("all of docs/site/guide/", "the lib/parsers/
-  module") and the level of detail expected.
+  Pass a self-contained brief — the explorer does not see your
+  conversation.
 
-  @param userMsg - the question, with the scope of coverage you
-    want covered
+  @param userMsg - the specific questions to answer and the scope to
+    cover, with any context from the conversation the explorer needs
   """
+  announce("explorer", userMsg)
   const result = stdExplorerAgent(
     question: userMsg,
     model: getSlowModel(),

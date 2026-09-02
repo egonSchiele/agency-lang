@@ -59,7 +59,13 @@ import { AccessChainElement, ValueAccess } from "../types/access.js";
 import { AgencyArray, AgencyObject, AgencyObjectKV } from "../types/dataStructures.js";
 import { ForLoop } from "../types/forLoop.js";
 import { TryExpression } from "../types/tryExpression.js";
-import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
+import {
+  FunctionCall,
+  FunctionDefinition,
+  FunctionMarkers,
+  FunctionParameter,
+  markerKeywordsOf,
+} from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { HandleBlock } from "../types/handleBlock.js";
 import { WithModifier } from "../types/withModifier.js";
@@ -129,6 +135,15 @@ import { ScopeManager } from "./typescriptBuilder/scopeManager.js";
 import { StepPathTracker } from "./typescriptBuilder/stepPathTracker.js";
 import { NameClassifier } from "./typescriptBuilder/nameClassifier.js";
 import { functionContainsDestructiveBlock } from "./functionContainsDestructiveBlock.js";
+
+/** The markers a def's AgencyFunction carries. Destructive is derived: the
+ *  raw `destructive def` marker OR a `destructive { }` region in the body.
+ *  (The entry flip / `inDestructiveFunction` still key on the raw marker
+ *  alone, so a contains-region-only function does not commit at entry.) */
+function toolMarkersOf(node: FunctionDefinition): FunctionMarkers {
+  const destructive = !!node.markers?.destructive || functionContainsDestructiveBlock(node.body);
+  return { ...node.markers, destructive };
+}
 import { DestructiveTracking } from "./typescriptBuilder/destructiveTracking.js";
 import {
   FinalizeCodegen,
@@ -2450,19 +2465,13 @@ export class TypeScriptBuilder {
       toolDefinition: toolDef,
       exported: ts.bool(!!node.exported),
     };
-    // Carry the retry-safety markers so the tool loop and MCP adapter can
-    // read them off the registered AgencyFunction. Emitted only when set.
-    // "Destructive" for metadata purposes is DERIVED: the raw `destructive def`
-    // marker OR the presence of a `destructive { }` region in the body. (The
-    // entry flip / `inDestructiveFunction` still key on the raw marker alone —
-    // see `:2266` — so a contains-region-only function does not commit at
-    // entry.)
-    const isDestructive =
-      !!node.markers?.destructive || functionContainsDestructiveBlock(node.body);
-    if (isDestructive || node.markers?.idempotent) {
-      const markerProps: Record<string, TsNode> = {};
-      if (isDestructive) markerProps.destructive = ts.bool(true);
-      if (node.markers?.idempotent) markerProps.idempotent = ts.bool(true);
+    // Carry the markers so the tool loop and MCP adapter can read them off
+    // the registered AgencyFunction. Emitted only when at least one is set.
+    const markerKeywords = markerKeywordsOf(toolMarkersOf(node));
+    if (markerKeywords.length > 0) {
+      const markerProps = Object.fromEntries(
+        markerKeywords.map((keyword) => [keyword, ts.bool(true)]),
+      );
       createProps.markers = ts.obj(markerProps);
     }
     const createCall = $.id("__AgencyFunction")

@@ -4,11 +4,10 @@
  * The agent itself lives in std::agents/oracle, so users get the same
  * reviewer in their own agents. This wrapper supplies the things that are
  * the agency agent's business and not the stdlib's: the slow-model slot
- * the user selected, a shared session so repeated consults in one run
- * continue a conversation rather than starting cold, the coordinator's
- * recent conversation as context, and thread tools so the oracle can read
- * other threads (such as an earlier explorer survey) instead of re-deriving
- * their work.
+ * the user selected, `inheritContext` so the consult runs in a subthread
+ * of the coordinator's conversation instead of starting blind, and thread
+ * tools so the oracle can read other threads (such as an earlier explorer
+ * survey) instead of re-deriving their work.
  *
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
@@ -17,8 +16,7 @@ import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 import { getThread, listThreads } from "std::thread"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
-import { announce } from "./announce.agency"
-import { recentConversation } from "./context.agency"
+import { announce } from "../lib/announce.agency"
 
 export def oracleAgent(userMsg: string): string {
   """
@@ -37,21 +35,20 @@ export def oracleAgent(userMsg: string): string {
   know and what you can read directly. A second opinion is worth its cost
   when you're about to act, not when you're about to reply.
 
-  The oracle sees the recent conversation automatically and can read other
-  threads (an earlier explorer survey, for example), so don't restate the
-  discussion. State the specific question, the relevant file paths, and
-  what you've already tried.
+  The oracle sees the conversation so far and can read other threads (an
+  earlier explorer survey, for example), so don't restate the discussion.
+  State the specific question, the relevant file paths, and what you've
+  already tried.
 
   @param userMsg - the specific question you want answered
   """
   announce("oracle", userMsg)
   const result = stdOracleAgent(
     question: userMsg,
-    context: recentConversation(),
     model: getSlowModel(),
     provider: getSlowProvider(),
-    session: "oracle",
     extraTools: [listThreads, getThread],
+    inheritContext: true,
   )
   if (isFailure(result)) {
     return "The oracle could not finish: ${result.error}"

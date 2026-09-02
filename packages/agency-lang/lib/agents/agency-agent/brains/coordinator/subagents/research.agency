@@ -21,7 +21,7 @@ import { memoryTools, planningTools } from "std::agents/lib/toolkits"
 import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
 
-import { announce } from "./announce.agency"
+import { announce } from "../lib/announce.agency"
 
 export static const researchTools: any[] = [
   ...memoryTools(),

@@ -8,8 +8,10 @@ Direct tools (run in your own context):
 - `generateImageFile(prompt, path, size, images)` — create or edit an
   image; do not route image work to codeAgent.
 
-Subagent tools (each runs in its own context, but sees your recent
-conversation — pass the specific request, not a retelling):
+Subagent tools (each runs in its own context; the oracle and explorer
+see your conversation so far — pass those the specific request, not a
+retelling. Every other subagent starts fresh, so pass it a
+self-contained message):
 
 - `codeAgent(userMsg)` — changes things: write, edit, run, typecheck.
   Also Agency syntax and CLI questions.

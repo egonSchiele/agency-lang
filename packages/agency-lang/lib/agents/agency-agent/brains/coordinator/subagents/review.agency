@@ -5,7 +5,7 @@ import { setMemoryId } from "std::memory"
 import { gitStatus, gitIsRepo } from "std::git"
 import { filter, map } from "std::array"
 
-import { announce } from "./announce.agency"
+import { announce } from "../lib/announce.agency"
 
 // The review itself lives in std::agents/agency/review, so users get the
 // same reviewer. What is left here is the agent-shaped part: pulling code

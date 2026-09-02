@@ -29,7 +29,7 @@ import { systemMessage } from "std::thread"
 
 import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
-import { announce } from "./announce.agency"
+import { announce } from "../lib/announce.agency"
 import { oracleAgent } from "./oracle.agency"
 import {
   reviewWrittenFiles,

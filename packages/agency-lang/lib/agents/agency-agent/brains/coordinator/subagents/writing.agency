@@ -2,7 +2,7 @@ import { writingReviewAgent } from "std::agents/writing/review"
 import { renderFeedback } from "std::agents/lib/feedback"
 import { setMemoryId } from "std::memory"
 
-import { announce } from "./announce.agency"
+import { announce } from "../lib/announce.agency"
 
 // The review itself lives in std::agents/writing/review. That reviewer
 // reads the files a message names and applies fixes only when asked, so

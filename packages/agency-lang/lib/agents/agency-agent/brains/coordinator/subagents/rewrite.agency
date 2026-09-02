@@ -1,7 +1,7 @@
 import { writingRewriteAgent } from "std::agents/writing/rewrite"
 import { setMemoryId } from "std::memory"
 
-import { announce } from "./announce.agency"
+import { announce } from "../lib/announce.agency"
 
 // The rewrite lives in std::agents/writing/rewrite. This wrapper only
 // separates the prose from the request around it and adds the thread and

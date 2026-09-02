@@ -4,9 +4,8 @@
  * The agent itself lives in std::agents/explorer, so users get the same
  * surveyor in their own agents. This wrapper supplies the things that are
  * the agency agent's business and not the stdlib's: the slow-model slot
- * the user selected, a shared session so repeated surveys in one run
- * continue a conversation rather than starting cold, and the coordinator's
- * recent conversation as context so the brief doesn't have to restate it.
+ * the user selected, and `inheritContext` so the survey runs in a
+ * subthread of the coordinator's conversation instead of starting blind.
  *
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
@@ -15,8 +14,7 @@ import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 import { getThread, listThreads } from "std::thread"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
-import { announce } from "./announce.agency"
-import { recentConversation } from "./context.agency"
+import { announce } from "../lib/announce.agency"
 
 export def explorerAgent(userMsg: string): string {
   """
@@ -33,19 +31,18 @@ export def explorerAgent(userMsg: string): string {
   answered and the scope to cover ("all of docs/site/guide/", "the
   lib/parsers/ module").
 
-  The explorer sees the recent conversation automatically, so state the
-  questions and scope rather than restating the discussion.
+  The explorer sees the conversation so far, so state the questions and
+  scope rather than restating the discussion.
 
   @param userMsg - the specific questions to answer and the scope to cover
   """
   announce("explorer", userMsg)
   const result = stdExplorerAgent(
     question: userMsg,
-    context: recentConversation(),
     model: getSlowModel(),
     provider: getSlowProvider(),
-    session: "explorer",
     extraTools: [listThreads, getThread],
+    inheritContext: true,
   )
   if (isFailure(result)) {
     return "The explorer could not finish: ${result.error}"

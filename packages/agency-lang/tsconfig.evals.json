@@ -8,5 +8,8 @@
     "incremental": false,
     "rootDir": "."
   },
-  "include": ["evals"]
+  "include": ["evals"],
+  // Seeded agent workdirs, not repo code: a test's files/ may deliberately
+  // reference packages that only exist in its fictional repo.
+  "exclude": ["evals/*/*/files"]
 }

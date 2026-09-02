@@ -2,16 +2,15 @@
  * The explorer, as the agency agent's coordinator sees it.
  *
  * The agent itself lives in std::agents/explorer, so users get the same
- * surveyor in their own agents. This wrapper supplies the things that are
- * the agency agent's business and not the stdlib's: the slow-model slot
- * the user selected, and `inheritContext` so the survey runs in a
- * subthread of the coordinator's conversation instead of starting blind.
+ * surveyor in their own agents. This wrapper supplies the two things that
+ * are the agency agent's business and not the stdlib's: the slow-model slot
+ * the user selected, and a shared session so repeated surveys in one run
+ * continue a conversation rather than starting cold.
  *
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
  */
 import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
-import { getThread, listThreads } from "std::thread"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
@@ -31,18 +30,18 @@ export def explorerAgent(userMsg: string): string {
   answered and the scope to cover ("all of docs/site/guide/", "the
   lib/parsers/ module").
 
-  The explorer sees the conversation so far, so state the questions and
-  scope rather than restating the discussion.
+  Pass a self-contained brief — the explorer does not see your
+  conversation.
 
-  @param userMsg - the specific questions to answer and the scope to cover
+  @param userMsg - the specific questions to answer and the scope to
+    cover, with any context from the conversation the explorer needs
   """
   announce("explorer", userMsg)
   const result = stdExplorerAgent(
     question: userMsg,
     model: getSlowModel(),
     provider: getSlowProvider(),
-    extraTools: [listThreads, getThread],
-    inheritContext: true,
+    session: "explorer",
   )
   if (isFailure(result)) {
     return "The explorer could not finish: ${result.error}"

@@ -42,7 +42,6 @@ oracleAgent(
   provider: string = "",
   session: string = "",
   extraTools: any[] = [],
-  inheritContext: boolean = false,
 ): Result<string>
 ```
 
@@ -51,11 +50,9 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
   design. Reads the code and returns a written analysis ending in a concrete
   recommendation. It never changes anything.
 
-  By default this agent starts fresh and cannot see your conversation, so
-  pass a self-contained question: include the plan, the relevant file paths,
-  and what you have already tried. With `inheritContext` it runs in a
-  subthread that sees the conversation so far, and the question only needs
-  to say what you want answered.
+  Pass a self-contained question: this agent starts fresh and cannot see your
+  conversation. Include the plan, the relevant file paths, and what you have
+  already tried.
 
   @param question - The question, with all the context needed to answer it
   @param context - Extra material folded into the prompt, or ""
@@ -63,9 +60,8 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
   @param maxTime - Hard wall-clock cap
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated. Ignored with `inheritContext`, since a subthread cannot be resumed
+  @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
-  @param inheritContext - true to run in a subthread that inherits the caller's conversation so far; false for an isolated thread
 
 **Parameters:**
 
@@ -79,7 +75,6 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
 | provider | `string` | "" |
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
-| inheritContext | `boolean` | false |
 
 **Returns:** `Result<string>`
 

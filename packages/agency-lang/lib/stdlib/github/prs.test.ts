@@ -9,6 +9,11 @@ import {
   _ghPrDiff,
   _ghPrReviews,
   _ghPrReviewComments,
+  _ghPrHeadSha,
+  _ghPrReviewComment,
+  _ghPrReview,
+  _ghPrApprove,
+  _ghCheckReview,
 } from "./prs.js";
 
 afterEach(() => {
@@ -189,5 +194,101 @@ describe("PR endpoints", () => {
     await withCtx(() => _ghPrReviewComments(7, 25, 3, "o", "r"));
     expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/reviews?per_page=50&page=2");
     expect(String(spy.mock.calls[1][0])).toContain("/pulls/7/comments?per_page=25&page=3");
+  });
+});
+
+const rawReviewComment = {
+  id: 2,
+  path: "a.ts",
+  line: 3,
+  user: { login: "agency-bot" },
+  body: "x",
+  html_url: "https://github.com/o/r/pull/7#discussion_r2",
+};
+
+const rawReview = {
+  id: 3,
+  user: { login: "agency-bot" },
+  state: "COMMENTED",
+  body: "overall",
+  submitted_at: "2026-09-01T00:00:00Z",
+};
+
+function sentBody(spy: ReturnType<typeof vi.spyOn>, call: number): unknown {
+  const init = spy.mock.calls[call][1] as RequestInit;
+  return JSON.parse(String(init.body));
+}
+
+describe("PR write endpoints", () => {
+  it("reads the head SHA of a pull request", async () => {
+    stubToken();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(rawPr));
+    expect(await withCtx(() => _ghPrHeadSha(7, "o", "r"))).toBe("abc123");
+  });
+
+  it("posts an inline review comment anchored to the given commit", async () => {
+    stubToken();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse(rawReviewComment, 201));
+    await withCtx(() => _ghPrReviewComment(7, "a.ts", 3, "x", "LEFT", "def456", "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/comments");
+    expect(sentBody(spy, 0)).toEqual({
+      path: "a.ts",
+      line: 3,
+      side: "LEFT",
+      commit_id: "def456",
+      body: "x",
+    });
+  });
+
+  it("submits a review with its inline comments, defaulting side to RIGHT", async () => {
+    stubToken();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(rawReview));
+    const review = await withCtx(() =>
+      _ghPrReview(7, "COMMENT", "overall", [{ path: "a.ts", line: 3, body: "x" }], "o", "r"),
+    );
+    expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/reviews");
+    expect(sentBody(spy, 0)).toEqual({
+      event: "COMMENT",
+      body: "overall",
+      comments: [{ path: "a.ts", line: 3, side: "RIGHT", body: "x" }],
+    });
+    expect(review.state).toBe("COMMENTED");
+  });
+
+  it("refuses event APPROVE without fetching", async () => {
+    stubToken();
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(withCtx(() => _ghPrReview(7, "APPROVE", "", [], "o", "r"))).rejects.toThrow(
+      /ghPrApprove/,
+    );
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["REQUEST_CHANGES", "", [], /needs a body/],
+    ["REQUEST_CHANGES", "   ", [], /needs a body/],
+    ["COMMENT", "", [{ path: "a.ts", line: 0, body: "x" }], /positive whole/],
+    ["COMMENT", "", [{ path: "a.ts", line: 2.5, body: "x" }], /positive whole/],
+  ])("refuses a review GitHub would reject: %s %j %j", (event, body, comments, message) => {
+    expect(() => _ghCheckReview(event, body, comments)).toThrow(message);
+  });
+
+  it("accepts a REQUEST_CHANGES review with a body and whole-number lines", () => {
+    expect(() =>
+      _ghCheckReview("REQUEST_CHANGES", "fix it", [{ path: "a.ts", line: 3, body: "x" }]),
+    ).not.toThrow();
+  });
+
+  it("approves with event APPROVE", async () => {
+    stubToken();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ ...rawReview, state: "APPROVED" }));
+    const review = await withCtx(() => _ghPrApprove(7, "lgtm", "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/reviews");
+    expect(sentBody(spy, 0)).toMatchObject({ event: "APPROVE", body: "lgtm" });
+    expect(review.state).toBe("APPROVED");
   });
 });

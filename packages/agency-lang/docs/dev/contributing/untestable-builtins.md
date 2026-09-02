@@ -2,6 +2,17 @@
 
 These stdlib functions produce side effects on the user's system, so CI cannot test them. This document tracks the test cases we want once someone establishes a mocking or sandboxing strategy.
 
+## GitHub (`std::github`)
+
+Everything runs against canned responses; a real repository needs a fixture
+account and a live token.
+
+- a 401 from an expired token drops the cached token
+- a rate-limit 403 carries the reset headers GitHub sends
+- a 422 from an inline review comment on a line outside the diff
+- a 406 from `ghPrDiff` on a pull request over the diff size limit
+- `gh auth token` resolution on a machine logged in through the keyring
+
 ## Clipboard (`std::clipboard`)
 
 - `copy` + `paste` round-trip: copy text, paste it back, verify match

@@ -7,6 +7,10 @@ import {
   _ghIssueComments,
   _ghIssueSearch,
   _ghScopedSearchQuery,
+  _ghIssueCreate,
+  _ghIssueComment,
+  _ghIssueClose,
+  _ghIssueLabel,
 } from "./issues.js";
 
 afterEach(() => {
@@ -135,6 +139,66 @@ describe("issue endpoints", () => {
     expect(url).toContain("/repos/o/r/issues/42/comments?");
     expect(url).toContain("per_page=50");
     expect(url).toContain("page=2");
+  });
+});
+
+function sentBody(spy: ReturnType<typeof vi.spyOn>, call: number): unknown {
+  const init = spy.mock.calls[call][1] as RequestInit;
+  return JSON.parse(String(init.body));
+}
+
+describe("issue write endpoints", () => {
+  it("creates an issue, omitting empty labels and assignees", async () => {
+    stubToken();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(rawIssue, 201));
+    const issue = await withCtx(() => _ghIssueCreate("Crash on start", "steps", [], [], "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/repos/o/r/issues");
+    expect((spy.mock.calls[0][1] as RequestInit).method).toBe("POST");
+    expect(sentBody(spy, 0)).toEqual({ title: "Crash on start", body: "steps" });
+    expect(issue.number).toBe(42);
+  });
+
+  it("creates an issue with labels and assignees when given", async () => {
+    stubToken();
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(rawIssue, 201));
+    await withCtx(() => _ghIssueCreate("t", "b", ["bug"], ["alice"], "o", "r"));
+    expect(sentBody(spy, 0)).toEqual({
+      title: "t",
+      body: "b",
+      labels: ["bug"],
+      assignees: ["alice"],
+    });
+  });
+
+  it("fails loudly when a created comment does not match the expected shape", async () => {
+    stubToken();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({}, 201));
+    await expect(withCtx(() => _ghIssueComment(42, "hi", "o", "r"))).rejects.toThrow(
+      /issues\/\{number\}\/comments.*expected shape/s,
+    );
+  });
+
+  it("closes an issue with a reason", async () => {
+    stubToken();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse({ ...rawIssue, state: "closed" }));
+    const issue = await withCtx(() => _ghIssueClose(42, "not_planned", "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/repos/o/r/issues/42");
+    expect((spy.mock.calls[0][1] as RequestInit).method).toBe("PATCH");
+    expect(sentBody(spy, 0)).toEqual({ state: "closed", state_reason: "not_planned" });
+    expect(issue.state).toBe("closed");
+  });
+
+  it("adds labels and returns the full label list", async () => {
+    stubToken();
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse([{ name: "bug" }, { name: "p1" }]));
+    const labels = await withCtx(() => _ghIssueLabel(42, ["p1"], "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/repos/o/r/issues/42/labels");
+    expect(sentBody(spy, 0)).toEqual({ labels: ["p1"] });
+    expect(labels).toEqual(["bug", "p1"]);
   });
 });
 

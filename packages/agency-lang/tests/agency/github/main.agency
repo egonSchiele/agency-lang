@@ -1,4 +1,4 @@
-import { ghPrGet, ghIssueList } from "std::github"
+import { ghPrGet, ghIssueList, ghIssueComment, ghPrReview, ghPrApprove } from "std::github"
 import { setEnv } from "std::system"
 import { exec } from "std::shell"
 import { setAgentCwd } from "std::index"
@@ -156,4 +156,59 @@ node alwaysScopePinsOwnerAndRepo(): string {
     return "FAIL second field: ${JSON.stringify(scope)}"
   }
   return "pass"
+}
+
+node rejectedWritePostsNothing(): string {
+  setEnv("GITHUB_TOKEN", "test-token") with approve
+  const comment = ghIssueComment(9, "should never land", owner: "o", repo: "r") with reject
+  if (isFailure(comment)) {
+    return "pass"
+  }
+  return "FAIL rejected comment was posted"
+}
+
+node approvedWritePostsBody(): string {
+  setEnv("GITHUB_TOKEN", "test-token") with approve
+  const comment = ghIssueComment(9, "hello from the test", owner: "o", repo: "r") with approve
+  if (isFailure(comment)) {
+    return "FAIL approved comment failed: ${JSON.stringify(comment)}"
+  }
+  if (comment.author != "agency-bot") {
+    return "FAIL wrong mapping: ${JSON.stringify(comment)}"
+  }
+  return "pass"
+}
+
+node reviewPayloadCarriesComments(): string {
+  let sawCount = 0
+  let sawBody = ""
+  handle {
+    const r = ghPrReview(7, "COMMENT", "overall", [{ path: "a.ts", line: 3, body: "inline one" }], owner: "o", repo: "r")
+  } with (intr) {
+    if (intr.effect == "std::github::prReview") {
+      sawCount = intr.data.comments.length
+      sawBody = intr.data.comments[0].body
+    }
+    return reject()
+  }
+  if (sawCount == 1 && sawBody == "inline one") {
+    return "pass"
+  }
+  return "FAIL payload comments: ${sawCount} ${sawBody}"
+}
+
+node approveIsItsOwnEffect(): string {
+  setEnv("GITHUB_TOKEN", "test-token") with approve
+  handle {
+    const r = ghPrApprove(7, owner: "o", repo: "r")
+    if (isFailure(r)) {
+      return "pass"
+    }
+    return "FAIL prApprove went through under a review-only handler"
+  } with (intr) {
+    if (intr.effect == "std::github::prReview" || intr.effect == "std::github::issueComment") {
+      return approve()
+    }
+    return reject()
+  }
 }

@@ -74,6 +74,18 @@ describe("resolveTokenFromSources precedence", () => {
     await expect(resolveTokenFromSources(s)).rejects.not.toThrow(/AGENCY_OAUTH_KEY/);
   });
 
+  it("refuses a token with a newline without echoing it", async () => {
+    const s = sources({ env: { GITHUB_TOKEN: "ghp_secretvalue\n" } });
+    const failure = resolveTokenFromSources(s);
+    await expect(failure).rejects.toThrow(/GITHUB_TOKEN.*HTTP header/);
+    await expect(failure).rejects.not.toThrow(/secretvalue/);
+  });
+
+  it("refuses a non-ASCII token from the keyring, naming the source", async () => {
+    const s = sources({ keyringGet: async () => "ghp_sécret" });
+    await expect(resolveTokenFromSources(s)).rejects.toThrow(/keyring entry "github-token"/);
+  });
+
   it("names all three remedies on a total miss", async () => {
     await expect(resolveTokenFromSources(sources({}))).rejects.toThrow(
       /gh auth login[\s\S]*GITHUB_TOKEN[\s\S]*setSecret/,

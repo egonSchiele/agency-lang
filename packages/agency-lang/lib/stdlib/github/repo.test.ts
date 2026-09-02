@@ -32,6 +32,12 @@ describe("redactUrl", () => {
   it("passes a credential-free URL through", () => {
     expect(redactUrl("https://github.com/o/r")).toBe("https://github.com/o/r");
   });
+  it("strips credentials from a URL the URL parser refuses", () => {
+    // The invalid port makes `new URL` throw; the userinfo must still go.
+    expect(redactUrl("https://user:ghp_secret123@github.com:bad/o/r")).toBe(
+      "https://github.com:bad/o/r",
+    );
+  });
   it("passes an unparseable SSH remote through", () => {
     expect(redactUrl("git@github.com:o/r.git")).toBe("git@github.com:o/r.git");
   });

@@ -22,9 +22,14 @@ export function parseRemoteUrl(url: string): RepoCoord | undefined {
   return undefined;
 }
 
+// `scheme://user:token@` — the userinfo of a URL the URL parser refused
+// (a bad port, say). The SSH form has no scheme, so it does not match.
+const USERINFO_PATTERN = /^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i;
+
 /** Strip embedded credentials (https://user:token@host/...) from a URL
- *  before it can reach an error message. An unparseable value (e.g. the
- *  SSH form) carries no embedded credential and passes through. */
+ *  before it can reach an error message. A value the URL parser refuses
+ *  still has its userinfo cut out textually, so a malformed remote can
+ *  never leak a token either. */
 export function redactUrl(url: string): string {
   try {
     const parsed = new URL(url);
@@ -35,7 +40,7 @@ export function redactUrl(url: string): string {
     }
     return url;
   } catch {
-    return url;
+    return url.replace(USERINFO_PATTERN, "$1");
   }
 }
 

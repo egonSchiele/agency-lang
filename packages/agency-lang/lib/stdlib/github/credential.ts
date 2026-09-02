@@ -15,34 +15,51 @@ const MISS_MESSAGE = `No GitHub credential. Do one of:
   - set GITHUB_TOKEN in the environment
   - store a token with setSecret("github-token", "<token>")`;
 
+// Visible ASCII only. A token with a newline or a non-ASCII byte would make
+// undici reject the Authorization header with an error that quotes the
+// whole header value, and that error would carry the token into a failure
+// message. Refuse such a token here, without echoing it.
+const HEADER_SAFE_TOKEN = /^[\x21-\x7e]+$/;
+
+function checkTokenShape(token: string, source: string): string {
+  if (!HEADER_SAFE_TOKEN.test(token)) {
+    throw new Error(
+      `The GitHub token from ${source} contains whitespace or a non-ASCII character, ` +
+        "which cannot be sent in an HTTP header. Replace it with the token exactly as GitHub issued it.",
+    );
+  }
+  return token;
+}
+
 /** Precedence: env, then gh, then keyring. Pure over its sources so tests
  *  can prove the order with a different value per source. Throws on a miss. */
 export async function resolveTokenFromSources(sources: CredentialSources): Promise<string> {
   const fromEnv = sources.env.GITHUB_TOKEN || sources.env.GH_TOKEN;
   if (fromEnv) {
-    return fromEnv;
+    return checkTokenShape(fromEnv, sources.env.GITHUB_TOKEN ? "GITHUB_TOKEN" : "GH_TOKEN");
   }
-  try {
-    const fromGh = await sources.ghAuthToken();
-    if (fromGh) {
-      return fromGh;
-    }
-  } catch {
-    // Expected miss, not a swallowed error: gh absent or not logged in is a
-    // normal state, and the chain falls through to the keyring. A total miss
-    // still surfaces every remedy via MISS_MESSAGE.
+  const fromGh = await readSource(sources.ghAuthToken);
+  if (fromGh) {
+    return checkTokenShape(fromGh, "gh auth token");
   }
-  try {
-    const fromKeyring = await sources.keyringGet("github-token", "agency-lang");
-    if (fromKeyring) {
-      return fromKeyring;
-    }
-  } catch {
-    // Same footing as the gh miss above: _getSecret throws on platforms with
-    // no keyring backend (Windows), and that must surface the GitHub
-    // remedies below, not the keyring's own unrelated advice.
+  const fromKeyring = await readSource(() => sources.keyringGet("github-token", "agency-lang"));
+  if (fromKeyring) {
+    return checkTokenShape(fromKeyring, 'the keyring entry "github-token"');
   }
   throw new Error(MISS_MESSAGE);
+}
+
+/** A source that throws is a miss, not an error: gh absent or not logged
+ *  in is a normal state, and _getSecret throws on platforms with no keyring
+ *  backend (Windows). Either way the chain moves on, and a total miss still
+ *  surfaces every remedy via MISS_MESSAGE rather than the source's own,
+ *  unrelated advice. */
+async function readSource(read: () => Promise<string | null>): Promise<string | null> {
+  try {
+    return await read();
+  } catch {
+    return null;
+  }
 }
 
 // gh can hang on a broken keyring backend or a credential helper waiting for

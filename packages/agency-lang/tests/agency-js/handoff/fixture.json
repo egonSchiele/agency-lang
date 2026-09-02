@@ -1,0 +1,304 @@
+{
+  "basic": {
+    "result": "outer done",
+    "requestCount": 4,
+    "allWellFormed": true,
+    "roles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+      "user"
+    ],
+    "markerOnAssistant": true,
+    "toolTexts": [
+      "value-of-k"
+    ],
+    "resumeCarriesResult": true,
+    "subagentSawCaller": true,
+    "toolStarts": [
+      "subagent",
+      "lookup"
+    ]
+  },
+  "persona": {
+    "result": "persona done",
+    "requestCount": 3,
+    "allWellFormed": true,
+    "bodySawPersona": 1,
+    "callerKeptPersona": 0,
+    "roles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user"
+    ]
+  },
+  "notAlone": {
+    "result": "notAlone done",
+    "requestCount": 2,
+    "allWellFormed": true,
+    "refused": 1,
+    "siblingRan": true,
+    "assistantKeptToolCalls": true,
+    "toolStarts": [
+      "lookup"
+    ],
+    "markers": 0
+  },
+  "threadInside": {
+    "result": "thread done",
+    "requestCount": 3,
+    "allWellFormed": true,
+    "bodyRequestLength": 1,
+    "roles": [
+      "user",
+      "assistant",
+      "user"
+    ],
+    "resume": 1
+  },
+  "subthreadInside": {
+    "result": "subthread done",
+    "requestCount": 3,
+    "allWellFormed": true,
+    "bodySawCaller": 1,
+    "roles": [
+      "user",
+      "assistant",
+      "user"
+    ],
+    "resume": 1
+  },
+  "pauseInside": {
+    "pausedWithInterrupt": true,
+    "result": "pause done",
+    "requestCount": 4,
+    "allWellFormed": true,
+    "markers": 1,
+    "resumes": 1,
+    "roles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+      "user"
+    ],
+    "toolTexts": [
+      "ran p1"
+    ]
+  },
+  "rejectInside": {
+    "result": "reject done",
+    "requestCount": 4,
+    "allWellFormed": true,
+    "rejectionSeenByBody": 1,
+    "markers": 1,
+    "resumes": 1,
+    "roles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+      "user"
+    ]
+  },
+  "failureInside": {
+    "result": "failure done",
+    "requestCount": 2,
+    "allWellFormed": true,
+    "roles": [
+      "user",
+      "assistant",
+      "user"
+    ],
+    "resumeCarriesError": 1
+  },
+  "rejectHandoff": {
+    "result": "rejectHandoff done",
+    "requestCount": 2,
+    "allWellFormed": true,
+    "roles": [
+      "user",
+      "assistant",
+      "user"
+    ],
+    "markers": 1,
+    "resumeCarriesRejection": 1
+  },
+  "nested": {
+    "result": "nested done",
+    "requestCount": 5,
+    "allWellFormed": true,
+    "roles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "markers": 2,
+    "resumes": 2,
+    "toolMessages": 0
+  },
+  "pauseWithPersona": {
+    "result": "pausePersona done",
+    "requestCount": 4,
+    "allWellFormed": true,
+    "bodySawPersona": 1,
+    "callerKeptPersona": 0,
+    "markers": 1,
+    "roles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+      "user"
+    ]
+  },
+  "twoDispatches": {
+    "result": "twice done",
+    "requestCount": 5,
+    "allWellFormed": true,
+    "firstBodySawPersona": 1,
+    "secondBodySawPersona": 1,
+    "callerKeptPersona": 0,
+    "markers": 2,
+    "resumes": 2
+  },
+  "twoHandoffs": {
+    "result": "twoHandoffs done",
+    "requestCount": 2,
+    "allWellFormed": true,
+    "refused": 2,
+    "toolStarts": [],
+    "markers": 0
+  },
+  "handoffWithDraft": {
+    "result": "draft done",
+    "requestCount": 2,
+    "allWellFormed": true,
+    "refused": 1,
+    "toolStarts": [
+      "saveDraft"
+    ],
+    "markers": 0
+  },
+  "objectResult": {
+    "result": "object done",
+    "requestCount": 2,
+    "allWellFormed": true,
+    "roles": [
+      "user",
+      "assistant",
+      "user"
+    ],
+    "resumeCarriesJson": 1
+  },
+  "nestedPause": {
+    "result": "nestedPause done",
+    "requestCount": 6,
+    "allWellFormed": true,
+    "roles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "tool",
+      "assistant",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "markers": 2,
+    "resumes": 2,
+    "toolTexts": [
+      "ran p4"
+    ]
+  },
+  "asyncHandoff": {
+    "result": "async done / main sees",
+    "requestCount": 4,
+    "allWellFormed": true,
+    "bodySawCaller": 1,
+    "asyncFinalRoles": [
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "mainThreadRoles": [
+      "user"
+    ],
+    "mainThreadSawHandoff": 0
+  },
+  "explicitMessages": {
+    "result": "explicit done / second sees",
+    "requestCount": 4,
+    "allWellFormed": true,
+    "bodySawExplicit": true,
+    "explicitFinalRoles": [
+      "user",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "activeThreadRoles": [
+      "user"
+    ],
+    "activeThreadSawHandoff": 0
+  },
+  "callerSystemVisible": {
+    "result": "caller done",
+    "requestCount": 3,
+    "allWellFormed": true,
+    "bodySawCallerRules": 1,
+    "bodySawOwnPersona": 1,
+    "callerKeptRules": 1,
+    "callerKeptPersona": 0,
+    "roles": [
+      "system",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user"
+    ]
+  },
+  "twoAsyncHandoffs": {
+    "result": "async done / async done / main sees",
+    "requestCount": 7,
+    "allWellFormed": true,
+    "asyncFinals": 2,
+    "eachFinalHoldsOneBody": true,
+    "mainThreadRoles": [
+      "user"
+    ],
+    "mainThreadSawHandoff": 0
+  },
+  "cancelledHandoff": {
+    "loserThreadFound": true,
+    "parkedRequestSawPersona": true,
+    "loserKeptPersona": 0,
+    "loserKeptMarker": 1,
+    "loserMarkedCancelled": 1
+  }
+}

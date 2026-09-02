@@ -39,7 +39,6 @@ explorerAgent(
   maxTime: number = 15m,
   model: string = "",
   provider: string = "",
-  session: string = "",
   extraTools: any[] = [],
 ): Result<string>
 ```
@@ -49,8 +48,9 @@ Survey a codebase or a body of documentation and return an organized
   many files. Reads widely before synthesizing, and cites what it read. It
   never changes anything.
 
-  Pass a self-contained question and say how much ground to cover: this agent
-  starts fresh and cannot see your conversation.
+  The explorer continues your conversation: it sees everything said so
+  far, and every file it reads stays in your history when it hands back.
+  Say how much ground to cover, and scope the question tightly.
 
   @param question - The question, and the scope you want covered
   @param context - Extra material folded into the prompt, or ""
@@ -58,8 +58,11 @@ Survey a codebase or a body of documentation and return an organized
   @param maxTime - Hard wall-clock cap
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+
+Called from code, this runs on the caller's thread like any function:
+ *  the system prompt, the reads, and the answer stay there. Wrap the call
+ *  in `thread { ... }` for an isolated survey.
 
 **Parameters:**
 
@@ -71,11 +74,10 @@ Survey a codebase or a body of documentation and return an organized
 | maxTime | `number` | 15m |
 | model | `string` | "" |
 | provider | `string` | "" |
-| session | `string` | "" |
 | extraTools | `any[]` | [] |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/explorer.agency#L152))

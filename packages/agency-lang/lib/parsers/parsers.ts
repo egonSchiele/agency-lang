@@ -107,6 +107,8 @@ import {
   FunctionCall,
   FunctionDefinition,
   FunctionMarkers,
+  FUNCTION_MARKER_KEYWORDS,
+  markersFromKeywords,
   FunctionParameter,
   InterpolationSegment,
   Literal,
@@ -278,6 +280,7 @@ export const RESERVED_WORDS: readonly string[] = [
   "with",
   "destructive",
   "idempotent",
+  "handoff",
   "optimize",
   "class",
   "true",
@@ -7038,40 +7041,39 @@ const exportKeywordParser: Parser<boolean> = or(
 
 // The modifiers that may precede `def`, in any order, each at most once.
 // A table looped to fixpoint keeps this order-independent and makes a new
-// modifier a one-line addition.
-const FUNCTION_MODIFIER_KEYWORDS = ["export", "destructive", "idempotent"] as const;
+// modifier a one-word addition to FUNCTION_MARKER_KEYWORDS.
+const FUNCTION_MODIFIER_KEYWORDS = ["export", ...FUNCTION_MARKER_KEYWORDS] as const;
 type FunctionModifierKeyword = (typeof FUNCTION_MODIFIER_KEYWORDS)[number];
 
-const modifierKeywordParser = (kw: string): Parser<boolean> =>
+const modifierKeywordParser = (keyword: string): Parser<boolean> =>
   or(
-    map(seqC(str(kw), spaces), () => true),
+    map(seqC(str(keyword), spaces), () => true),
     succeed(false),
   );
 
 type FunctionModifiers = {
   isExported: boolean;
-  isDestructive: boolean;
-  isIdempotent: boolean;
+  markers: FunctionMarkers;
 };
 
 function parseFunctionModifiers(
   input: string,
 ): { success: true; rest: string; modifiers: FunctionModifiers } | { success: false } {
   let rest = input;
-  const seen: Record<FunctionModifierKeyword, boolean> = {
-    export: false,
-    destructive: false,
-    idempotent: false,
-  };
+  const seen = Object.fromEntries(
+    FUNCTION_MODIFIER_KEYWORDS.map((keyword) => [keyword, false]),
+  ) as Record<FunctionModifierKeyword, boolean>;
   let progressed = true;
   while (progressed) {
     progressed = false;
-    for (const kw of FUNCTION_MODIFIER_KEYWORDS) {
-      if (seen[kw]) continue;
-      const r = modifierKeywordParser(kw)(rest);
-      if (r.success && r.result) {
-        seen[kw] = true;
-        rest = r.rest;
+    for (const keyword of FUNCTION_MODIFIER_KEYWORDS) {
+      if (seen[keyword]) {
+        continue;
+      }
+      const parsed = modifierKeywordParser(keyword)(rest);
+      if (parsed.success && parsed.result) {
+        seen[keyword] = true;
+        rest = parsed.rest;
         progressed = true;
       }
     }
@@ -7081,21 +7083,18 @@ function parseFunctionModifiers(
   // reject the conflict here: both are set on the AST and the type checker
   // reports a clear diagnostic (AG7006). A parse failure would only surface
   // a generic "unexpected modifier".
+  const markerKeywords = FUNCTION_MARKER_KEYWORDS.filter((keyword) => seen[keyword]);
   return {
     success: true,
     rest,
-    modifiers: {
-      isExported: seen.export,
-      isDestructive: seen.destructive,
-      isIdempotent: seen.idempotent,
-    },
+    modifiers: { isExported: seen.export, markers: markersFromKeywords(markerKeywords) },
   };
 }
 
 const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   const mods = parseFunctionModifiers(input);
   if (!mods.success) return failure("unexpected modifier", input);
-  const { isExported, isDestructive, isIdempotent } = mods.modifiers;
+  const { isExported, markers } = mods.modifiers;
 
   const baseResult = _baseFunctionParser(mods.rest);
   if (!baseResult.success) return baseResult;
@@ -7111,15 +7110,12 @@ const _functionParserInner: Parser<FunctionDefinition> = (input: string) => {
   // Only attach `raises` when a clause was present (optional() yields null);
   // keeps the AST shape unchanged for functions without a raises clause.
   if (_raises) result.raises = _raises;
-  if (isExported) result.exported = true;
-  // Markers travel as one object, present only when at least one is set,
-  // each field only when true — keeps AST JSON and exact-match tests clean.
-  // Both may be set when the source conflicts (`destructive idempotent`);
-  // the type checker reports that as AG7006.
-  if (isDestructive || isIdempotent) {
-    const markers: FunctionMarkers = {};
-    if (isDestructive) markers.destructive = true;
-    if (isIdempotent) markers.idempotent = true;
+  if (isExported) {
+    result.exported = true;
+  }
+  // Present only when at least one marker is set — keeps AST JSON and
+  // exact-match tests clean.
+  if (Object.keys(markers).length > 0) {
     result.markers = markers;
   }
 

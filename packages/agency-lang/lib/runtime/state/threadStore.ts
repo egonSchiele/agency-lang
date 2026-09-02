@@ -273,6 +273,25 @@ export class ThreadStore {
     return id !== undefined ? this.threads[id] : undefined;
   }
 
+  /** A view of this store, sharing the registry, whose active thread is
+   *  `thread`. A thread this store does not know (one built from explicit
+   *  `messages`) is registered first. The view has its own active stack,
+   *  so concurrent callers never push and pop on each other. */
+  viewWithActive(thread: MessageThread): ThreadStore {
+    const id = this.idOf(thread) ?? this.register(thread);
+    return this.restoreBranchView([id]);
+  }
+
+  private idOf(thread: MessageThread): MessageThreadID | undefined {
+    return Object.keys(this.threads).find((id) => this.threads[id] === thread);
+  }
+
+  private register(thread: MessageThread): MessageThreadID {
+    const id = (this.counter++).toString();
+    this.threads[id] = thread;
+    return id;
+  }
+
   // Get the active thread, or create a new one, push it active, and return it.
   getOrCreateActive(): MessageThread {
     const existing = this.active();

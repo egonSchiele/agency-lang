@@ -2,10 +2,11 @@
  * The explorer, as the agency agent's coordinator sees it.
  *
  * The agent itself lives in std::agents/explorer, so users get the same
- * surveyor in their own agents. This wrapper supplies the two things that
- * are the agency agent's business and not the stdlib's: the slow-model slot
- * the user selected, and a shared session so repeated surveys in one run
- * continue a conversation rather than starting cold.
+ * surveyor in their own agents. This wrapper supplies the slow-model slot
+ * the user selected, which is the agency agent's business and not the
+ * stdlib's. It is a handoff: the explorer continues the coordinator's
+ * conversation, so it sees everything above and every file it reads stays
+ * in the coordinator's history.
  *
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
@@ -15,7 +16,7 @@ import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
 
-export def explorerAgent(userMsg: string): string {
+export handoff def explorerAgent(userMsg: string): string {
   """
   Ask the explorer — a read-only researcher — to survey many files and
   return a synthesized answer. Use it only when the answer genuinely
@@ -30,18 +31,17 @@ export def explorerAgent(userMsg: string): string {
   answered and the scope to cover ("all of docs/site/guide/", "the
   lib/parsers/ module").
 
-  Pass a self-contained brief — the explorer does not see your
-  conversation.
+  The explorer continues this conversation: it sees everything above, and
+  every file it reads stays in your history, so scope the questions
+  tightly. Call it alone, with no other tool calls in the same response.
 
-  @param userMsg - the specific questions to answer and the scope to
-    cover, with any context from the conversation the explorer needs
+  @param userMsg - the specific questions to answer and the scope to cover
   """
   announce("explorer", userMsg)
   const result = stdExplorerAgent(
     question: userMsg,
     model: getSlowModel(),
     provider: getSlowProvider(),
-    session: "explorer",
   )
   if (isFailure(result)) {
     return "The explorer could not finish: ${result.error}"

@@ -2,10 +2,11 @@
  * The oracle, as the agency agent's coordinator sees it.
  *
  * The agent itself lives in std::agents/oracle, so users get the same
- * reviewer in their own agents. This wrapper supplies the two things that
- * are the agency agent's business and not the stdlib's: the slow-model slot
- * the user selected, and a shared session so repeated consults in one run
- * continue a conversation rather than starting cold.
+ * reviewer in their own agents. This wrapper supplies the slow-model slot
+ * the user selected, which is the agency agent's business and not the
+ * stdlib's. It is a handoff: the oracle continues the coordinator's
+ * conversation, so it sees everything above and its reasoning stays in
+ * the coordinator's history.
  *
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
@@ -15,7 +16,7 @@ import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
 
-export def oracleAgent(userMsg: string): string {
+export handoff def oracleAgent(userMsg: string): string {
   """
   Ask the oracle — a read-only senior reviewer — for a second opinion
   before acting on something that would be expensive to get wrong. Call
@@ -32,19 +33,17 @@ export def oracleAgent(userMsg: string): string {
   know and what you can read directly. A second opinion is worth its cost
   when you're about to act, not when you're about to reply.
 
-  Pass a self-contained question — the oracle does not see your
-  conversation. Include the specific question, the relevant file paths,
-  and what you've already tried.
+  The oracle continues this conversation: it sees everything above, and
+  its reading and reasoning stay in your history. Ask the question itself.
+  Call it alone, with no other tool calls in the same response.
 
-  @param userMsg - the question, with all the context the oracle
-    needs to answer it
+  @param userMsg - the question
   """
   announce("oracle", userMsg)
   const result = stdOracleAgent(
     question: userMsg,
     model: getSlowModel(),
     provider: getSlowProvider(),
-    session: "oracle",
   )
   if (isFailure(result)) {
     return "The oracle could not finish: ${result.error}"

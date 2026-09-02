@@ -282,6 +282,8 @@ destructive def rm(id: string): string {
     expect(dOut).toMatch(/markers:\s*\{\s*destructive:\s*true/);
     const iOut = generateWithBuilder(`idempotent def compileIt(s: string): string { return s }`);
     expect(iOut).toMatch(/markers:\s*\{\s*idempotent:\s*true/);
+    const hOut = generateWithBuilder(`handoff def explorer(q: string): string { return q }`);
+    expect(hOut).toMatch(/markers:\s*\{\s*handoff:\s*true/);
     const plainOut = generateWithBuilder(`def plain(id: string): string { return id }`);
     expect(plainOut).not.toContain("markers:");
   });

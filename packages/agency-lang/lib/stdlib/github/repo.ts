@@ -23,8 +23,10 @@ export function parseRemoteUrl(url: string): RepoCoord | undefined {
 }
 
 // `scheme://user:token@` — the userinfo of a URL the URL parser refused
-// (a bad port, say). The SSH form has no scheme, so it does not match.
-const USERINFO_PATTERN = /^([a-z][a-z0-9+.-]*:\/\/)[^/@]*@/i;
+// (a bad port, say). Greedy through the LAST `@` before the path, so an
+// `@` inside the userinfo cannot leave the rest of it in place. The SSH
+// form has no scheme, so it does not match.
+const USERINFO_PATTERN = /^([a-z][a-z0-9+.-]*:\/\/)[^/]*@/i;
 
 /** Strip embedded credentials (https://user:token@host/...) from a URL
  *  before it can reach an error message. A value the URL parser refuses

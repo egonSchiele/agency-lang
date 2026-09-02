@@ -38,6 +38,11 @@ describe("redactUrl", () => {
       "https://github.com:bad/o/r",
     );
   });
+  it("strips userinfo that itself contains an @", () => {
+    expect(redactUrl("https://user@example.com:ghp_secret123@github.com:bad/o/r")).toBe(
+      "https://github.com:bad/o/r",
+    );
+  });
   it("passes an unparseable SSH remote through", () => {
     expect(redactUrl("git@github.com:o/r.git")).toBe("git@github.com:o/r.git");
   });

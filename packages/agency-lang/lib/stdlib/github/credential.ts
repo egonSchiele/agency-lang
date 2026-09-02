@@ -63,9 +63,15 @@ async function readSource(read: () => Promise<string | null>): Promise<string | 
 }
 
 // gh can hang on a broken keyring backend or a credential helper waiting for
-// input, and this runs inside _githubRequest where a hang stalls the whole
-// agent. The command prints one line; seconds are plenty.
+// input, and the keyring itself can block on a locked-keychain prompt. Both
+// run inside _githubRequest where a hang stalls the whole agent. Each
+// command prints one line; seconds are plenty.
 const GH_AUTH_TOKEN_TIMEOUT_MS = 5000;
+const KEYRING_TIMEOUT_MS = 5000;
+
+function keyringGetBounded(key: string, service: string): Promise<string | null> {
+  return _getSecret(key, service, KEYRING_TIMEOUT_MS);
+}
 
 async function ghAuthToken(): Promise<string | null> {
   // Fixed literal argv, no shell, nothing model-supplied.
@@ -113,6 +119,6 @@ export async function resolveGithubToken(): Promise<string> {
   return _resolveAndCache({
     env: process.env,
     ghAuthToken,
-    keyringGet: _getSecret,
+    keyringGet: keyringGetBounded,
   });
 }

@@ -57,34 +57,39 @@ export async function _setSecret(key: string, value: string, service?: string): 
 /**
  * Retrieve a secret from the system keyring.
  * Returns null if the secret doesn't exist.
+ *
+ * `timeoutMs` bounds the lookup: a locked keychain can pop a prompt and a
+ * broken Secret Service backend can hang, and a caller on a request path
+ * cannot wait on either. When the child is killed at the deadline the
+ * lookup reads as a miss. Unset means no bound, the historical behavior.
  */
-export async function _getSecret(key: string, service?: string): Promise<string | null> {
+export async function _getSecret(
+  key: string,
+  service?: string,
+  timeoutMs?: number,
+): Promise<string | null> {
   if (!key) throw new Error("Keyring key must not be empty.");
   const svc = service || DEFAULT_SERVICE;
+  const options = timeoutMs === undefined ? {} : { timeout: timeoutMs };
 
   if (process.platform === "darwin") {
     try {
-      const { stdout } = await execFileAsync("security", [
-        "find-generic-password",
-        "-s",
-        svc,
-        "-a",
-        key,
-        "-w",
-      ]);
+      const { stdout } = await execFileAsync(
+        "security",
+        ["find-generic-password", "-s", svc, "-a", key, "-w"],
+        options,
+      );
       return stdout.trimEnd();
     } catch {
       return null;
     }
   } else if (process.platform === "linux") {
     try {
-      const { stdout } = await execFileAsync("secret-tool", [
-        "lookup",
-        "service",
-        svc,
-        "account",
-        key,
-      ]);
+      const { stdout } = await execFileAsync(
+        "secret-tool",
+        ["lookup", "service", svc, "account", key],
+        options,
+      );
       return stdout.trimEnd();
     } catch {
       return null;

@@ -221,7 +221,9 @@ effect std::github::prFiles {
 effect std::github::prReviewList {
   owner: string;
   repo: string;
-  number: number
+  number: number;
+  perPage: number;
+  page: number
 }
 ```
 
@@ -234,7 +236,9 @@ effect std::github::prReviewList {
 effect std::github::prReviewCommentList {
   owner: string;
   repo: string;
-  number: number
+  number: number;
+  perPage: number;
+  page: number
 }
 ```
 
@@ -247,7 +251,9 @@ effect std::github::prReviewCommentList {
 effect std::github::prChecks {
   owner: string;
   repo: string;
-  number: number
+  number: number;
+  perPage: number;
+  page: number
 }
 ```
 
@@ -450,6 +456,8 @@ List the files a pull request changes, with per-file add/delete counts and patch
 ```ts
 ghPrReviews(
   number: number,
+  perPage: number = 30,
+  page: number = 1,
   owner: string = "",
   repo: string = "",
 ): ReviewSummary[] raises <std::github::prReviewList>
@@ -457,6 +465,8 @@ ghPrReviews(
 
 List the reviews on a pull request: verdicts, authors, and bodies.
   @param number - The pull request number.
+  @param perPage - Results per page, at most 100.
+  @param page - Page number, starting at 1.
   @param owner - Repository owner. Defaults to the origin remote of the current repo.
   @param repo - Repository name. Defaults to the origin remote of the current repo.
 
@@ -465,6 +475,8 @@ List the reviews on a pull request: verdicts, authors, and bodies.
 | Name | Type | Default |
 |---|---|---|
 | number | `number` |  |
+| perPage | `number` | 30 |
+| page | `number` | 1 |
 | owner | `string` | "" |
 | repo | `string` | "" |
 
@@ -479,6 +491,8 @@ List the reviews on a pull request: verdicts, authors, and bodies.
 ```ts
 ghPrReviewComments(
   number: number,
+  perPage: number = 30,
+  page: number = 1,
   owner: string = "",
   repo: string = "",
 ): ReviewCommentInfo[] raises <std::github::prReviewCommentList>
@@ -486,6 +500,8 @@ ghPrReviewComments(
 
 List the inline review comments on a pull request, with file and line.
   @param number - The pull request number.
+  @param perPage - Results per page, at most 100.
+  @param page - Page number, starting at 1.
   @param owner - Repository owner. Defaults to the origin remote of the current repo.
   @param repo - Repository name. Defaults to the origin remote of the current repo.
 
@@ -494,6 +510,8 @@ List the inline review comments on a pull request, with file and line.
 | Name | Type | Default |
 |---|---|---|
 | number | `number` |  |
+| perPage | `number` | 30 |
+| page | `number` | 1 |
 | owner | `string` | "" |
 | repo | `string` | "" |
 
@@ -501,13 +519,15 @@ List the inline review comments on a pull request, with file and line.
 
 **Throws:** `std::github::prReviewCommentList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L166))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L168))
 
 ### ghPrChecks
 
 ```ts
 ghPrChecks(
   number: number,
+  perPage: number = 30,
+  page: number = 1,
   owner: string = "",
   repo: string = "",
 ): CheckRun[] raises <std::github::prChecks>
@@ -515,6 +535,8 @@ ghPrChecks(
 
 List the CI check runs on the head commit of a pull request.
   @param number - The pull request number.
+  @param perPage - Results per page, at most 100.
+  @param page - Page number, starting at 1.
   @param owner - Repository owner. Defaults to the origin remote of the current repo.
   @param repo - Repository name. Defaults to the origin remote of the current repo.
 
@@ -523,6 +545,8 @@ List the CI check runs on the head commit of a pull request.
 | Name | Type | Default |
 |---|---|---|
 | number | `number` |  |
+| perPage | `number` | 30 |
+| page | `number` | 1 |
 | owner | `string` | "" |
 | repo | `string` | "" |
 
@@ -530,7 +554,7 @@ List the CI check runs on the head commit of a pull request.
 
 **Throws:** `std::github::prChecks`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L178))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L182))
 
 ### ghIssueGet
 
@@ -559,7 +583,7 @@ Read one issue: title, state, author, labels, and body.
 
 **Throws:** `std::github::issueGet`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L196))
 
 ### ghIssueList
 
@@ -597,7 +621,7 @@ List issues, optionally filtered by labels.
 
 **Throws:** `std::github::issueList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L208))
 
 ### ghIssueComments
 
@@ -632,7 +656,7 @@ List the comments on an issue.
 
 **Throws:** `std::github::issueCommentList`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L217))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L223))
 
 ### ghIssueSearch
 
@@ -646,7 +670,9 @@ ghIssueSearch(
 ): IssueSummary[] raises <std::github::issueSearch>
 ```
 
-Search issues and pull requests in one repository.
+Search issues and pull requests in one repository. The query must not
+  contain a repo:, org:, or user: qualifier; the repository is always the one
+  named by owner and repo.
   @param query - GitHub search syntax, e.g. "crash in:title label:bug".
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
@@ -667,4 +693,4 @@ Search issues and pull requests in one repository.
 
 **Throws:** `std::github::issueSearch`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/github.agency#L237))

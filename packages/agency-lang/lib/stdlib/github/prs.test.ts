@@ -1,7 +1,15 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { withCtx, jsonResponse, stubToken } from "./testUtils.js";
 import { _resetGithubCredentialCacheForTests } from "./credential.js";
-import { _ghPrGet, _ghPrList, _ghPrChecks, _ghPrFiles, _ghPrDiff } from "./prs.js";
+import {
+  _ghPrGet,
+  _ghPrList,
+  _ghPrChecks,
+  _ghPrFiles,
+  _ghPrDiff,
+  _ghPrReviews,
+  _ghPrReviewComments,
+} from "./prs.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -126,11 +134,21 @@ describe("PR endpoints", () => {
           ],
         }),
       );
-    const runs = await withCtx(() => _ghPrChecks(7, "o", "r"));
+    const runs = await withCtx(() => _ghPrChecks(7, 50, 2, "o", "r"));
     expect(runs).toEqual([
       { name: "ci", status: "completed", conclusion: "success", url: "https://x" },
     ]);
     expect(String(spy.mock.calls[0][0])).toContain("/pulls/7");
-    expect(String(spy.mock.calls[1][0])).toContain("/commits/abc123/check-runs");
+    expect(String(spy.mock.calls[1][0])).toContain("/commits/abc123/check-runs?per_page=50&page=2");
+  });
+
+  it("pages reviews and review comments", async () => {
+    stubToken();
+    // A fresh Response per call: a body can only be read once.
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse([]));
+    await withCtx(() => _ghPrReviews(7, 50, 2, "o", "r"));
+    await withCtx(() => _ghPrReviewComments(7, 25, 3, "o", "r"));
+    expect(String(spy.mock.calls[0][0])).toContain("/pulls/7/reviews?per_page=50&page=2");
+    expect(String(spy.mock.calls[1][0])).toContain("/pulls/7/comments?per_page=25&page=3");
   });
 });

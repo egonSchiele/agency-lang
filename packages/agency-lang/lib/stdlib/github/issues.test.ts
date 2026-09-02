@@ -1,7 +1,13 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { withCtx, jsonResponse, stubToken } from "./testUtils.js";
 import { _resetGithubCredentialCacheForTests } from "./credential.js";
-import { _ghIssueGet, _ghIssueList, _ghIssueComments, _ghIssueSearch } from "./issues.js";
+import {
+  _ghIssueGet,
+  _ghIssueList,
+  _ghIssueComments,
+  _ghIssueSearch,
+  _ghScopedSearchQuery,
+} from "./issues.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -65,16 +71,32 @@ describe("issue endpoints", () => {
     expect(String(spy.mock.calls[0][0])).not.toContain("labels=");
   });
 
-  it("scopes a search to the repository and maps the items array", async () => {
+  it("drops pull requests from the issues list", async () => {
+    stubToken();
+    const pr = { ...rawIssue, number: 43, pull_request: { url: "https://api.github.com/x" } };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([rawIssue, pr]));
+    const issues = await withCtx(() => _ghIssueList("open", [], 30, 1, "o", "r"));
+    expect(issues.map((issue) => issue.number)).toEqual([42]);
+  });
+
+  it("sends the scoped query verbatim and maps the items array", async () => {
     stubToken();
     const spy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(jsonResponse({ total_count: 1, items: [rawIssue] }));
-    const found = await withCtx(() => _ghIssueSearch("crash", 30, 1, "o", "r"));
+    const found = await withCtx(() => _ghIssueSearch("repo:o/r crash", 30, 1));
     expect(found.map((issue) => issue.number)).toEqual([42]);
     const url = String(spy.mock.calls[0][0]);
     expect(url).toContain("/search/issues?");
-    expect(url).toContain(`q=${encodeURIComponent("repo:o/r crash").replace(/%20/g, "+")}`);
+    expect(url).toContain("q=repo%3Ao%2Fr+crash");
+  });
+
+  it("keeps pull requests in search results", async () => {
+    stubToken();
+    const pr = { ...rawIssue, number: 43, pull_request: { url: "https://api.github.com/x" } };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ items: [rawIssue, pr] }));
+    const found = await withCtx(() => _ghIssueSearch("repo:o/r crash", 30, 1));
+    expect(found.map((issue) => issue.number)).toEqual([42, 43]);
   });
 
   it("pages issue comments", async () => {
@@ -104,5 +126,26 @@ describe("issue endpoints", () => {
     expect(url).toContain("/repos/o/r/issues/42/comments?");
     expect(url).toContain("per_page=50");
     expect(url).toContain("page=2");
+  });
+});
+
+describe("_ghScopedSearchQuery", () => {
+  it("confines the query to one repository", () => {
+    expect(_ghScopedSearchQuery("o", "r", "crash label:bug")).toBe("repo:o/r crash label:bug");
+  });
+
+  it.each([
+    ["repo:other/private secret"],
+    ["secret repo:other/private"],
+    ["REPO:other/private secret"],
+    ["-repo:o/r secret"],
+    ["org:other secret"],
+    ["user:someone secret"],
+  ])("refuses a query with its own scope qualifier: %s", (query) => {
+    expect(() => _ghScopedSearchQuery("o", "r", query)).toThrow(/repo:, org:, or user:/);
+  });
+
+  it("allows a qualifier name inside a word", () => {
+    expect(_ghScopedSearchQuery("o", "r", "subrepo:thing")).toBe("repo:o/r subrepo:thing");
   });
 });

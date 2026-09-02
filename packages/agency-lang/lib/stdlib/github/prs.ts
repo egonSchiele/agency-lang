@@ -183,24 +183,30 @@ const prFiles: GithubEndpoint<PagedPrParams, PrFile[]> = {
   response: z.array(PrFileSchema),
 };
 
-const prReviews: GithubEndpoint<PrParams, ReviewSummary[]> = {
+const prReviews: GithubEndpoint<PagedPrParams, ReviewSummary[]> = {
   name: "GET /repos/{owner}/{repo}/pulls/{number}/reviews",
   method: "GET",
   path: (params) => `${repoPath(params.owner, params.repo)}/pulls/${params.number}/reviews`,
+  query: (params) => pagingQuery(params.perPage, params.page),
   response: z.array(ReviewSummarySchema),
 };
 
-const prReviewComments: GithubEndpoint<PrParams, ReviewCommentInfo[]> = {
+const prReviewComments: GithubEndpoint<PagedPrParams, ReviewCommentInfo[]> = {
   name: "GET /repos/{owner}/{repo}/pulls/{number}/comments",
   method: "GET",
   path: (params) => `${repoPath(params.owner, params.repo)}/pulls/${params.number}/comments`,
+  query: (params) => pagingQuery(params.perPage, params.page),
   response: z.array(ReviewCommentInfoSchema),
 };
 
-const prCheckRuns: GithubEndpoint<RepoParams & { sha: string }, CheckRun[]> = {
+const prCheckRuns: GithubEndpoint<
+  RepoParams & { sha: string; perPage: number; page: number },
+  CheckRun[]
+> = {
   name: "GET /repos/{owner}/{repo}/commits/{sha}/check-runs",
   method: "GET",
   path: (params) => `${repoPath(params.owner, params.repo)}/commits/${params.sha}/check-runs`,
+  query: (params) => pagingQuery(params.perPage, params.page),
   response: z.object({ check_runs: z.array(CheckRunSchema) }).transform((raw) => raw.check_runs),
 };
 
@@ -237,18 +243,22 @@ export async function _ghPrFiles(
 
 export async function _ghPrReviews(
   number: number,
+  perPage: number,
+  page: number,
   owner: string,
   repo: string,
 ): Promise<ReviewSummary[]> {
-  return _githubRequest(prReviews, { owner, repo, number });
+  return _githubRequest(prReviews, { owner, repo, number, perPage, page });
 }
 
 export async function _ghPrReviewComments(
   number: number,
+  perPage: number,
+  page: number,
   owner: string,
   repo: string,
 ): Promise<ReviewCommentInfo[]> {
-  return _githubRequest(prReviewComments, { owner, repo, number });
+  return _githubRequest(prReviewComments, { owner, repo, number, perPage, page });
 }
 
 // Two requests behind the one prChecks interrupt: check runs are keyed by
@@ -257,6 +267,8 @@ export async function _ghPrReviewComments(
 // PR number the payload shows.
 export async function _ghPrChecks(
   number: number,
+  perPage: number,
+  page: number,
   owner: string,
   repo: string,
 ): Promise<CheckRun[]> {
@@ -264,5 +276,5 @@ export async function _ghPrChecks(
   if (pr.headSha === "") {
     throw new Error(`Could not resolve the head commit of PR #${number}`);
   }
-  return _githubRequest(prCheckRuns, { owner, repo, sha: pr.headSha });
+  return _githubRequest(prCheckRuns, { owner, repo, sha: pr.headSha, perPage, page });
 }

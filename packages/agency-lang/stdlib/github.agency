@@ -2,7 +2,7 @@ import { getAgentCwd } from "std::index"
 import {
   _ghResolveRepo,
   _ghPrGet, _ghPrList, _ghPrDiff, _ghPrFiles, _ghPrReviews, _ghPrReviewComments, _ghPrChecks,
-  _ghIssueGet, _ghIssueList, _ghIssueComments, _ghIssueSearch,
+  _ghIssueGet, _ghIssueList, _ghIssueComments, _ghIssueSearch, _ghScopedSearchQuery,
  } from "agency-lang/stdlib-lib/github/index.js"
 
 /** @module
@@ -80,11 +80,11 @@ effect std::github::prDiff { owner: string, repo: string, number: number }
 @always(owner, repo)
 effect std::github::prFiles { owner: string, repo: string, number: number, perPage: number, page: number }
 @always(owner, repo)
-effect std::github::prReviewList { owner: string, repo: string, number: number }
+effect std::github::prReviewList { owner: string, repo: string, number: number, perPage: number, page: number }
 @always(owner, repo)
-effect std::github::prReviewCommentList { owner: string, repo: string, number: number }
+effect std::github::prReviewCommentList { owner: string, repo: string, number: number, perPage: number, page: number }
 @always(owner, repo)
-effect std::github::prChecks { owner: string, repo: string, number: number }
+effect std::github::prChecks { owner: string, repo: string, number: number, perPage: number, page: number }
 @always(owner, repo)
 effect std::github::issueGet { owner: string, repo: string, number: number }
 @always(owner, repo)
@@ -151,40 +151,46 @@ export idempotent def ghPrFiles(number: number, perPage: number = 100, page: num
   return _ghPrFiles(number, perPage, page, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrReviews(number: number, owner: string = "", repo: string = ""): ReviewSummary[] raises <std::github::prReviewList> {
+export idempotent def ghPrReviews(number: number, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): ReviewSummary[] raises <std::github::prReviewList> {
   """
   List the reviews on a pull request: verdicts, authors, and bodies.
   @param number - The pull request number.
+  @param perPage - Results per page, at most 100.
+  @param page - Page number, starting at 1.
   @param owner - Repository owner. Defaults to the origin remote of the current repo.
   @param repo - Repository name. Defaults to the origin remote of the current repo.
   """
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prReviewList("List reviews on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number })
-  return _ghPrReviews(number, coord.owner, coord.repo)
+  return interrupt std::github::prReviewList("List reviews on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: perPage, page: page })
+  return _ghPrReviews(number, perPage, page, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrReviewComments(number: number, owner: string = "", repo: string = ""): ReviewCommentInfo[] raises <std::github::prReviewCommentList> {
+export idempotent def ghPrReviewComments(number: number, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): ReviewCommentInfo[] raises <std::github::prReviewCommentList> {
   """
   List the inline review comments on a pull request, with file and line.
   @param number - The pull request number.
+  @param perPage - Results per page, at most 100.
+  @param page - Page number, starting at 1.
   @param owner - Repository owner. Defaults to the origin remote of the current repo.
   @param repo - Repository name. Defaults to the origin remote of the current repo.
   """
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prReviewCommentList("List inline review comments on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number })
-  return _ghPrReviewComments(number, coord.owner, coord.repo)
+  return interrupt std::github::prReviewCommentList("List inline review comments on pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: perPage, page: page })
+  return _ghPrReviewComments(number, perPage, page, coord.owner, coord.repo)
 }
 
-export idempotent def ghPrChecks(number: number, owner: string = "", repo: string = ""): CheckRun[] raises <std::github::prChecks> {
+export idempotent def ghPrChecks(number: number, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): CheckRun[] raises <std::github::prChecks> {
   """
   List the CI check runs on the head commit of a pull request.
   @param number - The pull request number.
+  @param perPage - Results per page, at most 100.
+  @param page - Page number, starting at 1.
   @param owner - Repository owner. Defaults to the origin remote of the current repo.
   @param repo - Repository name. Defaults to the origin remote of the current repo.
   """
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  return interrupt std::github::prChecks("Read CI check runs for pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number })
-  return _ghPrChecks(number, coord.owner, coord.repo)
+  return interrupt std::github::prChecks("Read CI check runs for pull request #${number} on ${coord.owner}/${coord.repo}", { owner: coord.owner, repo: coord.repo, number: number, perPage: perPage, page: page })
+  return _ghPrChecks(number, perPage, page, coord.owner, coord.repo)
 }
 
 export idempotent def ghIssueGet(number: number, owner: string = "", repo: string = ""): IssueSummary raises <std::github::issueGet> {
@@ -230,7 +236,9 @@ export idempotent def ghIssueComments(number: number, perPage: number = 30, page
 
 export idempotent def ghIssueSearch(query: string, perPage: number = 30, page: number = 1, owner: string = "", repo: string = ""): IssueSummary[] raises <std::github::issueSearch> {
   """
-  Search issues and pull requests in one repository.
+  Search issues and pull requests in one repository. The query must not
+  contain a repo:, org:, or user: qualifier; the repository is always the one
+  named by owner and repo.
   @param query - GitHub search syntax, e.g. "crash in:title label:bug".
   @param perPage - Results per page, at most 100.
   @param page - Page number, starting at 1.
@@ -238,7 +246,7 @@ export idempotent def ghIssueSearch(query: string, perPage: number = 30, page: n
   @param repo - Repository name. Defaults to the origin remote of the current repo.
   """
   const coord = _ghResolveRepo(owner, repo, getAgentCwd())
-  const scopedQuery = "repo:${coord.owner}/${coord.repo} ${query}"
+  const scopedQuery = _ghScopedSearchQuery(coord.owner, coord.repo, query)
   return interrupt std::github::issueSearch("Search issues on ${coord.owner}/${coord.repo}: ${query}", { owner: coord.owner, repo: coord.repo, query: scopedQuery, perPage: perPage, page: page })
-  return _ghIssueSearch(query, perPage, page, coord.owner, coord.repo)
+  return _ghIssueSearch(scopedQuery, perPage, page)
 }

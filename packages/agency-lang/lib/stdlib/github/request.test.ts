@@ -2,7 +2,20 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { z } from "zod";
 import { withCtx, jsonResponse, stubToken } from "./testUtils.js";
 import { _githubRequest, pagingQuery, GITHUB_API_BASE, type GithubEndpoint } from "./request.js";
-import { _resetGithubCredentialCacheForTests } from "./credential.js";
+import { _resetGithubCredentialCacheForTests, _resolveAndCache } from "./credential.js";
+import { AWS_OBJECT_BYTE_LIMIT } from "../../constants.js";
+
+function oversizedResponse(): Response {
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(AWS_OBJECT_BYTE_LIMIT + 1));
+        controller.close();
+      },
+    }),
+    { status: 200 },
+  );
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -108,6 +121,41 @@ describe("_githubRequest", () => {
     await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(
       /gh auth login/,
     );
+  });
+
+  it("forgets the cached token on a 401 so a replaced credential is picked up", async () => {
+    stubToken();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ message: "Bad credentials" }, 401),
+    );
+    await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(/401/);
+    // With the cache still holding "test-token-value" this would return it.
+    const fresh = {
+      env: { GITHUB_TOKEN: "fresh" },
+      ghAuthToken: async () => null,
+      keyringGet: async () => null,
+    };
+    expect(await _resolveAndCache(fresh)).toBe("fresh");
+  });
+
+  it("names the endpoint when a successful response is not JSON", async () => {
+    stubToken();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>oops</html>"));
+    await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(
+      /GET \/repos\/o\/r\/pulls\/\{n\}.*not valid JSON/s,
+    );
+  });
+
+  it("suggests a smaller perPage only when the endpoint is paginated", async () => {
+    stubToken();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(oversizedResponse());
+    await expect(withCtx(() => _githubRequest(listEndpoint, { state: "open" }))).rejects.toThrow(
+      /exceeds.*perPage/s,
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(oversizedResponse());
+    const diffFailure = withCtx(() => _githubRequest(diffEndpoint, { n: 1 }));
+    await expect(diffFailure).rejects.toThrow(/exceeds/);
+    await expect(diffFailure).rejects.not.toThrow(/perPage/);
   });
 
   // The no-credential-means-no-fetch test lives in

@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { parseRemoteUrl, redactUrl, _ghResolveRepo } from "./repo.js";
-import { withCtx } from "./testUtils.js";
+import { withCtx, makeCtx } from "./testUtils.js";
+import { ThreadStore } from "../../runtime/state/threadStore.js";
+import { runInTestContext } from "../../runtime/asyncContext.js";
+import { AgencyCancelledError } from "../../runtime/errors.js";
 
 describe("parseRemoteUrl", () => {
   it.each([
@@ -48,6 +51,17 @@ describe("_ghResolveRepo", () => {
     // _gitRun's contract: a lost directory must never silently target the
     // process's own repo — that would mispin @always(owner, repo).
     await expect(withCtx(() => _ghResolveRepo("", "", ""))).rejects.toThrow();
+  });
+  it("keeps a cancellation abort-shaped instead of wrapping it as a repo failure", async () => {
+    const ctx = makeCtx();
+    const execCtx = await ctx.createExecutionContext({ runId: "github-cancel" });
+    execCtx.cancel("test stop");
+    // process.cwd() is a real repo, so the only reason to fail is the abort.
+    await expect(
+      runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), () =>
+        _ghResolveRepo("", "", process.cwd()),
+      ),
+    ).rejects.toBeInstanceOf(AgencyCancelledError);
   });
   it("fails with an actionable message outside a git repo", async () => {
     // "/" is absolute and exists but is not a repository.

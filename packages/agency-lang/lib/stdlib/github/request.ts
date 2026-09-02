@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getRuntimeContext } from "../../runtime/asyncContext.js";
 import { runHttp, readBodyBytesCapped } from "../http.js";
 import { isAbortError } from "../../runtime/errors.js";
-import { resolveGithubToken } from "./credential.js";
+import { resolveGithubToken, invalidateGithubCredentialCache } from "./credential.js";
 import { githubFailureMessage, scrub } from "./errors.js";
 
 // Hard-coded on purpose. GitHub Enterprise support (GITHUB_API_URL) is issue
@@ -72,8 +72,11 @@ export async function _githubRequest<Params, Out>(
   const url = buildUrl(endpoint, params);
   return await runHttp(async () => {
     const response = await fetch(url, buildRequestInit(endpoint, params, token, signal));
-    const text = await readBodyText(response, url, signal);
+    const text = await readBodyText(response, url, signal, isPaginated(endpoint, params));
     if (!response.ok) {
+      if (response.status === 401) {
+        invalidateGithubCredentialCache();
+      }
       throw new Error(
         githubFailureMessage(response.status, response.headers, text, endpoint.method, url),
       );
@@ -102,7 +105,18 @@ function buildRequestInit<Params>(
   return { method: endpoint.method, headers, signal, body: JSON.stringify(requestBody) };
 }
 
-async function readBodyText(response: Response, url: string, signal: AbortSignal): Promise<string> {
+/** True when the endpoint sends GitHub's per_page field, so a smaller
+ *  perPage is a remedy the caller actually has. */
+function isPaginated<Params>(endpoint: GithubEndpoint<Params, unknown>, params: Params): boolean {
+  return endpoint.query !== undefined && "per_page" in endpoint.query(params);
+}
+
+async function readBodyText(
+  response: Response,
+  url: string,
+  signal: AbortSignal,
+  paginated: boolean,
+): Promise<string> {
   try {
     const bytes = await readBodyBytesCapped(response, url, signal);
     return new TextDecoder("utf-8").decode(bytes);
@@ -111,10 +125,14 @@ async function readBodyText(response: Response, url: string, signal: AbortSignal
       throw e;
     }
     const message = scrub(String(e));
-    // Only a size-cap trip gets the perPage advice; a mid-body network drop
-    // must not point the model at a fix that cannot help.
+    // Only a size-cap trip on a paginated endpoint gets the perPage advice.
+    // A mid-body network drop, or an oversized single-object response such
+    // as a PR diff, must not point the model at a fix that cannot help.
     if (SIZE_CAP_PATTERN.test(message)) {
-      throw new Error(`${message}. Request fewer results per call (smaller perPage).`);
+      const remedy = paginated
+        ? "Request fewer results per call (smaller perPage)."
+        : "This response is too large for Agency to hand back.";
+      throw new Error(`${message}. ${remedy}`);
     }
     throw new Error(message);
   }
@@ -127,7 +145,15 @@ function decodeBody<Params>(endpoint: GithubEndpoint<Params, unknown>, text: str
   if (text === "") {
     return null;
   }
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `GitHub's response for ${endpoint.name} was not valid JSON: ${scrub(why)}. ` +
+        "GitHub may have changed this API; report this.",
+    );
+  }
 }
 
 function validateResponse<Params, Out>(endpoint: GithubEndpoint<Params, Out>, raw: unknown): Out {

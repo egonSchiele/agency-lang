@@ -3,6 +3,7 @@ import {
   resolveTokenFromSources,
   _resolveAndCache,
   _resetGithubCredentialCacheForTests,
+  invalidateGithubCredentialCache,
   type CredentialSources,
 } from "./credential.js";
 
@@ -63,6 +64,16 @@ describe("resolveTokenFromSources precedence", () => {
     expect(seen).toEqual(["agency-lang/github-token"]);
   });
 
+  it("treats a keyring that throws (no backend on this platform) as a miss", async () => {
+    const s = sources({
+      keyringGet: async () => {
+        throw new Error("System keyring is not supported on win32. Set AGENCY_OAUTH_KEY.");
+      },
+    });
+    await expect(resolveTokenFromSources(s)).rejects.toThrow(/No GitHub credential/);
+    await expect(resolveTokenFromSources(s)).rejects.not.toThrow(/AGENCY_OAUTH_KEY/);
+  });
+
   it("names all three remedies on a total miss", async () => {
     await expect(resolveTokenFromSources(sources({}))).rejects.toThrow(
       /gh auth login[\s\S]*GITHUB_TOKEN[\s\S]*setSecret/,
@@ -84,6 +95,12 @@ describe("_resolveAndCache (cache layer, injected sources)", () => {
     const second = sources({ ghAuthToken: async () => "second" });
     expect(await _resolveAndCache(second)).toBe("first");
     expect(calls).toBe(1);
+  });
+
+  it("re-resolves after the cache is invalidated", async () => {
+    expect(await _resolveAndCache(sources({ env: { GITHUB_TOKEN: "stale" } }))).toBe("stale");
+    invalidateGithubCredentialCache();
+    expect(await _resolveAndCache(sources({ env: { GITHUB_TOKEN: "fresh" } }))).toBe("fresh");
   });
 
   it("does not cache a miss", async () => {

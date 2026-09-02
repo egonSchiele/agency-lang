@@ -32,9 +32,15 @@ export async function resolveTokenFromSources(sources: CredentialSources): Promi
     // normal state, and the chain falls through to the keyring. A total miss
     // still surfaces every remedy via MISS_MESSAGE.
   }
-  const fromKeyring = await sources.keyringGet("github-token", "agency-lang");
-  if (fromKeyring) {
-    return fromKeyring;
+  try {
+    const fromKeyring = await sources.keyringGet("github-token", "agency-lang");
+    if (fromKeyring) {
+      return fromKeyring;
+    }
+  } catch {
+    // Same footing as the gh miss above: _getSecret throws on platforms with
+    // no keyring backend (Windows), and that must surface the GitHub
+    // remedies below, not the keyring's own unrelated advice.
   }
   throw new Error(MISS_MESSAGE);
 }
@@ -62,6 +68,13 @@ async function ghAuthToken(): Promise<string | null> {
 let cachedToken: string | null = null;
 
 export function _resetGithubCredentialCacheForTests(): void {
+  cachedToken = null;
+}
+
+/** Forget the cached token. Called on a 401 so the remedies in that failure
+ *  message (a new gh login, a new GITHUB_TOKEN, a new keyring entry) take
+ *  effect on the next call instead of after a restart. */
+export function invalidateGithubCredentialCache(): void {
   cachedToken = null;
 }
 

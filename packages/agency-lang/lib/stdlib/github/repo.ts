@@ -1,4 +1,5 @@
 import { _gitRun } from "../git.js";
+import { isAbortError } from "../../runtime/errors.js";
 
 export type RepoCoord = { owner: string; repo: string };
 
@@ -60,6 +61,11 @@ export async function _ghResolveRepo(owner: string, repo: string, cwd: string): 
   try {
     url = (await _gitRun(cwd, ["remote", "get-url", "origin"])).trim();
   } catch (e) {
+    // A cancellation (Ctrl-C, guard trip) must stay abort-shaped so
+    // __tryCall propagates it instead of reporting a repository failure.
+    if (isAbortError(e)) {
+      throw e;
+    }
     const detail = e instanceof Error ? e.message : String(e);
     throw new Error(
       `Could not read the git remote named origin (${detail}). Pass owner and repo explicitly.`,

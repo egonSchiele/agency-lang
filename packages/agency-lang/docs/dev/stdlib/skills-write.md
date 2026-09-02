@@ -5,14 +5,18 @@ of markdown skills to an LLM. It now also has a write half:
 
 - `writeSkill(dir, name, description, body)` saves one flat-layout skill
   file, behind a `std::skills::save` interrupt.
-- `scanSkillsSubdirs(root, subdirs, maxFiles)` scans named subdirectories
-  of one root — one subdirectory per agent — and returns
-  `Result<Record<string, SkillEntry[]>>`, every requested name mapped to
-  its entries (empty when the subdirectory is empty or missing). The
-  record is null-prototype, so names like `__proto__` are plain data keys.
+- `scanSkillsSubdirs(root, subdirs)` scans named subdirectories of one
+  root — one subdirectory per agent — and returns
+  `Result<Record<string, SkillGroup>>`, every requested name mapped to a
+  group holding the scanned directory and its entries (empty when the
+  subdirectory is empty or missing). The record is null-prototype, so
+  names like `__proto__` are plain data keys.
 - `skillsToolFromEntries(dir, entries, name)` is the pure build half of
   `buildSkillsTool`: no reads, no interrupts, so a caller holding entries
-  can rebuild a skills tool without rescanning.
+  can rebuild a skills tool without rescanning. Its `dir` must be the
+  directory the entries were scanned from — for `scanSkillsSubdirs`
+  output that is the group's own `dir`, never the root — which is why
+  each group carries it.
 
 ## The save gate
 
@@ -31,10 +35,16 @@ responder is asked again for each.
 
 Duplicate names are refused twice. Before the interrupt, an `exists`
 check fails a taken name without prompting anyone. The write itself
-uses `create-only` mode — atomic via the `wx` open flag
-(`lib/stdlib/builtins.ts`) — because the pre-interrupt check is stale by
-save time: approval can take arbitrarily long, and a file created in the
-meantime must never be overwritten.
+uses `create-only` mode — the `wx` open flag is the whole
+implementation (`lib/stdlib/builtins.ts`), so an existing file or a
+dangling symlink fails the open atomically — because the pre-interrupt
+check is stale by save time: approval can take arbitrarily long, and a
+file created in the meantime must never be overwritten.
+
+The `dir` in the interrupt payload is absolutized with the same
+resolution the write itself uses, so an always-scope rule saved from a
+save approval names one directory regardless of how the caller spelled
+it. An empty `dir` is refused before any prompt.
 
 ## The trust argument for the subdir scan
 
@@ -47,10 +57,11 @@ approved:
 1. Every subdirectory name must be a bare path segment (no separators,
    no `..`, not empty), checked before the interrupt is raised; one
    failure names every offending entry.
-2. The scan passes the root as the glob's allowed path, whose
+2. The scan passes the root as the glob's allowed path. The
    symlink-aware containment check refuses a subdirectory that resolves
-   outside the root. A symlinked subdirectory therefore reads as empty
-   rather than following the link.
+   outside the root, and the glob skips symlinked entries whenever an
+   allowed path is set — so both a symlinked subdirectory and a
+   symlinked file inside a real one are ignored rather than followed.
 
 ## The frontmatter round-trip
 

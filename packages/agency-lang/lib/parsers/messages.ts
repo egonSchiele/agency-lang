@@ -20,6 +20,22 @@ export const BODY_RESERVED_MODIFIER_MESSAGE =
   "`static` and `export` declarations are only supported at module top level. " +
   "Inside function and node bodies, use `optimize const ...` for optimizable local declarations or ordinary `const`/`let` declarations.";
 
+/** A `def` or `node` name with whitespace inside it. Without this check the
+ *  parser accepts `def foo bar(` with the name "foo bar", and the first thing
+ *  to object is esbuild, deep in the generated TypeScript. */
+export const DECL_NAME_SPACES_MESSAGE = (keyword: string, name: string): string =>
+  `a ${keyword} name cannot contain spaces: \`${name}\``;
+
+/** The same mistake when the first word is a modifier: the author wrote
+ *  `def handoff getCapital(` and meant `handoff def getCapital(`. */
+export const MODIFIER_AFTER_KEYWORD_MESSAGE = (
+  modifier: string,
+  keyword: string,
+  name: string,
+): string => `\`${modifier}\` goes before \`${keyword}\`:
+
+  ${modifier} ${keyword} ${name}(...)`;
+
 export const STATIC_LET_MESSAGE =
   "`static let` is not allowed. Use `static const <name> = ...` for a " +
   "once-per-process binding, or `static <expr>` (e.g. `static foo()`) " +

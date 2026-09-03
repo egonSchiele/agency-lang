@@ -64,12 +64,12 @@ revisions. The caller's draft is shown as it is, so the accept path
 makes no model call at all.
 
 The review interrupt is `std::skills::review`, with the directory, the
-name, the description, and the body in its data. Its answer shape is
-the one `std::toolbox::review` uses: a bare `approve()` or
-`{ verdict: "accept" }` accepts, and `{ verdict: "revise", feedback }`
-asks for another round. A revise with empty or missing feedback fails
-the call, because the next draft would be the same. A rejection fails
-the call and writes nothing.
+name, the description, and the body in its data. The answer is text,
+as for `std::toolbox::review`: a bare `approve()` or the word `accept`
+accepts, and any other text is the feedback for the next draft. This
+is what a person can type at the interactive prompt. Feedback that is
+only whitespace fails the call. A rejection fails the call and writes
+nothing.
 
 Revise feedback goes to one model call, `redraft`, which returns a new
 description and body as structured output. The name is fixed, since it

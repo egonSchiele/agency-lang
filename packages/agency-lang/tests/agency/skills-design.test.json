@@ -80,7 +80,7 @@
       ]
     },
     {
-      "nodeName": "reviseWithEmptyFeedbackFails",
+      "nodeName": "whitespaceFeedbackFails",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [
@@ -90,7 +90,7 @@
       ]
     },
     {
-      "nodeName": "reviseWithoutFeedbackFails",
+      "nodeName": "objectAnswerFails",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

@@ -46,8 +46,6 @@ import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
   ```ts
   import { designTool, listTools, runTool } from "std::toolbox"
 
-  const REVISE_PREFIX = "revise "
-
   node main() {
     handle {
       const written = designTool(
@@ -67,14 +65,11 @@ import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
         "std::toolbox::review" => {
           print(intr.data.source)
           print("effects: ${intr.data.effects.join(", ")}")
-          const answer = input("accept / revise <feedback> / reject: ")
-          if (answer == "accept") {
-            return approve({ verdict: "accept" })
+          const answer = input("accept, or feedback for the next draft (empty rejects): ")
+          if (answer == "") {
+            return reject("cancelled by user")
           }
-          if (answer.startsWith(REVISE_PREFIX)) {
-            return approve({ verdict: "revise", feedback: answer.slice(REVISE_PREFIX.length) })
-          }
-          return reject("cancelled by user")
+          return approve(answer)
         }
         "std::toolbox::save" => approve()
         _ => pass()
@@ -164,11 +159,7 @@ export type ToolEntry = {
   broken?: string
 }
 
-/** The value a handler passes to approve() for std::toolbox::review. A
-  bare approve() counts as accept. */
-export type WriteToolReview =
-  | { verdict: "accept" }
-  | { verdict: "revise"; feedback: string }
+const ACCEPT = "accept"
 
 const DEFAULT_META: ToolMeta = {
   purpose: "",
@@ -631,7 +622,7 @@ def checkRequestMatches(source: string, request: string): Result {
   }
   if (actual.value != expected.value) {
     return draftProblem(
-      "${IMPL_FILE} declares `${actual.value}` but the request type is `${expected.value}`; copy the request type as given",
+      "${IMPL_FILE} declares `${actual.value}` but the request type is `${expected.value}`. Copy the request type as given.",
     )
   }
   return success(null)
@@ -712,45 +703,36 @@ def prepareDraft(settings: DraftSettings, feedback: string): Result<Draft> {
   return testSource(reviewed.value, settings)
 }
 
-// A rejected interrupt halts this function and returns the rejection to
-// the caller; nothing below the interrupt runs. A bare approve() carries
-// no value and counts as accept.
+// The answer is text: a bare approve() or "accept" accepts, and anything
+// else is the feedback for the next draft. Returns null for accept.
 def askUser(
   name: string,
   settings: DraftSettings,
   draft: Draft,
-): Result<WriteToolReview> {
-  const answer = interrupt std::toolbox::review("Review this tool before it is saved", {
+): Result<string | null> {
+  const answer = interrupt std::toolbox::review("Review this tool before it is saved: answer accept, or give feedback for the next draft", {
     name: name,
     stagingDir: settings.stagingDir,
     source: draft.source,
     effects: draft.effects,
     tested: draft.tested
   })
-  if (answer == null) {
-    return success({
-      verdict: "accept"
-    })
+  if (answer == null || answer == ACCEPT) {
+    return success(null)
   }
-  const review: WriteToolReview! = answer
-  if (review is failure(shapeErr)) {
-    return failure(
-      "unrecognized review answer ${JSON.stringify(answer)}: ${shapeErr}. Expected { verdict: \"accept\" } or { verdict: \"revise\", feedback: \"...\" }",
-    )
+  const feedback: string! = answer
+  if (feedback is failure) {
+    return failure("unrecognized review answer ${JSON.stringify(answer)}: answer \"${ACCEPT}\", or give feedback for the next draft as text")
   }
-  if (review.value.verdict == "revise" && review.value.feedback == "") {
-    return failure(
-      "a revise answer needs feedback; the next draft would get the same brief",
-    )
+  if (feedback.value.trim() == "") {
+    return failure("a revise answer needs feedback")
   }
-  return review
+  return feedback
 }
 
 // The save gate. Both entry points publish through here, so a policy
 // that matches std::toolbox::save sees every tool that enters a toolbox.
-// A rejection halts this function and returns the rejection to the
-// caller; nothing is written. Data carried on the approval is not
-// consulted.
+// Data carried on the approval is not consulted.
 def askToSave(
   root: string,
   name: string,
@@ -818,7 +800,7 @@ def rounds(
     }
     feedback = outcome.feedback
   }
-  return failure("gave up after ${maxRounds} rounds; last problem:\n${feedback}")
+  return failure("gave up after ${maxRounds} rounds. Last problem:\n${feedback}")
 }
 
 def gateAndSave(
@@ -861,22 +843,13 @@ def oneRound(
     }
     success(draft) => {
       const answer = askUser(name, settings, draft)
-      return match(answer) {
-        failure(rejected) => ({
-          done: failure(rejected),
-          feedback: ""
-        })
-        success(review) => match(review) {
-          { verdict: "accept" } => ({
-            done: gateAndSave(root, name, settings, draft.source, draft.effects),
-            feedback: ""
-          })
-          { verdict: "revise", feedback as next } => ({
-            done: null,
-            feedback: next
-          })
-        }
+      if (answer is failure(rejected)) {
+        return { done: failure(rejected), feedback: "" }
       }
+      if (answer.value == null) {
+        return { done: gateAndSave(root, name, settings, draft.source, draft.effects), feedback: "" }
+      }
+      return { done: null, feedback: answer.value }
     }
   }
 }
@@ -935,9 +908,7 @@ type Staged = {
   settings: DraftSettings
 }
 
-// Validate the inputs both entry points take, then stage. Every check
-// runs before anything is written or anyone is asked, so a bad call
-// fails without a prompt.
+// Every check runs before anything is written or anyone is asked.
 def stage(
   name: string,
   purpose: string,
@@ -989,9 +960,8 @@ def stage(
   })
 }
 
-// On success the publish renamed the staging directory away, so there is
-// nothing to clear. On failure the staging directory is removed once, and
-// a refused removal is folded into the returned failure.
+// On success the publish rename already emptied staging. On failure a
+// refused removal is folded into the returned failure.
 def clearStaging(outcome: Result<ToolEntry>, stagingDir: string): Result<ToolEntry> {
   if (outcome is success) {
     return outcome
@@ -1026,10 +996,9 @@ export def designTool(
   """
   Design a reusable tool with the user and save it into a toolbox
   directory. The coding agent drafts the tool's `run` function against
-  the request type; the draft is reviewed, typechecked, tested when it is
-  pure computation, and shown to the user, who accepts it or asks for a
-  revision. The revision loop runs inside this call, so do not call it
-  again to revise a draft.
+  the request type. The draft is reviewed, typechecked, tested when it is
+  pure computation, and shown to the user, who accepts it or gives
+  feedback for another draft.
 
   @param name - The tool's name; also its directory under dir
   @param purpose - What the tool should do, in plain language
@@ -1049,9 +1018,7 @@ export def designTool(
   return clearStaging(outcome, staged.value.settings.stagingDir)
 }
 
-// A compile or typecheck failure from assembleTool arrives as a
-// DraftProblem, shaped for the design loop's feedback. With no loop to
-// feed, the message is returned as a plain failure.
+// A DraftProblem from assembleTool, as a plain failure message.
 def problemText(err: any): string {
   return match(err) {
     { problem }: DraftProblem => problem
@@ -1091,11 +1058,11 @@ export def writeTool(
   """
   Save an already-written tool into a toolbox directory, after approval.
   The source must export `type Request` (matching the request text) and
-  `def run(request: Request): Json`; it is wrapped in the guarded tool
+  `def run(request: Request): Json`. It is wrapped in the guarded tool
   module and typechecked before the user is asked. A rejection saves
   nothing and fails the call.
 
-  @param name - The tool's name; also its directory under dir
+  @param name - The tool's name, also its directory under dir
   @param purpose - What the tool does, in plain language
   @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
   @param source - The complete impl.agency source

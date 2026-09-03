@@ -26,8 +26,6 @@ A tool is a directory holding two Agency files. `impl.agency` is the
   ```ts
   import { designTool, listTools, runTool } from "std::toolbox"
 
-  const REVISE_PREFIX = "revise "
-
   node main() {
     handle {
       const written = designTool(
@@ -47,14 +45,11 @@ A tool is a directory holding two Agency files. `impl.agency` is the
         "std::toolbox::review" => {
           print(intr.data.source)
           print("effects: ${intr.data.effects.join(", ")}")
-          const answer = input("accept / revise <feedback> / reject: ")
-          if (answer == "accept") {
-            return approve({ verdict: "accept" })
+          const answer = input("accept, or feedback for the next draft (empty rejects): ")
+          if (answer == "") {
+            return reject("cancelled by user")
           }
-          if (answer.startsWith(REVISE_PREFIX)) {
-            return approve({ verdict: "revise", feedback: answer.slice(REVISE_PREFIX.length) })
-          }
-          return reject("cancelled by user")
+          return approve(answer)
         }
         "std::toolbox::save" => approve()
         _ => pass()
@@ -81,7 +76,7 @@ export type ModuleFacts = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L135))
 
 ### ToolMeta
 
@@ -100,7 +95,7 @@ export type ToolMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L142))
 
 ### ToolEntry
 
@@ -119,22 +114,7 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L159))
-
-### WriteToolReview
-
-The value a handler passes to approve() for std::toolbox::review. A
-  bare approve() counts as accept.
-
-```ts
-/** The value a handler passes to approve() for std::toolbox::review. A
-  bare approve() counts as accept. */
-export type WriteToolReview =
-  | { verdict: "accept" }
-  | { verdict: "revise"; feedback: string }
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L154))
 
 ## Effects
 
@@ -147,7 +127,7 @@ effect std::toolbox::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L117))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L112))
 
 ### std::toolbox::review
 
@@ -161,7 +141,7 @@ effect std::toolbox::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L121))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L116))
 
 ### std::toolbox::save
 
@@ -175,7 +155,7 @@ effect std::toolbox::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L127))
 
 ## Functions
 
@@ -203,7 +183,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L332))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L323))
 
 ### designTool
 
@@ -223,10 +203,9 @@ designTool(
 
 Design a reusable tool with the user and save it into a toolbox
   directory. The coding agent drafts the tool's `run` function against
-  the request type; the draft is reviewed, typechecked, tested when it is
-  pure computation, and shown to the user, who accepts it or asks for a
-  revision. The revision loop runs inside this call, so do not call it
-  again to revise a draft.
+  the request type. The draft is reviewed, typechecked, tested when it is
+  pure computation, and shown to the user, who accepts it or gives
+  feedback for another draft.
 
   @param name - The tool's name; also its directory under dir
   @param purpose - What the tool should do, in plain language
@@ -262,7 +241,7 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 
 **Throws:** `std::remove`, `std::mkdir`, `std::toolbox::review`, `std::toolbox::save`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1015))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L985))
 
 ### writeTool
 
@@ -280,11 +259,11 @@ writeTool(
 
 Save an already-written tool into a toolbox directory, after approval.
   The source must export `type Request` (matching the request text) and
-  `def run(request: Request): Json`; it is wrapped in the guarded tool
+  `def run(request: Request): Json`. It is wrapped in the guarded tool
   module and typechecked before the user is asked. A rejection saves
   nothing and fails the call.
 
-  @param name - The tool's name; also its directory under dir
+  @param name - The tool's name, also its directory under dir
   @param purpose - What the tool does, in plain language
   @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
   @param source - The complete impl.agency source
@@ -314,7 +293,7 @@ in `designTool` ends by publishing through this same gate.
 
 **Throws:** `std::remove`, `std::mkdir`, `std::toolbox::save`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1082))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1049))
 
 ### runTool
 
@@ -346,4 +325,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1092))

@@ -23,15 +23,15 @@ type DesignRun = {
   shown: string[]
 }
 
-// Answer each review with the next scripted verdict: null rejects, the
-// string "bare" is a valueless approve(), anything else is passed to
-// approve(). Every other interrupt is approved. `shown` collects the body
-// of each review, in order.
+// Answer each review with the next scripted answer: null rejects, "bare"
+// is a valueless approve(), anything else is passed to approve(). Every
+// other interrupt is approved. `shown` collects the body of each review,
+// in order.
 def runDesign(
   dir: string,
   name: string,
   body: string,
-  verdicts: any[],
+  answers: any[],
   maxRounds: number = 3,
 ): DesignRun {
   let reviews = 0
@@ -44,15 +44,15 @@ def runDesign(
     return match(intr.effect) {
       "std::skills::review" => {
         shown.push(intr.data.body)
-        const verdict = verdicts[reviews]
+        const answer = answers[reviews]
         reviews = reviews + 1
-        if (verdict == null) {
+        if (answer == null) {
           return reject("cancelled by the test")
         }
-        if (verdict == "bare") {
+        if (answer == "bare") {
           return approve()
         }
-        return approve(verdict)
+        return approve(answer)
       }
       "std::skills::save" => {
         saves = saves + 1
@@ -72,7 +72,7 @@ def runDesign(
 // One review, then one save, and the file holds the draft as shown.
 node acceptSavesTheDraft(): boolean {
   const dir = outDir("accept")
-  const ran = runDesign(dir, "first-draft", "Read the README first.", [{ verdict: "accept" }])
+  const ran = runDesign(dir, "first-draft", "Read the README first.", ["accept"])
   if (ran.outcome is failure) {
     return false
   }
@@ -104,7 +104,7 @@ node rejectAtSaveWritesNothing(): boolean {
     outcome = designSkill(dir, "unsaved", "Use when testing", "Body.")
   } with (intr) {
     return match(intr.effect) {
-      "std::skills::review" => approve({ verdict: "accept" })
+      "std::skills::review" => approve("accept")
       "std::skills::save" => reject("not this one")
       _ => approve()
     }
@@ -116,11 +116,11 @@ node rejectAtSaveWritesNothing(): boolean {
 // redraft, and accepting it saves the redraft.
 node reviseShowsTheRedraft(): boolean {
   const dir = outDir("revise")
-  const verdicts = [
-    { verdict: "revise", feedback: "shorter" },
-    { verdict: "accept" },
+  const answers = [
+    "shorter",
+    "accept",
   ]
-  const ran = runDesign(dir, "revised", "The long first draft.", verdicts)
+  const ran = runDesign(dir, "revised", "The long first draft.", answers)
   if (ran.outcome is failure) {
     return false
   }
@@ -135,21 +135,22 @@ node reviseShowsTheRedraft(): boolean {
 // an accept, the call gives up and nothing is written.
 node givesUpAfterMaxRounds(): boolean {
   const dir = outDir("give-up")
-  const verdicts = [
-    { verdict: "revise", feedback: "shorter" },
-    { verdict: "revise", feedback: "shorter still" },
+  const answers = [
+    "shorter",
+    "shorter still",
   ]
-  const ran = runDesign(dir, "endless", "Body.", verdicts, 2)
+  const ran = runDesign(dir, "endless", "Body.", answers, 2)
   return ran.outcome is failure && "${ran.outcome.error}" =~ re/gave up/ && ran.reviews == 2 && ran.saves == 0 && !exists("endless.md", dir)
 }
 
-node reviseWithEmptyFeedbackFails(): boolean {
+node whitespaceFeedbackFails(): boolean {
   const dir = outDir("empty-feedback")
-  const ran = runDesign(dir, "empty-feedback", "Body.", [{ verdict: "revise", feedback: "" }])
+  const ran = runDesign(dir, "empty-feedback", "Body.", ["   "])
   return ran.outcome is failure && "${ran.outcome.error}" =~ re/feedback/ && ran.saves == 0 && !exists("empty-feedback.md", dir)
 }
 
-node reviseWithoutFeedbackFails(): boolean {
+// The answer is text; an object is not an answer.
+node objectAnswerFails(): boolean {
   const dir = outDir("no-feedback")
   const ran = runDesign(dir, "no-feedback", "Body.", [{ verdict: "revise" }])
   return ran.outcome is failure && "${ran.outcome.error}" =~ re/feedback/ && ran.saves == 0
@@ -159,7 +160,7 @@ node reviseWithoutFeedbackFails(): boolean {
 // so it is refused before the user is shown it.
 node multilineRedraftFails(): boolean {
   const dir = outDir("multiline-redraft")
-  const ran = runDesign(dir, "two-lines", "Body.", [{ verdict: "revise", feedback: "shorter" }])
+  const ran = runDesign(dir, "two-lines", "Body.", ["shorter"])
   return ran.outcome is failure && "${ran.outcome.error}" =~ re/one line/ && ran.reviews == 1 && !exists("two-lines.md", dir)
 }
 
@@ -184,28 +185,28 @@ node unrepresentableDescriptionFailsBeforeAsking(): boolean {
 // The same value from the redraft model is refused before it is shown.
 node unrepresentableRedraftFails(): boolean {
   const dir = outDir("unrepresentable-redraft")
-  const ran = runDesign(dir, "unrep-redraft", "Body.", [{ verdict: "revise", feedback: "shorter" }])
+  const ran = runDesign(dir, "unrep-redraft", "Body.", ["shorter"])
   return ran.outcome is failure && "${ran.outcome.error}" =~ re/frontmatter/ && ran.reviews == 1 && !exists("unrep-redraft.md", dir)
 }
 
 // The input checks run before the first prompt.
 node invalidNameFailsBeforeAsking(): boolean {
   const dir = outDir("invalid-name")
-  const ran = runDesign(dir, "Not Kebab", "Body.", [{ verdict: "accept" }])
+  const ran = runDesign(dir, "Not Kebab", "Body.", ["accept"])
   return ran.outcome is failure && ran.reviews == 0 && ran.saves == 0
 }
 
 node duplicateNameFailsBeforeAsking(): boolean {
   const dir = outDir("duplicate")
-  const first = runDesign(dir, "twice", "Body.", [{ verdict: "accept" }])
+  const first = runDesign(dir, "twice", "Body.", ["accept"])
   if (first.outcome is failure) {
     return false
   }
-  const second = runDesign(dir, "twice", "Body.", [{ verdict: "accept" }])
+  const second = runDesign(dir, "twice", "Body.", ["accept"])
   return second.outcome is failure && second.reviews == 0 && second.saves == 0
 }
 
 node emptyDirFailsBeforeAsking(): boolean {
-  const ran = runDesign("", "empty-dir", "Body.", [{ verdict: "accept" }])
+  const ran = runDesign("", "empty-dir", "Body.", ["accept"])
   return ran.outcome is failure && ran.reviews == 0
 }

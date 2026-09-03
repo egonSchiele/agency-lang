@@ -21,7 +21,7 @@ import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter, _res
   @summary Give an LLM access to a directory of skills, and support Claude-Code-style slash commands.
   Give an LLM access to a directory of skills, and support Claude-Code-style
   slash commands. `skillsDir` builds a tool that lets the model read skill
-  files on demand. `writeSkill` saves a new skill after approval;
+  files on demand. `writeSkill` saves a new skill after approval.
   `designSkill` shows a draft to the user, revises it on their feedback,
   and saves it through `writeSkill`. `commandsDir` and `expandSlash` load
   prompt-template commands and expand a user's `/command` into its body.
@@ -381,12 +381,6 @@ def validSkillName(name: string): boolean {
   return name =~ re/^[a-z0-9]+(-[a-z0-9]+)*$/
 }
 
-// The frontmatter block for a skill file. tarsec's serializer is the
-// encode half of the parser `frontmatter` wraps, so whatever it emits
-// reads back verbatim on the next scan — YAML flow syntax, quotes, or
-// backslashes in the description cannot silently corrupt or drop the
-// saved text. It throws on the rare value no quoting can hold; `try`
-// turns that into a clean failure.
 def renderFrontmatter(name: string, description: string): Result<string> {
   if (description.includes("\n") || description.includes("\r")) {
     return failure("the description must be one line")
@@ -398,10 +392,8 @@ def renderFrontmatter(name: string, description: string): Result<string> {
   return fm
 }
 
-// The checks every save runs before anyone is asked. Returns the
-// absolutized directory, the same resolution the write itself will use,
-// so the interrupt payloads name one directory regardless of the
-// caller's spelling.
+// Runs before anyone is asked. Returns the absolutized directory, so
+// the interrupt payloads name one directory however the caller spelled it.
 def checkSkillInputs(dir: string, name: string, description: string): Result<string> {
   if (!validSkillName(name)) {
     return failure("skill name '${name}' is invalid: use kebab-case, lowercase letters and digits separated by single hyphens")
@@ -481,18 +473,14 @@ export def writeSkill(
 // The design loop
 // ============================================================
 
-/** The user's answer to a std::skills::review interrupt. A bare
-  approve() counts as accept. */
-export type SkillReview =
-  | { verdict: "accept" }
-  | { verdict: "revise"; feedback: string }
-
-/** What the redraft model returns: the two fields the user can ask to
-  change. The name is fixed, since it is also the filename. */
+/** What the redraft model returns. The name is fixed, since it is also
+  the filename. */
 type SkillDraft = {
   description: string;
   body: string
 }
+
+const ACCEPT = "accept"
 
 effect std::skills::review {
   dir: string;
@@ -520,9 +508,7 @@ Rewrite the description and the body so the feedback is addressed. Keep everythi
 """
 }
 
-// A model override is set only when named, so an empty one never clobbers
-// the ambient model. Not llmOptions from std::agents/lib/shared: that
-// module imports this one.
+// Not llmOptions from std::agents/lib/shared: that module imports this one.
 def draftOptions(model: string, provider: string): any {
   const options: any = {}
   if (model != "") {
@@ -534,9 +520,6 @@ def draftOptions(model: string, provider: string): any {
   return options
 }
 
-// One model call turns the user's feedback into the next draft. A
-// description writeSkill could not save is refused here, before the user
-// is shown it.
 def redraft(
   name: string,
   draft: SkillDraft,
@@ -555,32 +538,29 @@ def redraft(
   return next
 }
 
-// A rejected interrupt halts this function and returns the rejection to
-// the caller; nothing below the interrupt runs. A bare approve() carries
-// no value and counts as accept.
-def askUser(dir: string, name: string, draft: SkillDraft): Result<SkillReview> {
-  const answer = interrupt std::skills::review("Review this skill before it is saved", {
+// The answer is text: a bare approve() or "accept" accepts, and anything
+// else is the feedback for the next draft. Returns null for accept.
+def askUser(dir: string, name: string, draft: SkillDraft): Result<string | null> {
+  const answer = interrupt std::skills::review("Review this skill before it is saved: answer accept, or give feedback for the next draft", {
     dir: dir,
     name: name,
     description: draft.description,
     body: draft.body
   })
-  if (answer == null) {
-    return success({ verdict: "accept" })
+  if (answer == null || answer == ACCEPT) {
+    return success(null)
   }
-  const review: SkillReview! = answer
-  if (review is failure(shapeErr)) {
-    return failure(
-      "unrecognized review answer ${JSON.stringify(answer)}: ${shapeErr}. Expected { verdict: \"accept\" } or { verdict: \"revise\", feedback: \"...\" }",
-    )
+  const feedback: string! = answer
+  if (feedback is failure) {
+    return failure("unrecognized review answer ${JSON.stringify(answer)}: answer \"${ACCEPT}\", or give feedback for the next draft as text")
   }
-  if (review.value.verdict == "revise" && review.value.feedback == "") {
-    return failure("a revise answer needs feedback; the next draft would be the same")
+  if (feedback.value.trim() == "") {
+    return failure("a revise answer needs feedback")
   }
-  return review
+  return feedback
 }
 
-/** `done` ends the loop; otherwise `feedback` goes into the next round. */
+/** `done` ends the loop. Otherwise `feedback` goes into the next round. */
 type SkillRoundOutcome = {
   done?: Result<SkillEntry>;
   feedback: string
@@ -592,33 +572,23 @@ def oneSkillRound(
   draft: SkillDraft,
 ): SkillRoundOutcome {
   const answer = askUser(dir, name, draft)
-  return match(answer) {
-    failure(rejected) => ({
-      done: failure(rejected),
-      feedback: ""
-    })
-    success(review) => match(review) {
-      { verdict: "accept" } => ({
-        done: writeSkill(dir, name, draft.description, draft.body),
-        feedback: ""
-      })
-      { verdict: "revise", feedback as next } => ({
-        done: null,
-        feedback: next
-      })
-    }
+  if (answer is failure(rejected)) {
+    return { done: failure(rejected), feedback: "" }
   }
+  if (answer.value == null) {
+    return { done: writeSkill(dir, name, draft.description, draft.body), feedback: "" }
+  }
+  return { done: null, feedback: answer.value }
 }
 
 /**
 The draft-show-revise-accept loop over `writeSkill`. The caller's draft
-is shown first, in a `std::skills::review` interrupt whose answer is
-accept or revise-with-feedback (the same shape as `std::toolbox::review`).
-Revise feedback goes to a model call that rewrites the description and
-body, and the result is shown again, up to `maxRounds` reviews. Accept
+is shown first, in a `std::skills::review` interrupt. The answer is
+text: `accept` (or a bare approval) accepts, and anything else is
+feedback, which goes to a model call that rewrites the description and
+body. The result is shown again, up to `maxRounds` reviews. Accept
 calls `writeSkill`, whose own `std::skills::save` interrupt still gates
-the write, so the responder sees the final file once more before it
-lands. This is the function to hand to a model as a tool.
+the write. This is the function to hand to a model as a tool.
 */
 export def designSkill(
   dir: string,
@@ -631,20 +601,16 @@ export def designSkill(
 ): Result<SkillEntry> raises <std::skills::review, std::skills::save, std::mkdir, std::write> {
   """
   Show a draft skill to the user, revise it on their feedback, and save
-  it once they accept. The revision loop runs inside this call, so do
-  not call it again to revise a draft; a rejection saves nothing and
-  fails the call.
+  it once they accept.
 
   @param dir - The skills directory to write into
-  @param name - The skill's name; also its filename. Lowercase letters, digits, and hyphens.
+  @param name - The skill's name, also its filename. Lowercase letters, digits, and hyphens.
   @param description - One line telling the reading agent when to use the skill
   @param body - The skill's markdown body, as a first draft
   @param maxRounds - Reviews before giving up
   @param model - Model override for the redraft, or ""
   @param provider - Provider for the model override
   """
-  // Checked before the first prompt, so a bad call fails without asking
-  // anyone; writeSkill checks again at save time.
   const checked = checkSkillInputs(dir, name, description)
   if (checked is failure) {
     return checked
@@ -666,7 +632,7 @@ export def designSkill(
     }
     feedback = outcome.feedback
   }
-  return failure("gave up after ${maxRounds} reviews; last feedback:\n${feedback}")
+  return failure("gave up after ${maxRounds} reviews. Last feedback:\n${feedback}")
 }
 
 export def docsSkill(

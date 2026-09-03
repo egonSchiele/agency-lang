@@ -7,7 +7,7 @@ description: "Give an LLM access to a directory of skills, and support Claude-Co
 
 Give an LLM access to a directory of skills, and support Claude-Code-style
   slash commands. `skillsDir` builds a tool that lets the model read skill
-  files on demand. `writeSkill` saves a new skill after approval;
+  files on demand. `writeSkill` saves a new skill after approval.
   `designSkill` shows a draft to the user, revises it on their feedback,
   and saves it through `writeSkill`. `commandsDir` and `expandSlash` load
   prompt-template commands and expand a user's `/command` into its body.
@@ -52,21 +52,6 @@ export type SkillGroup = {
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L305))
-
-### SkillReview
-
-The user's answer to a std::skills::review interrupt. A bare
-  approve() counts as accept.
-
-```ts
-/** The user's answer to a std::skills::review interrupt. A bare
-  approve() counts as accept. */
-export type SkillReview =
-  | { verdict: "accept" }
-  | { verdict: "revise"; feedback: string }
-```
-
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L486))
 
 ## Effects
 
@@ -142,7 +127,7 @@ effect std::skills::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L497))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L485))
 
 ## Functions
 
@@ -276,7 +261,7 @@ draft-revise-accept loop is `designSkill`, which ends by calling this.
 
 **Throws:** `std::skills::save`, `std::mkdir`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L433))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L425))
 
 ### designSkill
 
@@ -293,12 +278,10 @@ designSkill(
 ```
 
 Show a draft skill to the user, revise it on their feedback, and save
-  it once they accept. The revision loop runs inside this call, so do
-  not call it again to revise a draft; a rejection saves nothing and
-  fails the call.
+  it once they accept.
 
   @param dir - The skills directory to write into
-  @param name - The skill's name; also its filename. Lowercase letters, digits, and hyphens.
+  @param name - The skill's name, also its filename. Lowercase letters, digits, and hyphens.
   @param description - One line telling the reading agent when to use the skill
   @param body - The skill's markdown body, as a first draft
   @param maxRounds - Reviews before giving up
@@ -306,13 +289,12 @@ Show a draft skill to the user, revise it on their feedback, and save
   @param provider - Provider for the model override
 
 The draft-show-revise-accept loop over `writeSkill`. The caller's draft
-is shown first, in a `std::skills::review` interrupt whose answer is
-accept or revise-with-feedback (the same shape as `std::toolbox::review`).
-Revise feedback goes to a model call that rewrites the description and
-body, and the result is shown again, up to `maxRounds` reviews. Accept
+is shown first, in a `std::skills::review` interrupt. The answer is
+text: `accept` (or a bare approval) accepts, and anything else is
+feedback, which goes to a model call that rewrites the description and
+body. The result is shown again, up to `maxRounds` reviews. Accept
 calls `writeSkill`, whose own `std::skills::save` interrupt still gates
-the write, so the responder sees the final file once more before it
-lands. This is the function to hand to a model as a tool.
+the write. This is the function to hand to a model as a tool.
 
 **Parameters:**
 
@@ -330,7 +312,7 @@ lands. This is the function to hand to a model as a tool.
 
 **Throws:** `std::skills::review`, `std::skills::save`, `std::mkdir`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L623))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L593))
 
 ### docsSkill
 
@@ -355,7 +337,7 @@ Build a docs tool for an LLM over the packaged Agency documentation.
 |---|---|---|
 | section | `\| "guide" \| "cli" \| "diagnostics" \| "stdlib" \| "agent"` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L672))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L638))
 
 ### bundledDocsDir
 
@@ -368,7 +350,7 @@ The directory holding the Agency docs that ship inside the package. A
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L693))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L659))
 
 ### agentSkill
 
@@ -388,7 +370,7 @@ Build a skills tool over the skills shipped for one agent. The returned
 |---|---|---|
 | agent | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L701))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L667))
 
 ### commandsDir
 
@@ -441,7 +423,7 @@ root), pass an absolute path: `"${cwd()}/.claude/commands"`.
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L789))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L755))
 
 ### expandSlash
 
@@ -480,4 +462,4 @@ agency agent`, yielding `"/foo\n"`) dispatch correctly.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L844))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L810))

@@ -150,14 +150,12 @@ wrong tomorrow.
 
 ### What the handler may return
 
-A rejected interrupt halts `askUser` and returns the rejection to
-`rounds`, which returns it; nothing after the interrupt runs. A bare
-`approve()` arrives as `null` and counts as accept. `askUser` validates
-any other answer as a `WriteToolReview` with the bang syntax (the `!`
-runtime-validation operator), so a `revise` without a string `feedback`
-fails; the failure names the answer. A
-`revise` with empty feedback fails too, because the next round would
-get the identical brief.
+The answer is text, because that is what a person can type at the
+interactive prompt (the line they type is the approval value, and an
+empty line rejects). A bare `approve()` or the word `accept` accepts.
+Any other text is the feedback for the next draft. A rejection halts
+`askUser` and returns the rejection to `rounds`, which returns it. A
+non-string answer, or feedback that is only whitespace, fails the call.
 
 ## Reading a toolbox
 

@@ -228,6 +228,12 @@ type GrepMatch = {
   text: string
 }
 
+/**
+The `flags` string is translated before it reaches the RegExp, so a caller
+who writes grep-style letters gets a search or a message naming the parameter
+to use, never a RegExp constructor error. The rule table is in
+`lib/stdlib/grepQuery.ts`.
+*/
 export idempotent def grep(
   pattern: string,
   dir: string = ".",
@@ -247,7 +253,7 @@ export idempotent def grep(
 
   @param pattern - The regex pattern to search for, in JavaScript regex syntax
   @param dir - The directory to search in
-  @param flags - JavaScript regex flags: i (ignore case), m, s, u. The grep letters n, r, g, and E are accepted and ignored, since the tool already searches recursively and returns line numbers. For grep's -w, -l, and -v use wholeWord, filesOnly, and invert.
+  @param flags - JavaScript regex flags (i, m, s, u). grep's -r and -n are always on. For -w, -l, and -v use wholeWord, filesOnly, and invert.
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes. When set, a symlinked search dir fails the call rather than being followed.
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set

@@ -7,17 +7,9 @@ the skip list for `node_modules` and friends) in our code, and it behaves the
 same on every platform. The cost is that a model calling the tool thinks in
 `grep` flags, and JavaScript regexes know only a handful of letters.
 
-## The problem this solves
-
-Before this, `flags` went straight into the `RegExp` constructor. A model
-asking for `flags: "n"` (line numbers) or `"gn"` got back
-
-```
-Invalid flags supplied to RegExp constructor 'n'
-```
-
-and had to guess its way to an empty flags string. One trace showed five of
-six tool errors in a session were this.
+A `flags` string handed straight to the `RegExp` constructor fails on
+`"n"` with a message about the constructor, which tells the model nothing
+about what to send instead.
 
 ## How a call becomes a search
 

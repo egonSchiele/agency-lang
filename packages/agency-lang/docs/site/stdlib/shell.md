@@ -274,7 +274,7 @@ Search files under a directory for a regular expression, like `grep -rn`. The se
 
   @param pattern - The regex pattern to search for, in JavaScript regex syntax
   @param dir - The directory to search in
-  @param flags - JavaScript regex flags: i (ignore case), m, s, u. The grep letters n, r, g, and E are accepted and ignored, since the tool already searches recursively and returns line numbers. For grep's -w, -l, and -v use wholeWord, filesOnly, and invert.
+  @param flags - JavaScript regex flags (i, m, s, u). grep's -r and -n are always on. For -w, -l, and -v use wholeWord, filesOnly, and invert.
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes. When set, a symlinked search dir fails the call rather than being followed.
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
@@ -282,6 +282,11 @@ Search files under a directory for a regular expression, like `grep -rn`. The se
   @param wholeWord - Match only where the pattern is a whole word (grep -w)
   @param filesOnly - Return just the paths of the files with a match, one entry per file, instead of the matching lines (grep -l)
   @param invert - Return the lines that do NOT match (grep -v)
+
+The `flags` string is translated before it reaches the RegExp, so a caller
+who writes grep-style letters gets a search or a message naming the parameter
+to use, never a RegExp constructor error. The rule table is in
+`lib/stdlib/grepQuery.ts`.
 
 **Parameters:**
 
@@ -302,7 +307,7 @@ Search files under a directory for a regular expression, like `grep -rn`. The se
 
 **Throws:** `std::grep`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L231))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L237))
 
 ### glob
 
@@ -338,7 +343,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the p
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L290))
 
 ### stat
 
@@ -372,7 +377,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** `StatInfo`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L319))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L325))
 
 ### exists
 
@@ -403,7 +408,7 @@ Return true if a file or directory exists at the given path. Probing a path outs
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L341))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L347))
 
 ### which
 
@@ -423,4 +428,4 @@ Locate an executable in PATH and return its absolute path, or an empty string if
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L361))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L367))

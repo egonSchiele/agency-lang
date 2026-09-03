@@ -836,7 +836,7 @@ def oneLineData(data: any): string {
   for (key in IDENTIFYING_FIELDS) {
     const value = data[key]
     if (typeof value == "string" || typeof value == "number") {
-      let text = "${value}"
+      let text = "${value}".replace(re/[\u0000-\u001f\u007f-\u009f]/g, "�")
       if (text.length > 80) {
         text = text[:80] + "…"
       }

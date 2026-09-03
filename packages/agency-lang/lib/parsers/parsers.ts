@@ -1325,8 +1325,11 @@ const declNameParserFor = (
     if (words.length === 1) {
       return { ...raw, result: name };
     }
-    const message = modifiers.includes(words[0])
-      ? MODIFIER_AFTER_KEYWORD_MESSAGE(words[0], keyword, words.slice(1).join(" "))
+    // Only `def handoff foo(` earns the reorder hint. With three or more
+    // words the suggested line would itself still hold a spaced name.
+    const isMisplacedModifier = words.length === 2 && modifiers.includes(words[0]);
+    const message = isMisplacedModifier
+      ? MODIFIER_AFTER_KEYWORD_MESSAGE(words[0], keyword, words[1])
       : DECL_NAME_SPACES_MESSAGE(keyword, name);
     const declined = committedFailure(message, input);
     getParseState().committedFailure = declined;

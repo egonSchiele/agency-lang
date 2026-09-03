@@ -297,10 +297,8 @@ async function _writeBytes(
   }
   const filePath = await resolvePath(dir, filename);
   if (allowedPaths && allowedPaths.length > 0) {
-    // Descriptor-validated overwrite: the bytes provably land inside an
-    // allowed root, with no window in which a swap to a symlink can
-    // redirect the write (see writeContainedFile). Only whole-file
-    // writes take this path.
+    // Descriptor-validated overwrite, the write-side twin of the _read
+    // branch above (see writeContainedFile).
     if (mode !== "overwrite") {
       throw new Error(`allowedPaths is only supported with mode 'overwrite', got '${mode}'.`);
     }

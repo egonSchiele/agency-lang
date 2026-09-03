@@ -174,13 +174,11 @@ of `impl.agency` and `meta.json` use `_read`, covered by that one scan
 approval. `runTool` and the post-publish read in `saveTool` raise the
 same scan for the one tool directory they read, so no `_read` runs
 without an approval that names its directory. Every one of those reads
-is contained in the toolbox root (`readContainedFile`, the
-descriptor-validated read `std::skills` also uses): the open refuses a
-symlink, and the opened file is checked to sit inside the root. A tool
-directory that is a symlink is already left out of the catalog, because
-`ls` reports a link rather than a directory, and the contained read
-stops `runTool` from running it. That matters now that the recommended
-policy approves scans of the agent home's toolbox without asking. A toolbox directory that does not exist
+is contained in the toolbox root through `readContainedFile`, so a
+symlinked tool directory cannot carry a scan approval elsewhere. `ls`
+reports a link rather than a directory, so such a tool is already left
+out of the catalog, and the contained read stops `runTool` from running
+it. A toolbox directory that does not exist
 yet is an empty catalog.
 
 Each entry carries `module` (what `describe` says about `run`: signature,
@@ -200,18 +198,13 @@ headroom, so the guard trips before the subprocess is killed. `runFile`
 clamps `wallClock` to an hour, so `stage` refuses a `maxTime` above
 an hour minus that headroom. It then counts the use in
 `meta.json`, behind a `std::toolbox::recordUse` interrupt naming the
-tool's directory. The write that fulfils the approval uses the
-interrupt-free `_write`, contained in the toolbox root the same way the
-reads are (`writeContainedFile`, which also refuses to create a file
-under a symlinked directory). The count is best-effort: the tool has
-already run, so a declined interrupt or a failed write leaves the count
-where it was and `runTool` returns the node's own `Result`.
-
-`recordUse` is an effect of its own so a policy can approve it without
-approving any `std::write`. A write rule on `meta.json` would approve a
-program writing anything there, and `listTools` trusts the file's
-`purpose` and `runTool` its `maxTime`. The recommended policy approves
-the effect under the agent home's toolbox.
+tool's directory. The write that fulfils the approval is contained in
+the toolbox root through `writeContainedFile`, the write-side twin of
+the read helper. The count is best-effort: the tool has already run, so
+a declined interrupt or a failed write leaves the count where it was and
+`runTool` returns the node's own `Result`. Why the count is an effect of
+its own, and what the recommended policy does with it, is in
+`docs/dev/agents/approval-policies.md`.
 
 ## Model calls and mocks
 

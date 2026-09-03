@@ -113,10 +113,9 @@ effect std::toolbox::scan {
   dir: string
 }
 
-// runTool's use count, as its own effect rather than a std::write: the
-// stdlib composes the record, so approving this approves one known
-// change to the tool's meta.json and cannot be reused to land arbitrary
-// content there. The approval covers the write that fulfils it.
+// runTool's use count. Its own effect, so a policy can approve the
+// stdlib's record without approving any std::write to meta.json. The
+// approval covers the write that fulfils it.
 @alwaysUnder(dir)
 effect std::toolbox::recordUse {
   dir: string;
@@ -192,8 +191,7 @@ const EMPTY_MODULE: ModuleFacts = {
 // Every entry point takes the toolbox directory the same way. An empty
 // string is refused because the file primitives would resolve it to the
 // process cwd. Absolutized so the interrupt payloads name one directory
-// however the caller spelled it, and so a policy pattern that expands to
-// an absolute path can match them.
+// however the caller spelled it.
 def expandRoot(dir: string): Result<string> {
   if (dir == "") {
     return failure("dir must name the toolbox directory. Got an empty string")
@@ -213,10 +211,8 @@ def factsOf(exported: ExportInfo): ModuleFacts {
   }
 }
 
-// The reads under a scan approval are contained in the toolbox root:
-// the open refuses a symlink, and the descriptor is checked to sit
-// inside the root, so a symlinked tool directory cannot carry the
-// approval elsewhere.
+// The reads under a scan approval are contained in the toolbox root, so
+// a symlinked tool directory cannot carry the approval elsewhere.
 def moduleFacts(root: string, toolDir: string): Result<ModuleFacts> {
   const source = try _read(toolDir, IMPL_FILE, 0, 0, [root])
   if (source is failure) {
@@ -1118,9 +1114,9 @@ export def runTool(
 ): Result<Json> {
   """
   Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json records one more use and the time,
-  behind a `std::toolbox::recordUse` interrupt. A declined or failed
-  record does not fail the run. The result is not recorded.
+  returned. The tool's meta.json counts one more use and the time. A
+  declined or failed count does not fail the run. The result is not
+  recorded.
 
   @param name - The tool's name under dir
   @param request - The tool's input, a value of its Request type
@@ -1161,8 +1157,7 @@ export def runTool(
   if (ran is success(finished)) {
     result = finished.data
   }
-  // The tool has run and its effects have happened. A declined interrupt
-  // or a failed write leaves the count unrecorded and returns the result.
+  // Best-effort: the tool has already run.
   recordUse(root.value, name, meta.value)
   return result
 }

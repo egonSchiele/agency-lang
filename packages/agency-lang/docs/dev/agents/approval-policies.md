@@ -112,12 +112,6 @@ inside the home: the reads and the use-count write under these
 approvals refuse a symlinked skill or tool directory (see `docs/dev/stdlib/skills-write.md`
 and `docs/dev/stdlib/toolbox.md`).
 
-The matcher tries each `dir` pattern three ways: as written, with `.`
-expanded, and with every placeholder expanded in one pass. One pass,
-because each expander leaves a pattern without its token alone, so a
-pattern that mixes `<agency>` and `<agent-home>` in one brace group
-works too.
-
 A policy file saved before this change keeps its old catch-all read rules;
 there is no migration. Delete the file (the agent writes a fresh
 recommended policy on the next launch) or edit the five read effects.

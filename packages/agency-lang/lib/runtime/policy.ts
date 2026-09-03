@@ -176,10 +176,8 @@ export function expandAgentHomeDir(
 }
 
 // Realpathed for the reason the cwd is in resolveDotDirPattern: file
-// effects realpath the dir in their payload, so a home reached through a
-// symlinked ancestor (macOS /tmp, a linked $HOME) must share that
-// spelling or no rule ever matches. A home that does not exist yet keeps
-// its lexical spelling.
+// effects put the realpath in their payload. A home that does not exist
+// yet keeps its lexical spelling.
 function canonicalAgentHome(): string {
   const home = agentHomeDir();
   try {

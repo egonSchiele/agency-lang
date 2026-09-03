@@ -51,12 +51,9 @@ export function readScopeRules(): PolicyRule[] {
   ];
 }
 
-// runTool counts a use in the tool's meta.json behind this effect. It is
-// an effect of its own, not a std::write rule on the file, because a
-// path glob cannot tell the stdlib's bookkeeping from a program writing
-// arbitrary content into meta.json, whose purpose text listTools then
-// trusts. Approving the effect approves only the record the stdlib
-// composes. Scoped to the agent home's toolbox.
+// runTool's use count in a tool's meta.json. An effect of its own, never
+// a std::write rule on the file; docs/dev/agents/approval-policies.md
+// says why.
 function toolboxRecordUseRules(): PolicyRule[] {
   return [{ match: { dir: `${AGENT_HOME}/tools/**` }, action: "approve" }];
 }

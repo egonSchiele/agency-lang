@@ -1,0 +1,75 @@
+import { grep } from "std::shell"
+import { sortBy, map } from "std::array"
+
+const fixtures = __dirname + "/grep-fixtures"
+
+def locations(hits: any[]): string[] {
+  const sorted = sortBy(hits) as hit {
+    return "${hit.file}:${hit.line}"
+  }
+  return ["${hit.file}:${hit.line}" for hit in sorted]
+}
+
+// The grep habit: -n for line numbers. Accepted, and the search runs.
+node grepStyleFlagIsAccepted(): string[] {
+  const hits = grep("hello", fixtures, "n", 100) catch [] with approve
+  return locations(hits)
+}
+
+// A flag with a named parameter fails with the parameter's name.
+node flagWithParameterFails(): string {
+  const result = grep("hello", fixtures, "l", 100) with approve
+  if (result is failure(problem)) {
+    return "${problem}"
+  }
+  return "matched"
+}
+
+node ignoreCase(): string[] {
+  const hits = grep("hello", fixtures, "", 100, ignoreCase: true) catch [] with approve
+  return locations(hits)
+}
+
+// "hell" sits inside "hello" on three fixture lines. As a whole word it
+// matches none of them; "hello" as a whole word matches all three.
+node wholeWord(): any {
+  const inside = grep("hell", fixtures, "i", 100, wholeWord: true) catch ["failed"] with approve
+  const whole = grep("hello", fixtures, "i", 100, wholeWord: true) catch ["failed"] with approve
+  return {
+    inside: locations(inside),
+    whole: locations(whole)
+  }
+}
+
+node filesOnlyRespectsMaxResults(): number {
+  const files = grep("hello", fixtures, "i", 1, filesOnly: true) catch [] with approve
+  return files.length
+}
+
+// The named parameters ride in the interrupt data, where a policy or a
+// person approving the call can see them.
+node interruptCarriesParameters(): string {
+  handle {
+    const result = grep("hello", fixtures, "im", 5, wholeWord: true, filesOnly: true)
+    if (result is failure(reason)) {
+      return "${reason}"
+    }
+    return "not raised"
+  } with (intr) {
+    return reject(
+      "${intr.effect}|${intr.data.flags}|${intr.data.ignoreCase}|${intr.data.wholeWord}|${intr.data.filesOnly}|${intr.data.invert}",
+    )
+  }
+}
+
+node filesOnly(): string[] {
+  const files = grep("hello", fixtures, "i", 100, filesOnly: true) catch [] with approve
+  return sortBy(files) as file {
+    return file
+  }
+}
+
+node invert(): string[] {
+  const hits = grep("hello", fixtures, "i", 100, invert: true) catch [] with approve
+  return locations(hits)
+}

@@ -253,16 +253,66 @@ describe("symlinked-root refusal parity across walkers", () => {
     await safeDeleteDirectory(root);
   });
 
+  const needle = {
+    pattern: "needle",
+    flags: "",
+    ignoreCase: false,
+    wholeWord: false,
+    filesOnly: false,
+    invert: false,
+  };
+
   it("_grep refuses a symlinked search root when allowedPaths is set", async () => {
-    await expect(_grep("needle", path.join(root, "linked"), "", 10, [root])).rejects.toThrow(
+    await expect(_grep(needle, path.join(root, "linked"), 10, [root])).rejects.toThrow(
       /is a symlink/,
     );
-    const open = await _grep("needle", path.join(root, "linked"), "", 10, []);
+    const open = await _grep(needle, path.join(root, "linked"), 10, []);
     expect(open.length).toBe(1);
   });
 
   it("_glob returns nothing for a non-positive maxResults", async () => {
     expect(await _glob("*.md", path.join(root, "real"), 0, [])).toEqual([]);
     expect(await _glob("*.md", path.join(root, "real"), -3, [])).toEqual([]);
+  });
+});
+
+describe("_grep stops at maxResults inside one file", () => {
+  let root: string;
+  const query = {
+    pattern: "needle",
+    flags: "",
+    ignoreCase: false,
+    wholeWord: false,
+    filesOnly: false,
+    invert: false,
+  };
+  const MATCHING_LINES = 5000;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grep-cap-"));
+    const lines = Array.from({ length: MATCHING_LINES }, (_, index) => `needle ${index}`);
+    fs.writeFileSync(path.join(root, "big.txt"), lines.join("\n") + "\n");
+    fs.writeFileSync(path.join(root, "other.txt"), "needle here\nnothing\n");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("returns exactly maxResults matches from a file with far more", async () => {
+    const hits = await _grep(query, root, 3, []);
+    expect(hits.length).toBe(3);
+  });
+
+  it("with filesOnly returns each file once and never more files than maxResults", async () => {
+    const all = (await _grep({ ...query, filesOnly: true }, root, 10, [])) as string[];
+    expect(all.sort()).toEqual(["big.txt", "other.txt"]);
+    const one = await _grep({ ...query, filesOnly: true }, root, 1, []);
+    expect(one.length).toBe(1);
+  });
+
+  it("with invert does not report the line after the final newline", async () => {
+    const hits = await _grep({ ...query, invert: true }, root, 100, []);
+    expect(hits).toEqual([{ file: "other.txt", line: 2, text: "nothing" }]);
   });
 });

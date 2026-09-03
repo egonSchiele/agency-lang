@@ -1,4 +1,5 @@
 import process from "process";
+import { compileGrepQuery, type GrepPlan, type GrepQuery } from "./grepQuery.js";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
 import path from "path";
@@ -392,20 +393,22 @@ async function walkDir(root: string, visit: Visitor): Promise<void> {
   await walk(root);
 }
 
+/** Matching lines, or with `filesOnly` just the paths of files that have one. */
+export type GrepResults = GrepMatch[] | string[];
+
 export async function _grep(
-  pattern: string,
+  query: GrepQuery,
   dir: string,
-  flags: string,
   maxResults: number,
   allowedPaths?: string[],
-): Promise<GrepMatch[]> {
+): Promise<GrepResults> {
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned `file` paths are relative to `dir` so callers can hand
   // them to `read(file, dir)` directly.
   const root = await resolveDir(dir, allowedPaths ?? []);
   await refuseSymlinkedRoot(root, allowedPaths);
-  const re = new RegExp(pattern, flags || undefined);
-  const results: GrepMatch[] = [];
+  const plan = compileGrepQuery(query);
+  const matches: GrepMatch[] = [];
 
   await walkDir(root, async (full, st) => {
     if (!st.isFile()) return true;
@@ -415,22 +418,45 @@ export async function _grep(
     } catch {
       return true;
     }
-    const lines = text.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      if (re.test(lines[i])) {
-        results.push({
-          file: toPosix(path.relative(root, full)),
-          line: i + 1,
-          text: lines[i],
-        });
-        if (results.length >= maxResults) return false;
-      }
-      re.lastIndex = 0;
+    const file = toPosix(path.relative(root, full));
+    const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
+    for (const hit of firstMatchingLines(text, plan, perFile)) {
+      matches.push({ file, ...hit });
     }
-    return true;
+    return matches.length < maxResults;
   });
 
-  return results;
+  return plan.filesOnly ? matches.map((match) => match.file) : matches;
+}
+
+type LineHit = { line: number; text: string };
+
+/** Up to `limit` lines of one file that the plan selects, numbered from 1,
+ *  scanning no further than it must. A file's final newline does not start
+ *  a line, the same as grep, or `invert` would report an empty line past
+ *  the end of every file. */
+function firstMatchingLines(text: string, plan: GrepPlan, limit: number): LineHit[] {
+  const hits: LineHit[] = [];
+  if (text.length === 0) {
+    return hits;
+  }
+  const end = text.endsWith("\n") ? text.length - 1 : text.length;
+  let start = 0;
+  let line = 1;
+  while (start <= end && hits.length < limit) {
+    const newline = text.indexOf("\n", start);
+    const stop = newline === -1 || newline > end ? end : newline;
+    const lineText = text.slice(start, stop);
+    if (plan.regex.test(lineText) !== plan.invert) {
+      hits.push({ line, text: lineText });
+    }
+    if (stop === end) {
+      break;
+    }
+    start = stop + 1;
+    line += 1;
+  }
+  return hits;
 }
 
 export async function _glob(

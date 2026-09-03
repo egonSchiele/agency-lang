@@ -1,0 +1,92 @@
+{
+  "tests": [
+    {
+      "nodeName": "grepStyleFlagIsAccepted",
+      "input": "",
+      "expectedOutput": "[\"one.txt:1\",\"one.txt:3\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "the grep letter n is accepted and ignored"
+    },
+    {
+      "nodeName": "flagWithParameterFails",
+      "input": "",
+      "expectedOutput": "\"grep does not take the flag \\\"l\\\". Pass filesOnly: true instead.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a flag with a named parameter fails with that name"
+    },
+    {
+      "nodeName": "ignoreCase",
+      "input": "",
+      "expectedOutput": "[\"one.txt:1\",\"one.txt:3\",\"two.txt:2\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "ignoreCase matches HELLO too"
+    },
+    {
+      "nodeName": "filesOnly",
+      "input": "",
+      "expectedOutput": "[\"one.txt\",\"two.txt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "filesOnly returns one path per matching file"
+    },
+    {
+      "nodeName": "invert",
+      "input": "",
+      "expectedOutput": "[\"one.txt:2\",\"two.txt:1\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "invert returns the lines without a match"
+    },
+    {
+      "nodeName": "wholeWord",
+      "input": "",
+      "expectedOutput": "{\"inside\":[],\"whole\":[\"one.txt:1\",\"one.txt:3\",\"two.txt:2\"]}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "wholeWord matches whole words and not the same letters inside a word"
+    },
+    {
+      "nodeName": "filesOnlyRespectsMaxResults",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "filesOnly stops at maxResults files"
+    },
+    {
+      "nodeName": "interruptCarriesParameters",
+      "input": "",
+      "expectedOutput": "\"std::grep|im|false|true|true|false\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "the named parameters are in the std::grep interrupt data"
+    }
+  ]
+}

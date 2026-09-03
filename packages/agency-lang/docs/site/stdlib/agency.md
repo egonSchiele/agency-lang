@@ -622,7 +622,7 @@ typecheck(
 ): Result<TypeCheckReport>
 ```
 
-Type-check Agency source code.
+Type-check Agency source code given as a string. To check a file that is already on disk, call `typecheckFile` with its path instead of pasting its contents here.
 
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings

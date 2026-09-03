@@ -171,7 +171,7 @@ describe("promptCompletion expansion", () => {
     // trace, leaf, [user], [assistant], raw-data toggle
     expect(rows).toHaveLength(5);
     expect(rows[2].node.nodeKind).toBe("convoLine");
-    expect(rows[2].node.summary).toBe(`${color.green("[user]")} hi`);
+    expect(rows[2].node.summary).toBe(`${color.green("[user]")} ${color.cyan("hi")}`);
     expect(rows[3].node.nodeKind).toBe("convoLine");
     expect(rows[4].node.nodeKind).toBe("rawDataToggle");
     expect(rows[4].node.id).toBe("evt-0:raw");
@@ -260,12 +260,15 @@ describe("promptCompletion expansion", () => {
     const rows = flattenVisibleRows(state);
     const convoRows = rows.filter((r) => r.node.nodeKind === "convoLine");
     expect(convoRows.length).toBeGreaterThan(1);
-    // No row's rendered text exceeds the available width.
+    // No row's VISIBLE text exceeds the available width; the color escapes
+    // around a user body take no columns.
+    // eslint-disable-next-line no-control-regex
+    const visible = (s: string) => s.replace(/\x1b\[[\d;]*m/g, "");
     for (const r of convoRows) {
-      expect(r.node.summary.length).toBeLessThanOrEqual(40 - r.depth * 2 - 2);
+      expect(visible(r.node.summary).length).toBeLessThanOrEqual(40 - r.depth * 2 - 2);
     }
     // Concatenating wrapped chunks reconstructs the original line.
-    const joined = convoRows.map((r) => r.node.summary).join("");
+    const joined = convoRows.map((r) => visible(r.node.summary)).join("");
     expect(joined).toContain(longText);
   });
 });
@@ -285,6 +288,32 @@ describe("wrapLine", () => {
 
   it("returns a single-element list for width <= 0", () => {
     expect(wrapLine("abc", 0)).toEqual(["abc"]);
+  });
+
+  it("measures width without ANSI escapes and carries the style onto every chunk", () => {
+    const dim = "\x1b[2m";
+    const reset = "\x1b[0m";
+    // 18 visible columns; the escapes must not count toward the width.
+    const styled = `${dim}one two three four${reset}`;
+    expect(wrapLine(styled, 18)).toEqual([styled]);
+    expect(wrapLine(styled, 10)).toEqual([`${dim}one two${reset}`, `${dim}three four${reset}`]);
+  });
+
+  it("a style that starts mid-line opens the following chunks", () => {
+    const cyan = "\x1b[36m";
+    const reset = "\x1b[0m";
+    const styled = `tag ${cyan}alpha beta gamma${reset}`;
+    expect(wrapLine(styled, 9)).toEqual([
+      `tag ${cyan}alpha${reset}`,
+      `${cyan}beta${reset}`,
+      `${cyan}gamma${reset}`,
+    ]);
+  });
+
+  it("hard-breaks a styled word without losing escapes", () => {
+    const dim = "\x1b[2m";
+    const reset = "\x1b[0m";
+    expect(wrapLine(`${dim}abcdef${reset}`, 4)).toEqual([`${dim}abcd${reset}`, `${dim}ef${reset}`]);
   });
 });
 

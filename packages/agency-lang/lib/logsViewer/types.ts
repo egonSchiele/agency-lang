@@ -25,8 +25,13 @@ export type TreeNode = {
   // Pre-computed display summary, e.g. `llmCall (1.2s, 1500 tok, $0.007)`.
   summary: string;
   // For spans, aggregated from descendants; for events, drawn from
-  // the event payload.
+  // the event payload. `duration` is the wall-clock envelope; `active`
+  // is the part of it the agent spent working: the sum of its turns
+  // (turnEnd events) when a session has them, else the envelope, minus
+  // `waiting`, the time handlers spent waiting on a person at a prompt.
   duration?: number;
+  active?: number;
+  waiting?: number;
   tokens?: number;
   cost?: number;
   // Earliest event timestamp (ms since epoch) under this node, used

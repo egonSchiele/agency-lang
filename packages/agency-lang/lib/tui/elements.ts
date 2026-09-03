@@ -48,6 +48,7 @@ export type Style = {
   fg?: Color; // foreground color
   bg?: Color; // background color
   bold?: boolean;
+  dim?: boolean; // faint text, for content the eye should skip
   fill?: string; // pad cell character (defaults to space); use "─" to draw a horizontal rule
 
   // Scrolling
@@ -64,6 +65,7 @@ export type Cell = {
   fg?: string;
   bg?: string;
   bold?: boolean;
+  dim?: boolean;
 };
 
 export type FrameStyle = Pick<Style, "border" | "borderColor" | "bg" | "label" | "labelColor">;

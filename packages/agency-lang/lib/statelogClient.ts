@@ -1082,12 +1082,23 @@ export class StatelogClient {
     handlerIndex,
     decision,
     value,
+    decidedBy,
+    timeTaken,
     interrupt,
   }: {
     interruptId: string;
     handlerIndex: number;
+    /** "none": the handler was cut short (an abort inside it) and never
+     *  answered. */
     decision: "approve" | "reject" | "propagate" | "pass" | "none";
     value?: any;
+    /** How long the handler ran, in ms. For a handler that prompts a
+     *  person, this is the time the person took to answer. */
+    timeTaken?: number;
+    /** Set when the handler knows what it stood in for: a policy rule
+     *  ("policy") or a person at a prompt ("user"). Absent for a plain
+     *  handler function. */
+    decidedBy?: "policy" | "user";
     /** Optional summary of the interrupt being decided on. Carries
      *  `effect`, `message`, and `data` so log consumers can see *what*
      *  was being approved/rejected without having to correlate with
@@ -1101,8 +1112,20 @@ export class StatelogClient {
       handlerIndex,
       decision,
       value,
+      decidedBy,
+      timeTaken,
       interrupt,
     });
+  }
+
+  /** One user turn of an interactive agent begins. See lib/stdlib/agentTurn.ts. */
+  async turnStart(): Promise<void> {
+    await this.post({ type: "turnStart" });
+  }
+
+  /** The turn ends; `timeTaken` is its length in ms. */
+  async turnEnd({ timeTaken }: { timeTaken: number }): Promise<void> {
+    await this.post({ type: "turnEnd", timeTaken });
   }
 
   async interruptResolved({
@@ -1114,8 +1137,12 @@ export class StatelogClient {
   }: {
     interruptId: string;
     outcome: "approved" | "rejected" | "propagated" | "passed";
-    /** Null when nothing resolved anything — the chain-outcome event a
-     *  surfacing interrupt records ("propagated"/"passed"). */
+    /** "policy" or "user" when the deciding handler tagged its verdict
+     *  (the CLI policy handler does); "handler" for an untagged handler;
+     *  "ipc" when a parent process took part; "user" also for an answer
+     *  given on resume. Null when nothing resolved anything — the
+     *  chain-outcome event a surfacing interrupt records
+     *  ("propagated"/"passed"). */
     resolvedBy: "handler" | "user" | "policy" | "ipc" | null;
     timeTaken?: number;
     /** Optional summary of the interrupt being resolved. See

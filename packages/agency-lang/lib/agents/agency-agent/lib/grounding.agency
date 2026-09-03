@@ -13,18 +13,20 @@ import { Resolved } from "./models.agency"
 
 export def loadAgentsMd(dir: string): string {
   """
-  Read `AGENTS.md` from `dir` if it exists and return its raw contents;
-  the caller wraps them in a <project_context> block. Returns an empty
-  string if there is no AGENTS.md or it cannot be read.
+  Read `AGENTS.md` from `dir` if it exists, else `CLAUDE.md`, and return
+  the raw contents; the caller wraps them in a <project_context> block.
+  Returns an empty string if neither exists or the read fails.
   """
-  if (!exists("AGENTS.md", dir)) {
-    return ""
+  for (name in ["AGENTS.md", "CLAUDE.md"]) {
+    if (exists(name, dir)) {
+      const result = read(name, dir) with approve
+      if (isFailure(result)) {
+        return ""
+      }
+      return result.value
+    }
   }
-  const result = read("AGENTS.md", dir) with approve
-  if (isFailure(result)) {
-    return ""
-  }
-  return result.value
+  return ""
 }
 
 export def sessionFactsText(
@@ -62,21 +64,33 @@ export def sessionFactsText(
   """
 }
 
-export def groundingText(brainName: string): string {
+export def projectContextText(): string {
+  """
+  The part of the grounding that is about the project rather than the
+  agent: date, working directory, and the AGENTS.md block. Every brain
+  and subagent that runs commands in the project gets this, so the
+  conventions in AGENTS.md reach the model that acts on them and not
+  only the one that routes.
+  """
   const projectContext = loadAgentsMd(cwd()) with approve
-  const args = parseAgentArgs()
-
   return """
 
   Current date: ${today()}
   Current working directory: ${cwd()}
 
-  <session_facts>
-  ${sessionFactsText(brainName, getResolvedSlots(), args.flags)}
-  </session_facts>
-
   <project_context>
   ${projectContext}
   </project_context>
   """
+}
+
+export def groundingText(brainName: string): string {
+  const args = parseAgentArgs()
+
+  return """
+
+  <session_facts>
+  ${sessionFactsText(brainName, getResolvedSlots(), args.flags)}
+  </session_facts>
+  ${projectContextText()}"""
 }

@@ -6,6 +6,7 @@
 */
 import { readOnlyFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
+import { edit } from "std::fs"
 import { setMemoryId } from "std::memory"
 import { Attachment, systemMessage } from "std::thread"
 
@@ -13,7 +14,7 @@ import { generateImageFile } from "../../lib/images.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
-import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
+import { codeAgent, setCodeOneShot, setCodeGrounding } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
@@ -34,6 +35,12 @@ static const MAIN_PROMPT_SMALL = read("./prompts/main-small.md", __dirname) with
 // The read-only file tools let the coordinator answer a question that
 // hinges on a few files from its own context, instead of paying for a
 // subagent dispatch. Bigger sweeps still go to the explorer.
+//
+// `edit` is here for the same reason. Without it, a two-line change to a
+// file the coordinator had already read cost a full codeAgent dispatch: a
+// brief that was the diff in prose, then a fresh context re-reading the
+// same file (trace mL0SvY, 2026-09-03). The prompt keeps it to small
+// changes; anything that needs a build or tests still goes to codeAgent.
 static const mainAgentTools = [
   researchAgent,
   codeAgent,
@@ -44,6 +51,7 @@ static const mainAgentTools = [
   rewriteAgent,
   generateImageFile,
   ...readOnlyFileTools(),
+  edit.partial(useAgentCwd: true),
 ]
 
 def coordinatorInit(context: BrainContext) {
@@ -61,6 +69,9 @@ def coordinatorInit(context: BrainContext) {
   }
   _context = context.grounding
   first = true
+  // The code subagent acts in the project, so it gets the project block
+  // (AGENTS.md and cwd) without the session identity above it.
+  setCodeGrounding(context.projectContext)
   // One-shot autonomy: tell the code subagent there is no human to answer
   // questions and no next turn, so it must drive to a finished artifact.
   setCodeOneShot(!context.interactive)

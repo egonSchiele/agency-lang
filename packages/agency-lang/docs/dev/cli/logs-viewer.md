@@ -149,6 +149,31 @@ rules are its reason to exist.
   `bottomHints(hints, tag, cols)` in `views/shared.ts`, so the answer to
   "where am I" always lives in the same place.
 
+## Working time, not wall clock
+
+A span's `duration` is its wall-clock envelope, and for an interactive
+agent session that number was mostly the user: minutes spent answering
+approval prompts, and the gaps between one reply and the next message.
+The rows now show `active`, the time the agent worked, and name the
+rest as `waiting` so the two reconcile (`12m active, 25m waiting`).
+
+Two event fields feed it, both computed in `aggregateMetrics`
+(`lib/logsViewer/tree.ts`):
+
+- `turnStart` / `turnEnd` events, emitted by the agent's turn loop
+  (`runTurn` in `lib/agents/agency-agent/lib/turn.agency`, through
+  `lib/stdlib/agentTurn.ts`). When a span holds any, its working time is
+  the sum of `turnEnd.timeTaken` instead of the envelope, which drops the
+  time between turns. A one-shot run has none and keeps the envelope.
+- `handlerDecision.timeTaken` with `decidedBy: "user"`, which is how
+  long a person took at a prompt. It is subtracted from the working
+  time. A prompt the person cancelled arrives as `decision: "none"` with
+  the same tag, so an abandoned prompt still counts as waiting.
+
+Magnitude coloring uses the working time, since waiting on a person is
+not slowness. The `agentEnd (37m)` leaf still shows the runtime's own
+wall-clock figure.
+
 ## Adding a view
 
 Implement the `View` type, add a `ViewAction` case if the view needs a new cross-view jump,

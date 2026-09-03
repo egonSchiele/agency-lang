@@ -6,12 +6,14 @@ export type StyledSpan = {
   fg?: string;
   bg?: string;
   bold?: boolean;
+  dim?: boolean;
 };
 
 type Origin = "tag" | "ansi";
 
 type StyleEntry =
   | { type: "bold"; origin: Origin }
+  | { type: "dim"; origin: Origin }
   | { type: "fg"; color: string; origin: Origin }
   | { type: "bg"; color: string; origin: Origin };
 
@@ -85,7 +87,8 @@ function removeWhere(stack: StyleEntry[], pred: (e: StyleEntry) => boolean): voi
  * Recognized codes:
  *   0       — reset (clears all ANSI-origin entries)
  *   1       — bold
- *   22      — bold off (clears all ANSI-origin bold entries)
+ *   2       — dim (faint)
+ *   22      — normal intensity (clears all ANSI-origin bold and dim entries)
  *   30-37   — standard fg color
  *   38;5;N  — 256-color fg
  *   38;2;R;G;B — true-color fg
@@ -111,8 +114,11 @@ function applyAnsiCodes(stack: StyleEntry[], codes: number[]): void {
     } else if (code === 1) {
       stack.push({ type: "bold", origin: "ansi" });
       i++;
+    } else if (code === 2) {
+      stack.push({ type: "dim", origin: "ansi" });
+      i++;
     } else if (code === 22) {
-      removeWhere(stack, (e) => e.origin === "ansi" && e.type === "bold");
+      removeWhere(stack, (e) => e.origin === "ansi" && (e.type === "bold" || e.type === "dim"));
       i++;
     } else if (code === 39) {
       removeWhere(stack, (e) => e.origin === "ansi" && e.type === "fg");
@@ -197,6 +203,7 @@ function currentStyle(stack: StyleEntry[]): Omit<StyledSpan, "text"> {
   const style: Omit<StyledSpan, "text"> = {};
   for (const entry of stack) {
     if (entry.type === "bold") style.bold = true;
+    else if (entry.type === "dim") style.dim = true;
     else if (entry.type === "fg") style.fg = entry.color;
     else if (entry.type === "bg") style.bg = entry.color;
   }
@@ -210,6 +217,7 @@ function unescape(text: string): string {
 function makeSpan(text: string, style: Omit<StyledSpan, "text">): StyledSpan {
   const span: StyledSpan = { text: unescape(text) };
   if (style.bold) span.bold = true;
+  if (style.dim) span.dim = true;
   if (style.fg) span.fg = style.fg;
   if (style.bg) span.bg = style.bg;
   return span;
@@ -218,12 +226,13 @@ function makeSpan(text: string, style: Omit<StyledSpan, "text">): StyledSpan {
 function matchesEntry(a: StyleEntry, b: StyleEntry): boolean {
   if (a.origin !== "tag") return false;
   if (a.type !== b.type) return false;
-  if (a.type === "bold") return true;
+  if (a.type === "bold" || a.type === "dim") return true;
   return (a as { color: string }).color === (b as { color: string }).color;
 }
 
 function parseTag(tag: string): StyleEntry | null {
   if (tag === "bold") return { type: "bold", origin: "tag" };
+  if (tag === "dim") return { type: "dim", origin: "tag" };
   if (tag.endsWith("-fg")) return { type: "fg", color: tag.slice(0, -3), origin: "tag" };
   if (tag.endsWith("-bg")) return { type: "bg", color: tag.slice(0, -3), origin: "tag" };
   return null;

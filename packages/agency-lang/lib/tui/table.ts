@@ -14,7 +14,7 @@ const HEADER_FG = "gray";
 const SORTED_HEADER_FG = "bright-white";
 const SORT_ARROWS = { asc: "▲", desc: "▼" } as const;
 
-export type CellStyle = Pick<Style, "fg" | "bg" | "bold">;
+export type CellStyle = Pick<Style, "fg" | "bg" | "bold" | "dim">;
 
 export type TableColumn<Row> = {
   key: string;

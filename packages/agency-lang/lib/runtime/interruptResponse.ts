@@ -7,8 +7,14 @@
 // names, so existing `import { approve, reject } from "./interrupts.js"` keeps
 // working.
 
-export type InterruptApprove = { type: "approve"; value?: any };
-export type InterruptReject = { type: "reject"; value?: any };
+/** Who made a handler's decision, when the handler knows. The runtime only
+ * sees handler functions; a handler that consults a policy file or asks a
+ * person at a terminal tags its verdict so the statelog can say "policy" or
+ * "user" instead of the uninformative "handler". */
+export type DecisionSource = "policy" | "user";
+
+export type InterruptApprove = { type: "approve"; value?: any; decidedBy?: DecisionSource };
+export type InterruptReject = { type: "reject"; value?: any; decidedBy?: DecisionSource };
 export type InterruptResponse = InterruptApprove | InterruptReject;
 
 export function approve(value?: any): InterruptResponse {

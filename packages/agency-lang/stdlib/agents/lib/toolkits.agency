@@ -72,12 +72,17 @@ export def readOnlyFileTools(): any[] {
   """
   Return tools that inspect the file system without changing it: read, list,
   glob, and grep, resolved against the agent working directory.
+
+  grep honours .gitignore, and the setting is locked by partial application
+  so the model never sees the parameter: a search over a project should not
+  return hits in generated files, and a model that could turn the filter off
+  would do so the first time a build artifact looked relevant.
   """
   return [
     read.partial(useAgentCwd: true),
     ls.partial(useAgentCwd: true),
     glob.partial(useAgentCwd: true),
-    grep.partial(useAgentCwd: true),
+    grep.partial(useAgentCwd: true, respectGitignore: true),
   ]
 }
 

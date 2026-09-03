@@ -43,8 +43,8 @@ function formatMessage(msg: ConvoMessage): string[] {
   const text = contentText(msg.content);
   if (text !== undefined && text.length > 0) {
     const [first, ...rest] = escapeControls(text).split("\n");
-    lines.push(`${prefix} ${first}`);
-    for (const line of rest) lines.push(`  ${line}`);
+    lines.push(`${prefix} ${styleBody(role, first)}`);
+    for (const line of rest) lines.push(`  ${styleBody(role, line)}`);
   }
   const toolCalls = msg.toolCalls ?? msg.tool_calls ?? [];
   for (const tc of toolCalls) {
@@ -56,6 +56,15 @@ function formatMessage(msg: ConvoMessage): string[] {
     lines.push(`${prefix}`);
   }
   return lines;
+}
+
+// System and user message bodies get a distinct color so they stand
+// out from assistant/tool text; the role tag itself (from formatRole)
+// is unaffected.
+function styleBody(role: string, text: string): string {
+  if (role === "system") return color.dim(text);
+  if (role === "user") return color.cyan(text);
+  return text;
 }
 
 function formatRole(role: string, msg: ConvoMessage): string {

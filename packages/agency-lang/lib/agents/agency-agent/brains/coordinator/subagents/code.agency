@@ -134,6 +134,18 @@ export def setCodeOneShot(oneShot: boolean) {
   _oneShot = oneShot
 }
 
+// The project context block (date, cwd, AGENTS.md), set by the coordinator
+// before the first dispatch. The prompt used to ask the model to read
+// AGENTS.md itself; across two dispatches in trace mL0SvY it never did,
+// and ran `pnpm run fmt:ts` from the wrong directory when the file it
+// skipped named the right one. The harness has already read the file, so
+// it hands the text over instead of hoping.
+let _grounding = ""
+
+export def setCodeGrounding(grounding: string) {
+  _grounding = grounding
+}
+
 // only add system message the first time
 let _first = true
 
@@ -533,7 +545,7 @@ def converse(
   thread(label: "code", session: "code") {
     setMemoryId("code")
     if (_first) {
-      let sys = codeSysPrompt
+      let sys = "${codeSysPrompt}${_grounding}"
       if (getSearchBackend() != "off") {
         sys = "${sys}\n\n${WEB_SEARCH_NOTE}"
       }

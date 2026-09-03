@@ -16,6 +16,88 @@ import type { InterruptResponse } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 
+describe("interruptWithHandlers resolvedBy attribution (a handler that tags its verdict)", () => {
+  const makeCtx = (handlers: any[]): RuntimeContext<any> => {
+    const ctx = new RuntimeContext({
+      statelogConfig: {
+        host: "",
+        apiKey: "",
+        projectId: "",
+        debugMode: false,
+        observability: false,
+      },
+      smoltalkDefaults: {},
+      dirname: process.cwd(),
+    });
+    ctx.handlers = handlers.map((fn: any) => ({ fn, liveGuardIds: [] }));
+    return ctx;
+  };
+
+  it("an approval tagged decidedBy policy is resolvedBy policy, and the tag is on the handlerDecision", async () => {
+    const ctx = makeCtx([async () => ({ type: "approve", decidedBy: "policy" })]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+    const decided = vi.spyOn(ctx.statelogClient, "handlerDecision");
+
+    const verdict = await interruptWithHandlers("std::read", "m", {}, "o", ctx, new StateStack());
+    expect(verdict).toEqual({ type: "approve", value: undefined });
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "approved", resolvedBy: "policy" }),
+    );
+    expect(decided).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: "approve", decidedBy: "policy" }),
+    );
+  });
+
+  it("a rejection tagged decidedBy user is resolvedBy user", async () => {
+    const ctx = makeCtx([async () => ({ type: "reject", value: "no", decidedBy: "user" })]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    const verdict = await interruptWithHandlers("std::bash", "m", {}, "o", ctx, new StateStack());
+    expect(verdict).toEqual({ type: "reject", value: "no" });
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "rejected", resolvedBy: "user" }),
+    );
+  });
+
+  it("an untagged approval stays resolvedBy handler", async () => {
+    const ctx = makeCtx([async () => ({ type: "approve" })]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    await interruptWithHandlers("std::read", "m", {}, "o", ctx, new StateStack());
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "approved", resolvedBy: "handler" }),
+    );
+  });
+
+  it("with several approving handlers, the outermost tag wins", async () => {
+    // Handlers run innermost (last registered) first.
+    const ctx = makeCtx([
+      async () => ({ type: "approve", decidedBy: "policy" }),
+      async () => ({ type: "approve" }),
+    ]);
+    const resolved = vi.spyOn(ctx.statelogClient, "interruptResolved");
+
+    await interruptWithHandlers("std::read", "m", {}, "o", ctx, new StateStack());
+    expect(resolved).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "approved", resolvedBy: "policy" }),
+    );
+  });
+
+  it("mergeChainOutcomes keeps the tag, preferring the outer segment's", () => {
+    const inner = { kind: "approved", value: 1, decidedBy: "policy" } as const;
+    const outer = { kind: "approved", value: 2, decidedBy: "user" } as const;
+    expect(mergeChainOutcomes("std::read", inner, outer)).toEqual(
+      expect.objectContaining({ kind: "approved", decidedBy: "user" }),
+    );
+    expect(mergeChainOutcomes("std::read", inner, { kind: "approved", value: 2 })).toEqual(
+      expect.objectContaining({ kind: "approved", decidedBy: "policy" }),
+    );
+    expect(
+      mergeChainOutcomes("std::read", { kind: "rejected", value: "x", decidedBy: "user" }, outer),
+    ).toEqual(expect.objectContaining({ kind: "rejected", decidedBy: "user" }));
+  });
+});
+
 describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
   const originalSend = process.send;
   const originalIpc = process.env.AGENCY_IPC;

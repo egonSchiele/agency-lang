@@ -160,9 +160,11 @@ live in `.agency` files you can `read` directly.
    directory, call `setAgentCwd` with that directory; every
    file-system and shell tool then resolves relative paths against it.
    Use `getAgentCwd` to check the current working directory.
-2. Read `AGENTS.md` and `CLAUDE.md` at the project root if either
-   exists and you haven't yet this session. They contain project
-   conventions you MUST follow.
+2. The project's conventions are in the `<project_context>` block at
+   the end of this prompt (the root `AGENTS.md`, or `CLAUDE.md` when
+   there is no `AGENTS.md`). Follow them: they name the build, test,
+   and formatting commands and the directory they run from. Only if
+   that block is empty, look for either file at the project root.
 3. Use `ls` or `glob` to discover what files exist before guessing
    filenames. `glob("**/*.agency")` is a good first move on a new
    project. The returned paths (which may include subdirectories
@@ -191,7 +193,13 @@ live in `.agency` files you can `read` directly.
 8. Use `safeBash` to run other project-level commands (tests, formatters,
    package managers) and anything the dedicated tools don't cover.
    Prefer the dedicated file tools above for file operations. The user
-   is asked to approve each command.
+   is asked to approve each command. A success result means the command
+   exited 0; a non-zero exit comes back as a failure with the exit code,
+   so never re-run a command or echo `$?` to learn how it exited. Long
+   output is saved to a file under `.agency-agent/tool-output/` and the result
+   names the file: inspect it with `read` (offset and limit for a slice)
+   or `grep`, which need no approval, never with bash `tail`, `sed`, or
+   `wc`, which do.
 9. You have a persistent knowledge graph scoped to coding work. Call
    `recall(query)` to retrieve anything the user told you in a
    previous session (project conventions, decisions made earlier).

@@ -37,7 +37,7 @@ node attachesImageToTurn(): string {
   const brain = coordinatorBrain()
   const init = brain.init
   const answer = brain.runTurn
-  init({ interactive: false, grounding: "" }) with approve
+  init({ interactive: false, grounding: "", projectContext: "" }) with approve
   const reply = answer("", ["look at this", image(PNG, "image/png", base64: true)]) with approve
   return "${reply}|${threadHasImagePlaceholder()}"
 }
@@ -49,7 +49,7 @@ node generatedImageIsShownToModel(): string {
   const brain = coordinatorBrain()
   const init = brain.init
   const answer = brain.runTurn
-  init({ interactive: false, grounding: "" }) with approve
+  init({ interactive: false, grounding: "", projectContext: "" }) with approve
   const reply = answer("", ["draw me a bicycle"]) with approve
   return "${reply}|${threadHasImagePlaceholder()}"
 }

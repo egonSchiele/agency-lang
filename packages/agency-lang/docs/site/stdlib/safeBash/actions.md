@@ -41,7 +41,7 @@ export type Effect =
   | { name: "std::git::diff"; payload: GitDiffPayload }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L39))
 
 ### WritePayload
 
@@ -54,7 +54,7 @@ export type WritePayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L46))
 
 ### GitDiffPayload
 
@@ -68,7 +68,7 @@ export type GitDiffPayload = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L60))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L72))
 
 ### Execution
 
@@ -94,7 +94,7 @@ export type Execution =
   | RefuseExec
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L86))
 
 ### BashExec
 
@@ -105,7 +105,7 @@ export type BashExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L88))
 
 ### EchoExec
 
@@ -116,7 +116,7 @@ export type EchoExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L81))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L93))
 
 ### AgencyExec
 
@@ -130,7 +130,7 @@ export type AgencyExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L99))
 
 ### WriteExec
 
@@ -144,7 +144,7 @@ export type WriteExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L104))
 
 ### RefuseExec
 
@@ -155,7 +155,7 @@ export type RefuseExec = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L112))
 
 ### Plan
 
@@ -169,7 +169,7 @@ export type Plan = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L106))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L118))
 
 ## Constants
 
@@ -179,7 +179,15 @@ export type Plan = {
 export static const MAX_STDOUT_LEN = 2000
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L20))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L22))
+
+### TOOL_OUTPUT_DIR
+
+```ts
+export static const TOOL_OUTPUT_DIR = ".agency-agent/tool-output"
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L32))
 
 ## Functions
 
@@ -200,7 +208,7 @@ Both plan sides derive from one WritePayload, so payload/execution
 
 **Returns:** [Effect](#effect)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L55))
 
 ### writeExecution
 
@@ -216,7 +224,7 @@ writeExecution(write: WritePayload): WriteExec
 
 **Returns:** [WriteExec](#writeexec)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L62))
 
 ### runBash
 
@@ -245,26 +253,39 @@ Run a command string through bash and return what it printed.
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L123))
 
-### truncate
+### keepOutput
 
 ```ts
-truncate(text: string): string
+keepOutput(text: string, cwd: string, exitCode: number): string
 ```
 
-Cap output length. Raw output with no bound is a context-window hazard,
-  and a visible loss of fidelity beats an invisible one.
+What the model gets back for a command's output.
+
+  Short output comes back exactly as printed. Long output is saved to a
+  file under `cwd` and replaced by a preview: the exit code, the first and
+  last lines, the file's path, and which tools read it. Raw output with no
+  bound is a context-window hazard, but cutting it off was worse: the
+  model could not see whether a build finished, so it re-ran the build
+  through bash pipes to find out, and every one of those needed approval
+  (trace mL0SvY, 2026-09-03). The file goes under `cwd` because that is
+  where the agent's read tools are approved without asking.
+
+  If the file cannot be written, the output is cut at the cap with a
+  visible marker, the way it always was.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | text | `string` |  |
+| cwd | `string` |  |
+| exitCode | `number` |  |
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L160))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L172))
 
 ### runWrite
 
@@ -287,4 +308,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L171))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L229))

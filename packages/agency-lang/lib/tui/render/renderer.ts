@@ -90,6 +90,7 @@ function renderTextContent(
   bg?: string,
   bold?: boolean,
   fill?: string,
+  dim?: boolean,
 ): Cell[][] {
   const lines = content.split("\n");
   // Clamp so that scrolling past the end stops at the last screenful, and
@@ -121,6 +122,7 @@ function renderTextContent(
           fg: span.fg ?? fg,
           bg: span.bg ?? bg,
           bold: span.bold ?? bold,
+          dim: span.dim ?? dim,
         });
       }
     }
@@ -182,6 +184,7 @@ function renderListItemRows(
           fg: span.fg ?? itemFg,
           bg: span.bg ?? itemBg,
           bold: span.bold,
+          dim: span.dim,
         });
       }
     }
@@ -365,6 +368,7 @@ export function render(positioned: PositionedElement, parentScrollOffset = 0): F
       style.bg,
       style.bold,
       style.fill,
+      style.dim,
     );
   } else if (positioned.type === "list" && positioned.items) {
     innerContent = renderListContent(

@@ -1,4 +1,4 @@
-import { remove } from "std::fs"
+import { mkdir, remove } from "std::fs"
 import {
   bashParser,
   isRefused,
@@ -6,7 +6,9 @@ import {
   planFor,
   safeBash,
   resolveCwd,
+  TOOL_OUTPUT_DIR,
  } from "std::safeBash"
+import { glob } from "std::shell"
 
 def refusedFor(source: string): any {
   const parsed = bashParser(source)
@@ -263,18 +265,38 @@ node quotedRedirectTarget() {
   return writePlanDetail("echo hi > \"my file.txt\"")
 }
 
-node longOutputIsTruncated() {
-  // The only new behavior with no coverage: deleting the cap, or the
-  // marker, survives every other test. A >2000-char literal goes through
-  // the shell-free path, which truncates too — so this also pins the
-  // consistency between that path and the bash path.
+node longOutputIsSavedToFile() {
+  // A >2000-char literal goes through the shell-free path, which keeps
+  // output the same way the bash path does — so this also pins the
+  // consistency between the two. The scratch dir is the command's cwd, so
+  // the saved file lands under it and the whole thing can be removed.
+  const dir = "tests/agency/safebash-spill-scratch"
+  mkdir(dir) with approve
   const chars = ["x" for i in range(2500)]
   const long = chars.join("")
-  const result = safeBash("echo ${long}")
+  const result = safeBash("echo ${long}", cwd: dir)
   if (result is failure(why)) {
     return "FAILED"
   }
-  return [result.value.length, result.value.endsWith("\n[truncated]")]
+  const notice = result.value
+  const saved = glob("*.log", "${dir}/${TOOL_OUTPUT_DIR}") with approve
+  let savedLength = -1
+  if (saved is success(files)) {
+    if (files.length == 1) {
+      const contents = read(files[0], "${dir}/${TOOL_OUTPUT_DIR}") with approve
+      if (contents is success(text)) {
+        savedLength = text.length
+      }
+    }
+  }
+  remove(dir) with approve
+  return [
+    notice.length < 2000,
+    notice.includes("Command exited with code 0"),
+    notice.includes("full output saved to ${TOOL_OUTPUT_DIR}/"),
+    notice.includes("use the read tool"),
+    savedLength,
+  ]
 }
 
 // --- resolved redirect targets (contained-filenames spec) ---

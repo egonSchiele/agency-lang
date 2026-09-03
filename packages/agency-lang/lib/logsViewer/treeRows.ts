@@ -205,7 +205,13 @@ export function llmCallSpanChildren(span: TreeNode, childDepth = 0, cols?: numbe
 // the limit. Words longer than `width` are split mid-word. Empty
 // strings return [""] so a blank convoLine still occupies a row.
 export function wrapLine(text: string, width: number): string[] {
-  if (width <= 0 || text.length <= width) return [text];
+  const plain = text.replace(SGR_PATTERN, "");
+  if (width <= 0 || plain.length <= width) return [text];
+  if (plain.length === text.length) return wrapPlain(text, width);
+  return restyleChunks(text, wrapPlain(plain, width));
+}
+
+function wrapPlain(text: string, width: number): string[] {
   const out: string[] = [];
   let rest = text;
   while (rest.length > width) {
@@ -219,6 +225,71 @@ export function wrapLine(text: string, width: number): string[] {
   }
   if (rest.length > 0) out.push(rest);
   return out;
+}
+
+// An ANSI SGR sequence: `ESC[` params `m`. Zero columns wide.
+// eslint-disable-next-line no-control-regex
+const SGR_PATTERN = /\x1b\[[\d;]*m/g;
+const SGR_RESET = "\x1b[0m";
+
+// Walk the styled text alongside the chunks of its plain form, so each
+// chunk gets the escapes that fell inside it, opens with whatever style
+// was active when it began, and closes with a reset. Without this a dim
+// or colored line that wraps kept its style on the first row only, and
+// the escape bytes were counted as columns (trace mL0SvY, 2026-09-03).
+function restyleChunks(styled: string, plainChunks: string[]): string[] {
+  const out: string[] = [];
+  let active: string[] = [];
+  let pos = 0;
+  for (const chunk of plainChunks) {
+    let visible = 0;
+    let body = "";
+    const opening = active.join("");
+    // Skip the whitespace wrapPlain dropped between chunks.
+    while (pos < styled.length && visible === 0 && chunk.length > 0) {
+      const escape = escapeAt(styled, pos);
+      if (escape) {
+        active = applyEscape(active, escape);
+        body += escape;
+        pos += escape.length;
+      } else if (styled[pos] === " " && chunk[0] !== " ") {
+        pos++;
+      } else {
+        break;
+      }
+    }
+    // Escapes are zero-width, so one sitting right after the last visible
+    // character of a chunk (typically the final reset) belongs to it too.
+    while (pos < styled.length && (visible < chunk.length || escapeAt(styled, pos))) {
+      const escape = escapeAt(styled, pos);
+      if (escape) {
+        active = applyEscape(active, escape);
+        body += escape;
+        pos += escape.length;
+      } else {
+        body += styled[pos];
+        visible++;
+        pos++;
+      }
+    }
+    const closing = active.length > 0 ? SGR_RESET : "";
+    out.push(`${opening}${body}${closing}`);
+  }
+  return out;
+}
+
+function escapeAt(text: string, pos: number): string | null {
+  if (text.charCodeAt(pos) !== 0x1b) return null;
+  const re = new RegExp(SGR_PATTERN.source, "y");
+  re.lastIndex = pos;
+  const m = re.exec(text);
+  return m ? m[0] : null;
+}
+
+// A reset empties the active set; anything else joins it.
+function applyEscape(active: string[], escape: string): string[] {
+  if (escape === SGR_RESET || escape === "\x1b[m") return [];
+  return [...active, escape];
 }
 
 // Pretty-print the leaf event payload and turn it into one synthetic

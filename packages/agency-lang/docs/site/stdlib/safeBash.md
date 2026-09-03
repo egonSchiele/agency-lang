@@ -381,6 +381,14 @@ Run a shell command, asking the narrowest question that describes it.
   approved, the whole string goes to bash in one call, so bash does the
   control flow and produces the output.
 
+  A success result means the command exited 0, and its value is the
+  command's stdout. A non-zero exit is a failure whose message carries
+  the exit code, stdout, and stderr. There is no need to echo `$?` or
+  re-run a command to learn how it exited. Output longer than a couple of
+  thousand characters is saved to a file under `.agency-agent/tool-output/` in
+  the working directory and replaced by a preview that names the file;
+  read the file with the read tool, not with bash.
+
   @param command - One or more bash commands
   @param cwd - Working directory. Defaults to the agent working directory.
 

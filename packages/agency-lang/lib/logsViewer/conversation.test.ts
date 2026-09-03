@@ -8,7 +8,12 @@ describe("formatConversation", () => {
       { role: "user", content: "hi" },
       { role: "assistant", content: "hello" },
     ]);
-    expect(lines).toEqual([`${color.green("[user]")} hi`, `${color.green("[assistant]")} hello`]);
+    // A user body is cyan and a system body is dim, so both stand apart
+    // from assistant and tool text when scrolling a long transcript.
+    expect(lines).toEqual([
+      `${color.green("[user]")} ${color.cyan("hi")}`,
+      `${color.green("[assistant]")} hello`,
+    ]);
   });
 
   it("formats an assistant tool call (camelCase shape)", () => {
@@ -23,7 +28,7 @@ describe("formatConversation", () => {
       { role: "assistant", content: "Hello, Alice!" },
     ]);
     expect(lines).toEqual([
-      `${color.green("[user]")} Greet Alice using the greet tool`,
+      `${color.green("[user]")} ${color.cyan("Greet Alice using the greet tool")}`,
       `${color.green("[assistant]")} tool call: greet({"name":"Alice"})`,
       `${color.green("[tool: greet]")} Hello, Alice!`,
       `${color.green("[assistant]")} Hello, Alice!`,
@@ -55,7 +60,7 @@ describe("formatConversation", () => {
         ],
       },
     ]);
-    expect(lines).toEqual([`${color.green("[user]")} first second`]);
+    expect(lines).toEqual([`${color.green("[user]")} ${color.cyan("first second")}`]);
   });
 
   it("renders a non-content-part array (e.g. a tool result) as JSON", () => {
@@ -82,10 +87,10 @@ describe("formatConversation", () => {
       { role: "tool", name: "read", content: "line 1\nline 2", tool_call_id: "x" },
     ]);
     expect(lines).toEqual([
-      `${color.green("[system]")} You are helpful.`,
-      "  Be brief.",
-      "  ",
-      "  Answer in English.",
+      `${color.green("[system]")} ${color.dim("You are helpful.")}`,
+      `  ${color.dim("Be brief.")}`,
+      `  ${color.dim("")}`,
+      `  ${color.dim("Answer in English.")}`,
       `${color.green("[tool: read]")} line 1`,
       "  line 2",
     ]);

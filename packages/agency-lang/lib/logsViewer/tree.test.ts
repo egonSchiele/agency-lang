@@ -194,6 +194,82 @@ describe("buildForest", () => {
     expect(s1.duration).toBeCloseTo(2000, 0);
   });
 
+  it("reports working time as the turns minus prompts a person answered", () => {
+    // A 10-minute session: two turns of 60s and 30s, a 20s approval
+    // prompt inside the first, and the rest the user typing.
+    const B = "2026-05-16T00:";
+    const forest = buildForest([
+      evt({ span_id: "s1", data: { type: "agentStart", timestamp: `${B}00:00.000Z` } }),
+      evt({ span_id: "s1", data: { type: "turnStart", timestamp: `${B}00:01.000Z` } }),
+      evt({
+        span_id: "s1",
+        data: {
+          type: "handlerDecision",
+          timestamp: `${B}00:30.000Z`,
+          decision: "approve",
+          decidedBy: "user",
+          timeTaken: 20000,
+        },
+      }),
+      evt({
+        span_id: "s1",
+        data: {
+          type: "handlerDecision",
+          timestamp: `${B}00:31.000Z`,
+          decision: "approve",
+          decidedBy: "policy",
+          timeTaken: 5,
+        },
+      }),
+      evt({
+        span_id: "s1",
+        data: { type: "turnEnd", timestamp: `${B}01:01.000Z`, timeTaken: 60000 },
+      }),
+      evt({ span_id: "s1", data: { type: "turnStart", timestamp: `${B}08:00.000Z` } }),
+      evt({
+        span_id: "s1",
+        data: { type: "turnEnd", timestamp: `${B}08:30.000Z`, timeTaken: 30000 },
+      }),
+      evt({ span_id: "s1", data: { type: "agentEnd", timestamp: `${B}10:00.000Z` } }),
+    ]);
+    const s1 = forest[0].children[0];
+    expect(s1.duration).toBe(600000);
+    expect(s1.active).toBe(70000);
+    expect(s1.waiting).toBe(530000);
+  });
+
+  it("without turn markers, working time is the envelope minus user prompts", () => {
+    const B = "2026-05-16T00:";
+    const forest = buildForest([
+      evt({ span_id: "s1", data: { type: "agentStart", timestamp: `${B}00:00.000Z` } }),
+      evt({
+        span_id: "s1",
+        data: {
+          type: "handlerDecision",
+          timestamp: `${B}00:40.000Z`,
+          decision: "none",
+          decidedBy: "user",
+          timeTaken: 30000,
+        },
+      }),
+      evt({ span_id: "s1", data: { type: "agentEnd", timestamp: `${B}01:00.000Z` } }),
+    ]);
+    const s1 = forest[0].children[0];
+    expect(s1.duration).toBe(60000);
+    expect(s1.active).toBe(30000);
+    expect(s1.waiting).toBe(30000);
+  });
+
+  it("a span with no prompts and no turns shows no waiting time", () => {
+    const forest = buildForest([
+      evt({ span_id: "s1", data: { type: "agentStart", timestamp: "2026-05-16T00:00:00.000Z" } }),
+      evt({ span_id: "s1", data: { type: "agentEnd", timestamp: "2026-05-16T00:00:04.000Z" } }),
+    ]);
+    const s1 = forest[0].children[0];
+    expect(s1.active).toBe(4000);
+    expect(s1.waiting).toBeUndefined();
+  });
+
   it("computes duration from first to last event timestamp", () => {
     const forest = buildForest([
       evt({

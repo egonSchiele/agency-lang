@@ -345,6 +345,27 @@ function aggregateMetrics(node: TreeNode): void {
     node.duration = maxEnd - minStart;
   }
 
+  // Working time. A person answering a prompt is not the agent working,
+  // and neither is the gap between one turn's reply and the next
+  // message, so a session's duration was mostly the user's own time.
+  const waiting = sum(
+    leaves
+      .filter((l) => l.event!.data.type === "handlerDecision" && l.event!.data.decidedBy === "user")
+      .map((l) => (typeof l.event!.data.timeTaken === "number" ? l.event!.data.timeTaken : 0)),
+  );
+  const turnEnds = leaves.filter((l) => l.event!.data.type === "turnEnd");
+  const inTurns = sum(
+    turnEnds.map((l) =>
+      typeof l.event!.data.timeTaken === "number" ? l.event!.data.timeTaken : 0,
+    ),
+  );
+  const busy = turnEnds.length > 0 ? inTurns : node.duration;
+  if (busy !== undefined) {
+    node.active = Math.max(0, busy - waiting);
+    if (node.active !== node.duration)
+      node.waiting = Math.max(0, (node.duration ?? 0) - node.active);
+  }
+
   if (node.nodeKind === "span") {
     node.summary = summarizeSpan(node);
   }

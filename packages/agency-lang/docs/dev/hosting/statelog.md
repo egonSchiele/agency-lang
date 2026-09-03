@@ -178,6 +178,17 @@ Emitted at bootstrap when config names the provider, and from
 Memory: `memoryRemember`, `memoryRecall`, `memoryForget`, `memoryCompaction`.
 
 Interrupts: `interruptThrown`, `handlerDecision`, `interruptResolved`.
+`interruptResolved.resolvedBy` is `"policy"` or `"user"` when the deciding
+handler tagged its verdict (the CLI policy handler does), `"handler"` for a
+plain handler function, `"ipc"` when a parent process took part, and null
+on the chain-outcome event of an interrupt that surfaced to a person.
+`handlerDecision.decidedBy` carries the same tag per handler, and
+`handlerDecision.timeTaken` is how long that handler ran, which for the
+CLI policy handler is how long the person took to answer.
+
+Turns: `turnStart`, `turnEnd` (`timeTaken`), emitted by the agency
+agent's turn loop around each user turn. The logs viewer sums them for a
+session's working time instead of the session's wall clock.
 
 Checkpoints: `checkpointCreated`, `checkpointRestored`.
 

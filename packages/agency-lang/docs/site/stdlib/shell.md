@@ -265,10 +265,11 @@ grep(
   wholeWord: boolean = false,
   filesOnly: boolean = false,
   invert: boolean = false,
+  respectGitignore: boolean = true,
 ): Result
 ```
 
-Search files under a directory for a regular expression, like `grep -rn`. The search is always recursive and every match comes back with its file path, line number, and line text. Skips node_modules, .git, dist, build. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex or the directory cannot be read.
+Search files under a directory for a regular expression, like `grep -rn`. The search is always recursive and every match comes back with its file path, line number, and line text. Skips node_modules, .git, dist, build, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex or the directory cannot be read.
 
   Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern.
 
@@ -282,6 +283,7 @@ Search files under a directory for a regular expression, like `grep -rn`. The se
   @param wholeWord - Match only where the pattern is a whole word (grep -w)
   @param filesOnly - Return just the paths of the files with a match, one entry per file, instead of the matching lines (grep -l)
   @param invert - Return the lines that do NOT match (grep -v)
+  @param respectGitignore - Skip files and directories that the .gitignore files under dir ignore. True by default; pass false to search build output too.
 
 The `flags` string is translated before it reaches the RegExp, so a caller
 who writes grep-style letters gets a search or a message naming the parameter
@@ -302,6 +304,7 @@ to use, never a RegExp constructor error. The rule table is in
 | wholeWord | `boolean` | false |
 | filesOnly | `boolean` | false |
 | invert | `boolean` | false |
+| respectGitignore | `boolean` | true |
 
 **Returns:** `Result`
 
@@ -343,7 +346,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the p
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L290))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L292))
 
 ### stat
 
@@ -377,7 +380,7 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 
 **Returns:** `StatInfo`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L325))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L327))
 
 ### exists
 
@@ -408,7 +411,7 @@ Return true if a file or directory exists at the given path. Probing a path outs
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L347))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L349))
 
 ### which
 
@@ -428,4 +431,4 @@ Locate an executable in PATH and return its absolute path, or an empty string if
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L367))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L369))

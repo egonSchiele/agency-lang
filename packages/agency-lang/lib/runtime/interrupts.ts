@@ -3,7 +3,12 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
-import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
+import type {
+  DecisionSource,
+  InterruptApprove,
+  InterruptReject,
+  InterruptResponse,
+} from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
@@ -172,8 +177,8 @@ export function isApproved(obj: any): obj is Approved {
 }
 
 export type HandlerChainOutcome =
-  | { kind: "rejected"; value: any }
-  | { kind: "approved"; value: any }
+  | { kind: "rejected"; value: any; decidedBy?: DecisionSource }
+  | { kind: "approved"; value: any; decidedBy?: DecisionSource }
   | { kind: "propagated" }
   | { kind: "noResponse" };
 
@@ -251,6 +256,8 @@ async function runHandlerChain(
     // For effects with no specific merge the default reproduces the
     // historical behavior exactly: the outermost approval overwrites.
     const approvals: any[] = [];
+    // The source tag of the outermost approving handler that carried one.
+    let approvedBy: DecisionSource | undefined;
     let hasPropagation = false;
     const executing = executingHandlers();
     const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
@@ -291,6 +298,7 @@ async function runHandlerChain(
         // Treat handler execution as atomic for the debugger — same as LLM tool calls.
         ctx.enterToolCall();
         let result: any;
+        const handlerStartedAt = Date.now();
         try {
           result = await runAsHandler(entry, () => entry.fn(interruptObj));
         } finally {
@@ -323,7 +331,23 @@ async function runHandlerChain(
         // as a throwing handler behaved before the value transport. Without
         // this, the aborted value would hit the invalid-shape error below
         // and the abort's cause would be swallowed.
+        const timeTaken = Date.now() - handlerStartedAt;
         if (isAborted(result)) {
+          // The handler never answered. Record that it ran, and for how
+          // long: a prompt a person cancelled after minutes is still
+          // minutes the agent spent waiting on them.
+          ctx.statelogClient.handlerDecision({
+            interruptId,
+            handlerIndex: i,
+            decision: "none",
+            decidedBy: abortedByUser(result.cause) ? "user" : undefined,
+            timeTaken,
+            interrupt: {
+              effect: interruptObj.effect,
+              message: interruptObj.message,
+              data: interruptObj.data,
+            },
+          });
           throw result.toError();
         }
         // A handler that returns nothing means "pass". Normalize here so
@@ -348,6 +372,7 @@ async function runHandlerChain(
             interruptId,
             handlerIndex: i,
             decision: "pass",
+            timeTaken,
             interrupt: interruptSummary,
           });
           continue;
@@ -365,15 +390,18 @@ async function runHandlerChain(
             handlerIndex: i,
             decision: "reject",
             value: result.value,
+            decidedBy: result.decidedBy,
+            timeTaken,
             interrupt: interruptSummary,
           });
-          return { kind: "rejected", value: result.value };
+          return { kind: "rejected", value: result.value, decidedBy: result.decidedBy };
         }
         if (result.type === "propagate") {
           ctx.statelogClient.handlerDecision({
             interruptId,
             handlerIndex: i,
             decision: "propagate",
+            timeTaken,
             interrupt: interruptSummary,
           });
           hasPropagation = true;
@@ -385,9 +413,12 @@ async function runHandlerChain(
             handlerIndex: i,
             decision: "approve",
             value: result.value,
+            decidedBy: result.decidedBy,
+            timeTaken,
             interrupt: interruptSummary,
           });
           approvals.push(result.value);
+          if (result.decidedBy) approvedBy = result.decidedBy;
           continue;
         }
         throw new Error(
@@ -402,6 +433,7 @@ async function runHandlerChain(
       return {
         kind: "approved",
         value: approvals.reduce(mergeFor(interruptObj.effect)),
+        decidedBy: approvedBy,
       };
     }
     return { kind: "noResponse" };
@@ -429,9 +461,11 @@ export function mergeChainOutcomes(
   }
   if (outer.kind === "approved") {
     const innerValue = inner.kind === "approved" ? inner.value : undefined;
+    const innerBy = inner.kind === "approved" ? inner.decidedBy : undefined;
     return {
       kind: "approved",
       value: mergeForIpc(effect)(innerValue, outer.value),
+      decidedBy: outer.decidedBy ?? innerBy,
     };
   }
   if (inner.kind === "approved") return inner;
@@ -457,6 +491,12 @@ export function mergeChainOutcomes(
  * `renderVerdict` is the sole emitter, so relay hops (a parent process
  * evaluating a child's interrupt) contribute only handlerDecision events
  * to the shared trace. */
+/** A cancel or kill from the person at the terminal, as opposed to a
+ * guard trip or a programmatic abort. */
+function abortedByUser(cause: { kind: string } | undefined): boolean {
+  return cause?.kind === "userKill" || cause?.kind === "userInterrupt";
+}
+
 export async function gatherChainOutcome(
   interruptObj: InterruptInfo,
   ctx: RuntimeContext<any>,
@@ -500,7 +540,9 @@ function renderVerdict(
     ctx.statelogClient.interruptResolved({
       interruptId,
       outcome: "rejected",
-      resolvedBy,
+      // A handler that knows it was a policy rule or a person says so;
+      // otherwise all the runtime can say is which mechanism decided.
+      resolvedBy: merged.decidedBy ?? resolvedBy,
       interrupt: interruptSummary,
     });
     return { type: "reject", value: merged.value };
@@ -509,7 +551,7 @@ function renderVerdict(
     ctx.statelogClient.interruptResolved({
       interruptId,
       outcome: "approved",
-      resolvedBy,
+      resolvedBy: merged.decidedBy ?? resolvedBy,
       interrupt: interruptSummary,
     });
     return { type: "approve", value: merged.value };

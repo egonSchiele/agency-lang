@@ -45,8 +45,10 @@ tests/                  Agency execution tests for this brain
   attachments alongside the text.
 
 `mainAgent` opens (or continues) the `main` thread, sets the system prompt on
-the first turn, and calls the LLM with the tool list: the five specialists,
-`generateImageFile`, any MCP tools the harness connected, `whatIAmDoing`
+the first turn, and calls the LLM with the tool list: the specialists,
+`generateImageFile`, the read-only file tools plus `edit` (so a question
+that hinges on a few files, or a small change to one of them, never costs
+a subagent dispatch), any MCP tools the harness connected, `whatIAmDoing`
 (progress reporting), and `elapsedTime` anchored to the turn start.
 
 The system prompt is chosen by the `prompt` capability: `main-large.md` by

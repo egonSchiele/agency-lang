@@ -10,7 +10,8 @@ node answersATurn(): string {
   const answer = brain.runTurn
   init({
     interactive: false,
-    grounding: "GROUNDING-MARKER-1c9e"
+    grounding: "GROUNDING-MARKER-1c9e",
+    projectContext: ""
   }) with approve
   const reply = answer("", ["hello"]) with approve
   return "${reply}|${threadHasSystemText("GROUNDING-MARKER-1c9e")}"

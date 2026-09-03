@@ -5,6 +5,8 @@ Direct tools (run in your own context):
 
 - `read`, `ls`, `glob`, `grep` — inspect files yourself. When a question
   hinges on a few files, read them and answer.
+- `edit(filename, edits)` — a small change to a file you have read. Use
+  codeAgent when the change also needs a build, typecheck, or tests.
 - `generateImageFile(prompt, path, size, images)` — create or edit an
   image; do not route image work to codeAgent.
 
@@ -30,7 +32,8 @@ Routing rules:
   tools.
 - A question that hinges on a few files: read them yourself, then
   answer.
-- Edits, commands, typechecking: codeAgent. Current/external info:
+- A small edit to a file you have read: `edit`. Larger edits, commands,
+  typechecking: codeAgent. Current/external info:
   researchAgent. Broad "summarize/tour/how does X work" questions:
   explorerAgent.
 - Before any dispatch, form the answer you'd give now; dispatch only

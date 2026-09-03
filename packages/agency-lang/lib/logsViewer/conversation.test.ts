@@ -116,6 +116,28 @@ describe("formatConversation", () => {
     ]);
   });
 
+  it("wraps a long tool-call row too", () => {
+    const lines = formatConversation(
+      [
+        {
+          role: "assistant",
+          toolCalls: [{ name: "grep", arguments: { pattern: "needle in a haystack" } }],
+        },
+      ],
+      30,
+    );
+    expect(lines.length).toBeGreaterThan(1);
+    // eslint-disable-next-line no-control-regex
+    const visible = lines.map((l) => l.replace(/\x1b\[[\d;]*m/g, ""));
+    for (const row of visible) expect(row.length).toBeLessThanOrEqual(30);
+    expect(
+      visible
+        .join("")
+        .replace(/^\[assistant\] /, "")
+        .replace(/  /g, " "),
+    ).toContain("tool call: grep(");
+  });
+
   it("emits a placeholder row for empty turns", () => {
     const lines = formatConversation([{ role: "assistant", content: null }]);
     expect(lines).toEqual([color.green("[assistant]")]);

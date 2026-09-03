@@ -51,6 +51,14 @@ describe("parseGitignore + isIgnored", () => {
     expect(isIgnored("/elsewhere/a.log", false, [file])).toBe(false);
   });
 
+  it("braces and extglob are literal, as in git", () => {
+    const file = parseGitignore(root, "*.{js,ts}\n+(a|b).log\n");
+    expect(isIgnored(at("x.js"), false, [file])).toBe(false);
+    expect(isIgnored(at("x.{js,ts}"), false, [file])).toBe(true);
+    expect(isIgnored(at("a.log"), false, [file])).toBe(false);
+    expect(isIgnored(at("+(a|b).log"), false, [file])).toBe(true);
+  });
+
   it("dotfiles match like any other name", () => {
     const file = parseGitignore(root, ".env\n");
     expect(isIgnored(at(".env"), false, [file])).toBe(true);

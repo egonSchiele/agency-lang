@@ -48,19 +48,7 @@ function formatMessage(msg: ConvoMessage, width?: number): string[] {
   if (text !== undefined && text.length > 0) {
     const bodyLines: string[] = [];
     for (const line of escapeControls(text).split("\n")) {
-      if (width === undefined) {
-        bodyLines.push(line);
-        continue;
-      }
-      // The first row of the body shares its width with the role tag;
-      // every row after it is indented by two.
-      const firstWidth = Math.max(1, width - (bodyLines.length === 0 ? label.length + 1 : 2));
-      const [first, ...more] = wrapLine(line, firstWidth);
-      bodyLines.push(first);
-      if (more.length > 0) {
-        const rest = line.slice(first.length).replace(/^ +/, "");
-        bodyLines.push(...wrapLine(rest, Math.max(1, width - 2)));
-      }
+      bodyLines.push(...wrapBody(line, width, bodyLines.length === 0 ? label : undefined));
     }
     const [first, ...rest] = bodyLines;
     lines.push(`${prefix} ${styleBody(role, first)}`);
@@ -68,7 +56,9 @@ function formatMessage(msg: ConvoMessage, width?: number): string[] {
   }
   const toolCalls = msg.toolCalls ?? msg.tool_calls ?? [];
   for (const tc of toolCalls) {
-    lines.push(`${prefix} tool call: ${formatToolCall(tc)}`);
+    const [first, ...rest] = wrapBody(`tool call: ${formatToolCall(tc)}`, width, label);
+    lines.push(`${prefix} ${first}`);
+    for (const line of rest) lines.push(`  ${line}`);
   }
   // Empty assistant turn with no text and no tool calls — still emit
   // a row so it's visible in the conversation.
@@ -76,6 +66,18 @@ function formatMessage(msg: ConvoMessage, width?: number): string[] {
     lines.push(`${prefix}`);
   }
   return lines;
+}
+
+// Wrap one line of body text to `width`. When `label` is given the first
+// row shares its width with the role tag; every row after it is indented
+// by two. Without a width the line comes back whole.
+function wrapBody(line: string, width: number | undefined, label: string | undefined): string[] {
+  if (width === undefined) return [line];
+  const firstWidth = Math.max(1, width - (label === undefined ? 2 : label.length + 1));
+  const [first, ...more] = wrapLine(line, firstWidth);
+  if (more.length === 0) return [first];
+  const rest = line.slice(first.length).replace(/^ +/, "");
+  return [first, ...wrapLine(rest, Math.max(1, width - 2))];
 }
 
 // A system body is dim so the eye skips it; a user body is bright so the

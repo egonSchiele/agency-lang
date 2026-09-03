@@ -33,7 +33,8 @@ export type GitignoreFile = {
   rules: Rule[];
 };
 
-const MATCH_OPTIONS = { dot: true, nobrace: false, nonegate: true };
+// .gitignore has no brace expansion or extglob: `*.{js,ts}` is a literal name.
+const MATCH_OPTIONS = { dot: true, nobrace: true, noextglob: true, nonegate: true };
 
 export function parseGitignore(dir: string, text: string): GitignoreFile {
   const rules: Rule[] = [];
@@ -52,7 +53,10 @@ export function parseGitignore(dir: string, text: string): GitignoreFile {
     // Without one, the pattern matches at any depth.
     const anchored = pattern.startsWith("/") || pattern.includes("/");
     if (pattern.startsWith("/")) pattern = pattern.slice(1);
-    const glob = anchored ? pattern : `**/${pattern}`;
+    // Braces, parentheses and bars are ordinary characters in a .gitignore
+    // pattern; escape them so picomatch cannot read them as its own syntax.
+    const literal = pattern.replace(/[{}()|]/g, (ch) => `\\${ch}`);
+    const glob = anchored ? literal : `**/${literal}`;
     rules.push({
       matchesSelf: picomatch(glob, MATCH_OPTIONS),
       matchesUnder: picomatch(`${glob}/**`, MATCH_OPTIONS),

@@ -250,6 +250,24 @@ describe("buildForest", () => {
     expect(s1.active).toBe(0);
   });
 
+  it("an event landing in the middle of a model call is not a wait", () => {
+    // A 10s model call; a concurrent branch logs a tool call 4s in.
+    const at = (t: string) => `2026-05-16T00:${t}Z`;
+    const forest = buildForest([
+      evt({ span_id: "s1", data: { type: "agentStart", timestamp: at("00:00.000") } }),
+      evt({ span_id: "s1", data: { type: "toolCallStart", timestamp: at("00:04.000") } }),
+      evt({ span_id: "s1", data: { type: "toolCall", timestamp: at("00:04.500") } }),
+      evt({
+        span_id: "s1",
+        data: { type: "promptCompletion", timestamp: at("00:10.000"), timeTaken: 10000 },
+      }),
+    ]);
+    const s1 = forest[0].children[0];
+    expect(s1.duration).toBe(10000);
+    expect(s1.waiting).toBeUndefined();
+    expect(s1.active).toBe(10000);
+  });
+
   it("a model call is working time, with no waiting", () => {
     const forest = buildForest([
       evt({ span_id: "s1", data: { type: "promptStart", timestamp: "2026-05-16T00:00:00.000Z" } }),

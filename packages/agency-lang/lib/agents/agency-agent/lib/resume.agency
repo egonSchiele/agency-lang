@@ -187,11 +187,12 @@ export def recordTurn(userMsg: string): SaveTarget | null {
   record.turns = record.turns + 1
   record.lastActive = now()
   if (!_titlePinned && shouldRefreshTitle(record.turns)) {
-    // Turn 1 titles the first prompt; later refreshes summarize the
-    // conversation so far.
-    let source = userMsg
-    if (record.turns > 1) {
-      source = conversationText(_conversation)
+    // Title the conversation so far, the reply included, so turn 1 sees
+    // the first exchange and not just the prompt. The prompt alone is the
+    // fallback when the brain's thread cannot be read.
+    let source = conversationText(_conversation)
+    if (source == "") {
+      source = userMsg
     }
     const title = titleFor(source)
     if (title != "") {

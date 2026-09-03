@@ -125,7 +125,7 @@ export def parseAgentArgs() {
         },
         "max-tool-call-rounds": {
           type: "number",
-          description: "Max LLM tool-call rounds before a tool loop halts (default 10 interactive, 50 in one-shot/-p mode)"
+          description: "Max LLM tool-call rounds before a tool loop halts (default 50 interactive, 100 in one-shot/-p mode)"
         },
         "max-tool-result-chars": {
           type: "number",

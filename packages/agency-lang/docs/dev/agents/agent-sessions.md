@@ -25,8 +25,9 @@ tool, so it raises no interrupt and the user's policy is not asked about it.
 - `lib/agents/agency-agent/lib/sessions.agency` — the index, save, read,
   and the picker label.
 - `lib/agents/agency-agent/lib/sessionTitle.agency` — the one-line title:
-  from the first prompt on turn 1, then from the tail of the `main` thread
-  every `TITLE_EVERY` turns. One LLM call in its own thread; fails open to "".
+  from the tail of the `main` thread (the reply included) on turn 1 and
+  every `TITLE_EVERY` turns after. One LLM call in its own thread; fails
+  open to "".
 - `lib/agents/agency-agent/lib/resume.agency` — which session this run is
   (`chooseSession`, `startSession`), the restore, the per-turn record
   (`recordTurn`), and the footer text (`sessionTitle`).

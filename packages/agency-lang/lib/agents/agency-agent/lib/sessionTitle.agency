@@ -1,8 +1,8 @@
 /** @module
   @summary The one-line title a saved session shows in the resume picker
-  and the REPL footer. Written from the first prompt, then rewritten
-  every few turns as a summary of the conversation so far, unless the
-  user set one with `/rename`.
+  and the REPL footer. Written after the first turn and rewritten every
+  few turns as a summary of the conversation so far, unless the user set
+  one with `/rename`.
 */
 import { getThread, listThreads, sessionThreadId } from "std::thread"
 
@@ -63,8 +63,7 @@ export def cleanTitle(raw: string): string {
   return oneLine.slice(0, MAX_TITLE_CHARS)
 }
 
-/** One short title for `text`, which is either the first prompt or the
-  conversation so far. Runs in its own thread so the call never touches
+/** One short title for `text`, the conversation so far. Runs in its own thread so the call never touches
   the coordinator's conversation. Fails open to "": a title is never
   worth failing a turn over. */
 export def titleFor(text: string): string {

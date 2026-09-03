@@ -71,14 +71,15 @@ function openForWrite(realRoot: string, target: string): number {
       throw err;
     }
   }
-  // The file is new. Its parent must already be a real directory strictly
-  // inside root, so a symlinked tool directory cannot receive a new file.
+  // The file is new. Its parent must already be a real directory that is
+  // the root or inside it, so a symlinked tool directory cannot receive a
+  // new file.
   const parent = path.dirname(target);
   if (fs.lstatSync(parent).isSymbolicLink()) {
     throw new Error(`'${parent}' is a symlink`);
   }
   const realParent = fs.realpathSync(parent);
-  if (!isStrictDescendant(realRoot, realParent)) {
+  if (realParent !== realRoot && !isStrictDescendant(realRoot, realParent)) {
     throw new Error(`'${parent}' resolves to '${realParent}', which is outside '${realRoot}'`);
   }
   return fs.openSync(target, noFollow | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o644);

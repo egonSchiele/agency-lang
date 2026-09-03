@@ -626,7 +626,9 @@ describe("<agent-home> dir patterns", () => {
   const policy = {
     "std::read": [
       {
-        match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" },
+        match: {
+          dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**}",
+        },
         action: "approve" as const,
       },
     ],
@@ -698,6 +700,10 @@ describe("<agent-home> dir patterns", () => {
     try {
       const home = realpathSync(base);
       withAgentHome(home, () => {
+        // The roots themselves: what a catalog scan of the whole
+        // directory puts in its payload.
+        expect(checkPolicy(policy, read(`${home}/skills`)).type).toBe("approve");
+        expect(checkPolicy(policy, read(`${home}/tools`)).type).toBe("approve");
         expect(checkPolicy(policy, read(`${home}/skills/explorer`)).type).toBe("approve");
         expect(checkPolicy(policy, read(`${home}/tools/hnTop`)).type).toBe("approve");
         expect(checkPolicy(policy, read(home)).type).toBe("propagate");

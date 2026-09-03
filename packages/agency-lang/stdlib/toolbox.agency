@@ -21,7 +21,7 @@ import { ls, exists } from "std::shell"
 import { Json } from "std::validation"
 
 import { _read, _write } from "agency-lang/stdlib-lib/builtins.js"
-import { resolveCwdPath } from "agency-lang/stdlib-lib/resolveDir.js"
+import { canonicalDir } from "agency-lang/stdlib-lib/resolveDir.js"
 
 /** @module
   @summary Keep a directory of tools an agent wrote.
@@ -190,13 +190,13 @@ const EMPTY_MODULE: ModuleFacts = {
 
 // Every entry point takes the toolbox directory the same way. An empty
 // string is refused because the file primitives would resolve it to the
-// process cwd. Absolutized so the interrupt payloads name one directory
-// however the caller spelled it.
+// process cwd. Canonical (absolute, realpathed), so the interrupt
+// payloads name one directory however the caller spelled it.
 def expandRoot(dir: string): Result<string> {
   if (dir == "") {
     return failure("dir must name the toolbox directory. Got an empty string")
   }
-  return success(resolveCwdPath(dir))
+  return success(canonicalDir(dir))
 }
 
 def runExport(info: ModuleInfo): ExportInfo | null {

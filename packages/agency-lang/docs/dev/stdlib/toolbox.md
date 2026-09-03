@@ -164,9 +164,9 @@ It then lists the directory with `ls` from `std::shell` (which raises
 `std::ls`), and keeps the directories whose names are not `staging` and
 do not start with a dot. The recommended policy gives `std::toolbox::scan` the same `dir` scope
 as `std::read`, so a toolbox outside the working directory prompts. `listTools` refuses an empty `dir`, since the
-primitives would resolve it to the process cwd, and absolutizes it, so
-the scan payload names one directory however the caller spelled it and a
-policy pattern that expands to an absolute path can match it. `ls` counts every entry
+primitives would resolve it to the process cwd, and canonicalizes it
+(`canonicalDir`), so the scan payload names one directory however the
+caller spelled it and a policy rule written for reads matches it. `ls` counts every entry
 against its cap and does not say when it stopped, so a listing that
 reaches the cap is reported as a failure. It is not returned as a
 shortened catalog. The per-tool reads

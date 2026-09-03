@@ -39,6 +39,17 @@ describe("writeContainedFile", () => {
     }
   });
 
+  test("creates a missing file directly under the root", () => {
+    const dir = makeDir(".wcf-create-root-");
+    try {
+      const target = path.join(dir, "meta.json");
+      writeContainedFile(dir, target, "made");
+      expect(fs.readFileSync(target, "utf-8")).toBe("made");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("a final-component symlink is not followed", () => {
     const parent = makeDir(".wcf-link-");
     try {

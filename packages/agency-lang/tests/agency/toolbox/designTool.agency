@@ -394,7 +394,7 @@ node symlinkedToolIsRefused(): boolean {
   remove(box) with approve
   mkdir(box) with approve
   const linked = exec("ln", ["-s", "${TOOLS}/good", "${box}/linked"]) with approve
-  if (linked is failure) {
+  if (linked is failure || linked.exitCode != 0) {
     return false
   }
   const reachable = exists("linked/tool.agency", box)

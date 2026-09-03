@@ -1,4 +1,6 @@
-import { skillsDir } from "std::skills"
+import { mkdir, remove } from "std::fs"
+import { exists, exec } from "std::shell"
+import { skillsDir, commandsDir } from "std::skills"
 
 def stdDesc(): string {
   const tool = skillsDir(__dirname + "/skills-dir-fixture/std", "standard") with approve
@@ -105,4 +107,31 @@ node explicitNameOverrides(): boolean {
 node explicitNameSanitized(): boolean {
   const tool = skillsDir(__dirname + "/skills-dir-fixture/flat", "flat", "My Cool Skill!") with approve
   return tool.name == "My_Cool_Skill"
+}
+
+// Both scan payloads name the real directory, the spelling a read would
+// report, so one policy rule covers a scan and the reads under it. The
+// link is proven reachable first.
+node scanPayloadsAreTheRealDirectory(): boolean {
+  const fixture = __dirname + "/skills-dir-fixture/flat"
+  const link = __dirname + "/test-output/linked-skills"
+  mkdir(__dirname + "/test-output") with approve
+  remove(link) with approve
+  const linked = exec("ln", ["-s", fixture, link]) with approve
+  if (linked is failure || linked.exitCode != 0) {
+    return false
+  }
+  const reachable = exists("greet.md", link)
+  const seen: string[] = []
+  handle {
+    skillsDir(link, "flat")
+    commandsDir(link)
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir" || intr.effect == "std::skills::commandsDir") {
+      seen.push(intr.data.dir)
+    }
+    return approve()
+  }
+  remove(link) with approve
+  return reachable && seen.join(",") == "${fixture},${fixture}"
 }

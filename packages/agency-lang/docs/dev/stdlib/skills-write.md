@@ -43,17 +43,14 @@ dangling symlink fails the open atomically — because the pre-interrupt
 check is stale by save time: approval can take arbitrarily long, and a
 file created in the meantime must never be overwritten.
 
-The `dir` in the interrupt payload is absolutized (`~` expanded,
-resolved against the process cwd), so relative and `~`-led spellings
-produce the same payload and an always-scope rule saved from a save
-approval names one directory regardless of how the caller spelled it.
-One gap remains: the write that follows realpaths its directory
-(`prepareContainedPath`), and the save payload cannot — the directory
-may not exist until `mkdir` runs after approval. So a directory reached
-through a symlinked ancestor still yields two spellings (on macOS,
-`/tmp/skills` for the save and `/private/tmp/skills` for the write),
-and one always-scope rule will not cover both interrupts there. An
-empty `dir` is refused before any prompt.
+The `dir` in the interrupt payload is canonical (`~` expanded, resolved
+against the process cwd, realpathed through its nearest existing
+ancestor: `canonicalDir`), so relative, `~`-led, and symlink-spelled
+directories produce the same payload the write that follows will report
+(`prepareContainedPath` realpaths the same way), and an always-scope
+rule saved from a save approval covers both interrupts. Every scan
+payload in this module is spelled the same way. An empty `dir` is
+refused before any prompt.
 
 ## The design loop
 

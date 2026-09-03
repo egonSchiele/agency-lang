@@ -67,7 +67,9 @@ places only (`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
   `stdlib/docs/<section>`, and the bundled skills are read the same way, so
   without this rule those tools return rejections in a headless run;
 - the agent home's learned skills and tools, written as
-  `{<agent-home>/skills/**,<agent-home>/tools/**}`. Those directories
+  `{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**}`.
+  The roots are listed as well as their contents because a catalog scan
+  of the whole directory names the root itself in its payload. Those directories
   hold skills the user taught the agent and tools it wrote, and both
   enter them only through a review interrupt. Without this rule every
   read of a learned skill, every catalog scan, and every `runTool` would
@@ -106,7 +108,10 @@ never matches.
 The expanded home is realpathed, for the reason the cwd is in
 `resolveDotDirPattern`: file effects put the realpath of their directory
 in the interrupt payload, so a home reached through a symlinked ancestor
-(`/tmp` on macOS, a linked `$HOME`) would otherwise never match. This is
+(`/tmp` on macOS, a linked `$HOME`) would otherwise never match. The
+scan and save effects in `std::skills` and `std::toolbox` put the same
+spelling in their payloads (`canonicalDir` in `lib/stdlib/resolveDir.ts`),
+so one rule covers a read and the scan that precedes it. This is
 the spelling the payload already uses. It is not support for symlinks
 inside the home: the reads and the use-count write under these
 approvals refuse a symlinked skill or tool directory (see `docs/dev/stdlib/skills-write.md`

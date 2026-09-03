@@ -47,7 +47,12 @@ export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
     { match: { dir: `{${INSTALL}/stdlib/**,${INSTALL}/dist/**}` }, action: "approve" },
-    { match: { dir: `{${AGENT_HOME}/skills/**,${AGENT_HOME}/tools/**}` }, action: "approve" },
+    {
+      match: {
+        dir: `{${AGENT_HOME}/skills,${AGENT_HOME}/skills/**,${AGENT_HOME}/tools,${AGENT_HOME}/tools/**}`,
+      },
+      action: "approve",
+    },
   ];
 }
 

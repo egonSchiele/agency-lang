@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { assertContained } from "./assertContained.js";
@@ -8,6 +9,26 @@ import { expandPath } from "./expandPath.js";
  *  await `resolveDir` (e.g. `_readSkill`) use this instead of copying it. */
 export function resolveCwdPath(target: string): string {
   return path.resolve(process.cwd(), expandPath(target));
+}
+
+/** The spelling a file effect puts in its interrupt payload: absolutized
+ *  and realpathed, so a policy rule matches one directory however the
+ *  caller wrote it. A directory that does not exist yet is resolved
+ *  through its nearest existing ancestor, so a save into a new directory
+ *  still names the place the write will land. */
+export function canonicalDir(target: string): string {
+  const lexical = resolveCwdPath(target);
+  let current = lexical;
+  const tail: string[] = [];
+  while (current !== path.dirname(current)) {
+    try {
+      return path.resolve(fs.realpathSync(current), ...tail.reverse());
+    } catch {
+      tail.push(path.basename(current));
+      current = path.dirname(current);
+    }
+  }
+  return lexical;
 }
 
 /**

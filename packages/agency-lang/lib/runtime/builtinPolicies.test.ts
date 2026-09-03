@@ -17,7 +17,12 @@ describe("builtinPolicy", () => {
       expect(p![effect]).toEqual([
         { match: { dir: "{.,./**}" }, action: "approve" },
         { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
-        { match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" }, action: "approve" },
+        {
+          match: {
+            dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**}",
+          },
+          action: "approve",
+        },
       ]);
     }
     // No std::write rule at all: the toolbox use count goes through its

@@ -253,11 +253,20 @@ describe("symlinked-root refusal parity across walkers", () => {
     await safeDeleteDirectory(root);
   });
 
+  const needle = {
+    pattern: "needle",
+    flags: "",
+    ignoreCase: false,
+    wholeWord: false,
+    filesOnly: false,
+    invert: false,
+  };
+
   it("_grep refuses a symlinked search root when allowedPaths is set", async () => {
-    await expect(_grep("needle", path.join(root, "linked"), "", 10, [root])).rejects.toThrow(
+    await expect(_grep(needle, path.join(root, "linked"), 10, [root])).rejects.toThrow(
       /is a symlink/,
     );
-    const open = await _grep("needle", path.join(root, "linked"), "", 10, []);
+    const open = await _grep(needle, path.join(root, "linked"), 10, []);
     expect(open.length).toBe(1);
   });
 

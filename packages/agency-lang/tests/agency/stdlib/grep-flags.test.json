@@ -1,0 +1,70 @@
+{
+  "tests": [
+    {
+      "nodeName": "grepStyleFlagIsAccepted",
+      "input": "",
+      "expectedOutput": "[\"one.txt:1\",\"one.txt:3\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "the grep letter n is accepted and ignored"
+    },
+    {
+      "nodeName": "flagWithParameterFails",
+      "input": "",
+      "expectedOutput": "\"grep does not take the flag \\\"l\\\". Pass filesOnly: true instead.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "a flag with a named parameter fails with that name"
+    },
+    {
+      "nodeName": "ignoreCase",
+      "input": "",
+      "expectedOutput": "[\"one.txt:1\",\"one.txt:3\",\"two.txt:2\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "ignoreCase matches HELLO too"
+    },
+    {
+      "nodeName": "wholeWord",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "wholeWord does not match inside a word"
+    },
+    {
+      "nodeName": "filesOnly",
+      "input": "",
+      "expectedOutput": "[\"one.txt\",\"two.txt\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "filesOnly returns one path per matching file"
+    },
+    {
+      "nodeName": "invert",
+      "input": "",
+      "expectedOutput": "[\"one.txt:2\",\"two.txt:1\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "invert returns the lines without a match"
+    }
+  ]
+}

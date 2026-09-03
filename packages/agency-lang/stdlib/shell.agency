@@ -66,7 +66,11 @@ effect std::grep {
   pattern: string;
   dir: string;
   flags: string;
-  maxResults: number
+  maxResults: number;
+  ignoreCase: boolean;
+  wholeWord: boolean;
+  filesOnly: boolean;
+  invert: boolean
 }
 @alwaysUnder(dir)
 effect std::glob {
@@ -231,18 +235,26 @@ export idempotent def grep(
   maxResults: number = 200,
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
+  ignoreCase: boolean = false,
+  wholeWord: boolean = false,
+  filesOnly: boolean = false,
+  invert: boolean = false,
 ): Result {
   """
-  Search for a regex pattern in files under a directory. Returns matches with file path, line number, and matched line. Skips node_modules, .git, dist, build. Fails if the pattern is not a valid regex or the directory cannot be read.
+  Search files under a directory for a regular expression, like `grep -rn`. The search is always recursive and every match comes back with its file path, line number, and line text. Skips node_modules, .git, dist, build. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex or the directory cannot be read.
 
   Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern.
 
-  @param pattern - The regex pattern to search for
+  @param pattern - The regex pattern to search for, in JavaScript regex syntax
   @param dir - The directory to search in
-  @param flags - Regex flags
+  @param flags - JavaScript regex flags: i (ignore case), m, s, u. The grep letters n, r, g, and E are accepted and ignored, since the tool already searches recursively and returns line numbers. For grep's -w, -l, and -v use wholeWord, filesOnly, and invert.
   @param maxResults - Maximum number of results to return
   @param allowedPaths - Only allow searching under these path prefixes. When set, a symlinked search dir fails the call rather than being followed.
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
+  @param ignoreCase - Match regardless of letter case (grep -i)
+  @param wholeWord - Match only where the pattern is a whole word (grep -w)
+  @param filesOnly - Return just the paths of the files with a match, one entry per file, instead of the matching lines (grep -l)
+  @param invert - Return the lines that do NOT match (grep -v)
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
@@ -251,10 +263,22 @@ export idempotent def grep(
     pattern: pattern,
     dir: dir,
     flags: flags,
-    maxResults: maxResults
+    maxResults: maxResults,
+    ignoreCase: ignoreCase,
+    wholeWord: wholeWord,
+    filesOnly: filesOnly,
+    invert: invert
   })
 
-  return try _grep(pattern, dir, flags, maxResults, allowedPaths)
+  const query = {
+    pattern: pattern,
+    flags: flags,
+    ignoreCase: ignoreCase,
+    wholeWord: wholeWord,
+    filesOnly: filesOnly,
+    invert: invert
+  }
+  return try _grep(query, dir, maxResults, allowedPaths)
 }
 
 export idempotent def glob(

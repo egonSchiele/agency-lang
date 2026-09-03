@@ -1,0 +1,50 @@
+import { grep } from "std::shell"
+import { sortBy, map } from "std::array"
+
+const fixtures = __dirname + "/grep-fixtures"
+
+def locations(hits: any[]): string[] {
+  const sorted = sortBy(hits) as hit {
+    return "${hit.file}:${hit.line}"
+  }
+  return ["${hit.file}:${hit.line}" for hit in sorted]
+}
+
+// The grep habit: -n for line numbers. Accepted, and the search runs.
+node grepStyleFlagIsAccepted(): string[] {
+  const hits = grep("hello", fixtures, "n", 100) catch [] with approve
+  return locations(hits)
+}
+
+// A flag with a named parameter fails with the parameter's name.
+node flagWithParameterFails(): string {
+  const result = grep("hello", fixtures, "l", 100) with approve
+  if (result is failure(problem)) {
+    return "${problem}"
+  }
+  return "matched"
+}
+
+node ignoreCase(): string[] {
+  const hits = grep("hello", fixtures, "", 100, ignoreCase: true) catch [] with approve
+  return locations(hits)
+}
+
+node wholeWord(): string[] {
+  // "world" is a whole word; "worldly" is not in the fixtures, so use a prefix
+  // that only matches inside a word: "hell" is inside "hello".
+  const hits = grep("hell", fixtures, "", 100, wholeWord: true) catch [] with approve
+  return locations(hits)
+}
+
+node filesOnly(): string[] {
+  const files = grep("hello", fixtures, "i", 100, filesOnly: true) catch [] with approve
+  return sortBy(files) as file {
+    return file
+  }
+}
+
+node invert(): string[] {
+  const hits = grep("hello", fixtures, "i", 100, invert: true) catch [] with approve
+  return locations(hits)
+}

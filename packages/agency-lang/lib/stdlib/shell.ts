@@ -1,4 +1,5 @@
 import process from "process";
+import { compileGrepQuery, type GrepPlan, type GrepQuery } from "./grepQuery.js";
 import fs from "fs/promises";
 import { constants as fsConstants } from "fs";
 import path from "path";
@@ -392,20 +393,22 @@ async function walkDir(root: string, visit: Visitor): Promise<void> {
   await walk(root);
 }
 
+/** Matching lines, or with `filesOnly` just the paths of files that have one. */
+export type GrepResults = GrepMatch[] | string[];
+
 export async function _grep(
-  pattern: string,
+  query: GrepQuery,
   dir: string,
-  flags: string,
   maxResults: number,
   allowedPaths?: string[],
-): Promise<GrepMatch[]> {
+): Promise<GrepResults> {
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned `file` paths are relative to `dir` so callers can hand
   // them to `read(file, dir)` directly.
   const root = await resolveDir(dir, allowedPaths ?? []);
   await refuseSymlinkedRoot(root, allowedPaths);
-  const re = new RegExp(pattern, flags || undefined);
-  const results: GrepMatch[] = [];
+  const plan = compileGrepQuery(query);
+  const matches: GrepMatch[] = [];
 
   await walkDir(root, async (full, st) => {
     if (!st.isFile()) return true;
@@ -415,22 +418,29 @@ export async function _grep(
     } catch {
       return true;
     }
-    const lines = text.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      if (re.test(lines[i])) {
-        results.push({
-          file: toPosix(path.relative(root, full)),
-          line: i + 1,
-          text: lines[i],
-        });
-        if (results.length >= maxResults) return false;
-      }
-      re.lastIndex = 0;
-    }
-    return true;
+    const file = toPosix(path.relative(root, full));
+    const hits = matchingLines(text, plan).map((hit) => ({ file, ...hit }));
+    matches.push(...(plan.filesOnly ? hits.slice(0, 1) : hits));
+    return matches.length < maxResults;
   });
 
-  return results;
+  const capped = matches.slice(0, maxResults);
+  return plan.filesOnly ? capped.map((match) => match.file) : capped;
+}
+
+/** The lines of one file the plan selects, numbered from 1. A file's final
+ *  newline does not start a line, the same as grep, or `invert` would
+ *  report an empty line past the end of every file. */
+function matchingLines(text: string, plan: GrepPlan): { line: number; text: string }[] {
+  const selected = (line: string) => {
+    plan.regex.lastIndex = 0;
+    return plan.regex.test(line) !== plan.invert;
+  };
+  return text
+    .replace(/\n$/, "")
+    .split("\n")
+    .map((line, index) => ({ line: index + 1, text: line }))
+    .filter((entry) => selected(entry.text));
 }
 
 export async function _glob(

@@ -9,6 +9,7 @@ import { detectPlatform } from "./utils.js";
 import { resolvePath } from "./resolvePath.js";
 import { expandPath } from "./expandPath.js";
 import { readContainedFile } from "../utils/readContainedFile.js";
+import { writeContainedFile } from "../utils/writeContainedFile.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { FakeClock } from "../runtime/clock.js";
@@ -263,6 +264,21 @@ function readContainedAny(filePath: string, allowedRoots: string[]): string {
   throw lastErr;
 }
 
+// The first root that accepts the file wins; the last refusal is rethrown.
+// Validation precedes every write, so a refused root writes nothing.
+function writeContainedAny(filePath: string, content: string, allowedRoots: string[]): void {
+  let lastErr: unknown = new Error("no allowed roots");
+  for (const root of allowedRoots) {
+    try {
+      writeContainedFile(expandPath(root), filePath, content);
+      return;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
 const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;
 export type WriteMode = (typeof VALID_WRITE_MODES)[number];
 
@@ -274,11 +290,26 @@ async function _writeBytes(
   filename: string,
   data: string | Buffer,
   mode: WriteMode = "overwrite",
+  allowedPaths?: string[],
 ): Promise<boolean> {
   if (!VALID_WRITE_MODES.includes(mode)) {
     throw new Error(`Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`);
   }
   const filePath = await resolvePath(dir, filename);
+  if (allowedPaths && allowedPaths.length > 0) {
+    // Descriptor-validated overwrite: the bytes provably land inside an
+    // allowed root, with no window in which a swap to a symlink can
+    // redirect the write (see writeContainedFile). Only whole-file
+    // writes take this path.
+    if (mode !== "overwrite") {
+      throw new Error(`allowedPaths is only supported with mode 'overwrite', got '${mode}'.`);
+    }
+    if (typeof data !== "string") {
+      throw new Error("allowedPaths is only supported for text writes.");
+    }
+    writeContainedAny(filePath, data, allowedPaths);
+    return true;
+  }
   if (mode === "create-only") {
     // The "wx" flag makes create-only atomic: an existing file (or a
     // dangling symlink at the target) fails the open itself, with no
@@ -303,8 +334,9 @@ export async function _write(
   filename: string,
   content: string,
   mode: WriteMode = "overwrite",
+  allowedPaths?: string[],
 ): Promise<boolean> {
-  return _writeBytes(dir, filename, content, mode);
+  return _writeBytes(dir, filename, content, mode, allowedPaths);
 }
 
 export async function _writeBinary(

@@ -20,8 +20,8 @@ import { mkdir, remove, move } from "std::fs"
 import { ls, exists } from "std::shell"
 import { Json } from "std::validation"
 
-import { _read } from "agency-lang/stdlib-lib/builtins.js"
-import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
+import { _read, _write } from "agency-lang/stdlib-lib/builtins.js"
+import { resolveCwdPath } from "agency-lang/stdlib-lib/resolveDir.js"
 
 /** @module
   @summary Keep a directory of tools an agent wrote.
@@ -113,6 +113,16 @@ effect std::toolbox::scan {
   dir: string
 }
 
+// runTool's use count, as its own effect rather than a std::write: the
+// stdlib composes the record, so approving this approves one known
+// change to the tool's meta.json and cannot be reused to land arbitrary
+// content there. The approval covers the write that fulfils it.
+@alwaysUnder(dir)
+effect std::toolbox::recordUse {
+  dir: string;
+  name: string
+}
+
 effect std::toolbox::review {
   name: string;
   stagingDir: string;
@@ -181,12 +191,14 @@ const EMPTY_MODULE: ModuleFacts = {
 
 // Every entry point takes the toolbox directory the same way. An empty
 // string is refused because the file primitives would resolve it to the
-// process cwd.
+// process cwd. Absolutized so the interrupt payloads name one directory
+// however the caller spelled it, and so a policy pattern that expands to
+// an absolute path can match them.
 def expandRoot(dir: string): Result<string> {
   if (dir == "") {
-    return failure("dir must name the toolbox directory; got an empty string")
+    return failure("dir must name the toolbox directory. Got an empty string")
   }
-  return success(expandPath(dir))
+  return success(resolveCwdPath(dir))
 }
 
 def runExport(info: ModuleInfo): ExportInfo | null {
@@ -201,8 +213,12 @@ def factsOf(exported: ExportInfo): ModuleFacts {
   }
 }
 
-def moduleFacts(toolDir: string): Result<ModuleFacts> {
-  const source = try _read(toolDir, IMPL_FILE, 0, 0)
+// The reads under a scan approval are contained in the toolbox root:
+// the open refuses a symlink, and the descriptor is checked to sit
+// inside the root, so a symlinked tool directory cannot carry the
+// approval elsewhere.
+def moduleFacts(root: string, toolDir: string): Result<ModuleFacts> {
+  const source = try _read(toolDir, IMPL_FILE, 0, 0, [root])
   if (source is failure) {
     return source
   }
@@ -231,11 +247,11 @@ type MetaFile = {
 // A missing meta.json is the default record. A present one that cannot be
 // read, is not JSON, or has a field of the wrong type is a failure, so a
 // corrupt file never passes as a healthy tool.
-def metaFacts(toolDir: string): Result<ToolMeta> {
+def metaFacts(root: string, toolDir: string): Result<ToolMeta> {
   if (!exists(META_FILE, toolDir)) {
     return success(DEFAULT_META)
   }
-  const raw = try _read(toolDir, META_FILE, 0, 0)
+  const raw = try _read(toolDir, META_FILE, 0, 0, [root])
   if (raw is failure(readErr)) {
     return failure("${META_FILE} could not be read: ${readErr}")
   }
@@ -268,8 +284,8 @@ def presentFields(file: MetaFile): Record<string, Json> {
 
 def entryFor(root: string, name: string): ToolEntry {
   const toolDir = "${root}/${name}"
-  const module = moduleFacts(toolDir)
-  const meta = metaFacts(toolDir)
+  const module = moduleFacts(root, toolDir)
+  const meta = metaFacts(root, toolDir)
   const moduleFields: ModuleFacts = module catch EMPTY_MODULE
   const metaFields: ToolMeta = meta catch DEFAULT_META
   const problems: string[] = []
@@ -592,7 +608,7 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
   if (requestOk is failure) {
     return requestOk
   }
-  return moduleFacts(settings.stagingDir)
+  return moduleFacts(settings.stagingDir, settings.stagingDir)
 }
 
 def requestSignature(source: string): Result<string> {
@@ -1080,13 +1096,19 @@ export def writeTool(
 
 // ---- running a tool ----
 
-def recordUse(toolDir: string, name: string, meta: ToolMeta): Result {
+def recordUse(root: string, name: string, meta: ToolMeta): Result {
+  const toolDir = "${root}/${name}"
+  return interrupt std::toolbox::recordUse("Record one use of this tool in its ${META_FILE}?", {
+    dir: toolDir,
+    name: name
+  })
   const used: ToolMeta = {
     ...meta,
     uses: meta.uses + 1,
     lastUsedAt: format(now())
   }
-  return write(META_FILE, JSON.stringify(used, null, 2), toolDir)
+  // Contained in the toolbox root, like the reads under a scan.
+  return try _write(toolDir, META_FILE, JSON.stringify(used, null, 2), "overwrite", [root])
 }
 
 export def runTool(
@@ -1096,8 +1118,9 @@ export def runTool(
 ): Result<Json> {
   """
   Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json records one more use and the time; it
-  does not record the result.
+  returned. The tool's meta.json records one more use and the time,
+  behind a `std::toolbox::recordUse` interrupt. A declined or failed
+  record does not fail the run. The result is not recorded.
 
   @param name - The tool's name under dir
   @param request - The tool's input, a value of its Request type
@@ -1121,7 +1144,7 @@ export def runTool(
   return interrupt std::toolbox::scan("Are you sure you want to read this tool?", {
     dir: toolDir
   })
-  const meta = metaFacts(toolDir)
+  const meta = metaFacts(root.value, toolDir)
   if (meta is failure) {
     return meta
   }
@@ -1138,13 +1161,8 @@ export def runTool(
   if (ran is success(finished)) {
     result = finished.data
   }
-  // The tool has run and its effects have happened, so its result is
-  // never dropped: a failed record carries it in the message.
-  const recorded = recordUse(toolDir, name, meta.value)
-  if (recorded is failure(recordErr)) {
-    return failure(
-      "the tool ran and returned ${JSON.stringify(result)}, but ${META_FILE} could not be updated: ${recordErr}",
-    )
-  }
+  // The tool has run and its effects have happened. A declined interrupt
+  // or a failed write leaves the count unrecorded and returns the result.
+  recordUse(root.value, name, meta.value)
   return result
 }

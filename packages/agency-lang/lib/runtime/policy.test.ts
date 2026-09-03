@@ -3,13 +3,14 @@ import {
   checkPolicy,
   resolveDotDirPattern,
   expandAgencyInstallDir,
+  expandAgentHomeDir,
   validatePolicy,
   escapeGlob,
 } from "./policy.js";
 import { getStdlibDir } from "../importPaths.js";
 import path from "path";
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, realpathSync } from "fs";
-import { tmpdir } from "os";
+import os, { tmpdir } from "os";
 import picomatch from "picomatch";
 
 describe("checkPolicy", () => {
@@ -612,6 +613,114 @@ describe("<agency> dir patterns", () => {
     };
     expect(expandAgencyInstallDir("<agency>/stdlib/**", unresolvable)).toBe("<agency>/stdlib/**");
     expect(expandAgencyInstallDir("/plain/**", unresolvable)).toBe("/plain/**");
+  });
+});
+
+describe("<agent-home> dir patterns", () => {
+  const read = (dir: string) => ({
+    effect: "std::read",
+    message: "m",
+    data: { dir, filename: "x" },
+    origin: "std::fs",
+  });
+  const policy = {
+    "std::read": [
+      {
+        match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" },
+        action: "approve" as const,
+      },
+    ],
+  };
+
+  function withAgentHome<T>(value: string | undefined, body: () => T): T {
+    const previous = process.env.AGENCY_AGENT_HOME;
+    if (value === undefined) delete process.env.AGENCY_AGENT_HOME;
+    else process.env.AGENCY_AGENT_HOME = value;
+    try {
+      return body();
+    } finally {
+      if (previous === undefined) delete process.env.AGENCY_AGENT_HOME;
+      else process.env.AGENCY_AGENT_HOME = previous;
+    }
+  }
+
+  it("expands to the injected home", () => {
+    expect(expandAgentHomeDir("<agent-home>/skills/**", () => "/custom/home")).toBe(
+      "/custom/home/skills/**",
+    );
+  });
+
+  it("escapes glob characters in the resolved home", () => {
+    expect(expandAgentHomeDir("<agent-home>/skills/**", () => "/opt/v*1")).toBe(
+      "/opt/v\\*1/skills/**",
+    );
+  });
+
+  it("leaves a pattern without the token untouched", () => {
+    expect(expandAgentHomeDir("/plain/**", () => "/custom/home")).toBe("/plain/**");
+  });
+
+  it("resolves a relative AGENCY_AGENT_HOME to an absolute path", () => {
+    withAgentHome("./my-profile", () => {
+      expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(
+        `${path.resolve("./my-profile")}/skills/**`,
+      );
+    });
+  });
+
+  it("treats an empty AGENCY_AGENT_HOME as unset", () => {
+    withAgentHome("", () => {
+      expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(
+        `${path.join(os.homedir(), ".agency-agent")}/skills/**`,
+      );
+    });
+  });
+
+  it("expands to the realpath of the home, the spelling file effects report", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "policy-home-"));
+    try {
+      const real = path.join(base, "real-home");
+      mkdirSync(real);
+      const link = path.join(base, "linked-home");
+      symlinkSync(real, link);
+      withAgentHome(link, () => {
+        expect(expandAgentHomeDir("<agent-home>/skills/**")).toBe(
+          `${realpathSync(real)}/skills/**`,
+        );
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("matches reads under the home's skills and tools and nothing else", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "policy-home-"));
+    try {
+      const home = realpathSync(base);
+      withAgentHome(home, () => {
+        expect(checkPolicy(policy, read(`${home}/skills/explorer`)).type).toBe("approve");
+        expect(checkPolicy(policy, read(`${home}/tools/hnTop`)).type).toBe("approve");
+        expect(checkPolicy(policy, read(home)).type).toBe("propagate");
+        expect(checkPolicy(policy, read("/Users/someone")).type).toBe("propagate");
+      });
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it("matches a pattern that mixes <agency> and <agent-home> in one brace group", () => {
+    const mixed = {
+      "std::read": [
+        {
+          match: { dir: "{<agency>/stdlib/**,<agent-home>/skills/**}" },
+          action: "approve" as const,
+        },
+      ],
+    };
+    withAgentHome("/nowhere/agent-home", () => {
+      expect(checkPolicy(mixed, read("/nowhere/agent-home/skills/x")).type).toBe("approve");
+      expect(checkPolicy(mixed, read(path.join(getStdlibDir(), "docs"))).type).toBe("approve");
+    });
   });
 });
 

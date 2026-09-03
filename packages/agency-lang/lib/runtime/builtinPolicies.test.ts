@@ -17,16 +17,43 @@ describe("builtinPolicy", () => {
       expect(p![effect]).toEqual([
         { match: { dir: "{.,./**}" }, action: "approve" },
         { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
+        { match: { dir: "{<agent-home>/skills/**,<agent-home>/tools/**}" }, action: "approve" },
       ]);
     }
+    // No std::write rule at all: the toolbox use count goes through its
+    // own effect, never a write approval.
     expect(p!["std::write"]).toBeUndefined();
   });
 
-  it("scopes a toolbox scan like a read under 'recommended' and omits it under 'minimal'", () => {
-    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::scan"]).toEqual(
-      builtinPolicy("recommended", "/tmp/base")!["std::read"],
-    );
-    expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::scan"]).toBeUndefined();
+  it("scopes every scan like a read under 'recommended' and omits them under 'minimal'", () => {
+    const scans = ["std::toolbox::scan", "std::skills::skillsDir", "std::skills::commandsDir"];
+    for (const effect of scans) {
+      expect(builtinPolicy("recommended", "/tmp/base")![effect]).toEqual(
+        builtinPolicy("recommended", "/tmp/base")!["std::read"],
+      );
+      expect(builtinPolicy("minimal", "/tmp/base")![effect]).toBeUndefined();
+    }
+  });
+
+  it("approves the toolbox use count only under the agent home's toolbox", () => {
+    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::recordUse"]).toEqual([
+      { match: { dir: "<agent-home>/tools/**" }, action: "approve" },
+    ]);
+    expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::recordUse"]).toBeUndefined();
+  });
+
+  it("leaves the save and review gates undecided under every built-in but approve-all", () => {
+    for (const name of ["recommended", "minimal", "with-writes"]) {
+      const p = builtinPolicy(name, "/tmp/base")!;
+      for (const effect of [
+        "std::skills::save",
+        "std::skills::review",
+        "std::toolbox::save",
+        "std::toolbox::review",
+      ]) {
+        expect(p[effect]).toBeUndefined();
+      }
+    }
   });
 
   it("resolves 'minimal' with memory approved but reads absent", () => {

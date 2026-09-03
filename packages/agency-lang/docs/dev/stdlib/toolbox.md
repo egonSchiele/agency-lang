@@ -164,14 +164,23 @@ It then lists the directory with `ls` from `std::shell` (which raises
 `std::ls`), and keeps the directories whose names are not `staging` and
 do not start with a dot. The recommended policy gives `std::toolbox::scan` the same `dir` scope
 as `std::read`, so a toolbox outside the working directory prompts. `listTools` refuses an empty `dir`, since the
-primitives would resolve it to the process cwd. `ls` counts every entry
+primitives would resolve it to the process cwd, and absolutizes it, so
+the scan payload names one directory however the caller spelled it and a
+policy pattern that expands to an absolute path can match it. `ls` counts every entry
 against its cap and does not say when it stopped, so a listing that
 reaches the cap is reported as a failure. It is not returned as a
 shortened catalog. The per-tool reads
 of `impl.agency` and `meta.json` use `_read`, covered by that one scan
 approval. `runTool` and the post-publish read in `saveTool` raise the
 same scan for the one tool directory they read, so no `_read` runs
-without an approval that names its directory. A toolbox directory that does not exist
+without an approval that names its directory. Every one of those reads
+is contained in the toolbox root (`readContainedFile`, the
+descriptor-validated read `std::skills` also uses): the open refuses a
+symlink, and the opened file is checked to sit inside the root. A tool
+directory that is a symlink is already left out of the catalog, because
+`ls` reports a link rather than a directory, and the contained read
+stops `runTool` from running it. That matters now that the recommended
+policy approves scans of the agent home's toolbox without asking. A toolbox directory that does not exist
 yet is an empty catalog.
 
 Each entry carries `module` (what `describe` says about `run`: signature,
@@ -189,10 +198,20 @@ stops the tool before it has side effects. It then runs `main` through
 `runFile`, with `wallClock` set to the tool's own `maxTime` plus
 headroom, so the guard trips before the subprocess is killed. `runFile`
 clamps `wallClock` to an hour, so `stage` refuses a `maxTime` above
-an hour minus that headroom. It then rewrites `meta.json` with
-one more use and the time. If that write fails, the returned failure
-carries the tool's result in its message, since the tool has already
-run. Otherwise it returns the node's own `Result`.
+an hour minus that headroom. It then counts the use in
+`meta.json`, behind a `std::toolbox::recordUse` interrupt naming the
+tool's directory. The write that fulfils the approval uses the
+interrupt-free `_write`, contained in the toolbox root the same way the
+reads are (`writeContainedFile`, which also refuses to create a file
+under a symlinked directory). The count is best-effort: the tool has
+already run, so a declined interrupt or a failed write leaves the count
+where it was and `runTool` returns the node's own `Result`.
+
+`recordUse` is an effect of its own so a policy can approve it without
+approving any `std::write`. A write rule on `meta.json` would approve a
+program writing anything there, and `listTools` trusts the file's
+`purpose` and `runTool` its `maxTime`. The recommended policy approves
+the effect under the agent home's toolbox.
 
 ## Model calls and mocks
 

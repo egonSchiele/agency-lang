@@ -194,76 +194,69 @@ describe("buildForest", () => {
     expect(s1.duration).toBeCloseTo(2000, 0);
   });
 
-  it("reports working time as the turns minus prompts a person answered", () => {
-    // A 10-minute session: two turns of 60s and 30s, a 20s approval
-    // prompt inside the first, and the rest the user typing.
-    const B = "2026-05-16T00:";
+  it("subtracts prompt waits and the gaps between turns from the working time", () => {
+    // Turn 1: a 4s model call, then a tool call whose approval prompt a
+    // person answers after 20s and which runs for 5s. Seven minutes with
+    // nothing in flight. Turn 2: a 5s model call. Ten minutes end to end.
+    const at = (t: string) => `2026-05-16T00:${t}Z`;
     const forest = buildForest([
-      evt({ span_id: "s1", data: { type: "agentStart", timestamp: `${B}00:00.000Z` } }),
-      evt({ span_id: "s1", data: { type: "turnStart", timestamp: `${B}00:01.000Z` } }),
+      evt({ span_id: "s1", data: { type: "agentStart", timestamp: at("00:00.000") } }),
+      evt({ span_id: "s1", data: { type: "promptStart", timestamp: at("00:01.000") } }),
       evt({
         span_id: "s1",
-        data: {
-          type: "handlerDecision",
-          timestamp: `${B}00:30.000Z`,
-          decision: "approve",
-          decidedBy: "user",
-          timeTaken: 20000,
-        },
+        data: { type: "promptCompletion", timestamp: at("00:05.000"), timeTaken: 4000 },
+      }),
+      evt({ span_id: "s1", data: { type: "toolCallStart", timestamp: at("00:05.000") } }),
+      evt({
+        span_id: "s1",
+        data: { type: "handlerDecision", timestamp: at("00:05.000"), decision: "pass" },
       }),
       evt({
         span_id: "s1",
-        data: {
-          type: "handlerDecision",
-          timestamp: `${B}00:31.000Z`,
-          decision: "approve",
-          decidedBy: "policy",
-          timeTaken: 5,
-        },
+        data: { type: "handlerDecision", timestamp: at("00:25.000"), decision: "approve" },
       }),
+      evt({ span_id: "s1", data: { type: "toolCall", timestamp: at("00:30.000") } }),
+      evt({ span_id: "s1", data: { type: "promptStart", timestamp: at("07:30.000") } }),
       evt({
         span_id: "s1",
-        data: { type: "turnEnd", timestamp: `${B}01:01.000Z`, timeTaken: 60000 },
+        data: { type: "promptCompletion", timestamp: at("07:35.000"), timeTaken: 5000 },
       }),
-      evt({ span_id: "s1", data: { type: "turnStart", timestamp: `${B}08:00.000Z` } }),
-      evt({
-        span_id: "s1",
-        data: { type: "turnEnd", timestamp: `${B}08:30.000Z`, timeTaken: 30000 },
-      }),
-      evt({ span_id: "s1", data: { type: "agentEnd", timestamp: `${B}10:00.000Z` } }),
+      evt({ span_id: "s1", data: { type: "agentEnd", timestamp: at("10:00.000") } }),
     ]);
     const s1 = forest[0].children[0];
     expect(s1.duration).toBe(600000);
-    expect(s1.active).toBe(70000);
-    expect(s1.waiting).toBe(530000);
+    // Waiting: 20s at the prompt, 7 minutes between turns, 1s of startup,
+    // and the 2m25s tail after the last reply.
+    expect(s1.waiting).toBe(20000 + 420000 + 1000 + 145000);
+    expect(s1.active).toBe(600000 - s1.waiting!);
   });
 
-  it("without turn markers, working time is the envelope minus user prompts", () => {
-    const B = "2026-05-16T00:";
+  it("a prompt the person cancelled counts as waiting up to the aborted tool call", () => {
+    const at = (t: string) => `2026-05-16T00:${t}Z`;
     const forest = buildForest([
-      evt({ span_id: "s1", data: { type: "agentStart", timestamp: `${B}00:00.000Z` } }),
+      evt({ span_id: "s1", data: { type: "toolCallStart", timestamp: at("00:10.000") } }),
       evt({
         span_id: "s1",
-        data: {
-          type: "handlerDecision",
-          timestamp: `${B}00:40.000Z`,
-          decision: "none",
-          decidedBy: "user",
-          timeTaken: 30000,
-        },
+        data: { type: "handlerDecision", timestamp: at("00:10.000"), decision: "pass" },
       }),
-      evt({ span_id: "s1", data: { type: "agentEnd", timestamp: `${B}01:00.000Z` } }),
+      evt({
+        span_id: "s1",
+        data: { type: "toolCall", timestamp: at("00:40.000"), output: { __type: "abortedResult" } },
+      }),
     ]);
     const s1 = forest[0].children[0];
-    expect(s1.duration).toBe(60000);
-    expect(s1.active).toBe(30000);
+    expect(s1.duration).toBe(30000);
     expect(s1.waiting).toBe(30000);
+    expect(s1.active).toBe(0);
   });
 
-  it("a span with no prompts and no turns shows no waiting time", () => {
+  it("a model call is working time, with no waiting", () => {
     const forest = buildForest([
-      evt({ span_id: "s1", data: { type: "agentStart", timestamp: "2026-05-16T00:00:00.000Z" } }),
-      evt({ span_id: "s1", data: { type: "agentEnd", timestamp: "2026-05-16T00:00:04.000Z" } }),
+      evt({ span_id: "s1", data: { type: "promptStart", timestamp: "2026-05-16T00:00:00.000Z" } }),
+      evt({
+        span_id: "s1",
+        data: { type: "promptCompletion", timestamp: "2026-05-16T00:00:04.000Z", timeTaken: 4000 },
+      }),
     ]);
     const s1 = forest[0].children[0];
     expect(s1.active).toBe(4000);

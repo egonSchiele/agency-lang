@@ -45,6 +45,12 @@ describe("parseGitignore + isIgnored", () => {
     expect(isIgnored(at("other/a.js"), false, [parent, child])).toBe(true);
   });
 
+  it("a name that starts with two dots is inside the directory, not above it", () => {
+    const file = parseGitignore(root, "*.log\n");
+    expect(isIgnored(at("..cache/a.log"), false, [file])).toBe(true);
+    expect(isIgnored("/elsewhere/a.log", false, [file])).toBe(false);
+  });
+
   it("dotfiles match like any other name", () => {
     const file = parseGitignore(root, ".env\n");
     expect(isIgnored(at(".env"), false, [file])).toBe(true);

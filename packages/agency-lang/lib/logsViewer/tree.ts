@@ -287,6 +287,45 @@ function inferSpanLabel(evt: EventEnvelope): string {
   }
 }
 
+/** Time spent waiting on a person, read from the gaps between consecutive
+ *  events. A prompt wait ends at the handler decision that answered it, or
+ *  at the tool call that came back aborted when the prompt was cancelled.
+ *  A wait between turns is a gap with no tool call in flight, less the
+ *  model call that ended it (`promptCompletion.timeTaken`; the matching
+ *  promptStart is not a tree leaf). Everything else in a gap is the agent
+ *  working: a model thinking or a command running. */
+function waitingTime(leaves: TreeNode[]): number {
+  const events = leaves
+    .map((l) => ({ data: l.event!.data, ts: Date.parse(l.event!.data.timestamp) }))
+    .filter((e) => Number.isFinite(e.ts))
+    .sort((a, b) => a.ts - b.ts);
+  let inFlight = 0;
+  let waiting = 0;
+  let prev: number | undefined;
+  for (const { data, ts } of events) {
+    if (prev !== undefined && ts > prev) {
+      const gap = ts - prev;
+      const answered =
+        data.type === "handlerDecision" &&
+        (data.decision === "approve" || data.decision === "reject");
+      const cancelled = data.type === "toolCall" && data.output?.__type === "abortedResult";
+      if (answered || cancelled) {
+        waiting += gap;
+      } else if (inFlight === 0) {
+        const thinking =
+          data.type === "promptCompletion" && typeof data.timeTaken === "number"
+            ? data.timeTaken
+            : 0;
+        waiting += Math.max(0, gap - thinking);
+      }
+    }
+    if (data.type === "toolCallStart") inFlight++;
+    if (data.type === "toolCall") inFlight = Math.max(0, inFlight - 1);
+    prev = ts;
+  }
+  return waiting;
+}
+
 function aggregateMetrics(node: TreeNode): void {
   const leaves: TreeNode[] = [];
   walk(node, (n) => {
@@ -345,25 +384,13 @@ function aggregateMetrics(node: TreeNode): void {
     node.duration = maxEnd - minStart;
   }
 
-  // Working time. A person answering a prompt is not the agent working,
-  // and neither is the gap between one turn's reply and the next
-  // message, so a session's duration was mostly the user's own time.
-  const waiting = sum(
-    leaves
-      .filter((l) => l.event!.data.type === "handlerDecision" && l.event!.data.decidedBy === "user")
-      .map((l) => (typeof l.event!.data.timeTaken === "number" ? l.event!.data.timeTaken : 0)),
-  );
-  const turnEnds = leaves.filter((l) => l.event!.data.type === "turnEnd");
-  const inTurns = sum(
-    turnEnds.map((l) =>
-      typeof l.event!.data.timeTaken === "number" ? l.event!.data.timeTaken : 0,
-    ),
-  );
-  const busy = turnEnds.length > 0 ? inTurns : node.duration;
-  if (busy !== undefined) {
-    node.active = Math.max(0, busy - waiting);
-    if (node.active !== node.duration)
-      node.waiting = Math.max(0, (node.duration ?? 0) - node.active);
+  // A person answering a prompt is not the agent working, and neither is
+  // the gap between one turn's reply and the next message, so an
+  // interactive session's envelope is mostly the user's own time.
+  const waiting = waitingTime(leaves);
+  if (node.duration !== undefined) {
+    node.active = Math.max(0, node.duration - waiting);
+    if (waiting > 0) node.waiting = Math.min(waiting, node.duration);
   }
 
   if (node.nodeKind === "span") {

@@ -22,8 +22,7 @@ import {
   clearTurnPartial,
  } from "./budget.agency"
 import { projectCommands } from "./commandPalette.agency"
-import { groundingText, projectContextText } from "./grounding.agency"
-import { _turnStart, _turnEnd } from "agency-lang/stdlib-lib/agentTurn.js"
+import { groundingText } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
 import { Settings } from "./settings.agency"
 
@@ -97,8 +96,7 @@ export def resolveBrainName(flag: string | null, settings: Settings): string {
 def buildBrainContext(interactive: boolean, brainName: string): BrainContext {
   return {
     interactive: interactive,
-    grounding: groundingText(brainName),
-    projectContext: projectContextText()
+    grounding: groundingText(brainName)
   }
 }
 
@@ -170,18 +168,6 @@ def dispatchToBrain(target: string, userMsg: string): string {
 }
 
 export def runTurn(target: string, userMsg: string): string {
-  """
-  Run one user turn, marked in the statelog so the logs viewer can count
-  the agent's working time as the sum of its turns rather than the whole
-  session's wall clock (which includes the user's typing time).
-  """
-  const startedAt = _turnStart()
-  const reply = runGuardedTurn(target, userMsg)
-  _turnEnd(startedAt)
-  return reply
-}
-
-def runGuardedTurn(target: string, userMsg: string): string {
   """
   Run one user turn under a time/cost guard parsed from the user's message.
   A single guard wraps the whole turn — the brain and every subagent it

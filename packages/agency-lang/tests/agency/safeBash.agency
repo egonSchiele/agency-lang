@@ -8,6 +8,7 @@ import {
   resolveCwd,
   TOOL_OUTPUT_DIR,
  } from "std::safeBash"
+import { resolve } from "std::path"
 import { glob } from "std::shell"
 
 def refusedFor(source: string): any {
@@ -290,11 +291,20 @@ node longOutputIsSavedToFile() {
     }
   }
   remove(dir) with approve
+  // The notice must name the read call exactly as the agent's read tool
+  // takes it: the file name, and the directory as an absolute path.
+  let namedTheReadCall = false
+  if (saved is success(files)) {
+    if (files.length == 1) {
+      const absDir = resolve("${dir}/${TOOL_OUTPUT_DIR}")
+      namedTheReadCall = notice.includes("read(filename: \"${files[0]}\", dir: \"${absDir}\")")
+    }
+  }
   return [
     notice.length < 2000,
     notice.includes("Command exited with code 0"),
-    notice.includes("full output saved to ${TOOL_OUTPUT_DIR}/"),
-    notice.includes("use the read tool"),
+    notice.includes("full output saved to "),
+    namedTheReadCall,
     savedLength,
   ]
 }

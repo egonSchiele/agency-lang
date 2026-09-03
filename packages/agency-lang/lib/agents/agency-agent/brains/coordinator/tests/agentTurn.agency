@@ -33,7 +33,7 @@ node respondsToAMessage(): string {
   const brain = coordinatorBrain()
   const init = brain.init
   const answer = brain.runTurn
-  init({ interactive: false, grounding: "GROUNDING-MARKER-7f3a", projectContext: "" }) with approve
+  init({ interactive: false, grounding: "GROUNDING-MARKER-7f3a" }) with approve
   const reply = answer("", "hello") with approve
   return "${reply}|${threadHasSystemText("GROUNDING-MARKER-7f3a")}|${threadHasSystemText("Agency-language assistant")}"
 }
@@ -136,7 +136,7 @@ node switchPerSlotOnly(): string {
   saveSettings({}) with approve
   const out = switchModel(
     freshSession(),
-    "reasoning=claude-opus-4-8",
+    "reasoning=claude-sonnet-5",
     SWITCH_CTX,
     SWITCH_BEFORE,
   )

@@ -94,11 +94,11 @@ export function expandAncestorsOf(state: ViewerState, matchIds: string[]): Viewe
 // synthetic parent so the match is visible. The real node id is always
 // the first colon-delimited segment (nanoid span ids, `evt-N`,
 // `trace-…` contain no colons). Synthetic id forms:
-//   <leaf>:convo:<n>:<j>      — conversation line under a leaf event
+//   <leaf>:convo:<n>          — conversation line under a leaf event
 //   <leaf>:json:<n>           — raw JSON line under a non-pc leaf
 //   <leaf>:raw                — "raw data" toggle under a leaf
 //   <leaf>:raw:json:<n>       — JSON line under an opened raw toggle
-//   <span>:llm:convo:<n>:<j>  — conversation line under an llmCall span
+//   <span>:llm:convo:<n>      — conversation line under an llmCall span
 //   <span>:llm:raw            — "raw data" toggle under an llmCall span
 //   <span>:llm:raw:json:<n>   — JSON line under that opened raw toggle
 // Real node ids themselves are returned unchanged.

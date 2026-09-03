@@ -818,30 +818,22 @@ def askUser(intr: any): AskUserResult {
   }
 }
 
-/**
- * A verdict that says who made it. The runtime only sees handler functions,
- * so without this every decision this handler makes is logged as
- * `resolvedBy: "handler"`, whether a saved rule answered in a millisecond
- * or a person sat at the prompt for a minute. The runtime copies the tag
- * onto its handlerDecision and interruptResolved events.
- */
-def decidedBy(verdict: any, source: string): any {
-  verdict.decidedBy = source
-  return verdict
-}
+// The payload fields that say what an interrupt is about, as opposed to
+// what it carries: an edit's before/after text, a write's content, or a
+// command's stdin would swamp the line and echo file contents.
+static const IDENTIFYING_FIELDS = ["filename", "dir", "command", "cwd", "name", "url", "pattern", "target", "path", "src", "dest"]
 
 /**
  * One line naming what a rejected interrupt asked for, so a person watching
  * the session sees the refusal instead of only its effect on the agent's
- * next move. Only the flat string and number fields: an edit's before/after
- * text or a command's stdin would swamp the line.
+ * next move.
  */
 def oneLineData(data: any): string {
   if (data == null || typeof data != "object") {
     return ""
   }
   let parts: string[] = []
-  for (key in data) {
+  for (key in IDENTIFYING_FIELDS) {
     const value = data[key]
     if (typeof value == "string" || typeof value == "number") {
       let text = "${value}"
@@ -904,20 +896,17 @@ def _handler(intr: any): any {
     if (intr.effect == "std::edit") {
       print(renderEditDiff(intr.data))
     }
-    return decidedBy(approve(), "policy")
+    return approve()
   }
   if (decision.type == "reject") {
     // A rule rejected without asking. Say so on the terminal: a silent
     // rejection looks, from the outside, like the agent changing its mind.
-    // In one session a saved rule refused a read of a build log and the
-    // only visible sign was the agent switching to bash commands that each
-    // needed approval (trace mL0SvY, 2026-09-03).
     if (_interactive) {
       print(color.dim("⏺ Policy rejected ${intr.effect}${oneLineData(intr.data)}"))
     }
     // The rule's rejectMessage, when set: the model reads it as the
     // rejection reason and can steer its next attempt.
-    return decidedBy(reject(decision.message), "policy")
+    return reject(decision.message)
   }
 
   // No rule decided, and no user is at a terminal to ask: reject with a
@@ -934,27 +923,27 @@ def _handler(intr: any): any {
   if (answer.action == "approve-always") {
     _policy = recordRule(_policy, intr.effect, "approve")
     _pendingSave = true
-    return decidedBy(approve(), "user")
+    return approve()
   }
   if (answer.action == "approve-always-here") {
     _policy = recordScopedRule(_policy, intr, globalCliPolicyOpts.fields)
     _pendingSave = true
-    return decidedBy(approve(), "user")
+    return approve()
   }
   if (answer.action == "reject-always") {
     _policy = recordRule(_policy, intr.effect, "reject")
     _pendingSave = true
-    return decidedBy(reject(), "user")
+    return reject()
   }
   if (answer.action == "approve") {
-    return decidedBy(approve(), "user")
+    return approve()
   }
 
   // Free-text path: the user typed a rejection reason at the choice
   // prompt instead of picking a key. Use it directly so the LLM sees
   // their feedback without a second prompt.
   if (answer.reason != null) {
-    return decidedBy(reject(answer.reason), "user")
+    return reject(answer.reason)
   }
 
   // Interactive reject (user picked "r"): ask for optional guidance so
@@ -962,9 +951,9 @@ def _handler(intr: any): any {
   // agent can course-correct without ending the turn.
   const reason = input("What should the agent do instead? (press enter to skip) ")
   if (reason == "") {
-    return decidedBy(reject(), "user")
+    return reject()
   }
-  return decidedBy(reject(reason), "user")
+  return reject(reason)
 }
 
 /**

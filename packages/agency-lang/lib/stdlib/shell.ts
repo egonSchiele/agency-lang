@@ -13,7 +13,12 @@ import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
 import { resolvePath } from "./resolvePath.js";
-import { type GitignoreFile, isIgnored, readGitignore } from "./gitignore.js";
+import {
+  type GitignoreFile,
+  isIgnored,
+  readAncestorGitignores,
+  readGitignore,
+} from "./gitignore.js";
 
 function buildSpawnOptions(
   cwd: string,
@@ -405,7 +410,7 @@ async function walkDir(root: string, visit: Visitor, options: WalkOptions = {}):
     }
     return true;
   }
-  await walk(root, []);
+  await walk(root, options.respectGitignore ? await readAncestorGitignores(root) : []);
 }
 
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */

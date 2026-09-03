@@ -25,8 +25,8 @@ import { slotKind, canonicalSlot } from "./slots.agency"
 // OpenRouter fronts many open models; its defaults are a reasoning model
 // for the fast path and GLM for deep work (the model the custom-providers
 // doc uses). `slowProvider` stays "openrouter" — no Responses-style API.
-// Google's fast and slow slots both use gemini-3.1-pro-preview: this is an
-// experiment collapsing the split to a single capable model per provider.
+// Google's slow slot reuses gemini-3.5-flash: there is no 3.5-pro yet, and
+// 3.5-flash outperforms the older 3.1 Pro on coding and agentic work.
 // (Keep these notes out of the object literal below: comments inside an
 // object literal hit a parser bug.)
 type ProviderModels = {
@@ -47,8 +47,8 @@ export static const MODELS: Record<string, ProviderModels> = {
     slowProvider: "anthropic"
   },
   google: {
-    fast: "gemini-3.1-pro-preview",
-    slow: "gemini-3.1-pro-preview",
+    fast: "gemini-3.5-flash",
+    slow: "gemini-3.5-flash",
     slowProvider: "google"
   },
   openrouter: {

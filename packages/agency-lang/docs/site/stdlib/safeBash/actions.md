@@ -265,12 +265,11 @@ What the model gets back for a command's output.
 
   Short output comes back exactly as printed. Long output is saved to a
   file under `cwd` and replaced by a preview: the exit code, the first and
-  last lines, the file's path, and which tools read it. Raw output with no
-  bound is a context-window hazard, but cutting it off was worse: the
-  model could not see whether a build finished, so it re-ran the build
-  through bash pipes to find out, and every one of those needed approval
-  (trace mL0SvY, 2026-09-03). The file goes under `cwd` because that is
-  where the agent's read tools are approved without asking.
+  last lines, the file's location, and which tools read it. Raw output
+  with no bound is a context-window hazard, but cutting it off hid whether
+  a build had finished, and the model re-ran it through bash to find out.
+  The file goes under `cwd` because that is where the agent's read tools
+  are approved without asking.
 
   If the file cannot be written, the output is cut at the cap with a
   visible marker, the way it always was.
@@ -308,4 +307,4 @@ Perform the write a redirected echo asked for. Returns the empty string,
 
 **Returns:** `Result<string>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/safeBash/actions.agency#L228))

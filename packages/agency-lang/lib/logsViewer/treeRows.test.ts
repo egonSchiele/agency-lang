@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  renderViewerLines,
-  flattenVisibleRows,
-  colorFor,
-  renderRowText,
-  wrapLine,
-} from "./treeRows.js";
+import { renderViewerLines, flattenVisibleRows, colorFor, renderRowText } from "./treeRows.js";
+import { wrapLine } from "./wrapLine.js";
 import { TreeNode, ViewerState } from "./types.js";
 import { color } from "@/utils/termcolors.js";
 
@@ -171,7 +166,7 @@ describe("promptCompletion expansion", () => {
     // trace, leaf, [user], [assistant], raw-data toggle
     expect(rows).toHaveLength(5);
     expect(rows[2].node.nodeKind).toBe("convoLine");
-    expect(rows[2].node.summary).toBe(`${color.green("[user]")} ${color.cyan("hi")}`);
+    expect(rows[2].node.summary).toBe(`${color.green("[user]")} ${color.brightCyan("hi")}`);
     expect(rows[3].node.nodeKind).toBe("convoLine");
     expect(rows[4].node.nodeKind).toBe("rawDataToggle");
     expect(rows[4].node.id).toBe("evt-0:raw");
@@ -267,8 +262,9 @@ describe("promptCompletion expansion", () => {
     for (const r of convoRows) {
       expect(visible(r.node.summary).length).toBeLessThanOrEqual(40 - r.depth * 2 - 2);
     }
-    // Concatenating wrapped chunks reconstructs the original line.
-    const joined = convoRows.map((r) => visible(r.node.summary)).join("");
+    // Concatenating the wrapped rows, minus their indent, reconstructs the
+    // original line.
+    const joined = convoRows.map((r) => visible(r.node.summary).replace(/^  /, "")).join("");
     expect(joined).toContain(longText);
   });
 });
@@ -288,32 +284,6 @@ describe("wrapLine", () => {
 
   it("returns a single-element list for width <= 0", () => {
     expect(wrapLine("abc", 0)).toEqual(["abc"]);
-  });
-
-  it("measures width without ANSI escapes and carries the style onto every chunk", () => {
-    const dim = "\x1b[2m";
-    const reset = "\x1b[0m";
-    // 18 visible columns; the escapes must not count toward the width.
-    const styled = `${dim}one two three four${reset}`;
-    expect(wrapLine(styled, 18)).toEqual([styled]);
-    expect(wrapLine(styled, 10)).toEqual([`${dim}one two${reset}`, `${dim}three four${reset}`]);
-  });
-
-  it("a style that starts mid-line opens the following chunks", () => {
-    const cyan = "\x1b[36m";
-    const reset = "\x1b[0m";
-    const styled = `tag ${cyan}alpha beta gamma${reset}`;
-    expect(wrapLine(styled, 9)).toEqual([
-      `tag ${cyan}alpha${reset}`,
-      `${cyan}beta${reset}`,
-      `${cyan}gamma${reset}`,
-    ]);
-  });
-
-  it("hard-breaks a styled word without losing escapes", () => {
-    const dim = "\x1b[2m";
-    const reset = "\x1b[0m";
-    expect(wrapLine(`${dim}abcdef${reset}`, 4)).toEqual([`${dim}abcd${reset}`, `${dim}ef${reset}`]);
   });
 });
 

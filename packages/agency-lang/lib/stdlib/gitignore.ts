@@ -63,6 +63,39 @@ export function parseGitignore(dir: string, text: string): GitignoreFile {
   return { dir, rules };
 }
 
+/** The .gitignore files that already apply to `dir` before a walk enters
+ * it: those in its ancestors up to and including the repository root (the
+ * nearest ancestor holding a `.git` entry), outermost first. A search
+ * rooted in a subdirectory would otherwise miss the root file, where
+ * rules like `**\/*.js` usually live. With no repository above `dir`,
+ * nothing applies. */
+export async function readAncestorGitignores(dir: string): Promise<GitignoreFile[]> {
+  const ancestors: string[] = [];
+  let current = path.dirname(path.resolve(dir));
+  for (;;) {
+    ancestors.unshift(current);
+    if (await exists(path.join(current, ".git"))) break;
+    const parent = path.dirname(current);
+    if (parent === current) return [];
+    current = parent;
+  }
+  const files: GitignoreFile[] = [];
+  for (const ancestor of ancestors) {
+    const file = await readGitignore(ancestor);
+    if (file) files.push(file);
+  }
+  return files;
+}
+
+async function exists(p: string): Promise<boolean> {
+  try {
+    await fs.lstat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The .gitignore in `dir`, or null when there is none. */
 export async function readGitignore(dir: string): Promise<GitignoreFile | null> {
   let text: string;
@@ -84,7 +117,7 @@ export function isIgnored(fullPath: string, isDirectory: boolean, files: Gitigno
   let ignored = false;
   for (const file of files) {
     const relative = path.relative(file.dir, fullPath).split(path.sep).join("/");
-    if (relative.startsWith("..")) continue;
+    if (relative === ".." || relative.startsWith("../")) continue;
     for (const rule of file.rules) {
       if (ruleApplies(rule, relative, isDirectory)) ignored = !rule.negated;
     }

@@ -308,6 +308,19 @@ describe("_grep honours .gitignore", () => {
     expect(hits.sort()).toEqual(["a.agency", "keep/c.js"]);
   });
 
+  it("applies a .gitignore above the search root, up to the repository root", async () => {
+    // The root .gitignore ignores *.js; the search starts in `keep`, whose
+    // own .gitignore un-ignores it, and in `sub`, which has none.
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "d.js"), "needle\n");
+    fs.writeFileSync(path.join(root, "sub", "d.txt"), "needle\n");
+    const inSub = (await _grep(query, path.join(root, "sub"), 100, [])) as string[];
+    expect(inSub.sort()).toEqual(["d.txt"]);
+    const inKeep = (await _grep(query, path.join(root, "keep"), 100, [])) as string[];
+    expect(inKeep.sort()).toEqual(["c.js"]);
+  });
+
   it("searches everything when respectGitignore is false", async () => {
     const hits = (await _grep(query, root, 100, [], false)) as string[];
     expect(hits.sort()).toEqual(["a.agency", "a.js", "keep/c.js", "out/b.txt"]);

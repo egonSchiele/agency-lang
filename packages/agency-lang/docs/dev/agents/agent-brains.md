@@ -26,9 +26,7 @@ A brain is a value of type `AgentBrain` (`brains/brain.agency`):
 ```
 export type BrainContext = {
   interactive: boolean   // false for --print, piped stdin, or a query without -i
-  grounding: string      // session facts + the project context; harness-built
-  projectContext: string // date, working directory, AGENTS.md block on its own,
-                         // for a subagent that acts in the project (the code agent)
+  grounding: string      // date, working directory, AGENTS.md block; harness-built
 }
 
 export type AgentBrain = {
@@ -69,11 +67,10 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
   `brain.runTurn`.
 - `lib/repl.agency`: the interactive terminal. It calls the harness
   `runTurn` and never a brain directly.
-- `lib/grounding.agency`: builds the grounding text with `groundingText`,
-  and the project block on its own with `projectContextText`, which calls
-  `loadAgentsMd` (AGENTS.md, else CLAUDE.md). The coordinator hands the
-  project block to the code subagent (`setCodeGrounding`) so the build
-  and test commands in AGENTS.md reach the model that runs them.
+- `lib/grounding.agency`: builds the grounding text with `groundingText`.
+  The project block (date, cwd, AGENTS.md or else CLAUDE.md) is
+  `projectContextText` in `lib/projectContext.agency`, a leaf module so
+  the code subagent can put the same block in its own prompt.
 - `lib/agentName.agency`: `agentNameFor(brain)` returns
   `"agency-agent/<brain name>"`. `main()` passes it to `setAgentName`, so
   every trace is grouped by the brain that produced it.

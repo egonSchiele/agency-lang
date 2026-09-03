@@ -8,10 +8,10 @@ describe("formatConversation", () => {
       { role: "user", content: "hi" },
       { role: "assistant", content: "hello" },
     ]);
-    // A user body is cyan and a system body is dim, so both stand apart
-    // from assistant and tool text when scrolling a long transcript.
+    // A user body is bright cyan and a system body is dim, so both stand
+    // apart from assistant and tool text when scrolling a long transcript.
     expect(lines).toEqual([
-      `${color.green("[user]")} ${color.cyan("hi")}`,
+      `${color.green("[user]")} ${color.brightCyan("hi")}`,
       `${color.green("[assistant]")} hello`,
     ]);
   });
@@ -28,7 +28,7 @@ describe("formatConversation", () => {
       { role: "assistant", content: "Hello, Alice!" },
     ]);
     expect(lines).toEqual([
-      `${color.green("[user]")} ${color.cyan("Greet Alice using the greet tool")}`,
+      `${color.green("[user]")} ${color.brightCyan("Greet Alice using the greet tool")}`,
       `${color.green("[assistant]")} tool call: greet({"name":"Alice"})`,
       `${color.green("[tool: greet]")} Hello, Alice!`,
       `${color.green("[assistant]")} Hello, Alice!`,
@@ -60,7 +60,7 @@ describe("formatConversation", () => {
         ],
       },
     ]);
-    expect(lines).toEqual([`${color.green("[user]")} ${color.cyan("first second")}`]);
+    expect(lines).toEqual([`${color.green("[user]")} ${color.brightCyan("first second")}`]);
   });
 
   it("renders a non-content-part array (e.g. a tool result) as JSON", () => {
@@ -103,6 +103,16 @@ describe("formatConversation", () => {
     expect(lines).toEqual([
       `${color.green("[tool: bash]")} \\u001b[2Jcleared\\u001b[1;1H\\r\\tdone`,
       "  next",
+    ]);
+  });
+
+  it("wraps body text to the width before coloring, so every row is styled", () => {
+    const lines = formatConversation([{ role: "user", content: "one two three four five" }], 16);
+    // "[user] " takes 7 columns, so the first row holds 9 characters of body.
+    expect(lines).toEqual([
+      `${color.green("[user]")} ${color.brightCyan("one two")}`,
+      `  ${color.brightCyan("three four")}`,
+      `  ${color.brightCyan("five")}`,
     ]);
   });
 

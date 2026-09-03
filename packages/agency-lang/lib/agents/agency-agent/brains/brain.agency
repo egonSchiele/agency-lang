@@ -8,11 +8,8 @@ import { Attachment } from "std::thread"
 export type BrainContext = {
   // false for --print, piped stdin, or a positional query without -i.
   interactive: boolean;
-  // Session facts plus the project context below. Built by the harness.
-  grounding: string;
-  // Date, working directory, and the AGENTS.md block on its own, for a
-  // subagent that acts in the project but is not the session's identity.
-  projectContext: string
+  // Date, working directory, and the AGENTS.md block. Built by the harness.
+  grounding: string
 }
 
 export type AgentBrain = {

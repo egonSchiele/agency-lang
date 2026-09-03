@@ -42,17 +42,7 @@ is no one to ask.
 When a rule rejects in an interactive session, the handler prints one dim
 line (`⏺ Policy rejected std::read (dir: /private/tmp, filename: …)`).
 Without it a rejection is invisible: the only sign is the agent quietly
-taking another route. In trace `mL0SvY` (2026-09-03) a saved blanket
-reject on `std::read` refused the agent's read of a build log in 5 ms,
-and the agent fell back to bash `tail` and `sed`, each of which prompted
-the user, who never learned why.
-
-The handler also tags every verdict with who made it, `"policy"` for a
-rule and `"user"` for an answer at the prompt. The runtime copies the tag
-onto the `handlerDecision` event (`decidedBy`) and uses it as the
-`interruptResolved` event's `resolvedBy`. An untagged handler still logs
-as `"handler"`, so a trace can tell a saved rule from a person from a
-handler function.
+taking another route.
 
 ## What "approve always here" pins
 

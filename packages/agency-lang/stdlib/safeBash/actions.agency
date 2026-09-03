@@ -175,12 +175,11 @@ export def keepOutput(text: string, cwd: string, exitCode: number): string {
 
   Short output comes back exactly as printed. Long output is saved to a
   file under `cwd` and replaced by a preview: the exit code, the first and
-  last lines, the file's path, and which tools read it. Raw output with no
-  bound is a context-window hazard, but cutting it off was worse: the
-  model could not see whether a build finished, so it re-ran the build
-  through bash pipes to find out, and every one of those needed approval
-  (trace mL0SvY, 2026-09-03). The file goes under `cwd` because that is
-  where the agent's read tools are approved without asking.
+  last lines, the file's location, and which tools read it. Raw output
+  with no bound is a context-window hazard, but cutting it off hid whether
+  a build had finished, and the model re-ran it through bash to find out.
+  The file goes under `cwd` because that is where the agent's read tools
+  are approved without asking.
 
   If the file cannot be written, the output is cut at the cap with a
   visible marker, the way it always was.
@@ -192,10 +191,10 @@ export def keepOutput(text: string, cwd: string, exitCode: number): string {
   if (saved is failure(why)) {
     return text[:MAX_STDOUT_LEN] + "\n[truncated]"
   }
-  return spillNotice(text, saved.value, exitCode)
+  return spillNotice(text, saved.value.dir, saved.value.filename, exitCode)
 }
 
-def spillNotice(text: string, savedPath: string, exitCode: number): string {
+def spillNotice(text: string, dir: string, filename: string, exitCode: number): string {
   """
   The preview that stands in for a long output: what happened, a glimpse
   of both ends, and exactly how to read the rest.
@@ -210,8 +209,8 @@ def spillNotice(text: string, savedPath: string, exitCode: number): string {
 ${head}
 --- last ${PREVIEW_LINES} lines ---
 ${tail}
---- full output saved to ${savedPath} ---
-To read it, use the read tool: read(filename: "${savedPath}"), with offset and limit to take a slice. To search it, use the grep tool with dir: "${TOOL_OUTPUT_DIR}". Both work without approval on files under the working directory. Do not use bash (tail, sed, wc, cat) to inspect this file: every bash command needs approval, and these tools do not."""
+--- full output saved to ${dir}/${filename} ---
+To read it, use the read tool: read(filename: "${filename}", dir: "${dir}"), with offset and limit to take a slice. To search it, use the grep tool with dir: "${dir}". Both work without approval on files under the working directory. Do not use bash (tail, sed, wc, cat) to inspect this file: every bash command needs approval, and these tools do not."""
 }
 
 def previewLines(lines: string[]): string {

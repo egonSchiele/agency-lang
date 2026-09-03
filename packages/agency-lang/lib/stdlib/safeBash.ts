@@ -26,7 +26,7 @@ export async function _spillOutput(
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `${stamp}-${randomBytes(3).toString("hex")}.log`;
   // "wx": never overwrite, even on a clock collision.
-  await writeFile(path.join(dir, filename), text, { flag: "wx" });
+  await writeFile(path.join(dir, filename), text, { flag: "wx", mode: 0o600 });
   return { dir, filename };
 }
 

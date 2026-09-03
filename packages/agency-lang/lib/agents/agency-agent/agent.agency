@@ -150,11 +150,9 @@ node main() {
     args.flags["max-tool-call-rounds"] ?? null,
     isOneShot,
   )
-  if (maxRounds != null) {
-    setLlmOptions({
-      maxToolCallRounds: maxRounds
-    })
-  }
+  setLlmOptions({
+    maxToolCallRounds: maxRounds
+  })
   const maxResultChars = args.flags["max-tool-result-chars"]
   if (maxResultChars != null) {
     setLlmOptions({

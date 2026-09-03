@@ -432,15 +432,11 @@ export async function _grep(
  *  newline does not start a line, the same as grep, or `invert` would
  *  report an empty line past the end of every file. */
 function matchingLines(text: string, plan: GrepPlan): { line: number; text: string }[] {
-  const selected = (line: string) => {
-    plan.regex.lastIndex = 0;
-    return plan.regex.test(line) !== plan.invert;
-  };
   return text
     .replace(/\n$/, "")
     .split("\n")
     .map((line, index) => ({ line: index + 1, text: line }))
-    .filter((entry) => selected(entry.text));
+    .filter((entry) => plan.regex.test(entry.text) !== plan.invert);
 }
 
 export async function _glob(

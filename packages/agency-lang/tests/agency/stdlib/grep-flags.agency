@@ -30,11 +30,36 @@ node ignoreCase(): string[] {
   return locations(hits)
 }
 
-node wholeWord(): string[] {
-  // "world" is a whole word; "worldly" is not in the fixtures, so use a prefix
-  // that only matches inside a word: "hell" is inside "hello".
-  const hits = grep("hell", fixtures, "", 100, wholeWord: true) catch [] with approve
-  return locations(hits)
+// "hell" sits inside "hello" on three fixture lines. As a whole word it
+// matches none of them; "hello" as a whole word matches all three.
+node wholeWord(): any {
+  const inside = grep("hell", fixtures, "i", 100, wholeWord: true) catch ["failed"] with approve
+  const whole = grep("hello", fixtures, "i", 100, wholeWord: true) catch ["failed"] with approve
+  return {
+    inside: locations(inside),
+    whole: locations(whole)
+  }
+}
+
+node filesOnlyRespectsMaxResults(): number {
+  const files = grep("hello", fixtures, "i", 1, filesOnly: true) catch [] with approve
+  return files.length
+}
+
+// The named parameters ride in the interrupt data, where a policy or a
+// person approving the call can see them.
+node interruptCarriesParameters(): string {
+  handle {
+    const result = grep("hello", fixtures, "im", 5, wholeWord: true, filesOnly: true)
+    if (result is failure(reason)) {
+      return "${reason}"
+    }
+    return "not raised"
+  } with (intr) {
+    return reject(
+      "${intr.effect}|${intr.data.flags}|${intr.data.ignoreCase}|${intr.data.wholeWord}|${intr.data.filesOnly}|${intr.data.invert}",
+    )
+  }
 }
 
 node filesOnly(): string[] {

@@ -3778,3 +3778,48 @@ describe("arrow return type", () => {
     );
   });
 });
+
+describe("declaration names with spaces", () => {
+  it("rejects a def whose name has a space in it", () => {
+    const parsed = parseAgency("def foo bar(x: number): number { return x }", {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/`foo bar`/);
+    expect(parsed.message).toMatch(/cannot contain spaces/);
+  });
+
+  it("rejects a node whose name has a space in it", () => {
+    const parsed = parseAgency("node main loop() { print(1) }", {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/`main loop`/);
+  });
+
+  it("tells the author a modifier written after def goes before it", () => {
+    const parsed = parseAgency("def handoff getCapital(c: string): string { return c }", {}, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/`handoff` goes before `def`/);
+    expect(parsed.message).toMatch(/handoff def getCapital/);
+  });
+
+  it("does not suggest a reorder when the name after the modifier still has a space", () => {
+    const parsed = parseAgency(
+      "def handoff get capital(c: string): string { return c }",
+      {},
+      false,
+    );
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/cannot contain spaces: `handoff get capital`/);
+    expect(parsed.message).not.toMatch(/goes before/);
+  });
+
+  it("ignores whitespace between the name and the parameter list", () => {
+    const parsed = functionParser("def foo (x: number): number { return x }");
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.result.functionName).toBe("foo");
+    }
+  });
+});

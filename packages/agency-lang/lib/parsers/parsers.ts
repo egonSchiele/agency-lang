@@ -12,6 +12,7 @@ import {
   BODY_RESERVED_MODIFIER_MESSAGE,
   C_STYLE_FOR_MESSAGE,
   CATCH_ALL_NOT_LAST,
+  DECL_NAME_SPACES_MESSAGE,
   DUPLICATE_ON_CLAUSE,
   EMPTY_HANDLER_BLOCK,
   MALFORMED_ON_CLAUSE,
@@ -19,6 +20,7 @@ import {
   IF_EXPRESSION_MESSAGE,
   INTERFACE_EXTENDS_MESSAGE,
   MATCH_CASES_MESSAGE,
+  MODIFIER_AFTER_KEYWORD_MESSAGE,
   RESERVED_CLASS_MESSAGE,
   STATIC_ASSIGN_MESSAGE,
   STATIC_INNER_MESSAGE,
@@ -1287,16 +1289,56 @@ const declNameHoleParser: Parser<Hole> = map(
   (r: unknown) => (r as { hole: Hole }).hole,
 );
 
+// The modifiers that may precede `def`, in any order, each at most once.
+// A table looped to fixpoint keeps this order-independent and makes a new
+// modifier a one-word addition to FUNCTION_MARKER_KEYWORDS.
+const FUNCTION_MODIFIER_KEYWORDS = ["export", ...FUNCTION_MARKER_KEYWORDS] as const;
+type FunctionModifierKeyword = (typeof FUNCTION_MODIFIER_KEYWORDS)[number];
+
+// The modifiers that may precede `node`.
+const NODE_MODIFIER_KEYWORDS = ["export"] as const;
+
 /** A declaration name: an identifier hole or a raw name. When the input
  *  starts with `#` there is NO raw-name fallback — otherwise a rejected
  *  hole form (`def #...name`) would be swallowed as the literal string
- *  "#...name" instead of failing the parse. */
-const declNameParser: Parser<string | Hole> = (input: string) => {
-  if (input.startsWith("#")) {
-    return declNameHoleParser(input) as ParserResult<string | Hole>;
-  }
-  return many1Till(char("("))(input) as ParserResult<string | Hole>;
+ *  "#...name" instead of failing the parse.
+ *
+ *  A raw name runs up to `(`, so it is checked for whitespace here. Once
+ *  `def NAME` has been read the construct is unambiguous, so the failure
+ *  is committed: an enclosing `or(...)` would otherwise report something
+ *  unrelated. `modifiers` lists the words that may precede `keyword`, so
+ *  `def handoff foo(` gets the message that names the right order. */
+const declNameParserFor = (
+  keyword: "def" | "node",
+  modifiers: readonly string[],
+): Parser<string | Hole> => {
+  return (input: string) => {
+    if (input.startsWith("#")) {
+      return declNameHoleParser(input) as ParserResult<string | Hole>;
+    }
+    const raw = many1Till(char("("))(input);
+    if (!raw.success) {
+      return raw as ParserResult<string | Hole>;
+    }
+    const name = raw.result.trimEnd();
+    const words = name.split(/\s+/);
+    if (words.length === 1) {
+      return { ...raw, result: name };
+    }
+    // Only `def handoff foo(` earns the reorder hint. With three or more
+    // words the suggested line would itself still hold a spaced name.
+    const isMisplacedModifier = words.length === 2 && modifiers.includes(words[0]);
+    const message = isMisplacedModifier
+      ? MODIFIER_AFTER_KEYWORD_MESSAGE(words[0], keyword, words[1])
+      : DECL_NAME_SPACES_MESSAGE(keyword, name);
+    const declined = committedFailure(message, input);
+    getParseState().committedFailure = declined;
+    return declined as ParserResult<string | Hole>;
+  };
 };
+
+const defNameParser = declNameParserFor("def", FUNCTION_MODIFIER_KEYWORDS);
+const nodeNameParser = declNameParserFor("node", NODE_MODIFIER_KEYWORDS);
 
 export const booleanParser: Parser<BooleanLiteral> = label(
   "a boolean",
@@ -6991,7 +7033,7 @@ const _baseFunctionParser: Parser<any> = memo(
     set("type", "function"),
     capture(oneOfStr(["def", "function"]), "keyword"),
     many1(space),
-    capture(declNameParser, "functionName"),
+    capture(defNameParser, "functionName"),
     char("("),
     optionalSpacesOrNewline,
     captureCaptures(
@@ -7038,12 +7080,6 @@ const exportKeywordParser: Parser<boolean> = or(
   map(seqC(str("export"), spaces), () => true),
   succeed(false),
 );
-
-// The modifiers that may precede `def`, in any order, each at most once.
-// A table looped to fixpoint keeps this order-independent and makes a new
-// modifier a one-word addition to FUNCTION_MARKER_KEYWORDS.
-const FUNCTION_MODIFIER_KEYWORDS = ["export", ...FUNCTION_MARKER_KEYWORDS] as const;
-type FunctionModifierKeyword = (typeof FUNCTION_MODIFIER_KEYWORDS)[number];
 
 const modifierKeywordParser = (keyword: string): Parser<boolean> =>
   or(
@@ -7156,7 +7192,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label(
           optionalSpaces,
           str("node"),
           many1(space),
-          capture(declNameParser, "nodeName"),
+          capture(nodeNameParser, "nodeName"),
           char("("),
           optionalSpacesOrNewline,
           captureCaptures(

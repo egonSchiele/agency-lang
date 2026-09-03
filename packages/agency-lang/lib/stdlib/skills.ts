@@ -47,7 +47,7 @@ export { stringifyFrontmatter as _stringifyFrontmatter } from "tarsec/parsers/ma
  * payload built from the result matches the `std::write` payload raised
  * for the same directory.
  */
-export { resolveCwdPath as _resolveCwdPath } from "./resolveDir.js";
+export { canonicalDir as _canonicalDir } from "./resolveDir.js";
 
 /**
  * Absolute path to the skills we ship for one agent, under

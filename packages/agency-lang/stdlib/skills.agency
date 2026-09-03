@@ -14,7 +14,7 @@ import { exists } from "std::shell"
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
-import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter, _resolveCwdPath } from "agency-lang/stdlib-lib/skills.js"
+import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter, _canonicalDir } from "agency-lang/stdlib-lib/skills.js"
 
 
 /** @module
@@ -292,8 +292,11 @@ export def skillsDir(
   @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters. Defaults to a name derived from `dir`; set this to override it — e.g. for a stable, readable name, or to disambiguate two tools whose derived names would collide.
   """
+  // The payload names the directory the way a read would, so the same
+  // policy rule covers both. The tool keeps the caller's spelling, which
+  // its derived name is built from.
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: dir,
+    dir: _canonicalDir(dir),
     layout: layout
   })
 
@@ -342,10 +345,10 @@ export def scanSkillsSubdirs(
   if (subdirs.length == 0) {
     return success(Object.create(null))
   }
-  // Absolutized so the interrupt payload — and any always-scope rule
+  // Canonical, so the interrupt payload — and any always-scope rule
   // saved from it — names one directory regardless of the caller's
   // spelling.
-  const absRoot = _resolveCwdPath(root)
+  const absRoot = _canonicalDir(root)
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
     dir: absRoot,
     layout: "flat"
@@ -392,8 +395,8 @@ def renderFrontmatter(name: string, description: string): Result<string> {
   return fm
 }
 
-// Runs before anyone is asked. Returns the absolutized directory, so
-// the interrupt payloads name one directory however the caller spelled it.
+// Runs before anyone is asked. Returns the canonical directory, so the
+// interrupt payloads name one directory however the caller spelled it.
 def checkSkillInputs(dir: string, name: string, description: string): Result<string> {
   if (!validSkillName(name)) {
     return failure("skill name '${name}' is invalid: use kebab-case, lowercase letters and digits separated by single hyphens")
@@ -408,7 +411,7 @@ def checkSkillInputs(dir: string, name: string, description: string): Result<str
   if (dir.trim() == "") {
     return failure("dir must not be empty")
   }
-  const absDir = _resolveCwdPath(dir)
+  const absDir = _canonicalDir(dir)
   if (exists("${name}.md", absDir)) {
     return failure("a skill named ${name} already exists in ${absDir}")
   }
@@ -760,7 +763,7 @@ export def commandsDir(dir: string): any[] {
   @param dir - Directory containing command markdown files.
   """
   return interrupt std::skills::commandsDir("Are you sure you want to scan this directory for slash command files?", {
-    dir: dir
+    dir: _canonicalDir(dir)
   })
 
   const pathsResult = try _glob("*.md", dir, MAX_SKILL_FILES, [])

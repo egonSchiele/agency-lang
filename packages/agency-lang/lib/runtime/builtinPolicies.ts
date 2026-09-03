@@ -1,5 +1,6 @@
 import {
   AGENCY_INSTALL_DIR_PLACEHOLDER as INSTALL,
+  AGENT_HOME_PLACEHOLDER as AGENT_HOME,
   type Policy,
   type PolicyRule,
   escapeGlob,
@@ -31,20 +32,35 @@ function agencyExecApproveRules(): PolicyRule[] {
 
 const approve: PolicyRule[] = [{ action: "approve" }];
 
-// Where the read-only file tools may look without asking: the launch
-// directory and, because the agent's docs tools (`agencyGuide` and friends)
-// and bundled skills are plain reads of shipped files, the agency install
-// itself. Both are placeholders the matcher expands at match time (`.` to
-// the process cwd, `<agency>` to the package root; see
-// docs/dev/agents/approval-policies.md), so a saved copy of this policy keeps
-// meaning "wherever the agent runs, wherever agency is installed now".
-// Reads anywhere else fall through: a prompt in an interactive session, an
-// automatic rejection in a headless one.
+// Where the read-only file tools may look without asking. The launch
+// directory. The agency install itself, because the agent's docs tools
+// (`agencyGuide` and friends) and bundled skills are plain reads of
+// shipped files. The agent home's learned skills and tools, which only
+// enter those directories through a review interrupt. All three are
+// placeholders the matcher expands at match time (`.` to the process cwd,
+// `<agency>` to the package root, `<agent-home>` to the agent home, see
+// docs/dev/agents/approval-policies.md), so a saved copy of this policy
+// keeps meaning "wherever the agent runs, wherever agency is installed
+// now". Reads anywhere else fall through: a prompt in an interactive
+// session, an automatic rejection in a headless one.
 export function readScopeRules(): PolicyRule[] {
   return [
     { match: { dir: "{.,./**}" }, action: "approve" },
     { match: { dir: `{${INSTALL}/stdlib/**,${INSTALL}/dist/**}` }, action: "approve" },
+    {
+      match: {
+        dir: `{${AGENT_HOME}/skills,${AGENT_HOME}/skills/**,${AGENT_HOME}/tools,${AGENT_HOME}/tools/**}`,
+      },
+      action: "approve",
+    },
   ];
+}
+
+// runTool's use count in a tool's meta.json. An effect of its own, never
+// a std::write rule on the file; docs/dev/agents/approval-policies.md
+// says why.
+function toolboxRecordUseRules(): PolicyRule[] {
+  return [{ match: { dir: `${AGENT_HOME}/tools/**` }, action: "approve" }];
 }
 
 export const minimalAutoApprovePolicy: Policy = {
@@ -72,11 +88,12 @@ export const recommendedAutoApprovePolicy: Policy = {
   "std::weather": approve,
   "std::search": approve,
   "std::tavilySearch": approve,
-  "std::skills::skillsDir": approve,
-  "std::skills::commandsDir": approve,
-  // A scan reads tool sources and meta.json under a directory, so it
-  // takes the read scope.
+  // A scan reads every skill, command, or tool file under a directory,
+  // so it takes the read scope.
+  "std::skills::skillsDir": readScopeRules(),
+  "std::skills::commandsDir": readScopeRules(),
   "std::toolbox::scan": readScopeRules(),
+  "std::toolbox::recordUse": toolboxRecordUseRules(),
   "std::notify": approve,
   "std::clipboardCopy": approve,
   "std::git::status": approve,
@@ -137,7 +154,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory (and the agency install's own docs and skills) and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills and tools (plus the toolbox use count there), and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
   },
   {
     name: "minimal",

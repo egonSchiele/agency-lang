@@ -2,6 +2,7 @@ import picomatch from "picomatch";
 import { realpathSync } from "fs";
 import { z } from "zod";
 import { getPackageRoot } from "../importPaths.js";
+import { agentHomeDir } from "./agentHome.js";
 
 export const PolicyRuleSchema = z
   .object({
@@ -158,6 +159,34 @@ export function expandAgencyInstallDir(
   return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeForGlob(resolved));
 }
 
+/** In a `dir` pattern, `<agent-home>` stands for the agent home directory
+ *  (`AGENCY_AGENT_HOME`, or `~/.agency-agent`). The built-in read scope
+ *  uses it for the learned skills and tools directories, so a saved policy
+ *  keeps meaning "wherever the agent home is now". */
+export const AGENT_HOME_PLACEHOLDER = "<agent-home>";
+
+// Expanded at match time, like `<agency>`. Exported for tests, which
+// inject the home.
+export function expandAgentHomeDir(
+  pattern: string,
+  home: () => string = canonicalAgentHome,
+): string {
+  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) return pattern;
+  return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeForGlob(home()));
+}
+
+// Realpathed for the reason the cwd is in resolveDotDirPattern: file
+// effects put the realpath in their payload. A home that does not exist
+// yet keeps its lexical spelling.
+function canonicalAgentHome(): string {
+  const home = agentHomeDir();
+  try {
+    return realpathSync(home);
+  } catch {
+    return home;
+  }
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
@@ -185,12 +214,14 @@ function matchesRule(
       !raw &&
       key === "dir" &&
       picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
-    const viaInstall =
+    // Each expander leaves a pattern without its token alone, so one check
+    // covers every placeholder, including a pattern that mixes them.
+    const viaPlaceholders =
       !raw &&
       !viaDot &&
       key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), expandAgencyInstallDir(pattern));
-    if (!raw && !viaDot && !viaInstall) {
+      picomatch.isMatch(stripDotSlash(value), expandAgentHomeDir(expandAgencyInstallDir(pattern)));
+    if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }
   }

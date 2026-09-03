@@ -53,8 +53,10 @@ question, a review) get no "always" answers at all.
 ## What `recommended` lets the agent read
 
 The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
-`std::glob`, `std::grep`) are approved in two places only
-(`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
+`std::glob`, `std::grep`) and the scan effects that read a whole
+directory under one approval (`std::skills::skillsDir`,
+`std::skills::commandsDir`, `std::toolbox::scan`) are approved in three
+places only (`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
 
 - the launch directory and everything under it, written as `{.,./**}` so
   the rule keeps meaning "wherever the agent runs" after the policy is
@@ -63,17 +65,57 @@ The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,
   `{<agency>/stdlib/**,<agency>/dist/**}`. The docs tools (`agencyGuide`,
   `agencyStdlib`, ...) are `read` partially applied to
   `stdlib/docs/<section>`, and the bundled skills are read the same way, so
-  without this rule those tools return rejections in a headless run.
+  without this rule those tools return rejections in a headless run;
+- the agent home's learned skills and tools, written as
+  `{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**}`.
+  The roots are listed as well as their contents because a catalog scan
+  of the whole directory names the root itself in its payload. Those directories
+  hold skills the user taught the agent and tools it wrote, and both
+  enter them only through a review interrupt. Without this rule every
+  read of a learned skill, every catalog scan, and every `runTool` would
+  prompt, and would auto-reject headless. The rule reaches every
+  `recommended` run, not only the agent, and the policy's description
+  says so. The home itself is not covered, so `~/.agency-agent/policy.json`
+  and `settings.json` still prompt.
 
-Both rules are placeholders, not paths. `.` expands to the process cwd and
-`<agency>` to the directory the agency package is installed in
-(`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
-`getPackageRoot`), each at match time. The copy the agent saves to
-`~/.agency-agent/policy.json` therefore pins neither the directory it was
-first run in nor the install path of one version. After an upgrade moves the
-package, the same rule still matches. A root that cannot be found (a bundled build
-with no `package.json` above it) leaves `<agency>` as written and the rule
-simply never matches.
+`recommended` also approves `std::toolbox::recordUse` under
+`<agent-home>/tools/**`, the effect `runTool` raises before counting a
+use in the tool's `meta.json`. It is an effect of its own rather than a
+`std::write` rule on that filename because a path glob cannot tell the
+stdlib's bookkeeping from any program writing arbitrary content into
+`meta.json`, whose `purpose` text `listTools` then trusts and whose
+`maxTime` sets the run's time limit. Approving the effect approves only
+the record the stdlib composes. No `std::write` is approved anywhere.
+
+The save and review gates (`std::skills::save`, `std::skills::review`,
+`std::toolbox::save`, `std::toolbox::review`) have no rule in any
+built-in but `approve-all`. They prompt.
+
+All three read rules are placeholders, not paths. `.` expands to the
+process cwd, `<agency>` to the directory the agency package is installed
+in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
+`getPackageRoot`), and `<agent-home>` to `AGENCY_AGENT_HOME` or
+`~/.agency-agent` (`AGENT_HOME_PLACEHOLDER`, `expandAgentHomeDir`,
+`agentHomeDir` in `lib/runtime/agentHome.ts`), each at match time. An
+empty `AGENCY_AGENT_HOME` counts as unset, and a relative one resolves
+against the cwd, the way the `--agent-home` flag does. The copy the
+agent saves to `~/.agency-agent/policy.json` therefore pins neither the
+directory it was first run in, nor the install path of one version, nor
+one machine's home. A root that cannot be found (a bundled build with no
+`package.json` above it) leaves `<agency>` as written and the rule simply
+never matches.
+
+The expanded home is realpathed, for the reason the cwd is in
+`resolveDotDirPattern`: file effects put the realpath of their directory
+in the interrupt payload, so a home reached through a symlinked ancestor
+(`/tmp` on macOS, a linked `$HOME`) would otherwise never match. The
+scan and save effects in `std::skills` and `std::toolbox` put the same
+spelling in their payloads (`canonicalDir` in `lib/stdlib/resolveDir.ts`),
+so one rule covers a read and the scan that precedes it. This is
+the spelling the payload already uses. It is not support for symlinks
+inside the home: the reads and the use-count write under these
+approvals refuse a symlinked skill or tool directory (see `docs/dev/stdlib/skills-write.md`
+and `docs/dev/stdlib/toolbox.md`).
 
 A policy file saved before this change keeps its old catch-all read rules;
 there is no migration. Delete the file (the agent writes a fresh

@@ -1,6 +1,6 @@
-import * as os from "os";
 import * as path from "path";
 import { isFailure } from "@/runtime/index.js";
+import { agentHomeDir } from "@/runtime/agentHome.js";
 import { _addMcpServer, _removeMcpServer, _readMcpServersFromFile } from "@/stdlib/mcp.js";
 
 // The "what" for `agency mcp …`. Commander does the parsing; these thin actions
@@ -9,13 +9,8 @@ import { _addMcpServer, _removeMcpServer, _readMcpServersFromFile } from "@/stdl
 
 type ScopeOpts = { global?: boolean };
 
-function agentHome(): string {
-  const override = process.env.AGENCY_AGENT_HOME;
-  return override ? path.resolve(override) : path.join(os.homedir(), ".agency-agent");
-}
-
 const projectFile = (): string => path.resolve(process.cwd(), "agency.json");
-const globalFile = (): string => path.join(agentHome(), "settings.json");
+const globalFile = (): string => path.join(agentHomeDir(), "settings.json");
 
 const scopeFile = (o: ScopeOpts): string => (o.global ? globalFile() : projectFile());
 const scopeName = (o: ScopeOpts): string => (o.global ? "global" : "project");

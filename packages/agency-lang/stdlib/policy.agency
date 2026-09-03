@@ -836,7 +836,9 @@ def oneLineData(data: any): string {
   for (key in IDENTIFYING_FIELDS) {
     const value = data[key]
     if (typeof value == "string" || typeof value == "number") {
-      let text = "${value}".replace(re/[\u0000-\u001f\u007f-\u009f]/g, "�")
+      // JSON-quoted, so a control character in a command or name is shown
+      // escaped rather than sent to the terminal.
+      let text = JSON.stringify(value)
       if (text.length > 80) {
         text = text[:80] + "…"
       }

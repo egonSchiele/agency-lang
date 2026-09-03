@@ -437,6 +437,9 @@ type LineHit = { line: number; text: string };
  *  the end of every file. */
 function firstMatchingLines(text: string, plan: GrepPlan, limit: number): LineHit[] {
   const hits: LineHit[] = [];
+  if (text.length === 0) {
+    return hits;
+  }
   const end = text.endsWith("\n") ? text.length - 1 : text.length;
   let start = 0;
   let line = 1;

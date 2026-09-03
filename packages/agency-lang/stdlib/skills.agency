@@ -22,8 +22,9 @@ import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter, _res
   Give an LLM access to a directory of skills, and support Claude-Code-style
   slash commands. `skillsDir` builds a tool that lets the model read skill
   files on demand. `writeSkill` saves a new skill after approval.
-  `commandsDir` and `expandSlash` load prompt-template commands and expand
-  a user's `/command` into its body.
+  `designSkill` shows a draft to the user, revises it on their feedback,
+  and saves it through `writeSkill`. `commandsDir` and `expandSlash` load
+  prompt-template commands and expand a user's `/command` into its body.
 
   ```ts
   import { skillsDir, commandsDir, expandSlash } from "std::skills"
@@ -380,12 +381,46 @@ def validSkillName(name: string): boolean {
   return name =~ re/^[a-z0-9]+(-[a-z0-9]+)*$/
 }
 
+def renderFrontmatter(name: string, description: string): Result<string> {
+  if (description.includes("\n") || description.includes("\r")) {
+    return failure("the description must be one line")
+  }
+  const fm = try _stringifyFrontmatter({ name: name, description: description })
+  if (fm is failure(fmErr)) {
+    return failure("the description cannot be written as frontmatter: ${fmErr}")
+  }
+  return fm
+}
+
+// Runs before anyone is asked. Returns the absolutized directory, so
+// the interrupt payloads name one directory however the caller spelled it.
+def checkSkillInputs(dir: string, name: string, description: string): Result<string> {
+  if (!validSkillName(name)) {
+    return failure("skill name '${name}' is invalid: use kebab-case, lowercase letters and digits separated by single hyphens")
+  }
+  if (name.length > MAX_TOOL_NAME_LEN) {
+    return failure("skill name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
+  }
+  const rendered = renderFrontmatter(name, description)
+  if (rendered is failure) {
+    return rendered
+  }
+  if (dir.trim() == "") {
+    return failure("dir must not be empty")
+  }
+  const absDir = _resolveCwdPath(dir)
+  if (exists("${name}.md", absDir)) {
+    return failure("a skill named ${name} already exists in ${absDir}")
+  }
+  return success(absDir)
+}
+
 /**
 The plain primitive for saving a skill that is already final: show the
 complete file in a `std::skills::save` interrupt, then write it. There
 is deliberately no feedback shape on that interrupt — any approval
-saves, and data carried on the approval is not consulted. A
-draft-revise-accept loop belongs in a caller built on top of this.
+saves, and data carried on the approval is not consulted. The
+draft-revise-accept loop is `designSkill`, which ends by calling this.
 */
 export def writeSkill(
   dir: string,
@@ -396,41 +431,23 @@ export def writeSkill(
   """
   Save one skill file into a skills directory, after approval. Composes
   the flat-layout markdown (frontmatter with name and description, then
-  the body); a rejection writes nothing and fails the call.
+  the body); a rejection writes nothing and fails the call. To draft a
+  skill with the user and revise it on their feedback, use designSkill.
 
   @param dir - The skills directory to write into
   @param name - The skill's name; also its filename. Lowercase letters, digits, and hyphens.
   @param description - One line telling the reading agent when to use the skill
   @param body - The skill's markdown body
   """
-  if (!validSkillName(name)) {
-    return failure("skill name '${name}' is invalid: use kebab-case, lowercase letters and digits separated by single hyphens")
+  const checked = checkSkillInputs(dir, name, description)
+  if (checked is failure) {
+    return checked
   }
-  if (name.length > MAX_TOOL_NAME_LEN) {
-    return failure("skill name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
-  }
-  if (description.includes("\n") || description.includes("\r")) {
-    return failure("the description must be one line")
-  }
-  if (dir.trim() == "") {
-    return failure("dir must not be empty")
-  }
-  // Absolutized (the same resolution the write itself will use), so the
-  // interrupt payload — and any always-scope rule saved from it — names
-  // one directory regardless of the caller's spelling.
-  const absDir = _resolveCwdPath(dir)
+  const absDir = checked.value
   const filename = "${name}.md"
-  if (exists(filename, absDir)) {
-    return failure("a skill named ${name} already exists in ${absDir}")
-  }
-  // tarsec's serializer is the encode half of the parser `frontmatter`
-  // wraps, so whatever it emits reads back verbatim on the next scan —
-  // YAML flow syntax, quotes, or backslashes in the description cannot
-  // silently corrupt or drop the saved text. It throws on the rare
-  // value no quoting can hold; `try` turns that into a clean failure.
-  const fm = try _stringifyFrontmatter({ name: name, description: description })
-  if (fm is failure(fmErr)) {
-    return failure("the description cannot be written as frontmatter: ${fmErr}")
+  const fm = renderFrontmatter(name, description)
+  if (fm is failure) {
+    return fm
   }
   const content = "${fm.value}\n${body}\n"
   return interrupt std::skills::save(
@@ -450,6 +467,172 @@ export def writeSkill(
     return wrote
   }
   return success({ name: name, description: description, location: filename })
+}
+
+// ============================================================
+// The design loop
+// ============================================================
+
+/** What the redraft model returns. The name is fixed, since it is also
+  the filename. */
+type SkillDraft = {
+  description: string;
+  body: string
+}
+
+const ACCEPT = "accept"
+
+effect std::skills::review {
+  dir: string;
+  name: string;
+  description: string;
+  body: string
+}
+
+def draftBrief(name: string, draft: SkillDraft, feedback: string): string {
+  return """
+Revise a skill file for an AI agent. A skill is a short markdown document the agent reads when the description says it applies: the description is one line saying when to use it, and the body is the guidance itself.
+
+The skill is named `${name}`. Keep the name.
+
+## Current description
+${draft.description}
+
+## Current body
+${draft.body}
+
+## Feedback from the user
+${feedback}
+
+Rewrite the description and the body so the feedback is addressed. Keep everything the feedback does not mention. Reply with the new description (one line) and the new body (markdown).
+"""
+}
+
+// Not llmOptions from std::agents/lib/shared: that module imports this one.
+def draftOptions(model: string, provider: string): any {
+  const options: any = {}
+  if (model != "") {
+    options.model = model
+    if (provider != "") {
+      options.provider = provider
+    }
+  }
+  return options
+}
+
+def redraft(
+  name: string,
+  draft: SkillDraft,
+  feedback: string,
+  model: string,
+  provider: string,
+): Result<SkillDraft> {
+  const next: SkillDraft! = llm(draftBrief(name, draft, feedback), draftOptions(model, provider))
+  if (next is failure(shapeErr)) {
+    return failure("the redraft had the wrong shape: ${shapeErr}")
+  }
+  const rendered = renderFrontmatter(name, next.value.description)
+  if (rendered is failure(renderErr)) {
+    return failure("the redraft was refused: ${renderErr}")
+  }
+  return next
+}
+
+// The answer is text: a bare approve() or "accept" accepts, and anything
+// else is the feedback for the next draft. Returns null for accept.
+def askUser(dir: string, name: string, draft: SkillDraft): Result<string | null> {
+  const answer = interrupt std::skills::review("Review this skill before it is saved: answer accept, or give feedback for the next draft", {
+    dir: dir,
+    name: name,
+    description: draft.description,
+    body: draft.body
+  })
+  if (answer == null || answer == ACCEPT) {
+    return success(null)
+  }
+  const feedback: string! = answer
+  if (feedback is failure) {
+    return failure("unrecognized review answer ${JSON.stringify(answer)}: answer \"${ACCEPT}\", or give feedback for the next draft as text")
+  }
+  if (feedback.value.trim() == "") {
+    return failure("a revise answer needs feedback")
+  }
+  return feedback
+}
+
+/** `done` ends the loop. Otherwise `feedback` goes into the next round. */
+type SkillRoundOutcome = {
+  done?: Result<SkillEntry>;
+  feedback: string
+}
+
+def oneSkillRound(
+  dir: string,
+  name: string,
+  draft: SkillDraft,
+): SkillRoundOutcome {
+  const answer = askUser(dir, name, draft)
+  if (answer is failure(rejected)) {
+    return { done: failure(rejected), feedback: "" }
+  }
+  if (answer.value == null) {
+    return { done: writeSkill(dir, name, draft.description, draft.body), feedback: "" }
+  }
+  return { done: null, feedback: answer.value }
+}
+
+/**
+The draft-show-revise-accept loop over `writeSkill`. The caller's draft
+is shown first, in a `std::skills::review` interrupt. The answer is
+text: `accept` (or a bare approval) accepts, and anything else is
+feedback, which goes to a model call that rewrites the description and
+body. The result is shown again, up to `maxRounds` reviews. Accept
+calls `writeSkill`, whose own `std::skills::save` interrupt still gates
+the write. This is the function to hand to a model as a tool.
+*/
+export def designSkill(
+  dir: string,
+  name: string,
+  description: string,
+  body: string,
+  maxRounds: number = 3,
+  model: string = "",
+  provider: string = "",
+): Result<SkillEntry> raises <std::skills::review, std::skills::save, std::mkdir, std::write> {
+  """
+  Show a draft skill to the user, revise it on their feedback, and save
+  it once they accept.
+
+  @param dir - The skills directory to write into
+  @param name - The skill's name, also its filename. Lowercase letters, digits, and hyphens.
+  @param description - One line telling the reading agent when to use the skill
+  @param body - The skill's markdown body, as a first draft
+  @param maxRounds - Reviews before giving up
+  @param model - Model override for the redraft, or ""
+  @param provider - Provider for the model override
+  """
+  const checked = checkSkillInputs(dir, name, description)
+  if (checked is failure) {
+    return checked
+  }
+  const absDir = checked.value
+  let draft: SkillDraft = { description: description, body: body }
+  let feedback = ""
+  for (round in range(maxRounds)) {
+    if (feedback != "") {
+      const next = redraft(name, draft, feedback, model, provider)
+      if (next is failure) {
+        return next
+      }
+      draft = next.value
+    }
+    const outcome = oneSkillRound(absDir, name, draft)
+    if (outcome.done != null) {
+      return outcome.done
+    }
+    feedback = outcome.feedback
+  }
+  return failure("gave up after ${maxRounds} reviews. Last feedback:\n${feedback}")
 }
 
 export def docsSkill(

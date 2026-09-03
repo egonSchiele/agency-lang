@@ -34,19 +34,21 @@ import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
   ## Useful exports
   - `listTools` reads a toolbox directory into a catalog. It raises a
     `std::toolbox::scan` interrupt, then `std::ls` for the listing.
-  - `writeTool` has the coding agent draft a new tool. `writeTool` then
-    reviews and tests the draft, shows it to the user through an
-    interrupt, and saves it.
+  - `designTool` has the coding agent draft a new tool. `designTool` then
+    reviews and tests the draft, shows it to the user through a
+    `std::toolbox::review` interrupt that can ask for a revision, and
+    saves it through the same save gate `writeTool` uses.
+  - `writeTool` saves a tool whose `run` function is already written. It
+    wraps and typechecks the source, shows it through a
+    `std::toolbox::save` interrupt, and saves it. No model is called.
   - `runTool` runs a saved tool and records the use.
 
   ```ts
-  import { writeTool, listTools, runTool } from "std::toolbox"
-
-  const REVISE_PREFIX = "revise "
+  import { designTool, listTools, runTool } from "std::toolbox"
 
   node main() {
     handle {
-      const written = writeTool(
+      const written = designTool(
         name: "getNews",
         purpose: "Summarize today's news for a list of topics as Markdown.",
         request: "{ topics: string[]; maxItems: number }",
@@ -63,15 +65,13 @@ import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
         "std::toolbox::review" => {
           print(intr.data.source)
           print("effects: ${intr.data.effects.join(", ")}")
-          const answer = input("accept / revise <feedback> / reject: ")
-          if (answer == "accept") {
-            return approve({ verdict: "accept" })
+          const answer = input("accept, or feedback for the next draft (empty rejects): ")
+          if (answer == "") {
+            return reject("cancelled by user")
           }
-          if (answer.startsWith(REVISE_PREFIX)) {
-            return approve({ verdict: "revise", feedback: answer.slice(REVISE_PREFIX.length) })
-          }
-          return reject("cancelled by user")
+          return approve(answer)
         }
+        "std::toolbox::save" => approve()
         _ => pass()
       }
     }
@@ -97,7 +97,7 @@ const WALL_CLOCK_HEADROOM = 30s
 const MAX_TOOL_TIME = 1h - WALL_CLOCK_HEADROOM
 
 // Drafts are built under <root>/staging/<name>-<random>, one directory
-// per writeTool call. Not a dot directory: the with-writes policy scopes
+// per designTool or writeTool call. Not a dot directory: the with-writes policy scopes
 // writes with `base/**`, and `**` does not match a dot-led segment.
 const STAGING_DIR = "staging"
 
@@ -119,6 +119,16 @@ effect std::toolbox::review {
   source: string;
   effects: string[];
   tested: boolean
+}
+
+// Every publish into a toolbox raises this, whether the source came from
+// the design loop or from the caller. `dir` is the toolbox root.
+@alwaysUnder(dir)
+effect std::toolbox::save {
+  dir: string;
+  name: string;
+  source: string;
+  effects: string[]
 }
 
 /** What `describe` says about a tool's `run` function. */
@@ -149,11 +159,7 @@ export type ToolEntry = {
   broken?: string
 }
 
-/** The value a handler passes to approve() for std::toolbox::review. A
-  bare approve() counts as accept. */
-export type WriteToolReview =
-  | { verdict: "accept" }
-  | { verdict: "revise"; feedback: string }
+const ACCEPT = "accept"
 
 const DEFAULT_META: ToolMeta = {
   purpose: "",
@@ -368,7 +374,8 @@ static const toolTemplate = [|
   }
 |]
 
-/** The settings one writeTool call hands every pipeline stage. */
+/** The settings one designTool or writeTool call hands every pipeline
+  stage. */
 type DraftSettings = {
   purpose: string;
   request: string;
@@ -491,7 +498,7 @@ def callsUnpredictable(source: string): boolean {
   return some(calls, \call -> names.includes(call.functionName))
 }
 
-// ---- the writeTool pipeline ----
+// ---- the designTool pipeline ----
 
 /** A failure the next draft can fix, as opposed to one it cannot (a
   refused write, a review agent that did not run). Only these become
@@ -581,7 +588,44 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
     const messages = map(report.value.errors, \diag -> diag.message)
     return draftProblem("the tool does not typecheck:\n${messages.join("\n")}")
   }
+  const requestOk = checkRequestMatches(source, settings.request)
+  if (requestOk is failure) {
+    return requestOk
+  }
   return moduleFacts(settings.stagingDir)
+}
+
+def requestSignature(source: string): Result<string> {
+  const info = describe(source)
+  if (info is failure) {
+    return info
+  }
+  const exported = find(info.value.exports, \entry -> entry.name == "Request" && entry.kind == "type")
+  if (exported == null) {
+    return failure("no exported `type Request`")
+  }
+  return success(exported.signature)
+}
+
+// The wrapper imports whatever `Request` the source declares, so the
+// typecheck cannot tell that it differs from the request text meta.json
+// will advertise. Both are printed by `describe`, so spacing and line
+// breaks do not count as a difference.
+def checkRequestMatches(source: string, request: string): Result {
+  const expected = requestSignature("export type Request = ${request}")
+  if (expected is failure) {
+    return expected
+  }
+  const actual = requestSignature(source)
+  if (actual is failure(missing)) {
+    return draftProblem("${missing} in ${IMPL_FILE}")
+  }
+  if (actual.value != expected.value) {
+    return draftProblem(
+      "${IMPL_FILE} declares `${actual.value}` but the request type is `${expected.value}`. Copy the request type as given.",
+    )
+  }
+  return success(null)
 }
 
 def failedCases(report: TestReport): string[] {
@@ -659,45 +703,56 @@ def prepareDraft(settings: DraftSettings, feedback: string): Result<Draft> {
   return testSource(reviewed.value, settings)
 }
 
-// A rejected interrupt halts this function and returns the rejection to
-// the caller; nothing below the interrupt runs. A bare approve() carries
-// no value and counts as accept.
+// The answer is text: a bare approve() or "accept" accepts, and anything
+// else is the feedback for the next draft. Returns null for accept.
 def askUser(
   name: string,
   settings: DraftSettings,
   draft: Draft,
-): Result<WriteToolReview> {
-  const answer = interrupt std::toolbox::review("Review this tool before it is saved", {
+): Result<string | null> {
+  const answer = interrupt std::toolbox::review("Review this tool before it is saved: answer accept, or give feedback for the next draft", {
     name: name,
     stagingDir: settings.stagingDir,
     source: draft.source,
     effects: draft.effects,
     tested: draft.tested
   })
-  if (answer == null) {
-    return success({
-      verdict: "accept"
-    })
+  if (answer == null || answer == ACCEPT) {
+    return success(null)
   }
-  const review: WriteToolReview! = answer
-  if (review is failure(shapeErr)) {
-    return failure(
-      "unrecognized review answer ${JSON.stringify(answer)}: ${shapeErr}. Expected { verdict: \"accept\" } or { verdict: \"revise\", feedback: \"...\" }",
-    )
+  const feedback: string! = answer
+  if (feedback is failure) {
+    return failure("unrecognized review answer ${JSON.stringify(answer)}: answer \"${ACCEPT}\", or give feedback for the next draft as text")
   }
-  if (review.value.verdict == "revise" && review.value.feedback == "") {
-    return failure(
-      "a revise answer needs feedback; the next draft would get the same brief",
-    )
+  if (feedback.value.trim() == "") {
+    return failure("a revise answer needs feedback")
   }
-  return review
+  return feedback
+}
+
+// The save gate. Both entry points publish through here, so a policy
+// that matches std::toolbox::save sees every tool that enters a toolbox.
+// Data carried on the approval is not consulted.
+def askToSave(
+  root: string,
+  name: string,
+  source: string,
+  effects: string[],
+): Result {
+  return interrupt std::toolbox::save("Do you want to save this tool?", {
+    dir: root,
+    name: name,
+    source: source,
+    effects: effects
+  })
+  return success(null)
 }
 
 // The staged directory already holds impl.agency, tool.agency, and (when
 // the tool was tested) tool.test.json. Add meta.json and publish the whole
 // directory with one rename, so a tool is either fully present or absent.
 // The existence check is repeated here because the one in checkName is
-// stale after the model calls.
+// stale after the approval and any model calls.
 def saveTool(
   root: string,
   name: string,
@@ -745,7 +800,21 @@ def rounds(
     }
     feedback = outcome.feedback
   }
-  return failure("gave up after ${maxRounds} rounds; last problem:\n${feedback}")
+  return failure("gave up after ${maxRounds} rounds. Last problem:\n${feedback}")
+}
+
+def gateAndSave(
+  root: string,
+  name: string,
+  settings: DraftSettings,
+  source: string,
+  effects: string[],
+): Result<ToolEntry> {
+  const approved = askToSave(root, name, source, effects)
+  if (approved is failure) {
+    return approved
+  }
+  return saveTool(root, name, settings)
 }
 
 /** `done` ends the loop; otherwise `feedback` goes into the next round. */
@@ -774,22 +843,13 @@ def oneRound(
     }
     success(draft) => {
       const answer = askUser(name, settings, draft)
-      return match(answer) {
-        failure(rejected) => ({
-          done: failure(rejected),
-          feedback: ""
-        })
-        success(review) => match(review) {
-          { verdict: "accept" } => ({
-            done: saveTool(root, name, settings),
-            feedback: ""
-          })
-          { verdict: "revise", feedback as next } => ({
-            done: null,
-            feedback: next
-          })
-        }
+      if (answer is failure(rejected)) {
+        return { done: failure(rejected), feedback: "" }
       }
+      if (answer.value == null) {
+        return { done: gateAndSave(root, name, settings, draft.source, draft.effects), feedback: "" }
+      }
+      return { done: null, feedback: answer.value }
     }
   }
 }
@@ -841,34 +901,24 @@ def checkRequest(request: string): Result {
   return success(null)
 }
 
-export def writeTool(
+/** What the two entry points share once their inputs pass: the expanded
+  toolbox root and the settings for this call's staging directory. */
+type Staged = {
+  root: string;
+  settings: DraftSettings
+}
+
+// Every check runs before anything is written or anyone is asked.
+def stage(
   name: string,
   purpose: string,
   request: string,
-  dir: string = "~/.agency-agent/tools",
-  maxRounds: number = 3,
-  maxTime: number = 3m,
-  maxCost: number = $1.00,
-  model: string = "",
-  provider: string = "",
-): Result<ToolEntry> {
-  """
-  Write a reusable tool into a toolbox directory. The coding agent drafts
-  the tool's `run` function against the request type. writeTool reviews
-  the draft, wraps it in the guarded tool module and typechecks the pair,
-  tests it when it is pure computation, shows it to the user for
-  acceptance or revision, and saves it.
-
-  @param name - The tool's name; also its directory under dir
-  @param purpose - What the tool should do, in plain language
-  @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
-  @param dir - The toolbox directory to write into
-  @param maxRounds - Draft-review rounds before giving up
-  @param maxTime - Time limit baked into the tool's guard, under one hour
-  @param maxCost - Cost limit baked into the tool's guard
-  @param model - Model override for the coding and review agents, or ""
-  @param provider - Provider for the model override
-  """
+  dir: string,
+  maxTime: number,
+  maxCost: number,
+  model: string,
+  provider: string,
+): Result<Staged> {
   // Expanded once here: the sandboxed testFile resolves paths without
   // expanding `~`, unlike the file primitives.
   const expanded = expandRoot(dir)
@@ -896,18 +946,24 @@ export def writeTool(
   if (made is failure) {
     return made
   }
-  const settings: DraftSettings = {
-    purpose: purpose,
-    request: request,
-    stagingDir: stagingDir,
-    maxTime: maxTime,
-    maxCost: maxCost,
-    model: model,
-    provider: provider
-  }
-  const outcome = rounds(root, name, settings, maxRounds)
+  return success({
+    root: root,
+    settings: {
+      purpose: purpose,
+      request: request,
+      stagingDir: stagingDir,
+      maxTime: maxTime,
+      maxCost: maxCost,
+      model: model,
+      provider: provider
+    }
+  })
+}
+
+// On success the publish rename already emptied staging. On failure a
+// refused removal is folded into the returned failure.
+def clearStaging(outcome: Result<ToolEntry>, stagingDir: string): Result<ToolEntry> {
   if (outcome is success) {
-    // The publish renamed the staging directory away; nothing to clear.
     return outcome
   }
   const removed = remove(stagingDir)
@@ -917,6 +973,109 @@ export def writeTool(
     )
   }
   return outcome
+}
+
+/**
+The design loop: the coding agent drafts the tool, the review agent and
+the typecheck vet the draft, a pure tool gets generated tests, and the
+result goes to the user in a `std::toolbox::review` interrupt that can
+accept it or send feedback for another round. An accepted draft is
+published through the same `std::toolbox::save` gate `writeTool` uses.
+*/
+export def designTool(
+  name: string,
+  purpose: string,
+  request: string,
+  dir: string = "~/.agency-agent/tools",
+  maxRounds: number = 3,
+  maxTime: number = 3m,
+  maxCost: number = $1.00,
+  model: string = "",
+  provider: string = "",
+): Result<ToolEntry> {
+  """
+  Design a reusable tool with the user and save it into a toolbox
+  directory. The coding agent drafts the tool's `run` function against
+  the request type. The draft is reviewed, typechecked, tested when it is
+  pure computation, and shown to the user, who accepts it or gives
+  feedback for another draft.
+
+  @param name - The tool's name; also its directory under dir
+  @param purpose - What the tool should do, in plain language
+  @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
+  @param dir - The toolbox directory to write into
+  @param maxRounds - Draft-review rounds before giving up
+  @param maxTime - Time limit baked into the tool's guard, under one hour
+  @param maxCost - Cost limit baked into the tool's guard
+  @param model - Model override for the coding and review agents, or ""
+  @param provider - Provider for the model override
+  """
+  const staged = stage(name, purpose, request, dir, maxTime, maxCost, model, provider)
+  if (staged is failure) {
+    return staged
+  }
+  const outcome = rounds(staged.value.root, name, staged.value.settings, maxRounds)
+  return clearStaging(outcome, staged.value.settings.stagingDir)
+}
+
+// A DraftProblem from assembleTool, as a plain failure message.
+def problemText(err: any): string {
+  return match(err) {
+    { problem }: DraftProblem => problem
+    _ => "${err}"
+  }
+}
+
+def assembleAndSave(
+  root: string,
+  name: string,
+  source: string,
+  settings: DraftSettings,
+): Result<ToolEntry> {
+  const assembled = assembleTool(source, settings)
+  if (assembled is failure(assembleErr)) {
+    return failure(problemText(assembleErr))
+  }
+  return gateAndSave(root, name, settings, source, assembled.value.effects)
+}
+
+/**
+The plain primitive for saving a tool whose `run` function is already
+written: wrap the source in the guarded tool module, typecheck the pair,
+show the source and its effects in a `std::toolbox::save` interrupt, and
+publish. No model is called and no tests are generated. The design loop
+in `designTool` ends by publishing through this same gate.
+*/
+export def writeTool(
+  name: string,
+  purpose: string,
+  request: string,
+  source: string,
+  dir: string = "~/.agency-agent/tools",
+  maxTime: number = 3m,
+  maxCost: number = $1.00,
+): Result<ToolEntry> {
+  """
+  Save an already-written tool into a toolbox directory, after approval.
+  The source must export `type Request` (matching the request text) and
+  `def run(request: Request): Json`. It is wrapped in the guarded tool
+  module and typechecked before the user is asked. A rejection saves
+  nothing and fails the call.
+
+  @param name - The tool's name, also its directory under dir
+  @param purpose - What the tool does, in plain language
+  @param request - The tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`
+  @param source - The complete impl.agency source
+  @param dir - The toolbox directory to write into
+  @param maxTime - Time limit baked into the tool's guard, under one hour
+  @param maxCost - Cost limit baked into the tool's guard
+  """
+  const staged = stage(name, purpose, request, dir, maxTime, maxCost, "", "")
+  if (staged is failure) {
+    return staged
+  }
+  const outcome = assembleAndSave(staged.value.root, name, source, staged.value.settings)
+  return clearStaging(outcome, staged.value.settings.stagingDir)
 }
 
 // ---- running a tool ----

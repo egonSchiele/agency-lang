@@ -1,0 +1,436 @@
+import { remove, mkdir } from "std::fs"
+import { exists, ls } from "std::shell"
+import { designTool, listTools, runTool } from "std::toolbox"
+
+const OUT = __dirname + "/test-output"
+const TOOLS = __dirname + "/fixtures/tools"
+const REQUEST = "{ n: number }"
+
+// Approve every non-review interrupt; answer the review with the scripted
+// answers in order. A null answer rejects; "bare" answers with a valueless
+// approve(). Returns designTool's result.
+def runDesign(
+  name: string,
+  dir: string,
+  answers: any[],
+  request: string = "{ n: number }",
+) {
+  let reviewCount = 0
+  handle {
+    return designTool(
+      name: name,
+      purpose: "Add one to a number.",
+      request: request,
+      dir: dir,
+      maxRounds: 3,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::toolbox::review" => {
+        const answer = answers[reviewCount]
+        reviewCount = reviewCount + 1
+        if (answer == null) {
+          return reject("cancelled by the test")
+        }
+        if (answer == "bare") {
+          return approve()
+        }
+        return approve(answer)
+      }
+      _ => approve()
+    }
+  }
+}
+
+def cleanup(name: string) {
+  remove(OUT + "/${name}") with approve
+  remove(OUT + "/staging") with approve
+}
+
+def savedFiles(name: string): boolean {
+  const hasImpl = exists("${name}/impl.agency", OUT)
+  const hasTool = exists("${name}/tool.agency", OUT)
+  const hasCases = exists("${name}/tool.test.json", OUT)
+  const hasMeta = exists("${name}/meta.json", OUT)
+  const staged = ls("${OUT}/staging") with approve
+  const stagingGone = (staged catch []).length == 0
+  return hasImpl && hasTool && hasCases && hasMeta && stagingGone
+}
+
+node acceptSavesTheTool(): boolean {
+  cleanup("addOne")
+  const result = runDesign("addOne", OUT, ["accept"])
+  const saved = savedFiles("addOne")
+  const listed = listTools(OUT) with approve
+  let inCatalog = false
+  if (listed is success(entries)) {
+    inCatalog = some(
+      entries,
+      \entry -> entry.name == "addOne" && entry.broken == null && entry.meta.request == REQUEST,
+    )
+  }
+  cleanup("addOne")
+  return result is success && saved && inCatalog
+}
+
+// An accepted design is published through the same std::toolbox::save
+// gate writeTool uses: one review, then one save, in that order.
+node acceptRaisesTheSaveGate(): boolean {
+  cleanup("addGated")
+  const order: string[] = []
+  let result: Result = failure("not run")
+  handle {
+    result = designTool(
+      name: "addGated",
+      purpose: "Add one to a number.",
+      request: REQUEST,
+      dir: OUT,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::toolbox::review" => {
+        order.push("review")
+        return approve("accept")
+      }
+      "std::toolbox::save" => {
+        order.push("save")
+        return approve()
+      }
+      _ => approve()
+    }
+  }
+  const saved = savedFiles("addGated")
+  cleanup("addGated")
+  return result is success && saved && order.join(",") == "review,save"
+}
+
+// Accepting the review is not the last word: a rejected save publishes
+// nothing and clears staging.
+node rejectAtSaveWritesNothing(): boolean {
+  cleanup("addUnsaved")
+  let result: Result = failure("not run")
+  handle {
+    result = designTool(
+      name: "addUnsaved",
+      purpose: "Add one to a number.",
+      request: REQUEST,
+      dir: OUT,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::toolbox::review" => approve("accept")
+      "std::toolbox::save" => reject("not this one")
+      _ => approve()
+    }
+  }
+  const nothing = !exists("addUnsaved", OUT)
+  const staged = ls("${OUT}/staging") with approve
+  const stagingGone = (staged catch []).length == 0
+  cleanup("addUnsaved")
+  return result is failure && "${result.error}" =~ re/not this one/ && nothing && stagingGone
+}
+
+node rejectWritesNothing(): boolean {
+  cleanup("addTwo")
+  const result = runDesign("addTwo", OUT, [null])
+  const nothing = !exists("addTwo", OUT) && !exists("staging/addTwo", OUT)
+  const keptMessage = result is failure && "${result.error}" =~ re/cancelled by the test/
+  cleanup("addTwo")
+  return keptMessage && nothing
+}
+
+node reviseRunsASecondRound(): boolean {
+  cleanup("addThree")
+  const answers = [
+    "name the variable sum",
+    "accept",
+  ]
+  const result = runDesign("addThree", OUT, answers)
+  const ok = result is success && result.value.meta.version == 1
+  cleanup("addThree")
+  return ok
+}
+
+// The first draft exports `compute` instead of `run`, so the assembled
+// tool does not typecheck. That failure goes back to the coding agent and
+// the second draft is the one saved: the saved impl has no `compute`.
+node wrongExportGoesBackToTheCodingAgent(): boolean {
+  cleanup("addFour")
+  const result = runDesign("addFour", OUT, ["accept"])
+  const saved = read("addFour/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/compute/)
+  }
+  cleanup("addFour")
+  return result is success && cleanSource
+}
+
+// The first draft typechecks but declares a different Request than the
+// request text. That goes back to the coding agent, and the second
+// draft is the one saved.
+node wrongRequestGoesBackToTheCodingAgent(): boolean {
+  cleanup("addFifteen")
+  const result = runDesign("addFifteen", OUT, ["accept"])
+  const saved = read("addFifteen/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/text/)
+  }
+  cleanup("addFifteen")
+  return result is success && cleanSource
+}
+
+// No mocks: the name check runs before staging and before any model call.
+// This is the test that fails if the existence check moves later.
+node refusesAnExistingName(): boolean {
+  const result = runDesign("good", TOOLS, ["accept"])
+  return result is failure && "${result.error}" =~ re/exists/
+}
+
+node refusesALongName(): boolean {
+  // 65 characters, one over the cap.
+  const name = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  const result = runDesign(name, OUT, ["accept"])
+  return result is failure && "${result.error}" =~ re/64/
+}
+
+node refusesAnEmptyDir(): boolean {
+  const result = runDesign("addFive", "", ["accept"])
+  return result is failure && "${result.error}" =~ re/dir/
+}
+
+node refusesTheStagingName(): boolean {
+  const result = runDesign("staging", OUT, ["accept"])
+  return result is failure && "${result.error}" =~ re/staging/
+}
+
+// No mocks: the request text is checked before any model call.
+node refusesBadRequestText(): boolean {
+  const unclosed = runDesign("addNine", OUT, ["accept"], "{ n: ")
+  const twoTypes = runDesign(
+    "addTen",
+    OUT,
+    ["accept"],
+    "{ n: number }\nexport type Other = string",
+  )
+  const nothing = !exists("addNine", OUT) && !exists("addTen", OUT)
+  return unclosed is failure && "${unclosed.error}" =~ re/request/ && twoTypes is failure && "${twoTypes.error}" =~ re/request/ && nothing
+}
+
+node bareApproveAccepts(): boolean {
+  cleanup("addSix")
+  const result = runDesign("addSix", OUT, ["bare"])
+  const saved = savedFiles("addSix")
+  cleanup("addSix")
+  return result is success && saved
+}
+
+// A tool that calls a model draws no test-cases mock and saves without a
+// tool.test.json.
+node modelToolSkipsTests(): boolean {
+  cleanup("greet")
+  const result = runDesign("greet", OUT, ["accept"])
+  const hasImpl = exists("greet/impl.agency", OUT)
+  const hasMeta = exists("greet/meta.json", OUT)
+  const noCases = !exists("greet/tool.test.json", OUT)
+  cleanup("greet")
+  return result is success && hasImpl && hasMeta && noCases
+}
+
+// `read` raises std::read, so `run` has an effect and no test file.
+node effectfulToolSkipsTests(): boolean {
+  cleanup("readIt")
+  const result = runDesign("readIt", OUT, ["accept"])
+  const noCases = !exists("readIt/tool.test.json", OUT)
+  let effectsOk = false
+  if (result is success(entry)) {
+    effectsOk = entry.module.effects.join(",") == "std::read"
+  }
+  cleanup("readIt")
+  return result is success && noCases && effectsOk
+}
+
+node whitespaceFeedbackFails(): boolean {
+  cleanup("addTwelve")
+  const result = runDesign("addTwelve", OUT, ["   "])
+  const nothing = !exists("addTwelve", OUT)
+  cleanup("addTwelve")
+  return result is failure && "${result.error}" =~ re/feedback/ && nothing
+}
+
+// Each call stages in its own directory, so a draft another call left
+// behind does not block this one and is not touched by it.
+node leftoverStagingDoesNotBlock(): boolean {
+  cleanup("addEleven")
+  mkdir("${OUT}/staging/addEleven-old") with approve
+  const result = runDesign("addEleven", OUT, ["accept"])
+  const untouched = exists("staging/addEleven-old", OUT)
+  cleanup("addEleven")
+  return result is success && untouched
+}
+
+// The first draft imports a TypeScript primitive that raises no interrupt.
+// The coding agent's own typecheck accepts it; the sandboxed compile in
+// assembleTool refuses it, and the second draft is the one saved.
+node nodeImportGoesBackToTheCodingAgent(): boolean {
+  cleanup("addThirteen")
+  const result = runDesign("addThirteen", OUT, ["accept"])
+  const saved = read("addThirteen/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/stdlib-lib/)
+  }
+  cleanup("addThirteen")
+  return result is success && cleanSource
+}
+
+// A tool that calls today() computes without effects, but its output
+// changes daily, so it gets no generated tests.
+node dateToolSkipsTests(): boolean {
+  cleanup("stamp")
+  const result = runDesign("stamp", OUT, ["accept"])
+  const noCases = !exists("stamp/tool.test.json", OUT)
+  cleanup("stamp")
+  return result is success && noCases
+}
+
+// The answer is text; an object is not an answer.
+node objectAnswerFails(): boolean {
+  cleanup("addSeven")
+  const result = runDesign("addSeven", OUT, [{
+    verdict: "revise"
+  }])
+  const nothing = !exists("addSeven", OUT)
+  cleanup("addSeven")
+  return result is failure && "${result.error}" =~ re/feedback/ && nothing
+}
+
+// Round 1 is pure and writes a test file; the user asks for a revision;
+// round 2 calls a model. The saved tool must not ship round 1's tests.
+node staleTestFileDoesNotShip(): boolean {
+  cleanup("greetTwice")
+  const answers = [
+    "use a model instead",
+    "accept",
+  ]
+  const result = runDesign("greetTwice", OUT, answers)
+  const noCases = !exists("greetTwice/tool.test.json", OUT)
+  const hasImpl = exists("greetTwice/impl.agency", OUT)
+  cleanup("greetTwice")
+  return result is success && hasImpl && noCases
+}
+
+// Write a tool, run it, and check the record: one use, a last-used time,
+// and the createdAt from the write kept as it was.
+node runToolRunsAndRecords(): boolean {
+  cleanup("addEight")
+  const written = runDesign("addEight", OUT, ["accept"])
+  if (written is failure) {
+    cleanup("addEight")
+    return false
+  }
+  const createdAt = written.value.meta.createdAt
+  const answer = runTool("addEight", {
+    n: 41
+  }, OUT) with approve
+  const listed = listTools(OUT) with approve
+  let recorded = false
+  if (listed is success(entries)) {
+    const entry = find(entries, \candidate -> candidate.name == "addEight")
+    recorded = entry.meta.uses == 1 && entry.meta.lastUsedAt != null && entry.meta.createdAt == createdAt && createdAt != ""
+  }
+  cleanup("addEight")
+  return answer is success && answer.value == 42 && recorded
+}
+
+// A refused write is not something a new draft can fix, so designTool
+// stops after the first round instead of drafting maxRounds times. If it
+// looped, the error would read "gave up after".
+node refusedWriteStopsTheRounds(): boolean {
+  cleanup("addFourteen")
+  let result: Result = success(null)
+  handle {
+    result = designTool(
+      name: "addFourteen",
+      purpose: "Add one.",
+      request: "{ n: number }",
+      dir: OUT,
+      maxRounds: 3,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::write" => {
+        if (intr.data.filename == "impl.agency") {
+          return reject("no writes today")
+        }
+        return approve()
+      }
+      _ => approve()
+    }
+  }
+  cleanup("addFourteen")
+  return result is failure && "${result.error}" =~ re/no writes today/ && "${result.error}" !~ re/gave up/
+}
+
+// `import { now as clock }` then `clock()` is still a call to now.
+node aliasedDateCallSkipsTests(): boolean {
+  cleanup("clocked")
+  const result = runDesign("clocked", OUT, ["accept"])
+  const noCases = !exists("clocked/tool.test.json", OUT)
+  cleanup("clocked")
+  return result is success && noCases
+}
+
+// No mocks: refused before any model call.
+node refusesATimeLimitOverAnHour(): boolean {
+  const result = designTool(
+    name: "slow",
+    purpose: "Wait.",
+    request: "{ n: number }",
+    dir: OUT,
+    maxTime: 2h,
+  ) with approve
+  return result is failure && "${result.error}" =~ re/maxTime/
+}
+
+// No mocks: an import smuggled into the request text is refused.
+node refusesAnImportInTheRequestText(): boolean {
+  const result = runDesign(
+    "smuggled",
+    OUT,
+    ["accept"],
+    "{ n: number }\nimport { bash } from \"std::shell\"",
+  )
+  return result is failure && "${result.error}" =~ re/request/ && !exists("smuggled", OUT)
+}
+
+node runToolRefusesAnEmptyDir(): boolean {
+  const answer = runTool("good", {
+    n: 1
+  }, "") with approve
+  return answer is failure && "${answer.error}" =~ re/dir/
+}
+
+node runToolRefusesAMissingTool(): boolean {
+  const answer = runTool("noSuchTool", {
+    n: 1
+  }, OUT) with approve
+  return answer is failure && "${answer.error}" =~ re/noSuchTool/
+}
+
+// A path is not a tool name; runTool must not resolve outside the toolbox.
+node runToolRefusesAPath(): boolean {
+  const answer = runTool("../good", {
+    n: 1
+  }, TOOLS + "/good") with approve
+  return answer is failure && "${answer.error}" =~ re/identifier/
+}
+
+// A corrupt meta.json stops the run before the tool has side effects.
+node runToolRefusesCorruptMeta(): boolean {
+  const answer = runTool("badMeta", {
+    n: 1
+  }, TOOLS) with approve
+  return answer is failure && "${answer.error}" =~ re/meta\.json/
+}

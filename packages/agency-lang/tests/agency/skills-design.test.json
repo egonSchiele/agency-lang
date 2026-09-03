@@ -1,0 +1,181 @@
+{
+  "sourceFile": "skills-design.agency",
+  "tests": [
+    {
+      "nodeName": "acceptSavesTheDraft",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bareApproveAccepts",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectAtReviewWritesNothing",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectAtSaveWritesNothing",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reviseShowsTheRedraft",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "description": "Use when testing designSkill",
+            "body": "The short redraft."
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "givesUpAfterMaxRounds",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "description": "Use when testing designSkill",
+            "body": "The short redraft."
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "whitespaceFeedbackFails",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "objectAnswerFails",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "multilineRedraftFails",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "description": "line one\nline two",
+            "body": "Body."
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "unrepresentableDescriptionFailsBeforeAsking",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unrepresentableRedraftFails",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "description": " \"d\" 's' `t`",
+            "body": "Body."
+          }
+        }
+      ]
+    },
+    {
+      "nodeName": "invalidNameFailsBeforeAsking",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "duplicateNameFailsBeforeAsking",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "emptyDirFailsBeforeAsking",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

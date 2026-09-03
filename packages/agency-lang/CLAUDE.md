@@ -298,9 +298,9 @@ Other process docs:
 - `docs/dev/stdlib/aws.md` — S3 support with no AWS SDK, including the request signer and the safety contracts around it.
 - `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.
 - `docs/dev/stdlib/github.md` — `std::github`: why it speaks REST directly, the three-source credential chain, why the token never becomes an Agency value, and the deliberate departures in its effect vocabulary.
-- `docs/dev/stdlib/skills-write.md` — The `std::skills` write half: writeSkill's save gate, the subdir scan's path-segment validation, and the frontmatter round-trip contract.
+- `docs/dev/stdlib/skills-write.md` — The `std::skills` write half: writeSkill's save gate, designSkill's review-and-redraft loop over it, the subdir scan's path-segment validation, and the frontmatter round-trip contract.
 - `docs/dev/stdlib/std-agency-test.md` — `test()` and `testFile()` from `std::agency`, and the sandbox rules that are easy to get wrong.
-- `docs/dev/stdlib/toolbox.md` — `std::toolbox`: tools an agent writes and keeps; the tool template, the writeTool pipeline, the review interrupt, and runTool.
+- `docs/dev/stdlib/toolbox.md` — `std::toolbox`: tools an agent writes and keeps; the tool template, the designTool pipeline and the plain writeTool, the save gate both publish through, and runTool.
 
 ### LLM plumbing
 

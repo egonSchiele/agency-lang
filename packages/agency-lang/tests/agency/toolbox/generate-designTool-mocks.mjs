@@ -1,5 +1,5 @@
-// Regenerates writeTool.test.json. Run from packages/agency-lang:
-//   node tests/agency/toolbox/generate-writeTool-mocks.mjs
+// Regenerates designTool.test.json. Run from packages/agency-lang:
+//   node tests/agency/toolbox/generate-designTool-mocks.mjs
 // The mocked drafts embed the good fixture as a string, so run this
 // whenever fixtures/tools/good/impl.agency changes; a stale copy fails the
 // coding agent's own check and silently spends the round's mocks.
@@ -12,6 +12,11 @@ const good = readFileSync(join(here, "fixtures/tools/good/impl.agency"), "utf8")
 // The coding agent accepts this module; the assembled tool.agency does not
 // typecheck because nothing named `run` is exported.
 const wrongExport = good.replace("export def run(", "export def compute(");
+// Typechecks on its own, but declares a Request other than the request
+// text; only the comparison in assembleTool catches it.
+const wrongRequest = good
+  .replace("export type Request = {\n  n: number\n}", "export type Request = {\n  text: string\n}")
+  .replace("return request.n + 1", "return request.text.length + 1");
 const modelImpl = `import { Json } from "std::validation"
 
 export type Request = {
@@ -73,14 +78,18 @@ const pureRound = [codeMock(good), reviewOk, casesMock];
 const modelRound = [codeMock(modelImpl), reviewOk];
 const readRound = [codeMock(readImpl), reviewOk];
 const wrongRound = [codeMock(wrongExport), reviewOk];
+const wrongRequestRound = [codeMock(wrongRequest), reviewOk];
 const nodeImportRound = [codeMock(nodeImportImpl), reviewOk];
 const dateRound = [codeMock(dateImpl), reviewOk];
 const aliasRound = [codeMock(aliasImpl), reviewOk];
 const tests = [
   testCase("acceptSavesTheTool", pureRound),
+  testCase("acceptRaisesTheSaveGate", pureRound),
+  testCase("rejectAtSaveWritesNothing", pureRound),
   testCase("rejectWritesNothing", pureRound),
   testCase("reviseRunsASecondRound", [...pureRound, ...pureRound]),
   testCase("wrongExportGoesBackToTheCodingAgent", [...wrongRound, ...pureRound]),
+  testCase("wrongRequestGoesBackToTheCodingAgent", [...wrongRequestRound, ...pureRound]),
   testCase("refusesAnExistingName", []),
   testCase("refusesALongName", []),
   testCase("refusesAnEmptyDir", []),
@@ -89,8 +98,8 @@ const tests = [
   testCase("bareApproveAccepts", pureRound),
   testCase("modelToolSkipsTests", modelRound),
   testCase("effectfulToolSkipsTests", readRound),
-  testCase("reviseWithoutFeedbackFails", pureRound),
-  testCase("reviseWithEmptyFeedbackFails", pureRound),
+  testCase("objectAnswerFails", pureRound),
+  testCase("whitespaceFeedbackFails", pureRound),
   testCase("leftoverStagingDoesNotBlock", pureRound),
   testCase("nodeImportGoesBackToTheCodingAgent", [...nodeImportRound, ...pureRound]),
   testCase("dateToolSkipsTests", dateRound),
@@ -105,4 +114,4 @@ const tests = [
   testCase("runToolRefusesAPath", []),
   testCase("runToolRefusesCorruptMeta", []),
 ];
-writeFileSync(join(here, "writeTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");
+writeFileSync(join(here, "designTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");

@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { execFileSync } from "child_process";
 import { writeContainedFile } from "./writeContainedFile.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
@@ -69,6 +70,16 @@ describe("writeContainedFile", () => {
       expect(fs.existsSync(path.join(outside, "meta.json"))).toBe(false);
     } finally {
       cleanup(parent);
+    }
+  });
+
+  test("a FIFO is refused without blocking", () => {
+    const dir = makeDir(".wcf-fifo-");
+    try {
+      execFileSync("mkfifo", [path.join(dir, "pipe")]);
+      expect(() => writeContainedFile(dir, path.join(dir, "pipe"), "x")).toThrow();
+    } finally {
+      cleanup(dir);
     }
   });
 

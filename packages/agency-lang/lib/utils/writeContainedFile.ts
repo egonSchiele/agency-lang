@@ -4,9 +4,10 @@
  * readContainedFile: the descriptor is what gets validated, and no byte
  * is written before it passes.
  *
- *   1. open O_WRONLY|O_NOFOLLOW — a final-component symlink fails to open.
- *      A file that does not exist yet is created with O_CREAT|O_EXCL after
- *      its parent directory is validated the same way (below).
+ *   1. open O_WRONLY|O_NONBLOCK|O_NOFOLLOW — a final-component symlink
+ *      fails to open; a FIFO fails or returns instead of blocking. A file
+ *      that does not exist yet is created with O_CREAT|O_EXCL after its
+ *      parent directory is validated the same way (below).
  *   2. fstat the descriptor: must be a regular file.
  *   3. realpath the path AFTER the open and require it to sit strictly
  *      inside root — this catches an ancestor swapped to a link that is
@@ -53,14 +54,16 @@ export function writeContainedFile(
       throw new Error(`'${target}' changed between validation and write`);
     }
     fs.ftruncateSync(fd);
-    fs.writeSync(fd, content);
+    // writeFileSync on a descriptor loops until every byte is written; a
+    // bare writeSync may stop short and report the count.
+    fs.writeFileSync(fd, content, "utf-8");
   } finally {
     fs.closeSync(fd);
   }
 }
 
 function openForWrite(realRoot: string, target: string): number {
-  const noFollow = fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW;
+  const noFollow = fs.constants.O_WRONLY | fs.constants.O_NONBLOCK | fs.constants.O_NOFOLLOW;
   try {
     return fs.openSync(target, noFollow);
   } catch (err) {

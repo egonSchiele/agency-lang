@@ -419,24 +419,41 @@ export async function _grep(
       return true;
     }
     const file = toPosix(path.relative(root, full));
-    const hits = matchingLines(text, plan).map((hit) => ({ file, ...hit }));
-    matches.push(...(plan.filesOnly ? hits.slice(0, 1) : hits));
+    const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
+    for (const hit of firstMatchingLines(text, plan, perFile)) {
+      matches.push({ file, ...hit });
+    }
     return matches.length < maxResults;
   });
 
-  const capped = matches.slice(0, maxResults);
-  return plan.filesOnly ? capped.map((match) => match.file) : capped;
+  return plan.filesOnly ? matches.map((match) => match.file) : matches;
 }
 
-/** The lines of one file the plan selects, numbered from 1. A file's final
- *  newline does not start a line, the same as grep, or `invert` would
- *  report an empty line past the end of every file. */
-function matchingLines(text: string, plan: GrepPlan): { line: number; text: string }[] {
-  return text
-    .replace(/\n$/, "")
-    .split("\n")
-    .map((line, index) => ({ line: index + 1, text: line }))
-    .filter((entry) => plan.regex.test(entry.text) !== plan.invert);
+type LineHit = { line: number; text: string };
+
+/** Up to `limit` lines of one file that the plan selects, numbered from 1,
+ *  scanning no further than it must. A file's final newline does not start
+ *  a line, the same as grep, or `invert` would report an empty line past
+ *  the end of every file. */
+function firstMatchingLines(text: string, plan: GrepPlan, limit: number): LineHit[] {
+  const hits: LineHit[] = [];
+  const end = text.endsWith("\n") ? text.length - 1 : text.length;
+  let start = 0;
+  let line = 1;
+  while (start <= end && hits.length < limit) {
+    const newline = text.indexOf("\n", start);
+    const stop = newline === -1 || newline > end ? end : newline;
+    const lineText = text.slice(start, stop);
+    if (plan.regex.test(lineText) !== plan.invert) {
+      hits.push({ line, text: lineText });
+    }
+    if (stop === end) {
+      break;
+    }
+    start = stop + 1;
+    line += 1;
+  }
+  return hits;
 }
 
 export async function _glob(

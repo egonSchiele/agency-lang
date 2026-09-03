@@ -37,6 +37,7 @@ import {
   _getTokens,
   _getModelCosts,
   _threadIsNew,
+  _threadHasSystemMessage,
  } from "agency-lang/stdlib-lib/thread.js"
 
 import { _installSlowInputImpl } from "agency-lang/stdlib-lib/builtins.js"
@@ -218,6 +219,20 @@ export idempotent def threadIsNew(): boolean {
   thread block to send a system prompt only on the first entry.
   """
   return _threadIsNew()
+}
+
+/** For an agent's persona. An agent called twice from code on one thread
+ *  keeps one persona; a handoff, whose system messages are removed when it
+ *  hands back, pushes the persona fresh on every dispatch. */
+export def ensureSystemMessage(msg: string) {
+  """
+  Push `msg` as a system message unless the active thread already holds it.
+
+  @param msg - The system message
+  """
+  if (!_threadHasSystemMessage(msg)) {
+    systemMessage(msg)
+  }
 }
 
 export def getTokens(): number {

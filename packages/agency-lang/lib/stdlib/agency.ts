@@ -217,6 +217,7 @@ export type ExportInfo = {
   effects: string[];
   destructive: boolean;
   idempotent: boolean;
+  handoff: boolean;
   /** The module path this export was re-exported from, else null. */
   reexportedFrom: string | null;
 };
@@ -338,6 +339,7 @@ function localExportInfos(
         effects: effects[name] ?? [],
         destructive: node.markers?.destructive === true,
         idempotent: node.markers?.idempotent === true,
+        handoff: node.markers?.handoff === true,
         reexportedFrom: null,
       },
     ];
@@ -356,6 +358,7 @@ function localExportInfos(
         // destructive or idempotent.
         destructive: false,
         idempotent: false,
+        handoff: false,
         reexportedFrom: null,
       },
     ];
@@ -371,6 +374,7 @@ function localExportInfos(
         effects: [],
         destructive: false,
         idempotent: false,
+        handoff: false,
         reexportedFrom: null,
       },
     ];
@@ -392,6 +396,7 @@ function localExportInfos(
         effects: [],
         destructive: false,
         idempotent: false,
+        handoff: false,
         reexportedFrom: null,
       }));
   }
@@ -477,6 +482,8 @@ function resolveNamedReExports(
         // Re-export sites may add tool markers the source did not have.
         destructive: base.destructive || (body.destructiveNames ?? []).includes(sourceName),
         idempotent: base.idempotent || (body.idempotentNames ?? []).includes(sourceName),
+        // A re-export cannot add handoff; it comes only from the def.
+        handoff: base.handoff,
       },
     ];
   });
@@ -500,6 +507,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
     effects: ["unknown"],
     destructive: false,
     idempotent: false,
+    handoff: false,
     reexportedFrom: from,
   };
 }

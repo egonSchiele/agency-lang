@@ -114,6 +114,26 @@ def promptText(prompt: string | (string | Attachment)[]): string {
   }
 }
 
+// The oracle and explorer are handoffs: as tools they continue the
+// caller's thread. Called directly by --target there is no caller thread
+// to continue, so give each its own, as the other subagents do for
+// themselves.
+def oracleTurn(userMsg: string): string {
+  let reply = ""
+  thread(label: "oracle", summarize: true) {
+    reply = oracleAgent(userMsg)
+  }
+  return reply
+}
+
+def explorerTurn(userMsg: string): string {
+  let reply = ""
+  thread(label: "explorer", summarize: true) {
+    reply = explorerAgent(userMsg)
+  }
+  return reply
+}
+
 def coordinatorRunTurn(
   target: string,
   prompt: string | (string | Attachment)[],
@@ -121,8 +141,8 @@ def coordinatorRunTurn(
   return match(target) {
     "code" => codeAgent(promptText(prompt))
     "research" => researchAgent(promptText(prompt))
-    "oracle" => oracleAgent(promptText(prompt))
-    "explorer" => explorerAgent(promptText(prompt))
+    "oracle" => oracleTurn(promptText(prompt))
+    "explorer" => explorerTurn(promptText(prompt))
     "review" => reviewAgent(promptText(prompt))
     "writing" => writingAgent(promptText(prompt))
     "rewrite" => rewriteAgent(promptText(prompt))

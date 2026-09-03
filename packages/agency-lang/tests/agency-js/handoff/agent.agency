@@ -1,0 +1,217 @@
+// Handoff functions through the real tool loop, against a scripted
+// model. Each node dispatches one handoff and the test reads the
+// caller's thread back from the final request the model sees.
+import { systemMessage, ensureSystemMessage, listThreads, getThread } from "std::thread"
+
+// A leaf tool for the subagents to call.
+def lookup(key: string): string {
+  return "value-of-${key}"
+}
+
+handoff def subagent(question: string): string {
+  return llm("brief: ${question}", { tools: [lookup] })
+}
+
+handoff def personaAgent(question: string): string {
+  systemMessage("persona: be terse")
+  return llm("brief: ${question}")
+}
+
+// The stdlib agents' persona pattern: pushed only when the thread does
+// not already hold it.
+handoff def terseAgent(question: string): string {
+  ensureSystemMessage("persona: be terse")
+  return llm("brief: ${question}")
+}
+
+handoff def threadedAgent(question: string): string {
+  let answer = ""
+  thread {
+    answer = llm("brief: ${question}")
+  }
+  return answer
+}
+
+handoff def subthreadedAgent(question: string): string {
+  let answer = ""
+  subthread {
+    answer = llm("brief: ${question}")
+  }
+  return answer
+}
+
+// Raises with no handler in scope, so the run pauses inside the handoff.
+def pauseMe(id: string): string {
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+handoff def pausingAgent(question: string): string {
+  return llm("brief: ${question}", { tools: [pauseMe] })
+}
+
+// Pushes a persona, then pauses. The persona must still be stripped
+// after the resume, which needs the recorded start index to survive
+// the checkpoint.
+handoff def pausingPersonaAgent(question: string): string {
+  systemMessage("persona: be patient")
+  return llm("brief: ${question}", { tools: [pauseMe] })
+}
+
+handoff def failingAgent(question: string): Result<string> {
+  return failure("boom")
+}
+
+// Returns a structured value, so the resume message has to stringify it.
+handoff def objectAgent(question: string): any {
+  return { answer: "obj", n: 1 }
+}
+
+// Raises before doing anything, so rejecting it rejects the handoff
+// call itself at the outer loop.
+handoff def gatedAgent(question: string): string {
+  const _ok = interrupt("gate ${question}")
+  return llm("brief: ${question}")
+}
+
+// A handoff that offers a handoff.
+handoff def outerAgent(question: string): string {
+  return llm("outer brief: ${question}", { tools: [subagent] })
+}
+
+// A handoff that offers a handoff that pauses.
+handoff def outerPausingAgent(question: string): string {
+  return llm("outer brief: ${question}", { tools: [pausingAgent] })
+}
+
+// Pushes a persona, then asks the model. The test parks that request
+// until a race abort fires.
+handoff def parkingAgent(question: string): string {
+  systemMessage("persona: be parked")
+  return llm("parked: ${question}")
+}
+
+node basic() {
+  return llm("Answer with the subagent.", { tools: [subagent, lookup] })
+}
+
+node persona() {
+  return llm("Answer with the persona agent.", { tools: [personaAgent] })
+}
+
+node notAlone() {
+  return llm("Use both tools at once.", { tools: [subagent, lookup] })
+}
+
+node threadInside() {
+  return llm("Answer with the threaded agent.", { tools: [threadedAgent] })
+}
+
+node subthreadInside() {
+  return llm("Answer with the subthreaded agent.", { tools: [subthreadedAgent] })
+}
+
+node pauseInside() {
+  return llm("Answer with the pausing agent.", { tools: [pausingAgent] })
+}
+
+// Same shape as pauseInside; the test rejects instead of approving.
+node rejectInside() {
+  return llm("Answer with the pausing agent.", { tools: [pausingAgent] })
+}
+
+node failureInside() {
+  return llm("Answer with the failing agent.", { tools: [failingAgent] })
+}
+
+node rejectHandoff() {
+  return llm("Answer with the gated agent.", { tools: [gatedAgent] })
+}
+
+node nested() {
+  return llm("Answer with the outer agent.", { tools: [outerAgent] })
+}
+
+node pauseWithPersona() {
+  return llm("Answer with the pausing persona agent.", { tools: [pausingPersonaAgent] })
+}
+
+node twoDispatches() {
+  return llm("Ask the terse agent twice.", { tools: [terseAgent] })
+}
+
+node twoHandoffs() {
+  return llm("Use both agents at once.", { tools: [subagent, personaAgent] })
+}
+
+// saveDraft is an intrinsic call; it counts toward the round like any
+// other call. It needs a def with a declared return type.
+def withDraft(): string {
+  return llm("Use the subagent and save a draft.", { tools: [subagent, saveDraft] })
+}
+
+node handoffWithDraft() {
+  return withDraft()
+}
+
+node objectResult() {
+  return llm("Answer with the object agent.", { tools: [objectAgent] })
+}
+
+node nestedPause() {
+  return llm("Answer with the outer pausing agent.", { tools: [outerPausingAgent] })
+}
+
+// An async prompt runs on a subthread that is not the active thread. A
+// handoff inside it must land on that subthread, not on the main thread
+// the next llm() call reads.
+node asyncHandoff() {
+  const side = async llm("Answer with the subagent.", { tools: [subagent] })
+  const sideAnswer = await side
+  const mainAnswer = llm("What happened?")
+  return "${sideAnswer} / ${mainAnswer}"
+}
+
+// The caller's own system prompt is live during the body and survives
+// the hand-back; only the body's system messages are removed.
+node callerSystemVisible() {
+  systemMessage("caller rules")
+  return llm("Answer with the persona agent.", { tools: [personaAgent] })
+}
+
+// Two async prompts each dispatch a handoff at the same time. Each
+// body must land on its own prompt's subthread.
+node twoAsyncHandoffs() {
+  const first = async llm("A", { tools: [subagent] })
+  const second = async llm("B", { tools: [subagent] })
+  const firstAnswer = await first
+  const secondAnswer = await second
+  const mainAnswer = llm("What happened?")
+  return "${firstAnswer} / ${secondAnswer} / ${mainAnswer}"
+}
+
+// A race whose loser is inside a handoff body. The abort unwinds the
+// body without a hand-back; the persona it pushed must not stay on the
+// loser's thread. Returns every thread's messages for the test to read.
+node cancelledHandoff(): any {
+  const winner = race([1, 2]) as item {
+    if (item == 1) {
+      return llm("fast")
+    }
+    return llm("slow", { tools: [parkingAgent] })
+  }
+  const infos = listThreads(lazySummarize: false) catch []
+  return map(infos, \info -> getThread(info.id, 0, 1000) catch [])
+}
+
+// Explicit messages give the prompt a thread the store has never seen. A
+// handoff inside it must land on that thread.
+node explicitMessages() {
+  const options: any = {
+    tools: [subagent],
+    messages: [{ role: "user", content: "earlier context" }],
+  }
+  const first = llm("Answer with the subagent.", options)
+  const second = llm("What happened?")
+  return "${first} / ${second}"
+}

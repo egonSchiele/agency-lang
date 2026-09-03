@@ -65,11 +65,14 @@ export type ToolDefinition = {
   schema: unknown;
 };
 
-/** Retry-safety markers carried on a registered tool. Inline shape so the
- *  runtime stays decoupled from the compiler's AST types. */
+/** Markers carried on a registered tool. Inline shape so the runtime
+ *  stays decoupled from the compiler's AST types. */
 export type ToolMarkers = {
   destructive?: boolean;
   idempotent?: boolean;
+  /** Called as a tool, this function continues the caller's conversation.
+   *  Read by the tool loop in prompt.ts. */
+  handoff?: boolean;
 };
 
 export type AgencyFunctionOpts = {

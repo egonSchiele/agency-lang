@@ -1378,6 +1378,23 @@ describe("AgencyGenerator - destructive/idempotent markers", () => {
     return new AgencyGenerator().generate(parseResult.result).output.trim();
   };
 
+  it("round-trips handoff defs, export first", () => {
+    expect(roundTrip("handoff def explorer(q: string): string {\n  return q\n}")).toContain(
+      "handoff def explorer",
+    );
+    expect(roundTrip("handoff export def explorer(q: string): string {\n  return q\n}")).toContain(
+      "export handoff def explorer",
+    );
+  });
+
+  it("a call to a function named handoff is still a call", () => {
+    // The modifier loop must fail and fall through when `handoff` is not
+    // followed by a def, so a plain call keeps parsing as a call.
+    expect(roundTrip("def handoff(n: number): number {\n  return n\n}\nhandoff(1)")).toContain(
+      "handoff(1)",
+    );
+  });
+
   it("round-trips destructive and idempotent defs", () => {
     expect(roundTrip("destructive def rm(p: string) {\n  return 1\n}")).toContain(
       "destructive def rm",

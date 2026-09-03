@@ -40,7 +40,6 @@ oracleAgent(
   maxTime: number = 15m,
   model: string = "",
   provider: string = "",
-  session: string = "",
   extraTools: any[] = [],
 ): Result<string>
 ```
@@ -50,18 +49,21 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
   design. Reads the code and returns a written analysis ending in a concrete
   recommendation. It never changes anything.
 
-  Pass a self-contained question: this agent starts fresh and cannot see your
-  conversation. Include the plan, the relevant file paths, and what you have
-  already tried.
+  The oracle continues your conversation: it sees everything said so far,
+  and its reading and reasoning stay in your history when it hands back.
+  Ask the question itself; there is no need to restate the context.
 
-  @param question - The question, with all the context needed to answer it
+  @param question - The question
   @param context - Extra material folded into the prompt, or ""
   @param maxCost - Hard spend cap
   @param maxTime - Hard wall-clock cap
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
-  @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
+
+Called from code, this runs on the caller's thread like any function:
+ *  the system prompt, the reads, and the answer stay there. Wrap the call
+ *  in `thread { ... }` for an isolated consult.
 
 **Parameters:**
 
@@ -73,11 +75,10 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
 | maxTime | `number` | 15m |
 | model | `string` | "" |
 | provider | `string` | "" |
-| session | `string` | "" |
 | extraTools | `any[]` | [] |
 
 **Returns:** `Result<string>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/oracle.agency#L124))

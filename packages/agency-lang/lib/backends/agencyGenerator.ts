@@ -51,7 +51,12 @@ import { LEGAL_IDENTIFIER } from "../parsers/parsers.js";
 import { comprehensionPrefixString } from "../types/comprehension.js";
 import { BlockArgument } from "../types/blockArgument.js";
 import { AgencyArray, AgencyObject, AgencyObjectKV } from "../types/dataStructures.js";
-import { FunctionCall, FunctionDefinition, FunctionParameter } from "../types/function.js";
+import {
+  FunctionCall,
+  FunctionDefinition,
+  FunctionParameter,
+  markerKeywordsOf,
+} from "../types/function.js";
 import { GraphNodeDefinition } from "../types/graphNode.js";
 import { IfElse } from "../types/ifElse.js";
 import {
@@ -1258,10 +1263,10 @@ export class AgencyGenerator {
     const { body } = node;
 
     const prefixes: string[] = [];
-    if (node.exported) prefixes.push("export");
-    if (node.markers?.destructive) prefixes.push("destructive");
-    if (node.markers?.idempotent) prefixes.push("idempotent");
-    prefixes.push("def");
+    if (node.exported) {
+      prefixes.push("export");
+    }
+    prefixes.push(...markerKeywordsOf(node.markers), "def");
     const prefix = `${prefixes.join(" ")} ${declaredName(node.functionName)}`;
     const signature = this.buildSignature(prefix, node, " {", "source");
 

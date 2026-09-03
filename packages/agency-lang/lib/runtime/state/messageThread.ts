@@ -82,7 +82,8 @@ export class MessageThread {
    *  instead of a reason to reach past them:
    *
    *  - `push` — the only append.
-   *  - `removeAt` — the only removal.
+   *  - `removeAt` and `removeMatching` — the only removals.
+   *  - `replaceAt` — the only in-place swap.
    *  - `adoptFrom` — take on another thread's messages and labels.
    *  - the constructor and `setMessages` — the only replacements.
    *
@@ -144,6 +145,26 @@ export class MessageThread {
   removeAt(index: number): void {
     this.messages.splice(index, 1);
     this.messageLabels.splice(index, 1);
+  }
+
+  /** Swap the message at `index` for `message`, keeping its label. For an
+   *  edit of ONE message that must not reset the labels of the others. */
+  replaceAt(index: number, message: smoltalk.Message): void {
+    if (index < 0 || index >= this.messages.length) {
+      throw new Error(`replaceAt: index ${index} is outside a thread of ${this.messages.length}`);
+    }
+    this.messages[index] = message;
+  }
+
+  /** Remove every message at or after `fromIndex` that `matches`, taking
+   *  labels with them. Walks backwards so each removal leaves the indexes
+   *  still to visit untouched. */
+  removeMatching(fromIndex: number, matches: (message: smoltalk.Message) => boolean): void {
+    for (let index = this.messages.length - 1; index >= fromIndex; index--) {
+      if (matches(this.messages[index])) {
+        this.removeAt(index);
+      }
+    }
   }
 
   /** Take on `other`'s messages AND labels while keeping this thread's

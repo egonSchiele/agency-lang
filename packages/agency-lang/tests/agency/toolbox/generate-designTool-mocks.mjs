@@ -1,5 +1,5 @@
-// Regenerates writeTool.test.json. Run from packages/agency-lang:
-//   node tests/agency/toolbox/generate-writeTool-mocks.mjs
+// Regenerates designTool.test.json. Run from packages/agency-lang:
+//   node tests/agency/toolbox/generate-designTool-mocks.mjs
 // The mocked drafts embed the good fixture as a string, so run this
 // whenever fixtures/tools/good/impl.agency changes; a stale copy fails the
 // coding agent's own check and silently spends the round's mocks.
@@ -78,6 +78,8 @@ const dateRound = [codeMock(dateImpl), reviewOk];
 const aliasRound = [codeMock(aliasImpl), reviewOk];
 const tests = [
   testCase("acceptSavesTheTool", pureRound),
+  testCase("acceptRaisesTheSaveGate", pureRound),
+  testCase("rejectAtSaveWritesNothing", pureRound),
   testCase("rejectWritesNothing", pureRound),
   testCase("reviseRunsASecondRound", [...pureRound, ...pureRound]),
   testCase("wrongExportGoesBackToTheCodingAgent", [...wrongRound, ...pureRound]),
@@ -105,4 +107,4 @@ const tests = [
   testCase("runToolRefusesAPath", []),
   testCase("runToolRefusesCorruptMeta", []),
 ];
-writeFileSync(join(here, "writeTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");
+writeFileSync(join(here, "designTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");

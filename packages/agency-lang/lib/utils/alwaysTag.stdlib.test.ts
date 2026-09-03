@@ -147,8 +147,12 @@ const EXPECTED: Record<string, string[]> = {
   "std::skills::skillsDir": ["dir/**"],
   "std::skills::commandsDir": ["dir/**"],
   "std::skills::save": ["dir/**"],
+  // A review is a human look at one draft; an "always" answer would
+  // make the look meaningless, so nothing is pinned.
+  "std::skills::review": [],
   "std::toolbox::scan": ["dir/**"],
   "std::toolbox::review": [],
+  "std::toolbox::save": ["dir/**"],
   "std::memory::enableMemory": [],
   "std::memory::disableMemory": [],
   "std::memory::remember": [],

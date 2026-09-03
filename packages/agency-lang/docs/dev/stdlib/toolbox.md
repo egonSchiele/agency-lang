@@ -45,25 +45,62 @@ every tool. There is no hole in docstring position either, so the
 purpose goes through `.describe()` on the exported `tool` and into
 `meta.json`. `runGuarded` keeps a fixed docstring.
 
-`writeTool` takes the request type as Agency type text, such as
-`"{ topics: string[]; maxItems: number }"`. It parses
-`export type Request = <text>` and requires exactly one type alias back.
+Both entry points take the request type as Agency type text, such as
+`"{ topics: string[]; maxItems: number }"`. They parse
+`export type Request = <text>` and require exactly one type alias back.
 The brief tells the coding agent to copy that line as is; a draft that
 changes it fails the typecheck of `tool.agency`.
 
-## `writeTool` is a pipeline
+## Two entry points, one save gate
+
+`designTool` is the design loop: the coding agent drafts, the review
+agent and the typecheck vet the draft, and the user sees it in a
+`std::toolbox::review` interrupt that can accept or ask for a revision.
+`writeTool` is the plain primitive: the caller already has the `run`
+source, and no model is called. Both publish through `gateAndSave`,
+which raises one `std::toolbox::save` interrupt (the toolbox root, the
+name, the source, and its effects) and then calls `saveTool`. So every
+tool that enters a toolbox raises the save effect, whichever way it was
+made, and a policy that matches `std::toolbox::save` sees all of them.
+A rejection there publishes nothing.
+
+An accepted design therefore raises two interrupts in a row: the review
+with its revise option, then the save. The second look is deliberate.
+The review is where the user shapes the tool; the save is the one
+effect a policy can pin. `designSkill` in `std::skills` ends the same
+way, by calling `writeSkill`.
+
+`designTool` does not call the exported `writeTool` for that last step.
+It would have to stage a second copy and typecheck it again, and the
+generated `tool.test.json` from the design's own staging directory would
+not come along. Sharing `gateAndSave` gives the same effect without the
+copy.
+
+`stage` is what the two share up front: expand the root, check the name,
+the time limit, and the request text, then make the call's staging
+directory. Every check runs before anything is written or anyone is
+asked. `clearStaging` is the shared tail: on failure it removes the
+staging directory once and folds a refused delete into the returned
+failure. On success the publish rename has already emptied staging, so
+no delete interrupt is raised.
+
+## `designTool` is a pipeline
 
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
-→ `askUser` → `saveTool`, each a def with one job that returns a
+→ `askUser` → `gateAndSave`, each a def with one job that returns a
 `Result`. `rounds` is the loop; `feedback` is its only state, holding
 the last problem or the user's revision request. Only a `DraftProblem`
 (a coding-agent failure, review findings, a typecheck or compile error,
 a failed test) becomes feedback. Any other failure, such as a refused
 write or a review agent that did not run, ends the loop at once, since
-another draft cannot fix it. `writeTool` validates,
-stages, and calls `rounds`. On failure, it clears staging once and
-folds a refused delete into the returned failure. On success the publish rename
-has already emptied staging, so no delete interrupt is raised.
+another draft cannot fix it.
+
+`writeTool` is `stage` → `assembleTool` → `gateAndSave`. A compile or
+typecheck failure arrives from `assembleTool` as a `DraftProblem`, the
+shape the design loop feeds back to the coding agent. With no loop to
+feed, `problemText` returns the message as a plain failure. No tests are
+generated: the design loop tests a draft it produced, and a caller who
+wrote the source is expected to have tested it.
 
 `testSource` starts with `assembleTool`: write `impl.agency`, fill the
 template, write `tool.agency`, compile the pair in the sandbox, and
@@ -77,7 +114,7 @@ draft could import a raw primitive such as `_which` from
 `agency-lang/stdlib-lib/shell.js`, which raises no interrupt and so
 never shows in the effect list.
 
-`writeTool` and `listTools` expand `~` in `dir` once, up front, with the
+`stage` and `listTools` expand `~` in `dir` once, up front, with the
 stdlib's `expandPath`. The file primitives expand it themselves, but the
 sandboxed `testFile` resolves its directory without expansion, so an
 unexpanded default would have made every generated test run fail.
@@ -97,8 +134,8 @@ its directory behind for the user to remove. A round whose tool has an
 effect removes a `tool.test.json` that an earlier pure round left
 behind, so a revision that starts calling a model does not ship the old
 tests. `saveTool` re-checks that `<dir>/<name>` is still free (the check
-in `checkName` is stale after several model calls) and then `move`s the
-staged directory into place. A tool is either fully present or absent.
+in `checkName` is stale after the approval and any model calls) and then
+`move`s the staged directory into place. A tool is either fully present or absent.
 
 ### Only pure tools are tested
 
@@ -155,7 +192,7 @@ path segment. It reads `meta.json` before the run, so a corrupt record
 stops the tool before it has side effects. It then runs `main` through
 `runFile`, with `wallClock` set to the tool's own `maxTime` plus
 headroom, so the guard trips before the subprocess is killed. `runFile`
-clamps `wallClock` to an hour, so `writeTool` refuses a `maxTime` above
+clamps `wallClock` to an hour, so `stage` refuses a `maxTime` above
 an hour minus that headroom. It then rewrites `meta.json` with
 one more use and the time. If that write fails, the returned failure
 carries the tool's result in its message, since the tool has already
@@ -167,13 +204,19 @@ Per round: one call in the coding agent (its internal review has no
 task, so it draws no separate mock), one in the review agent (it has a task), and, for
 a pure tool only, one for the test cases. The review runs before the
 tool is assembled, so a draft with the wrong export still draws the
-review mock. `tests/agency/toolbox/generate-writeTool-mocks.mjs`
-regenerates `writeTool.test.json`; run it whenever
+review mock. `tests/agency/toolbox/generate-designTool-mocks.mjs`
+regenerates `designTool.test.json`; run it whenever
 `fixtures/tools/good/impl.agency` changes. A stale copy fails the coding
 agent's own check and silently spends the round's mocks.
 
-`writeTool.agency` writes under `tests/agency/toolbox/test-output/`
-(gitignored) and removes what it made. A `tool.test.json` left there is
+`tests/agency/toolbox/writeTool.agency` covers the plain primitive with
+no mocks at all, so a model call anywhere on its path fails the suite.
+It feeds the good fixture's source in by hand, and edits it to make the
+wrong-export and raw-import sources.
+
+`designTool.agency` and `writeTool.agency` write under
+`tests/agency/toolbox/test-output/` (gitignored) and remove what they
+made. A `tool.test.json` left there is
 picked up by `agency test tests/agency/toolbox` and refused by the full
 profile (`args` is sandbox-only), so tests must clean up.
 

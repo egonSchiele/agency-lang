@@ -297,6 +297,57 @@
       ]
     },
     {
+      "nodeName": "wrongRequestGoesBackToTheCodingAgent",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  text: string\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.text.length + 1\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+          }
+        },
+        {
+          "return": []
+        },
+        {
+          "return": {
+            "cases": [
+              {
+                "args": {
+                  "request": {
+                    "n": 41
+                  }
+                },
+                "expectedOutput": 42
+              },
+              {
+                "args": {
+                  "request": {
+                    "n": 0
+                  }
+                },
+                "expectedOutput": 1
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
       "nodeName": "refusesAnExistingName",
       "input": "",
       "expectedOutput": "true",

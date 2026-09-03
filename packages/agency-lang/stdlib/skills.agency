@@ -381,19 +381,27 @@ def validSkillName(name: string): boolean {
   return name =~ re/^[a-z0-9]+(-[a-z0-9]+)*$/
 }
 
-def checkDescription(description: string): Result {
+// The frontmatter block for a skill file. tarsec's serializer is the
+// encode half of the parser `frontmatter` wraps, so whatever it emits
+// reads back verbatim on the next scan — YAML flow syntax, quotes, or
+// backslashes in the description cannot silently corrupt or drop the
+// saved text. It throws on the rare value no quoting can hold; `try`
+// turns that into a clean failure.
+def renderFrontmatter(name: string, description: string): Result<string> {
   if (description.includes("\n") || description.includes("\r")) {
     return failure("the description must be one line")
   }
-  return success(null)
+  const fm = try _stringifyFrontmatter({ name: name, description: description })
+  if (fm is failure(fmErr)) {
+    return failure("the description cannot be written as frontmatter: ${fmErr}")
+  }
+  return fm
 }
 
-// The checks every save runs before anyone is asked: the name is valid
-// and not taken, the description is one line, the directory is named.
-// Returns the absolutized directory (the same resolution the write
-// itself will use), so the interrupt payloads — and any always-scope
-// rule saved from them — name one directory regardless of the caller's
-// spelling.
+// The checks every save runs before anyone is asked. Returns the
+// absolutized directory, the same resolution the write itself will use,
+// so the interrupt payloads name one directory regardless of the
+// caller's spelling.
 def checkSkillInputs(dir: string, name: string, description: string): Result<string> {
   if (!validSkillName(name)) {
     return failure("skill name '${name}' is invalid: use kebab-case, lowercase letters and digits separated by single hyphens")
@@ -401,9 +409,9 @@ def checkSkillInputs(dir: string, name: string, description: string): Result<str
   if (name.length > MAX_TOOL_NAME_LEN) {
     return failure("skill name must be at most ${MAX_TOOL_NAME_LEN} characters, got ${name.length}")
   }
-  const descriptionOk = checkDescription(description)
-  if (descriptionOk is failure) {
-    return descriptionOk
+  const rendered = renderFrontmatter(name, description)
+  if (rendered is failure) {
+    return rendered
   }
   if (dir.trim() == "") {
     return failure("dir must not be empty")
@@ -445,14 +453,9 @@ export def writeSkill(
   }
   const absDir = checked.value
   const filename = "${name}.md"
-  // tarsec's serializer is the encode half of the parser `frontmatter`
-  // wraps, so whatever it emits reads back verbatim on the next scan —
-  // YAML flow syntax, quotes, or backslashes in the description cannot
-  // silently corrupt or drop the saved text. It throws on the rare
-  // value no quoting can hold; `try` turns that into a clean failure.
-  const fm = try _stringifyFrontmatter({ name: name, description: description })
-  if (fm is failure(fmErr)) {
-    return failure("the description cannot be written as frontmatter: ${fmErr}")
+  const fm = renderFrontmatter(name, description)
+  if (fm is failure) {
+    return fm
   }
   const content = "${fm.value}\n${body}\n"
   return interrupt std::skills::save(
@@ -518,8 +521,8 @@ Rewrite the description and the body so the feedback is addressed. Keep everythi
 }
 
 // A model override is set only when named, so an empty one never clobbers
-// the ambient model. (std::agents/lib/shared has this helper, but it
-// imports this module.)
+// the ambient model. Not llmOptions from std::agents/lib/shared: that
+// module imports this one.
 def draftOptions(model: string, provider: string): any {
   const options: any = {}
   if (model != "") {
@@ -531,9 +534,9 @@ def draftOptions(model: string, provider: string): any {
   return options
 }
 
-// One model call turns the user's feedback into the next draft. The
-// model can put a line break in the description, which writeSkill would
-// refuse after the user already accepted, so it is refused here instead.
+// One model call turns the user's feedback into the next draft. A
+// description writeSkill could not save is refused here, before the user
+// is shown it.
 def redraft(
   name: string,
   draft: SkillDraft,
@@ -545,9 +548,9 @@ def redraft(
   if (next is failure(shapeErr)) {
     return failure("the redraft had the wrong shape: ${shapeErr}")
   }
-  const descriptionOk = checkDescription(next.value.description)
-  if (descriptionOk is failure(descriptionErr)) {
-    return failure("the redraft was refused: ${descriptionErr}")
+  const rendered = renderFrontmatter(name, next.value.description)
+  if (rendered is failure(renderErr)) {
+    return failure("the redraft was refused: ${renderErr}")
   }
   return next
 }

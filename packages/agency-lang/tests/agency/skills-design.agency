@@ -163,6 +163,31 @@ node multilineRedraftFails(): boolean {
   return ran.outcome is failure && "${ran.outcome.error}" =~ re/one line/ && ran.reviews == 1 && !exists("two-lines.md", dir)
 }
 
+// A description the frontmatter grammar cannot hold (needs quoting, and
+// contains all three quote characters) fails before the first prompt,
+// not after the user has accepted.
+node unrepresentableDescriptionFailsBeforeAsking(): boolean {
+  const dir = outDir("unrepresentable")
+  let reviews = 0
+  let outcome: Result<SkillEntry> = failure("not run")
+  handle {
+    outcome = designSkill(dir, "unrep", " \"d\" 's' `t`", "Body.")
+  } with (intr) {
+    if (intr.effect == "std::skills::review") {
+      reviews = reviews + 1
+    }
+    return approve()
+  }
+  return outcome is failure && reviews == 0 && !exists("unrep.md", dir)
+}
+
+// The same value from the redraft model is refused before it is shown.
+node unrepresentableRedraftFails(): boolean {
+  const dir = outDir("unrepresentable-redraft")
+  const ran = runDesign(dir, "unrep-redraft", "Body.", [{ verdict: "revise", feedback: "shorter" }])
+  return ran.outcome is failure && "${ran.outcome.error}" =~ re/frontmatter/ && ran.reviews == 1 && !exists("unrep-redraft.md", dir)
+}
+
 // The input checks run before the first prompt.
 node invalidNameFailsBeforeAsking(): boolean {
   const dir = outDir("invalid-name")

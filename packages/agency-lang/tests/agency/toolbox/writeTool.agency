@@ -158,6 +158,20 @@ node nodeImportFailsBeforeAsking(): boolean {
   return ran.result is failure && ran.saves == 0 && nothing
 }
 
+// The source's Request must be the request text meta.json will
+// advertise. The typecheck passes either way, so this is a separate
+// check, and it runs before the gate.
+node mismatchedRequestFailsBeforeAsking(): boolean {
+  cleanup("plainFive")
+  const source = goodSource()
+    .replace("export type Request = {\n  n: number\n}", "export type Request = {\n  text: string\n}")
+    .replace("return request.n + 1", "return request.text.length + 1")
+  const ran = runWrite("plainFive", source, OUT)
+  const nothing = !exists("plainFive", OUT)
+  cleanup("plainFive")
+  return ran.result is failure && "${ran.result.error}" =~ re/request type/ && ran.saves == 0 && nothing
+}
+
 // The name check runs before staging and before the gate.
 node refusesAnExistingName(): boolean {
   const ran = runWrite("good", goodSource(), TOOLS)

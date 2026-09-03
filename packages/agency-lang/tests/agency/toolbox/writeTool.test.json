@@ -51,6 +51,16 @@
       ]
     },
     {
+      "nodeName": "mismatchedRequestFailsBeforeAsking",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "refusesAnExistingName",
       "input": "",
       "expectedOutput": "true",

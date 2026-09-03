@@ -179,6 +179,23 @@ node wrongExportGoesBackToTheCodingAgent(): boolean {
   return result is success && cleanSource
 }
 
+// The first draft typechecks but declares a different Request than the
+// request text. That goes back to the coding agent, and the second
+// draft is the one saved.
+node wrongRequestGoesBackToTheCodingAgent(): boolean {
+  cleanup("addFifteen")
+  const result = runDesign("addFifteen", OUT, [{
+    verdict: "accept"
+  }])
+  const saved = read("addFifteen/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/text/)
+  }
+  cleanup("addFifteen")
+  return result is success && cleanSource
+}
+
 // No mocks: the name check runs before staging and before any model call.
 // This is the test that fails if the existence check moves later.
 node refusesAnExistingName(): boolean {

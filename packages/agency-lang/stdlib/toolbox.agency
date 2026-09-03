@@ -597,7 +597,44 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
     const messages = map(report.value.errors, \diag -> diag.message)
     return draftProblem("the tool does not typecheck:\n${messages.join("\n")}")
   }
+  const requestOk = checkRequestMatches(source, settings.request)
+  if (requestOk is failure) {
+    return requestOk
+  }
   return moduleFacts(settings.stagingDir)
+}
+
+def requestSignature(source: string): Result<string> {
+  const info = describe(source)
+  if (info is failure) {
+    return info
+  }
+  const exported = find(info.value.exports, \entry -> entry.name == "Request" && entry.kind == "type")
+  if (exported == null) {
+    return failure("no exported `type Request`")
+  }
+  return success(exported.signature)
+}
+
+// The wrapper imports whatever `Request` the source declares, so the
+// typecheck cannot tell that it differs from the request text meta.json
+// will advertise. Both are printed by `describe`, so spacing and line
+// breaks do not count as a difference.
+def checkRequestMatches(source: string, request: string): Result {
+  const expected = requestSignature("export type Request = ${request}")
+  if (expected is failure) {
+    return expected
+  }
+  const actual = requestSignature(source)
+  if (actual is failure(missing)) {
+    return draftProblem("${missing} in ${IMPL_FILE}")
+  }
+  if (actual.value != expected.value) {
+    return draftProblem(
+      "${IMPL_FILE} declares `${actual.value}` but the request type is `${expected.value}`; copy the request type as given",
+    )
+  }
+  return success(null)
 }
 
 def failedCases(report: TestReport): string[] {

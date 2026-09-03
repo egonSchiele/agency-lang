@@ -73,12 +73,11 @@ the call and writes nothing.
 
 Revise feedback goes to one model call, `redraft`, which returns a new
 description and body as structured output. The name is fixed, since it
-is also the filename. The brief carries the current description, the
-current body, and the feedback, and asks for everything the feedback
-does not mention to be kept. A redraft whose description spans lines is
-refused there, since `writeSkill` would refuse it after the user had
-already accepted. `maxRounds` caps the reviews, three by default; after
-the last revise the call fails with the last feedback in its message.
+is also the filename. A redraft whose description `writeSkill` could not
+save (a line break, or a value the frontmatter grammar cannot hold) is
+refused there, before the user is shown it. `maxRounds` caps the
+reviews, three by default; after the last revise the call fails with
+the last feedback in its message.
 
 Accept calls `writeSkill`. That raises `std::skills::save` with the
 complete file, so an accepted design raises two interrupts in a row.
@@ -87,13 +86,11 @@ skill; the save is the one effect a policy can pin, and it is raised
 for every skill that lands whichever way it was made. `designTool` in
 `std::toolbox` ends the same way.
 
-The input checks (`checkSkillInputs`: name, description, directory, and
-the duplicate check) run once before the first review, so a bad call
-fails without a prompt, and again inside `writeSkill` at save time.
-
-The model override is built by a local `draftOptions` rather than
-`llmOptions` from `std::agents/lib/shared`, because that module imports
-`std::skills` and the import would be circular.
+The input checks (name, description, directory, and the duplicate
+check) run before the first review, so a bad call fails without a
+prompt, and again inside `writeSkill` at save time. The description
+check renders the frontmatter, so a description the serializer cannot
+hold fails here rather than after the user has accepted.
 
 ## The trust argument for the subdir scan
 

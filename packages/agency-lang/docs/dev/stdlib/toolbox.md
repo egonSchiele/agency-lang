@@ -48,8 +48,11 @@ purpose goes through `.describe()` on the exported `tool` and into
 Both entry points take the request type as Agency type text, such as
 `"{ topics: string[]; maxItems: number }"`. They parse
 `export type Request = <text>` and require exactly one type alias back.
-The brief tells the coding agent to copy that line as is; a draft that
-changes it fails the typecheck of `tool.agency`.
+The brief tells the coding agent to copy that line as is. The typecheck
+cannot catch a draft that changes it, because `tool.agency` imports
+whatever `Request` the draft declares, so `assembleTool` compares the
+two through `describe`, which prints both the same way. A mismatch is a
+draft problem for the design loop and a plain failure for `writeTool`.
 
 ## Two entry points, one save gate
 
@@ -70,19 +73,16 @@ The review is where the user shapes the tool; the save is the one
 effect a policy can pin. `designSkill` in `std::skills` ends the same
 way, by calling `writeSkill`.
 
-`designTool` does not call the exported `writeTool` for that last step.
-It would have to stage a second copy and typecheck it again, and the
-generated `tool.test.json` from the design's own staging directory would
-not come along. Sharing `gateAndSave` gives the same effect without the
-copy.
+`designTool` shares the gate function rather than calling the exported
+`writeTool`, which would stage and typecheck a second copy and lose the
+design's generated `tool.test.json`.
 
-`stage` is what the two share up front: expand the root, check the name,
-the time limit, and the request text, then make the call's staging
-directory. Every check runs before anything is written or anyone is
-asked. `clearStaging` is the shared tail: on failure it removes the
-staging directory once and folds a refused delete into the returned
-failure. On success the publish rename has already emptied staging, so
-no delete interrupt is raised.
+Both validate and stage through `stage`, so every check runs before
+anything is written or anyone is asked, and both clear staging through
+`clearStaging`: on failure the staging directory is removed once and a
+refused delete is folded into the returned failure. On success the
+publish rename has already emptied staging, so no delete interrupt is
+raised.
 
 ## `designTool` is a pipeline
 
@@ -95,12 +95,10 @@ a failed test) becomes feedback. Any other failure, such as a refused
 write or a review agent that did not run, ends the loop at once, since
 another draft cannot fix it.
 
-`writeTool` is `stage` → `assembleTool` → `gateAndSave`. A compile or
-typecheck failure arrives from `assembleTool` as a `DraftProblem`, the
-shape the design loop feeds back to the coding agent. With no loop to
-feed, `problemText` returns the message as a plain failure. No tests are
-generated: the design loop tests a draft it produced, and a caller who
-wrote the source is expected to have tested it.
+`writeTool` is `stage` → `assembleTool` → `gateAndSave`. A
+`DraftProblem` from `assembleTool` becomes a plain failure, since there
+is no loop to feed it to. No tests are generated: a caller who wrote the
+source is expected to have tested it.
 
 `testSource` starts with `assembleTool`: write `impl.agency`, fill the
 template, write `tool.agency`, compile the pair in the sandbox, and
@@ -211,8 +209,6 @@ agent's own check and silently spends the round's mocks.
 
 `tests/agency/toolbox/writeTool.agency` covers the plain primitive with
 no mocks at all, so a model call anywhere on its path fails the suite.
-It feeds the good fixture's source in by hand, and edits it to make the
-wrong-export and raw-import sources.
 
 `designTool.agency` and `writeTool.agency` write under
 `tests/agency/toolbox/test-output/` (gitignored) and remove what they

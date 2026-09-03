@@ -119,6 +119,35 @@
       ]
     },
     {
+      "nodeName": "unrepresentableDescriptionFailsBeforeAsking",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unrepresentableRedraftFails",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": {
+            "description": " \"d\" 's' `t`",
+            "body": "Body."
+          }
+        }
+      ]
+    },
+    {
       "nodeName": "invalidNameFailsBeforeAsking",
       "input": "",
       "expectedOutput": "true",

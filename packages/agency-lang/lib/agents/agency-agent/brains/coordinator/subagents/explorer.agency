@@ -16,10 +16,7 @@ import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
 
-export
-handoff
-
-def explorerAgent(userMsg: string): string {
+export handoff def explorerAgent(userMsg: string): string {
   """
   Ask the explorer — a read-only researcher — to survey many files and
   return a synthesized answer. Use it only when the answer genuinely

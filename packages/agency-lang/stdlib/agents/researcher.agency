@@ -144,7 +144,7 @@ def researchLoop(
   }
 }
 
-export def researcherAgent(
+export handoff def researcherAgent(
   task: string,
   context: string = "",
   maxAttempts: number = 2,
@@ -175,17 +175,15 @@ export def researcherAgent(
 
   return guard(cost: maxCost, time: maxTime, label: "researcherAgent") {
     let answer = ""
-    thread(label: "researcherAgent", session: session) {
-      answer = researchLoop(
-        task: task,
-        context: context,
-        history: history,
-        maxAttempts: maxAttempts,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
-    }
+    answer = researchLoop(
+      task: task,
+      context: context,
+      history: history,
+      maxAttempts: maxAttempts,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
     return answer
 
     // Salvage the best-so-far answer (a completed attempt, or the model's

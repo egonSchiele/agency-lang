@@ -1,11 +1,7 @@
-import { s3PutBinary, s3PresignGet, createBucket } from "std::aws/s3"
-import { hnStories, Story } from "std::data/tech/hackernews"
-import { today } from "std::date"
-import { generateImage } from "std::image"
-import { parse, renderForHtml } from "std::markdown"
-import { sendWithResend } from "std::messaging/email"
+import { systemMessage } from "std::thread"
 
 handoff def getCapital(country: string): string {
+  systemMessage("foo")
   const capital = llm("What is the capital of ${country}?")
   return capital
 }

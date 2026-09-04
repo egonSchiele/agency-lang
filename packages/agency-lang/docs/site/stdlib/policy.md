@@ -785,4 +785,4 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1019))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1021))

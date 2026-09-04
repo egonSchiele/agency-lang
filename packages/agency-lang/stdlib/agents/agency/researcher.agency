@@ -15,7 +15,7 @@ import {
   readOnlyFileTools,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { systemMessage, threadIsNew } from "std::thread"
+import { ensureSystemMessage } from "std::thread"
 
 static const skills = agentSkill("agency/researcher")
 
@@ -46,9 +46,7 @@ def answer(
   provider: string,
   extraTools: any[],
 ): string {
-  if (threadIsNew()) {
-    systemMessage(systemPrompt)
-  }
+  ensureSystemMessage(systemPrompt)
   return llm(
     withContext(task: question, context: context),
     llmOptions(

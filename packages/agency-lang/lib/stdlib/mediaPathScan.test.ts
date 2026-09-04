@@ -51,6 +51,10 @@ describe("_scanMediaPaths", () => {
     ]);
   });
 
+  it("still splits on other Unicode whitespace", () => {
+    expect(paths("see\u00a0/tmp/a.png\u00a0please")).toEqual(["/tmp/a.png"]);
+  });
+
   it("unescapes backslash-escaped spaces in unquoted tokens", () => {
     expect(paths("see /tmp/da\\ b.png now")).toEqual(["/tmp/da b.png"]);
   });

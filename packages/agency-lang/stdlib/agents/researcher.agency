@@ -18,7 +18,7 @@ import { Critique, revise } from "std::strategy"
 import {
   ThreadMessage,
   assistantMessage,
-  systemMessage,
+  ensureSystemMessage,
   threadIsNew,
   userMessage,
  } from "std::thread"
@@ -103,8 +103,11 @@ def researchLoop(
   extraTools: any[],
 ): string {
   const researchTools = buildTools()
-  if (threadIsNew()) {
-    systemMessage(systemPrompt)
+  const fresh = threadIsNew()
+  // A handoff runs on the caller's thread, which may already hold the
+  // persona; the push is skipped when it does.
+  ensureSystemMessage(systemPrompt)
+  if (fresh) {
     // The conversation so far, so the question is read in its context. A
     // shared session already holds its history and is not seeded again.
     for (message in history) {

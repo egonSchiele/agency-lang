@@ -233,11 +233,16 @@ export async function _read(
     const data = await readFile(filePath);
     text = data.toString("utf8");
   }
+  return sliceLines(text, offset, limit);
+}
+
+/** The lines of `text` a read with `offset` and `limit` returns. Default:
+ * the whole text. Only paginate (and emit a truncation note) when the
+ * caller explicitly asks for it. A 0 (or unset) for both arguments means
+ * "no pagination". */
+export function sliceLines(text: string, offset?: number, limit?: number): string {
   const off = offset && offset > 0 ? offset : undefined;
   const lim = limit && limit > 0 ? limit : undefined;
-  // Default: return the whole file. Only paginate (and emit a
-  // truncation note) when the caller explicitly asks for it. A 0 (or
-  // unset) for both arguments means "no pagination".
   if (off === undefined && lim === undefined) return text;
   const start = off ?? 1;
   const lines = text.split("\n");

@@ -2,13 +2,14 @@
 // kept, and the two ways it comes back out. One fixed place, outside every
 // project, so the write goes somewhere the model never chose and nothing
 // lands in a repository.
-import { mkdir, readFile, readdir, writeFile } from "fs/promises";
+import { lstat, mkdir, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { randomBytes } from "crypto";
-import { _read } from "./builtins.js";
+import { sliceLines } from "./builtins.js";
 import { compileGrepQuery } from "./grepQuery.js";
 import { firstMatchingLines, type GrepMatch } from "./shell.js";
+import { readContainedFile } from "../utils/readContainedFile.js";
 
 /** `~/.agency-agent/tool-output`, or `AGENCY_TOOL_OUTPUT_DIR` when set, so a
  * test can point the spill somewhere it may delete. */
@@ -36,26 +37,55 @@ function checkName(filename: string): void {
   }
 }
 
-/** Write `text` under the spill directory as `filename`, creating the
- * directory if needed. The file is created fresh: an existing file is never
- * overwritten, even on a clock collision. */
+/** The spill directory, created if needed. A symlink anywhere from the
+ * home directory down is refused, so a link planted at `~/.agency-agent`
+ * cannot redirect where saved output lands or where the readers look. */
+async function spillDirReady(): Promise<string> {
+  const dir = path.resolve(_spillDir());
+  for (const candidate of [path.dirname(dir), dir]) {
+    await refuseSymlink(candidate);
+  }
+  await mkdir(dir, { recursive: true });
+  return dir;
+}
+
+async function refuseSymlink(p: string): Promise<void> {
+  try {
+    if ((await lstat(p)).isSymbolicLink()) {
+      throw new Error(`refused: '${p}' is a symlink`);
+    }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+}
+
+/** Write `text` under the spill directory as `filename`. The file is
+ * created fresh: an existing entry, a symlink included, is never opened. */
 export async function _spillOutput(filename: string, text: string): Promise<string> {
   checkName(filename);
-  const dir = _spillDir();
-  await mkdir(dir, { recursive: true });
+  const dir = await spillDirReady();
   await writeFile(path.join(dir, filename), text, { flag: "wx", mode: 0o600 });
   return path.join(dir, filename);
+}
+
+/** One saved file's text, read through a descriptor that is checked to sit
+ * inside the spill directory, so a symlink named like a saved file leads
+ * nowhere. */
+async function readSaved(filename: string): Promise<string> {
+  checkName(filename);
+  const dir = await spillDirReady();
+  return readContainedFile(dir, path.join(dir, filename));
 }
 
 /** The saved file, whole or a slice of lines; the same offset and limit
  * rules as `read`. */
 export async function _readSpill(filename: string, offset: number, limit: number): Promise<string> {
-  checkName(filename);
-  return _read(_spillDir(), filename, offset, limit);
+  const text = await readSaved(filename);
+  return sliceLines(text, offset, limit);
 }
 
-/** Lines matching `pattern` in one saved file, or in every saved file when
- * `filename` is empty. */
+/** Lines matching `pattern` in one saved file. */
 export async function _grepSpill(
   pattern: string,
   filename: string,
@@ -69,25 +99,6 @@ export async function _grepSpill(
     filesOnly: false,
     invert: false,
   });
-  const dir = _spillDir();
-  let names: string[];
-  if (filename === "") {
-    try {
-      names = (await readdir(dir)).filter((name) => SPILL_NAME.test(name)).sort();
-    } catch {
-      names = [];
-    }
-  } else {
-    checkName(filename);
-    names = [filename];
-  }
-  const matches: GrepMatch[] = [];
-  for (const name of names) {
-    if (matches.length >= maxResults) break;
-    const text = await readFile(path.join(dir, name), "utf8");
-    for (const hit of firstMatchingLines(text, plan, maxResults - matches.length)) {
-      matches.push({ file: name, ...hit });
-    }
-  }
-  return matches;
+  const text = await readSaved(filename);
+  return firstMatchingLines(text, plan, maxResults).map((hit) => ({ file: filename, ...hit }));
 }

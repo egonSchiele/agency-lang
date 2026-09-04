@@ -87,10 +87,6 @@ export function summarize(evt: EventEnvelope): string {
       return `agentStart "${d.entryNode ?? "?"}"`;
     case "agentEnd":
       return `agentEnd (${fmtDuration(d.timeTaken)})`;
-    case "turnStart":
-      return "turnStart";
-    case "turnEnd":
-      return `turnEnd (${fmtDuration(d.timeTaken)})`;
     case "enterNode":
       return `enterNode "${d.nodeId ?? "?"}"`;
     case "runMetadata":
@@ -140,21 +136,9 @@ function fmtTime(ms: number): string {
   return `${month} ${day}, ${hours12}:${minutes}${period}`;
 }
 
-// The duration a row shows is the agent's working time. When that is
-// less than the wall clock, the difference (prompts answered by a person,
-// gaps between turns) is named so the two numbers reconcile.
-export function describeTime(node: TreeNode): string | undefined {
-  if (node.active === undefined) {
-    return node.duration === undefined ? undefined : fmtDuration(node.duration);
-  }
-  if (node.waiting === undefined || node.waiting <= 0) return fmtDuration(node.active);
-  return `${fmtDuration(node.active)} active, ${fmtDuration(node.waiting)} waiting`;
-}
-
 function formatMetrics(node: TreeNode): string {
   const parts: string[] = [];
-  const time = describeTime(node);
-  if (time !== undefined) parts.push(time);
+  if (node.duration !== undefined) parts.push(fmtDuration(node.duration));
   if (node.tokens !== undefined) parts.push(`${node.tokens} tok`);
   if (node.cost !== undefined) parts.push(fmtCost(node.cost));
   return parts.join(", ");
@@ -235,10 +219,8 @@ export function summarizeTraceStyled(
 
 function formatMetricsStyled(node: TreeNode, t: ViewerThresholds): string {
   const parts: string[] = [];
-  const time = describeTime(node);
-  if (time !== undefined) {
-    // Colored by the working time: waiting on a person is not slowness.
-    parts.push(wrapTag(time, durationColor(node.active ?? node.duration ?? 0, t)));
+  if (node.duration !== undefined) {
+    parts.push(wrapTag(fmtDuration(node.duration), durationColor(node.duration, t)));
   }
   if (node.tokens !== undefined) parts.push(`${node.tokens} tok`);
   if (node.cost !== undefined) {

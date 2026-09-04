@@ -149,23 +149,6 @@ rules are its reason to exist.
   `bottomHints(hints, tag, cols)` in `views/shared.ts`, so the answer to
   "where am I" always lives in the same place.
 
-## Working time, not wall clock
-
-A span's `duration` is its wall-clock envelope, and for an interactive
-agent session that number was mostly the user: minutes spent answering
-approval prompts, and the gaps between one reply and the next message.
-The rows show `active`, the time the agent worked, and name the rest as
-`waiting` so the two reconcile (`12m active, 25m waiting`).
-
-Nothing new is logged for this. `waitingTime` in `lib/logsViewer/tree.ts`
-reads the gaps between consecutive events: a gap that ends at a
-`handlerDecision` approve or reject is a person answering a prompt; a gap
-that ends at a `toolCall` carrying an aborted result is a prompt the
-person cancelled; a gap with no `promptStart` or `toolCallStart` still
-open is time between turns. Every other gap is a model thinking or a
-command running. Magnitude coloring uses the active time. The `agentEnd`
-leaf still shows the runtime's own wall-clock figure.
-
 ## Adding a view
 
 Implement the `View` type, add a `ViewAction` case if the view needs a new cross-view jump,

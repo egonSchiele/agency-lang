@@ -94,10 +94,12 @@ def isCwdBound(tool: any): boolean {
 node fileAndShellToolsAreCwdBound(): boolean {
   // safeBash is exempt: it has no useAgentCwd parameter — its empty cwd
   // default already resolves to the agent working directory (resolveCwd in
-  // std::safeBash), so there is nothing to bind.
+  // std::safeBash), so there is nothing to bind. readSpill and grepSpill
+  // take a file name in one fixed directory, so they have no cwd either.
+  const unbound = ["safeBash", "readSpill", "grepSpill"]
   const shouldBeBound = filter(
     [...writableFileTools(), ...shellTools()],
-    \tool -> tool.name != "safeBash",
+    \tool -> !unbound.includes(tool.name),
   )
   return every(shouldBeBound, isCwdBound)
 }

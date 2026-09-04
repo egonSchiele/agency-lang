@@ -1,6 +1,6 @@
 ---
 name: agency-cli-docs
-description: Developer docs for the Agency CLI and terminal UI: command line argument handling, the vendored commander fork, the agency doc cache, the sandbox flags for untrusted code, the interactive debugger, the logs viewer and cross-run explorer, and the TUI toolkit. Use when changing a CLI command or anything that draws in the terminal.
+description: Developer docs for the Agency CLI and terminal UI: command line argument handling, the vendored commander fork, the agency doc cache, the sandbox flags for untrusted code, the interactive debugger, the logs viewer and cross-run explorer, the terminal tab title, and the TUI toolkit. Use when changing a CLI command or anything that draws in the terminal.
 ---
 
 # Cli developer docs
@@ -17,6 +17,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/cli/debugger-future-work.md` — The few debugger and TUI items still open.
 - `docs/dev/cli/logs-viewer.md` — The interactive viewer for a single statelog trace, including the timeline.
 - `docs/dev/cli/runs-explorer.md` — The cross-run table `agency logs` opens when pointed at several paths.
+- `docs/dev/cli/terminal-status.md` — How a command names its terminal tab and drives the tab's progress indicator.
 - `docs/dev/cli/tui.md` — The terminal UI toolkit the debugger, the viewer, and `std::ui` are built on.
 - `docs/dev/cli/tui/guide/getting-started.md` — Writing a first TUI screen, and the builders available.
 - `docs/dev/cli/tui/guide/terminal-usage.md` — Running a TUI against a real terminal: input, signals, and resizing.

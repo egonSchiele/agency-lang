@@ -40,6 +40,16 @@ policy or a person approving the call sees the whole request. Translation
 happens after the interrupt, in `_grep`, so what a policy matches on is
 always what the caller sent.
 
+## `.gitignore`
+
+`grep` skips what the `.gitignore` files under (and above, up to the
+repository root) the search directory ignore, so compiled output does not
+crowd out source. The matcher is `lib/stdlib/gitignore.ts`: comments,
+negation, directory-only rules, anchoring, nested files refining their
+parents; not `.git/info/exclude` or the global excludes. The
+`respectGitignore` parameter is true by default, and the agent toolkits
+lock it with partial application so the model cannot turn it off.
+
 ## Tests
 
 - `lib/stdlib/grepQuery.test.ts` covers the rule table and messages.
@@ -47,3 +57,5 @@ always what the caller sent.
   shared `grep-fixtures` directory: a grep-style flag succeeds, a flag with a
   parameter fails with the parameter's name, and each parameter changes the
   output.
+- `lib/stdlib/gitignore.test.ts` and the `_grep honours .gitignore` cases
+  in `lib/stdlib/shell.test.ts` cover the ignore rules and the walk.

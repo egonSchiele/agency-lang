@@ -51,8 +51,15 @@ const QUOTED_MEDIA_SPAN = /(?:^|(?<=\s))(['"])([^'"\n]+?\.(?:png|jpe?g|gif|webp|
  *  appear in terminal line input. */
 const ESCAPED_SPACE = "\u0000";
 
+/** Token separators: every whitespace character except U+202F, the narrow
+ *  no-break space macOS puts before "AM"/"PM" in screenshot names
+ *  (`Screenshot 2026-09-03 at 9.02.01\u202fAM.png`). A terminal drag-drop
+ *  escapes the ordinary spaces in that name but not this one, so the path
+ *  used to break into `9.02.01` and `AM.png`. */
+const TOKEN_SEPARATOR = /[^\S\u202f]+/;
+
 function pushWords(segment: string, out: string[]): void {
-  const words = segment.replace(/\\ /g, ESCAPED_SPACE).split(/\s+/);
+  const words = segment.replace(/\\ /g, ESCAPED_SPACE).split(TOKEN_SEPARATOR);
   for (const word of words) {
     if (word !== "") {
       out.push(word.split(ESCAPED_SPACE).join(" "));

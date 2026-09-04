@@ -22,7 +22,7 @@ An agent's tool list should read as a description of what that agent may
 export static const SAVE_DRAFT_HINT = "\n\nIf you might run low on time or budget, call `saveDraft` with your best answer so far as you work, and update it as you improve. If the run is cut short, the last draft you saved is what the user receives — a run that saved nothing returns nothing."
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L204))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L210))
 
 ## Functions
 
@@ -42,7 +42,7 @@ Tell the user what you are doing. Use this tool often to update the user on what
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L57))
 
 ### communicationTools
 
@@ -54,7 +54,7 @@ Return tools that help the agent communicate with the user.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L65))
 
 ### readOnlyFileTools
 
@@ -65,9 +65,12 @@ readOnlyFileTools(): any[]
 Return tools that inspect the file system without changing it: read, list,
   glob, and grep, resolved against the agent working directory.
 
+  grep honours .gitignore, and the setting is locked by partial application
+  so the model cannot turn it off and search generated files.
+
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L71))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L72))
 
 ### writableFileTools
 
@@ -79,7 +82,7 @@ Return the read-only file tools plus write and edit.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L84))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L88))
 
 ### shellTools
 
@@ -93,11 +96,13 @@ Return tools that run commands: safeBash for a shell pipeline, exec for
   (a recognized write raises std::write, a git read raises its git
   effect), so a policy can pre-approve what raw bash never could. It
   needs no useAgentCwd binding — its empty cwd already resolves to the
-  agent working directory (resolveCwd in std::safeBash).
+  agent working directory (resolveCwd in std::safeBash). readSpill and
+  grepSpill read back the output safeBash saved to a file when a command
+  printed too much to return inline.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L95))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L99))
 
 ### readOnlyGitTools
 
@@ -115,7 +120,7 @@ Return the read-only git tools: history, diffs, status, branches. Nothing
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L108))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L114))
 
 ### gitTools
 
@@ -128,7 +133,7 @@ Return the git tools. The read-only ones run without an approval prompt;
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L131))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L137))
 
 ### webTools
 
@@ -142,7 +147,7 @@ Return tools that retrieve a named web resource: HTTP fetches and Wikipedia
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L156))
 
 ### agencyDocTools
 
@@ -156,7 +161,7 @@ Return the bundled Agency documentation tools: the language guide, the CLI
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L166))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L172))
 
 ### agencyCodeTools
 
@@ -169,7 +174,7 @@ Return tools for checking Agency source: the type checker, the parser,
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L175))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L181))
 
 ### memoryTools
 
@@ -181,7 +186,7 @@ Return tools that persist and retrieve facts across sessions.
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L183))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L189))
 
 ### planningTools
 
@@ -194,4 +199,4 @@ Return tools an agent uses to organize a long run: writing and reading a
 
 **Returns:** `any[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L193))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/lib/toolkits.agency#L199))

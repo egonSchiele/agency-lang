@@ -216,10 +216,21 @@
       ]
     },
     {
-      "nodeName": "longOutputIsTruncated",
-      "description": "Output is capped, and truncation is marked rather than silent. The shell-free echo path truncates too, so a long echo and a long shell command return the same shape.",
+      "nodeName": "longOutputIsSavedToFile",
+      "description": "Output past the cap is saved to the spill directory and replaced by a preview that gives the exit code, names the file, and says to read it with readSpill. The saved file holds the whole output (2500 x's plus echo's newline) and grepSpill finds its one line. The shell-free echo path keeps output the same way the bash path does.",
       "input": "",
-      "expectedOutput": "[2012,true]",
+      "expectedOutput": "[true,true,true,true,2501,1]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "spillToolsTakeNamesOnly",
+      "description": "readSpill and grepSpill refuse anything that is not a plain .log file name: upward paths, absolute paths, and dot-led names.",
+      "input": "",
+      "expectedOutput": "[true,true,true]",
       "evaluationCriteria": [
         {
           "type": "exact"

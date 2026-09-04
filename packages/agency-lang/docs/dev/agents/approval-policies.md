@@ -39,6 +39,11 @@ In a non-interactive run (`-p`), an effect no rule decides is
 auto-rejected with an explanatory message (`stdlib/policy.agency`) — there
 is no one to ask.
 
+When a rule rejects in an interactive session, the handler prints one dim
+line (`⏺ Policy rejected std::read (dir: /private/tmp, filename: …)`).
+Without it a rejection is invisible: the only sign is the agent quietly
+taking another route.
+
 ## What "approve always here" pins
 
 The prompt's "approve always here" answer saves a rule scoped to some of

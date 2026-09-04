@@ -7,7 +7,7 @@ import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { bottomHints } from "../../logsViewer/views/shared.js";
-import { wrapLine } from "../../logsViewer/treeRows.js";
+import { wrapLine } from "../../logsViewer/wrapLine.js";
 import type { GraderVerdict, RunRow, TestDetail, TestRow } from "../rows.js";
 import { verdictValue } from "./gradersTableView.js";
 import { fmtScore, scoreColor } from "./rowFormat.js";

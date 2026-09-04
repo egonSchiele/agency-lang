@@ -25,6 +25,7 @@ function cellStyle(cell: Cell): string {
   const bg = safeColor(cell.bg);
   if (bg) parts.push(`background-color:${bg}`);
   if (cell.bold) parts.push("font-weight:bold");
+  if (cell.dim) parts.push("opacity:0.6");
   return parts.join(";");
 }
 

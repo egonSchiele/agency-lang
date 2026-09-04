@@ -13,11 +13,10 @@
 */
 import { WriteMode } from "std::index"
 
+import { keepOutput } from "std::spill"
+
 import { _write } from "agency-lang/stdlib-lib/builtins.js"
 import { _bash } from "agency-lang/stdlib-lib/shell.js"
-
-/** How much of a command's output to keep before truncating. */
-export static const MAX_STDOUT_LEN = 2000
 
 /** One interrupt a command needs raised before it may run.
  *
@@ -141,31 +140,20 @@ export def runBash(command: string, cwd: string): Result<string> {
   // `try` WRAPS the call in a Result, so the ExecResult is inside
   // `.value`. Reading `attempt.stdout` directly is undefined.
   const result: any = attempt.value
-  const out = truncate(result.stdout)
+  const out = keepOutput(result.stdout, result.exitCode)
   if (result.exitCode != 0) {
     return failure(
       JSON.stringify(
       {
       command: command,
       exitCode: result.exitCode,
-      stderr: truncate(result.stderr),
+      stderr: keepOutput(result.stderr, result.exitCode),
       stdout: out
     },
     ),
     )
   }
   return success(out)
-}
-
-export def truncate(text: string): string {
-  """
-  Cap output length. Raw output with no bound is a context-window hazard,
-  and a visible loss of fidelity beats an invisible one.
-  """
-  if (text.length <= MAX_STDOUT_LEN) {
-    return text
-  }
-  return text[:MAX_STDOUT_LEN] + "\n[truncated]"
 }
 
 export def runWrite(exec: WriteExec): Result<string> {

@@ -276,6 +276,57 @@ describe("symlinked-root refusal parity across walkers", () => {
   });
 });
 
+describe("_grep honours .gitignore", () => {
+  let root: string;
+  const query = {
+    pattern: "needle",
+    flags: "",
+    ignoreCase: false,
+    wholeWord: false,
+    filesOnly: true,
+    invert: false,
+  };
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grep-ignore-"));
+    fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n");
+    fs.writeFileSync(path.join(root, "a.agency"), "needle\n");
+    fs.writeFileSync(path.join(root, "a.js"), "needle\n");
+    fs.mkdirSync(path.join(root, "out"));
+    fs.writeFileSync(path.join(root, "out", "b.txt"), "needle\n");
+    fs.mkdirSync(path.join(root, "keep"));
+    fs.writeFileSync(path.join(root, "keep", ".gitignore"), "!*.js\n");
+    fs.writeFileSync(path.join(root, "keep", "c.js"), "needle\n");
+  });
+
+  afterEach(async () => {
+    await safeDeleteDirectory(root);
+  });
+
+  it("skips ignored files and directories, and lets a nested .gitignore un-ignore", async () => {
+    const hits = (await _grep(query, root, 100, [])) as string[];
+    expect(hits.sort()).toEqual(["a.agency", "keep/c.js"]);
+  });
+
+  it("applies a .gitignore above the search root, up to the repository root", async () => {
+    // The root .gitignore ignores *.js; the search starts in `keep`, whose
+    // own .gitignore un-ignores it, and in `sub`, which has none.
+    fs.mkdirSync(path.join(root, ".git"));
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "d.js"), "needle\n");
+    fs.writeFileSync(path.join(root, "sub", "d.txt"), "needle\n");
+    const inSub = (await _grep(query, path.join(root, "sub"), 100, [])) as string[];
+    expect(inSub.sort()).toEqual(["d.txt"]);
+    const inKeep = (await _grep(query, path.join(root, "keep"), 100, [])) as string[];
+    expect(inKeep.sort()).toEqual(["c.js"]);
+  });
+
+  it("searches everything when respectGitignore is false", async () => {
+    const hits = (await _grep(query, root, 100, [], false)) as string[];
+    expect(hits.sort()).toEqual(["a.agency", "a.js", "keep/c.js", "out/b.txt"]);
+  });
+});
+
 describe("_grep stops at maxResults inside one file", () => {
   let root: string;
   const query = {

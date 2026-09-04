@@ -37,6 +37,7 @@ import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { remember, recall } from "std::memory"
 import { safeBash } from "std::safeBash"
 import { ls, glob, grep, exec } from "std::shell"
+import { readSpill, grepSpill } from "std::spill"
 import { docsSkill } from "std::skills"
 import {
   search as wikipediaSearch,
@@ -72,12 +73,15 @@ export def readOnlyFileTools(): any[] {
   """
   Return tools that inspect the file system without changing it: read, list,
   glob, and grep, resolved against the agent working directory.
+
+  grep honours .gitignore, and the setting is locked by partial application
+  so the model cannot turn it off and search generated files.
   """
   return [
     read.partial(useAgentCwd: true),
     ls.partial(useAgentCwd: true),
     glob.partial(useAgentCwd: true),
-    grep.partial(useAgentCwd: true),
+    grep.partial(useAgentCwd: true, respectGitignore: true),
   ]
 }
 
@@ -100,9 +104,11 @@ export def shellTools(): any[] {
   (a recognized write raises std::write, a git read raises its git
   effect), so a policy can pre-approve what raw bash never could. It
   needs no useAgentCwd binding — its empty cwd already resolves to the
-  agent working directory (resolveCwd in std::safeBash).
+  agent working directory (resolveCwd in std::safeBash). readSpill and
+  grepSpill read back the output safeBash saved to a file when a command
+  printed too much to return inline.
   """
-  return [safeBash, exec.partial(useAgentCwd: true)]
+  return [safeBash, exec.partial(useAgentCwd: true), readSpill, grepSpill]
 }
 
 export def readOnlyGitTools(): any[] {

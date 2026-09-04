@@ -1,4 +1,4 @@
-import { remove } from "std::fs"
+import { mkdir, remove } from "std::fs"
 import {
   bashParser,
   isRefused,
@@ -7,6 +7,10 @@ import {
   safeBash,
   resolveCwd,
  } from "std::safeBash"
+import { resolve } from "std::path"
+import { glob } from "std::shell"
+import { readSpill, grepSpill } from "std::spill"
+import { setEnv } from "std::system"
 
 def refusedFor(source: string): any {
   const parsed = bashParser(source)
@@ -206,7 +210,19 @@ node exactlyOneQuestion() {
   // question and asserts the command ran. A test that only rejects the
   // first interrupt passes whether or not a second std::bash prompt
   // appears — which is how calling `bash()` instead of `_bash()` hides.
-  const result = safeBash("git status")
+  //
+  // In a checkout with many untracked files the status runs long enough
+  // to be saved to a file, which asks its own question. That one is
+  // answered here so the harness sees only the git question.
+  let result: Result<string> = failure("not run")
+  handle {
+    result = safeBash("git status")
+  } with (intr) {
+    if (intr.effect == "std::spill::write") {
+      return approve()
+    }
+    return propagate()
+  }
   if (result is failure(why)) {
     return "FAILED"
   }
@@ -263,18 +279,56 @@ node quotedRedirectTarget() {
   return writePlanDetail("echo hi > \"my file.txt\"")
 }
 
-node longOutputIsTruncated() {
-  // The only new behavior with no coverage: deleting the cap, or the
-  // marker, survives every other test. A >2000-char literal goes through
-  // the shell-free path, which truncates too — so this also pins the
-  // consistency between that path and the bash path.
+node longOutputIsSavedToFile() {
+  // A >2000-char literal goes through the shell-free path, which keeps
+  // output the same way the bash path does — so this also pins the
+  // consistency between the two. The spill directory is pointed at a
+  // scratch dir so the whole thing can be removed afterwards.
+  const dir = resolve("tests/agency/safebash-spill-scratch")
+  setEnv("AGENCY_TOOL_OUTPUT_DIR", dir) with approve
   const chars = ["x" for i in range(2500)]
   const long = chars.join("")
-  const result = safeBash("echo ${long}")
+  const result = safeBash("echo ${long}") with approve
   if (result is failure(why)) {
     return "FAILED"
   }
-  return [result.value.length, result.value.endsWith("\n[truncated]")]
+  const notice = result.value
+  const saved = glob("*.log", dir) with approve
+  let savedLength = -1
+  let namedTheReadCall = false
+  let grepHits = -1
+  if (saved is success(files)) {
+    if (files.length == 1) {
+      const contents = readSpill(files[0]) with approve
+      if (contents is success(text)) {
+        savedLength = text.length
+      }
+      // The notice must name the readSpill call exactly as the tool takes it.
+      namedTheReadCall = notice.includes("readSpill(filename: \"${files[0]}\")")
+      const hits = grepSpill("x{10}", filename: files[0]) with approve
+      if (hits is success(matches)) {
+        grepHits = matches.length
+      }
+    }
+  }
+  remove(dir) with approve
+  return [
+    notice.length < 2000,
+    notice.includes("Command exited with code 0"),
+    notice.includes("full output saved as "),
+    namedTheReadCall,
+    savedLength,
+    grepHits,
+  ]
+}
+
+node spillToolsTakeNamesOnly() {
+  // The read tools accept a file name, never a path, so nothing outside
+  // the spill directory can be reached through them.
+  const up = readSpill("../../etc/passwd") with approve
+  const absolute = readSpill("/etc/passwd") with approve
+  const hidden = grepSpill("x", filename: ".hidden.log") with approve
+  return [isFailure(up), isFailure(absolute), isFailure(hidden)]
 }
 
 // --- resolved redirect targets (contained-filenames spec) ---

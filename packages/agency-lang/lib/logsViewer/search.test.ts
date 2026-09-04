@@ -124,7 +124,7 @@ describe("findMatches — synthetic rows", () => {
     leaf.parentId = "T";
     // "Alice" appears in the conversation row and again inside the
     // raw-data JSON payload, so we expect both synthetic ids.
-    expect(findMatches([t], "Alice")).toContain("evt-0:convo:0:0");
+    expect(findMatches([t], "Alice")).toContain("evt-0:convo:0");
   });
 
   it("expands the parent leaf when a convo row matches", () => {
@@ -232,7 +232,7 @@ describe("findMatches — llmCall span flatten", () => {
       scrollTop: 0,
       quit: false,
     };
-    const next = expandAncestorsOf(state, ["L:llm:convo:3:0"]);
+    const next = expandAncestorsOf(state, ["L:llm:convo:3"]);
     // The llmCall span itself and its ancestors (nodeExecution/agent
     // span + trace) are expanded so the convo row becomes visible.
     expect(next.expanded.has("L")).toBe(true);

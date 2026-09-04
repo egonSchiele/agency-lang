@@ -109,23 +109,23 @@ function availableWidth(childDepth: number, cols?: number): number | undefined {
 }
 
 // Turn one conversation line into one-or-more wrapped `convoLine` nodes.
-function convoLineNodes(
+// The formatter already wrapped the line to the available width, so one
+// line is one row.
+function convoLineNode(
   idPrefix: string,
   parent: TreeNode,
   line: string,
   lineIdx: number,
-  available?: number,
-): TreeNode[] {
-  const chunks = available !== undefined ? wrapLine(line, available) : [line];
-  return chunks.map((chunk, j) => ({
-    id: `${idPrefix}:${lineIdx}:${j}`,
+): TreeNode {
+  return {
+    id: `${idPrefix}:${lineIdx}`,
     traceId: parent.traceId,
     parentId: parent.id,
     children: [],
     nodeKind: "convoLine" as const,
     label: "",
-    summary: chunk,
-  }));
+    summary: line,
+  };
 }
 
 function rawDataToggleNode(id: string, parent: TreeNode, event: TreeNode["event"]): TreeNode {
@@ -142,12 +142,9 @@ function rawDataToggleNode(id: string, parent: TreeNode, event: TreeNode["event"
 }
 
 function promptCompletionChildren(leaf: TreeNode, childDepth = 0, cols?: number): TreeNode[] {
-  const convoLines = formatConversation(assembleTranscript(leaf.event!));
   const available = availableWidth(childDepth, cols);
-  const convoNodes: TreeNode[] = [];
-  convoLines.forEach((line, i) => {
-    convoNodes.push(...convoLineNodes(`${leaf.id}:convo`, leaf, line, i, available));
-  });
+  const convoLines = formatConversation(assembleTranscript(leaf.event!), available);
+  const convoNodes = convoLines.map((line, i) => convoLineNode(`${leaf.id}:convo`, leaf, line, i));
   return [...convoNodes, rawDataToggleNode(`${leaf.id}:raw`, leaf, leaf.event)];
 }
 
@@ -183,8 +180,8 @@ export function llmCallSpanChildren(span: TreeNode, childDepth = 0, cols?: numbe
   const queue = [...toolExecs];
   let lineIdx = 0;
   for (const msg of transcript) {
-    for (const line of formatConversation([msg])) {
-      out.push(...convoLineNodes(`${span.id}:llm:convo`, span, line, lineIdx++, available));
+    for (const line of formatConversation([msg], available)) {
+      out.push(convoLineNode(`${span.id}:llm:convo`, span, line, lineIdx++));
     }
     const toolCallCount = (msg?.toolCalls ?? msg?.tool_calls ?? []).length;
     for (let i = 0; i < toolCallCount && queue.length > 0; i++) {
@@ -197,27 +194,6 @@ export function llmCallSpanChildren(span: TreeNode, childDepth = 0, cols?: numbe
   out.push(...queue, ...others);
   // Raw-data toggle exposing the final promptCompletion envelope.
   out.push(rawDataToggleNode(`${span.id}:llm:raw`, span, last.event));
-  return out;
-}
-
-// Word-aware hard wrap. Splits `text` into chunks of at most `width`
-// code points, preferring to break at the last space at or before
-// the limit. Words longer than `width` are split mid-word. Empty
-// strings return [""] so a blank convoLine still occupies a row.
-export function wrapLine(text: string, width: number): string[] {
-  if (width <= 0 || text.length <= width) return [text];
-  const out: string[] = [];
-  let rest = text;
-  while (rest.length > width) {
-    let cut = rest.lastIndexOf(" ", width);
-    // No space found in the window — hard-break mid-word.
-    if (cut <= 0) cut = width;
-    out.push(rest.slice(0, cut));
-    // Drop the space we broke on (if any) so the next line doesn't
-    // start with leading whitespace.
-    rest = rest.slice(cut).replace(/^ +/, "");
-  }
-  if (rest.length > 0) out.push(rest);
   return out;
 }
 

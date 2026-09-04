@@ -7,6 +7,7 @@
 // for tool calls, content, etc.
 
 import { color } from "@/utils/termcolors.js";
+import { wrapLine } from "./wrapLine.js";
 
 export type ConvoMessage = {
   role?: string;
@@ -27,28 +28,37 @@ type ToolCall = {
 
 // Returns one display string per message. A single message can become
 // multiple lines (tool calls + text content) — they're returned as a
-// flat list, in order, so the viewer can render one row per entry.
-export function formatConversation(messages: ConvoMessage[]): string[] {
+// flat list, in order, so the viewer can render one row per entry. With
+// `width`, body text is wrapped to fit before it is colored, so every row
+// carries its own complete escape sequences.
+export function formatConversation(messages: ConvoMessage[], width?: number): string[] {
   const out: string[] = [];
   for (const msg of messages) {
-    out.push(...formatMessage(msg));
+    out.push(...formatMessage(msg, width));
   }
   return out;
 }
 
-function formatMessage(msg: ConvoMessage): string[] {
+function formatMessage(msg: ConvoMessage, width?: number): string[] {
   const role = msg.role ?? "unknown";
-  const prefix = formatRole(role, msg);
+  const label = roleLabel(role, msg);
+  const prefix = color.green(label);
   const lines: string[] = [];
   const text = contentText(msg.content);
   if (text !== undefined && text.length > 0) {
-    const [first, ...rest] = escapeControls(text).split("\n");
-    lines.push(`${prefix} ${first}`);
-    for (const line of rest) lines.push(`  ${line}`);
+    const bodyLines: string[] = [];
+    for (const line of escapeControls(text).split("\n")) {
+      bodyLines.push(...wrapBody(line, width, bodyLines.length === 0 ? label : undefined));
+    }
+    const [first, ...rest] = bodyLines;
+    lines.push(`${prefix} ${styleBody(role, first)}`);
+    for (const line of rest) lines.push(`  ${styleBody(role, line)}`);
   }
   const toolCalls = msg.toolCalls ?? msg.tool_calls ?? [];
   for (const tc of toolCalls) {
-    lines.push(`${prefix} tool call: ${formatToolCall(tc)}`);
+    const [first, ...rest] = wrapBody(`tool call: ${formatToolCall(tc)}`, width, label);
+    lines.push(`${prefix} ${first}`);
+    for (const line of rest) lines.push(`  ${line}`);
   }
   // Empty assistant turn with no text and no tool calls — still emit
   // a row so it's visible in the conversation.
@@ -58,12 +68,29 @@ function formatMessage(msg: ConvoMessage): string[] {
   return lines;
 }
 
-function formatRole(role: string, msg: ConvoMessage): string {
-  if (role === "tool") {
-    const name = msg.name ?? "tool";
-    return color.green(`[tool: ${name}]`);
-  }
-  return color.green(`[${role}]`);
+// Wrap one line of body text to `width`. When `label` is given the first
+// row shares its width with the role tag; every row after it is indented
+// by two. Without a width the line comes back whole.
+function wrapBody(line: string, width: number | undefined, label: string | undefined): string[] {
+  if (width === undefined) return [line];
+  const firstWidth = Math.max(1, width - (label === undefined ? 2 : label.length + 1));
+  const [first, ...more] = wrapLine(line, firstWidth);
+  if (more.length === 0) return [first];
+  const rest = line.slice(first.length).replace(/^ +/, "");
+  return [first, ...wrapLine(rest, Math.max(1, width - 2))];
+}
+
+// A system body is dim so the eye skips it; a user body is bright so the
+// eye can find it. The role tag itself keeps its green.
+function styleBody(role: string, text: string): string {
+  if (role === "system") return color.dim(text);
+  if (role === "user") return color.brightCyan(text);
+  return text;
+}
+
+function roleLabel(role: string, msg: ConvoMessage): string {
+  if (role === "tool") return `[tool: ${msg.name ?? "tool"}]`;
+  return `[${role}]`;
 }
 
 // Content can be a string, null, or (for some providers) a structured

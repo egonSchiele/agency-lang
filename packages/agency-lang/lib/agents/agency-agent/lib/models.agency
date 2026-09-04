@@ -37,12 +37,12 @@ type ProviderModels = {
 
 export static const MODELS: Record<string, ProviderModels> = {
   openai: {
-    fast: "gpt-5-mini",
+    fast: "gpt-5.6-sol",
     slow: "gpt-5.6-sol",
     slowProvider: "openai-responses"
   },
   anthropic: {
-    fast: "claude-sonnet-5",
+    fast: "claude-opus-4-8",
     slow: "claude-opus-4-8",
     slowProvider: "anthropic"
   },

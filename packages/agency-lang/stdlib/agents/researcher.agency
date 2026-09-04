@@ -18,7 +18,7 @@ import { Critique, revise } from "std::strategy"
 import {
   ThreadMessage,
   assistantMessage,
-  systemMessage,
+  ensureSystemMessage,
   threadIsNew,
   userMessage,
  } from "std::thread"
@@ -103,8 +103,11 @@ def researchLoop(
   extraTools: any[],
 ): string {
   const researchTools = buildTools()
-  if (threadIsNew()) {
-    systemMessage(systemPrompt)
+  const fresh = threadIsNew()
+  // A handoff runs on the caller's thread, which may already hold the
+  // persona; the push is skipped when it does.
+  ensureSystemMessage(systemPrompt)
+  if (fresh) {
     // The conversation so far, so the question is read in its context. A
     // shared session already holds its history and is not seeded again.
     for (message in history) {
@@ -144,7 +147,7 @@ def researchLoop(
   }
 }
 
-export def researcherAgent(
+export handoff def researcherAgent(
   task: string,
   context: string = "",
   maxAttempts: number = 2,
@@ -175,17 +178,15 @@ export def researcherAgent(
 
   return guard(cost: maxCost, time: maxTime, label: "researcherAgent") {
     let answer = ""
-    thread(label: "researcherAgent", session: session) {
-      answer = researchLoop(
-        task: task,
-        context: context,
-        history: history,
-        maxAttempts: maxAttempts,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
-    }
+    answer = researchLoop(
+      task: task,
+      context: context,
+      history: history,
+      maxAttempts: maxAttempts,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
     return answer
 
     // Salvage the best-so-far answer (a completed attempt, or the model's

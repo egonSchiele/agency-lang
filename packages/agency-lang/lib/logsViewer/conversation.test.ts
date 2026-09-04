@@ -8,7 +8,12 @@ describe("formatConversation", () => {
       { role: "user", content: "hi" },
       { role: "assistant", content: "hello" },
     ]);
-    expect(lines).toEqual([`${color.green("[user]")} hi`, `${color.green("[assistant]")} hello`]);
+    // A user body is bright cyan and a system body is dim, so both stand
+    // apart from assistant and tool text when scrolling a long transcript.
+    expect(lines).toEqual([
+      `${color.green("[user]")} ${color.brightCyan("hi")}`,
+      `${color.green("[assistant]")} hello`,
+    ]);
   });
 
   it("formats an assistant tool call (camelCase shape)", () => {
@@ -23,7 +28,7 @@ describe("formatConversation", () => {
       { role: "assistant", content: "Hello, Alice!" },
     ]);
     expect(lines).toEqual([
-      `${color.green("[user]")} Greet Alice using the greet tool`,
+      `${color.green("[user]")} ${color.brightCyan("Greet Alice using the greet tool")}`,
       `${color.green("[assistant]")} tool call: greet({"name":"Alice"})`,
       `${color.green("[tool: greet]")} Hello, Alice!`,
       `${color.green("[assistant]")} Hello, Alice!`,
@@ -55,7 +60,7 @@ describe("formatConversation", () => {
         ],
       },
     ]);
-    expect(lines).toEqual([`${color.green("[user]")} first second`]);
+    expect(lines).toEqual([`${color.green("[user]")} ${color.brightCyan("first second")}`]);
   });
 
   it("renders a non-content-part array (e.g. a tool result) as JSON", () => {
@@ -82,10 +87,10 @@ describe("formatConversation", () => {
       { role: "tool", name: "read", content: "line 1\nline 2", tool_call_id: "x" },
     ]);
     expect(lines).toEqual([
-      `${color.green("[system]")} You are helpful.`,
-      "  Be brief.",
-      "  ",
-      "  Answer in English.",
+      `${color.green("[system]")} ${color.dim("You are helpful.")}`,
+      `  ${color.dim("Be brief.")}`,
+      `  ${color.dim("")}`,
+      `  ${color.dim("Answer in English.")}`,
       `${color.green("[tool: read]")} line 1`,
       "  line 2",
     ]);
@@ -99,6 +104,38 @@ describe("formatConversation", () => {
       `${color.green("[tool: bash]")} \\u001b[2Jcleared\\u001b[1;1H\\r\\tdone`,
       "  next",
     ]);
+  });
+
+  it("wraps body text to the width before coloring, so every row is styled", () => {
+    const lines = formatConversation([{ role: "user", content: "one two three four five" }], 16);
+    // "[user] " takes 7 columns, so the first row holds 9 characters of body.
+    expect(lines).toEqual([
+      `${color.green("[user]")} ${color.brightCyan("one two")}`,
+      `  ${color.brightCyan("three four")}`,
+      `  ${color.brightCyan("five")}`,
+    ]);
+  });
+
+  it("wraps a long tool-call row too", () => {
+    const lines = formatConversation(
+      [
+        {
+          role: "assistant",
+          toolCalls: [{ name: "grep", arguments: { pattern: "needle in a haystack" } }],
+        },
+      ],
+      30,
+    );
+    expect(lines.length).toBeGreaterThan(1);
+    // eslint-disable-next-line no-control-regex
+    const visible = lines.map((l) => l.replace(/\x1b\[[\d;]*m/g, ""));
+    for (const row of visible) expect(row.length).toBeLessThanOrEqual(30);
+    expect(
+      visible
+        .join("")
+        .replace(/^\[assistant\] /, "")
+        .replace(/  /g, " "),
+    ).toContain("tool call: grep(");
   });
 
   it("emits a placeholder row for empty turns", () => {

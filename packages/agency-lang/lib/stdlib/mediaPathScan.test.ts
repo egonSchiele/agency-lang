@@ -43,6 +43,18 @@ describe("_scanMediaPaths", () => {
     expect(paths("dogs' /tmp/a.png cats' /tmp/b.png")).toEqual(["/tmp/a.png", "/tmp/b.png"]);
   });
 
+  it("keeps a macOS screenshot name whole across its narrow no-break space", () => {
+    // Finder escapes the ordinary spaces on drag-drop but not U+202F.
+    const msg = "see /Users/me/Desktop/Screenshot\\ 2026-09-03\\ at\\ 9.02.01\u202fAM.png please";
+    expect(_scanMediaPaths(msg)).toEqual([
+      { path: "/Users/me/Desktop/Screenshot 2026-09-03 at 9.02.01\u202fAM.png", mime: "image/png" },
+    ]);
+  });
+
+  it("still splits on other Unicode whitespace", () => {
+    expect(paths("see\u00a0/tmp/a.png\u00a0please")).toEqual(["/tmp/a.png"]);
+  });
+
   it("unescapes backslash-escaped spaces in unquoted tokens", () => {
     expect(paths("see /tmp/da\\ b.png now")).toEqual(["/tmp/da b.png"]);
   });

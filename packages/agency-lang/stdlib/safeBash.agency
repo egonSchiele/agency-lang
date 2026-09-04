@@ -17,12 +17,12 @@ import {
   writeExecution,
   runBash,
   runWrite,
-  truncate,
  } from "./safeBash/actions.agency"
+import { keepOutput } from "std::spill"
 import { _bashParser, _astToBash } from "agency-lang/stdlib-lib/safeBash.js"
 import { _resolveRedirectTarget } from "agency-lang/stdlib-lib/fs.js"
 
-export { MAX_STDOUT_LEN } from "./safeBash/actions.agency"
+export { MAX_STDOUT_LEN } from "std::spill"
 
 export type Word =
   | LiteralWord
@@ -885,7 +885,7 @@ export def resolveCwd(cwd: string): string {
 export def safeBash(
   command: string,
   cwd: string = "",
-): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard> {
+): Result<string> raises <std::bash, std::write, std::git::status, std::git::diff, std::git::log, std::read, std::run, std::guard, std::spill::write> {
   """
   Run a shell command, asking the narrowest question that describes it.
 
@@ -897,6 +897,13 @@ export def safeBash(
   Nothing runs until every question is answered. If everything is
   approved, the whole string goes to bash in one call, so bash does the
   control flow and produces the output.
+
+  A success result means the command exited 0, and its value is the
+  command's stdout. A non-zero exit is a failure whose message carries
+  the exit code, stdout, and stderr. There is no need to echo `$?` or
+  re-run a command to learn how it exited. Output longer than a couple of
+  thousand characters is saved to a file and replaced by a preview that
+  names the file; read it with readSpill or grepSpill, not with bash.
 
   @param command - One or more bash commands
   @param cwd - Working directory. Defaults to the agent working directory.
@@ -928,7 +935,7 @@ export def safeBash(
   // dropped by a rebuild.
   return match(exec) {
     { kind: "write" } => runWrite(exec)
-    { kind: "echo", content } => success(truncate(content))
+    { kind: "echo", content } => success(keepOutput(content, 0))
     { kind: "agency", args } => runAgency(args, dir)
     { kind: "bash", command as text } => runBash(text, dir)
     // Unreachable — the early return above already handled refusal. The
@@ -943,16 +950,16 @@ def runAgency(args: string[], cwd: string): Result<string> {
   the output, the way a failing bash command is.
   """
   return match(cli(args, cwd)) {
-    success(result) => cliOutcome(result)
-    failure(err) => failure(truncate("${err}"))
+    success(result) => cliOutcome(result, cwd)
+    failure(err) => failure(keepOutput("${err}", 1))
   }
 }
 
-def cliOutcome(result: ExecResult): Result<string> {
+def cliOutcome(result: ExecResult, cwd: string): Result<string> {
   if (result.exitCode != 0) {
-    return failure(truncate(result.stdout + result.stderr))
+    return failure(keepOutput(result.stdout + result.stderr, result.exitCode))
   }
-  return success(truncate(result.stdout))
+  return success(keepOutput(result.stdout, 0))
 }
 
 def raiseAll(effects: Effect[], fullCommand: string, cwd: string): Result {

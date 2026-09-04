@@ -52,6 +52,21 @@ describe("parseStyledText", () => {
 });
 
 describe("parseStyledText: ANSI passthrough", () => {
+  it("parses the dim code, and 22 turns both bold and dim off", () => {
+    expect(parseStyledText("\x1b[2mfaint\x1b[0m loud")).toEqual([
+      { text: "faint", dim: true },
+      { text: " loud" },
+    ]);
+    expect(parseStyledText("\x1b[1m\x1b[2mboth\x1b[22mplain")).toEqual([
+      { text: "both", bold: true, dim: true },
+      { text: "plain" },
+    ]);
+  });
+
+  it("parses a {dim} tag", () => {
+    expect(parseStyledText("{dim}quiet{/dim}")).toEqual([{ text: "quiet", dim: true }]);
+  });
+
   it("parses a basic ANSI fg color escape", () => {
     expect(parseStyledText("\x1b[31mred\x1b[0m")).toEqual([{ text: "red", fg: "red" }]);
   });

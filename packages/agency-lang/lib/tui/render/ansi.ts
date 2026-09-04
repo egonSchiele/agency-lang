@@ -6,6 +6,7 @@ import { flatten } from "./flatten.js";
 
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
+const DIM = "\x1b[2m";
 
 const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -34,6 +35,7 @@ function colorEscape(value: string | undefined, kind: "fg" | "bg"): string {
 function cellEscapes(cell: Cell): string {
   let seq = "";
   if (cell.bold) seq += BOLD;
+  if (cell.dim) seq += DIM;
   seq += colorEscape(cell.fg, "fg");
   seq += colorEscape(cell.bg, "bg");
   return seq;

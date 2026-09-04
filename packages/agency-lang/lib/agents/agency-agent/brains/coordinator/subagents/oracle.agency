@@ -16,10 +16,7 @@ import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
 
-export
-handoff
-
-def oracleAgent(userMsg: string): string {
+export handoff def oracleAgent(userMsg: string): string {
   """
   Ask the oracle — a read-only senior reviewer — for a second opinion
   before acting on something that would be expensive to get wrong. Call

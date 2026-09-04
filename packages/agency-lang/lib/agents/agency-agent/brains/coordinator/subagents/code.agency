@@ -27,6 +27,7 @@ import { exec } from "std::shell"
 import { supervise } from "std::supervise"
 import { systemMessage } from "std::thread"
 
+import { projectContextText } from "../../../lib/projectContext.agency"
 import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
@@ -133,6 +134,7 @@ let _oneShot = false
 export def setCodeOneShot(oneShot: boolean) {
   _oneShot = oneShot
 }
+
 
 // only add system message the first time
 let _first = true
@@ -533,7 +535,9 @@ def converse(
   thread(label: "code", session: "code") {
     setMemoryId("code")
     if (_first) {
-      let sys = codeSysPrompt
+      // The project block (date, cwd, AGENTS.md) goes in the system prompt
+      // rather than being left for the model to read on its own.
+      let sys = "${codeSysPrompt}${projectContextText()}"
       if (getSearchBackend() != "off") {
         sys = "${sys}\n\n${WEB_SEARCH_NOTE}"
       }

@@ -13,6 +13,12 @@ import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
 import { resolvePath } from "./resolvePath.js";
+import {
+  type GitignoreFile,
+  isIgnored,
+  readAncestorGitignores,
+  readGitignore,
+} from "./gitignore.js";
 
 function buildSpawnOptions(
   cwd: string,
@@ -368,13 +374,26 @@ async function refuseSymlinkedRoot(root: string, allowedPaths?: string[]): Promi
   }
 }
 
-async function walkDir(root: string, visit: Visitor): Promise<void> {
-  async function walk(current: string): Promise<boolean> {
+type WalkOptions = {
+  /** Skip whatever the .gitignore files between the root and an entry
+   * would ignore. Off, the walk skips only SKIP_DIRS. */
+  respectGitignore?: boolean;
+};
+
+async function walkDir(root: string, visit: Visitor, options: WalkOptions = {}): Promise<void> {
+  // The .gitignore files on the path from the root to the directory being
+  // read, outermost first: a deeper file's rules refine a shallower one's.
+  async function walk(current: string, ignoreFiles: GitignoreFile[]): Promise<boolean> {
     let entries: string[];
     try {
       entries = await fs.readdir(current);
     } catch {
       return true;
+    }
+    let scoped = ignoreFiles;
+    if (options.respectGitignore) {
+      const here = await readGitignore(current);
+      if (here) scoped = [...ignoreFiles, here];
     }
     for (const name of entries) {
       if (SKIP_DIRS.has(name)) continue;
@@ -385,12 +404,13 @@ async function walkDir(root: string, visit: Visitor): Promise<void> {
       } catch {
         continue;
       }
+      if (options.respectGitignore && isIgnored(full, st.isDirectory(), scoped)) continue;
       if (!(await visit(full, st))) return false;
-      if (st.isDirectory() && !(await walk(full))) return false;
+      if (st.isDirectory() && !(await walk(full, scoped))) return false;
     }
     return true;
   }
-  await walk(root);
+  await walk(root, options.respectGitignore ? await readAncestorGitignores(root) : []);
 }
 
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */
@@ -401,6 +421,7 @@ export async function _grep(
   dir: string,
   maxResults: number,
   allowedPaths?: string[],
+  respectGitignore: boolean = true,
 ): Promise<GrepResults> {
   // See `_ls` for the resolution policy. `dir` is module-relative;
   // returned `file` paths are relative to `dir` so callers can hand
@@ -410,21 +431,25 @@ export async function _grep(
   const plan = compileGrepQuery(query);
   const matches: GrepMatch[] = [];
 
-  await walkDir(root, async (full, st) => {
-    if (!st.isFile()) return true;
-    let text: string;
-    try {
-      text = await fs.readFile(full, "utf8");
-    } catch {
-      return true;
-    }
-    const file = toPosix(path.relative(root, full));
-    const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
-    for (const hit of firstMatchingLines(text, plan, perFile)) {
-      matches.push({ file, ...hit });
-    }
-    return matches.length < maxResults;
-  });
+  await walkDir(
+    root,
+    async (full, st) => {
+      if (!st.isFile()) return true;
+      let text: string;
+      try {
+        text = await fs.readFile(full, "utf8");
+      } catch {
+        return true;
+      }
+      const file = toPosix(path.relative(root, full));
+      const perFile = plan.filesOnly ? 1 : maxResults - matches.length;
+      for (const hit of firstMatchingLines(text, plan, perFile)) {
+        matches.push({ file, ...hit });
+      }
+      return matches.length < maxResults;
+    },
+    { respectGitignore },
+  );
 
   return plan.filesOnly ? matches.map((match) => match.file) : matches;
 }
@@ -435,7 +460,7 @@ type LineHit = { line: number; text: string };
  *  scanning no further than it must. A file's final newline does not start
  *  a line, the same as grep, or `invert` would report an empty line past
  *  the end of every file. */
-function firstMatchingLines(text: string, plan: GrepPlan, limit: number): LineHit[] {
+export function firstMatchingLines(text: string, plan: GrepPlan, limit: number): LineHit[] {
   const hits: LineHit[] = [];
   if (text.length === 0) {
     return hits;

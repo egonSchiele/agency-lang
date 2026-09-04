@@ -136,7 +136,7 @@ node switchPerSlotOnly(): string {
   saveSettings({}) with approve
   const out = switchModel(
     freshSession(),
-    "reasoning=claude-opus-4-8",
+    "reasoning=claude-sonnet-5",
     SWITCH_CTX,
     SWITCH_BEFORE,
   )

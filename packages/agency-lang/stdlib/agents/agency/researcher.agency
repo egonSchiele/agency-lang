@@ -15,7 +15,7 @@ import {
   readOnlyFileTools,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
-import { systemMessage, threadIsNew } from "std::thread"
+import { ensureSystemMessage } from "std::thread"
 
 static const skills = agentSkill("agency/researcher")
 
@@ -36,12 +36,7 @@ export def buildTools(): any[] {
   Return the Agency researcher's tools: the bundled documentation, read-only
   access to the project, and the source inspectors it checks answers with.
   """
-  return [
-    ...agencyDocTools(),
-    ...agencyCodeTools(),
-    ...readOnlyFileTools(),
-    skills,
-  ]
+  return [...agencyDocTools(), ...agencyCodeTools(), ...readOnlyFileTools(), skills]
 }
 
 def answer(
@@ -51,9 +46,7 @@ def answer(
   provider: string,
   extraTools: any[],
 ): string {
-  if (threadIsNew()) {
-    systemMessage(systemPrompt)
-  }
+  ensureSystemMessage(systemPrompt)
   return llm(
     withContext(task: question, context: context),
     llmOptions(
@@ -64,7 +57,7 @@ def answer(
   )
 }
 
-export def agencyResearcherAgent(
+export handoff def agencyResearcherAgent(
   question: string,
   context: string = "",
   maxCost: number = $10.00,
@@ -89,15 +82,13 @@ export def agencyResearcherAgent(
   """
   return guard(cost: maxCost, time: maxTime, label: "agencyResearcherAgent") {
     let reply = ""
-    thread(label: "agencyResearcherAgent", session: session, summarize: true) {
-      reply = answer(
-        question: question,
-        context: context,
-        model: model,
-        provider: provider,
-        extraTools: extraTools,
-      )
-    }
+    reply = answer(
+      question: question,
+      context: context,
+      model: model,
+      provider: provider,
+      extraTools: extraTools,
+    )
     return reply
 
     // Salvage the model's best-so-far saveDraft if an outer budget guard

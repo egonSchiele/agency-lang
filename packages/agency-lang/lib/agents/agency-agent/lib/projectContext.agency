@@ -1,0 +1,44 @@
+/** @module
+  @summary The project half of the grounding: date, working directory, and
+  the AGENTS.md block. A leaf module so both the harness (for every brain's
+  grounding) and the code subagent (for its own prompt) can import it.
+*/
+import { today } from "std::date"
+import { exists } from "std::shell"
+import { cwd } from "std::system"
+
+export def loadAgentsMd(dir: string): string {
+  """
+  Read `AGENTS.md` from `dir` if it exists, else `CLAUDE.md`, and return
+  the raw contents; the caller wraps them in a <project_context> block.
+  Returns an empty string if neither exists or the read fails.
+  """
+  for (name in ["AGENTS.md", "CLAUDE.md"]) {
+    if (exists(name, dir)) {
+      const result = read(name, dir) with approve
+      if (isFailure(result)) {
+        return ""
+      }
+      return result.value
+    }
+  }
+  return ""
+}
+
+export def projectContextText(): string {
+  """
+  The part of the grounding that is about the project rather than the
+  agent: date, working directory, and the AGENTS.md block. The code
+  subagent adds it to its own prompt too.
+  """
+  const projectContext = loadAgentsMd(cwd()) with approve
+  return """
+
+  Current date: ${today()}
+  Current working directory: ${cwd()}
+
+  <project_context>
+  ${projectContext}
+  </project_context>
+  """
+}

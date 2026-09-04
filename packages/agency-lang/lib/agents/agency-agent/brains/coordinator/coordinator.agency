@@ -6,6 +6,7 @@
 */
 import { readOnlyFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
+import { edit } from "std::fs"
 import { setMemoryId } from "std::memory"
 import { Attachment, systemMessage } from "std::thread"
 
@@ -34,6 +35,11 @@ static const MAIN_PROMPT_SMALL = read("./prompts/main-small.md", __dirname) with
 // The read-only file tools let the coordinator answer a question that
 // hinges on a few files from its own context, instead of paying for a
 // subagent dispatch. Bigger sweeps still go to the explorer.
+//
+// `edit` is here for the same reason: a small change to a file the
+// coordinator has already read should not cost a codeAgent dispatch. The
+// prompt keeps it to small changes; anything that needs a build or tests
+// still goes to codeAgent.
 static const mainAgentTools = [
   researchAgent,
   codeAgent,
@@ -44,6 +50,7 @@ static const mainAgentTools = [
   rewriteAgent,
   generateImageFile,
   ...readOnlyFileTools(),
+  edit.partial(useAgentCwd: true),
 ]
 
 def coordinatorInit(context: BrainContext) {

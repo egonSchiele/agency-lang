@@ -818,6 +818,39 @@ def askUser(intr: any): AskUserResult {
   }
 }
 
+// The payload fields that say what an interrupt is about, as opposed to
+// what it carries: an edit's before/after text, a write's content, or a
+// command's stdin would swamp the line and echo file contents.
+static const IDENTIFYING_FIELDS = ["filename", "dir", "command", "cwd", "name", "url", "pattern", "target", "path", "src", "dest"]
+
+/**
+ * One line naming what a rejected interrupt asked for, so a person watching
+ * the session sees the refusal instead of only its effect on the agent's
+ * next move.
+ */
+def oneLineData(data: any): string {
+  if (data == null || typeof data != "object") {
+    return ""
+  }
+  let parts: string[] = []
+  for (key in IDENTIFYING_FIELDS) {
+    const value = data[key]
+    if (typeof value == "string" || typeof value == "number") {
+      // JSON-quoted, so a control character in a command or name is shown
+      // escaped rather than sent to the terminal.
+      let text = JSON.stringify(value)
+      if (text.length > 80) {
+        text = text[:80] + "…"
+      }
+      parts.push("${key}: ${text}")
+    }
+  }
+  if (parts.length == 0) {
+    return ""
+  }
+  return " (" + parts.join(", ") + ")"
+}
+
 /**
  * Internal — the actual handler function returned by
  * `cliPolicyHandler`. Do not call directly; use `cliPolicyHandler`
@@ -868,6 +901,11 @@ def _handler(intr: any): any {
     return approve()
   }
   if (decision.type == "reject") {
+    // A rule rejected without asking. Say so on the terminal: a silent
+    // rejection looks, from the outside, like the agent changing its mind.
+    if (_interactive) {
+      print(color.dim("⏺ Policy rejected ${intr.effect}${oneLineData(intr.data)}"))
+    }
     // The rule's rejectMessage, when set: the model reads it as the
     // rejection reason and can steer its next attempt.
     return reject(decision.message)

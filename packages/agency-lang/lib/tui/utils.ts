@@ -38,7 +38,7 @@ export function innerArea(
 }
 
 export function sameStyle(a: Cell, b: Cell): boolean {
-  return a.fg === b.fg && a.bg === b.bg && a.bold === b.bold;
+  return a.fg === b.fg && a.bg === b.bg && a.bold === b.bold && a.dim === b.dim;
 }
 
 export function escapeHtml(s: string): string {

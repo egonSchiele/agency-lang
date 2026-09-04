@@ -67,8 +67,10 @@ Paths in this section are relative to `lib/agents/agency-agent/`.
   `brain.runTurn`.
 - `lib/repl.agency`: the interactive terminal. It calls the harness
   `runTurn` and never a brain directly.
-- `lib/grounding.agency`: builds the grounding text with `groundingText`,
-  which calls `loadAgentsMd`.
+- `lib/grounding.agency`: builds the grounding text with `groundingText`.
+  The project block (date, cwd, AGENTS.md or else CLAUDE.md) is
+  `projectContextText` in `lib/projectContext.agency`, a leaf module so
+  the code subagent can put the same block in its own prompt.
 - `lib/agentName.agency`: `agentNameFor(brain)` returns
   `"agency-agent/<brain name>"`. `main()` passes it to `setAgentName`, so
   every trace is grouped by the brain that produced it.

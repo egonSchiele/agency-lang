@@ -13,5 +13,6 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/stdlib/grep-flags.md` — `std::grep`: why it is an in-process regex walk and not the `grep` program, the flag rule table that turns grep habits into regex flags or named parameters, and the messages a rejected flag sends back to the model.
 - `docs/dev/stdlib/github.md` — `std::github`: why it speaks REST directly, the three-source credential chain, why the token never becomes an Agency value, and the deliberate departures in its effect vocabulary.
 - `docs/dev/stdlib/skills-write.md` — The `std::skills` write half: writeSkill's save gate, designSkill's review-and-redraft loop over it, the subdir scan's path-segment validation, and the frontmatter round-trip contract.
+- `docs/dev/stdlib/spill.md` — `std::spill`: long tool output saved to one fixed directory outside every project, the two effects and two name-only tools that read it back, and why the preview is bounded by characters.
 - `docs/dev/stdlib/std-agency-test.md` — `test()` and `testFile()` from `std::agency`, and the sandbox rules that are easy to get wrong.
 - `docs/dev/stdlib/toolbox.md` — `std::toolbox`: tools an agent writes and keeps; the tool template, the designTool pipeline and the plain writeTool, the save gate both publish through, and runTool.

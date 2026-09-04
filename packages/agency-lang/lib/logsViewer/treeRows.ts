@@ -197,10 +197,6 @@ export function llmCallSpanChildren(span: TreeNode, childDepth = 0, cols?: numbe
   return out;
 }
 
-// Word-aware hard wrap. Splits `text` into chunks of at most `width`
-// code points, preferring to break at the last space at or before
-// the limit. Words longer than `width` are split mid-word. Empty
-// strings return [""] so a blank convoLine still occupies a row.
 // Pretty-print the leaf event payload and turn it into one synthetic
 // TreeNode per line, so the visible-rows pipeline can fold them into
 // the same scroll/cursor model used for real tree rows.

@@ -6,10 +6,11 @@ import {
   planFor,
   safeBash,
   resolveCwd,
-  TOOL_OUTPUT_DIR,
  } from "std::safeBash"
 import { resolve } from "std::path"
 import { glob } from "std::shell"
+import { readSpill, grepSpill } from "std::spill"
+import { setEnv } from "std::system"
 
 def refusedFor(source: string): any {
   const parsed = bashParser(source)
@@ -209,7 +210,19 @@ node exactlyOneQuestion() {
   // question and asserts the command ran. A test that only rejects the
   // first interrupt passes whether or not a second std::bash prompt
   // appears — which is how calling `bash()` instead of `_bash()` hides.
-  const result = safeBash("git status")
+  //
+  // In a checkout with many untracked files the status runs long enough
+  // to be saved to a file, which asks its own question. That one is
+  // answered here so the harness sees only the git question.
+  let result: Result<string> = failure("not run")
+  handle {
+    result = safeBash("git status")
+  } with (intr) {
+    if (intr.effect == "std::spill::write") {
+      return approve()
+    }
+    return propagate()
+  }
   if (result is failure(why)) {
     return "FAILED"
   }
@@ -269,44 +282,53 @@ node quotedRedirectTarget() {
 node longOutputIsSavedToFile() {
   // A >2000-char literal goes through the shell-free path, which keeps
   // output the same way the bash path does — so this also pins the
-  // consistency between the two. The scratch dir is the command's cwd, so
-  // the saved file lands under it and the whole thing can be removed.
-  const dir = "tests/agency/safebash-spill-scratch"
-  mkdir(dir) with approve
+  // consistency between the two. The spill directory is pointed at a
+  // scratch dir so the whole thing can be removed afterwards.
+  const dir = resolve("tests/agency/safebash-spill-scratch")
+  setEnv("AGENCY_TOOL_OUTPUT_DIR", dir) with approve
   const chars = ["x" for i in range(2500)]
   const long = chars.join("")
-  const result = safeBash("echo ${long}", cwd: dir)
+  const result = safeBash("echo ${long}") with approve
   if (result is failure(why)) {
     return "FAILED"
   }
   const notice = result.value
-  const saved = glob("*.log", "${dir}/${TOOL_OUTPUT_DIR}") with approve
+  const saved = glob("*.log", dir) with approve
   let savedLength = -1
+  let namedTheReadCall = false
+  let grepHits = -1
   if (saved is success(files)) {
     if (files.length == 1) {
-      const contents = read(files[0], "${dir}/${TOOL_OUTPUT_DIR}") with approve
+      const contents = readSpill(files[0]) with approve
       if (contents is success(text)) {
         savedLength = text.length
+      }
+      // The notice must name the readSpill call exactly as the tool takes it.
+      namedTheReadCall = notice.includes("readSpill(filename: \"${files[0]}\")")
+      const hits = grepSpill("x{10}", filename: files[0]) with approve
+      if (hits is success(matches)) {
+        grepHits = matches.length
       }
     }
   }
   remove(dir) with approve
-  // The notice must name the read call exactly as the agent's read tool
-  // takes it: the file name, and the directory as an absolute path.
-  let namedTheReadCall = false
-  if (saved is success(files)) {
-    if (files.length == 1) {
-      const absDir = resolve("${dir}/${TOOL_OUTPUT_DIR}")
-      namedTheReadCall = notice.includes("read(filename: \"${files[0]}\", dir: \"${absDir}\")")
-    }
-  }
   return [
     notice.length < 2000,
     notice.includes("Command exited with code 0"),
-    notice.includes("full output saved to "),
+    notice.includes("full output saved as "),
     namedTheReadCall,
     savedLength,
+    grepHits,
   ]
+}
+
+node spillToolsTakeNamesOnly() {
+  // The read tools accept a file name, never a path, so nothing outside
+  // the spill directory can be reached through them.
+  const up = readSpill("../../etc/passwd") with approve
+  const absolute = readSpill("/etc/passwd") with approve
+  const hidden = grepSpill("x", filename: ".hidden.log") with approve
+  return [isFailure(up), isFailure(absolute), isFailure(hidden)]
 }
 
 // --- resolved redirect targets (contained-filenames spec) ---

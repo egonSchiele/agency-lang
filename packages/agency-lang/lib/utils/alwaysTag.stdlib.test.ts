@@ -76,6 +76,8 @@ const EXPECTED: Record<string, string[]> = {
   "std::exec": ["command", "subcommand"],
   "std::bash": ["command", "cwd"],
   "std::run": [],
+  "std::spill::write": [],
+  "std::spill::read": [],
   "std::git::status": ["cwd/**"],
   "std::git::log": ["cwd/**"],
   "std::git::diff": ["cwd/**"],

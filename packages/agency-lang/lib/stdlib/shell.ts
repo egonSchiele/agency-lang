@@ -460,7 +460,7 @@ type LineHit = { line: number; text: string };
  *  scanning no further than it must. A file's final newline does not start
  *  a line, the same as grep, or `invert` would report an empty line past
  *  the end of every file. */
-function firstMatchingLines(text: string, plan: GrepPlan, limit: number): LineHit[] {
+export function firstMatchingLines(text: string, plan: GrepPlan, limit: number): LineHit[] {
   const hits: LineHit[] = [];
   if (text.length === 0) {
     return hits;

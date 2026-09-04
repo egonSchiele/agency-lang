@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { isIgnored, parseGitignore } from "./gitignore.js";
+import { describe, it, expect, afterEach } from "vitest";
+import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
+import { safeDeleteDirectoryWithin } from "../utils.js";
+import { isIgnored, parseGitignore, readAncestorGitignores } from "./gitignore.js";
 
 const root = "/repo";
 const at = (relative: string) => `${root}/${relative}`;
@@ -63,5 +67,51 @@ describe("parseGitignore + isIgnored", () => {
     const file = parseGitignore(root, ".env\n");
     expect(isIgnored(at(".env"), false, [file])).toBe(true);
     expect(isIgnored(at("config/.env"), false, [file])).toBe(true);
+  });
+
+  it("a [!x] bracket class negates the class, as in git", () => {
+    const file = parseGitignore(root, "[!a]*.txt\n");
+    expect(isIgnored(at("b.txt"), false, [file])).toBe(true);
+    expect(isIgnored(at("a.txt"), false, [file])).toBe(false);
+  });
+});
+
+describe("readAncestorGitignores", () => {
+  const scratchDirs: string[] = [];
+  afterEach(() => {
+    for (const dir of scratchDirs.splice(0)) safeDeleteDirectoryWithin(tmpdir(), dir);
+  });
+
+  function repo(): string {
+    const base = mkdtempSync(join(tmpdir(), "gitignore-"));
+    scratchDirs.push(base);
+    return base;
+  }
+
+  it("loads the files between a subdirectory and its repository root", async () => {
+    const outer = repo();
+    mkdirSync(join(outer, ".git"));
+    writeFileSync(join(outer, ".gitignore"), "*.log\n");
+    mkdirSync(join(outer, "lib", "deep"), { recursive: true });
+    const files = await readAncestorGitignores(join(outer, "lib", "deep"));
+    expect(files.map((file) => file.dir)).toEqual([outer]);
+  });
+
+  it("stops at a nested repository root, where an enclosing repository's rules do not reach", async () => {
+    const outer = repo();
+    mkdirSync(join(outer, ".git"));
+    writeFileSync(join(outer, ".gitignore"), "*\n");
+    const inner = join(outer, "inner");
+    mkdirSync(join(inner, ".git"), { recursive: true });
+    mkdirSync(join(inner, "src"));
+    expect(await readAncestorGitignores(inner)).toEqual([]);
+    const fromSrc = await readAncestorGitignores(join(inner, "src"));
+    expect(fromSrc.map((file) => file.dir)).toEqual([]);
+  });
+
+  it("finds nothing outside any repository", async () => {
+    const dir = repo();
+    writeFileSync(join(dir, ".gitignore"), "*.log\n");
+    expect(await readAncestorGitignores(join(dir))).toEqual([]);
   });
 });

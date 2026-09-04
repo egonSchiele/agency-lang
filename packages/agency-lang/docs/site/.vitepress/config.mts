@@ -445,6 +445,7 @@ export default defineConfig({
             { text: "shell", link: "/stdlib/shell" },
             { text: "skills", link: "/stdlib/skills" },
             { text: "speech", link: "/stdlib/speech" },
+            { text: "spill", link: "/stdlib/spill" },
             { text: "statelog", link: "/stdlib/statelog" },
             { text: "strategy", link: "/stdlib/strategy" },
             { text: "supervise", link: "/stdlib/supervise" },

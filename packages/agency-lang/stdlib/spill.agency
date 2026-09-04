@@ -1,0 +1,197 @@
+/** @module
+  @summary Where long tool output goes, and how to read it back.
+
+  A command can print far more than a model should be handed in one tool
+  result. Cutting the output off hid whether a build had finished, and the
+  model re-ran the command to find out. So output past `MAX_STDOUT_LEN` is
+  saved to a file instead, and the model gets a preview: the exit code, a
+  few lines from each end, and the file's name.
+
+  Saved files live in one fixed directory, `~/.agency-agent/tool-output`,
+  outside every project. The model never chooses the location, nothing
+  lands in a repository, and there is one place to clean up. Set
+  `AGENCY_TOOL_OUTPUT_DIR` to move it.
+
+  Two tools read the files back: `readSpill` for the whole file or a slice
+  of lines, and `grepSpill` to search one. Both take a file name, so
+  they cannot reach anything outside the directory. Each raises its own effect, so
+  a policy can approve reading saved output without opening the
+  general-purpose read tools any wider.
+
+  ```agency
+  import { keepOutput, readSpill, grepSpill } from "std::spill"
+
+  const shown = keepOutput(hugeBuildLog, 1)
+  // shown is a preview naming a file such as 2026-09-04T01-02-03-000Z-a1b2c3.log
+  const tail = readSpill("2026-09-04T01-02-03-000Z-a1b2c3.log", offset: 900, limit: 50)
+  const errors = grepSpill("error", filename: "2026-09-04T01-02-03-000Z-a1b2c3.log")
+  ```
+*/
+import {
+  _spillDir,
+  _spillName,
+  _spillOutput,
+  _readSpill,
+  _grepSpill,
+} from "agency-lang/stdlib-lib/spill.js"
+
+/** How much of a command's output comes back inline. Anything longer is
+  saved to a file and replaced by a preview (see `keepOutput`). */
+export static const MAX_STDOUT_LEN = 2000
+
+/** Characters of preview taken from each end of a long output. Two of
+  these plus the notice around them stay near MAX_STDOUT_LEN, so a preview
+  is never longer than the output it replaces would have been when cut. */
+static const PREVIEW_CHARS = 700
+
+/** Longest line the preview shows before cutting it. */
+static const PREVIEW_LINE_LEN = 200
+
+/** Saving one long tool output to the spill directory. */
+effect std::spill::write { filename: string }
+
+/** Reading or searching one saved output file. */
+effect std::spill::read { filename: string }
+
+export def spillDir(): string {
+  """
+  The directory saved tool output lives in.
+  """
+  return _spillDir()
+}
+
+export def keepOutput(text: string, exitCode: number): string raises <std::spill::write> {
+  """
+  What the model gets back for a command's output.
+
+  Short output comes back exactly as printed. Long output is saved to a
+  file and replaced by a preview: the exit code, the first and last lines,
+  and the file's name, with the tools that read it.
+
+  If the file cannot be written, or the save is rejected, the output is cut
+  at the cap with a visible marker.
+  """
+  if (text.length <= MAX_STDOUT_LEN) {
+    return text
+  }
+  const saved = saveOutput(text)
+  if (saved is failure(why)) {
+    return text[:MAX_STDOUT_LEN] + "\n[truncated]"
+  }
+  return spillNotice(text, saved.value, exitCode)
+}
+
+def saveOutput(text: string): Result<string> raises <std::spill::write> {
+  """
+  Save one output under a fresh name and return the name. The name is
+  chosen before the interrupt so the interrupt can say which file.
+  """
+  const filename = _spillName()
+  return interrupt std::spill::write("Save this long command output to ${spillDir()}/${filename}?", {
+    filename: filename
+  })
+  const written = try _spillOutput(filename, text)
+  if (written is failure(why)) {
+    return failure(why)
+  }
+  return success(filename)
+}
+
+export idempotent def readSpill(
+  filename: string,
+  offset: number = 0,
+  limit: number = 0,
+): Result raises <std::spill::read> {
+  """
+  Read a saved tool-output file, named in a "full output saved as" notice. Returns the whole file, or a slice of lines when offset or limit is set.
+
+  @param filename - The file's name from the notice, such as 2026-09-04T01-02-03-000Z-a1b2c3.log. A name only, never a path.
+  @param offset - 1-indexed line to start at (0 means start of file)
+  @param limit - Maximum number of lines to return (0 means read to end of file)
+  """
+  return interrupt std::spill::read("Read saved tool output ${filename}?", {
+    filename: filename
+  })
+  return try _readSpill(filename, offset, limit)
+}
+
+export idempotent def grepSpill(
+  pattern: string,
+  filename: string = "",
+  maxResults: number = 100,
+): Result raises <std::spill::read> {
+  """
+  Search a saved tool-output file for a regular expression. Each match comes back with its line number and line text. Patterns use JavaScript regex syntax.
+
+  @param pattern - The regular expression to search for
+  @param filename - The file's name from a "full output saved as" notice. Empty searches every saved file.
+  @param maxResults - Most matches to return
+  """
+  return interrupt std::spill::read("Search saved tool output ${filename}?", {
+    filename: filename
+  })
+  return try _grepSpill(pattern, filename, maxResults)
+}
+
+def spillNotice(text: string, filename: string, exitCode: number): string {
+  """
+  The preview that stands in for a long output: what happened, a glimpse
+  of both ends, and exactly how to read the rest.
+  """
+  const lines = text.split("\n")
+  const head = previewHead(lines)
+  const tail = previewTail(lines, head.length)
+  return """
+[Output too long to return in full: ${lines.length} lines, ${text.length} characters. Command exited with code ${exitCode}.]
+--- first ${head.length} lines ---
+${head.join("\n")}
+--- last ${tail.length} lines ---
+${tail.join("\n")}
+--- full output saved as ${filename} ---
+To read it, use the readSpill tool: readSpill(filename: "${filename}"), with offset and limit to take a slice. To search it, use grepSpill(pattern, filename: "${filename}"). Neither needs approval. Do not use bash (tail, sed, wc, cat) to inspect this file: every bash command needs approval, and these tools do not."""
+}
+
+def previewHead(lines: string[]): string[] {
+  """
+  Lines from the start until the preview budget is spent. Always at least
+  one line, so a single enormous line still shows its beginning.
+  """
+  let out: string[] = []
+  let used = 0
+  for (line in lines) {
+    const shown = cutLine(line)
+    if (out.length > 0 && used + shown.length > PREVIEW_CHARS) {
+      return out
+    }
+    out.push(shown)
+    used = used + shown.length
+  }
+  return out
+}
+
+def previewTail(lines: string[], skip: number): string[] {
+  """
+  Lines from the end until the preview budget is spent, never reaching back
+  into the lines the head already showed.
+  """
+  let out: string[] = []
+  let used = 0
+  let index = lines.length - 1
+  while (index >= skip) {
+    const shown = cutLine(lines[index])
+    if (out.length > 0 && used + shown.length > PREVIEW_CHARS) {
+      return out
+    }
+    out.unshift(shown)
+    used = used + shown.length
+    index = index - 1
+  }
+  return out
+}
+
+def cutLine(line: string): string {
+  if (line.length > PREVIEW_LINE_LEN) {
+    return line[:PREVIEW_LINE_LEN] + "…"
+  }
+  return line
+}

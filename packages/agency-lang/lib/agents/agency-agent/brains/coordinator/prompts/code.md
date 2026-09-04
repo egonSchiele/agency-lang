@@ -196,10 +196,9 @@ live in `.agency` files you can `read` directly.
    is asked to approve each command. A success result means the command
    exited 0; a non-zero exit comes back as a failure with the exit code,
    so never re-run a command or echo `$?` to learn how it exited. Long
-   output is saved to a file under `.agency-agent/tool-output/` and the result
-   names the file: inspect it with `read` (offset and limit for a slice)
-   or `grep`, which need no approval, never with bash `tail`, `sed`, or
-   `wc`, which do.
+   output is saved to a file and the result names it: inspect it with
+   `readSpill` (offset and limit for a slice) or `grepSpill`, which need
+   no approval, never with bash `tail`, `sed`, or `wc`, which do.
 9. You have a persistent knowledge graph scoped to coding work. Call
    `recall(query)` to retrieve anything the user told you in a
    previous session (project conventions, decisions made earlier).

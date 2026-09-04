@@ -56,7 +56,10 @@ export function parseGitignore(dir: string, text: string): GitignoreFile {
     // Braces, parentheses and bars are ordinary characters in a .gitignore
     // pattern; escape them so picomatch cannot read them as its own syntax.
     const literal = pattern.replace(/[{}()|]/g, (ch) => `\\${ch}`);
-    const glob = anchored ? literal : `**/${literal}`;
+    // git negates a bracket class with `[!a]` as well as `[^a]`; picomatch
+    // only knows the second spelling.
+    const classes = literal.replace(/\[!/g, "[^");
+    const glob = anchored ? classes : `**/${classes}`;
     rules.push({
       matchesSelf: picomatch(glob, MATCH_OPTIONS),
       matchesUnder: picomatch(`${glob}/**`, MATCH_OPTIONS),
@@ -74,6 +77,9 @@ export function parseGitignore(dir: string, text: string): GitignoreFile {
  * rules like `**\/*.js` usually live. With no repository above `dir`,
  * nothing applies. */
 export async function readAncestorGitignores(dir: string): Promise<GitignoreFile[]> {
+  // A directory that is itself a repository root has no ancestors that
+  // apply: git never lets an enclosing repository's rules reach inside.
+  if (await exists(path.join(path.resolve(dir), ".git"))) return [];
   const ancestors: string[] = [];
   let current = path.dirname(path.resolve(dir));
   for (;;) {

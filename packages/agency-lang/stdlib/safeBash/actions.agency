@@ -13,23 +13,10 @@
 */
 import { WriteMode } from "std::index"
 
+import { keepOutput } from "std::spill"
+
 import { _write } from "agency-lang/stdlib-lib/builtins.js"
-import { _spillOutput } from "agency-lang/stdlib-lib/safeBash.js"
 import { _bash } from "agency-lang/stdlib-lib/shell.js"
-
-/** How much of a command's output comes back inline. Anything longer is
-  saved to a file and replaced by a preview (see `keepOutput`). */
-export static const MAX_STDOUT_LEN = 2000
-
-/** Lines from each end of a long output that the preview shows. */
-static const PREVIEW_LINES = 15
-
-/** Longest line the preview shows before cutting it. */
-static const PREVIEW_LINE_LEN = 200
-
-/** Where `keepOutput` saves long output, relative to the command's cwd.
-  Mirrors TOOL_OUTPUT_DIR in lib/stdlib/safeBash.ts. */
-export static const TOOL_OUTPUT_DIR = ".agency-agent/tool-output"
 
 /** One interrupt a command needs raised before it may run.
  *
@@ -153,76 +140,20 @@ export def runBash(command: string, cwd: string): Result<string> {
   // `try` WRAPS the call in a Result, so the ExecResult is inside
   // `.value`. Reading `attempt.stdout` directly is undefined.
   const result: any = attempt.value
-  const out = keepOutput(result.stdout, cwd, result.exitCode)
+  const out = keepOutput(result.stdout, result.exitCode)
   if (result.exitCode != 0) {
     return failure(
       JSON.stringify(
       {
       command: command,
       exitCode: result.exitCode,
-      stderr: keepOutput(result.stderr, cwd, result.exitCode),
+      stderr: keepOutput(result.stderr, result.exitCode),
       stdout: out
     },
     ),
     )
   }
   return success(out)
-}
-
-export def keepOutput(text: string, cwd: string, exitCode: number): string {
-  """
-  What the model gets back for a command's output.
-
-  Short output comes back exactly as printed. Long output is saved to a
-  file under `cwd` and replaced by a preview: the exit code, the first and
-  last lines, the file's location, and which tools read it. Raw output
-  with no bound is a context-window hazard, but cutting it off hid whether
-  a build had finished, and the model re-ran it through bash to find out.
-  The file goes under `cwd` because that is where the agent's read tools
-  are approved without asking.
-
-  If the file cannot be written, the output is cut at the cap with a
-  visible marker, the way it always was.
-  """
-  if (text.length <= MAX_STDOUT_LEN) {
-    return text
-  }
-  const saved = try _spillOutput(cwd, text)
-  if (saved is failure(why)) {
-    return text[:MAX_STDOUT_LEN] + "\n[truncated]"
-  }
-  return spillNotice(text, saved.value.dir, saved.value.filename, exitCode)
-}
-
-def spillNotice(text: string, dir: string, filename: string, exitCode: number): string {
-  """
-  The preview that stands in for a long output: what happened, a glimpse
-  of both ends, and exactly how to read the rest.
-  """
-  const lines = text.split("\n")
-  const head = previewLines(lines.slice(0, PREVIEW_LINES))
-  const tailStart = if lines.length > PREVIEW_LINES then lines.length - PREVIEW_LINES else 0
-  const tail = previewLines(lines.slice(tailStart, lines.length))
-  return """
-[Output too long to return in full: ${lines.length} lines, ${text.length} characters. Command exited with code ${exitCode}.]
---- first ${PREVIEW_LINES} lines ---
-${head}
---- last ${PREVIEW_LINES} lines ---
-${tail}
---- full output saved to ${dir}/${filename} ---
-To read it, use the read tool: read(filename: "${filename}", dir: "${dir}"), with offset and limit to take a slice. To search it, use the grep tool with dir: "${dir}". Both work without approval on files under the working directory. Do not use bash (tail, sed, wc, cat) to inspect this file: every bash command needs approval, and these tools do not."""
-}
-
-def previewLines(lines: string[]): string {
-  let out: string[] = []
-  for (line in lines) {
-    if (line.length > PREVIEW_LINE_LEN) {
-      out.push(line[:PREVIEW_LINE_LEN] + "…")
-    } else {
-      out.push(line)
-    }
-  }
-  return out.join("\n")
 }
 
 export def runWrite(exec: WriteExec): Result<string> {

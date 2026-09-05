@@ -1,6 +1,4 @@
 import { spawn } from "child_process";
-import { constants as fsConstants } from "fs";
-import { writeFile, unlink, lstat, link, open, access } from "fs/promises";
 import { performance } from "node:perf_hooks";
 import { nanoid } from "nanoid";
 import os from "os";
@@ -11,7 +9,17 @@ import { abortableExec } from "./abortable.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { assertContained } from "./assertContained.js";
-import { fixedPath, resolveUnder, stat as statUnder } from "./contained.js";
+import {
+  root,
+  wholePath,
+  fixedPath,
+  resolveUnder,
+  stat as statUnder,
+  remove,
+  readStream,
+  writeText,
+  writeBytes,
+} from "./contained.js";
 import {
   meteredDispatch,
   recordUsage,
@@ -57,9 +65,15 @@ async function speakImpl(
 
   const platform = await detectPlatform();
   if (platform === "macos") {
-    const tmpFile = path.join(os.tmpdir(), `agency-speak-${nanoid()}.txt`);
+    const tmpDir = root(os.tmpdir());
+    const tmpName = `agency-speak-${nanoid()}.txt`;
+    const tmpFile = path.join(tmpDir.real, tmpName);
+    // Only a file this call created is removed afterwards. A create that
+    // fails because the name was taken must not delete someone else's file.
+    let owned = false;
     try {
-      await writeFile(tmpFile, text, "utf8");
+      writeText(tmpDir, tmpName, text, { mode: "create-only" });
+      owned = true;
       const args: string[] = ["-f", tmpFile];
       if (voice !== "") {
         args.push("-v", voice);
@@ -72,9 +86,11 @@ async function speakImpl(
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
     } finally {
-      try {
-        await unlink(tmpFile);
-      } catch {}
+      if (owned) {
+        try {
+          remove(tmpDir, tmpName);
+        } catch {}
+      }
     }
   } else {
     console.error(
@@ -163,7 +179,7 @@ async function recordImpl(
     proc.on("error", (err) => {
       signal.removeEventListener("abort", onAbort);
       cleanupStdin(onData);
-      if (!outputFile) unlink(outPath).catch(() => {});
+      if (!outputFile) removeQuietly(outPath);
       reject(
         new Error(
           `Failed to start 'rec' command: ${err.message}. ` +
@@ -176,12 +192,12 @@ async function recordImpl(
       signal.removeEventListener("abort", onAbort);
       cleanupStdin(onData);
       if (cancelled) {
-        if (!outputFile) unlink(outPath).catch(() => {});
+        if (!outputFile) removeQuietly(outPath);
         reject(new AgencyCancelledError("record cancelled"));
         return;
       }
       if (code !== 0 && code !== null && !stoppedByUser) {
-        if (!outputFile) unlink(outPath).catch(() => {});
+        if (!outputFile) removeQuietly(outPath);
         reject(new Error(`'rec' exited with code ${code}`));
       } else {
         resolve();
@@ -335,7 +351,9 @@ export async function _transcribe(
   if (!info.isFile()) {
     throw new Error(`transcribe: not a regular file: ${resolvedPath}`);
   }
-  await access(resolvedPath, fsConstants.R_OK); // throws EACCES if unreadable
+  // Readability preflight: opening the file here throws EACCES before any
+  // paid dispatch, and validates the descriptor the way every read does.
+  readStream(located.root, located.target).destroy();
 
   const source: AudioInput = { kind: "path", path: resolvedPath };
   const config: TranscribeConfig = { model };
@@ -385,56 +403,20 @@ export async function _transcribe(
 }
 
 /**
- * Atomically publish synthesized audio to `finalPath` WITHOUT overwriting an
- * existing file. Writes to an exclusive invocation-owned sibling stage, checks
- * cancellation (the commit point), then `link()`s the stage onto `finalPath`
- * (fails with EEXIST rather than clobbering a file that appeared after
- * preflight). Cleanup removes only the owned stage. See plan §13.
+ * Publish synthesized audio to `finalPath` without overwriting an existing
+ * file. `create-only` writes the whole file beside the target and links it
+ * into place, so the target appears complete or not at all, and a file that
+ * appeared after the preflight makes the publish fail rather than be
+ * replaced. Cancellation is checked last, right before the write.
  */
 export async function publishSpeechOutput(
   finalPath: string,
   audio: Uint8Array,
   signal: AbortSignal,
 ): Promise<void> {
-  const dir = path.dirname(finalPath);
-  const stage = path.join(dir, `.${path.basename(finalPath)}.agency-tts-${nanoid()}.part`);
-  // Open with "wx" FIRST and only mark ownership once the exclusive create
-  // SUCCEEDS. A failed open (e.g. an EEXIST collision on an unowned path) must
-  // never lead cleanup to delete a path we do not own. A create that succeeds
-  // then fails mid-write (ENOSPC) leaves an owned partial stage that cleanup
-  // must remove — hence ownership tracks the open, not the write.
-  let handle: Awaited<ReturnType<typeof open>>;
-  try {
-    handle = await open(stage, "wx");
-  } catch (openError) {
-    throw openError; // never created the stage — nothing owned to clean up
-  }
-  try {
-    await handle.writeFile(audio);
-    await handle.close();
-    if (signal.aborted) throwAbortReason(signal); // last abort check before commit
-    await link(stage, finalPath); // atomic no-clobber commit (EEXIST if target appeared)
-  } catch (primaryError) {
-    await handle.close().catch(() => {}); // idempotent; already closed on the happy path
-    try {
-      await unlink(stage);
-    } catch (cleanupError) {
-      throw new AggregateError(
-        [primaryError, cleanupError],
-        "Speech output failed and staging cleanup failed",
-      );
-    }
-    throw primaryError;
-  }
-  // Committed: the published file is preserved even if removing the stage fails.
-  try {
-    await unlink(stage);
-  } catch (cleanupError) {
-    console.error(
-      `Failed to remove published speech staging file '${stage}' for '${finalPath}'`,
-      cleanupError,
-    );
-  }
+  const located = fixedPath(finalPath);
+  if (signal.aborted) throwAbortReason(signal);
+  writeBytes(located.root, located.target, Buffer.from(audio), { mode: "create-only" });
 }
 
 /**
@@ -483,7 +465,9 @@ export async function _synthesizeSpeech(
       );
     }
   } else {
-    finalPath = path.join(os.tmpdir(), `agency-tts-${nanoid()}.${canonicalFormat}`);
+    // The real spelling of the temp dir, so the no-follow check below sees
+    // no link in it (/var is a link on macOS).
+    finalPath = path.join(root(os.tmpdir()).real, `agency-tts-${nanoid()}.${canonicalFormat}`);
   }
   // No-clobber preflight: new speech output never overwrites an existing file.
   if (await pathExists(finalPath)) {
@@ -542,18 +526,19 @@ export async function _synthesizeSpeech(
   return finalPath;
 }
 
-/** True when `p` exists (any kind, symlink NOT followed). Only a genuine
- *  ENOENT counts as "missing" and returns false; EACCES / ELOOP / I/O errors
- *  rethrow so paid synthesis never proceeds toward a predictably-failing commit,
- *  and a dangling symlink (which `stat` would mask as ENOENT) is surfaced. */
+/** True when `p` exists. A symlink at `p`, dangling or not, throws from
+ *  `resolveUnder`, so paid synthesis never proceeds toward a commit that
+ *  would be refused. */
 async function pathExists(p: string): Promise<boolean> {
+  const located = fixedPath(p);
+  resolveUnder(located.root, located.target);
+  return statUnder(located.root, located.target) !== null;
+}
+
+/** Best-effort removal of a runtime-owned temp file. */
+function removeQuietly(p: string): void {
   try {
-    await lstat(p);
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return false;
-    }
-    throw err;
-  }
+    const located = wholePath(p);
+    remove(located.root, located.target);
+  } catch {}
 }

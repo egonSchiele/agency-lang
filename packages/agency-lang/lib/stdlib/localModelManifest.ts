@@ -1,6 +1,4 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-import * as crypto from "node:crypto";
+import { root, mkdir, readText, writeText } from "./contained.js";
 
 /** downloads.json in the models cache dir: resolved model URI → the .gguf
  *  basename node-llama-cpp stored it under. Written on successful (verified)
@@ -8,16 +6,16 @@ import * as crypto from "node:crypto";
  *  resolution, downloading, and verification never consult it, so a missing
  *  or corrupt manifest can mislabel the list and nothing else — and for the
  *  same reason `recordDownload` NEVER throws (a bookkeeping failure must not
- *  turn a successful download into a failed command). Writes go through a
- *  uniquely-named sibling temp file + rename: an interrupted write keeps the
- *  previous valid manifest, and two concurrent downloaders cannot collide on
- *  the temp file — they race whole-file on the rename (last writer wins),
- *  accepted for display metadata. */
+ *  turn a successful download into a failed command). `writeText` replaces
+ *  the file by renaming a uniquely named sibling over it, so an interrupted
+ *  write keeps the previous valid manifest, and two concurrent downloaders
+ *  race whole-file on the rename (last writer wins), accepted for display
+ *  metadata. */
 export const MANIFEST_FILE = "downloads.json";
 
 export function readDownloadManifest(dir: string): Record<string, string> {
   try {
-    const parsed: unknown = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf-8"));
+    const parsed: unknown = JSON.parse(readText(root(dir), MANIFEST_FILE));
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
@@ -35,24 +33,12 @@ export function readDownloadManifest(dir: string): Record<string, string> {
 }
 
 export function recordDownload(dir: string, uri: string, file: string): void {
-  // Unique per writer: a fixed name would make two concurrent downloads race
-  // on the SAME temp file — the loser's rename throws ENOENT after its model
-  // downloaded fine.
-  const tmp = path.join(
-    dir,
-    `${MANIFEST_FILE}.${process.pid}-${crypto.randomBytes(4).toString("hex")}.tmp`,
-  );
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    const cache = root(dir);
+    mkdir(cache, ".");
     const next = { ...readDownloadManifest(dir), [uri]: file };
-    fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
-    fs.renameSync(tmp, path.join(dir, MANIFEST_FILE));
+    writeText(cache, MANIFEST_FILE, JSON.stringify(next, null, 2) + "\n");
   } catch (err) {
-    try {
-      fs.unlinkSync(tmp);
-    } catch {
-      /* never written, or already renamed */
-    }
     console.warn(
       `Could not record the download in ${MANIFEST_FILE} (the list view may not mark this model):`,
       (err as Error).message,

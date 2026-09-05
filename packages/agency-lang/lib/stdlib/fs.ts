@@ -16,6 +16,7 @@ import {
   copy,
   move,
   type Located,
+  _realTarget,
 } from "./contained.js";
 
 export { prepareContainedPath as _prepareContainedPath } from "./prepareContainedPath.js";
@@ -113,16 +114,35 @@ export type PatchResult = {
   files: string[];
 };
 
-export async function _applyPatch(patch: string, allowedPaths?: string[]): Promise<PatchResult> {
+/** The real whole path of every file a patch touches, in patch order, for
+ *  the `std::applyPatch` payload. Paths in the patch text are relative to
+ *  the process cwd. */
+export function _patchFiles(patch: string): string[] {
+  return parseUnifiedDiff(patch).map((f) => _realTarget(f.path));
+}
+
+/** Apply a parsed patch. `approved` is the file list the approver saw, from
+ *  `_patchFiles`; each entry is taken through `fixedPath`, so a link planted
+ *  at one of those paths after approval is refused. Without it, as from a
+ *  direct TypeScript caller, each path is resolved from the patch text. */
+export async function _applyPatch(
+  patch: string,
+  allowedPaths?: string[],
+  approved?: string[],
+): Promise<PatchResult> {
   const files = parseUnifiedDiff(patch);
+  if (approved !== undefined && approved.length !== files.length) {
+    throw new Error(
+      `applyPatch: the approved file list names ${approved.length} files but the patch touches ${files.length}`,
+    );
+  }
   const touched: string[] = [];
 
-  for (const f of files) {
-    // A patched file is a whole path relative to the process cwd, spelled
-    // in the patch text. No canonical form was shown to the approver, so it
-    // is resolved here.
-    await assertContained(f.path, allowedPaths ?? [], process.cwd());
-    const located = wholePath(f.path);
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const spelled = approved === undefined ? f.path : approved[i];
+    await assertContained(spelled, allowedPaths ?? [], process.cwd());
+    const located = approved === undefined ? wholePath(spelled) : fixedPath(spelled);
     const original = f.isNew ? "" : readText(located.root, located.target);
     const updated = applyHunks(original, f.hunks, f.path);
     mkdir(located.root, ".");

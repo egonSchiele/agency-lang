@@ -1,7 +1,6 @@
 import * as readline from "readline";
 import process from "process";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from "fs";
-import { dirname } from "path";
+import { wholePath, stat, readText, writeText, mkdir } from "./contained.js";
 import { __call } from "../runtime/call.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
@@ -69,9 +68,11 @@ type LoadedHistory = { entries: string[]; expansions: Record<string, string> };
  *  startup. */
 function loadHistory(file: string, max: number): LoadedHistory {
   const empty: LoadedHistory = { entries: [], expansions: {} };
-  if (!file || !existsSync(file)) return empty;
+  if (!file) return empty;
   try {
-    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    const located = wholePath(file);
+    if (stat(located.root, located.target) === null) return empty;
+    const parsed = JSON.parse(readText(located.root, located.target));
     if (!Array.isArray(parsed)) return empty;
     const entries: string[] = [];
     const expansions: Record<string, string> = {};
@@ -104,7 +105,8 @@ function saveHistory(
 ): void {
   if (!file) return;
   try {
-    mkdirSync(dirname(file), { recursive: true });
+    const located = wholePath(file);
+    mkdir(located.root, ".");
     const oldestFirst = history.slice(0, max).slice().reverse();
     const records: HistoryRecord[] = oldestFirst.map((entry) =>
       Object.prototype.hasOwnProperty.call(expansions, entry)
@@ -112,13 +114,10 @@ function saveHistory(
         : entry,
     );
     const data = JSON.stringify(records, null, 2) + "\n";
-    // Write to a sibling temp file, then rename into place. The rename is an
-    // atomic swap (POSIX, and Windows via libuv's REPLACE_EXISTING), so a crash
-    // mid-write can't leave a half-written file — which, as JSON, would parse to
-    // empty and silently wipe the user's history on the next load.
-    const tmp = `${file}.tmp-${process.pid}`;
-    writeFileSync(tmp, data, "utf8");
-    renameSync(tmp, file);
+    // writeText replaces the file by renaming a finished sibling over it, so
+    // a crash mid-write cannot leave half-written JSON that would parse to
+    // empty and wipe the user's history on the next load.
+    writeText(located.root, located.target, data);
   } catch {
     // Ignore — best-effort persistence.
   }

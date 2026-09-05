@@ -1,6 +1,6 @@
 import http from "http";
 import crypto from "crypto";
-import fs from "fs/promises";
+import { root, stat, remove, mkdir, readText, writeText, type Root } from "./contained.js";
 import os from "os";
 import path from "path";
 import { execFile } from "child_process";
@@ -56,13 +56,14 @@ type StoredTokens = {
   client_secret: string;
 };
 
-function getTokenPath(name: string): string {
+/** The token directory as a root plus the provider's file name in it. */
+function tokenLocation(name: string): { dir: Root; file: string } {
   if (!VALID_NAME_PATTERN.test(name)) {
     throw new Error(
       `Invalid OAuth provider name: "${name}". Use only letters, numbers, dots, hyphens, and underscores.`,
     );
   }
-  return path.join(getTokenDir(), `${name}.json`);
+  return { dir: root(getTokenDir()), file: `${name}.json` };
 }
 
 function generateCodeVerifier(): string {
@@ -234,22 +235,20 @@ async function exchangeCodeForTokens(
 }
 
 async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {
-  await fs.mkdir(getTokenDir(), { recursive: true });
+  const located = tokenLocation(name);
+  mkdir(located.dir, ".");
   const json = JSON.stringify(tokens, null, 2);
 
   const key = await getEncryptionKey();
   const content = key ? encrypt(json, key) : json;
 
-  await fs.writeFile(getTokenPath(name), content, {
-    encoding: "utf-8",
-    mode: 0o600,
-  });
+  writeText(located.dir, located.file, content, { fileMode: 0o600 });
 }
 
 async function loadTokens(name: string): Promise<StoredTokens | null> {
-  const tokenPath = getTokenPath(name);
+  const located = tokenLocation(name);
   try {
-    const raw = await fs.readFile(tokenPath, "utf-8");
+    const raw = readText(located.dir, located.file);
 
     const key = await getEncryptionKey();
     const json = key ? decrypt(raw, key) : raw;
@@ -463,14 +462,11 @@ export async function _isAuthorized(name: string): Promise<boolean> {
 }
 
 export async function _revokeAuth(name: string): Promise<{ revoked: boolean }> {
-  const tokenPath = getTokenPath(name);
-  try {
-    await fs.unlink(tokenPath);
-    return { revoked: true };
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      return { revoked: false };
-    }
-    throw err;
+  const located = tokenLocation(name);
+  const info = stat(located.dir, located.file);
+  if (info === null || !info.isFile()) {
+    return { revoked: false };
   }
+  remove(located.dir, located.file);
+  return { revoked: true };
 }

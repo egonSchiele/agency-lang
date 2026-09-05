@@ -260,7 +260,7 @@ export async function _bash(
 export type LsEntry = {
   name: string;
   path: string;
-  type: "file" | "dir" | "symlink" | "other";
+  type: "file" | "dir" | "other";
   size: number;
 };
 
@@ -612,7 +612,7 @@ const globParser: Parser<string> = map(many(globElement), (parts: string[]) => p
 
 export type StatInfo = {
   exists: boolean;
-  type: "file" | "dir" | "symlink" | "other" | "missing";
+  type: "file" | "dir" | "other" | "missing";
   size: number;
   modifiedMs: number;
 };

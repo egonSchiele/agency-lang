@@ -314,7 +314,11 @@ export function writeBytes(
     overwriteViaSibling(root, resolved, data, fileMode, seams);
     return;
   }
-  const fd = openForWrite(root, resolved, mode, fileMode);
+  if (mode === "create-only") {
+    createViaSibling(root, resolved, data, fileMode, seams);
+    return;
+  }
+  const fd = openForAppend(root, resolved, fileMode);
   try {
     validateDescriptor(fd, root, resolved, seams, "write");
     fs.writeFileSync(fd, data);
@@ -326,28 +330,74 @@ export function writeBytes(
 /** Open an existing file for append, or create a new one. A new file's
  *  parent is checked to be a real directory inside the root first, so a
  *  linked directory cannot receive a file. */
-function openForWrite(root: Root, resolved: string, mode: WriteMode, fileMode: number): number {
+function openForAppend(root: Root, resolved: string, fileMode: number): number {
   const appendFlags = fs.constants.O_WRONLY | fs.constants.O_APPEND | NO_FOLLOW;
-  const createFlags =
-    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW;
-  if (mode === "append") {
-    try {
-      return fs.openSync(resolved, appendFlags);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-        throw error;
-      }
+  try {
+    return fs.openSync(resolved, appendFlags);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
     }
   }
   requireRealParent(root, resolved);
+  return fs.openSync(resolved, appendFlags | fs.constants.O_CREAT | fs.constants.O_EXCL, fileMode);
+}
+
+/** Write the whole content to a sibling temporary file, then hard-link it
+ *  to the target name. `link` fails with EEXIST when anything already sits
+ *  at the target, so nothing is ever replaced, and the target appears only
+ *  once its bytes are complete. A write that fails part way leaves no
+ *  partial target behind. */
+function createViaSibling(
+  root: Root,
+  resolved: string,
+  data: Buffer,
+  fileMode: number,
+  seams: Seams,
+): void {
+  requireRealParent(root, resolved);
+  const temp = siblingTemp(resolved);
+  const fd = fs.openSync(temp, CREATE_FLAGS, fileMode);
+  let open = true;
   try {
-    return fs.openSync(resolved, createFlags, fileMode);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new Error(`File already exists: '${resolved}' (mode is 'create-only').`);
+    validateDescriptor(fd, root, temp, seams, "write");
+    fs.writeFileSync(fd, data);
+    fs.closeSync(fd);
+    open = false;
+    try {
+      fs.linkSync(temp, resolved);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        throw new Error(`File already exists: '${resolved}' (mode is 'create-only').`);
+      }
+      throw error;
     }
+  } catch (error) {
+    if (open) {
+      fs.closeSync(fd);
+    }
+    fs.rmSync(temp, { force: true });
     throw error;
   }
+  try {
+    fs.rmSync(temp, { force: true });
+  } catch (cleanupError) {
+    console.error(
+      `Failed to remove create-only staging file '${temp}' for '${resolved}'`,
+      cleanupError,
+    );
+  }
+}
+
+const CREATE_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW;
+
+/** A unique name beside the target, created exclusively so two writers
+ *  never share one. */
+function siblingTemp(resolved: string): string {
+  return path.join(
+    path.dirname(resolved),
+    `.${path.basename(resolved)}.${randomBytes(4).toString("hex")}.tmp`,
+  );
 }
 
 function requireRealParent(root: Root, resolved: string): void {
@@ -374,12 +424,8 @@ function overwriteViaSibling(
 ): void {
   requireRealParent(root, resolved);
   const existingMode = modeOfExisting(resolved);
-  const temp = path.join(
-    path.dirname(resolved),
-    `.${path.basename(resolved)}.${randomBytes(4).toString("hex")}.tmp`,
-  );
-  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW;
-  const fd = fs.openSync(temp, flags, existingMode ?? fileMode);
+  const temp = siblingTemp(resolved);
+  const fd = fs.openSync(temp, CREATE_FLAGS, existingMode ?? fileMode);
   let open = true;
   try {
     validateDescriptor(fd, root, temp, seams, "write");

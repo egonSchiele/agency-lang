@@ -1,0 +1,23 @@
+// Spike 2: two tools, one depending on the other's result.
+//
+// Proves three things spike 1 does not: a string argument survives the
+// round-trip, the model can pick the right tool out of two, and a second
+// tool call in the same llm() call works after the first result comes back.
+
+def getWeather(city: string): string {
+  print("getWeather called for ${city}")
+  if (city == "Paris") {
+    return "18 degrees celsius and cloudy"
+  }
+  return "no data for ${city}"
+}
+
+def convertToFahrenheit(celsius: number): number {
+  print("convertToFahrenheit called with ${celsius}")
+  return celsius * 9 / 5 + 32
+}
+
+node main() {
+  const answer = llm("What is the temperature in Paris in Fahrenheit? Look up the weather with getWeather, then convert the celsius value with convertToFahrenheit. Reply with just the Fahrenheit number.", { tools: [getWeather, convertToFahrenheit] })
+  print("answer: ${answer}")
+}

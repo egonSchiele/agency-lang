@@ -1,0 +1,17 @@
+// Spike 1: one function, one llm() call.
+//
+// This is the go/no-go for MLX tool calling. If the model calls `add`, the
+// server turned the request's tool list into a tool call the model could
+// make, parsed the model's reply into a tool_call, and fed the result back.
+// If the model answers "42" without the "add called" line, it did the
+// arithmetic itself and the tool round-trip is NOT proven.
+
+def add(a: number, b: number): number {
+  print("add called with ${a} and ${b}")
+  return a + b
+}
+
+node main() {
+  const answer = llm("What is 17 + 25? You must use the add tool to compute it. Reply with just the number.", { tools: [add] })
+  print("answer: ${answer}")
+}

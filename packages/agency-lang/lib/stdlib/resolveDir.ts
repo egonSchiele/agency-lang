@@ -3,32 +3,30 @@ import process from "node:process";
 import { assertContained } from "./assertContained.js";
 import { expandPath } from "./expandPath.js";
 
-/** The sync policy core: expand shorthands, resolve against cwd. The ONE
- *  home of "what does a relative path mean" — sync-only callers that cannot
- *  await `resolveDir` (e.g. `_readSkill`) use this instead of copying it. */
+/** Expand shorthands and resolve against the cwd, with no filesystem
+ *  access. `contained.ts` does the same as the first step of `root()`.
+ *  Use this only for a path that is about to be handed to `contained.ts`
+ *  or checked by `assertContained`. */
 export function resolveCwdPath(target: string): string {
   return path.resolve(process.cwd(), expandPath(target));
 }
 
 /**
- * Resolve a directory argument the way every path-taking stdlib
- * function does:
+ * Resolve a directory argument and apply the program's own allow-list:
  *
- *  1. Expand user shorthands (currently `~`, eventually env vars and
- *     normalization) via `expandPath`.
+ *  1. Expand user shorthands (currently `~`) via `expandPath`.
  *  2. Resolve against `process.cwd()`. A relative path always means
  *     "relative to where the program was run". Agency code that wants
  *     a path relative to its own file passes `__dirname`.
- *  3. Assert containment against `allowedPaths` so a policy can
- *     reject paths outside the allow-list.
+ *  3. Assert containment against `allowedPaths`, the guardrail a program
+ *     sets on itself.
  *
- * Returns the absolute, validated directory.
- *
- * Mirrors what `resolvePath(dir, filename)` does at the `dir` level.
- * If you're writing a new stdlib function that takes a `dir`-like
- * arg, USE THIS — don't re-implement the policy. Doing so encodes
- * the policy at one site, so future rules added to `expandPath` /
- * `resolveDir` propagate everywhere automatically.
+ * Returns the absolute directory. This does not touch the filesystem
+ * and does not refuse symlinks. A function that then reads, writes,
+ * lists, or probes anything must go through `contained.ts`
+ * (docs/dev/stdlib/contained-files.md). `exec` and `bash` use this for
+ * their working directory, which is handed to a child process rather
+ * than opened.
  */
 export async function resolveDir(dir: string, allowedPaths: string[] = []): Promise<string> {
   const root = resolveCwdPath(dir);

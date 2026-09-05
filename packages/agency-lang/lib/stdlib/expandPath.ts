@@ -13,24 +13,18 @@ import path from "node:path";
  *
  * This is the single owner of path-shorthand policy for the stdlib.
  * Future rules (env-var expansion, NFC normalization, etc.) land
- * here, not at call sites. Anything in `lib/stdlib/` that resolves
- * a user-typed path string MUST route through `resolvePath` /
- * `resolveDir`, which call this helper first — never re-implement
- * the policy locally.
+ * here, not at call sites. Anything in `lib/stdlib/` that resolves a
+ * user-typed path string goes through `contained.ts` (`root`,
+ * `resolveUnder`, `wholePath`) or `resolveDir`, which call this helper
+ * first. Do not re-implement the policy locally.
  *
- * Layering: `expandPath` is intentionally a **pure string transform**
- * with no async, no ALS access, and no base-directory awareness. The
- * "resolve relative paths against the cwd" policy lives one layer
- * up: `resolveDir` (which also asserts allow-list containment) and
- * `resolvePath` for the dir+filename case (which deliberately
- * enforces no containment — callers that take `allowedPaths` layer
- * `assertContained` themselves). Keeping the layers
- * split means `expandPath` is trivially testable in isolation, and
- * each caller picks the base it wants without this helper having to
- * fan out into runtime context.
+ * Layering: `expandPath` is a pure string transform with no async, no
+ * ALS access, and no base-directory awareness. Resolving against the
+ * cwd and refusing symlinks live one layer up in `contained.ts`.
+ * Keeping the layers split means `expandPath` is testable in isolation.
  *
- * Does NOT resolve to an absolute path — callers still pass the
- * result through `path.resolve` / `resolvePath` / `resolveDir`.
+ * Does NOT resolve to an absolute path. Callers pass the result to
+ * `root`, `wholePath`, or `resolveDir`.
  *
  * `expandPath("")` returns `""` unchanged so empty-string sentinels
  * pass through (callers that disallow empty dir handle that

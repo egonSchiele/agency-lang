@@ -128,9 +128,7 @@ threat model.
 `std::skills::skillsDir` and `std::skills::commandsDir` take the same
 read scope as `std::read` in the recommended policy (`readScopeRules`):
 the launch directory, the agency install, and the agent home's learned
-skills and tools. Before this they were approved anywhere, which let a
-scan read a directory a plain `read` would have prompted for. The save
-and review gates have no rule and prompt.
+skills and tools. The save and review gates have no rule and prompt.
 
 ## The frontmatter round-trip
 

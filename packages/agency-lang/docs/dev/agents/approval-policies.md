@@ -78,10 +78,8 @@ places only (`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
   hold skills the user taught the agent and tools it wrote, and both
   enter them only through a review interrupt. Without this rule every
   read of a learned skill, every catalog scan, and every `runTool` would
-  prompt, and would auto-reject headless. The rule reaches every
-  `recommended` run, not only the agent, and the policy's description
-  says so. The home itself is not covered, so `~/.agency-agent/policy.json`
-  and `settings.json` still prompt.
+  prompt, and would auto-reject headless. The home itself is not covered,
+  so `~/.agency-agent/policy.json` and `settings.json` still prompt.
 
 `recommended` also approves `std::toolbox::recordUse` under
 `<agent-home>/tools/**`, the effect `runTool` raises before counting a
@@ -115,10 +113,10 @@ the same walker every file effect uses for the directory in its payload,
 so a home reached through a symlinked ancestor (`/tmp` on macOS, a linked
 `$HOME`) matches the payload's spelling. The scan and save effects in
 `std::skills` and `std::toolbox` put that spelling in their payloads too,
-so one rule covers a read and the scan that precedes it. This is not
-support for symlinks inside the home: below an approved directory, a
-symlinked skill or tool directory is hidden from scans and refused by
-reads and writes (see `docs/dev/stdlib/contained-files.md`).
+so one rule covers a read and the scan that precedes it. Below an
+approved directory, a symlinked skill or tool directory is hidden from
+scans and refused by reads and writes, as everywhere else (see
+`docs/dev/stdlib/contained-files.md`).
 
 A policy file saved before this change keeps its old catch-all read rules;
 there is no migration. Delete the file (the agent writes a fresh

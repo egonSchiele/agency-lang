@@ -411,8 +411,6 @@ def checkSkillInputs(dir: string, name: string, description: string): Result<str
   if (dir.trim() == "") {
     return failure("dir must not be empty")
   }
-  // The real spelling, so the save payload names the directory the way
-  // the write that follows will report it, and one policy rule covers both.
   const absDir = try _realDir(dir)
   if (isFailure(absDir)) {
     return absDir

@@ -1103,8 +1103,6 @@ def recordUse(root: string, name: string, meta: ToolMeta): Result {
     uses: meta.uses + 1,
     lastUsedAt: format(now())
   }
-  // Written under the toolbox root the approval named, so a link planted
-  // at the tool directory afterwards is refused.
   return try _write(root, "${name}/${META_FILE}", JSON.stringify(used, null, 2), "overwrite")
 }
 

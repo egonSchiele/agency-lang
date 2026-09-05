@@ -714,6 +714,15 @@ describe("<agent-home> dir patterns", () => {
     }
   });
 
+  it("keeps a comma in the home literal inside a brace group", () => {
+    withAgentHome("/nowhere/a,b", () => {
+      expect(checkPolicy(policy, read("/nowhere/a,b/skills/x")).type).toBe("approve");
+      // An unescaped comma would split the brace group and approve these.
+      expect(checkPolicy(policy, read("/nowhere/a")).type).toBe("propagate");
+      expect(checkPolicy(policy, read("b/skills")).type).toBe("propagate");
+    });
+  });
+
   it("matches a pattern that mixes <agency> and <agent-home> in one brace group", () => {
     const mixed = {
       "std::read": [

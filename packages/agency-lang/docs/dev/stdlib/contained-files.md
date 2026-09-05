@@ -84,8 +84,8 @@ The files on the allow-list today, and why:
 - `gitignore.ts` reads `.gitignore` files from a walk root up to the filesystem root. Those ancestors sit above the approved directory. The text becomes ignore rules and is never returned to the caller.
 - `shell.ts` probes `PATH` entries for `which` and checks the working directory for `exec`. No approval names either.
 - `utils.ts` reads `/proc/version` once to tell WSL from Linux.
-- `speech.ts` commits a text-to-speech output by staging and hard-linking.
-- `cli.ts`, `agentSessions.ts`, `oauth.ts`, `localModelManifest.ts` read and write fixed files under the agent home.
+
+Files that keep Agency's own state, such as the REPL history, saved agent sessions, OAuth tokens, and the model download manifest, also go through this module. They pass the directory they were given to `root`, because no interrupt is involved and the path is the program's own spelling. A user who points one of these directories at a symlink gets it followed, as anywhere else in the spelling of a root.
 
 ## The symlink battery
 
@@ -102,7 +102,7 @@ The read and write seams run a directory swap between the open and the validatio
 - `lib/stdlib/contained.ts`: the module. `lib/stdlib/contained.test.ts` covers the helpers and write modes.
 - `lib/stdlib/prepareContainedPath.ts`: the wrapper-facing preparation for `read`, `write`, `edit`, and their binary twins, now built on `root` and `resolveUnder`. `resolveRedirectTarget` for `safeBash` uses `root` to find where a redirect lands.
 - `lib/stdlib/assertContained.ts`: the `allowedPaths` guardrail, now built on `root`.
-- `lib/stdlib/builtins.ts`, `fs.ts`, `shell.ts`, `agency.ts`, `template.ts`, `spill.ts`, `policy.ts`, `git.ts`, `speech.ts`, `system.ts`, `mcp.ts`, `llm.ts`, `localModels.ts`: the migrated callers.
+- `lib/stdlib/builtins.ts`, `fs.ts`, `shell.ts`, `agency.ts`, `template.ts`, `spill.ts`, `policy.ts`, `git.ts`, `speech.ts`, `system.ts`, `mcp.ts`, `llm.ts`, `localModels.ts`, `localModelManifest.ts`, `cli.ts`, `agentSessions.ts`, `oauth.ts`: the migrated callers.
 - `stdlib/index.agency`, `fs.agency`, `shell.agency`, `skills.agency`, `toolbox.agency`, `llm.agency`: the wrappers, which canonicalize their payload directory with `_realDir` or `_realTarget` before raising.
 - `eslint.config.js`: `FS_IMPORTERS` and the `no-restricted-imports` block.
 

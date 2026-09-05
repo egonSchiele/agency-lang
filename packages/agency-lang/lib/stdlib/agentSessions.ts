@@ -1,6 +1,6 @@
 import type { MessageJSON } from "smoltalk";
-import * as fs from "fs";
 import * as path from "path";
+import { root, list, stat, mkdir, readText, writeText, type Root } from "./contained.js";
 import { __call } from "../runtime/call.js";
 import { checkpoint, getCheckpoint } from "../runtime/checkpoint.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
@@ -30,26 +30,20 @@ export type SessionRecord = {
 
 const META_SUFFIX = ".meta.json";
 
-function checkpointFile(dir: string, id: string): string {
-  return path.join(dir, `${id}.json`);
+function checkpointFile(id: string): string {
+  return `${id}.json`;
 }
 
-function metaFile(dir: string, id: string): string {
-  return path.join(dir, `${id}${META_SUFFIX}`);
+function metaFile(id: string): string {
+  return `${id}${META_SUFFIX}`;
 }
 
-/** Write via a sibling temp file and rename, so a crash mid-write never
- *  leaves a half-written file (the same pattern as the REPL history). */
-function writeAtomic(file: string, data: string): void {
-  const tmp = `${file}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, data, "utf8");
-  fs.renameSync(tmp, file);
-}
-
-function readJson(file: string): unknown {
-  if (!fs.existsSync(file)) return null;
+/** The parsed JSON of `name` under `dir`, or null when it is missing or
+ *  malformed. */
+function readJson(dir: Root, name: string): unknown {
   try {
-    return JSON.parse(fs.readFileSync(file, "utf-8"));
+    if (stat(dir, name) === null) return null;
+    return JSON.parse(readText(dir, name));
   } catch {
     return null;
   }
@@ -74,11 +68,12 @@ function isRecord(value: unknown): value is SessionRecord {
 /** Every session in `dir`, most recently active first. A malformed
  *  record file is skipped. */
 export function _listSessions(dir: string): SessionRecord[] {
-  if (!fs.existsSync(dir)) return [];
+  const sessions = root(dir);
+  if (stat(sessions, ".") === null) return [];
   const records: SessionRecord[] = [];
-  for (const name of fs.readdirSync(dir)) {
-    if (!name.endsWith(META_SUFFIX)) continue;
-    const parsed = readJson(path.join(dir, name));
+  for (const entry of list(sessions, ".")) {
+    if (entry.type !== "file" || !entry.name.endsWith(META_SUFFIX)) continue;
+    const parsed = readJson(sessions, entry.name);
     if (isRecord(parsed)) records.push(parsed);
   }
   records.sort((a, b) => b.lastActive - a.lastActive);
@@ -89,9 +84,12 @@ export function _listSessions(dir: string): SessionRecord[] {
  *  error message. */
 export function _saveSession(dir: string, record: SessionRecord, checkpoint: unknown): string {
   try {
-    fs.mkdirSync(dir, { recursive: true });
-    writeAtomic(checkpointFile(dir, record.id), JSON.stringify(checkpoint));
-    writeAtomic(metaFile(dir, record.id), JSON.stringify(record));
+    const sessions = root(dir);
+    mkdir(sessions, ".");
+    // writeText renames a finished sibling over the target, so a crash
+    // mid-write never leaves a half-written file.
+    writeText(sessions, checkpointFile(record.id), JSON.stringify(checkpoint));
+    writeText(sessions, metaFile(record.id), JSON.stringify(record));
     return "";
   } catch (err) {
     return err instanceof Error ? err.message : String(err);
@@ -100,7 +98,7 @@ export function _saveSession(dir: string, record: SessionRecord, checkpoint: unk
 
 /** The parsed checkpoint, or null when the file is missing or malformed. */
 export function _readCheckpointFile(dir: string, id: string): unknown {
-  return readJson(checkpointFile(dir, id));
+  return readJson(root(dir), checkpointFile(id));
 }
 
 export type TranscriptMessage = { role: "user" | "assistant"; content: string };

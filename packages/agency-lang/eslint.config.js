@@ -10,11 +10,6 @@ const FS_IMPORTERS = {
   "lib/stdlib/gitignore.ts":
     "reads .gitignore rules from a walk root up to the filesystem root, ancestors included; the text becomes ignore rules and is never returned",
   "lib/stdlib/shell.ts": "which() probes PATH entries and exec() checks its cwd; no approval names either",
-  "lib/stdlib/speech.ts": "cloud TTS commits its output by staging a file and hard-linking it into place",
-  "lib/stdlib/cli.ts": "CLI settings under the agent home",
-  "lib/stdlib/agentSessions.ts": "saved sessions under the agent home",
-  "lib/stdlib/localModelManifest.ts": "the local model manifest under the agent home",
-  "lib/stdlib/oauth.ts": "OAuth tokens under the agent home",
   "lib/stdlib/utils.ts": "reads /proc/version once to tell WSL from Linux, a fixed kernel file",
 };
 

@@ -129,6 +129,17 @@ describe("_revokeAuth", () => {
     expect(await _revokeAuth("revoke-test")).toEqual({ revoked: true });
     expect(fsSync.existsSync(testTokenPath)).toBe(false);
   });
+
+  it("treats a symlinked token file as absent and leaves its target alone", async () => {
+    await fs.mkdir(TOKEN_DIR, { recursive: true });
+    const elsewhere = path.join(TOKEN_DIR, "elsewhere.txt");
+    await fs.writeFile(elsewhere, "keep");
+    const linked = path.join(TOKEN_DIR, "linked.json");
+    await fs.symlink(elsewhere, linked);
+    expect(await _isAuthorized("linked")).toBe(false);
+    expect(await _revokeAuth("linked")).toEqual({ revoked: false });
+    expect(await fs.readFile(elsewhere, "utf-8")).toBe("keep");
+  });
 });
 
 describe("_getAccessToken", () => {

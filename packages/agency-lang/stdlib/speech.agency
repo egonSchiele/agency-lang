@@ -115,8 +115,8 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000, allowe
   @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
   """
   const out = realOutput(outputFile)
-  if (out is failure) {
-    return out
+  if (out is failure(why)) {
+    throw("${why}")
   }
   return interrupt std::record("Allow microphone recording?", {
     outputFile: out.value
@@ -215,8 +215,8 @@ export def speak(
   _validateSpeakArgs(format, speed)
 
   const out = realOutput(outputFile)
-  if (out is failure) {
-    return out
+  if (out is failure(why)) {
+    throw("${why}")
   }
   return interrupt std::synthesizeSpeech("Send this text to the active cloud speech provider?", {
     requestedProvider: provider,

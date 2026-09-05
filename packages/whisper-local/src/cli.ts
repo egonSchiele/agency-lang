@@ -15,6 +15,12 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { findPackageRoot } from "./packageRoot.js";
+import {
+  buildOutputPath,
+  currentAddonTarget,
+  packageVersion,
+  resolveAddonPath,
+} from "./addonPaths.js";
 
 async function cmdBuild() {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -51,12 +57,17 @@ async function cmdBuild() {
     });
   });
 
-  const addonPath = path.join(pkgRoot, "build", "Release", "whisper_addon.node");
-  if (!existsSync(addonPath)) {
-    console.error(`Build reported success but addon not found at ${addonPath}.`);
+  const builtPath = buildOutputPath(pkgRoot);
+  if (!existsSync(builtPath)) {
+    console.error(`Build reported success but addon not found at ${builtPath}.`);
     process.exit(6);
   }
-  console.log(`Built: ${addonPath}`);
+  // Keep a copy outside node_modules so a reinstall does not cost a rebuild.
+  const durablePath = resolveAddonPath(currentAddonTarget(packageVersion(pkgRoot)));
+  await fs.mkdir(path.dirname(durablePath), { recursive: true });
+  await fs.copyFile(builtPath, durablePath);
+  console.log(`Built: ${builtPath}`);
+  console.log(`Installed: ${durablePath}`);
 }
 
 async function cmdPull(name: string) {
@@ -103,7 +114,7 @@ async function cmdVerify(name: string) {
 function usage() {
   console.error("Usage: agency-whisper <command> [args]");
   console.error(
-    "  build            Compile the native addon (run once after install)",
+    "  build            Compile the native addon (once per machine and Node version)",
   );
   console.error("  pull <model>     Download a model (e.g. base.en)");
   console.error("  list             List supported models and installation status");

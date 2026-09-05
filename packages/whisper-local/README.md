@@ -10,9 +10,16 @@ This package ships as source and ships **no** install/postinstall scripts — `n
 # 1. Install (no compilation, no network beyond the npm download itself)
 npm install @agency-lang/whisper-local
 
-# 2. Explicitly build the native addon (one-time, ~30-90 seconds)
+# 2. Explicitly build the native addon (once per machine, ~30-90 seconds)
 npx -p @agency-lang/whisper-local agency-whisper build
 ```
+
+The build is kept in `~/.agency/addons/whisper/` (override with
+`AGENCY_WHISPER_ADDON_DIR`), beside the models, so reinstalling the package
+or letting your package manager move it does not cost a rebuild. The file
+name carries the package version, platform, architecture, and Node ABI:
+after upgrading this package or Node, run `agency-whisper build` again and
+the old file is simply ignored.
 
 **System dependencies (install before running `agency-whisper build`):**
 
@@ -115,7 +122,7 @@ Set `AGENCY_WHISPER_MODELS_DIR` to use a directory other than `~/.agency/models/
 
 **`SHA-256 mismatch`** — the downloaded model's hash doesn't match the lockfile. The partial file has been deleted. Re-running usually succeeds; if it persists, file an issue.
 
-**`whisper-local native addon not found`** — you skipped step 2 of installation. Run `npx -p @agency-lang/whisper-local agency-whisper build`.
+**`whisper-local native addon not found`** — you skipped step 2 of installation, or upgraded this package or Node since building. Run `npx -p @agency-lang/whisper-local agency-whisper build`.
 
 ## Not in v0
 

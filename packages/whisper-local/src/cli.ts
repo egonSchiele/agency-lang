@@ -63,9 +63,13 @@ async function cmdBuild() {
     process.exit(6);
   }
   // Keep a copy outside node_modules so a reinstall does not cost a rebuild.
+  // Written beside its final name and renamed into place, so a build that
+  // is interrupted mid-copy leaves no half-written file for loadAddon to find.
   const durablePath = resolveAddonPath(currentAddonTarget(packageVersion(pkgRoot)));
+  const partialPath = `${durablePath}.${process.pid}.partial`;
   await fs.mkdir(path.dirname(durablePath), { recursive: true });
-  await fs.copyFile(builtPath, durablePath);
+  await fs.copyFile(builtPath, partialPath);
+  await fs.rename(partialPath, durablePath);
   console.log(`Built: ${builtPath}`);
   console.log(`Installed: ${durablePath}`);
 }
@@ -114,7 +118,7 @@ async function cmdVerify(name: string) {
 function usage() {
   console.error("Usage: agency-whisper <command> [args]");
   console.error(
-    "  build            Compile the native addon (once per machine and Node version)",
+    "  build            Compile the native addon (again after upgrading this package or Node)",
   );
   console.error("  pull <model>     Download a model (e.g. base.en)");
   console.error("  list             List supported models and installation status");

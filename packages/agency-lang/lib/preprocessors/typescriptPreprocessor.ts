@@ -431,40 +431,7 @@ export class TypescriptPreprocessor {
   // TODO: Update collectSkillsInFunction to work with llm() as FunctionCall.
   // Skills are now passed in the config object (2nd arg to llm()), but skill
   // statements still need to be collected and merged with config skills.
-  protected collectSkillsInFunction(body: AgencyNode[]): void {
-    /* Original implementation (used PromptLiteral nodes, needs rewrite for FunctionCall):
-    let skillsUsed: Skill[] = [];
-
-    const setSkillsForPrompt = (promptNode: PromptLiteral) => {
-      promptNode.skills = skillsUsed;
-
-      if (skillsUsed.length > 0) {
-        const hasReadSkillTool = promptNode.tools?.toolNames.some(
-          (t) => t === "readSkill",
-        );
-        if (!hasReadSkillTool) {
-          promptNode.tools = promptNode.tools || {
-            type: "usesTool",
-            toolNames: [],
-          };
-          promptNode.tools.toolNames.push("readSkill");
-        }
-      }
-
-      skillsUsed = [];
-    };
-
-    for (const { node } of walkNodesArray(body)) {
-      if (node.type === "skill") {
-        skillsUsed.push(node);
-      } else if (node.type === "prompt") {
-        setSkillsForPrompt(node);
-      } else if (node.type === "assignment" && node.value.type === "prompt") {
-        setSkillsForPrompt(node.value);
-      }
-    }
-    */
-  }
+  protected collectSkillsInFunction(body: AgencyNode[]): void {}
 
   protected findChildren(body: AgencyNode[], type: string): AgencyNode[] {
     const children: AgencyNode[] = [];

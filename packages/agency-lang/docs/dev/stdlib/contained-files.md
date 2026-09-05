@@ -32,7 +32,7 @@ const real = _realDir(dir);           // root(dir).real
 const approved = fixedRoot(real);     // refuses if real now contains a link
 ```
 
-`wholePath` and `fixedPath` are the same pair for whole paths. `stat` and `exists` raise no interrupt, so they resolve the caller's spelling with `root()`. `applyPatch` resolves each patched path after approval, because its payload carries the patch text and no canonical path.
+`wholePath` and `fixedPath` are the same pair for whole paths. `stat` and `exists` raise no interrupt, so they resolve the caller's spelling with `root()`. `applyPatch` parses the patch before the interrupt and puts the real path of every touched file in the payload as `files`; after approval each entry goes through `fixedPath`.
 
 ## Two shapes of operation
 
@@ -109,7 +109,7 @@ The read and write seams run a directory swap between the open and the validatio
 ## Things that are easy to miss
 
 - `_ls`, `_glob`, and `_grep` take the approved directory first and where in it to start second. Results stay relative to the second argument. `scanSkillsSubdirs` passes the root and the subdirectory separately so a linked subdirectory is refused rather than becoming its own root.
-- `stat` returning `null` for a link is a hidden entry, not an error. The Agency `StatInfo` and `LsEntry` types keep `"symlink"` in their unions, but no code produces it any more.
+- `stat` returning `null` for a link is a hidden entry, not an error. The Agency `StatInfo` and `LsEntry` `type` fields have no `"symlink"` member.
 - A standalone `exists(p)` or `stat(p)` with no `dir` passes `p` as the root and `"."` as the target, so it follows the caller's spelling.
 - A TypeScript function that runs both after an Agency interrupt and from the CLI takes a `locate` argument, the way `_loadModelData` does. The Agency wrapper leaves the default, `fixedPath`, because the approver saw the real spelling. The CLI passes `wholePath`, because no approval happened and the user's own spelling may run through a link.
 - The payloads for `ls`, `glob`, `grep`, `mkdir`, `copy`, `move`, `remove`, `skillsDir`, `commandsDir`, and `scanSkillsSubdirs` now carry the real spelling, the way `read` and `write` did before. A policy written against `/tmp/...` on macOS matches `/private/tmp/...`, which the built-in rules already do through `resolveDotDirPattern`.

@@ -225,7 +225,7 @@ ls(
 ): Result
 ```
 
-List entries in a directory. Each entry has name, path, type ("file", "dir", "symlink", or "other"), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read.
+List entries in a directory. Each entry has name, path, type ("file", "dir", or "other"; symlinked entries are left out), and size. Set recursive to true to walk subdirectories. Fails if the directory cannot be read.
 
   A recursive listing skips heavyweight dirs (node_modules, .git, dist, build, .next, .cache) and stops at maxResults. A non-recursive listing still shows those dirs. If entries look truncated, narrow dir or raise maxResults.
 

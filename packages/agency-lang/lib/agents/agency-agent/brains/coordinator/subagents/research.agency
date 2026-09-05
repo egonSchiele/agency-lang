@@ -22,6 +22,7 @@ import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
 
 import { announce } from "../lib/announce.agency"
+import { agentOutcome, costBudget, timeBudget } from "../lib/budgets.agency"
 
 export static const researchTools: any[] = [...memoryTools(), ...planningTools(), highlight.partial(language: "ts"), print]
 
@@ -36,7 +37,9 @@ Keep replies brief. Cite sources. Show, do not lecture."""
 export handoff def researchAgent(
   userMsg: string,
   agencyTopic: boolean = false,
-): string {
+  maxSeconds: number | null = null,
+  maxDollars: number | null = null,
+): Result<string> {
   """
   Answer a question that needs reading rather than writing: looking something
   up, summarizing a document, gathering background, or recalling a stored
@@ -47,6 +50,12 @@ export handoff def researchAgent(
     itself (its syntax, types, stdlib, or CLI), which routes to the agent
     that reads the bundled Agency documentation. Leave it false for every
     other subject, including questions about other languages.
+  @param maxSeconds - stop the research after this many seconds of working
+    time. Set it when the user gave a deadline ("in five minutes" is 300).
+    Leave it null for the default of 30 minutes (10 for an Agency topic).
+  @param maxDollars - stop the research after spending this many dollars.
+    Set it when the user gave a spend limit. Leave it null for the default
+    of $50 ($10 for an Agency topic).
   """
   announce("research", userMsg)
   setMemoryId("research")
@@ -55,6 +64,8 @@ export handoff def researchAgent(
     result = agencyResearcherAgent(
       question: userMsg,
       context: replStyle,
+      maxCost: costBudget(maxDollars, $10.00),
+      maxTime: timeBudget(maxSeconds, 10m),
       session: "research",
       extraTools: researchTools,
     )
@@ -62,12 +73,11 @@ export handoff def researchAgent(
     result = researcherAgent(
       task: userMsg,
       context: replStyle,
+      maxCost: costBudget(maxDollars, $50.00),
+      maxTime: timeBudget(maxSeconds, 30m),
       session: "research",
       extraTools: researchTools,
     )
   }
-  if (isFailure(result)) {
-    return "Research did not finish: ${result.error}"
-  }
-  return result.value
+  return agentOutcome(result)
 }

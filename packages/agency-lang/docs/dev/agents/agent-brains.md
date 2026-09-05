@@ -3,7 +3,7 @@
 The Agency agent (`agency agent`, source in `lib/agents/agency-agent/`) is
 split into two parts. The **harness** is everything a user of the command
 line sees and everything that keeps the agent safe: flags, the REPL, the
-approval policy handler, the per-turn budget guard, slash commands,
+approval policy handler, the hard stop for a subagent budget trip, slash commands,
 attachments. The **brain** is the part that answers a turn. There can be
 several brains; `--brain <name>` picks one. This note explains the split,
 the record a brain must provide, where the safety boundary sits, and how to
@@ -15,7 +15,7 @@ We want to try different designs for "how does the agent answer a turn"
 (one coordinator LLM with subagents, a single tool-less call, something
 else) without rewriting the parts every design shares. Before the split,
 the coordinator module owned both the routing *and* pieces of the harness
-(the budget guard, slash expansion, attachment detection), so a second
+(the budget-trip handler, slash expansion, attachment detection), so a second
 design would have had to copy them. Now the harness owns those, and a brain
 is a small record it calls.
 

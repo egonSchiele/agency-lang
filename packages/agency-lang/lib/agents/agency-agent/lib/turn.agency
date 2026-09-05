@@ -1,8 +1,9 @@
 /** @module
   @summary The harness side of a turn: which brain is selected, the one
   session wrapper that installs the policy handler, and the per-turn work
-  (budget guard, slash expansion, attachments) that happens before the brain
-  sees the message. See docs/dev/agents/agent-brains.md.
+  (slash expansion, attachments, the hard stop for a subagent budget trip)
+  that happens before the brain sees the message. See
+  docs/dev/agents/agent-brains.md.
 */
 import { map } from "std::array"
 import { cliPolicyHandler } from "std::policy"
@@ -12,15 +13,7 @@ import { pushMessage } from "std::ui/cli"
 
 import { AgentBrain, BrainContext } from "../brains/brain.agency"
 import { detectAttachments, modalityFilter } from "./attachments.agency"
-import {
-  TURN_BUDGET_LABEL,
-  budgetTime,
-  budgetCost,
-  parseTurnBudget,
-  turnBudgetHandler,
-  lastTurnPartial,
-  clearTurnPartial,
- } from "./budget.agency"
+import { guardStopHandler } from "./budget.agency"
 import { projectCommands } from "./commandPalette.agency"
 import { groundingText } from "./grounding.agency"
 import { getPolicyForAgent } from "./policy.agency"
@@ -169,36 +162,12 @@ def dispatchToBrain(target: string, userMsg: string): string {
 
 export def runTurn(target: string, userMsg: string): string {
   """
-  Run one user turn under a time/cost guard parsed from the user's message.
-  A single guard wraps the whole turn — the brain and every subagent it
-  calls — so the budget is a true total. When the guard trips,
-  `turnBudgetHandler` asks the user whether to grant more and resumes in
-  place, or stops.
+  Run one user turn. A subagent's budget trip that no inner handler owns is
+  answered here as a hard stop, so the subagent returns its best result and
+  the brain continues. A whole-agent limit comes only from the `--max-time`
+  and `--max-cost` flags, which the runtime enforces as a root budget.
   """
-  parseTurnBudget(userMsg)
-  clearTurnPartial()
   handle {
-    const result = guard(time: budgetTime(), cost: budgetCost(), label: TURN_BUDGET_LABEL) {
-      return dispatchToBrain(target, userMsg)
-    }
-    return match(result) {
-      success(reply) => reply
-      failure(f) => {
-        let dimension = "cost"
-        if (f.type == "timeoutFailure") {
-          dimension = "time"
-        }
-        // Show the best-so-far draft the handler kept, if any. The draft is
-        // the innermost saveDraft from anywhere in the turn.
-        const partial = lastTurnPartial()
-        if (partial != null && partial != "") {
-          const header = color.yellow(
-            "⏳ Stopped (over the ${dimension} budget). Best answer so far:",
-          )
-          return "${header}\n\n${partial}"
-        }
-        return color.yellow("⏳ Stopped: over the ${dimension} budget for this turn.")
-      }
-    }
-  } with turnBudgetHandler
+    return dispatchToBrain(target, userMsg)
+  } with guardStopHandler
 }

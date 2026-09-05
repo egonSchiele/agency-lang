@@ -15,7 +15,7 @@ import {
   runGateAndFeedback,
   type BoundaryContext,
 } from "./turnBoundary.js";
-import { AgencyCancelledError, isAbortError, readCause } from "./errors.js";
+import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } from "./errors.js";
 import { recordCompletionUsage } from "./recordPaidUsage.js";
 import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
@@ -54,9 +54,11 @@ import type { LlmDefaults } from "../stdlib/llm.js";
 import {
   applyHandoffMarker,
   finishHandoff,
+  finishStoppedHandoff,
   handoffNotAloneMessage,
   stripHandoffSystemMessages,
 } from "./handoff.js";
+import { isAborted } from "./abortedResult.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
 import { StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -1261,6 +1263,7 @@ export async function runPrompt(args: {
             toolCall,
             handler,
             namedArgs,
+            stoppedReason: cappedError,
           });
         };
         if (tier === "destructive") {
@@ -1313,6 +1316,22 @@ export async function runPrompt(args: {
       // only CONSECUTIVE rejections remove it.
       rejectionCounts[handler.name] = 0;
       stack.setResultOnBranch(branchKey, toolResult);
+      if (isAborted(toolResult) && toolResult.cause.kind === "guardTrip") {
+        // An outer guard stopped the tool mid-flight. The aborted value
+        // still travels up the stack to unwind this loop, but the thread
+        // must not record it as a success carrying raw JSON: the model
+        // reads why the call stopped instead. A cancel (Esc, a race
+        // loser) keeps its own path, where the turn is ending anyway.
+        const reason = describeAbortCause(toolResult.cause);
+        pushToolReply({
+          content: `Error: ${reason}.`,
+          toolCall,
+          handler,
+          namedArgs,
+          stoppedReason: reason,
+        });
+        return { toolResult, invokeOutcome: "failed" };
+      }
       pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack, namedArgs });
       return { toolResult, invokeOutcome: "success" };
     };
@@ -1336,15 +1355,23 @@ export async function runPrompt(args: {
     // (the .handoffMarker step rewrote it), so it gets the user-role
     // resume message instead, after the body's system messages are
     // stripped. `content` may be structured; the resume message needs
-    // text.
+    // text. `stoppedReason` is set when the call failed or was aborted:
+    // a handoff's work is already on this thread, so its resume message
+    // points the model at that work instead of the plain error text an
+    // ordinary tool gets.
     const pushToolReply = (args: {
       content: any;
       toolCall: smoltalk.ToolCallJSON;
       handler: AgencyFunction;
       namedArgs: Record<string, any>;
+      stoppedReason?: string;
     }): void => {
-      const { content, toolCall, handler, namedArgs } = args;
+      const { content, toolCall, handler, namedArgs, stoppedReason } = args;
       if (handler.markers?.handoff) {
+        if (stoppedReason !== undefined) {
+          finishStoppedHandoff(messages, handler.name, namedArgs, stoppedReason);
+          return;
+        }
         finishHandoff(messages, handler.name, namedArgs, stringifyToolResult(content));
         return;
       }

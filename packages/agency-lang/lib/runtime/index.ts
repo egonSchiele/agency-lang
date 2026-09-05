@@ -68,9 +68,7 @@ export { __call, __callMethod } from "./call.js";
 export { callHook, registerGlobalHook } from "./hooks.js";
 export type { AgencyCallbacks, CallbackMap, CallbackReturn } from "./hooks.js";
 
-export { head, tail, empty, builtinRead, builtinSleep, readSkill } from "./builtins.js";
-
-export { readSkillTool, readSkillToolParams } from "./builtinTools.js";
+export { head, tail, empty, builtinRead, builtinSleep } from "./builtins.js";
 
 export {
   interrupt,

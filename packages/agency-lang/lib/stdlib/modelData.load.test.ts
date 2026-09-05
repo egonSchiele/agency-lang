@@ -4,9 +4,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { clearModelData, getModel, getRegisteredModelData } from "smoltalk";
 import { _loadModelData } from "./llm.js";
+import { wholePath } from "./contained.js";
 
+// Real paths: the loader runs after a `std::read` approval named the file,
+// so it refuses a link in the spelling, and /var is a link on macOS.
 function tmpFile(name: string, contents: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-models-"));
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "agency-models-")));
   const p = path.join(dir, name);
   fs.writeFileSync(p, contents);
   return p;
@@ -100,6 +103,17 @@ describe("_loadModelData", () => {
     expect(_loadModelData(tmpFile("bad.json", "{not json")).ok).toBe(false);
     expect(_loadModelData(tmpFile("nomodels.json", "{}")).ok).toBe(false);
     expect(getModel("custom-a" as any)).toBeDefined();
+  });
+
+  it("refuses a link in the path by default and accepts it through wholePath", () => {
+    const file = tmpFile("a.json", A);
+    const linkDir = path.join(path.dirname(file), "link");
+    fs.symlinkSync(path.dirname(file), linkDir);
+    const viaLink = path.join(linkDir, "a.json");
+    const refused = _loadModelData(viaLink);
+    expect(refused.ok).toBe(false);
+    expect(refused.error).toMatch(/is a symlink/);
+    expect(_loadModelData(viaLink, wholePath).ok).toBe(true);
   });
 
   it("fails on schemaVersion mismatch after a prior load", () => {

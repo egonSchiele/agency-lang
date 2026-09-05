@@ -6,7 +6,9 @@ import {
   _loadModelData,
   _modelSupportsInput,
 } from "agency-lang/stdlib-lib/llm.js"
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
 import { env } from "std::system"
+import { dirname, basename } from "std::path"
 
 /** @module
 Choose which model and options your `llm()` calls use at runtime.
@@ -178,6 +180,14 @@ export def modelSupportsInput(model: string, modality: string): boolean | null {
 }
 
 
+// `std::read` is also declared in the prelude. A module that raises an
+// effect declares it itself. The payload is `{ dir, filename }`.
+@alwaysUnder(dir)
+effect std::read {
+  dir: string;
+  filename: string
+}
+
 // Accumulation details (kept out of the docstring, which is also the LLM tool
 // description): when called more than once, the newly loaded file wins over
 // previously loaded files and over the built-in catalog on provider+name
@@ -185,6 +195,8 @@ export def modelSupportsInput(model: string, modality: string): boolean | null {
 // instead of replacing it; `hostedTools` are merged too. The returned count is
 // the number of models in this file, not the running total registered. `path`
 // is resolved relative to the working directory, or used as-is if absolute.
+// The interrupt names the real spelling of the file, and the read refuses a
+// link planted in that spelling afterwards.
 export def loadModelData(path: string): Result<number, string> {
   """
   Load model data from a JSON file (the shape `agency models refresh`
@@ -194,7 +206,15 @@ export def loadModelData(path: string): Result<number, string> {
 
   @param path - Path to a model-data JSON file
   """
-  const res = _loadModelData(path)
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::read("Are you sure you want to read this file?", {
+    dir: dirname(real.value),
+    filename: basename(real.value)
+  })
+  const res = _loadModelData(real.value)
   if (res.ok) {
     return success(res.count)
   }

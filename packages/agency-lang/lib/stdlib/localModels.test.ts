@@ -145,6 +145,18 @@ describe("downloaded models", () => {
     expect(_listDownloadedModels(cache)).toEqual([]);
     expect(_removeModel("missing.gguf", cache)).toBe(false);
   });
+  it("hides a symlinked model and refuses a name that leaves the cache dir", () => {
+    const cache = path.join(dir, "models");
+    const outside = path.join(dir, "outside.gguf");
+    fs.mkdirSync(cache);
+    fs.writeFileSync(outside, "xxxx");
+    fs.symlinkSync(outside, path.join(cache, "linked.gguf"));
+    expect(_listDownloadedModels(cache)).toEqual([]);
+    expect(_removeModel("linked.gguf", cache)).toBe(false);
+    expect(() => _removeModel("../outside.gguf", cache)).toThrow();
+    expect(fs.existsSync(outside)).toBe(true);
+  });
+
   it("returns [] for a missing cache dir", () => {
     expect(_listDownloadedModels(path.join(dir, "nope"))).toEqual([]);
   });

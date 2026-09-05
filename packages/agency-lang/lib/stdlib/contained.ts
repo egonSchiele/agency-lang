@@ -8,7 +8,7 @@
  * where it points.
  *
  * How strong that rule is depends on the operation. Reads and writes,
- * and `copy`, which is built on them, move bytes only through a
+ * `readStream`, and `copy`, which is built on them, move bytes only through a
  * descriptor that is validated after it is open, so a directory swapped
  * to a link while the operation runs cannot redirect them. `list`,
  * `stat`, `mkdir`, `remove`, and `move` act on a pathname that was
@@ -248,6 +248,21 @@ export function readBytes(root: Root, target: string, seams: Seams = {}): Buffer
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/** A read stream over a validated descriptor, for a file too large to
+ *  buffer, such as a downloaded model being hashed. The stream owns the
+ *  descriptor and closes it when it ends. */
+export function readStream(root: Root, target: string, seams: Seams = {}): fs.ReadStream {
+  const resolved = resolveUnder(root, target);
+  const fd = fs.openSync(resolved, fs.constants.O_RDONLY | NO_FOLLOW);
+  try {
+    validateDescriptor(fd, root, resolved, seams, "read");
+  } catch (error) {
+    fs.closeSync(fd);
+    throw error;
+  }
+  return fs.createReadStream(resolved, { fd, autoClose: true });
 }
 
 function validateDescriptor(
@@ -526,6 +541,7 @@ export function move(from: Located, to: Located): void {
 export const PRIMITIVES = [
   "readText",
   "readBytes",
+  "readStream",
   "writeText",
   "writeBytes",
   "list",

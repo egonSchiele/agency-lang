@@ -4,12 +4,13 @@ import { env } from "std::system"
 // test.js writes two model-data files to temp paths and passes them via
 // MODELS_FIXTURE_A / MODELS_FIXTURE_B. Asserts: each load succeeds with a
 // count, BOTH custom models are visible after loading both (accumulation
-// survives the Agency layer), and a bad path fails.
+// survives the Agency layer), and a bad path fails. Each load raises
+// std::read, approved here.
 node main(): any {
   let countA = -1
   const pa = env("MODELS_FIXTURE_A") with approve
   if (pa != null) {
-    const ra = loadModelData(pa)
+    const ra = loadModelData(pa) with approve
     if (ra is success(n)) {
       countA = n
     }
@@ -17,7 +18,7 @@ node main(): any {
   let countB = -1
   const pb = env("MODELS_FIXTURE_B") with approve
   if (pb != null) {
-    const rb = loadModelData(pb)
+    const rb = loadModelData(pb) with approve
     if (rb is success(n)) {
       countB = n
     }
@@ -32,7 +33,7 @@ node main(): any {
   if (ib != null) {
     seenB = ib.provider
   }
-  const bad = loadModelData("/no/such/models-file.json")
+  const bad = loadModelData("/no/such/models-file.json") with approve
   return {
     countA: countA,
     countB: countB,

@@ -1,21 +1,5 @@
-import fs from "fs";
 import path from "path";
 import { getStdlibDir } from "../importPaths.js";
-import { resolveCwdPath } from "./resolveDir.js";
-
-/**
- * Read a skill file. `filepath` resolves against `process.cwd()` like
- * every other path-taking stdlib entry point; a skill colocated with
- * the calling Agency file is read with
- * `readSkill(__dirname + "/skills/x.md")`. `~` expands
- * (`resolveCwdPath` runs `expandPath`) so `~/.agency/skills/foo.md`
- * works. No allow-list / symlink checks: skills are trusted resources
- * and the function is sync by design (`resolveDir` is async;
- * `resolveCwdPath` is its sync core).
- */
-export function _readSkill(filepath: string): string {
-  return fs.readFileSync(resolveCwdPath(filepath), "utf8");
-}
 
 /**
  * Absolute path to a section of the packaged Agency docs. `make` stages

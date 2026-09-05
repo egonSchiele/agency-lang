@@ -17,7 +17,3 @@ export function builtinSleep(seconds: number): Promise<void> {
     setTimeout(resolve, seconds * 1000);
   });
 }
-
-export function readSkill(args: { filepath: string; dirname: string }): string {
-  return builtinRead({ filename: args.filepath, dirname: args.dirname });
-}

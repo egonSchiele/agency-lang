@@ -60,7 +60,7 @@ A **standalone probe** such as `exists("/home/me/project/build")`, with no `dir`
 - `fixedRoot(real): Root` takes the spelling an approver saw, after the interrupt, and refuses a symlink anywhere in it.
 - `resolveUnder(root, target): string` joins a relative target and refuses an absolute path, a `~` path, an upward escape, and any symlink below the root. `""` and `"."` mean the root.
 - `wholePath(p): Located` splits a whole path into `{ root, target }` before the interrupt. `fixedPath(p)` does the same after it.
-- `readText`, `readBytes` open the file without following a final link, require a regular file, realpath after the open and require it inside the root, and require the descriptor's `(dev, ino)` to match what is on disk.
+- `readText`, `readBytes` open the file without following a final link, require a regular file, realpath after the open and require it inside the root, and require the descriptor's `(dev, ino)` to match what is on disk. `readStream` does the same validation and returns a stream over that descriptor, for a file too large to buffer, such as a downloaded model being hashed.
 - `writeText`, `writeBytes` take a `mode` of `overwrite`, `append`, or `create-only`, an optional `fileMode`, and validate the descriptor the same way before any byte is written. Overwrite writes a sibling temporary file and renames it over the target, so a failed write leaves the old file whole. The file's mode bits are kept. The inode changes on every overwrite.
 - `list(root, target)` returns one level with symlinked entries left out.
 - `stat(root, target)` returns `null` for a missing entry and for a symlink below the root.
@@ -86,7 +86,6 @@ The files on the allow-list today, and why:
 - `utils.ts` reads `/proc/version` once to tell WSL from Linux.
 - `speech.ts` commits a text-to-speech output by staging and hard-linking.
 - `cli.ts`, `agentSessions.ts`, `oauth.ts`, `localModelManifest.ts` read and write fixed files under the agent home.
-- `localModels.ts`, `llm.ts`, `mcp.ts`, `skills.ts` take a path the caller supplied and do not go through this module yet.
 
 ## The symlink battery
 
@@ -103,8 +102,8 @@ The read and write seams run a directory swap between the open and the validatio
 - `lib/stdlib/contained.ts`: the module. `lib/stdlib/contained.test.ts` covers the helpers and write modes.
 - `lib/stdlib/prepareContainedPath.ts`: the wrapper-facing preparation for `read`, `write`, `edit`, and their binary twins, now built on `root` and `resolveUnder`. `resolveRedirectTarget` for `safeBash` uses `root` to find where a redirect lands.
 - `lib/stdlib/assertContained.ts`: the `allowedPaths` guardrail, now built on `root`.
-- `lib/stdlib/builtins.ts`, `fs.ts`, `shell.ts`, `agency.ts`, `template.ts`, `spill.ts`, `policy.ts`, `git.ts`, `speech.ts`, `system.ts`: the migrated callers.
-- `stdlib/index.agency`, `fs.agency`, `shell.agency`, `skills.agency`, `toolbox.agency`: the wrappers, which canonicalize their payload directory with `_realDir` or `_realTarget` before raising.
+- `lib/stdlib/builtins.ts`, `fs.ts`, `shell.ts`, `agency.ts`, `template.ts`, `spill.ts`, `policy.ts`, `git.ts`, `speech.ts`, `system.ts`, `mcp.ts`, `llm.ts`, `localModels.ts`: the migrated callers.
+- `stdlib/index.agency`, `fs.agency`, `shell.agency`, `skills.agency`, `toolbox.agency`, `llm.agency`: the wrappers, which canonicalize their payload directory with `_realDir` or `_realTarget` before raising.
 - `eslint.config.js`: `FS_IMPORTERS` and the `no-restricted-imports` block.
 
 ## Things that are easy to miss
@@ -112,4 +111,5 @@ The read and write seams run a directory swap between the open and the validatio
 - `_ls`, `_glob`, and `_grep` take the approved directory first and where in it to start second. Results stay relative to the second argument. `scanSkillsSubdirs` passes the root and the subdirectory separately so a linked subdirectory is refused rather than becoming its own root.
 - `stat` returning `null` for a link is a hidden entry, not an error. The Agency `StatInfo` and `LsEntry` types keep `"symlink"` in their unions, but no code produces it any more.
 - A standalone `exists(p)` or `stat(p)` with no `dir` passes `p` as the root and `"."` as the target, so it follows the caller's spelling.
+- A TypeScript function that runs both after an Agency interrupt and from the CLI takes a `locate` argument, the way `_loadModelData` does. The Agency wrapper leaves the default, `fixedPath`, because the approver saw the real spelling. The CLI passes `wholePath`, because no approval happened and the user's own spelling may run through a link.
 - The payloads for `ls`, `glob`, `grep`, `mkdir`, `copy`, `move`, `remove`, `skillsDir`, `commandsDir`, and `scanSkillsSubdirs` now carry the real spelling, the way `read` and `write` did before. A policy written against `/tmp/...` on macOS matches `/private/tmp/...`, which the built-in rules already do through `resolveDotDirPattern`.

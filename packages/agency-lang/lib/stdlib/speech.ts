@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
-import { writeFile, unlink, lstat, link, open } from "fs/promises";
+import { constants as fsConstants } from "fs";
+import { writeFile, unlink, lstat, link, open, access } from "fs/promises";
 import { performance } from "node:perf_hooks";
 import { nanoid } from "nanoid";
 import os from "os";
@@ -331,6 +332,7 @@ export async function _transcribe(
   if (!info.isFile()) {
     throw new Error(`transcribe: not a regular file: ${resolvedPath}`);
   }
+  await access(resolvedPath, fsConstants.R_OK); // throws EACCES if unreadable
 
   const source: AudioInput = { kind: "path", path: resolvedPath };
   const config: TranscribeConfig = { model };

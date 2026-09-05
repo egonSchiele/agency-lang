@@ -80,6 +80,18 @@ the implementation is planned but not built:
 `docs/superpowers/plans/2026-08-30-ses-layer3-plan.md`. Listed here because the
 other two layers point forward to it; move it up when phase 1 merges.
 
+### Layer 4 — one contained file API
+
+Every file operation the standard library performs on a path an Agency
+program chose goes through `lib/stdlib/contained.ts`. The approved directory
+is realpathed once, and a symlink at any component below it is refused,
+whatever it points at. Reads and writes validate the open descriptor. An
+ESLint rule refuses `fs` imports elsewhere under `lib/stdlib` unless the file
+is on an allow-list with a reason, and a table-driven test refuses to pass if
+an operation is missing from the symlink battery.
+
+Depth: `docs/dev/stdlib/contained-files.md`.
+
 ## Front door: the runner's handler is always outermost
 
 ### Root policy handler installed before any user code (#966, #987)

@@ -1,3 +1,52 @@
+## Sep 5 2026 — v0.18.0
+
+### Standard Library
+
+- **`std::github`** — eleven read functions and eight write functions for pull requests and issues. New capability sets `GithubRead`, `GithubReview`, `GithubIssueWrite`, `GithubWrite`, and `Github`.
+- **`std::skills` can write skills** — Use `writeSkill` to write a skill file. Use `designSkill` to have an LLM write a skill file, show it to you for review, and redraft on feedback. Calls `writeSkill` to save the final version.
+- **`std::toolbox` splits into `designTool` and `writeTool`**.
+- **`std::grep` understands grep flags**. Also has an option to skip `.gitignore`d files, which is on by default.
+- **One contained file API** — every stdlib file operation on a path an Agency program chose goes through `lib/stdlib/contained.ts`, so we can stop worrying about symlinks separately everywhere.
+
+### Agents
+
+- The coordinator can now answer simple questions itself.
+- More grounding facts for the agent.
+- Add budget params to subagents, so coordinator can run the research agent for exactly 5 mins, for example.
+- Tool call limits raised to 50 interactive / 100 one-shot.
+- If a tool is rejected by a policy, we now print a line so the user knows a tool call was rejected.
+
+### Language
+
+- **`handoff def`** — tool calls get the full message thread of their parents, and for any llm calls in a tool call, add messages to the parent's thread.
+- **Effect patterns in `match`** — a match arm can name an interrupt effect and destructure its payload. Example: `app::write({ data }) if data.dir == "/tmp" => return approve()`.
+
+### CLI
+
+- **`agency effects`** — lists the capability sets and built-in policies the approval flags accept.
+- **`agency agent --approve` and `--reject`**, now also take capability set names like `FileRead`.
+- `agency config` with no subcommand shows the config.
+
+### Security
+
+- **The root policy handler and budget install before any user code runs.** Top-level code that used `with approve` ignored anything specified with the `--reject` flag... fixed now.
+- **Checkpoints carry an optional HMAC checksum.** Set `AGENCY_CHECKPOINT_KEY` to add a signature to every checkpoint. A host can then verify a checkpoint with `verifyCheckpointChecksum` to ensure it hasn't been tampered with. Note that verification is not automatic... users have to do it manually.
+- **Detect when a checkpoint is for an older version of the code**, and don't resume.
+
+### Eval framework
+
+- `agency eval upload` prints per-run progress and links to the batch.
+
+### LLM
+
+- smoltalk upgraded to 0.12.1, adds new model data.
+
+### Fixes
+
+- The certificate checker accepts the space-padded expiry day openssl prints for single-digit dates.
+- macOS screenshot names carry a narrow no-break space before AM/PM, which meant they weren't correctly being added as attachments for the agency agent. Fixed now.
+- `agency test` no longer reports a spurious AG4010 for an `import test` of a non-exported symbol.
+
 ## Aug 30 2026 — v0.17.1
 
 ### Hosting

@@ -58,12 +58,17 @@ playback. */
 
 // The real spelling of an output file, so the interrupt names the file
 // that will be written. An empty outputFile means a temporary file the
-// runtime picks, and passes through.
-def realOutput(outputFile: string): Result<string> {
+// runtime picks, and passes through. A path that cannot be resolved is
+// thrown, like the other argument checks in this module.
+def realOutput(outputFile: string): string {
   if (outputFile == "") {
-    return success("")
+    return ""
   }
-  return try _realTarget(outputFile)
+  const real = try _realTarget(outputFile)
+  if (real is failure(why)) {
+    throw("${why}")
+  }
+  return real.value
 }
 
 export def say(
@@ -85,15 +90,12 @@ export def say(
   @param allowedPaths - Only allow saving under these path prefixes
   """
   const out = realOutput(outputFile)
-  if (out is failure) {
-    return out
-  }
   return interrupt std::say("Allow local text-to-speech playback?", {
     textLength: text.length,
-    outputFile: out.value
+    outputFile: out
   })
 
-  _say(text, voice, rate, out.value, allowedPaths)
+  _say(text, voice, rate, out, allowedPaths)
 }
 
 /**
@@ -115,14 +117,11 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000, allowe
   @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
   """
   const out = realOutput(outputFile)
-  if (out is failure(why)) {
-    throw("${why}")
-  }
   return interrupt std::record("Allow microphone recording?", {
-    outputFile: out.value
+    outputFile: out
   })
 
-  return _record(out.value, silenceTimeout, allowedPaths)
+  return _record(out, silenceTimeout, allowedPaths)
 }
 
 /** A cloud transcription request tears down on Ctrl-C, race-loser, or
@@ -215,19 +214,16 @@ export def speak(
   _validateSpeakArgs(format, speed)
 
   const out = realOutput(outputFile)
-  if (out is failure(why)) {
-    throw("${why}")
-  }
   return interrupt std::synthesizeSpeech("Send this text to the active cloud speech provider?", {
     requestedProvider: provider,
     configuredModel: model,
     textLength: text.length,
-    outputFile: out.value
+    outputFile: out
   })
 
   return _synthesizeSpeech(
     text,
-    out.value,
+    out,
     voice,
     model,
     provider,

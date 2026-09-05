@@ -17,8 +17,8 @@ A command can print far more than a model should be handed in one tool
   `AGENCY_TOOL_OUTPUT_DIR` to move it.
 
   Two tools read the files back: `readSpill` for the whole file or a slice
-  of lines, and `grepSpill` to search one. Both take a file name, never a
-  path, so they cannot reach anything else. Each raises its own effect, so
+  of lines, and `grepSpill` to search one. Both take a file name, so
+  they cannot reach anything outside the directory. Each raises its own effect, so
   a policy can approve reading saved output without opening the
   general-purpose read tools any wider.
 
@@ -44,7 +44,7 @@ effect std::spill::write {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L53))
 
 ### std::spill::read
 
@@ -57,7 +57,7 @@ effect std::spill::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L56))
 
 ## Constants
 
@@ -81,7 +81,7 @@ The directory saved tool output lives in.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L58))
 
 ### keepOutput
 
@@ -109,7 +109,7 @@ What the model gets back for a command's output.
 
 **Throws:** `std::spill::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L63))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L65))
 
 ### readSpill
 
@@ -139,14 +139,14 @@ Read a saved tool-output file, named in a "full output saved as" notice. Returns
 
 **Throws:** `std::spill::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L102))
 
 ### grepSpill
 
 ```ts
 grepSpill(
   pattern: string,
-  filename: string = "",
+  filename: string,
   maxResults: number = 100,
 ): Result raises <std::spill::read>
 ```
@@ -154,7 +154,7 @@ grepSpill(
 Search a saved tool-output file for a regular expression. Each match comes back with its line number and line text. Patterns use JavaScript regex syntax.
 
   @param pattern - The regular expression to search for
-  @param filename - The file's name from a "full output saved as" notice. Empty searches every saved file.
+  @param filename - The file's name from a "full output saved as" notice. A name only, never a path.
   @param maxResults - Most matches to return
 
 **Parameters:**
@@ -162,11 +162,11 @@ Search a saved tool-output file for a regular expression. Each match comes back 
 | Name | Type | Default |
 |---|---|---|
 | pattern | `string` |  |
-| filename | `string` | "" |
+| filename | `string` |  |
 | maxResults | `number` | 100 |
 
 **Returns:** `Result`
 
 **Throws:** `std::spill::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/spill.agency#L120))

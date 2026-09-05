@@ -14,6 +14,7 @@ import { exists } from "std::shell"
 // the interrupt-raising versions have.
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
+import { _realDir } from "agency-lang/stdlib-lib/contained.js"
 import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter, _resolveCwdPath } from "agency-lang/stdlib-lib/skills.js"
 
 
@@ -241,15 +242,15 @@ export def skillsToolFromEntries(
 // Read one directory of skills into entries: glob the layout's pattern,
 // read each match with the interrupt-free primitives (a scan
 // interrupt's approval covers them), and parse its frontmatter,
-// tolerating a file that does not parse. A non-empty `allowedPaths`
-// makes `_glob`'s symlink-aware containment check refuse a directory
-// that resolves outside of it.
+// tolerating a file that does not parse. `root` is the directory the
+// scan interrupt named and `sub` is where under it to look ("." for the
+// root itself), so a scan of root/sub can never leave root through a link.
 def scanEntries(
-  dir: string,
+  root: string,
+  sub: string,
   layout: "flat" | "standard",
   recursive: boolean,
   maxFiles: number,
-  allowedPaths: string[],
 ): SkillEntry[] {
   let pattern = "*/SKILL.md"
   if (layout == "flat") {
@@ -258,12 +259,12 @@ def scanEntries(
       pattern = "**/*.{md,markdown}"
     }
   }
-  const pathsResult = try _glob(pattern, dir, maxFiles, allowedPaths)
+  const pathsResult = try _glob(root, sub, pattern, maxFiles)
   if (pathsResult is failure) {
     return []
   }
   return map(pathsResult.value) as path {
-    const data = (try _read(dir, path, 0, 0, allowedPaths) |> frontmatter) catch {}
+    const data = (try _read(root, "${sub}/${path}", 0, 0) |> frontmatter) catch {}
     if (layout == "standard") {
       return standardEntry(path, data)
     }
@@ -277,7 +278,7 @@ def buildSkillsTool(
   name: string = "",
   recursive: boolean = false,
 ) {
-  return skillsToolFromEntries(dir, scanEntries(dir, layout, recursive, MAX_SKILL_FILES, []), name)
+  return skillsToolFromEntries(dir, scanEntries(dir, ".", layout, recursive, MAX_SKILL_FILES), name)
 }
 
 export def skillsDir(
@@ -292,12 +293,16 @@ export def skillsDir(
   @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters. Defaults to a name derived from `dir`; set this to override it — e.g. for a stable, readable name, or to disambiguate two tools whose derived names would collide.
   """
+  const real = try _realDir(dir)
+  if (real is failure) {
+    return real
+  }
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: dir,
+    dir: real.value,
     layout: layout
   })
 
-  return buildSkillsTool(dir, layout, name)
+  return buildSkillsTool(real.value, layout, name)
 }
 
 /** One subdirectory's scan result: the directory that was scanned (the
@@ -342,12 +347,14 @@ export def scanSkillsSubdirs(
   if (subdirs.length == 0) {
     return success(Object.create(null))
   }
-  // Absolutized so the interrupt payload — and any always-scope rule
-  // saved from it — names one directory regardless of the caller's
-  // spelling.
-  const absRoot = _resolveCwdPath(root)
+  // The real spelling, so the interrupt payload and any always-scope
+  // rule saved from it name one directory however the caller spelled it.
+  const absRoot = try _realDir(root)
+  if (absRoot is failure) {
+    return absRoot
+  }
   return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: absRoot,
+    dir: absRoot.value,
     layout: "flat"
   })
 
@@ -355,13 +362,9 @@ export def scanSkillsSubdirs(
   // key (the groupBy pattern from std::index).
   const out: Record<string, SkillGroup> = Object.create(null)
   for (sub in subdirs) {
-    const subdir = "${absRoot}/${sub}"
-    // `[absRoot]` makes the scan's containment check refuse a
-    // subdirectory or file that resolves outside the approved root — a
-    // symlink, say.
     out[sub] = {
-      dir: subdir,
-      entries: scanEntries(subdir, "flat", false, MAX_SKILL_FILES, [absRoot])
+      dir: "${absRoot.value}/${sub}",
+      entries: scanEntries(absRoot.value, sub, "flat", false, MAX_SKILL_FILES)
     }
   }
   return success(out)
@@ -759,14 +762,18 @@ export def commandsDir(dir: string): any[] {
 
   @param dir - Directory containing command markdown files.
   """
+  const real = try _realDir(dir)
+  if (real is failure) {
+    return []
+  }
   return interrupt std::skills::commandsDir("Are you sure you want to scan this directory for slash command files?", {
-    dir: dir
+    dir: real.value
   })
 
-  const pathsResult = try _glob("*.md", dir, MAX_SKILL_FILES, [])
+  const pathsResult = try _glob(real.value, ".", "*.md", MAX_SKILL_FILES)
   if (pathsResult is success(paths)) {
     return map(paths) as p {
-      const raw = try _read(dir, p, 0, 0) catch ""
+      const raw = try _read(real.value, p, 0, 0) catch ""
       // `catch {}` collapses parse failures + a missing frontmatter
       // block to an empty object so the dot access below is safe.
       const fm = frontmatter(raw) catch {}

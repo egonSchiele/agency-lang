@@ -11,6 +11,7 @@ import {
   _exec,
   _bash,
  } from "agency-lang/stdlib-lib/shell.js"
+import { _realDir } from "agency-lang/stdlib-lib/contained.js"
 
 
 /** @module
@@ -207,19 +208,25 @@ export idempotent def ls(
   @param dir - The directory to list
   @param recursive - Whether to walk subdirectories
   @param maxResults - Maximum number of entries to return
-  @param allowedPaths - Only allow listing directories under these prefixes. When set, a symlinked dir fails the call rather than being followed.
+  Symlinked entries are left out. Symlinks below dir are never followed.
+
+  @param allowedPaths - Only allow listing directories under these prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const root = try _realDir(dir)
+  if (isFailure(root)) {
+    return root
+  }
   return interrupt std::ls("Are you sure you want to list this directory?", {
-    dir: dir,
+    dir: root.value,
     recursive: recursive,
     maxResults: maxResults
   })
 
-  return try _ls(dir, recursive, allowedPaths, maxResults)
+  return try _ls(root.value, ".", recursive, maxResults, allowedPaths)
 }
 
 type GrepMatch = {
@@ -250,13 +257,13 @@ export idempotent def grep(
   """
   Search files under a directory for a regular expression, like `grep -rn`. The search is always recursive and every match comes back with its file path, line number, and line text. Skips node_modules, .git, dist, build, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex or the directory cannot be read.
 
-  Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern.
+  Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern. Symlinked entries are left out. Symlinks below dir are never followed.
 
   @param pattern - The regex pattern to search for, in JavaScript regex syntax
   @param dir - The directory to search in
   @param flags - JavaScript regex flags (i, m, s, u). grep's -r and -n are always on. For -w, -l, and -v use wholeWord, filesOnly, and invert.
   @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes. When set, a symlinked search dir fails the call rather than being followed.
+  @param allowedPaths - Only allow searching under these path prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
   @param ignoreCase - Match regardless of letter case (grep -i)
   @param wholeWord - Match only where the pattern is a whole word (grep -w)
@@ -267,9 +274,13 @@ export idempotent def grep(
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const root = try _realDir(dir)
+  if (isFailure(root)) {
+    return root
+  }
   return interrupt std::grep("Are you sure you want to search files with grep?", {
     pattern: pattern,
-    dir: dir,
+    dir: root.value,
     flags: flags,
     maxResults: maxResults,
     ignoreCase: ignoreCase,
@@ -286,7 +297,7 @@ export idempotent def grep(
     filesOnly: filesOnly,
     invert: invert
   }
-  return try _grep(query, dir, maxResults, allowedPaths, respectGitignore)
+  return try _grep(root.value, ".", query, maxResults, allowedPaths, respectGitignore)
 }
 
 export idempotent def glob(
@@ -297,24 +308,28 @@ export idempotent def glob(
   useAgentCwd: boolean = false,
 ): Result {
   """
-  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read.
+  Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read. Symlinked entries are left out. Symlinks below dir are never followed.
 
   @param pattern - The glob pattern to match
   @param dir - The directory to search in
   @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes. When set, symlinks are refused rather than followed: a symlinked search dir fails the call, and symlinked entries are left out of the results.
+  @param allowedPaths - Only allow searching under these path prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
   """
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const root = try _realDir(dir)
+  if (isFailure(root)) {
+    return root
+  }
   return interrupt std::glob("Are you sure you want to glob files?", {
     pattern: pattern,
-    dir: dir,
+    dir: root.value,
     maxResults: maxResults
   })
 
-  return try _glob(pattern, dir, maxResults, allowedPaths)
+  return try _glob(root.value, ".", pattern, maxResults, allowedPaths)
 }
 
 type StatInfo = {
@@ -329,21 +344,22 @@ export def stat(
   dir: string = "",
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-  followSymlinks: boolean = false,
 ): StatInfo {
   """
-  Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms.
+  Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "other", or "missing" if absent), size in bytes, and mtime in ms. A symlink below dir is reported as missing. With no dir, the path itself is resolved the way you spelled it.
 
   @param filename - The path to stat
   @param dir - Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted
   @param allowedPaths - Only allow paths under these prefixes
   @param useAgentCwd - When true, resolve a relative filename against the agent working directory if one is set; absolute filenames are unaffected
-  @param followSymlinks - When true, report the symlink target's type and size (a broken link reports "missing"); when false, report the link itself with type "symlink"
   """
   if (useAgentCwd && !isAbsolute(filename)) {
     dir = applyAgentCwd(dir)
   }
-  return _stat(filename, dir, allowedPaths, followSymlinks)
+  if (dir == "") {
+    return _stat(filename, ".", allowedPaths)
+  }
+  return _stat(dir, filename, allowedPaths)
 }
 
 export def exists(
@@ -353,7 +369,7 @@ export def exists(
   useAgentCwd: boolean = false,
 ): boolean {
   """
-  Return true if a file or directory exists at the given path. Probing a path outside allowedPaths raises an error rather than silently returning false.
+  Return true if a file or directory exists at the given path. A symlink below dir is reported as missing. Probing a path outside allowedPaths raises an error rather than silently returning false.
 
   @param filename - The path to check
   @param dir - Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted
@@ -363,7 +379,10 @@ export def exists(
   if (useAgentCwd && !isAbsolute(filename)) {
     dir = applyAgentCwd(dir)
   }
-  return _exists(filename, dir, allowedPaths)
+  if (dir == "") {
+    return _exists(filename, ".", allowedPaths)
+  }
+  return _exists(dir, filename, allowedPaths)
 }
 
 export def which(command: string): string {

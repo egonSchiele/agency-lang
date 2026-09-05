@@ -45,9 +45,9 @@ export def detectAttachments(msg: string, maxBytes: number = 20971520): Detected
     const abs = applyAgentCwd(candidate.path)
     if (!seen.includes(abs)) {
       seen.push(abs)
-      // followSymlinks: a link to an image must report the TARGET's type
-      // and size (lstat would say "symlink" and the link blob's size).
-      const info = stat(abs, followSymlinks: true)
+      // A standalone probe resolves the path the way it was spelled, so a
+      // link to an image reports the target's type and size.
+      const info = stat(abs)
       if (info.type == "file") {
         const label = basename(abs)
         if (attached.length >= MAX_ATTACHMENTS) {

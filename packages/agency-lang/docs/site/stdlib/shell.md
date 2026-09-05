@@ -39,7 +39,7 @@ export type ExecResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L37))
 
 ## Effects
 
@@ -57,7 +57,7 @@ effect std::exec {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L44))
 
 ### std::bash
 
@@ -71,7 +71,7 @@ effect std::bash {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L52))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L53))
 
 ### std::ls
 
@@ -84,7 +84,7 @@ effect std::ls {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L60))
 
 ### std::grep
 
@@ -102,7 +102,7 @@ effect std::grep {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L65))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L66))
 
 ### std::glob
 
@@ -115,7 +115,7 @@ effect std::glob {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L76))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L77))
 
 ## Functions
 
@@ -165,7 +165,7 @@ Run an executable directly with an array of arguments, bypassing the shell, and 
 
 **Throws:** `std::exec`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L83))
 
 ### bash
 
@@ -211,7 +211,7 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
 
 **Throws:** `std::bash`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L146))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L147))
 
 ### ls
 
@@ -232,7 +232,9 @@ List entries in a directory. Each entry has name, path, type ("file", "dir", "sy
   @param dir - The directory to list
   @param recursive - Whether to walk subdirectories
   @param maxResults - Maximum number of entries to return
-  @param allowedPaths - Only allow listing directories under these prefixes. When set, a symlinked dir fails the call rather than being followed.
+  Symlinked entries are left out. Symlinks below dir are never followed.
+
+  @param allowedPaths - Only allow listing directories under these prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
 
 **Parameters:**
@@ -249,7 +251,7 @@ List entries in a directory. Each entry has name, path, type ("file", "dir", "sy
 
 **Throws:** `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L196))
 
 ### grep
 
@@ -271,13 +273,13 @@ grep(
 
 Search files under a directory for a regular expression, like `grep -rn`. The search is always recursive and every match comes back with its file path, line number, and line text. Skips node_modules, .git, dist, build, and by default anything the directory's .gitignore files ignore, so generated output does not crowd out source. Patterns use JavaScript regex syntax, not grep's. Fails if the pattern is not a valid regex or the directory cannot be read.
 
-  Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern.
+  Returned file values are relative to dir. Returns at most maxResults matches; if matches look truncated, narrow dir or refine the pattern. Symlinked entries are left out. Symlinks below dir are never followed.
 
   @param pattern - The regex pattern to search for, in JavaScript regex syntax
   @param dir - The directory to search in
   @param flags - JavaScript regex flags (i, m, s, u). grep's -r and -n are always on. For -w, -l, and -v use wholeWord, filesOnly, and invert.
   @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes. When set, a symlinked search dir fails the call rather than being followed.
+  @param allowedPaths - Only allow searching under these path prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
   @param ignoreCase - Match regardless of letter case (grep -i)
   @param wholeWord - Match only where the pattern is a whole word (grep -w)
@@ -310,7 +312,7 @@ to use, never a RegExp constructor error. The rule table is in
 
 **Throws:** `std::grep`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L237))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L244))
 
 ### glob
 
@@ -324,12 +326,12 @@ glob(
 ): Result
 ```
 
-Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read.
+Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the pattern is not valid glob syntax or the directory cannot be read. Symlinked entries are left out. Symlinks below dir are never followed.
 
   @param pattern - The glob pattern to match
   @param dir - The directory to search in
   @param maxResults - Maximum number of results to return
-  @param allowedPaths - Only allow searching under these path prefixes. When set, symlinks are refused rather than followed: a symlinked search dir fails the call, and symlinked entries are left out of the results.
+  @param allowedPaths - Only allow searching under these path prefixes
   @param useAgentCwd - When true, resolve a relative dir against the agent working directory if one is set
 
 **Parameters:**
@@ -346,7 +348,7 @@ Find files whose paths match a glob pattern (e.g. "src/**/*.ts"). Fails if the p
 
 **Throws:** `std::glob`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L292))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L303))
 
 ### stat
 
@@ -356,17 +358,15 @@ stat(
   dir: string = "",
   allowedPaths: string[] = [],
   useAgentCwd: boolean = false,
-  followSymlinks: boolean = false,
 ): StatInfo
 ```
 
-Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "symlink", "other", or "missing" if absent), size in bytes, and mtime in ms.
+Return metadata about a filesystem entry: whether it exists, its type ("file", "dir", "other", or "missing" if absent), size in bytes, and mtime in ms. A symlink below dir is reported as missing. With no dir, the path itself is resolved the way you spelled it.
 
   @param filename - The path to stat
   @param dir - Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted
   @param allowedPaths - Only allow paths under these prefixes
   @param useAgentCwd - When true, resolve a relative filename against the agent working directory if one is set; absolute filenames are unaffected
-  @param followSymlinks - When true, report the symlink target's type and size (a broken link reports "missing"); when false, report the link itself with type "symlink"
 
 **Parameters:**
 
@@ -376,11 +376,10 @@ Return metadata about a filesystem entry: whether it exists, its type ("file", "
 | dir | `string` | "" |
 | allowedPaths | `string[]` | [] |
 | useAgentCwd | `boolean` | false |
-| followSymlinks | `boolean` | false |
 
 **Returns:** `StatInfo`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L327))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L342))
 
 ### exists
 
@@ -393,7 +392,7 @@ exists(
 ): boolean
 ```
 
-Return true if a file or directory exists at the given path. Probing a path outside allowedPaths raises an error rather than silently returning false.
+Return true if a file or directory exists at the given path. A symlink below dir is reported as missing. Probing a path outside allowedPaths raises an error rather than silently returning false.
 
   @param filename - The path to check
   @param dir - Directory to resolve a relative filename against; filename cannot escape it. When empty, filename resolves against the process cwd and absolute paths are accepted
@@ -411,7 +410,7 @@ Return true if a file or directory exists at the given path. Probing a path outs
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L349))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L365))
 
 ### which
 
@@ -431,4 +430,4 @@ Locate an executable in PATH and return its absolute path, or an empty string if
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L369))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/shell.agency#L388))

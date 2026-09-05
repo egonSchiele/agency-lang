@@ -5,10 +5,19 @@
  * path outside D. A symlink in the caller's own spelling of D (a linked
  * /tmp, a linked home) resolves normally, once, in `root`. A symlink at
  * any component below D is refused, because the approver never named
- * where it points. See docs/dev/stdlib/contained-files.md.
+ * where it points.
+ *
+ * How strong that rule is depends on the operation. Reads and writes,
+ * and `copy`, which is built on them, move bytes only through a
+ * descriptor that is validated after it is open, so a directory swapped
+ * to a link while the operation runs cannot redirect them. `list`,
+ * `stat`, `mkdir`, `remove`, and `move` act on a pathname that was
+ * checked a moment earlier. Node has no openat, so a swap between that
+ * check and the action is not closed here. Process containment is the
+ * answer for that window. See docs/dev/stdlib/contained-files.md.
  */
 import fs from "fs";
-import type { Stats, CopySyncOptions } from "fs";
+import type { Stats } from "fs";
 import * as path from "path";
 import process from "process";
 import { randomBytes } from "crypto";
@@ -411,20 +420,41 @@ export function remove(root: Root, target: string): void {
   fs.rmSync(resolveUnder(root, target), { recursive: true, force: true });
 }
 
-const COPY_OPTIONS: CopySyncOptions = {
-  recursive: true,
-  dereference: false,
-  verbatimSymlinks: true,
-};
-
-/** Copy a file or tree. Links inside the tree are copied as links, never
- *  followed, so a copy cannot pull in bytes from outside the source. */
+/** Copy a file or tree. Every file is read and written through a
+ *  validated descriptor, and a symlink anywhere in the source tree is
+ *  refused, so a copy can neither pull in bytes from outside the source
+ *  nor plant a link at the destination. An existing destination file is
+ *  replaced, as with cp. */
 export function copy(from: Located, to: Located): void {
   const source = resolveUnder(from.root, from.target);
-  const destination = resolveUnder(to.root, to.target);
-  fs.cpSync(source, destination, COPY_OPTIONS);
+  let info: Stats;
+  try {
+    info = fs.lstatSync(source);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`copy: no such file or directory: '${source}'`);
+    }
+    throw error;
+  }
+  if (info.isDirectory()) {
+    mkdir(to.root, to.target);
+    for (const name of fs.readdirSync(source)) {
+      copy(
+        { root: from.root, target: path.join(from.target, name) },
+        { root: to.root, target: path.join(to.target, name) },
+      );
+    }
+    return;
+  }
+  if (!info.isFile()) {
+    throw new Error(`copy: '${source}' is not a regular file or directory`);
+  }
+  writeBytes(to.root, to.target, readBytes(from.root, from.target), {
+    fileMode: info.mode & 0o777,
+  });
 }
 
+/** Rename within one filesystem, or copy and remove across two. */
 export function move(from: Located, to: Located): void {
   const source = resolveUnder(from.root, from.target);
   const destination = resolveUnder(to.root, to.target);
@@ -434,7 +464,7 @@ export function move(from: Located, to: Located): void {
     if ((error as NodeJS.ErrnoException).code !== "EXDEV") {
       throw error;
     }
-    fs.cpSync(source, destination, COPY_OPTIONS);
+    copy(from, to);
     fs.rmSync(source, { recursive: true, force: true });
   }
 }

@@ -322,6 +322,9 @@ export async function _transcribe(
 
   // Local preflight before the metered boundary, so a missing path never
   // looks like paid work. A symlink at the final name is reported missing.
+  // The client then opens the pathname itself, so it can apply its size cap
+  // before reading. That leaves the check-then-open window that
+  // docs/dev/stdlib/contained-files.md describes for pathname operations.
   await assertContained(filepath, allowedPaths ?? []);
   const located = wholePath(filepath);
   const resolvedPath = resolveUnder(located.root, located.target);

@@ -261,11 +261,18 @@ export type LsEntry = {
 // safety default for direct callers.
 const DEFAULT_LS_MAX_RESULTS = 1000;
 
-/** The approved directory as a Root, with the program's own allow-list
- *  applied to it. Every directory-walking primitive starts here. */
-async function approvedRoot(rootDir: string, allowedPaths: string[] | undefined): Promise<Root> {
-  await assertContained(rootDir, allowedPaths ?? [], process.cwd());
-  return root(rootDir);
+/** The approved directory as a Root. The program's own allow-list is
+ *  checked against the path being walked or probed, `target` under the
+ *  root, so `allowedPaths: ["/tmp/file"]` still admits a probe of exactly
+ *  that file. Every directory-walking primitive starts here. */
+async function approvedRoot(
+  rootDir: string,
+  target: string,
+  allowedPaths: string[] | undefined,
+): Promise<Root> {
+  const approved = root(rootDir);
+  await assertContained(path.join(approved.real, target), allowedPaths ?? [], process.cwd());
+  return approved;
 }
 
 function joinRel(rel: string, name: string): string {
@@ -293,7 +300,7 @@ export async function _ls(
   maxResults: number = DEFAULT_LS_MAX_RESULTS,
   allowedPaths?: string[],
 ): Promise<LsEntry[]> {
-  const approved = await approvedRoot(rootDir, allowedPaths);
+  const approved = await approvedRoot(rootDir, dir, allowedPaths);
   // Coerce the cap so a non-finite value (e.g. NaN) can't silently
   // disable the bound and reintroduce unbounded recursion. `0` (and any
   // value <= 0) is a valid request that yields an empty result.
@@ -400,7 +407,7 @@ export async function _grep(
   allowedPaths?: string[],
   respectGitignore: boolean = true,
 ): Promise<GrepResults> {
-  const approved = await approvedRoot(rootDir, allowedPaths);
+  const approved = await approvedRoot(rootDir, dir, allowedPaths);
   const plan = compileGrepQuery(query);
   const matches: GrepMatch[] = [];
 
@@ -467,7 +474,7 @@ export async function _glob(
   allowedPaths?: string[],
 ): Promise<string[]> {
   if (maxResults <= 0) return [];
-  const approved = await approvedRoot(rootDir, allowedPaths);
+  const approved = await approvedRoot(rootDir, dir, allowedPaths);
   const re = globToRegExp(pattern);
   const results: string[] = [];
 
@@ -551,7 +558,7 @@ export async function _stat(
   target: string,
   allowedPaths?: string[],
 ): Promise<StatInfo> {
-  const approved = await approvedRoot(rootDir, allowedPaths);
+  const approved = await approvedRoot(rootDir, target, allowedPaths);
   const info = stat(approved, target);
   if (info === null) {
     return { exists: false, type: "missing", size: 0, modifiedMs: 0 };
@@ -567,7 +574,7 @@ export async function _exists(
   target: string,
   allowedPaths?: string[],
 ): Promise<boolean> {
-  const approved = await approvedRoot(rootDir, allowedPaths);
+  const approved = await approvedRoot(rootDir, target, allowedPaths);
   return stat(approved, target) !== null;
 }
 

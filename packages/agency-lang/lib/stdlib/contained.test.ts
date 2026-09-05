@@ -337,16 +337,30 @@ describe("mkdir, remove, copy, move", () => {
     }
   });
 
-  test("copy copies a tree and keeps a link inside it as a link", () => {
+  test("copy copies a tree, keeping file modes", () => {
     const dir = makeDir(".ct-copy-");
     try {
       const r = root(dir);
-      mkdir(r, "src");
-      fs.writeFileSync(path.join(dir, "src", "f.txt"), "x");
-      fs.symlinkSync(path.join(dir, "src", "f.txt"), path.join(dir, "src", "l.txt"));
+      mkdir(r, "src/deep");
+      fs.writeFileSync(path.join(dir, "src", "f.txt"), "x", { mode: 0o600 });
+      fs.writeFileSync(path.join(dir, "src", "deep", "g.txt"), "y");
       copy({ root: r, target: "src" }, { root: r, target: "dst" });
       expect(fs.readFileSync(path.join(dir, "dst", "f.txt"), "utf8")).toBe("x");
-      expect(fs.lstatSync(path.join(dir, "dst", "l.txt")).isSymbolicLink()).toBe(true);
+      expect(fs.readFileSync(path.join(dir, "dst", "deep", "g.txt"), "utf8")).toBe("y");
+      expect(fs.statSync(path.join(dir, "dst", "f.txt")).mode & 0o777).toBe(0o600);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("copy refuses a tree that contains a link anywhere", () => {
+    const dir = makeDir(".ct-copylink-");
+    try {
+      const r = root(dir);
+      mkdir(r, "src/deep");
+      fs.writeFileSync(path.join(dir, "src", "f.txt"), "x");
+      fs.symlinkSync(path.join(dir, "src", "f.txt"), path.join(dir, "src", "deep", "l.txt"));
+      expect(() => copy({ root: r, target: "src" }, { root: r, target: "dst" })).toThrow(/symlink/);
     } finally {
       cleanup(dir);
     }

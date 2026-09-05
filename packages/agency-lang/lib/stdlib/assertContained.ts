@@ -29,7 +29,7 @@ export async function assertContained(
   if (target.trim() === "") {
     throw new Error("assertContained: target must not be empty");
   }
-  const realTarget = root(path.resolve(baseDir, expandPath(target))).real;
+  const realTarget = realOrLexical(path.resolve(baseDir, expandPath(target)));
   const realRoots = allowedRoots
     .filter((entry) => entry.trim() !== "")
     .map((entry) => root(path.resolve(baseDir, expandPath(entry))).real);
@@ -44,4 +44,19 @@ export async function assertContained(
   throw new Error(
     `Path "${target}" is not under any of the allowed paths: ${allowedRoots.join(", ")}.`,
   );
+}
+
+/** A dangling link or a loop in the target's spelling is judged where it
+ *  sits: its nearest resolvable ancestor is realpathed and the rest kept
+ *  as written. The operation that follows refuses or hides it anyway. */
+function realOrLexical(p: string): string {
+  try {
+    return root(p).real;
+  } catch {
+    const parent = path.dirname(p);
+    if (parent === p) {
+      return p;
+    }
+    return path.join(realOrLexical(parent), path.basename(p));
+  }
 }

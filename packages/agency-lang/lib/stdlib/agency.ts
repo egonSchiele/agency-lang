@@ -119,28 +119,10 @@ export function _compile(source: string, dir: string = ""): CompiledProgramValue
   return compileToProgram({ source }, dir);
 }
 
-// Resolve `filename` against `dir`, requiring the result to live strictly
-// inside `dir` after symlinks are collapsed. Used by _compileFile,
-// _typecheckFile, and _formatFile to share one sandbox boundary.
-//
-// SECURITY: A naive `path.resolve(dir, filename)` is unsafe in two ways:
-//   1. If `filename` is absolute (e.g. "/etc/passwd"), `resolve` ignores
-//      `dir` entirely.
-//   2. `filename` may contain `..` segments that walk out of `dir`.
-// We defend against both by realpath-ing the resolved file and checking
-// it lives strictly inside the realpath-ed `dir`. realpath also collapses
-// symlinks, so a symlink planted inside `dir` that points outside cannot
-// be used as an escape hatch. The trailing `+ sep` on the prefix
-// prevents a sibling directory (e.g. `/safedir-evil/`) from passing the
-// startsWith check by sharing the same prefix string.
-//
-// When `mustExist` is false, the target file is allowed to not exist yet
-// (used by callers that are about to create the file). In that mode we
-// realpath the directory but only lexically resolve the file path —
-// symlinks INSIDE `dir` are not followed on the missing-target branch,
-// so if you let the user create a symlink and then write to it, that's
-// on you. For overwrite of an EXISTING symlink the realpath check still
-// applies because we hit the existing-target branch.
+// Resolve `filename` against `dir`, the sandbox. An absolute filename, a
+// `..` escape, or a symlink at any component below `dir` is refused. Used
+// by _compileFile, _typecheckFile, _formatFile, and _readTestFileSandbox
+// so they share one boundary and one error message.
 export function resolveInSandbox(dir: string, filename: string): string {
   try {
     return resolveUnder(root(dir), filename);
@@ -548,9 +530,6 @@ export function _format(source: string): string {
 }
 
 export function _formatFile(dir: string, filename: string): boolean {
-  // formatFile *requires* the file to exist — it reads then writes.
-  // Use the existing-target branch (mustExist: true) so symlinks get
-  // realpath-collapsed before we touch the file.
   resolveInSandbox(dir, filename);
   const sandbox = root(dir);
   const source = readText(sandbox, filename);

@@ -54,6 +54,16 @@ describe("_addMcpServer", () => {
     expect(Object.keys(raw.mcpServers).sort()).toEqual(["a", "b"]);
   });
 
+  it("refuses a symlink where the config file should be", async () => {
+    const elsewhere = path.join(dir, "elsewhere.json");
+    fs.writeFileSync(elsewhere, "{}");
+    fs.symlinkSync(elsewhere, file);
+    const result = await _addMcpServer("fs", { command: "npx" }, file);
+    expect(isFailure(result)).toBe(true);
+    expect((result as { error: string }).error).toMatch(/is a symlink/);
+    expect(fs.readFileSync(elsewhere, "utf-8")).toBe("{}");
+  });
+
   it("is prototype-safe for a __proto__ server name", async () => {
     await _addMcpServer("__proto__", { command: "x" }, file);
     expect(({} as any).command).toBeUndefined();

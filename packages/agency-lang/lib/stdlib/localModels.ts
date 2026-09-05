@@ -1,4 +1,14 @@
-import * as fs from "node:fs";
+import {
+  root,
+  wholePath,
+  stat,
+  list,
+  remove,
+  move,
+  readText,
+  readStream,
+  writeText,
+} from "./contained.js";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -366,13 +376,14 @@ function resolveAliasFile(file: string): string {
   return file === "" ? resolveAliasConfigPath() : file;
 }
 
-/** Read a JSON file as a plain object. */
+/** Read a JSON file as a plain object. A missing file reads as `{}`. */
 function readJson(file: string): Record<string, any> {
-  if (!fs.existsSync(file)) {
+  const located = wholePath(file);
+  if (stat(located.root, located.target) === null) {
     return {};
   }
   try {
-    return JSON.parse(fs.readFileSync(file, "utf-8"));
+    return JSON.parse(readText(located.root, located.target));
   } catch (err) {
     throw new Error(`Failed to parse ${file}: ${(err as Error).message}`);
   }
@@ -398,7 +409,8 @@ function withAlias(
 }
 
 function writeJson(file: string, value: unknown): void {
-  fs.writeFileSync(file, JSON.stringify(value, null, 2) + "\n");
+  const located = wholePath(file);
+  writeText(located.root, located.target, JSON.stringify(value, null, 2) + "\n");
 }
 
 /** A model alias value: either the bare URI (hand-edit shorthand) or an
@@ -525,7 +537,8 @@ export type UnaliasResult = { file: string; removed: boolean };
 /** Remove an alias. Bails early (no write) if file or alias missing. */
 export function _unaliasModel(name: string, file: string = ""): UnaliasResult {
   const resolved = resolveAliasFile(file);
-  if (!fs.existsSync(resolved)) {
+  const located = wholePath(resolved);
+  if (stat(located.root, located.target) === null) {
     return { file: resolved, removed: false };
   }
   const cfg = readJson(resolved);
@@ -540,24 +553,34 @@ export function _listDownloadedModels(
   cacheDir: string = "",
 ): { name: string; path: string; sizeBytes: number }[] {
   const dir = resolveCacheDir(cacheDir);
-  if (!fs.existsSync(dir)) {
-    return [];
-  }
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".gguf"))
-    .map((f) => {
-      const p = path.join(dir, f);
-      return { name: f, path: p, sizeBytes: fs.statSync(p).size };
-    });
+  return ggufEntries(dir).map((entry) => ({
+    name: entry.name,
+    path: path.join(dir, entry.name),
+    sizeBytes: entry.size,
+  }));
 }
 
+/** The `.gguf` files directly in `dir`, by name. A missing dir has none. */
+function ggufEntries(dir: string): { name: string; size: number }[] {
+  const cache = root(dir);
+  if (stat(cache, ".") === null) {
+    return [];
+  }
+  return list(cache, ".")
+    .filter((entry) => entry.type === "file" && entry.name.endsWith(".gguf"))
+    .map((entry) => ({ name: entry.name, size: entry.size }));
+}
+
+/** Delete one model file from the cache dir. `name` must be a plain file
+ *  name inside it: `resolveUnder` refuses `..` and symlinks, and a missing
+ *  file or a non-file returns false. */
 export function _removeModel(name: string, cacheDir: string = ""): boolean {
-  const p = path.join(resolveCacheDir(cacheDir), name);
-  if (!fs.existsSync(p)) {
+  const cache = root(resolveCacheDir(cacheDir));
+  const info = stat(cache, name);
+  if (info === null || !info.isFile()) {
     return false;
   }
-  fs.rmSync(p);
+  remove(cache, name);
   return true;
 }
 
@@ -707,12 +730,16 @@ function catalogLocalPath(url: string): string | null {
 }
 
 /** Read a local catalog file, enforcing the byte cap up front via `stat`. */
-function readCatalogFile(path: string): string {
-  const size = fs.statSync(path).size;
-  if (size > CATALOG_MAX_BYTES) {
-    throw new Error(`catalog file too large (${size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`);
+function readCatalogFile(file: string): string {
+  const located = wholePath(file);
+  const info = stat(located.root, located.target);
+  if (info === null) {
+    throw new Error(`catalog file not found: ${file}`);
   }
-  return fs.readFileSync(path, "utf-8");
+  if (info.size > CATALOG_MAX_BYTES) {
+    throw new Error(`catalog file too large (${info.size} bytes; cap ${CATALOG_MAX_BYTES} bytes)`);
+  }
+  return readText(located.root, located.target);
 }
 
 /** Stream a response body, enforcing the byte cap as chunks arrive so a
@@ -980,7 +1007,14 @@ export async function _registerLocalProvider(): Promise<void> {
 export function fileSha256(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const hash = createHash("sha256");
-    const stream = fs.createReadStream(filePath);
+    let stream: ReturnType<typeof readStream>;
+    try {
+      const located = wholePath(filePath);
+      stream = readStream(located.root, located.target);
+    } catch (err) {
+      reject(err as Error);
+      return;
+    }
     stream.on("error", reject);
     stream.on("data", (chunk) => {
       try {
@@ -1011,7 +1045,7 @@ export async function verifyModelFile(
   const quarantine = `${filePath}.invalidSha`;
   let moved = true;
   try {
-    fs.renameSync(filePath, quarantine);
+    move(wholePath(filePath), wholePath(quarantine));
   } catch (err) {
     moved = false;
     console.warn(`Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`, err);
@@ -1047,10 +1081,8 @@ export type FreshnessProbe = (resolved: string) => boolean;
  *  prefixed filename — no per-repo subdirs (verified against its
  *  `buildHuggingFaceFilePrefix`) — so matching by basename is correct. */
 export function snapshotFreshness(dir: string): FreshnessProbe {
-  const present = fs.existsSync(dir)
-    ? new Set(fs.readdirSync(dir).filter((f) => f.endsWith(".gguf")))
-    : new Set<string>();
-  return (resolved) => !present.has(path.basename(resolved));
+  const present = ggufEntries(dir).map((entry) => entry.name);
+  return (resolved) => !present.includes(path.basename(resolved));
 }
 
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */

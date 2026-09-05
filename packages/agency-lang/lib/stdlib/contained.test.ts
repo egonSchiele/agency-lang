@@ -11,6 +11,7 @@ import {
   wholePath,
   isContained,
   readText,
+  readStream,
   readBytes,
   writeText,
   writeBytes,
@@ -213,6 +214,22 @@ describe("readText and readBytes", () => {
       const r = root(dir);
       expect(readText(r, "sub/a.txt")).toBe("hello");
       expect(readBytes(r, "sub/a.txt").toString("utf8")).toBe("hello");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("readStream yields the same bytes and closes its descriptor", async () => {
+    const dir = makeDir(".ct-stream-");
+    try {
+      fs.writeFileSync(path.join(dir, "a.txt"), "hello");
+      const stream = readStream(root(dir), "a.txt");
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk as Buffer);
+      }
+      expect(Buffer.concat(chunks).toString("utf8")).toBe("hello");
+      expect(stream.closed).toBe(true);
     } finally {
       cleanup(dir);
     }

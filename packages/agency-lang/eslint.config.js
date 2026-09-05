@@ -13,11 +13,7 @@ const FS_IMPORTERS = {
   "lib/stdlib/speech.ts": "cloud TTS commits its output by staging a file and hard-linking it into place",
   "lib/stdlib/cli.ts": "CLI settings under the agent home",
   "lib/stdlib/agentSessions.ts": "saved sessions under the agent home",
-  "lib/stdlib/localModels.ts": "the local model cache directory",
   "lib/stdlib/localModelManifest.ts": "the local model manifest under the agent home",
-  "lib/stdlib/llm.ts": "loadModelData reads a model-data file at a caller-supplied path",
-  "lib/stdlib/mcp.ts": "reads and writes the project MCP config file",
-  "lib/stdlib/skills.ts": "readSkill reads a skill file at a caller-supplied path",
   "lib/stdlib/oauth.ts": "OAuth tokens under the agent home",
   "lib/stdlib/utils.ts": "reads /proc/version once to tell WSL from Linux, a fixed kernel file",
 };

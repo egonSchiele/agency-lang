@@ -52,7 +52,7 @@ export type LlmDefaults = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L35))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L37))
 
 ### HostedModelInfo
 
@@ -68,7 +68,21 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L139))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L141))
+
+## Effects
+
+### std::read
+
+```ts
+@alwaysUnder(dir)
+effect std::read {
+  dir: string;
+  filename: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L186))
 
 ## Functions
 
@@ -89,7 +103,7 @@ Set default options for subsequent llm() calls. Only the fields you
 |---|---|---|
 | opts | [LlmDefaults](#llmdefaults) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L51))
 
 ### setModel
 
@@ -107,7 +121,7 @@ Set the default model for subsequent llm() calls.
 |---|---|---|
 | name | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L61))
 
 ### envVarFor
 
@@ -132,7 +146,7 @@ Return the environment variable that holds the API key for a recognized
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L70))
 
 ### pickProvider
 
@@ -159,7 +173,7 @@ Return the first provider in `order` whose API-key environment variable
 
 **Throws:** `std::env`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L99))
 
 ### registerProviderModule
 
@@ -178,7 +192,7 @@ Load a provider module by path at runtime and register its custom provider
 |---|---|---|
 | path | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L129))
 
 ### listHostedModels
 
@@ -191,7 +205,7 @@ Return all known hosted text models (the built-in catalog plus any
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L149))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L151))
 
 ### hostedModelInfo
 
@@ -212,7 +226,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L157))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L159))
 
 ### modelSupportsInput
 
@@ -237,7 +251,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L167))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L169))
 
 ### loadModelData
 
@@ -260,4 +274,6 @@ Load model data from a JSON file (the shape `agency models refresh`
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L188))
+**Throws:** `std::read`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L200))

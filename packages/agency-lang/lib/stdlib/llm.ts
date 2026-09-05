@@ -1,4 +1,4 @@
-import * as fs from "node:fs";
+import { fixedPath, readText, type Located } from "./contained.js";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
@@ -198,11 +198,19 @@ export async function _fetchModelData(
  *  register it, ACCUMULATING over any previously registered data (this file
  *  wins on provider+name collisions, deep-merging fields) and over the baked
  *  catalog. Errors are returned, never thrown, so the Agency wrapper can map
- *  them to a Result. Returns the number of models in THIS file. */
-export function _loadModelData(path: string): { ok: boolean; count: number; error: string } {
+ *  them to a Result. Returns the number of models in THIS file.
+ *
+ *  `locate` splits the path into its parent and final name. The Agency
+ *  wrapper raised `std::read` on the real spelling, so the default refuses
+ *  a link in it; a CLI caller with no approval passes `wholePath`. */
+export function _loadModelData(
+  path: string,
+  locate: (p: string) => Located = fixedPath,
+): { ok: boolean; count: number; error: string } {
   let text: string;
   try {
-    text = fs.readFileSync(path, "utf-8");
+    const located = locate(path);
+    text = readText(located.root, located.target);
   } catch (err) {
     return { ok: false, count: 0, error: `cannot read ${path}: ${(err as Error).message}` };
   }

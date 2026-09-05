@@ -6,6 +6,7 @@ import {
   root,
   readText,
   readBytes,
+  readStream,
   writeText,
   writeBytes,
   list,
@@ -87,6 +88,11 @@ type Run = (r: Root, target: string) => unknown;
 const ADAPTERS: Record<Primitive, Run> = {
   readText: (r, t) => readText(r, t),
   readBytes: (r, t) => readBytes(r, t),
+  readStream: (r, t) => {
+    const stream = readStream(r, t);
+    stream.destroy();
+    return stream;
+  },
   writeText: (r, t) => writeText(r, t, "payload"),
   writeBytes: (r, t) => writeBytes(r, t, Buffer.from("payload")),
   list: (r, t) => list(r, t),
@@ -128,6 +134,7 @@ function checkPositive(name: Primitive, fixture: Fixture, result: unknown): void
   const inside = path.join(fixture.real, "inside.txt");
   if (name === "readText") expect(result).toBe("inside");
   if (name === "readBytes") expect((result as Buffer).toString()).toBe("inside");
+  if (name === "readStream") expect(result).toBeInstanceOf(fs.ReadStream);
   if (name === "writeText" || name === "writeBytes") {
     expect(fs.readFileSync(inside, "utf8")).toBe("payload");
   }

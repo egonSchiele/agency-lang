@@ -1,61 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import fs from "node:fs";
-import os from "node:os";
+import { describe, it, expect } from "vitest";
 import path from "node:path";
-import { _readSkill, _docsDir } from "./skills.js";
+import { _docsDir } from "./skills.js";
 import { _glob } from "./shell.js";
-
-describe("_readSkill", () => {
-  let fakeHome: string;
-  let homedirSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "skill-home-"));
-    homedirSpy = vi.spyOn(os, "homedir").mockReturnValue(fakeHome);
-  });
-
-  afterEach(() => {
-    homedirSpy.mockRestore();
-    fs.rmSync(fakeHome, { recursive: true, force: true });
-  });
-
-  it("reads a skill at a ~/-prefixed path", () => {
-    // The bug this guards against: pre-fix, `_readSkill("~/foo.md")`
-    // resolved `~` as a literal directory name under the base dir,
-    // producing `<base>/~/foo.md` and throwing ENOENT instead of
-    // reading from the user's home.
-    const skillDir = path.join(fakeHome, ".agency", "skills");
-    fs.mkdirSync(skillDir, { recursive: true });
-    const skillPath = path.join(skillDir, "test-skill.md");
-    fs.writeFileSync(skillPath, "skill body");
-
-    expect(_readSkill("~/.agency/skills/test-skill.md")).toBe("skill body");
-  });
-
-  it("reads a skill at `~` alone (file directly under home)", () => {
-    const skillPath = path.join(fakeHome, "bare.md");
-    fs.writeFileSync(skillPath, "bare body");
-
-    // `_readSkill("~")` would refer to home directly — not a file. The
-    // meaningful case is `~/<filename>` since skills are files. This
-    // test covers the simplest valid tilde form.
-    expect(_readSkill("~/bare.md")).toBe("bare body");
-  });
-
-  it("still resolves a relative path against the cwd (no regression)", () => {
-    // Confirms the `expandPath` wrapper is a no-op on non-tilde paths;
-    // relative skill paths anchor to process.cwd() like every other
-    // path-taking stdlib entry point.
-    const cwd = process.cwd();
-    const targetPath = path.join(cwd, "relative-skill.md");
-    fs.writeFileSync(targetPath, "relative body");
-    try {
-      expect(_readSkill("relative-skill.md")).toBe("relative body");
-    } finally {
-      fs.rmSync(targetPath, { force: true });
-    }
-  });
-});
 
 describe("_docsDir", () => {
   it("resolves the diagnostics section under docs/", () => {

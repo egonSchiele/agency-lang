@@ -1,5 +1,4 @@
-import * as fs from "fs";
-import * as path from "path";
+import { wholePath, readText, writeText, mkdir } from "./contained.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";
@@ -185,7 +184,8 @@ export async function _validateMcpServers(servers: McpServers): Promise<ResultVa
 function readConfigObject(file: string): ResultValue {
   let text: string;
   try {
-    text = fs.readFileSync(file, "utf-8");
+    const located = wholePath(file);
+    text = readText(located.root, located.target);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return success(null);
@@ -209,8 +209,9 @@ function readConfigObject(file: string): ResultValue {
 }
 
 function writeConfigObject(file: string, data: Record<string, unknown>): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+  const located = wholePath(file);
+  mkdir(located.root, ".");
+  writeText(located.root, located.target, JSON.stringify(data, null, 2) + "\n");
 }
 
 /** The mcpServers map from a config file. Lenient: a missing or unparseable

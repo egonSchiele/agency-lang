@@ -17,6 +17,7 @@ import {
   modelsList,
 } from "./hostedModels.js";
 import { _fetchModelData, _loadModelData } from "../stdlib/llm.js";
+import { wholePath } from "../stdlib/contained.js";
 import type { HostedModelInfo } from "../stdlib/llm.js";
 
 const catalog: HostedModelInfo[] = [
@@ -82,6 +83,9 @@ describe("agency models list with files", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     await modelsList({}, ["a.json", "b.json"]);
     expect(vi.mocked(_loadModelData).mock.calls.map((c) => c[0])).toEqual(["a.json", "b.json"]);
+    // The CLI has no approval step, so it must pass wholePath; the default
+    // fixedPath would refuse a path spelled through a linked directory.
+    expect(vi.mocked(_loadModelData).mock.calls.every((c) => c[1] === wholePath)).toBe(true);
     expect(log).toHaveBeenCalled(); // the table is printed after loading
     log.mockRestore();
   });

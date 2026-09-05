@@ -20,6 +20,20 @@ Reads, writes, and `copy` move bytes only through a descriptor that is validated
 
 `list`, `stat`, `mkdir`, `remove`, and `move` act on a pathname that was checked a moment earlier. Node has no `openat`, so a swap between the check and the action is not closed in this module. A `remove` can be aimed at a directory that was swapped for a link after its check. Process containment, roadmap items C5, C6, and H in `docs/dev/security/roadmap.md`, is the answer for that window. The same applies to paths handed to another program, such as the output file of `say` or `screencapture`.
 
+## Before the interrupt and after it
+
+A wrapper resolves the caller's spelling with `root()` before it raises, and puts the real path in the payload. That is the directory the approver sees. After approval the primitive must use exactly that directory, so it calls `fixedRoot()` on the string it was handed. `fixedRoot` follows nothing: every existing component must be a real directory, and a symlink anywhere in the spelling is refused. Without it, a directory renamed and replaced by a link while the prompt was pending would be resolved again after approval, and the link's target would become the root.
+
+```ts
+// in the wrapper, before the interrupt
+const real = _realDir(dir);           // root(dir).real
+// ... interrupt std::ls(..., { dir: real })
+// in the primitive, after approval
+const approved = fixedRoot(real);     // refuses if real now contains a link
+```
+
+`wholePath` and `fixedPath` are the same pair for whole paths. `stat` and `exists` raise no interrupt, so they resolve the caller's spelling with `root()`. `applyPatch` resolves each patched path after approval, because its payload carries the patch text and no canonical path.
+
 ## Two shapes of operation
 
 A **dir plus relative target** operation has the approved directory as its root. `read`, `write`, `edit`, `ls`, `glob`, `grep`, `exists`, `stat`, the sandbox functions in `std::agency`, and the scan reads in `std::skills` and `std::toolbox` are this shape. The primitive takes the root first and the relative target second:
@@ -42,9 +56,10 @@ A **standalone probe** such as `exists("/home/me/project/build")`, with no `dir`
 
 ## The API
 
-- `root(dir): Root` realpaths an approved directory once. A dangling link or a loop in the spelling throws. A directory that does not exist yet keeps a lexical tail under its nearest real ancestor.
+- `root(dir): Root` realpaths a caller's spelling once, before the interrupt. A dangling link or a loop in the spelling throws. A directory that does not exist yet keeps a lexical tail under its nearest real ancestor.
+- `fixedRoot(real): Root` takes the spelling an approver saw, after the interrupt, and refuses a symlink anywhere in it.
 - `resolveUnder(root, target): string` joins a relative target and refuses an absolute path, a `~` path, an upward escape, and any symlink below the root. `""` and `"."` mean the root.
-- `wholePath(p): Located` splits a whole path into `{ root, target }`.
+- `wholePath(p): Located` splits a whole path into `{ root, target }` before the interrupt. `fixedPath(p)` does the same after it.
 - `readText`, `readBytes` open the file without following a final link, require a regular file, realpath after the open and require it inside the root, and require the descriptor's `(dev, ino)` to match what is on disk.
 - `writeText`, `writeBytes` take a `mode` of `overwrite`, `append`, or `create-only`, an optional `fileMode`, and validate the descriptor the same way before any byte is written. Overwrite writes a sibling temporary file and renames it over the target, so a failed write leaves the old file whole. The file's mode bits are kept. The inode changes on every overwrite.
 - `list(root, target)` returns one level with symlinked entries left out.

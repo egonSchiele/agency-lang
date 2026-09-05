@@ -5,6 +5,8 @@ import * as os from "os";
 import * as contained from "./contained.js";
 import {
   root,
+  fixedRoot,
+  fixedPath,
   resolveUnder,
   wholePath,
   isContained,
@@ -144,6 +146,37 @@ describe("resolveUnder", () => {
       );
     } finally {
       cleanup(dir);
+    }
+  });
+});
+
+describe("fixedRoot and fixedPath", () => {
+  test("accepts a real spelling with a missing tail", () => {
+    const dir = makeDir(".ct-fixed-");
+    try {
+      const real = fs.realpathSync(dir);
+      expect(fixedRoot(real).real).toBe(real);
+      expect(fixedRoot(path.join(real, "not", "yet")).real).toBe(path.join(real, "not", "yet"));
+      const located = fixedPath(path.join(real, "child"));
+      expect(located.root.real).toBe(real);
+      expect(located.target).toBe("child");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("refuses a symlink anywhere in the spelling, where root would follow it", () => {
+    const base = makeDir(".ct-fixedlink-");
+    try {
+      fs.mkdirSync(path.join(base, "real", "sub"), { recursive: true });
+      fs.symlinkSync(path.join(base, "real"), path.join(base, "link"));
+      const linked = path.join(fs.realpathSync(base), "link");
+      expect(root(linked).real).toBe(fs.realpathSync(path.join(base, "real")));
+      expect(() => fixedRoot(linked)).toThrow(/symlink/);
+      expect(() => fixedRoot(path.join(linked, "sub"))).toThrow(/symlink/);
+      expect(() => fixedPath(path.join(linked, "sub"))).toThrow(/symlink/);
+    } finally {
+      cleanup(base);
     }
   });
 });

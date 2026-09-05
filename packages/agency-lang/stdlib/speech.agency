@@ -16,6 +16,7 @@ import {
   _validateSpeakArgs,
   _validateTranscribeArgs,
 } from "agency-lang/stdlib-lib/speech.js"
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
 
 /** @module Speak text aloud locally, synthesize and transcribe speech in the
 cloud, and record from the microphone.
@@ -54,6 +55,17 @@ effect std::synthesizeSpeech {
 
 /** Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
 playback. */
+
+// The real spelling of an output file, so the interrupt names the file
+// that will be written. An empty outputFile means a temporary file the
+// runtime picks, and passes through.
+def realOutput(outputFile: string): Result<string> {
+  if (outputFile == "") {
+    return success("")
+  }
+  return try _realTarget(outputFile)
+}
+
 export def say(
   text: string,
   voice: string = "",
@@ -72,11 +84,16 @@ export def say(
   @param outputFile - When set, save the audio to this file instead of playing it
   @param allowedPaths - Only allow saving under these path prefixes
   """
+  const out = realOutput(outputFile)
+  if (out is failure) {
+    return out
+  }
   return interrupt std::say("Allow local text-to-speech playback?", {
-    textLength: text.length
+    textLength: text.length,
+    outputFile: out.value
   })
 
-  _say(text, voice, rate, outputFile, allowedPaths)
+  _say(text, voice, rate, out.value, allowedPaths)
 }
 
 /**
@@ -97,9 +114,15 @@ export def record(outputFile: string = "", silenceTimeout: number = 2000, allowe
   @param silenceTimeout - Silence before auto-stopping, in milliseconds; 0 disables silence detection so recording stops only on Enter
   @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
   """
-  return interrupt std::record("Allow microphone recording?", {})
+  const out = realOutput(outputFile)
+  if (out is failure) {
+    return out
+  }
+  return interrupt std::record("Allow microphone recording?", {
+    outputFile: out.value
+  })
 
-  return _record(outputFile, silenceTimeout, allowedPaths)
+  return _record(out.value, silenceTimeout, allowedPaths)
 }
 
 /** A cloud transcription request tears down on Ctrl-C, race-loser, or
@@ -132,14 +155,18 @@ export def transcribe(
   }
   _validateTranscribeArgs(timestampGranularity)
 
+  const real = try _realTarget(filepath)
+  if (real is failure) {
+    return real
+  }
   return interrupt std::transcribe("Send this audio to the active cloud speech provider?", {
     requestedProvider: provider,
     configuredModel: model,
-    filepath: filepath,
+    filepath: real.value,
   })
 
   return _transcribe(
-    filepath,
+    real.value,
     language,
     allowedPaths,
     model,
@@ -187,15 +214,20 @@ export def speak(
   }
   _validateSpeakArgs(format, speed)
 
+  const out = realOutput(outputFile)
+  if (out is failure) {
+    return out
+  }
   return interrupt std::synthesizeSpeech("Send this text to the active cloud speech provider?", {
     requestedProvider: provider,
     configuredModel: model,
     textLength: text.length,
+    outputFile: out.value
   })
 
   return _synthesizeSpeech(
     text,
-    outputFile,
+    out.value,
     voice,
     model,
     provider,

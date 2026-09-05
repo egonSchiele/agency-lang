@@ -7,6 +7,7 @@ import {
   readFileSync,
   existsSync,
   symlinkSync,
+  realpathSync,
 } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -50,7 +51,7 @@ describe("_compileFile sandbox containment", () => {
     //     sandbox-XXXX-evil/   <- shares string prefix with sandbox
     //       sneaky.agency      <- sibling-prefix attack target
     //     outside.agency        <- target the sandbox must NOT reach
-    sandbox = mkdtempSync(join(tmpdir(), "agency-sandbox-"));
+    sandbox = mkdtempSync(join(realpathSync(tmpdir()), "agency-sandbox-"));
     writeFileSync(
       join(sandbox, "inside.agency"),
       `node main() { return "${INSIDE_SENTINEL}" }`,
@@ -183,7 +184,7 @@ describe("_writeAST / _format / _formatFile", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "agency-fmt-"));
+    dir = mkdtempSync(join(realpathSync(tmpdir()), "agency-fmt-"));
   });
 
   afterEach(() => {

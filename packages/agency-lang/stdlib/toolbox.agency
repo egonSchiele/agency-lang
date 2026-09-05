@@ -21,7 +21,7 @@ import { ls, exists } from "std::shell"
 import { Json } from "std::validation"
 
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
-import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
+import { _realDir } from "agency-lang/stdlib-lib/contained.js"
 
 /** @module
   @summary Keep a directory of tools an agent wrote.
@@ -182,11 +182,13 @@ const EMPTY_MODULE: ModuleFacts = {
 // Every entry point takes the toolbox directory the same way. An empty
 // string is refused because the file primitives would resolve it to the
 // process cwd.
+// The real spelling of the toolbox directory, so every scan and save
+// interrupt names the directory the reads and writes will use.
 def expandRoot(dir: string): Result<string> {
   if (dir == "") {
     return failure("dir must name the toolbox directory; got an empty string")
   }
-  return success(expandPath(dir))
+  return try _realDir(dir)
 }
 
 def runExport(info: ModuleInfo): ExportInfo | null {

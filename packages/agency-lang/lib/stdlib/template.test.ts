@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -13,7 +13,7 @@ import {
 } from "./template.js";
 
 function withTemplate(source: string): { dir: string; filename: string } {
-  const dir = mkdtempSync(join(tmpdir(), "tpl-"));
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), "tpl-"));
   writeFileSync(join(dir, "t.agency"), source, "utf-8");
   return { dir, filename: "t.agency" };
 }

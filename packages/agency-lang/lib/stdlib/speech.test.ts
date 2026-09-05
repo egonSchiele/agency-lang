@@ -12,7 +12,7 @@ import { _transcribe, _synthesizeSpeech, publishSpeechOutput } from "./speech.js
 // shared /tmp path (see plan §12j).
 let root = "";
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), "agency-speech-test-"));
+  root = await mkdtemp(path.join(realpathSync(os.tmpdir()), "agency-speech-test-"));
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });

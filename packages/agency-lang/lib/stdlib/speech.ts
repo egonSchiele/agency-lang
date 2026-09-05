@@ -11,7 +11,7 @@ import { abortableExec } from "./abortable.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { assertContained } from "./assertContained.js";
-import { wholePath, resolveUnder, stat as statUnder } from "./contained.js";
+import { fixedPath, resolveUnder, stat as statUnder } from "./contained.js";
 import {
   meteredDispatch,
   recordUsage,
@@ -203,7 +203,7 @@ async function recordImpl(
  *  final name is never followed. */
 async function outputPath(outputFile: string, allowedPaths: string[] | undefined): Promise<string> {
   await assertContained(outputFile, allowedPaths ?? []);
-  const located = wholePath(outputFile);
+  const located = fixedPath(outputFile);
   return resolveUnder(located.root, located.target);
 }
 
@@ -326,7 +326,7 @@ export async function _transcribe(
   // before reading. That leaves the check-then-open window that
   // docs/dev/stdlib/contained-files.md describes for pathname operations.
   await assertContained(filepath, allowedPaths ?? []);
-  const located = wholePath(filepath);
+  const located = fixedPath(filepath);
   const resolvedPath = resolveUnder(located.root, located.target);
   const info = statUnder(located.root, located.target);
   if (info === null) {

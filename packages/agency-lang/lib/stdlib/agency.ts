@@ -1,6 +1,15 @@
 import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
 import { resolve, sep, join, dirname } from "path";
-import { root, resolveUnder, readText, writeText, stat, wholePath } from "./contained.js";
+import {
+  root,
+  fixedRoot,
+  resolveUnder,
+  readText,
+  writeText,
+  stat,
+  wholePath,
+  type Root,
+} from "./contained.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
@@ -122,10 +131,16 @@ export function _compile(source: string, dir: string = ""): CompiledProgramValue
 // Resolve `filename` against `dir`, the sandbox. An absolute filename, a
 // `..` escape, or a symlink at any component below `dir` is refused. Used
 // by _compileFile, _typecheckFile, _formatFile, and _readTestFileSandbox
-// so they share one boundary and one error message.
-export function resolveInSandbox(dir: string, filename: string): string {
+// so they share one boundary and one error message. `sandbox` picks how
+// `dir` itself is read: `root` resolves a caller's spelling, and is right
+// before any interrupt; `fixedRoot` holds the spelling an approver saw.
+export function resolveInSandbox(
+  dir: string,
+  filename: string,
+  sandbox: (dir: string) => Root = fixedRoot,
+): string {
   try {
-    return resolveUnder(root(dir), filename);
+    return resolveUnder(sandbox(dir), filename);
   } catch (error) {
     throw new Error(`Sandbox violation: ${(error as Error).message}`);
   }
@@ -138,7 +153,8 @@ export function resolveInSandbox(dir: string, filename: string): string {
 export function _compileFile(dir: string, filename: string): CompiledProgramValue {
   // Containment + existence check up front for a precise error; the
   // sandboxed compile then reads the file itself as part of validation.
-  resolveInSandbox(dir, filename);
+  // No interrupt precedes this, so the caller's spelling resolves.
+  resolveInSandbox(dir, filename, root);
   return compileToProgram({ file: filename }, dir);
 }
 
@@ -480,7 +496,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
 // `dir` — typechecking is read-only so this is intentional).
 export function _typecheckFile(dir: string, filename: string): TypeCheckReport {
   const target = resolveInSandbox(dir, filename);
-  return typeCheckSource(readText(root(dir), filename), target);
+  return typeCheckSource(readText(fixedRoot(dir), filename), target);
 }
 
 // ---------------------------------------------------------------------------
@@ -531,7 +547,7 @@ export function _format(source: string): string {
 
 export function _formatFile(dir: string, filename: string): boolean {
   resolveInSandbox(dir, filename);
-  const sandbox = root(dir);
+  const sandbox = fixedRoot(dir);
   const source = readText(sandbox, filename);
   const formatted = generateAgency(_parseAST(source));
   // Skip the write if formatting is a no-op — avoids touching mtime
@@ -671,7 +687,7 @@ export type ParsedTestFileWire = {
  *  resolveInSandbox BEFORE any read. */
 export function _readTestFileSandbox(dir: string, filename: string): ParsedTestFileWire {
   resolveInSandbox(dir, filename);
-  const parsed = parseTestFileSandbox(readText(root(dir), filename), filename);
+  const parsed = parseTestFileSandbox(readText(fixedRoot(dir), filename), filename);
   const wire: ParsedTestFileWire = {
     // sourceFile is declared relative to the .test.json, so a nested
     // suite ("sub/suite.test.json") tests "sub/<source>", not "<source>".

@@ -6,6 +6,8 @@ import { assertContained } from "./assertContained.js";
 import { expandPath } from "./expandPath.js";
 import {
   root,
+  fixedRoot,
+  fixedPath,
   wholePath,
   readText,
   writeText,
@@ -86,7 +88,7 @@ export async function _previewEdit(
   edits: MultiEdit[],
 ): Promise<{ before: string; after: string }> {
   try {
-    const before = readText(root(rootDir), filename);
+    const before = readText(fixedRoot(rootDir), filename);
     const { contents } = applyEdits(before, edits, filename);
     return { before, after: contents };
   } catch {
@@ -99,7 +101,7 @@ export async function _multiedit(
   filename: string,
   edits: MultiEdit[],
 ): Promise<MultiEditResult> {
-  const sandbox = root(rootDir);
+  const sandbox = fixedRoot(rootDir);
   const original = readText(sandbox, filename);
   const { contents, replacements } = applyEdits(original, edits, filename);
   writeText(sandbox, filename, contents);
@@ -116,8 +118,11 @@ export async function _applyPatch(patch: string, allowedPaths?: string[]): Promi
   const touched: string[] = [];
 
   for (const f of files) {
-    // A patched file is a whole path relative to the process cwd.
-    const located = await locateWhole(f.path, allowedPaths);
+    // A patched file is a whole path relative to the process cwd, spelled
+    // in the patch text. No canonical form was shown to the approver, so it
+    // is resolved here.
+    await assertContained(f.path, allowedPaths ?? [], process.cwd());
+    const located = wholePath(f.path);
     const original = f.isNew ? "" : readText(located.root, located.target);
     const updated = applyHunks(original, f.hunks, f.path);
     mkdir(located.root, ".");
@@ -230,11 +235,12 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
   return updated;
 }
 
-/** A whole path the interrupt named, checked against the program's own
- *  allow-list and split into its real parent and final name. */
+/** A whole path the interrupt named, in the real spelling the approver
+ *  saw, checked against the program's own allow-list and split into its
+ *  parent and final name without following anything. */
 async function locateWhole(p: string, allowedPaths: string[] | undefined): Promise<Located> {
   await assertContained(p, allowedPaths ?? [], process.cwd());
-  return wholePath(p);
+  return fixedPath(p);
 }
 
 export async function _mkdir(dir: string, allowedPaths?: string[]): Promise<void> {

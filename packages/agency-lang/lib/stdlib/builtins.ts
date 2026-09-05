@@ -5,7 +5,7 @@ import { decodeBase64Strict } from "./base64.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
-import { root, readText, readBytes, writeBytes, type WriteMode } from "./contained.js";
+import { fixedRoot, readText, readBytes, writeBytes, type WriteMode } from "./contained.js";
 export type { WriteMode } from "./contained.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
@@ -218,7 +218,7 @@ export async function _read(
   offset?: number,
   limit?: number,
 ): Promise<string> {
-  return sliceLines(readText(root(rootDir), filename), offset, limit);
+  return sliceLines(readText(fixedRoot(rootDir), filename), offset, limit);
 }
 
 /** The lines of `text` a read with `offset` and `limit` returns. Default:
@@ -247,7 +247,7 @@ export async function _write(
   content: string,
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
-  writeBytes(root(rootDir), filename, Buffer.from(content, "utf8"), { mode });
+  writeBytes(fixedRoot(rootDir), filename, Buffer.from(content, "utf8"), { mode });
   return true;
 }
 
@@ -264,12 +264,12 @@ export async function _writeBinary(
     // Add the operation context to the shared decoder's message.
     throw new Error(`writeBinary: ${(e as Error).message}`);
   }
-  writeBytes(root(rootDir), filename, Buffer.from(bytes), { mode });
+  writeBytes(fixedRoot(rootDir), filename, Buffer.from(bytes), { mode });
   return true;
 }
 
 export async function _readBinary(rootDir: string, filename: string): Promise<string> {
-  return readBytes(root(rootDir), filename).toString("base64");
+  return readBytes(fixedRoot(rootDir), filename).toString("base64");
 }
 
 /** argv item 1 is the message, item 2 is the title. See `_notify`. */

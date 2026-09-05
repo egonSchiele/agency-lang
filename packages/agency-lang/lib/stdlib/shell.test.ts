@@ -6,6 +6,7 @@ import { __internal_exec, __internal_bash, _glob, _grep } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
+import { _realDir } from "./contained.js";
 import { safeDeleteDirectory } from "../utils.js";
 import { findPackageRoot } from "../importPaths.js";
 
@@ -41,7 +42,7 @@ describe("_exec / _bash cwd ~ expansion", () => {
   let homedirSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "shell-home-"));
+    fakeHome = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "shell-home-"));
     homedirSpy = vi.spyOn(os, "homedir").mockReturnValue(fakeHome);
   });
 
@@ -208,7 +209,7 @@ describe("_glob and symlinks", () => {
   let root: string;
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-glob-symlink-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-glob-symlink-"));
     fs.mkdirSync(path.join(root, "real"));
     fs.writeFileSync(path.join(root, "real", "a.md"), "a");
     fs.symlinkSync(path.join(root, "real", "a.md"), path.join(root, "real", "link.md"));
@@ -228,9 +229,11 @@ describe("_glob and symlinks", () => {
     await expect(_glob(root, "linked", "*.md", 100)).rejects.toThrow(/is a symlink/);
   });
 
-  it("follows a symlink in the spelling of the root itself", async () => {
+  it("refuses a link in the root spelling; the wrapper resolves that before the interrupt", async () => {
     fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
-    expect(await _glob(path.join(root, "linked"), ".", "*.md", 100)).toEqual(["a.md"]);
+    const linked = path.join(root, "linked");
+    await expect(_glob(linked, ".", "*.md", 100)).rejects.toThrow(/symlink/);
+    expect(await _glob(_realDir(linked), ".", "*.md", 100)).toEqual(["a.md"]);
   });
 });
 
@@ -238,7 +241,7 @@ describe("symlinked search dirs are refused by every walker", () => {
   let root: string;
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-walk-symlink-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-walk-symlink-"));
     fs.mkdirSync(path.join(root, "real"));
     fs.writeFileSync(path.join(root, "real", "a.md"), "needle");
     fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
@@ -281,7 +284,7 @@ describe("_grep honours .gitignore", () => {
   };
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grep-ignore-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-grep-ignore-"));
     fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n");
     fs.writeFileSync(path.join(root, "a.agency"), "needle\n");
     fs.writeFileSync(path.join(root, "a.js"), "needle\n");
@@ -319,7 +322,9 @@ describe("_grep honours .gitignore", () => {
     // that would ignore *.txt. It is a link below the root, so it is not read.
     fs.mkdirSync(path.join(root, "sub"));
     fs.writeFileSync(path.join(root, "sub", "e.txt"), "needle\n");
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "agency-gitignore-outside-"));
+    const outside = fs.mkdtempSync(
+      path.join(fs.realpathSync(os.tmpdir()), "agency-gitignore-outside-"),
+    );
     try {
       fs.writeFileSync(path.join(outside, "rules"), "*.txt\n");
       fs.symlinkSync(path.join(outside, "rules"), path.join(root, "sub", ".gitignore"));
@@ -349,7 +354,7 @@ describe("_grep stops at maxResults inside one file", () => {
   const MATCHING_LINES = 5000;
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grep-cap-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-grep-cap-"));
     const lines = Array.from({ length: MATCHING_LINES }, (_, index) => `needle ${index}`);
     fs.writeFileSync(path.join(root, "big.txt"), lines.join("\n") + "\n");
     fs.writeFileSync(path.join(root, "other.txt"), "needle here\nnothing\n");

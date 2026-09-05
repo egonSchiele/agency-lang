@@ -1,4 +1,4 @@
-import { root, readText } from "./contained.js";
+import { fixedRoot, readText } from "./contained.js";
 import { AgencyNode } from "../types.js";
 import { exprParser, bodyParser } from "../parsers/parsers.js";
 import { generateAgency } from "../backends/agencyGenerator.js";
@@ -34,7 +34,7 @@ export function _toSource(code: Code): string {
 }
 
 export function _loadTemplate(dir: string, filename: string): Code {
-  const program = _parseAST(readText(root(dir), filename));
+  const program = _parseAST(readText(fixedRoot(dir), filename));
   return { ...program, kind: "program" } as Code;
 }
 

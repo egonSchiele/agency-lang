@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, symlinkSync } from "fs";
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  symlinkSync,
+  realpathSync,
+} from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { _write, _read } from "./builtins.js";
@@ -9,7 +17,7 @@ describe("_write mode parameter", () => {
   let target: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "agency-write-mode-"));
+    dir = mkdtempSync(join(realpathSync(tmpdir()), "agency-write-mode-"));
     target = "out.txt";
   });
 
@@ -76,7 +84,7 @@ describe("_read offset/limit", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "agency-read-"));
+    dir = mkdtempSync(join(realpathSync(tmpdir()), "agency-read-"));
   });
 
   afterEach(() => {
@@ -131,7 +139,7 @@ describe("_read allowedPaths containment", () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), "agency-read-contained-"));
+    root = mkdtempSync(join(realpathSync(tmpdir()), "agency-read-contained-"));
     writeFileSync(join(root, "inside.md"), "inside");
   });
 
@@ -148,7 +156,7 @@ describe("_read allowedPaths containment", () => {
   });
 
   it("refuses a symlink below dir that resolves outside it", async () => {
-    const outside = mkdtempSync(join(tmpdir(), "agency-read-outside-"));
+    const outside = mkdtempSync(join(realpathSync(tmpdir()), "agency-read-outside-"));
     writeFileSync(join(outside, "secret.md"), "secret");
     symlinkSync(join(outside, "secret.md"), join(root, "evil.md"));
     await expect(_read(root, "evil.md")).rejects.toThrow(/symlink/);

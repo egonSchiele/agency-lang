@@ -150,7 +150,7 @@ const text = fs.readFileSync(path.resolve(dir, filename), "utf8");
 const text = readText(root(dir), filename);
 ```
 
-A whole path the interrupt named, such as the target of `remove`, goes through `wholePath(p)`, which splits it into a real parent and a final name that is never followed. `resolveDir` remains for the `allowedPaths` guardrail and for anchoring a relative path to the cwd. The reasoning and the API are in [`docs/dev/stdlib/contained-files.md`](../stdlib/contained-files.md).
+A whole path the interrupt named, such as the target of `remove`, goes through `wholePath(p)`, which splits it into a real parent and a final name that is never followed. Resolve the caller's spelling with `root` or `wholePath` before raising the interrupt, and hold it with `fixedRoot` or `fixedPath` after approval, so a link planted at the approved path during the prompt is refused rather than followed. `resolveDir` remains for the `allowedPaths` guardrail and for anchoring a relative path to the cwd. The reasoning and the API are in [`docs/dev/stdlib/contained-files.md`](../stdlib/contained-files.md).
 
 **Rationale:** A symlink below an approved directory must never be followed, and that rule has to hold at every call site. One module enforces it, so a new function cannot forget.
 

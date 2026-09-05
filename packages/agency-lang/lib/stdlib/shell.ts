@@ -12,7 +12,16 @@ import { abortableSpawn, AbortableSpawnOptions, SpawnResult } from "./abortable.
 import { checkAllowBlockList } from "./allowBlockList.js";
 import { assertContained } from "./assertContained.js";
 import { resolveDir } from "./resolveDir.js";
-import { root, resolveUnder, list, stat, readText, type Root, type Entry } from "./contained.js";
+import {
+  root,
+  fixedRoot,
+  resolveUnder,
+  list,
+  stat,
+  readText,
+  type Root,
+  type Entry,
+} from "./contained.js";
 import {
   type GitignoreFile,
   isIgnored,
@@ -262,18 +271,30 @@ export type LsEntry = {
 // safety default for direct callers.
 const DEFAULT_LS_MAX_RESULTS = 1000;
 
-/** The approved directory as a Root. The program's own allow-list is
- *  checked against the path being walked or probed, `target` under the
- *  root, so `allowedPaths: ["/tmp/file"]` still admits a probe of exactly
- *  that file. Every directory-walking primitive starts here. */
+/** The directory an interrupt approved, spelled as the approver saw it
+ *  and followed no further. The program's own allow-list is checked
+ *  against the path being walked, `target` under the root, so
+ *  `allowedPaths: ["/tmp/file"]` still admits exactly that file. */
 async function approvedRoot(
   rootDir: string,
   target: string,
   allowedPaths: string[] | undefined,
 ): Promise<Root> {
-  const approved = root(rootDir);
+  const approved = fixedRoot(rootDir);
   await assertContained(path.join(approved.real, target), allowedPaths ?? [], process.cwd());
   return approved;
+}
+
+/** The root of a probe. stat and exists raise no interrupt, so there is
+ *  no approved spelling to hold fixed: the caller's spelling resolves. */
+async function probeRoot(
+  rootDir: string,
+  target: string,
+  allowedPaths: string[] | undefined,
+): Promise<Root> {
+  const probed = root(rootDir);
+  await assertContained(path.join(probed.real, target), allowedPaths ?? [], process.cwd());
+  return probed;
 }
 
 function joinRel(rel: string, name: string): string {
@@ -604,7 +625,7 @@ export async function _stat(
   target: string,
   allowedPaths?: string[],
 ): Promise<StatInfo> {
-  const approved = await approvedRoot(rootDir, target, allowedPaths);
+  const approved = await probeRoot(rootDir, target, allowedPaths);
   const info = stat(approved, target);
   if (info === null) {
     return { exists: false, type: "missing", size: 0, modifiedMs: 0 };
@@ -620,7 +641,7 @@ export async function _exists(
   target: string,
   allowedPaths?: string[],
 ): Promise<boolean> {
-  const approved = await approvedRoot(rootDir, target, allowedPaths);
+  const approved = await probeRoot(rootDir, target, allowedPaths);
   return stat(approved, target) !== null;
 }
 

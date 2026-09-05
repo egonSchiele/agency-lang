@@ -7,7 +7,8 @@
  * any component below D is refused, because the approver never named
  * where it points. See docs/dev/stdlib/contained-files.md.
  */
-import * as fs from "fs";
+import fs from "fs";
+import type { Stats, CopySyncOptions } from "fs";
 import * as path from "path";
 import process from "process";
 import { randomBytes } from "crypto";
@@ -42,7 +43,7 @@ function walkSpelling(target: string): string {
   let current = parsed.root;
   for (let i = 0; i < segments.length; i++) {
     const next = path.join(current, segments[i]);
-    let info: fs.Stats;
+    let info: Stats;
     try {
       info = fs.lstatSync(next);
     } catch (error) {
@@ -92,7 +93,7 @@ function refuseLinksBelow(realRoot: string, lexical: string): void {
   let current = realRoot;
   for (const segment of relative.split(path.sep)) {
     current = path.join(current, segment);
-    let info: fs.Stats;
+    let info: Stats;
     try {
       info = fs.lstatSync(current);
     } catch (error) {
@@ -198,7 +199,7 @@ function validateDescriptor(
   resolved: string,
   seams: Seams,
   verb: string,
-): fs.Stats {
+): Stats {
   const opened = fs.fstatSync(fd);
   if (!opened.isFile()) {
     throw new Error(`'${resolved}' is not a regular file`);
@@ -354,7 +355,7 @@ export function list(root: Root, target: string): Entry[] {
   const resolved = resolveUnder(root, target);
   const entries: Entry[] = [];
   for (const name of fs.readdirSync(resolved)) {
-    let info: fs.Stats;
+    let info: Stats;
     try {
       info = fs.lstatSync(path.join(resolved, name));
     } catch {
@@ -369,7 +370,7 @@ export function list(root: Root, target: string): Entry[] {
   return entries;
 }
 
-function entryType(info: fs.Stats): Entry["type"] {
+function entryType(info: Stats): Entry["type"] {
   if (info.isDirectory()) {
     return "dir";
   }
@@ -382,7 +383,7 @@ function entryType(info: fs.Stats): Entry["type"] {
 /** lstat of a target under the root. Missing returns null. A symlink below
  *  the root also returns null: it is hidden, the way `list` hides it. The
  *  root itself is already real, so "." reports the directory. */
-export function stat(root: Root, target: string): fs.Stats | null {
+export function stat(root: Root, target: string): Stats | null {
   let resolved: string;
   try {
     resolved = resolveUnder(root, target);
@@ -410,7 +411,7 @@ export function remove(root: Root, target: string): void {
   fs.rmSync(resolveUnder(root, target), { recursive: true, force: true });
 }
 
-const COPY_OPTIONS: fs.CopySyncOptions = {
+const COPY_OPTIONS: CopySyncOptions = {
   recursive: true,
   dereference: false,
   verbatimSymlinks: true,

@@ -1,7 +1,6 @@
 import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
-import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
 import { resolve, sep, join, dirname } from "path";
-import { readContainedFile } from "../utils/readContainedFile.js";
+import { root, resolveUnder, readText, writeText, stat, wholePath } from "./contained.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
@@ -15,7 +14,7 @@ import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
 import type { ExportFromStatement, NamedExportBody } from "../types.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 import { declaredName } from "../types/hole.js";
-import { deepCopy, isStrictDescendant } from "../utils.js";
+import { deepCopy } from "../utils.js";
 import { compileSandboxed } from "../compiler/compileSandboxed.js";
 import { nanoid } from "nanoid";
 import { exactVerdictValue } from "../testFormat/verdict.js";
@@ -142,31 +141,12 @@ export function _compile(source: string, dir: string = ""): CompiledProgramValue
 // so if you let the user create a symlink and then write to it, that's
 // on you. For overwrite of an EXISTING symlink the realpath check still
 // applies because we hit the existing-target branch.
-export function resolveInSandbox(
-  dir: string,
-  filename: string,
-  opts: { mustExist?: boolean } = {},
-): string {
-  const mustExist = opts.mustExist ?? true;
-  const sandboxRoot = realpathSync(resolve(dir));
-  const resolved = resolve(sandboxRoot, filename);
-  // Realpath the target whenever it exists so symlinks get collapsed and
-  // can't punch out of the sandbox. The only branch that skips realpath
-  // is "the target doesn't exist yet AND the caller said that's fine" —
-  // used by write-style callers (writeAST) that are about to create the
-  // file.
-  let target: string;
-  if (mustExist || existsSync(resolved)) {
-    target = realpathSync(resolved);
-  } else {
-    target = resolved;
+export function resolveInSandbox(dir: string, filename: string): string {
+  try {
+    return resolveUnder(root(dir), filename);
+  } catch (error) {
+    throw new Error(`Sandbox violation: ${(error as Error).message}`);
   }
-  if (!isStrictDescendant(sandboxRoot, target)) {
-    throw new Error(
-      `Sandbox violation: '${filename}' resolves to '${target}', which is outside the sandbox dir '${sandboxRoot}'.`,
-    );
-  }
-  return target;
 }
 
 // Read an agency source file from disk and compile it under the same
@@ -195,7 +175,7 @@ export function _typecheck(source: string, dir: string = ""): TypeCheckReport {
   // The draft is given a path inside dir, so its relative imports resolve
   // against dir's files (as typecheckFile's do), and its own text comes from
   // the override: nothing is written to dir.
-  const draftPath = join(realpathSync(resolve(dir)), `agency_draft_${nanoid()}.agency`);
+  const draftPath = join(root(dir).real, `agency_draft_${nanoid()}.agency`);
   return typeCheckSource(source, draftPath, {}, { [draftPath]: source });
 }
 
@@ -421,8 +401,9 @@ function reExportInfos(node: ExportFromStatement, visited: string[]): ReExportRe
   const from = node.modulePath;
   if (isResolvableReExport(node)) {
     const abs = resolveAgencyImportPath(from, "");
-    if (!visited.includes(abs) && existsSync(abs)) {
-      const inner = describeSource(readFileSync(abs, "utf-8"), [...visited, abs]);
+    const located = wholePath(abs);
+    if (!visited.includes(abs) && stat(located.root, located.target) !== null) {
+      const inner = describeSource(readText(located.root, located.target), [...visited, abs]);
       if (node.body.kind === "starExport") {
         return {
           infos: inner.info.exports.map((info) => ({ ...info, reexportedFrom: from })),
@@ -517,7 +498,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
 // `dir` — typechecking is read-only so this is intentional).
 export function _typecheckFile(dir: string, filename: string): TypeCheckReport {
   const target = resolveInSandbox(dir, filename);
-  return typeCheckSource(readFileSync(target, "utf-8"), target);
+  return typeCheckSource(readText(root(dir), filename), target);
 }
 
 // ---------------------------------------------------------------------------
@@ -570,13 +551,14 @@ export function _formatFile(dir: string, filename: string): boolean {
   // formatFile *requires* the file to exist — it reads then writes.
   // Use the existing-target branch (mustExist: true) so symlinks get
   // realpath-collapsed before we touch the file.
-  const target = resolveInSandbox(dir, filename, { mustExist: true });
-  const source = readFileSync(target, "utf-8");
+  resolveInSandbox(dir, filename);
+  const sandbox = root(dir);
+  const source = readText(sandbox, filename);
   const formatted = generateAgency(_parseAST(source));
   // Skip the write if formatting is a no-op — avoids touching mtime
   // when nothing actually changed. Matches Prettier / rustfmt behavior.
   if (formatted !== source) {
-    writeFileSync(target, formatted, "utf-8");
+    writeText(sandbox, filename, formatted);
   }
   return true;
 }
@@ -709,11 +691,8 @@ export type ParsedTestFileWire = {
  *  test() can launch anything. An escaping filename is refused by
  *  resolveInSandbox BEFORE any read. */
 export function _readTestFileSandbox(dir: string, filename: string): ParsedTestFileWire {
-  const target = resolveInSandbox(dir, filename);
-  // The std::read vote authorized this sandbox-relative path; the read
-  // validates the opened descriptor itself, so a swap after
-  // resolveInSandbox cannot redirect it outside dir.
-  const parsed = parseTestFileSandbox(readContainedFile(dir, target), filename);
+  resolveInSandbox(dir, filename);
+  const parsed = parseTestFileSandbox(readText(root(dir), filename), filename);
   const wire: ParsedTestFileWire = {
     // sourceFile is declared relative to the .test.json, so a nested
     // suite ("sub/suite.test.json") tests "sub/<source>", not "<source>".

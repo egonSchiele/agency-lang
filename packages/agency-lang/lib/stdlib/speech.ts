@@ -1,6 +1,5 @@
 import { spawn } from "child_process";
-import { constants as fsConstants } from "fs";
-import { writeFile, unlink, stat, lstat, access, link, open } from "fs/promises";
+import { writeFile, unlink, lstat, link, open } from "fs/promises";
 import { performance } from "node:perf_hooks";
 import { nanoid } from "nanoid";
 import os from "os";
@@ -10,7 +9,8 @@ import { detectPlatform } from "./utils.js";
 import { abortableExec } from "./abortable.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
-import { resolveDir } from "./resolveDir.js";
+import { assertContained } from "./assertContained.js";
+import { wholePath, resolveUnder, stat as statUnder } from "./contained.js";
 import {
   meteredDispatch,
   recordUsage,
@@ -67,10 +67,7 @@ async function speakImpl(
         args.push("-r", String(rate));
       }
       if (outputFile !== "") {
-        // `resolveDir` (cwd-anchored) handles `~` expansion + allow-list
-        // enforcement uniformly with the fs.ts call sites.
-        const outPath = await resolveDir(outputFile, allowedPaths ?? []);
-        args.push("-o", outPath);
+        args.push("-o", await outputPath(outputFile, allowedPaths));
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
     } finally {
@@ -120,7 +117,7 @@ async function recordImpl(
   }
 
   const outPath = outputFile
-    ? await resolveDir(outputFile, allowedPaths ?? [])
+    ? await outputPath(outputFile, allowedPaths)
     : path.join(os.tmpdir(), `agency-rec-${nanoid()}.wav`);
 
   const args = [outPath];
@@ -198,6 +195,15 @@ async function recordImpl(
   });
 
   return outPath;
+}
+
+/** An output file an external program will write: a whole path the
+ *  interrupt named, checked against the program's own allow-list, whose
+ *  final name is never followed. */
+async function outputPath(outputFile: string, allowedPaths: string[] | undefined): Promise<string> {
+  await assertContained(outputFile, allowedPaths ?? []);
+  const located = wholePath(outputFile);
+  return resolveUnder(located.root, located.target);
 }
 
 /** Backs `std::speech.record`. */
@@ -313,18 +319,18 @@ export async function _transcribe(
   const signal = ctx.getAbortSignal(stack);
   if (signal.aborted) throwAbortReason(signal); // preflight: no dispatch
 
-  // Local preflight — Agency's allow-list + a real, readable, regular file —
-  // before the metered boundary, so a missing/unreadable path never looks like
-  // paid work. `stat` (follows symlinks) accepts a contained symlink to a real
-  // readable file — `resolveDir` already enforced allow-list containment on the
-  // resolved target — and a dangling symlink surfaces here as ENOENT. `access`
-  // proves readability, which `stat`/`isFile` alone does not.
-  const resolvedPath = await resolveDir(filepath, allowedPaths ?? []);
-  const info = await stat(resolvedPath); // throws ENOENT for a missing/dangling target
+  // Local preflight before the metered boundary, so a missing path never
+  // looks like paid work. A symlink at the final name is reported missing.
+  await assertContained(filepath, allowedPaths ?? []);
+  const located = wholePath(filepath);
+  const resolvedPath = resolveUnder(located.root, located.target);
+  const info = statUnder(located.root, located.target);
+  if (info === null) {
+    throw new Error(`transcribe: no such file: ${resolvedPath}`);
+  }
   if (!info.isFile()) {
     throw new Error(`transcribe: not a regular file: ${resolvedPath}`);
   }
-  await access(resolvedPath, fsConstants.R_OK); // throws EACCES if unreadable
 
   const source: AudioInput = { kind: "path", path: resolvedPath };
   const config: TranscribeConfig = { model };
@@ -464,7 +470,7 @@ export async function _synthesizeSpeech(
   // runtime-owned temp path (exempt from allowedPaths, like record()).
   let finalPath: string;
   if (outputFile) {
-    finalPath = await resolveDir(outputFile, allowedPaths ?? []);
+    finalPath = await outputPath(outputFile, allowedPaths);
     const explicitExt = path.extname(finalPath).replace(/^\./, "").toLowerCase();
     if (explicitExt && explicitExt !== canonicalFormat) {
       throw new Error(

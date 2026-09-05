@@ -1,15 +1,24 @@
-import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import process from "process";
 import diff_match_patch from "diff-match-patch";
-import { resolvePath } from "./resolvePath.js";
-import { resolveDir } from "./resolveDir.js";
+import { assertContained } from "./assertContained.js";
 import { expandPath } from "./expandPath.js";
+import {
+  root,
+  wholePath,
+  readText,
+  writeText,
+  mkdir,
+  remove,
+  copy,
+  move,
+  type Located,
+} from "./contained.js";
 
-export { resolvePath } from "./resolvePath.js";
 export { prepareContainedPath as _prepareContainedPath } from "./prepareContainedPath.js";
 export { resolveRedirectTarget as _resolveRedirectTarget } from "./prepareContainedPath.js";
+export { _realDir, _realTarget } from "./contained.js";
 
 export type MultiEdit = {
   oldText: string;
@@ -72,13 +81,12 @@ function applyEdits(
 // rejected). The authoritative validation and erroring happen in `_multiedit`
 // after the interrupt is approved.
 export async function _previewEdit(
-  dir: string,
+  rootDir: string,
   filename: string,
   edits: MultiEdit[],
 ): Promise<{ before: string; after: string }> {
   try {
-    const full = await resolvePath(dir, filename);
-    const before = await fs.readFile(full, "utf8");
+    const before = readText(root(rootDir), filename);
     const { contents } = applyEdits(before, edits, filename);
     return { before, after: contents };
   } catch {
@@ -87,14 +95,14 @@ export async function _previewEdit(
 }
 
 export async function _multiedit(
-  dir: string,
+  rootDir: string,
   filename: string,
   edits: MultiEdit[],
 ): Promise<MultiEditResult> {
-  const full = await resolvePath(dir, filename);
-  const original = await fs.readFile(full, "utf8");
+  const sandbox = root(rootDir);
+  const original = readText(sandbox, filename);
   const { contents, replacements } = applyEdits(original, edits, filename);
-  await fs.writeFile(full, contents, "utf8");
+  writeText(sandbox, filename, contents);
   return { replacements, path: filename, edits: edits.length };
 }
 
@@ -108,19 +116,14 @@ export async function _applyPatch(patch: string, allowedPaths?: string[]): Promi
   const touched: string[] = [];
 
   for (const f of files) {
-    // Resolve via `resolveDir` (cwd-anchored — fs ops are
-    // process-cwd-relative, not module-dir-relative). This expands
-    // `~` and runs the allow-list check in one place.
-    const full = await resolveDir(f.path, allowedPaths ?? []);
-    let original = "";
-    if (f.isNew) {
-      original = "";
-    } else {
-      original = await fs.readFile(full, "utf8");
-    }
+    // A patched file is a whole path relative to the process cwd.
+    const located = await locateWhole(f.path, allowedPaths);
+    const original = f.isNew ? "" : readText(located.root, located.target);
     const updated = applyHunks(original, f.hunks, f.path);
-    await fs.mkdir(path.dirname(full), { recursive: true });
-    await fs.writeFile(full, updated, "utf8");
+    mkdir(located.root, ".");
+    writeText(located.root, located.target, updated, {
+      mode: f.isNew ? "create-only" : "overwrite",
+    });
     touched.push(f.path);
   }
 
@@ -227,37 +230,33 @@ function applyHunks(original: string, hunks: Hunk[], filePath: string): string {
   return updated;
 }
 
+/** A whole path the interrupt named, checked against the program's own
+ *  allow-list and split into its real parent and final name. */
+async function locateWhole(p: string, allowedPaths: string[] | undefined): Promise<Located> {
+  await assertContained(p, allowedPaths ?? [], process.cwd());
+  return wholePath(p);
+}
+
 export async function _mkdir(dir: string, allowedPaths?: string[]): Promise<void> {
-  const full = await resolveDir(dir, allowedPaths ?? []);
-  await fs.mkdir(full, { recursive: true });
+  const located = await locateWhole(dir, allowedPaths);
+  mkdir(located.root, located.target);
 }
 
 export async function _copy(src: string, dest: string, allowedPaths?: string[]): Promise<void> {
-  const srcFull = await resolveDir(src, allowedPaths ?? []);
-  const destFull = await resolveDir(dest, allowedPaths ?? []);
-  await fs.cp(srcFull, destFull, { recursive: true });
+  copy(await locateWhole(src, allowedPaths), await locateWhole(dest, allowedPaths));
 }
 
 export async function _move(src: string, dest: string, allowedPaths?: string[]): Promise<void> {
-  const srcFull = await resolveDir(src, allowedPaths ?? []);
-  const destFull = await resolveDir(dest, allowedPaths ?? []);
+  const from = await locateWhole(src, allowedPaths);
+  const to = await locateWhole(dest, allowedPaths);
   await rejectDangerousPath(src, "move", "source");
-  try {
-    await fs.rename(srcFull, destFull);
-  } catch (e: any) {
-    if (e?.code === "EXDEV") {
-      await fs.cp(srcFull, destFull, { recursive: true });
-      await fs.rm(srcFull, { recursive: true, force: true });
-      return;
-    }
-    throw e;
-  }
+  move(from, to);
 }
 
 export async function _remove(target: string, allowedPaths?: string[]): Promise<void> {
-  const full = await resolveDir(target, allowedPaths ?? []);
+  const located = await locateWhole(target, allowedPaths);
   await rejectDangerousPath(target, "remove", "target");
-  await fs.rm(full, { recursive: true, force: true });
+  remove(located.root, located.target);
 }
 
 export async function rejectDangerousPath(p: string, op: string, role: string): Promise<void> {
@@ -268,13 +267,12 @@ export async function rejectDangerousPath(p: string, op: string, role: string): 
   // Expand `~` first so the home / top-level checks below are
   // performed against the actual target, not the literal `~/foo`.
   const lexical = path.resolve(process.cwd(), expandPath(trimmed));
-  const [real, homeReal, cwdReal] = await Promise.all([
-    realpathOrResolve(lexical),
-    realpathOrResolve(os.homedir()),
-    realpathOrResolve(process.cwd()),
-  ]);
+  const real = root(lexical).real;
+  const homeReal = root(os.homedir()).real;
+  const cwdReal = root(process.cwd()).real;
 
-  for (const candidate of new Set([lexical, real])) {
+  const candidates = [lexical, real].filter((c, i, all) => all.indexOf(c) === i);
+  for (const candidate of candidates) {
     const root = path.parse(candidate).root;
 
     if (samePath(candidate, root)) {
@@ -300,14 +298,6 @@ export async function rejectDangerousPath(p: string, op: string, role: string): 
         `${op}: refusing to use the current working directory or one of its ancestors '${candidate}' as ${role} (got '${p}')`,
       );
     }
-  }
-}
-
-async function realpathOrResolve(p: string): Promise<string> {
-  try {
-    return await fs.realpath(p);
-  } catch {
-    return p;
   }
 }
 

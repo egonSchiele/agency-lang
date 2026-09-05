@@ -23,7 +23,7 @@ import { getAllImports } from "@/analysis/imports.js";
 import { importKind } from "@/importPaths.js";
 import { splicesIn } from "@/preprocessors/expandSplices.js";
 import { isStrictDescendant } from "@/utils.js";
-import { readContainedFile } from "@/utils/readContainedFile.js";
+import { root, readText } from "@/stdlib/contained.js";
 import type { AgencyProgram } from "@/types.js";
 
 declare const validatedClosureBrand: unique symbol;
@@ -164,7 +164,7 @@ class ClosureWalker {
     // its real path, so any difference here means a symlink somewhere in
     // the import's own path. Refused rather than followed: the mirror
     // copies files at their written paths and does not reproduce links.
-    // (readContainedFile re-checks this on the opened descriptor, so a
+    // (readText re-checks this on the opened descriptor, so a
     // link swapped in after this point is refused too.)
     if (canonical !== resolved) {
       this.violations.push(
@@ -180,7 +180,8 @@ class ClosureWalker {
     this.visited[filePath] = true;
     let source: string;
     try {
-      source = readContainedFile(this.root as string, filePath);
+      const sandbox = root(this.root as string);
+      source = readText(sandbox, path.relative(sandbox.real, filePath));
     } catch (e) {
       this.violations.push(`${importedFrom}: '${filePath}' cannot be read: ${messageOf(e)}`);
       return;

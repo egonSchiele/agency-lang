@@ -379,7 +379,14 @@ function createViaSibling(
     fs.rmSync(temp, { force: true });
     throw error;
   }
-  fs.rmSync(temp, { force: true });
+  try {
+    fs.rmSync(temp, { force: true });
+  } catch (cleanupError) {
+    console.error(
+      `Failed to remove create-only staging file '${temp}' for '${resolved}'`,
+      cleanupError,
+    );
+  }
 }
 
 const CREATE_FLAGS = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | NO_FOLLOW;

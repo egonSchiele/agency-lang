@@ -27,16 +27,17 @@ export type WhisperModelCtor = new (modelPath: string) => WhisperModelInstance;
 let cached: { WhisperModel: WhisperModelCtor } | null = null;
 
 /**
- * The durable copy (see addonPaths.ts) is preferred; the in-package build
- * output is the fallback, for working inside this repo and for anyone who
- * built before the durable location existed.
+ * The in-package build output wins when it exists, so editing addon.cc and
+ * rebuilding inside this repo is always what runs; the durable copy (see
+ * addonPaths.ts) is what an installed package finds after a reinstall has
+ * emptied build/Release/.
  */
 export function loadAddon(): { WhisperModel: WhisperModelCtor } {
   if (cached) return cached;
   const pkgRoot = findPackageRoot(__dirname);
   const durablePath = resolveAddonPath(currentAddonTarget(packageVersion(pkgRoot)));
   const buildPath = buildOutputPath(pkgRoot);
-  const addonPath = [durablePath, buildPath].find((candidate) => existsSync(candidate));
+  const addonPath = [buildPath, durablePath].find((candidate) => existsSync(candidate));
   if (addonPath === undefined) {
     throw new Error(
       `whisper-local native addon not found at ${durablePath} (nor at ${buildPath}). ` +

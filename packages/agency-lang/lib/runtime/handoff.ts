@@ -26,16 +26,11 @@ export function handoffResumeText(toolName: string, body: string): string {
   return `[${toolName} finished. ${body}]\nContinue with the user's request.`;
 }
 
-/**
- * The resume message for a handoff that failed or was aborted partway.
- * A handoff leaves everything it did on the caller's thread, so the
- * caller is told where that work is and to carry on from it.
- */
+/** The resume message for a handoff that failed or was aborted partway. */
 export function handoffStoppedText(toolName: string, reason: string): string {
   return (
     `[${toolName} stopped before finishing: ${reason}]\n` +
-    `Its work so far is in the messages above, from the line where it was dispatched onward. ` +
-    `Continue with the user's request using that work, and say what is unfinished.`
+    `Its work so far is in the messages above. Continue with the user's request using that work.`
   );
 }
 
@@ -120,8 +115,7 @@ export function finishHandoff(
   thread.push(smoltalk.userMessage(handoffResumeText(toolName, body)));
 }
 
-/** Close a handoff that failed or was aborted: same cleanup as
- *  finishHandoff, but the resume message says the work is above. */
+/** Close a handoff that failed or was aborted. */
 export function finishStoppedHandoff(
   thread: MessageThread,
   toolName: string,

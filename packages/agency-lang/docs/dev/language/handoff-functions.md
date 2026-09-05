@@ -40,17 +40,14 @@ the body's messages can land on the caller's thread as valid history.
    last assistant message. A rejection takes the same route with the
    text an ordinary tool message would have carried.
 
-   A failure, or an aborted result from an outer guard trip, takes a
-   different route: `finishStoppedHandoff` pushes
-   `[name stopped before finishing: <reason>]` followed by a line saying
-   the work so far is in the messages above, from the dispatch marker
-   onward, and to continue with the user's request from it. An ordinary
-   tool that fails has nothing to show. A handoff that fails has left
-   every search, read, and draft on the caller's thread, and the caller
-   should use them. The reason is
-   the failure's error text, or `describeAbortCause` for an abort. A
-   cancelled body (Esc, a race loser) gets no resume message; its system
-   messages are removed on the way out and the marker stays.
+   A failure, or an aborted result from an outer guard trip, goes
+   through `finishStoppedHandoff` instead, which pushes
+   `[name stopped before finishing: <reason>]` and a line saying the
+   work so far is in the messages above and to continue with the user's
+   request from it. The reason is the failure's error text, or
+   `describeAbortCause` for an abort. A cancelled body (Esc, a race
+   loser) gets no resume message; its system messages are removed on
+   the way out and the marker stays.
 
 The strip is anchored on the marker, not on a recorded position: memory
 compaction rewrites the thread and shifts every index, while the marker

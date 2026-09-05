@@ -22,7 +22,7 @@ import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
 
 import { announce } from "../lib/announce.agency"
-import { agentOutcome, costBudget, timeBudget } from "../lib/budgets.agency"
+import { budgeted, costBudget, timeBudget } from "../lib/budgets.agency"
 
 export static const researchTools: any[] = [...memoryTools(), ...planningTools(), highlight.partial(language: "ts"), print]
 
@@ -50,27 +50,27 @@ export handoff def researchAgent(
     itself (its syntax, types, stdlib, or CLI), which routes to the agent
     that reads the bundled Agency documentation. Leave it false for every
     other subject, including questions about other languages.
-  @param maxSeconds - stop the research after this many seconds of working
-    time. Set it when the user gave a deadline ("in five minutes" is 300).
-    Leave it null for the default of 30 minutes (10 for an Agency topic).
-  @param maxDollars - stop the research after spending this many dollars.
-    Set it when the user gave a spend limit. Leave it null for the default
-    of $50 ($10 for an Agency topic).
+  @param maxSeconds - working-time cap in seconds, when the user gave a
+    deadline; null for the default (30 minutes, 10 for an Agency topic).
+  @param maxDollars - spend cap in dollars, when the user gave one; null
+    for the default ($50, $10 for an Agency topic).
   """
   announce("research", userMsg)
   setMemoryId("research")
-  let result: Result<string> = success("")
   if (agencyTopic) {
-    result = agencyResearcherAgent(
-      question: userMsg,
-      context: replStyle,
-      maxCost: costBudget(maxDollars, $10.00),
-      maxTime: timeBudget(maxSeconds, 10m),
-      session: "research",
-      extraTools: researchTools,
-    )
-  } else {
-    result = researcherAgent(
+    return budgeted("agencyResearcherAgent") {
+      return agencyResearcherAgent(
+        question: userMsg,
+        context: replStyle,
+        maxCost: costBudget(maxDollars, $10.00),
+        maxTime: timeBudget(maxSeconds, 10m),
+        session: "research",
+        extraTools: researchTools,
+      )
+    }
+  }
+  return budgeted("researcherAgent") {
+    return researcherAgent(
       task: userMsg,
       context: replStyle,
       maxCost: costBudget(maxDollars, $50.00),
@@ -79,5 +79,4 @@ export handoff def researchAgent(
       extraTools: researchTools,
     )
   }
-  return agentOutcome(result)
 }

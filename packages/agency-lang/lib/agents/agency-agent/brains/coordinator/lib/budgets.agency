@@ -1,17 +1,11 @@
 /** @module
-  @summary Budget plumbing shared by the coordinator's subagent tools: turning
-  the seconds and dollars the model passes into the milliseconds the stdlib
-  agents take, and turning a stopped agent's failure into one readable line.
-
-  The coordinator is the one that hears "do this in five minutes", so the
-  budget is a tool parameter the coordinator fills in. Each subagent tool
-  passes the budget straight to the
-  stdlib agent it wraps, and that agent's own guard enforces it. When the
-  guard trips, the failure comes back here to be described.
+  @summary Budget plumbing for the coordinator's subagent tools: convert the
+  seconds and dollars the model passes, run the stdlib agent under its label,
+  and report a budget stop as a failure that names the budget.
 */
 import { formatDuration } from "std::date"
 
-/** The stdlib agent's own time cap when the model set none, in milliseconds. */
+/** Milliseconds for the stdlib agent's `maxTime`. */
 export def timeBudget(maxSeconds: number | null, fallback: number): number {
   if (maxSeconds == null) {
     return fallback
@@ -19,37 +13,48 @@ export def timeBudget(maxSeconds: number | null, fallback: number): number {
   return maxSeconds * 1000
 }
 
-/** The stdlib agent's own cost cap when the model set none. */
+/** Dollars for the stdlib agent's `maxCost`. */
 export def costBudget(maxDollars: number | null, fallback: number): number {
   return maxDollars ?? fallback
 }
 
-/** One line saying why an agent stopped, for the resume message the
-  coordinator reads. A guard failure names the budget that ran out; anything
-  else is passed through as text. */
-export def describeStop(error: any): string {
-  if (error is string) {
-    return error
+def describeTrip(trip: any): string {
+  if (trip.dimension == "time") {
+    return "its time budget of ${formatDuration(trip.limit)} ran out"
   }
-  if (error.type == "timeoutFailure") {
-    return "its time budget of ${formatDuration(error.maxTime)} ran out"
-  }
-  if (error.type == "guardFailure") {
-    return "its cost budget of $${error.maxCost} ran out"
-  }
-  return "${error}"
+  return "its cost budget of $${trip.limit} ran out"
 }
 
-/** Turn a stdlib agent's Result into the tool's Result: a failure carries
-  the readable stop reason, and an answer that came back empty (the guard
-  salvaged nothing) is reported as a stop too rather than as a blank
-  success. */
-export def agentOutcome(result: Result<string>): Result<string> {
+export def budgeted(label: string, block: () -> Result<string>): Result<string> {
+  """
+  Run a stdlib agent and return its Result, except that a trip of the guard
+  carrying `label` becomes a failure naming the budget that ran out. The
+  guard itself turns a rejected trip into success carrying the saved draft,
+  which would read as a finished answer; the handoff's work is on the
+  thread already, so the stop is what the coordinator needs to hear.
+
+  @param label - the label of the agent's own guard
+  @param block - the call to the agent
+  """
+  let trip: any = null
+  let result: Result<string> = success("")
+  handle {
+    result = block()
+  } with (intr) {
+    if (intr.effect != "std::guard" || intr.data.label != label) {
+      return pass()
+    }
+    trip = intr.data
+    return reject()
+  }
+  if (trip != null) {
+    return failure(describeTrip(trip))
+  }
   if (isFailure(result)) {
-    return failure(describeStop(result.error))
+    return failure("${result.error}")
   }
   if (result.value == "") {
-    return failure("it stopped before producing an answer")
+    return failure("it returned no answer")
   }
   return result
 }

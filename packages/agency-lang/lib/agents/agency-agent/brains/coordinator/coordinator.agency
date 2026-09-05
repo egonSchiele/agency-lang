@@ -121,8 +121,7 @@ def promptText(prompt: string | (string | Attachment)[]): string {
   }
 }
 
-// A subagent called directly by --target has no coordinator to read its
-// Result, so a stop becomes the reply text.
+// A --target call has no coordinator to read the Result.
 def replyText(name: string, result: Result<string>): string {
   if (isFailure(result)) {
     return "${name} stopped before finishing: ${result.error}"

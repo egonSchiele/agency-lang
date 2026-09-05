@@ -1,32 +1,20 @@
 /** @module
-  @summary What happens when a subagent's budget runs out: the trip is a
-  hard stop, and the coordinator carries on from the work left behind.
+  @summary The top-level handler for a subagent's budget trip: a hard stop.
 
-  Budgets belong to the tool call. The coordinator hears the user say "in
-  five minutes" and passes `maxSeconds` (or `maxDollars`) to the subagent
-  tool it dispatches; that tool hands the number to the stdlib agent it
-  wraps, whose own `guard` enforces it. The harness does not parse a
-  deadline out of the message, and does not wrap the turn in a guard. The
-  only whole-agent budget is the root budget the `--max-time` and
-  `--max-cost` flags install, which the runtime enforces before any Agency
-  code runs and which no handler can extend.
-
-  `guardStopHandler` is the top-level handler for the `std::guard` trips
-  those subagent guards raise. It rejects every one: the guard converts the
-  rejection to a failure (or the saved draft) at its own site, the subagent
-  tool returns that to the coordinator's tool loop, and the loop pushes a
-  resume message saying the subagent stopped and its work is in the thread
-  above. The coordinator continues from there. Passing instead would park
-  the turn at an interrupt nobody answers.
+  A budget is a parameter on the subagent tool call (`maxSeconds`,
+  `maxDollars`), enforced by the stdlib agent's own `guard`. The harness
+  does not guard the turn; a whole-agent limit comes only from the
+  `--max-time` and `--max-cost` flags, which the runtime installs as a root
+  budget. See docs/dev/agents/subagent-budgets.md.
 */
 import { isInteractive } from "./trace.agency"
 
 export def guardStopHandler(intr: any): any {
   """
-  Top-level handler for budget trips. A `std::guard` trip that reaches this
-  handler has no owner below it, so the budget is honored as a hard stop:
-  reject, and let the guard site salvage the draft. Every other interrupt
-  passes through to the policy handler.
+  Reject every `std::guard` trip that reaches the top of the turn, so the
+  guard site converts it to a failure or the saved draft and the brain
+  continues. Passing would park the turn on an interrupt nobody answers.
+  Every other interrupt passes through to the policy handler.
   """
   if (intr.effect != "std::guard") {
     return pass()

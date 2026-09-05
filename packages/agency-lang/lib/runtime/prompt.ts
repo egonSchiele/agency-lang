@@ -1318,10 +1318,9 @@ export async function runPrompt(args: {
       stack.setResultOnBranch(branchKey, toolResult);
       if (isAborted(toolResult) && toolResult.cause.kind === "guardTrip") {
         // An outer guard stopped the tool mid-flight. The aborted value
-        // still travels up the stack to unwind this loop, but the thread
-        // must not record it as a success carrying raw JSON: the model
-        // reads why the call stopped instead. A cancel (Esc, a race
-        // loser) keeps its own path, where the turn is ending anyway.
+        // still unwinds this loop; the thread records why the call
+        // stopped rather than a success carrying raw JSON. A cancel
+        // (Esc, a race loser) keeps its own path.
         const reason = describeAbortCause(toolResult.cause);
         pushToolReply({
           content: `Error: ${reason}.`,
@@ -1355,10 +1354,9 @@ export async function runPrompt(args: {
     // (the .handoffMarker step rewrote it), so it gets the user-role
     // resume message instead, after the body's system messages are
     // stripped. `content` may be structured; the resume message needs
-    // text. `stoppedReason` is set when the call failed or was aborted:
-    // a handoff's work is already on this thread, so its resume message
-    // points the model at that work instead of the plain error text an
-    // ordinary tool gets.
+    // text. `stoppedReason` is set when the call failed or was aborted;
+    // a handoff's resume message then points at the work already on this
+    // thread instead of carrying the error text an ordinary tool gets.
     const pushToolReply = (args: {
       content: any;
       toolCall: smoltalk.ToolCallJSON;

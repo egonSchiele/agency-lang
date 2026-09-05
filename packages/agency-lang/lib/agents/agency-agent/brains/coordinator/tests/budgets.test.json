@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "nodeName": "tripWithDraftIsAStop",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:its time budget of 10s ran out\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "finishedAgentPassesThrough",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:FULL\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "emptyAnswerIsAStop",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"failure:it returned no answer\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "otherLabelIsNotOurs",
+      "fakeClock": true,
+      "input": "",
+      "expectedOutput": "\"success:PARTIAL\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

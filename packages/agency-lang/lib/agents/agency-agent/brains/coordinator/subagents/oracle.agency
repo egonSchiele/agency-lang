@@ -15,7 +15,7 @@ import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
-import { agentOutcome, costBudget, timeBudget } from "../lib/budgets.agency"
+import { budgeted, costBudget, timeBudget } from "../lib/budgets.agency"
 
 export handoff def oracleAgent(
   userMsg: string,
@@ -43,19 +43,19 @@ export handoff def oracleAgent(
   Call it alone, with no other tool calls in the same response.
 
   @param userMsg - the question
-  @param maxSeconds - stop the consult after this many seconds of working
-    time. Set it when the user gave a deadline. Leave it null for the
-    default of 15 minutes.
-  @param maxDollars - stop the consult after spending this many dollars.
-    Leave it null for the default of $20.
+  @param maxSeconds - working-time cap in seconds, when the user gave a
+    deadline; null for the default (15 minutes).
+  @param maxDollars - spend cap in dollars, when the user gave one; null
+    for the default ($20).
   """
   announce("oracle", userMsg)
-  const result = stdOracleAgent(
-    question: userMsg,
-    maxCost: costBudget(maxDollars, $20.00),
-    maxTime: timeBudget(maxSeconds, 15m),
-    model: getSlowModel(),
-    provider: getSlowProvider(),
-  )
-  return agentOutcome(result)
+  return budgeted("oracleAgent") {
+    return stdOracleAgent(
+      question: userMsg,
+      maxCost: costBudget(maxDollars, $20.00),
+      maxTime: timeBudget(maxSeconds, 15m),
+      model: getSlowModel(),
+      provider: getSlowProvider(),
+    )
+  }
 }

@@ -1,0 +1,80 @@
+/*
+ * budgeted(): a subagent that overruns its own guard comes back as a
+ * failure naming the budget, even when the guard salvaged a draft. Fake
+ * agents stand in for the stdlib ones; the guard label is what budgeted
+ * matches on.
+ */
+import test { _advanceTime } from "std::date"
+
+import { guardStopHandler } from "../../../lib/budget.agency"
+import { budgeted } from "../lib/budgets.agency"
+
+def overrunWithDraft(): string {
+  saveDraft("PARTIAL")
+  _advanceTime(20000)
+  return "FULL"
+
+  finalize as draft {
+    return draft ?? ""
+  }
+}
+
+def draftingAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    return overrunWithDraft()
+  }
+}
+
+def promptAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    return "FULL"
+  }
+}
+
+def emptyAgent(): Result<string> {
+  return guard(cost: $5, time: 10s, label: "fakeAgent") {
+    return ""
+  }
+}
+
+def describe(r: Result<string>): string {
+  if (isFailure(r)) {
+    return "failure:${r.error}"
+  }
+  return "success:${r.value}"
+}
+
+// The guard alone would return success("PARTIAL") here, which the tool
+// loop would announce as a finished answer.
+node tripWithDraftIsAStop(): string {
+  let out = ""
+  handle {
+    out = describe(budgeted("fakeAgent") { return draftingAgent() })
+  } with guardStopHandler
+  return out
+}
+
+node finishedAgentPassesThrough(): string {
+  let out = ""
+  handle {
+    out = describe(budgeted("fakeAgent") { return promptAgent() })
+  } with guardStopHandler
+  return out
+}
+
+node emptyAnswerIsAStop(): string {
+  let out = ""
+  handle {
+    out = describe(budgeted("fakeAgent") { return emptyAgent() })
+  } with guardStopHandler
+  return out
+}
+
+// A trip of some other guard is not this agent's stop.
+node otherLabelIsNotOurs(): string {
+  let out = ""
+  handle {
+    out = describe(budgeted("someOtherAgent") { return draftingAgent() })
+  } with guardStopHandler
+  return out
+}

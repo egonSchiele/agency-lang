@@ -110,11 +110,9 @@ def approveExceptGuard(intr: any): any {
   return approve()
 }
 
-// A budget trip inside the brain is a hard stop for that step, not for the
-// turn: the harness rejects the trip, the guard returns a failure naming
-// itself, and the brain's reply is built from that failure. If the harness
-// passed on the trip instead, the turn would park on an unanswered
-// interrupt and this node would never return a string.
+// A budget trip inside the brain stops that step, not the turn: the harness
+// rejects the trip and the brain's reply is built from the failure. If the
+// harness passed instead, the turn would park on an unanswered interrupt.
 node budgetTripIsHardStopAndBrainContinues(): string {
   setInteractive(false)
   setBrain(guardedBrain())

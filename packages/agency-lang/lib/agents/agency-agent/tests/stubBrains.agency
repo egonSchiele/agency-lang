@@ -126,10 +126,8 @@ export def selfApprovingBrain(): AgentBrain {
   }
 }
 
-// A subagent-style budget: one deterministic LLM call under a cost guard
-// too small to cover it, the way a coordinator's subagent tool caps the
-// stdlib agent it wraps. The reply records whether the brain got to
-// continue after the trip.
+// One deterministic LLM call under a cost guard too small to cover it.
+// The reply records whether the brain continued after the trip.
 def guardedRunTurn(
   target: string,
   prompt: string | (string | Attachment)[],

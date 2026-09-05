@@ -353,6 +353,24 @@ describe("mkdir, remove, copy, move", () => {
     }
   });
 
+  test("copy refuses a destination inside or equal to the source", () => {
+    const dir = makeDir(".ct-copyself-");
+    try {
+      const r = root(dir);
+      mkdir(r, "src");
+      fs.writeFileSync(path.join(dir, "src", "f.txt"), "x");
+      expect(() => copy({ root: r, target: "src" }, { root: r, target: "src/backup" })).toThrow(
+        /inside source/,
+      );
+      expect(() => copy({ root: r, target: "src" }, { root: r, target: "src" })).toThrow(
+        /inside source/,
+      );
+      expect(fs.existsSync(path.join(dir, "src", "backup"))).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("copy refuses a tree that contains a link anywhere", () => {
     const dir = makeDir(".ct-copylink-");
     try {

@@ -314,6 +314,22 @@ describe("_grep honours .gitignore", () => {
     expect(inKeep.sort()).toEqual(["c.js"]);
   });
 
+  it("does not follow a symlinked .gitignore below the root", async () => {
+    // A link named .gitignore inside `sub` points at rules outside the root
+    // that would ignore *.txt. It is a link below the root, so it is not read.
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "e.txt"), "needle\n");
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "agency-gitignore-outside-"));
+    try {
+      fs.writeFileSync(path.join(outside, "rules"), "*.txt\n");
+      fs.symlinkSync(path.join(outside, "rules"), path.join(root, "sub", ".gitignore"));
+      const hits = (await _grep(root, "sub", query, 100)) as string[];
+      expect(hits).toEqual(["e.txt"]);
+    } finally {
+      await safeDeleteDirectory(outside);
+    }
+  });
+
   it("searches everything when respectGitignore is false", async () => {
     const hits = (await _grep(root, ".", query, 100, [], false)) as string[];
     expect(hits.sort()).toEqual(["a.agency", "a.js", "keep/c.js", "out/b.txt"]);

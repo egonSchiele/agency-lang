@@ -427,6 +427,10 @@ export function remove(root: Root, target: string): void {
  *  replaced, as with cp. */
 export function copy(from: Located, to: Located): void {
   const source = resolveUnder(from.root, from.target);
+  const destination = resolveUnder(to.root, to.target);
+  if (isContained(destination, source)) {
+    throw new Error(`copy: destination '${destination}' is inside source '${source}'`);
+  }
   let info: Stats;
   try {
     info = fs.lstatSync(source);

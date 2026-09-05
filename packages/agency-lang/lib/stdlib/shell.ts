@@ -16,8 +16,9 @@ import { root, resolveUnder, list, stat, readText, type Root, type Entry } from 
 import {
   type GitignoreFile,
   isIgnored,
-  readAncestorGitignores,
   readGitignore,
+  parseGitignore,
+  repositoryAncestors,
 } from "./gitignore.js";
 
 function buildSpawnOptions(
@@ -356,6 +357,52 @@ type WalkOptions = {
   respectGitignore?: boolean;
 };
 
+/** The .gitignore in `rel` under the root, read through a validated
+ *  descriptor, so a linked .gitignore below the root is ignored like any
+ *  other link. Null when there is none. */
+function gitignoreUnder(approved: Root, rel: string): GitignoreFile | null {
+  let text: string;
+  try {
+    text = readText(approved, path.join(rel, ".gitignore"));
+  } catch {
+    return null;
+  }
+  return parseGitignore(path.join(approved.real, rel), text);
+}
+
+/** The in-tree directories strictly above `dir`, outermost first: for
+ *  "a/b/c" that is ".", "a", "a/b". Empty for "." itself. */
+function prefixesAbove(dir: string): string[] {
+  const segments = dir === "." || dir === "" ? [] : dir.split(path.sep);
+  return segments.map((_, i) => (i === 0 ? "." : segments.slice(0, i).join(path.sep)));
+}
+
+/** The .gitignore files that already apply when a walk enters `dir`,
+ *  outermost first. Files above the root are read by `gitignore.ts`,
+ *  since no approval names them. Files between the root and `dir` are
+ *  read under the root. The nearest `.git` entry marks the repository
+ *  root, and with no repository anywhere above `dir` nothing applies. */
+async function ancestorIgnoreFiles(approved: Root, dir: string): Promise<GitignoreFile[]> {
+  if (stat(approved, path.join(dir, ".git")) !== null) return [];
+  const prefixes = prefixesAbove(dir);
+  const inTree = (from: number) =>
+    prefixes
+      .slice(from)
+      .map((prefix) => gitignoreUnder(approved, prefix))
+      .filter((file): file is GitignoreFile => file !== null);
+  for (let i = prefixes.length - 1; i >= 0; i--) {
+    if (stat(approved, path.join(prefixes[i], ".git")) !== null) return inTree(i);
+  }
+  const above = await repositoryAncestors(approved.real);
+  if (above === null) return [];
+  const aboveFiles: GitignoreFile[] = [];
+  for (const ancestor of above) {
+    const file = await readGitignore(ancestor);
+    if (file) aboveFiles.push(file);
+  }
+  return [...aboveFiles, ...inTree(0)];
+}
+
 /** Walk `dir` under the approved root. A `dir` that is itself a symlink
  *  below the root is refused before the walk starts; a missing `dir`
  *  yields nothing. */
@@ -377,7 +424,7 @@ async function walkDir(
     }
     let scoped = ignoreFiles;
     if (options.respectGitignore) {
-      const here = await readGitignore(path.join(approved.real, rel));
+      const here = gitignoreUnder(approved, rel);
       if (here) scoped = [...ignoreFiles, here];
     }
     for (const entry of entries) {
@@ -390,8 +437,7 @@ async function walkDir(
     }
     return true;
   }
-  const start = path.join(approved.real, dir);
-  await walk(dir, options.respectGitignore ? await readAncestorGitignores(start) : []);
+  await walk(dir, options.respectGitignore ? await ancestorIgnoreFiles(approved, dir) : []);
 }
 
 /** Matching lines, or with `filesOnly` just the paths of files that have one. */

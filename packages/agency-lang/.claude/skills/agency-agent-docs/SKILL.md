@@ -13,6 +13,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/agents/harness-and-model.md` — How to divide credit between harness and model, the six tiers a fix can land in, and what a harness genuinely cannot do.
 - `docs/dev/agents/harness-guidelines.md` — The prescriptive companion: must-dos and must-nots for building and changing the agent harness.
 - `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
+- `docs/dev/agents/subagent-budgets.md` — How a stated deadline reaches a subagent as a tool parameter, what happens when its guard trips, and why the harness no longer guards the whole turn.
 - `docs/dev/agents/tool-loop-guards.md` — The three refusals that stop a model wasting rounds: a repeated call, an argument that is really tool-call markup, and a call identical to one already rejected.
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.

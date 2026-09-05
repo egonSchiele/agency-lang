@@ -119,7 +119,9 @@
       "assistant",
       "user"
     ],
-    "resumeCarriesError": 1
+    "resumeSaysStopped": 1,
+    "resumePointsAtWork": 1,
+    "finishedLineAbsent": true
   },
   "rejectHandoff": {
     "result": "rejectHandoff done",

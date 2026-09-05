@@ -1,0 +1,60 @@
+/** @module
+  @summary Budget plumbing for the coordinator's subagent tools: convert the
+  seconds and dollars the model passes, run the stdlib agent under its label,
+  and report a budget stop as a failure that names the budget.
+*/
+import { formatDuration } from "std::date"
+
+/** Milliseconds for the stdlib agent's `maxTime`. */
+export def timeBudget(maxSeconds: number | null, fallback: number): number {
+  if (maxSeconds == null) {
+    return fallback
+  }
+  return maxSeconds * 1000
+}
+
+/** Dollars for the stdlib agent's `maxCost`. */
+export def costBudget(maxDollars: number | null, fallback: number): number {
+  return maxDollars ?? fallback
+}
+
+def describeTrip(trip: any): string {
+  if (trip.dimension == "time") {
+    return "its time budget of ${formatDuration(trip.limit)} ran out"
+  }
+  return "its cost budget of $${trip.limit} ran out"
+}
+
+export def budgeted(label: string, block: () -> Result<string>): Result<string> {
+  """
+  Run a stdlib agent and return its Result, except that a trip of the guard
+  carrying `label` becomes a failure naming the budget that ran out. The
+  guard itself turns a rejected trip into success carrying the saved draft,
+  which would read as a finished answer; the handoff's work is on the
+  thread already, so the stop is what the coordinator needs to hear.
+
+  @param label - the label of the agent's own guard
+  @param block - the call to the agent
+  """
+  let trip: any = null
+  let result: Result<string> = success("")
+  handle {
+    result = block()
+  } with (intr) {
+    if (intr.effect != "std::guard" || intr.data.label != label) {
+      return pass()
+    }
+    trip = intr.data
+    return reject()
+  }
+  if (trip != null) {
+    return failure(describeTrip(trip))
+  }
+  if (isFailure(result)) {
+    return failure("${result.error}")
+  }
+  if (result.value == "") {
+    return failure("it returned no answer")
+  }
+  return result
+}

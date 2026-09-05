@@ -121,6 +121,18 @@ def promptText(prompt: string | (string | Attachment)[]): string {
   }
 }
 
+// A --target call has no coordinator to read the Result.
+def replyText(name: string, result: Result<string>): string {
+  if (isFailure(result)) {
+    return "${name} stopped before finishing: ${result.error}"
+  }
+  return result.value
+}
+
+def researchTurn(userMsg: string): string {
+  return replyText("The researcher", researchAgent(userMsg))
+}
+
 // The oracle and explorer are handoffs: as tools they continue the
 // caller's thread. Called directly by --target there is no caller thread
 // to continue, so give each its own, as the other subagents do for
@@ -128,7 +140,7 @@ def promptText(prompt: string | (string | Attachment)[]): string {
 def oracleTurn(userMsg: string): string {
   let reply = ""
   thread(label: "oracle", summarize: true) {
-    reply = oracleAgent(userMsg)
+    reply = replyText("The oracle", oracleAgent(userMsg))
   }
   return reply
 }
@@ -136,7 +148,7 @@ def oracleTurn(userMsg: string): string {
 def explorerTurn(userMsg: string): string {
   let reply = ""
   thread(label: "explorer", summarize: true) {
-    reply = explorerAgent(userMsg)
+    reply = replyText("The explorer", explorerAgent(userMsg))
   }
   return reply
 }
@@ -147,7 +159,7 @@ def coordinatorRunTurn(
 ): string {
   return match(target) {
     "code" => codeAgent(promptText(prompt))
-    "research" => researchAgent(promptText(prompt))
+    "research" => researchTurn(promptText(prompt))
     "oracle" => oracleTurn(promptText(prompt))
     "explorer" => explorerTurn(promptText(prompt))
     "review" => reviewAgent(promptText(prompt))

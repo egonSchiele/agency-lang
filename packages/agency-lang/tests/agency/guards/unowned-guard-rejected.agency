@@ -1,12 +1,9 @@
-// turnBudgetHandler used to pass foreign std::guard trips through, and
-// since nothing above it answers guards, an unlabeled inner guard parked
-// the turn forever (the orphaned tool_use incident). Now a foreign trip is
-// rejected: the budget is a hard stop, the trip converts to a Failure at
-// the guard site, and the caller salvages like any other guard failure.
-// These tests drive the REAL handler — turn-budget-partial.agency only
-// imitates it.
+// The agent harness rejects every std::guard trip that reaches the top of
+// a turn. The trip converts to a Failure at the guard site, and the caller
+// salvages like any other guard failure. These tests drive the REAL
+// handler.
 import test { _advanceTime } from "std::date"
-import { turnBudgetHandler, TURN_BUDGET_LABEL } from "../../../lib/agents/agency-agent/lib/budget.agency"
+import { guardStopHandler } from "../../../lib/agents/agency-agent/lib/budget.agency"
 import { setInteractive } from "../../../lib/agents/agency-agent/lib/trace.agency"
 
 // Stands in for a subagent body that saves a partial, then overruns its
@@ -44,15 +41,12 @@ def innerBare(): Result<string> {
 }
 
 // Each node states its own interactivity instead of inheriting the
-// module default (true) — otherwise the file is order-sensitive: one
-// node flipping the module-global flag would silently change which
-// branch its siblings exercise.
+// module default (true), so the file is not order-sensitive.
 
-// Foreign label + salvage: reject converts the trip to a Failure at the
-// guard site, where finalize-as-draft turns it into a success carrying
-// the partial. This is the claim "salvage still runs", demonstrated.
+// Salvage: reject converts the trip to a Failure at the guard site, where
+// finalize-as-draft turns it into a success carrying the partial.
 // Interactive: covers the notice-then-reject branch.
-node foreignGuardSalvage() {
+node guardSalvage() {
   setInteractive(true)
   handle {
     const r = innerWithSalvage()
@@ -60,41 +54,25 @@ node foreignGuardSalvage() {
       return "salvaged:${v}"
     }
     return "no-salvage"
-  } with turnBudgetHandler
+  } with guardStopHandler
 }
 
-// Foreign label, no salvage: a plain Failure the caller can match on.
-// Non-interactive: covers the reject-without-notice branch.
-node foreignGuardBare() {
+// No salvage: a plain Failure the caller can match on. Non-interactive:
+// covers the reject-without-notice branch.
+node guardBare() {
   setInteractive(false)
   handle {
     const r = innerBare()
     return "failure:${isFailure(r)}"
-  } with turnBudgetHandler
+  } with guardStopHandler
 }
 
-// The handler's OWN label still takes the non-interactive reject path,
-// proving the label match is intact. Must be non-interactive: the
-// interactive own-label path prompts via input() and would hang the
-// harness.
-node ownLabelReject() {
-  setInteractive(false)
-  handle {
-    const r = guard(time: 50ms, label: TURN_BUDGET_LABEL) {
-      return workBare()
-    }
-    return "failure:${isFailure(r)}"
-  } with turnBudgetHandler
-}
-
-// Non-guard interrupts must still pass through to whoever is outside —
-// here, the test harness resolves it. Getting the early-return split
-// wrong would make the agent reject tool approvals, which would be far
-// worse than the bug being fixed.
+// Non-guard interrupts pass through to whoever is outside; here, the test
+// harness resolves it.
 node nonGuardPassthrough() {
   setInteractive(false)
   handle {
     interrupt("confirm")
     return "resolved"
-  } with turnBudgetHandler
+  } with guardStopHandler
 }

@@ -126,21 +126,28 @@ export def selfApprovingBrain(): AgentBrain {
   }
 }
 
-// One deterministic LLM call gives the real turn guard non-zero cost.
-def costlyRunTurn(
+// One deterministic LLM call under a cost guard too small to cover it.
+// The reply records whether the brain continued after the trip.
+def guardedRunTurn(
   target: string,
   prompt: string | (string | Attachment)[],
 ): string {
-  return llm("Return the test reply.")
+  const result = guard(cost: $0.000001, label: "sub") {
+    return llm("Return the test reply.")
+  }
+  if (isFailure(result)) {
+    return "stopped|${result.error.label}"
+  }
+  return "finished|${result.value}"
 }
 
-export def costlyBrain(): AgentBrain {
+export def guardedBrain(): AgentBrain {
   return {
-    name: "costly",
-    session: "costly",
-    description: "test stub that incurs deterministic LLM cost",
+    name: "guarded",
+    session: "guarded",
+    description: "test stub whose one LLM call runs under a tiny cost guard",
     startTargets: [],
     init: recordingInit,
-    runTurn: costlyRunTurn
+    runTurn: guardedRunTurn
   }
 }

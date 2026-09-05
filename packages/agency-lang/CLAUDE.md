@@ -283,6 +283,7 @@ Other process docs:
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
 - `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind that argument.
+- `docs/dev/agents/subagent-budgets.md` — How a stated deadline reaches a subagent as a tool parameter, what happens when its guard trips, and why the harness no longer guards the whole turn.
 - `docs/dev/agents/tool-loop-guards.md` — The three refusals that stop a model wasting rounds: a repeated call, an argument that is really tool-call markup, and a call identical to one already rejected.
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
 - `docs/dev/agents/writing-rewrite-agent.md` — The rewrite agent over the writing reviewer: the passes loop, why a reviewer failure is not a clean pass, and how its eval suite shares the reviewer suite's files.

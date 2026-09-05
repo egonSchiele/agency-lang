@@ -219,8 +219,10 @@ const results = {};
   };
 }
 
-// A body that returns a failure hands back with the error in the resume
-// message and no tool message anywhere.
+// A body that returns a failure hands back with no tool message anywhere.
+// Its messages are still on the caller's thread, so the resume message
+// says it stopped and points the caller at that work instead of carrying
+// a bare error.
 {
   const { state, callbacks } = makeCapture();
   const result = await failureInside({ callbacks });
@@ -230,7 +232,9 @@ const results = {};
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
     roles: roles(final),
-    resumeCarriesError: count(final, "[failingAgent finished. Error: boom"),
+    resumeSaysStopped: count(final, "[failingAgent stopped before finishing: boom]"),
+    resumePointsAtWork: count(final, "Its work so far is in the messages above"),
+    finishedLineAbsent: count(final, "[failingAgent finished.") === 0,
   };
 }
 

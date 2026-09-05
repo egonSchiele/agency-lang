@@ -15,8 +15,13 @@ import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
+import { budgeted, costBudget, timeBudget } from "../lib/budgets.agency"
 
-export handoff def oracleAgent(userMsg: string): string {
+export handoff def oracleAgent(
+  userMsg: string,
+  maxSeconds: number | null = null,
+  maxDollars: number | null = null,
+): Result<string> {
   """
   Ask the oracle — a read-only senior reviewer — for a second opinion
   before acting on something that would be expensive to get wrong. Call
@@ -38,15 +43,19 @@ export handoff def oracleAgent(userMsg: string): string {
   Call it alone, with no other tool calls in the same response.
 
   @param userMsg - the question
+  @param maxSeconds - working-time cap in seconds, when the user gave a
+    deadline; null for the default (15 minutes).
+  @param maxDollars - spend cap in dollars, when the user gave one; null
+    for the default ($20).
   """
   announce("oracle", userMsg)
-  const result = stdOracleAgent(
-    question: userMsg,
-    model: getSlowModel(),
-    provider: getSlowProvider(),
-  )
-  if (isFailure(result)) {
-    return "The oracle could not finish: ${result.error}"
+  return budgeted("oracleAgent") {
+    return stdOracleAgent(
+      question: userMsg,
+      maxCost: costBudget(maxDollars, $20.00),
+      maxTime: timeBudget(maxSeconds, 15m),
+      model: getSlowModel(),
+      provider: getSlowProvider(),
+    )
   }
-  return result.value
 }

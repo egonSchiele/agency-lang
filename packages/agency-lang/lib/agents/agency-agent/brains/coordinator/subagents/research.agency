@@ -22,6 +22,7 @@ import { setMemoryId } from "std::memory"
 import { highlight } from "std::syntax"
 
 import { announce } from "../lib/announce.agency"
+import { budgeted, costBudget, timeBudget } from "../lib/budgets.agency"
 
 export static const researchTools: any[] = [...memoryTools(), ...planningTools(), highlight.partial(language: "ts"), print]
 
@@ -36,7 +37,9 @@ Keep replies brief. Cite sources. Show, do not lecture."""
 export handoff def researchAgent(
   userMsg: string,
   agencyTopic: boolean = false,
-): string {
+  maxSeconds: number | null = null,
+  maxDollars: number | null = null,
+): Result<string> {
   """
   Answer a question that needs reading rather than writing: looking something
   up, summarizing a document, gathering background, or recalling a stored
@@ -47,27 +50,33 @@ export handoff def researchAgent(
     itself (its syntax, types, stdlib, or CLI), which routes to the agent
     that reads the bundled Agency documentation. Leave it false for every
     other subject, including questions about other languages.
+  @param maxSeconds - working-time cap in seconds, when the user gave a
+    deadline; null for the default (30 minutes, 10 for an Agency topic).
+  @param maxDollars - spend cap in dollars, when the user gave one; null
+    for the default ($50, $10 for an Agency topic).
   """
   announce("research", userMsg)
   setMemoryId("research")
-  let result: Result<string> = success("")
   if (agencyTopic) {
-    result = agencyResearcherAgent(
-      question: userMsg,
-      context: replStyle,
-      session: "research",
-      extraTools: researchTools,
-    )
-  } else {
-    result = researcherAgent(
+    return budgeted("agencyResearcherAgent") {
+      return agencyResearcherAgent(
+        question: userMsg,
+        context: replStyle,
+        maxCost: costBudget(maxDollars, $10.00),
+        maxTime: timeBudget(maxSeconds, 10m),
+        session: "research",
+        extraTools: researchTools,
+      )
+    }
+  }
+  return budgeted("researcherAgent") {
+    return researcherAgent(
       task: userMsg,
       context: replStyle,
+      maxCost: costBudget(maxDollars, $50.00),
+      maxTime: timeBudget(maxSeconds, 30m),
       session: "research",
       extraTools: researchTools,
     )
   }
-  if (isFailure(result)) {
-    return "Research did not finish: ${result.error}"
-  }
-  return result.value
 }

@@ -2,7 +2,7 @@
 
 This directory is one *brain* of the Agency agent: the part that answers a
 turn. The harness around it (`agent.agency` and `lib/`) owns the command
-line, the REPL, the approval policy handler, the per-turn budget guard,
+line, the REPL, the approval policy handler, the hard stop for a subagent budget trip,
 slash-command expansion, and attachment detection. None of that lives here.
 `docs/dev/agents/agent-brains.md` explains the split; this file explains how this
 particular brain is put together.

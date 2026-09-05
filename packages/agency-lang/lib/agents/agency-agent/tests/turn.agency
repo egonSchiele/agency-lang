@@ -1,14 +1,13 @@
 /*
  * Harness tests: the work that happens around a brain (slash expansion,
- * attachments, the budget guard) and the session wrapper that installs the
- * policy handler around init and every turn. Uses stub brains; no real
- * coordinator involved.
+ * attachments, the hard stop for a budget trip) and the session wrapper
+ * that installs the policy handler around init and every turn. Uses stub
+ * brains; no real coordinator involved.
  *
  * `slashCommandExpands` depends on the working directory being
  * packages/agency-lang, whose .claude/commands/check-tests.md is the
  * fixture (projectCommands is a static read of ${cwd()}/.claude/commands).
  */
-import { budgetCost, budgetTime } from "../lib/budget.agency"
 import { setInteractive } from "../lib/trace.agency"
 import {
   setBrain,
@@ -22,7 +21,7 @@ import { applyResolved } from "../shared.agency"
 import {
   recordingBrain,
   selfApprovingBrain,
-  costlyBrain,
+  guardedBrain,
   initCount,
   lastTarget,
   lastPromptKind,
@@ -101,26 +100,27 @@ node namedTargetGetsBareTextWithoutReading(): string {
   return "${reply}|${lastTarget()}|${lastPromptKind()}|${lastAttachmentCount()}|${_readBinaryInterrupts}"
 }
 
-// The harness calls parseTurnBudget, uses both parsed dimensions, and resets
-// them on the next clue-free turn.
-node budgetIsParsedAndReset(): string {
-  setBrain(recordingBrain())
-  const firstReply = runTurn("", "answer within 2 minutes and $1.25: what is 1+1") with approve
-  const firstReachedBrain = lastText().includes("1+1")
-  const parsedTime = budgetTime()
-  const parsedCost = budgetCost()
-  const secondReply = runTurn("", "ordinary follow-up") with approve
-  return "${firstReply}|${firstReachedBrain}|${parsedTime == 120000}|${parsedCost == 1.25}|${secondReply}|${budgetTime() == 1h}|${budgetCost() == 50}"
+// Approve everything the harness raises around the turn, but leave a
+// std::guard trip to the harness's own handler: a blanket approve would
+// answer the trip itself.
+def approveExceptGuard(intr: any): any {
+  if (intr.effect == "std::guard") {
+    return pass()
+  }
+  return approve()
 }
 
-// Parsing alone is insufficient: a deterministic LLM call must actually trip
-// the cost guard. If runTurn stops wrapping the brain in guard(...), this
-// returns the stub reply and the assertion fails.
-node parsedBudgetGuardsBrain(): boolean {
+// A budget trip inside the brain stops that step, not the turn: the harness
+// rejects the trip and the brain's reply is built from the failure. If the
+// harness passed instead, the turn would park on an unanswered interrupt.
+node budgetTripIsHardStopAndBrainContinues(): string {
   setInteractive(false)
-  setBrain(costlyBrain())
-  const reply = runTurn("", "spend no more than $0.000001") with approve
-  return reply.includes("over the cost budget")
+  setBrain(guardedBrain())
+  let reply = ""
+  handle {
+    reply = runTurn("", "hello")
+  } with approveExceptGuard
+  return reply
 }
 
 // The unit tests for modalityFilter prove its internals. This integration

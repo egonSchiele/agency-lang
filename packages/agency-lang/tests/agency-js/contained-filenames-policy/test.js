@@ -58,12 +58,13 @@ try {
       && !existsSync(join(outside, "abs-escape.txt")),
     upwardPrep: r.upwardEscape.outcome === "prep-rejected" && !r.upwardEscape.reached
       && !existsSync(join(outside, "up-escape.txt")),
-    // Stable symlinks: an escaping one dies in preparation, an in-work one
-    // is approved and lands on the real target.
+    // Stable symlinks: an escaping one and an in-work one both die in
+    // preparation. A symlink below the approved directory is never
+    // followed, whatever it points at.
     outLinkPrep: r.outLinkEscape.outcome === "prep-rejected" && !r.outLinkEscape.reached
       && !existsSync(join(outside, "link-escape.txt")),
-    inLinkApproved: r.inLinkWrite.outcome === "ok"
-      && readFileSync(join(work, "real-sub", "linked.txt"), "utf8") === "cf-e2e",
+    inLinkPrep: r.inLinkWrite.outcome === "prep-rejected" && !r.inLinkWrite.reached
+      && !existsSync(join(work, "real-sub", "linked.txt")),
     // A symlink supplied AS dir: the interrupt reports the real outside
     // path, the workdir policy rejects it, and nothing is created.
     dirLinkRejected: r.dirLinkWrite.outcome === "policy-rejected"

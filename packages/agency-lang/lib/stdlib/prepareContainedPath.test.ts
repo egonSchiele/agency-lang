@@ -67,41 +67,30 @@ describe("prepareContainedPath", () => {
     expect((await prepareContainedPath(link, "f.txt", "write")).dir).toBe(await realDir(root));
   });
 
-  it("follows in-root symlinks and rejects escaping ones", async () => {
+  it("rejects every symlink below dir, whatever it points at", async () => {
     const { root, outside } = sandbox();
     mkdirSync(path.join(root, "realsub"));
     symlinkSync(path.join(root, "realsub"), path.join(root, "insub"));
     symlinkSync(outside, path.join(root, "outsub"));
-    // In-root parent link: allowed, filename keeps the link spelling.
-    expect((await prepareContainedPath(root, "insub/f.txt", "write")).filename).toBe(
-      path.join("insub", "f.txt"),
-    );
-    // Escaping parent link and escaping final link: rejected.
-    await expect(prepareContainedPath(root, "outsub/f.txt", "write")).rejects.toThrow(
-      /outside dir/,
-    );
+    await expect(prepareContainedPath(root, "insub/f.txt", "write")).rejects.toThrow(/symlink/);
+    await expect(prepareContainedPath(root, "outsub/f.txt", "write")).rejects.toThrow(/symlink/);
     writeFileSync(path.join(outside, "real.txt"), "x");
     symlinkSync(path.join(outside, "real.txt"), path.join(root, "leaflink"));
-    await expect(prepareContainedPath(root, "leaflink", "write")).rejects.toThrow(/outside dir/);
-    // In-root final link: allowed.
+    await expect(prepareContainedPath(root, "leaflink", "write")).rejects.toThrow(/symlink/);
     writeFileSync(path.join(root, "inner.txt"), "x");
     symlinkSync(path.join(root, "inner.txt"), path.join(root, "innerlink"));
-    expect((await prepareContainedPath(root, "innerlink", "write")).filename).toBe("innerlink");
+    await expect(prepareContainedPath(root, "innerlink", "write")).rejects.toThrow(/symlink/);
+    // A real path beside the links still works.
+    expect((await prepareContainedPath(root, "realsub/f.txt", "write")).filename).toBe(
+      path.join("realsub", "f.txt"),
+    );
   });
 
-  it("follows a two-link in-root chain", async () => {
-    const { root } = sandbox();
-    writeFileSync(path.join(root, "end.txt"), "x");
-    symlinkSync(path.join(root, "end.txt"), path.join(root, "hop2"));
-    symlinkSync(path.join(root, "hop2"), path.join(root, "hop1"));
-    expect((await prepareContainedPath(root, "hop1", "write")).filename).toBe("hop1");
-  });
-
-  it("rejects a symlink loop with ELOOP", async () => {
+  it("rejects a symlink loop", async () => {
     const { root } = sandbox();
     symlinkSync(path.join(root, "loopB"), path.join(root, "loopA"));
     symlinkSync(path.join(root, "loopA"), path.join(root, "loopB"));
-    await expect(prepareContainedPath(root, "loopA", "write")).rejects.toThrow(/ELOOP/);
+    await expect(prepareContainedPath(root, "loopA", "write")).rejects.toThrow(/symlink/);
   });
 
   it("rejects a regular file used as a directory with ENOTDIR", async () => {
@@ -123,9 +112,9 @@ describe("prepareContainedPath", () => {
   it("rejects dangling symlinks on the target path", async () => {
     const { root, outside } = sandbox();
     symlinkSync(path.join(outside, "missing"), path.join(root, "dangle"));
-    await expect(prepareContainedPath(root, "dangle", "write")).rejects.toThrow(/dangling/);
+    await expect(prepareContainedPath(root, "dangle", "write")).rejects.toThrow(/symlink/);
     await expect(prepareContainedPath(root, "dangle/deeper.txt", "write")).rejects.toThrow(
-      /dangling/,
+      /symlink/,
     );
   });
 

@@ -138,12 +138,20 @@ Always create new commits. Never use `git push --force` or `git commit --amend`.
 
 ---
 
-### Route path arguments through `resolveDir` / `resolvePath`
+### Touch files through `contained.ts`
 
-Any new stdlib function in `lib/stdlib/` that takes a `dir`, `cwd`, `src`, `dest`, or `path` argument MUST resolve it via [`resolveDir`](../../../lib/stdlib/resolveDir.ts) for directories, or [`resolvePath`](../../../lib/stdlib/resolvePath.ts) for the dir-plus-filename case. Do NOT call `path.resolve(process.cwd(), …)` directly on user-supplied paths. Sync-only code uses `resolveCwdPath` from `resolveDir.ts`, so the expand-then-resolve policy stays in one place.
+Any stdlib function in `lib/stdlib/` that reads, writes, lists, or probes a path an Agency value chose calls [`contained.ts`](../../../lib/stdlib/contained.ts) with the approved directory as its root. A directory plus a relative target uses `root(dir)` and the operation:
 
-`resolveDir` and `resolvePath` delegate to [`expandPath`](../../../lib/stdlib/expandPath.ts), the single owner of path-shorthand policy. Today it expands a leading `~`, and later it may handle env vars and normalization. Inlining `path.resolve` at a new call site encodes the policy locally, so any future expansion rule has to be added at every site. That is exactly the "inconsistent patterns" anti-pattern this module exists to prevent.
+```ts
+// Bad
+const text = fs.readFileSync(path.resolve(dir, filename), "utf8");
 
-For options-only `allowedPaths` shapes, `assertContained` in `lib/stdlib/assertContained.ts` already runs each entry through `expandPath`, so a policy that says `allowedPaths: ["~/.agency"]` works for free.
+// Good
+const text = readText(root(dir), filename);
+```
 
-**Enforcement:** convention only.
+A whole path the interrupt named, such as the target of `remove`, goes through `wholePath(p)`, which splits it into a real parent and a final name that is never followed. Resolve the caller's spelling with `root` or `wholePath` before raising the interrupt, and hold it with `fixedRoot` or `fixedPath` after approval, so a link planted at the approved path during the prompt is refused rather than followed. `resolveDir` remains for the `allowedPaths` guardrail and for anchoring a relative path to the cwd. The reasoning and the API are in [`docs/dev/stdlib/contained-files.md`](../stdlib/contained-files.md).
+
+**Rationale:** A symlink below an approved directory must never be followed, and that rule has to hold at every call site. One module enforces it, so a new function cannot forget.
+
+**Enforcement:** linted. `no-restricted-imports` in `eslint.config.js` refuses `fs` and `fs/promises` under `lib/stdlib/` except for the files in `FS_IMPORTERS`, each of which carries a reason.

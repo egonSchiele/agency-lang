@@ -468,11 +468,15 @@ export def testFile(
   // Gate the read BEFORE the TS seam performs it (the typecheckFile idiom).
   // The whole file is validated and converted up front, so a malformed file
   // is a whole-call failure with zero launches.
+  const prepared = try _prepareContainedPath(dir, filename, "read")
+  if (isFailure(prepared)) {
+    return prepared
+  }
   return interrupt std::read("Read this test file?", {
-    dir: dir,
-    filename: filename
+    dir: prepared.value.dir,
+    filename: prepared.value.filename
   })
-  const parsed = try _readTestFileSandbox(dir, filename)
+  const parsed = try _readTestFileSandbox(prepared.value.dir, prepared.value.filename)
   if (parsed is failure) {
     return parsed
   }

@@ -21,7 +21,8 @@ def attempt(filename: string, dir: string): any {
   const r = try write(filename, "cf-e2e", dir)
   let outcome = "ok"
   if (isFailure(r)) {
-    if ("${r.error}" =~ re/pass that directory in dir/) {
+    // An escape and a symlink below dir both fail in preparation.
+    if ("${r.error}" =~ re/pass that directory in dir|is a symlink/) {
       outcome = "prep-rejected"
     } else {
       outcome = "policy-rejected"

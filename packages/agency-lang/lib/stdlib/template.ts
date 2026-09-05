@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { fixedRoot, readText } from "./contained.js";
 import { AgencyNode } from "../types.js";
 import { exprParser, bodyParser } from "../parsers/parsers.js";
 import { generateAgency } from "../backends/agencyGenerator.js";
@@ -34,8 +34,7 @@ export function _toSource(code: Code): string {
 }
 
 export function _loadTemplate(dir: string, filename: string): Code {
-  const target = resolveInSandbox(dir, filename, { mustExist: true });
-  const program = _parseAST(readFileSync(target, "utf-8"));
+  const program = _parseAST(readText(fixedRoot(dir), filename));
   return { ...program, kind: "program" } as Code;
 }
 

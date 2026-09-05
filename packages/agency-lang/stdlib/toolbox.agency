@@ -21,7 +21,7 @@ import { ls, exists } from "std::shell"
 import { Json } from "std::validation"
 
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
-import { expandPath } from "agency-lang/stdlib-lib/expandPath.js"
+import { _realDir } from "agency-lang/stdlib-lib/contained.js"
 
 /** @module
   @summary Keep a directory of tools an agent wrote.
@@ -182,11 +182,13 @@ const EMPTY_MODULE: ModuleFacts = {
 // Every entry point takes the toolbox directory the same way. An empty
 // string is refused because the file primitives would resolve it to the
 // process cwd.
+// The real spelling of the toolbox directory, so every scan and save
+// interrupt names the directory the reads and writes will use.
 def expandRoot(dir: string): Result<string> {
   if (dir == "") {
     return failure("dir must name the toolbox directory; got an empty string")
   }
-  return success(expandPath(dir))
+  return try _realDir(dir)
 }
 
 def runExport(info: ModuleInfo): ExportInfo | null {
@@ -201,8 +203,10 @@ def factsOf(exported: ExportInfo): ModuleFacts {
   }
 }
 
-def moduleFacts(toolDir: string): Result<ModuleFacts> {
-  const source = try _read(toolDir, IMPL_FILE, 0, 0)
+// `root` is the toolbox directory the scan interrupt named and `name` the
+// tool's directory under it, so a linked tool directory is refused.
+def moduleFacts(root: string, name: string): Result<ModuleFacts> {
+  const source = try _read(root, "${name}/${IMPL_FILE}", 0, 0)
   if (source is failure) {
     return source
   }
@@ -231,11 +235,11 @@ type MetaFile = {
 // A missing meta.json is the default record. A present one that cannot be
 // read, is not JSON, or has a field of the wrong type is a failure, so a
 // corrupt file never passes as a healthy tool.
-def metaFacts(toolDir: string): Result<ToolMeta> {
-  if (!exists(META_FILE, toolDir)) {
+def metaFacts(root: string, name: string): Result<ToolMeta> {
+  if (!exists("${name}/${META_FILE}", root)) {
     return success(DEFAULT_META)
   }
-  const raw = try _read(toolDir, META_FILE, 0, 0)
+  const raw = try _read(root, "${name}/${META_FILE}", 0, 0)
   if (raw is failure(readErr)) {
     return failure("${META_FILE} could not be read: ${readErr}")
   }
@@ -268,8 +272,8 @@ def presentFields(file: MetaFile): Record<string, Json> {
 
 def entryFor(root: string, name: string): ToolEntry {
   const toolDir = "${root}/${name}"
-  const module = moduleFacts(toolDir)
-  const meta = metaFacts(toolDir)
+  const module = moduleFacts(root, name)
+  const meta = metaFacts(root, name)
   const moduleFields: ModuleFacts = module catch EMPTY_MODULE
   const metaFields: ToolMeta = meta catch DEFAULT_META
   const problems: string[] = []
@@ -592,7 +596,7 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
   if (requestOk is failure) {
     return requestOk
   }
-  return moduleFacts(settings.stagingDir)
+  return moduleFacts(settings.stagingDir, ".")
 }
 
 def requestSignature(source: string): Result<string> {
@@ -1112,7 +1116,7 @@ export def runTool(
     return root
   }
   const toolDir = "${root.value}/${name}"
-  if (!exists(TOOL_FILE, toolDir)) {
+  if (!exists("${name}/${TOOL_FILE}", root.value)) {
     return failure("no tool named `${name}` in ${root.value}")
   }
   // The same approval listTools asks for, here for one tool's directory:
@@ -1121,7 +1125,7 @@ export def runTool(
   return interrupt std::toolbox::scan("Are you sure you want to read this tool?", {
     dir: toolDir
   })
-  const meta = metaFacts(toolDir)
+  const meta = metaFacts(root.value, name)
   if (meta is failure) {
     return meta
   }

@@ -6,6 +6,6 @@
   "absolutePrep": true,
   "upwardPrep": true,
   "outLinkPrep": true,
-  "inLinkApproved": true,
+  "inLinkPrep": true,
   "dirLinkRejected": true
 }

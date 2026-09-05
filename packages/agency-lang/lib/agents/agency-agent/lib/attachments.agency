@@ -1,4 +1,5 @@
 import { _scanMediaPaths } from "agency-lang/stdlib-lib/mediaPathScan.js"
+import { _realDir } from "agency-lang/stdlib-lib/contained.js"
 import { applyAgentCwd } from "std::index"
 import { modelSupportsInput } from "std::llm"
 import { stat } from "std::shell"
@@ -45,10 +46,12 @@ export def detectAttachments(msg: string, maxBytes: number = 20971520): Detected
     const abs = applyAgentCwd(candidate.path)
     if (!seen.includes(abs)) {
       seen.push(abs)
-      // followSymlinks: a link to an image must report the TARGET's type
-      // and size (lstat would say "symlink" and the link blob's size).
-      const info = stat(abs, followSymlinks: true)
-      if (info.type == "file") {
+      // The user typed this path, so it resolves the way they spelled it,
+      // links included. The real file is what gets probed and read. A
+      // dangling link resolves to "" and is skipped like a missing file.
+      const real = (try _realDir(abs)) catch ""
+      const info = stat(real)
+      if (real != "" && info.type == "file") {
         const label = basename(abs)
         if (attached.length >= MAX_ATTACHMENTS) {
           skipped.push({ label: label, reason: "too many attachments (limit ${MAX_ATTACHMENTS})" })
@@ -61,7 +64,7 @@ export def detectAttachments(msg: string, maxBytes: number = 20971520): Detected
           // keeps the persistent thread immune to later file deletion or
           // edits and keeps the read inside the std::readBinary policy
           // gate.
-          const bytes = readBinary(label, dirname(abs))
+          const bytes = readBinary(basename(real), dirname(real))
           if (isSuccess(bytes)) {
             if (candidate.mime == "application/pdf") {
               attached.push({ attachment: file(bytes.value, filename: label, mimeType: candidate.mime, base64: true), label: label })

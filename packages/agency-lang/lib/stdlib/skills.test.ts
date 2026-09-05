@@ -75,8 +75,8 @@ describe("stdlib docs recursive glob", () => {
   const stdlibDocs = path.resolve(__dirname, "../../docs/site/stdlib");
 
   it("includes nested modules that the flat pattern misses", async () => {
-    const flat = await _glob("*.{md,markdown}", stdlibDocs, 500, []);
-    const recursive = await _glob("**/*.{md,markdown}", stdlibDocs, 500, []);
+    const flat = await _glob(stdlibDocs, ".", "*.{md,markdown}", 500);
+    const recursive = await _glob(stdlibDocs, ".", "**/*.{md,markdown}", 500);
     expect(recursive.length).toBeGreaterThan(flat.length);
     expect(recursive).toContain("ui/table.md"); // nested
     expect(recursive).toContain("array.md"); // top-level still present
@@ -87,8 +87,8 @@ describe("stdlib docs recursive glob", () => {
     // nested docs, so recursion must list exactly the same pages as the flat
     // pattern — a regression here would silently drop pages from those tools.
     const guideDocs = path.resolve(__dirname, "../../docs/site/guide");
-    const flat = await _glob("*.{md,markdown}", guideDocs, 500, []);
-    const recursive = await _glob("**/*.{md,markdown}", guideDocs, 500, []);
+    const flat = await _glob(guideDocs, ".", "*.{md,markdown}", 500);
+    const recursive = await _glob(guideDocs, ".", "**/*.{md,markdown}", 500);
     expect(recursive.length).toBeGreaterThan(0);
     expect(recursive.sort()).toEqual(flat.sort());
   });

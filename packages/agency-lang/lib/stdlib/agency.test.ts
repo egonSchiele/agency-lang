@@ -7,6 +7,7 @@ import {
   readFileSync,
   existsSync,
   symlinkSync,
+  realpathSync,
 } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -50,7 +51,7 @@ describe("_compileFile sandbox containment", () => {
     //     sandbox-XXXX-evil/   <- shares string prefix with sandbox
     //       sneaky.agency      <- sibling-prefix attack target
     //     outside.agency        <- target the sandbox must NOT reach
-    sandbox = mkdtempSync(join(tmpdir(), "agency-sandbox-"));
+    sandbox = mkdtempSync(join(realpathSync(tmpdir()), "agency-sandbox-"));
     writeFileSync(
       join(sandbox, "inside.agency"),
       `node main() { return "${INSIDE_SENTINEL}" }`,
@@ -183,7 +184,7 @@ describe("_writeAST / _format / _formatFile", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "agency-fmt-"));
+    dir = mkdtempSync(join(realpathSync(tmpdir()), "agency-fmt-"));
   });
 
   afterEach(() => {
@@ -262,22 +263,21 @@ describe("_writeAST / _format / _formatFile", () => {
     await expect(_writeAST(ast, dir, "exists.agency", false)).rejects.toThrow(/already exists/);
   });
 
-  it("_writeAST allows upward traversal via .. segments", async () => {
+  it("_writeAST refuses upward traversal via .. segments", async () => {
     const sub = join(dir, "sub");
     mkdirSync(sub);
     const ast = _parseAST(`node main() { return 1 }`);
-    // resolvePath no longer enforces containment; ".." resolves like
-    // open() in other languages. Both dirs are inside this test's
-    // mkdtemp sandbox.
-    await _writeAST(ast, sub, "../upward.agency", true);
-    expect(existsSync(join(dir, "upward.agency"))).toBe(true);
+    await expect(_writeAST(ast, sub, "../upward.agency", true)).rejects.toThrow(/outside/);
+    expect(existsSync(join(dir, "upward.agency"))).toBe(false);
   });
 
-  it("_writeAST allows absolute filenames (they win over dir)", async () => {
+  it("_writeAST refuses an absolute filename", async () => {
     const ast = _parseAST(`node main() { return 1 }`);
     const outPath = join(dir, "abs-out.agency");
-    await _writeAST(ast, join(dir, "ignored-when-abs"), outPath, true);
-    expect(existsSync(outPath)).toBe(true);
+    await expect(_writeAST(ast, join(dir, "ignored-when-abs"), outPath, true)).rejects.toThrow(
+      /outside/,
+    );
+    expect(existsSync(outPath)).toBe(false);
   });
 
   it("_formatFile formats a file in place", () => {

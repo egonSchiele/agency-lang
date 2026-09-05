@@ -1,5 +1,29 @@
 import tseslint from "typescript-eslint";
 
+// Files under lib/stdlib that may import fs directly, each with the reason.
+// Everything else in lib/stdlib reads and writes files through
+// lib/stdlib/contained.ts, which refuses symlinks below the approved
+// directory (docs/dev/stdlib/contained-files.md). To add a file here, say
+// which fixed file it touches and why no approval names that path.
+const FS_IMPORTERS = {
+  "lib/stdlib/contained.ts": "the module every other file operation goes through",
+  "lib/stdlib/gitignore.ts":
+    "reads .gitignore rules from a walk root up to the filesystem root, ancestors included; the text becomes ignore rules and is never returned",
+  "lib/stdlib/shell.ts": "which() probes PATH entries and exec() checks its cwd; no approval names either",
+  "lib/stdlib/speech.ts": "cloud TTS commits its output by staging a file and hard-linking it into place",
+  "lib/stdlib/cli.ts": "CLI settings under the agent home",
+  "lib/stdlib/agentSessions.ts": "saved sessions under the agent home",
+  "lib/stdlib/localModels.ts": "the local model cache directory",
+  "lib/stdlib/localModelManifest.ts": "the local model manifest under the agent home",
+  "lib/stdlib/llm.ts": "loadModelData reads a model-data file at a caller-supplied path",
+  "lib/stdlib/mcp.ts": "reads and writes the project MCP config file",
+  "lib/stdlib/skills.ts": "readSkill reads a skill file at a caller-supplied path",
+  "lib/stdlib/oauth.ts": "OAuth tokens under the agent home",
+  "lib/stdlib/utils.ts": "reads /proc/version once to tell WSL from Linux, a fixed kernel file",
+};
+
+const FS_MODULES = ["fs", "fs/promises", "node:fs", "node:fs/promises"];
+
 export default [
   {
     ignores: [
@@ -62,6 +86,22 @@ export default [
       "max-lines": [
         "error",
         { max: 1250, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
+  {
+    files: ["lib/stdlib/**/*.ts"],
+    ignores: ["lib/stdlib/**/*.test.ts", "lib/stdlib/__tests__/**", ...Object.keys(FS_IMPORTERS)],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: FS_MODULES.map((name) => ({
+            name,
+            message:
+              "lib/stdlib reads and writes files through lib/stdlib/contained.ts. If this file truly needs fs, add it to FS_IMPORTERS in eslint.config.js with the reason.",
+          })),
+        },
       ],
     },
   },

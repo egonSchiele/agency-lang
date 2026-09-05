@@ -206,8 +206,9 @@ node symlinkedFileIsNotListed(): boolean {
   write("secret.md", "---\nname: secret\n---\nSecret.", "${base}/outside") with approve
   write("real.md", "---\nname: real\n---\nReal.", "${base}/root/sub") with approve
   exec("ln", ["-s", "${base}/outside/secret.md", "${base}/root/sub/evil.md"]) with approve
-  // Positive control, as in the directory case above.
-  if (!exists("evil.md", "${base}/root/sub")) {
+  // Positive control: the link is reachable when spelled out whole. Below
+  // a dir, exists() hides it, which is the rule under test.
+  if (!exists("${base}/root/sub/evil.md")) {
     return false
   }
   const scanned = scanSkillsSubdirs("${base}/root", ["sub"]) with approve

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtemp, writeFile, rm, readFile, stat, symlink, chmod } from "fs/promises";
 import os from "os";
 import path from "path";
+import { realpathSync } from "fs";
 import { agencyStore } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
@@ -11,7 +12,7 @@ import { _transcribe, _synthesizeSpeech, publishSpeechOutput } from "./speech.js
 // shared /tmp path (see plan §12j).
 let root = "";
 beforeEach(async () => {
-  root = await mkdtemp(path.join(os.tmpdir(), "agency-speech-test-"));
+  root = await mkdtemp(path.join(realpathSync(os.tmpdir()), "agency-speech-test-"));
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
@@ -103,8 +104,8 @@ describe("_transcribe", () => {
     await withClient({ transcribe }, async ({ stack, transcription, meter }) => {
       const text = await _transcribe(filepath, "en", [root], "whisper-1", "", "", "", "");
       expect(text).toBe("hello world");
-      // exact path BlobRef + complete config forwarded
-      expect(captured.source).toEqual({ kind: "path", path: filepath });
+      // the real path as a BlobRef + complete config forwarded
+      expect(captured.source).toEqual({ kind: "path", path: realpathSync(filepath) });
       expect(captured.config.model).toBe("whisper-1");
       expect(captured.config.language).toBe("en");
       expect(stack.localCost).toBeCloseTo(0.006);
@@ -136,19 +137,16 @@ describe("_transcribe", () => {
     });
   });
 
-  it("accepts a contained symlink to a readable regular file (follows the link)", async () => {
+  it("refuses a symlink at the input path before dispatch", async () => {
     const target = await makeAudioFile(); // real readable file inside root
     const linkPath = path.join(root, "link.wav");
     await symlink(target, linkPath);
-    let calls = 0;
-    const transcribe: TranscribeImpl = async () => {
-      calls++;
-      return trOk();
-    };
-    await withClient({ transcribe }, async () => {
-      const text = await _transcribe(linkPath, "", [root], "whisper-1", "", "", "", "");
-      expect(text).toBe("hello world");
-      expect(calls).toBe(1); // stat followed the symlink; not rejected as non-file
+    const transcribe = vi.fn();
+    await withClient({ transcribe: transcribe as any }, async () => {
+      await expect(_transcribe(linkPath, "", [root], "whisper-1", "", "", "", "")).rejects.toThrow(
+        /symlink/,
+      );
+      expect(transcribe).not.toHaveBeenCalled();
     });
   });
 
@@ -237,7 +235,7 @@ describe("_synthesizeSpeech", () => {
         [root],
         "",
       );
-      expect(returned).toBe(out);
+      expect(returned).toBe(path.join(realpathSync(root), "out.mp3"));
       expect(new Uint8Array(await readFile(out))).toEqual(new Uint8Array([9, 8, 7, 6]));
       expect(stack.localCost).toBeCloseTo(0.015);
       expect(stack.localTokens).toBe(0); // TTS is per-character, no tokens
@@ -403,7 +401,7 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     await withClient({ speak: speak as any }, async () => {
       await expect(
         _synthesizeSpeech("hi", link, "alloy", "tts-1", "", "mp3", 1, [root], ""),
-      ).rejects.toThrow(/already exists/);
+      ).rejects.toThrow(/symlink/);
       expect(speak).not.toHaveBeenCalled();
     });
   });

@@ -1,14 +1,12 @@
 import * as readline from "readline";
 import process from "process";
-import { readFile, writeFile, appendFile } from "fs/promises";
 import { classifyIterable } from "../utils/iteration.js";
 import { decodeBase64Strict } from "./base64.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { detectPlatform } from "./utils.js";
-import { resolvePath } from "./resolvePath.js";
-import { expandPath } from "./expandPath.js";
-import { readContainedFile } from "../utils/readContainedFile.js";
+import { fixedRoot, readText, readBytes, writeBytes, type WriteMode } from "./contained.js";
+export type { WriteMode } from "./contained.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { FakeClock } from "../runtime/clock.js";
@@ -215,25 +213,12 @@ export function _round(num: number, precision: number): number {
 // re-export needed here.
 
 export async function _read(
-  dir: string,
+  rootDir: string,
   filename: string,
   offset?: number,
   limit?: number,
-  allowedPaths?: string[],
 ): Promise<string> {
-  const filePath = await resolvePath(dir, filename);
-  let text: string;
-  if (allowedPaths && allowedPaths.length > 0) {
-    // Descriptor-validated read: the bytes provably come from inside an
-    // allowed root, with no window in which a swap to a symlink can
-    // redirect the read (see readContainedFile). The first root that
-    // accepts the file wins; the last refusal is rethrown.
-    text = readContainedAny(filePath, allowedPaths);
-  } else {
-    const data = await readFile(filePath);
-    text = data.toString("utf8");
-  }
-  return sliceLines(text, offset, limit);
+  return sliceLines(readText(fixedRoot(rootDir), filename), offset, limit);
 }
 
 /** The lines of `text` a read with `offset` and `limit` returns. Default:
@@ -256,64 +241,18 @@ export function sliceLines(text: string, offset?: number, limit?: number): strin
   return slice.join("\n") + trailing;
 }
 
-function readContainedAny(filePath: string, allowedRoots: string[]): string {
-  let lastErr: unknown = new Error("no allowed roots");
-  for (const root of allowedRoots) {
-    try {
-      return readContainedFile(expandPath(root), filePath);
-    } catch (err) {
-      lastErr = err;
-    }
-  }
-  throw lastErr;
-}
-
-const VALID_WRITE_MODES = ["overwrite", "append", "create-only"] as const;
-export type WriteMode = (typeof VALID_WRITE_MODES)[number];
-
-/** Single owner of the write-mode ladder. `data` is a string (written UTF-8 by
- *  Node's default) or a Buffer (raw bytes). `_write` / `_writeBinary` delegate
- *  here so mode semantics live in one place. */
-async function _writeBytes(
-  dir: string,
-  filename: string,
-  data: string | Buffer,
-  mode: WriteMode = "overwrite",
-): Promise<boolean> {
-  if (!VALID_WRITE_MODES.includes(mode)) {
-    throw new Error(`Invalid mode '${mode}'. Must be one of: ${VALID_WRITE_MODES.join(", ")}.`);
-  }
-  const filePath = await resolvePath(dir, filename);
-  if (mode === "create-only") {
-    // The "wx" flag makes create-only atomic: an existing file (or a
-    // dangling symlink at the target) fails the open itself, with no
-    // check-then-write window.
-    try {
-      await writeFile(filePath, data, { flag: "wx" });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-        throw new Error(`File already exists: '${filePath}' (mode is 'create-only').`);
-      }
-      throw err;
-    }
-    return true;
-  }
-  const doWrite = mode === "append" ? appendFile : writeFile;
-  await doWrite(filePath, data);
-  return true;
-}
-
 export async function _write(
-  dir: string,
+  rootDir: string,
   filename: string,
   content: string,
   mode: WriteMode = "overwrite",
 ): Promise<boolean> {
-  return _writeBytes(dir, filename, content, mode);
+  writeBytes(fixedRoot(rootDir), filename, Buffer.from(content, "utf8"), { mode });
+  return true;
 }
 
 export async function _writeBinary(
-  dir: string,
+  rootDir: string,
   filename: string,
   base64: string,
   mode: WriteMode = "overwrite",
@@ -325,13 +264,12 @@ export async function _writeBinary(
     // Add the operation context to the shared decoder's message.
     throw new Error(`writeBinary: ${(e as Error).message}`);
   }
-  return _writeBytes(dir, filename, Buffer.from(bytes), mode);
+  writeBytes(fixedRoot(rootDir), filename, Buffer.from(bytes), { mode });
+  return true;
 }
 
-export async function _readBinary(dir: string, filename: string): Promise<string> {
-  const filePath = await resolvePath(dir, filename);
-  const data = await readFile(filePath);
-  return data.toString("base64");
+export async function _readBinary(rootDir: string, filename: string): Promise<string> {
+  return readBytes(fixedRoot(rootDir), filename).toString("base64");
 }
 
 /** argv item 1 is the message, item 2 is the title. See `_notify`. */

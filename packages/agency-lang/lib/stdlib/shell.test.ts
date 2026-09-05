@@ -6,6 +6,7 @@ import { __internal_exec, __internal_bash, _glob, _grep } from "./shell.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
+import { _realDir } from "./contained.js";
 import { safeDeleteDirectory } from "../utils.js";
 import { findPackageRoot } from "../importPaths.js";
 
@@ -41,7 +42,7 @@ describe("_exec / _bash cwd ~ expansion", () => {
   let homedirSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "shell-home-"));
+    fakeHome = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "shell-home-"));
     homedirSpy = vi.spyOn(os, "homedir").mockReturnValue(fakeHome);
   });
 
@@ -204,11 +205,11 @@ describe("_exec / _bash reject a nonexistent cwd with a clear error", () => {
   });
 });
 
-describe("_glob symlink handling under allowedPaths", () => {
+describe("_glob and symlinks", () => {
   let root: string;
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-glob-symlink-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-glob-symlink-"));
     fs.mkdirSync(path.join(root, "real"));
     fs.writeFileSync(path.join(root, "real", "a.md"), "a");
     fs.symlinkSync(path.join(root, "real", "a.md"), path.join(root, "real", "link.md"));
@@ -218,32 +219,29 @@ describe("_glob symlink handling under allowedPaths", () => {
     await safeDeleteDirectory(root);
   });
 
-  it("lists symlinked entries when allowedPaths is not set", async () => {
-    const results = await _glob("*.md", path.join(root, "real"), 100, []);
-    expect(results.sort()).toEqual(["a.md", "link.md"]);
+  it("leaves symlinked entries out", async () => {
+    expect(await _glob(root, "real", "*.md", 100)).toEqual(["a.md"]);
+    expect(await _glob(path.join(root, "real"), ".", "*.md", 100)).toEqual(["a.md"]);
   });
 
-  it("skips symlinked entries when allowedPaths is set", async () => {
-    const results = await _glob("*.md", path.join(root, "real"), 100, [root]);
-    expect(results).toEqual(["a.md"]);
-  });
-
-  it("refuses a symlinked search root when allowedPaths is set, even with an in-root target", async () => {
+  it("refuses a symlinked search dir below the root", async () => {
     fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
-    await expect(_glob("*.md", path.join(root, "linked"), 100, [root])).rejects.toThrow(
-      /is a symlink/,
-    );
-    // Without allowedPaths the link is followed, as before.
-    const open = await _glob("*.md", path.join(root, "linked"), 100, []);
-    expect(open.sort()).toEqual(["a.md", "link.md"]);
+    await expect(_glob(root, "linked", "*.md", 100)).rejects.toThrow(/is a symlink/);
+  });
+
+  it("refuses a link in the root spelling; the wrapper resolves that before the interrupt", async () => {
+    fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
+    const linked = path.join(root, "linked");
+    await expect(_glob(linked, ".", "*.md", 100)).rejects.toThrow(/symlink/);
+    expect(await _glob(_realDir(linked), ".", "*.md", 100)).toEqual(["a.md"]);
   });
 });
 
-describe("symlinked-root refusal parity across walkers", () => {
+describe("symlinked search dirs are refused by every walker", () => {
   let root: string;
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-walk-symlink-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-walk-symlink-"));
     fs.mkdirSync(path.join(root, "real"));
     fs.writeFileSync(path.join(root, "real", "a.md"), "needle");
     fs.symlinkSync(path.join(root, "real"), path.join(root, "linked"));
@@ -262,17 +260,15 @@ describe("symlinked-root refusal parity across walkers", () => {
     invert: false,
   };
 
-  it("_grep refuses a symlinked search root when allowedPaths is set", async () => {
-    await expect(_grep(needle, path.join(root, "linked"), 10, [root])).rejects.toThrow(
-      /is a symlink/,
-    );
-    const open = await _grep(needle, path.join(root, "linked"), 10, []);
-    expect(open.length).toBe(1);
+  it("_grep refuses a symlinked search dir below the root", async () => {
+    await expect(_grep(root, "linked", needle, 10)).rejects.toThrow(/is a symlink/);
+    const real = await _grep(root, "real", needle, 10);
+    expect(real.length).toBe(1);
   });
 
   it("_glob returns nothing for a non-positive maxResults", async () => {
-    expect(await _glob("*.md", path.join(root, "real"), 0, [])).toEqual([]);
-    expect(await _glob("*.md", path.join(root, "real"), -3, [])).toEqual([]);
+    expect(await _glob(root, "real", "*.md", 0)).toEqual([]);
+    expect(await _glob(root, "real", "*.md", -3)).toEqual([]);
   });
 });
 
@@ -288,7 +284,7 @@ describe("_grep honours .gitignore", () => {
   };
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grep-ignore-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-grep-ignore-"));
     fs.writeFileSync(path.join(root, ".gitignore"), "*.js\nout/\n");
     fs.writeFileSync(path.join(root, "a.agency"), "needle\n");
     fs.writeFileSync(path.join(root, "a.js"), "needle\n");
@@ -304,7 +300,7 @@ describe("_grep honours .gitignore", () => {
   });
 
   it("skips ignored files and directories, and lets a nested .gitignore un-ignore", async () => {
-    const hits = (await _grep(query, root, 100, [])) as string[];
+    const hits = (await _grep(root, ".", query, 100)) as string[];
     expect(hits.sort()).toEqual(["a.agency", "keep/c.js"]);
   });
 
@@ -315,14 +311,32 @@ describe("_grep honours .gitignore", () => {
     fs.mkdirSync(path.join(root, "sub"));
     fs.writeFileSync(path.join(root, "sub", "d.js"), "needle\n");
     fs.writeFileSync(path.join(root, "sub", "d.txt"), "needle\n");
-    const inSub = (await _grep(query, path.join(root, "sub"), 100, [])) as string[];
+    const inSub = (await _grep(root, "sub", query, 100)) as string[];
     expect(inSub.sort()).toEqual(["d.txt"]);
-    const inKeep = (await _grep(query, path.join(root, "keep"), 100, [])) as string[];
+    const inKeep = (await _grep(root, "keep", query, 100)) as string[];
     expect(inKeep.sort()).toEqual(["c.js"]);
   });
 
+  it("does not follow a symlinked .gitignore below the root", async () => {
+    // A link named .gitignore inside `sub` points at rules outside the root
+    // that would ignore *.txt. It is a link below the root, so it is not read.
+    fs.mkdirSync(path.join(root, "sub"));
+    fs.writeFileSync(path.join(root, "sub", "e.txt"), "needle\n");
+    const outside = fs.mkdtempSync(
+      path.join(fs.realpathSync(os.tmpdir()), "agency-gitignore-outside-"),
+    );
+    try {
+      fs.writeFileSync(path.join(outside, "rules"), "*.txt\n");
+      fs.symlinkSync(path.join(outside, "rules"), path.join(root, "sub", ".gitignore"));
+      const hits = (await _grep(root, "sub", query, 100)) as string[];
+      expect(hits).toEqual(["e.txt"]);
+    } finally {
+      await safeDeleteDirectory(outside);
+    }
+  });
+
   it("searches everything when respectGitignore is false", async () => {
-    const hits = (await _grep(query, root, 100, [], false)) as string[];
+    const hits = (await _grep(root, ".", query, 100, [], false)) as string[];
     expect(hits.sort()).toEqual(["a.agency", "a.js", "keep/c.js", "out/b.txt"]);
   });
 });
@@ -340,7 +354,7 @@ describe("_grep stops at maxResults inside one file", () => {
   const MATCHING_LINES = 5000;
 
   beforeEach(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "agency-grep-cap-"));
+    root = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-grep-cap-"));
     const lines = Array.from({ length: MATCHING_LINES }, (_, index) => `needle ${index}`);
     fs.writeFileSync(path.join(root, "big.txt"), lines.join("\n") + "\n");
     fs.writeFileSync(path.join(root, "other.txt"), "needle here\nnothing\n");
@@ -351,19 +365,19 @@ describe("_grep stops at maxResults inside one file", () => {
   });
 
   it("returns exactly maxResults matches from a file with far more", async () => {
-    const hits = await _grep(query, root, 3, []);
+    const hits = await _grep(root, ".", query, 3);
     expect(hits.length).toBe(3);
   });
 
   it("with filesOnly returns each file once and never more files than maxResults", async () => {
-    const all = (await _grep({ ...query, filesOnly: true }, root, 10, [])) as string[];
+    const all = (await _grep(root, ".", { ...query, filesOnly: true }, 10)) as string[];
     expect(all.sort()).toEqual(["big.txt", "other.txt"]);
-    const one = await _grep({ ...query, filesOnly: true }, root, 1, []);
+    const one = await _grep(root, ".", { ...query, filesOnly: true }, 1);
     expect(one.length).toBe(1);
   });
 
   it("with invert does not report the line after the final newline", async () => {
-    const hits = await _grep({ ...query, invert: true }, root, 100, []);
+    const hits = await _grep(root, ".", { ...query, invert: true }, 100);
     expect(hits).toEqual([{ file: "other.txt", line: 2, text: "nothing" }]);
   });
 });

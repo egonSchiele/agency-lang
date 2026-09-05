@@ -1,5 +1,5 @@
 import path from "path";
-import { statSync } from "fs";
+import { root, stat } from "./contained.js";
 import process from "process";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { abortableSpawn } from "./abortable.js";
@@ -34,13 +34,11 @@ export async function gitRunImpl(
       `git: no repo directory — pass an explicit absolute "cwd" or set the agent working directory (got "${cwd}")`,
     );
   }
-  let stats;
-  try {
-    stats = statSync(cwd);
-  } catch {
+  const info = stat(root(cwd), ".");
+  if (info === null) {
     throw new Error(`git: repo directory does not exist: ${cwd}`);
   }
-  if (!stats.isDirectory()) {
+  if (!info.isDirectory()) {
     throw new Error(`git: repo directory is not a directory: ${cwd}`);
   }
   const env = scrubEnv(opts?.env ?? process.env);

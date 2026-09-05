@@ -12,6 +12,7 @@ import {
   _urlHost,
  } from "agency-lang/stdlib-lib/system.js"
 import { _notify } from "agency-lang/stdlib-lib/builtins.js"
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
 
 /** @module Talk to the host OS: read command-line args and environment
 variables, find the current directory, show notifications, take screenshots,
@@ -71,11 +72,15 @@ export def screenshot(
   @param height - Height of the capture region; -1 for the full screen
   @param allowedPaths - Only allow saving under these path prefixes
   """
+  const real = try _realTarget(filepath)
+  if (real is failure) {
+    return real
+  }
   return interrupt std::screenshot("Are you sure you want to take a screenshot? This will capture the screen contents, which may include sensitive information.", {
-    filepath: filepath
+    filepath: real.value
   })
 
-  _screenshot(filepath, x, y, width, height, allowedPaths)
+  _screenshot(real.value, x, y, width, height, allowedPaths)
 }
 
 export def exit(code: number = 0) {

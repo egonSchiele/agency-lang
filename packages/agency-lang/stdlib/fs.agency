@@ -1,4 +1,4 @@
-import { _multiedit, _previewEdit, _applyPatch, _mkdir, _copy, _move, _remove, _prepareContainedPath } from "agency-lang/stdlib-lib/fs.js"
+import { _multiedit, _previewEdit, _applyPatch, _mkdir, _copy, _move, _remove, _prepareContainedPath, _realTarget } from "agency-lang/stdlib-lib/fs.js"
 import { bash, glob, ls, grep } from "std::shell"
 import { applyAgentCwd } from "std::index"
 
@@ -118,12 +118,16 @@ export def mkdir(dir: string, allowedPaths: string[] = [], useAgentCwd: boolean 
   if (useAgentCwd) {
     dir = applyAgentCwd(dir)
   }
+  const target = try _realTarget(dir)
+  if (isFailure(target)) {
+    return target
+  }
   return interrupt std::mkdir("Are you sure you want to create this directory?", {
-    dir: dir
+    dir: target.value
   })
 
   destructive {
-    return try _mkdir(dir, allowedPaths)
+    return try _mkdir(target.value, allowedPaths)
   }
 }
 
@@ -140,13 +144,21 @@ export def copy(src: string, dest: string, allowedPaths: string[] = [], useAgent
     src = applyAgentCwd(src)
     dest = applyAgentCwd(dest)
   }
+  const from = try _realTarget(src)
+  if (isFailure(from)) {
+    return from
+  }
+  const to = try _realTarget(dest)
+  if (isFailure(to)) {
+    return to
+  }
   return interrupt std::copy("Are you sure you want to copy this file or directory?", {
-    src: src,
-    dest: dest
+    src: from.value,
+    dest: to.value
   })
 
   destructive {
-    return try _copy(src, dest, allowedPaths)
+    return try _copy(from.value, to.value, allowedPaths)
   }
 }
 
@@ -163,13 +175,21 @@ export def move(src: string, dest: string, allowedPaths: string[] = [], useAgent
     src = applyAgentCwd(src)
     dest = applyAgentCwd(dest)
   }
+  const from = try _realTarget(src)
+  if (isFailure(from)) {
+    return from
+  }
+  const to = try _realTarget(dest)
+  if (isFailure(to)) {
+    return to
+  }
   return interrupt std::move("Are you sure you want to move this file or directory?", {
-    src: src,
-    dest: dest
+    src: from.value,
+    dest: to.value
   })
 
   destructive {
-    return try _move(src, dest, allowedPaths)
+    return try _move(from.value, to.value, allowedPaths)
   }
 }
 
@@ -184,11 +204,15 @@ export def remove(target: string, allowedPaths: string[] = [], useAgentCwd: bool
   if (useAgentCwd) {
     target = applyAgentCwd(target)
   }
+  const real = try _realTarget(target)
+  if (isFailure(real)) {
+    return real
+  }
   return interrupt std::remove("Are you sure you want to delete this file or directory? This cannot be undone.", {
-    target: target
+    target: real.value
   })
 
   destructive {
-    return try _remove(target, allowedPaths)
+    return try _remove(real.value, allowedPaths)
   }
 }

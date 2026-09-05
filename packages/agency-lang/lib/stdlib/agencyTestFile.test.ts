@@ -5,7 +5,7 @@ import * as path from "path";
 import { _readTestFileSandbox } from "./agency.js";
 
 function makeDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "agency-testfile-"));
+  return fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agency-testfile-"));
 }
 
 describe("_readTestFileSandbox", () => {

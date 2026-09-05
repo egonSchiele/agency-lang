@@ -2,21 +2,31 @@
 // kept, and the two ways it comes back out. One fixed place, outside every
 // project, so the write goes somewhere the model never chose and nothing
 // lands in a repository.
-import { lstat, mkdir, writeFile } from "fs/promises";
 import os from "os";
 import path from "path";
 import { randomBytes } from "crypto";
 import { sliceLines } from "./builtins.js";
 import { compileGrepQuery } from "./grepQuery.js";
 import { firstMatchingLines, type GrepMatch } from "./shell.js";
-import { readContainedFile } from "../utils/readContainedFile.js";
+import { root, wholePath, mkdir, readText, writeText, type Located } from "./contained.js";
 
-/** `~/.agency-agent/tool-output`, or `AGENCY_TOOL_OUTPUT_DIR` when set, so a
- * test can point the spill somewhere it may delete. */
-export function _spillDir(): string {
+const SPILL_SUBDIR = path.join(".agency-agent", "tool-output");
+
+/** Where saved output lives: two components under the home directory, so a
+ * link planted at `~/.agency-agent` is refused by the same rule as any
+ * other link below a root. `AGENCY_TOOL_OUTPUT_DIR` overrides it so a test
+ * can point the spill somewhere it may delete. */
+function spillLocation(): Located {
   const override = process.env.AGENCY_TOOL_OUTPUT_DIR;
-  if (override !== undefined && override !== "") return override;
-  return path.join(os.homedir(), ".agency-agent", "tool-output");
+  if (override !== undefined && override !== "") {
+    return wholePath(override);
+  }
+  return { root: root(os.homedir()), target: SPILL_SUBDIR };
+}
+
+export function _spillDir(): string {
+  const location = spillLocation();
+  return path.join(location.root.real, location.target);
 }
 
 // A saved file's name: a timestamp, a random suffix, `.log`. The read
@@ -37,36 +47,21 @@ function checkName(filename: string): void {
   }
 }
 
-/** The spill directory, created if needed. A symlink anywhere from the
- * home directory down is refused, so a link planted at `~/.agency-agent`
- * cannot redirect where saved output lands or where the readers look. */
-async function spillDirReady(): Promise<string> {
-  const dir = path.resolve(_spillDir());
-  for (const candidate of [path.dirname(dir), dir]) {
-    await refuseSymlink(candidate);
-  }
-  await mkdir(dir, { recursive: true });
-  return dir;
-}
-
-async function refuseSymlink(p: string): Promise<void> {
-  try {
-    if ((await lstat(p)).isSymbolicLink()) {
-      throw new Error(`refused: '${p}' is a symlink`);
-    }
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw err;
-  }
+/** The spill directory, created if needed. */
+async function spillDirReady(): Promise<Located> {
+  const location = spillLocation();
+  mkdir(location.root, location.target);
+  return location;
 }
 
 /** Write `text` under the spill directory as `filename`. The file is
  * created fresh: an existing entry, a symlink included, is never opened. */
 export async function _spillOutput(filename: string, text: string): Promise<string> {
   checkName(filename);
-  const dir = await spillDirReady();
-  await writeFile(path.join(dir, filename), text, { flag: "wx", mode: 0o600 });
-  return path.join(dir, filename);
+  const location = await spillDirReady();
+  const file = path.join(location.target, filename);
+  writeText(location.root, file, text, { mode: "create-only", fileMode: 0o600 });
+  return path.join(location.root.real, file);
 }
 
 /** One saved file's text, read through a descriptor that is checked to sit
@@ -74,8 +69,8 @@ export async function _spillOutput(filename: string, text: string): Promise<stri
  * nowhere. */
 async function readSaved(filename: string): Promise<string> {
   checkName(filename);
-  const dir = await spillDirReady();
-  return readContainedFile(dir, path.join(dir, filename));
+  const location = await spillDirReady();
+  return readText(location.root, path.join(location.target, filename));
 }
 
 /** The saved file, whole or a slice of lines; the same offset and limit

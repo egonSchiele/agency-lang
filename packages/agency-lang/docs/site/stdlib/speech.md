@@ -29,7 +29,7 @@ effect std::say {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L36))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L37))
 
 ### std::record
 
@@ -37,7 +37,7 @@ effect std::say {
 effect std::record {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L38))
 
 ### std::transcribe
 
@@ -49,7 +49,7 @@ effect std::transcribe {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L43))
 
 ### std::synthesizeSpeech
 
@@ -61,7 +61,7 @@ effect std::synthesizeSpeech {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L50))
 
 ## Functions
 
@@ -87,9 +87,6 @@ Speak text aloud locally using the operating system's text-to-speech
   @param outputFile - When set, save the audio to this file instead of playing it
   @param allowedPaths - Only allow saving under these path prefixes
 
-Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
-playback.
-
 **Parameters:**
 
 | Name | Type | Default |
@@ -102,7 +99,7 @@ playback.
 
 **Throws:** `std::say`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L57))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L74))
 
 ### record
 
@@ -141,7 +138,7 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L92))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L111))
 
 ### transcribe
 
@@ -190,7 +187,7 @@ time-guard abort. Cost, spend guards, and statelog apply.
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L129))
 
 ### speak
 
@@ -244,4 +241,4 @@ and statelog apply.
 
 **Throws:** `std::synthesizeSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L182))

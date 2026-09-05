@@ -1,7 +1,15 @@
 import { typeCheckSource, getEffectsFromSource, TypeCheckReport } from "../compiler/compile.js";
-import { writeFileSync, readFileSync, realpathSync, existsSync } from "fs";
 import { resolve, sep, join, dirname } from "path";
-import { readContainedFile } from "../utils/readContainedFile.js";
+import {
+  root,
+  fixedRoot,
+  resolveUnder,
+  readText,
+  writeText,
+  stat,
+  wholePath,
+  type Root,
+} from "./contained.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { AgencyGenerator, generateAgency } from "../backends/agencyGenerator.js";
 import { TypescriptPreprocessor } from "../preprocessors/typescriptPreprocessor.js";
@@ -15,7 +23,7 @@ import { resolveAgencyImportPath, isStdlibImport } from "../importPaths.js";
 import type { ExportFromStatement, NamedExportBody } from "../types.js";
 import { variableTypeToString } from "../backends/typescriptGenerator/typeToString.js";
 import { declaredName } from "../types/hole.js";
-import { deepCopy, isStrictDescendant } from "../utils.js";
+import { deepCopy } from "../utils.js";
 import { compileSandboxed } from "../compiler/compileSandboxed.js";
 import { nanoid } from "nanoid";
 import { exactVerdictValue } from "../testFormat/verdict.js";
@@ -120,53 +128,22 @@ export function _compile(source: string, dir: string = ""): CompiledProgramValue
   return compileToProgram({ source }, dir);
 }
 
-// Resolve `filename` against `dir`, requiring the result to live strictly
-// inside `dir` after symlinks are collapsed. Used by _compileFile,
-// _typecheckFile, and _formatFile to share one sandbox boundary.
-//
-// SECURITY: A naive `path.resolve(dir, filename)` is unsafe in two ways:
-//   1. If `filename` is absolute (e.g. "/etc/passwd"), `resolve` ignores
-//      `dir` entirely.
-//   2. `filename` may contain `..` segments that walk out of `dir`.
-// We defend against both by realpath-ing the resolved file and checking
-// it lives strictly inside the realpath-ed `dir`. realpath also collapses
-// symlinks, so a symlink planted inside `dir` that points outside cannot
-// be used as an escape hatch. The trailing `+ sep` on the prefix
-// prevents a sibling directory (e.g. `/safedir-evil/`) from passing the
-// startsWith check by sharing the same prefix string.
-//
-// When `mustExist` is false, the target file is allowed to not exist yet
-// (used by callers that are about to create the file). In that mode we
-// realpath the directory but only lexically resolve the file path —
-// symlinks INSIDE `dir` are not followed on the missing-target branch,
-// so if you let the user create a symlink and then write to it, that's
-// on you. For overwrite of an EXISTING symlink the realpath check still
-// applies because we hit the existing-target branch.
+// Resolve `filename` against `dir`, the sandbox. An absolute filename, a
+// `..` escape, or a symlink at any component below `dir` is refused. Used
+// by _compileFile, _typecheckFile, _formatFile, and _readTestFileSandbox
+// so they share one boundary and one error message. `sandbox` picks how
+// `dir` itself is read: `root` resolves a caller's spelling, and is right
+// before any interrupt; `fixedRoot` holds the spelling an approver saw.
 export function resolveInSandbox(
   dir: string,
   filename: string,
-  opts: { mustExist?: boolean } = {},
+  sandbox: (dir: string) => Root = fixedRoot,
 ): string {
-  const mustExist = opts.mustExist ?? true;
-  const sandboxRoot = realpathSync(resolve(dir));
-  const resolved = resolve(sandboxRoot, filename);
-  // Realpath the target whenever it exists so symlinks get collapsed and
-  // can't punch out of the sandbox. The only branch that skips realpath
-  // is "the target doesn't exist yet AND the caller said that's fine" —
-  // used by write-style callers (writeAST) that are about to create the
-  // file.
-  let target: string;
-  if (mustExist || existsSync(resolved)) {
-    target = realpathSync(resolved);
-  } else {
-    target = resolved;
+  try {
+    return resolveUnder(sandbox(dir), filename);
+  } catch (error) {
+    throw new Error(`Sandbox violation: ${(error as Error).message}`);
   }
-  if (!isStrictDescendant(sandboxRoot, target)) {
-    throw new Error(
-      `Sandbox violation: '${filename}' resolves to '${target}', which is outside the sandbox dir '${sandboxRoot}'.`,
-    );
-  }
-  return target;
 }
 
 // Read an agency source file from disk and compile it under the same
@@ -176,7 +153,8 @@ export function resolveInSandbox(
 export function _compileFile(dir: string, filename: string): CompiledProgramValue {
   // Containment + existence check up front for a precise error; the
   // sandboxed compile then reads the file itself as part of validation.
-  resolveInSandbox(dir, filename);
+  // No interrupt precedes this, so the caller's spelling resolves.
+  resolveInSandbox(dir, filename, root);
   return compileToProgram({ file: filename }, dir);
 }
 
@@ -195,7 +173,7 @@ export function _typecheck(source: string, dir: string = ""): TypeCheckReport {
   // The draft is given a path inside dir, so its relative imports resolve
   // against dir's files (as typecheckFile's do), and its own text comes from
   // the override: nothing is written to dir.
-  const draftPath = join(realpathSync(resolve(dir)), `agency_draft_${nanoid()}.agency`);
+  const draftPath = join(root(dir).real, `agency_draft_${nanoid()}.agency`);
   return typeCheckSource(source, draftPath, {}, { [draftPath]: source });
 }
 
@@ -421,8 +399,9 @@ function reExportInfos(node: ExportFromStatement, visited: string[]): ReExportRe
   const from = node.modulePath;
   if (isResolvableReExport(node)) {
     const abs = resolveAgencyImportPath(from, "");
-    if (!visited.includes(abs) && existsSync(abs)) {
-      const inner = describeSource(readFileSync(abs, "utf-8"), [...visited, abs]);
+    const located = wholePath(abs);
+    if (!visited.includes(abs) && stat(located.root, located.target) !== null) {
+      const inner = describeSource(readText(located.root, located.target), [...visited, abs]);
       if (node.body.kind === "starExport") {
         return {
           infos: inner.info.exports.map((info) => ({ ...info, reexportedFrom: from })),
@@ -517,7 +496,7 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
 // `dir` — typechecking is read-only so this is intentional).
 export function _typecheckFile(dir: string, filename: string): TypeCheckReport {
   const target = resolveInSandbox(dir, filename);
-  return typeCheckSource(readFileSync(target, "utf-8"), target);
+  return typeCheckSource(readText(fixedRoot(dir), filename), target);
 }
 
 // ---------------------------------------------------------------------------
@@ -567,16 +546,14 @@ export function _format(source: string): string {
 }
 
 export function _formatFile(dir: string, filename: string): boolean {
-  // formatFile *requires* the file to exist — it reads then writes.
-  // Use the existing-target branch (mustExist: true) so symlinks get
-  // realpath-collapsed before we touch the file.
-  const target = resolveInSandbox(dir, filename, { mustExist: true });
-  const source = readFileSync(target, "utf-8");
+  resolveInSandbox(dir, filename);
+  const sandbox = fixedRoot(dir);
+  const source = readText(sandbox, filename);
   const formatted = generateAgency(_parseAST(source));
   // Skip the write if formatting is a no-op — avoids touching mtime
   // when nothing actually changed. Matches Prettier / rustfmt behavior.
   if (formatted !== source) {
-    writeFileSync(target, formatted, "utf-8");
+    writeText(sandbox, filename, formatted);
   }
   return true;
 }
@@ -709,11 +686,8 @@ export type ParsedTestFileWire = {
  *  test() can launch anything. An escaping filename is refused by
  *  resolveInSandbox BEFORE any read. */
 export function _readTestFileSandbox(dir: string, filename: string): ParsedTestFileWire {
-  const target = resolveInSandbox(dir, filename);
-  // The std::read vote authorized this sandbox-relative path; the read
-  // validates the opened descriptor itself, so a swap after
-  // resolveInSandbox cannot redirect it outside dir.
-  const parsed = parseTestFileSandbox(readContainedFile(dir, target), filename);
+  resolveInSandbox(dir, filename);
+  const parsed = parseTestFileSandbox(readText(fixedRoot(dir), filename), filename);
   const wire: ParsedTestFileWire = {
     // sourceFile is declared relative to the .test.json, so a nested
     // suite ("sub/suite.test.json") tests "sub/<source>", not "<source>".

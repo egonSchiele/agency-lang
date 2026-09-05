@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, symlinkSync } from "fs";
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  symlinkSync,
+  realpathSync,
+} from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { _write, _read } from "./builtins.js";
@@ -9,7 +17,7 @@ describe("_write mode parameter", () => {
   let target: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "agency-write-mode-"));
+    dir = mkdtempSync(join(realpathSync(tmpdir()), "agency-write-mode-"));
     target = "out.txt";
   });
 
@@ -60,13 +68,9 @@ describe("_write mode parameter", () => {
   });
 
   it("create-only mode refuses a dangling symlink at the target", async () => {
-    // A stat-based existence check says "absent" here; only the wx open
-    // flag refuses it. This pins the flag: dropping it turns the write
-    // into follow-the-link.
     symlinkSync(join(dir, "no-such-file"), join(dir, target));
-    await expect(_write(dir, target, "should-fail", "create-only")).rejects.toThrow(
-      /already exists/,
-    );
+    await expect(_write(dir, target, "should-fail", "create-only")).rejects.toThrow(/symlink/);
+    expect(existsSync(join(dir, "no-such-file"))).toBe(false);
   });
 
   it("rejects unknown mode strings with a clear message", async () => {
@@ -80,7 +84,7 @@ describe("_read offset/limit", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "agency-read-"));
+    dir = mkdtempSync(join(realpathSync(tmpdir()), "agency-read-"));
   });
 
   afterEach(() => {
@@ -135,7 +139,7 @@ describe("_read allowedPaths containment", () => {
   let root: string;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), "agency-read-contained-"));
+    root = mkdtempSync(join(realpathSync(tmpdir()), "agency-read-contained-"));
     writeFileSync(join(root, "inside.md"), "inside");
   });
 
@@ -148,16 +152,14 @@ describe("_read allowedPaths containment", () => {
   });
 
   it("reads a contained file and paginates as usual", async () => {
-    expect(await _read(root, "inside.md", 0, 0, [root])).toBe("inside");
+    expect(await _read(root, "inside.md", 0, 0)).toBe("inside");
   });
 
-  it("refuses a symlink that resolves outside every allowed root", async () => {
-    const outside = mkdtempSync(join(tmpdir(), "agency-read-outside-"));
+  it("refuses a symlink below dir that resolves outside it", async () => {
+    const outside = mkdtempSync(join(realpathSync(tmpdir()), "agency-read-outside-"));
     writeFileSync(join(outside, "secret.md"), "secret");
     symlinkSync(join(outside, "secret.md"), join(root, "evil.md"));
-    await expect(_read(root, "evil.md", 0, 0, [root])).rejects.toThrow();
-    // Without allowedPaths the link is followed, as before.
-    expect(await _read(root, "evil.md")).toBe("secret");
+    await expect(_read(root, "evil.md")).rejects.toThrow(/symlink/);
     rmSync(outside, { recursive: true });
   });
 });

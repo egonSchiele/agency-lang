@@ -77,24 +77,31 @@ export function parseGitignore(dir: string, text: string): GitignoreFile {
  * rules like `**\/*.js` usually live. With no repository above `dir`,
  * nothing applies. */
 export async function readAncestorGitignores(dir: string): Promise<GitignoreFile[]> {
-  // A directory that is itself a repository root has no ancestors that
-  // apply: git never lets an enclosing repository's rules reach inside.
-  if (await exists(path.join(path.resolve(dir), ".git"))) return [];
-  const ancestors: string[] = [];
-  let current = path.dirname(path.resolve(dir));
-  for (;;) {
-    ancestors.unshift(current);
-    if (await exists(path.join(current, ".git"))) break;
-    const parent = path.dirname(current);
-    if (parent === current) return [];
-    current = parent;
-  }
+  const ancestors = await repositoryAncestors(dir);
+  if (ancestors === null) return [];
   const files: GitignoreFile[] = [];
   for (const ancestor of ancestors) {
     const file = await readGitignore(ancestor);
     if (file) files.push(file);
   }
   return files;
+}
+
+/** The directories strictly above `dir` up to and including the repository
+ * root, outermost first. Null when no ancestor holds a `.git` entry, and
+ * empty when `dir` is itself a repository root: git never lets an
+ * enclosing repository's rules reach inside. */
+export async function repositoryAncestors(dir: string): Promise<string[] | null> {
+  if (await exists(path.join(path.resolve(dir), ".git"))) return [];
+  const ancestors: string[] = [];
+  let current = path.dirname(path.resolve(dir));
+  for (;;) {
+    ancestors.unshift(current);
+    if (await exists(path.join(current, ".git"))) return ancestors;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
 }
 
 async function exists(p: string): Promise<boolean> {

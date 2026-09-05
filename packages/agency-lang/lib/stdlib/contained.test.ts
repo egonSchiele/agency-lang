@@ -295,6 +295,25 @@ describe("writeText modes", () => {
     }
   });
 
+  test("create-only publishes whole or not at all, and leaves no temporary file", () => {
+    const dir = makeDir(".ct-create-atomic-");
+    try {
+      const r = root(dir);
+      const seams = {
+        afterOpen: () => {
+          throw new Error("disk full");
+        },
+      };
+      expect(() => writeText(r, "f.txt", "a", { mode: "create-only", seams })).toThrow(/disk full/);
+      expect(fs.readdirSync(dir)).toEqual([]);
+      writeText(r, "f.txt", "a", { mode: "create-only", fileMode: 0o600 });
+      expect(fs.readdirSync(dir)).toEqual(["f.txt"]);
+      expect(fs.statSync(path.join(dir, "f.txt")).mode & 0o777).toBe(0o600);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
   test("a write into a missing parent directory fails rather than creating it", () => {
     const dir = makeDir(".ct-noparent-");
     try {

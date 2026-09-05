@@ -68,8 +68,12 @@ async function speakImpl(
     const tmpDir = root(os.tmpdir());
     const tmpName = `agency-speak-${nanoid()}.txt`;
     const tmpFile = path.join(tmpDir.real, tmpName);
+    // Only a file this call created is removed afterwards. A create that
+    // fails because the name was taken must not delete someone else's file.
+    let owned = false;
     try {
       writeText(tmpDir, tmpName, text, { mode: "create-only" });
+      owned = true;
       const args: string[] = ["-f", tmpFile];
       if (voice !== "") {
         args.push("-v", voice);
@@ -82,9 +86,11 @@ async function speakImpl(
       }
       await abortableExec("say", args, ctx.getAbortSignal(stack));
     } finally {
-      try {
-        remove(tmpDir, tmpName);
-      } catch {}
+      if (owned) {
+        try {
+          remove(tmpDir, tmpName);
+        } catch {}
+      }
     }
   } else {
     console.error(
@@ -398,9 +404,10 @@ export async function _transcribe(
 
 /**
  * Publish synthesized audio to `finalPath` without overwriting an existing
- * file. `create-only` opens the file exclusively, so a file that appeared
- * after the preflight makes the write fail rather than be replaced.
- * Cancellation is checked last, right before the write.
+ * file. `create-only` writes the whole file beside the target and links it
+ * into place, so the target appears complete or not at all, and a file that
+ * appeared after the preflight makes the publish fail rather than be
+ * replaced. Cancellation is checked last, right before the write.
  */
 export async function publishSpeechOutput(
   finalPath: string,

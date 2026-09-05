@@ -105,6 +105,8 @@ const tests = [
   testCase("dateToolSkipsTests", dateRound),
   testCase("staleTestFileDoesNotShip", [...pureRound, ...modelRound]),
   testCase("runToolRunsAndRecords", pureRound),
+  testCase("declinedRecordUseKeepsTheResult", pureRound),
+  testCase("symlinkedToolIsRefused", []),
   testCase("refusedWriteStopsTheRounds", pureRound),
   testCase("aliasedDateCallSkipsTests", aliasRound),
   testCase("refusesATimeLimitOverAnHour", []),

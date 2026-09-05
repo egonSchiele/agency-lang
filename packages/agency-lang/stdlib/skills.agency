@@ -15,7 +15,7 @@ import { exists } from "std::shell"
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
 import { _realDir } from "agency-lang/stdlib-lib/contained.js"
-import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter, _resolveCwdPath } from "agency-lang/stdlib-lib/skills.js"
+import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter } from "agency-lang/stdlib-lib/skills.js"
 
 
 /** @module
@@ -411,11 +411,16 @@ def checkSkillInputs(dir: string, name: string, description: string): Result<str
   if (dir.trim() == "") {
     return failure("dir must not be empty")
   }
-  const absDir = _resolveCwdPath(dir)
-  if (exists("${name}.md", absDir)) {
-    return failure("a skill named ${name} already exists in ${absDir}")
+  // The real spelling, so the save payload names the directory the way
+  // the write that follows will report it, and one policy rule covers both.
+  const absDir = try _realDir(dir)
+  if (isFailure(absDir)) {
+    return absDir
   }
-  return success(absDir)
+  if (exists("${name}.md", absDir.value)) {
+    return failure("a skill named ${name} already exists in ${absDir.value}")
+  }
+  return success(absDir.value)
 }
 
 /**

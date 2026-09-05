@@ -1,5 +1,5 @@
 import { remove, mkdir } from "std::fs"
-import { exists, ls } from "std::shell"
+import { exists, ls, exec } from "std::shell"
 import { designTool, listTools, runTool } from "std::toolbox"
 
 const OUT = __dirname + "/test-output"
@@ -322,7 +322,8 @@ node staleTestFileDoesNotShip(): boolean {
 }
 
 // Write a tool, run it, and check the record: one use, a last-used time,
-// and the createdAt from the write kept as it was.
+// and the createdAt from the write kept as it was. The record goes
+// through a recordUse interrupt naming the tool's directory.
 node runToolRunsAndRecords(): boolean {
   cleanup("addEight")
   const written = runDesign("addEight", OUT, ["accept"])
@@ -331,9 +332,19 @@ node runToolRunsAndRecords(): boolean {
     return false
   }
   const createdAt = written.value.meta.createdAt
-  const answer = runTool("addEight", {
-    n: 41
-  }, OUT) with approve
+  let recordDir = ""
+  let answer: Result = failure("not run")
+  handle {
+    answer = runTool("addEight", {
+      n: 41
+    }, OUT)
+  } with (intr) {
+    if (intr.effect == "std::toolbox::recordUse") {
+      recordDir = intr.data.dir
+    }
+    return approve()
+  }
+  const namedTheTool = recordDir == "${OUT}/addEight"
   const listed = listTools(OUT) with approve
   let recorded = false
   if (listed is success(entries)) {
@@ -341,7 +352,64 @@ node runToolRunsAndRecords(): boolean {
     recorded = entry.meta.uses == 1 && entry.meta.lastUsedAt != null && entry.meta.createdAt == createdAt && createdAt != ""
   }
   cleanup("addEight")
-  return answer is success && answer.value == 42 && recorded
+  return answer is success && answer.value == 42 && recorded && namedTheTool
+}
+
+// The count is only a count: a declined recordUse leaves meta.json as it
+// was and the run still returns the tool's result.
+node declinedRecordUseKeepsTheResult(): boolean {
+  cleanup("addSixteen")
+  const written = runDesign("addSixteen", OUT, ["accept"])
+  if (written is failure) {
+    cleanup("addSixteen")
+    return false
+  }
+  let answer: Result = failure("not run")
+  handle {
+    answer = runTool("addSixteen", {
+      n: 1
+    }, OUT)
+  } with (intr) {
+    if (intr.effect == "std::toolbox::recordUse") {
+      return reject("no bookkeeping")
+    }
+    return approve()
+  }
+  const listed = listTools(OUT) with approve
+  let unrecorded = false
+  if (listed is success(entries)) {
+    const entry = find(entries, \candidate -> candidate.name == "addSixteen")
+    unrecorded = entry.meta.uses == 0 && entry.meta.lastUsedAt == null
+  }
+  cleanup("addSixteen")
+  return answer is success && answer.value == 2 && unrecorded
+}
+
+// A tool directory that is a symlink does not carry the scan approval to
+// its target: listTools leaves it out and runTool does not find it, since
+// linked entries are hidden below an approved directory. The link is
+// proven reachable first.
+node symlinkedToolIsRefused(): boolean {
+  const box = "${OUT}/linkbox"
+  remove(box) with approve
+  mkdir(box) with approve
+  const linked = exec("ln", ["-s", "${TOOLS}/good", "${box}/linked"]) with approve
+  if (linked is failure || linked.exitCode != 0) {
+    return false
+  }
+  // Standalone exists follows the caller's own spelling; under `box` the
+  // link would be hidden, which is the behavior under test.
+  const reachable = exists("${box}/linked/tool.agency")
+  const listed = listTools(box) with approve
+  let unlisted = false
+  if (listed is success(entries)) {
+    unlisted = !some(entries, \candidate -> candidate.name == "linked")
+  }
+  const ran = runTool("linked", {
+    n: 1
+  }, box) with approve
+  remove(box) with approve
+  return reachable && unlisted && ran is failure && "${ran.error}" =~ re/no tool named|symlink/
 }
 
 // A refused write is not something a new draft can fix, so designTool

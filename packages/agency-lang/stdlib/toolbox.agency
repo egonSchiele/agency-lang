@@ -20,7 +20,7 @@ import { mkdir, remove, move } from "std::fs"
 import { ls, exists } from "std::shell"
 import { Json } from "std::validation"
 
-import { _read } from "agency-lang/stdlib-lib/builtins.js"
+import { _read, _write } from "agency-lang/stdlib-lib/builtins.js"
 import { _realDir } from "agency-lang/stdlib-lib/contained.js"
 
 /** @module
@@ -111,6 +111,15 @@ const META_FILE = "meta.json"
 @alwaysUnder(dir)
 effect std::toolbox::scan {
   dir: string
+}
+
+// runTool's use count. Its own effect, so a policy can approve the
+// stdlib's record without approving any std::write to meta.json. The
+// approval covers the write that fulfils it.
+@alwaysUnder(dir)
+effect std::toolbox::recordUse {
+  dir: string;
+  name: string
 }
 
 effect std::toolbox::review {
@@ -1084,13 +1093,19 @@ export def writeTool(
 
 // ---- running a tool ----
 
-def recordUse(toolDir: string, name: string, meta: ToolMeta): Result {
+def recordUse(root: string, name: string, meta: ToolMeta): Result {
+  return interrupt std::toolbox::recordUse("Record one use of this tool in its ${META_FILE}?", {
+    dir: "${root}/${name}",
+    name: name
+  })
   const used: ToolMeta = {
     ...meta,
     uses: meta.uses + 1,
     lastUsedAt: format(now())
   }
-  return write(META_FILE, JSON.stringify(used, null, 2), toolDir)
+  // Written under the toolbox root the approval named, so a link planted
+  // at the tool directory afterwards is refused.
+  return try _write(root, "${name}/${META_FILE}", JSON.stringify(used, null, 2), "overwrite")
 }
 
 export def runTool(
@@ -1100,8 +1115,9 @@ export def runTool(
 ): Result<Json> {
   """
   Run a saved tool's `main` node in a subprocess and return what it
-  returned. The tool's meta.json records one more use and the time; it
-  does not record the result.
+  returned. The tool's meta.json counts one more use and the time. A
+  declined or failed count does not fail the run. The result is not
+  recorded.
 
   @param name - The tool's name under dir
   @param request - The tool's input, a value of its Request type
@@ -1142,13 +1158,7 @@ export def runTool(
   if (ran is success(finished)) {
     result = finished.data
   }
-  // The tool has run and its effects have happened, so its result is
-  // never dropped: a failed record carries it in the message.
-  const recorded = recordUse(toolDir, name, meta.value)
-  if (recorded is failure(recordErr)) {
-    return failure(
-      "the tool ran and returned ${JSON.stringify(result)}, but ${META_FILE} could not be updated: ${recordErr}",
-    )
-  }
+  // Best-effort: the tool has already run.
+  recordUse(root.value, name, meta.value)
   return result
 }

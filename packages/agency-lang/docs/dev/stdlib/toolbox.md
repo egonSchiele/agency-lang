@@ -164,14 +164,20 @@ It then lists the directory with `ls` from `std::shell` (which raises
 `std::ls`), and keeps the directories whose names are not `staging` and
 do not start with a dot. The recommended policy gives `std::toolbox::scan` the same `dir` scope
 as `std::read`, so a toolbox outside the working directory prompts. `listTools` refuses an empty `dir`, since the
-primitives would resolve it to the process cwd. `ls` counts every entry
+primitives would resolve it to the process cwd, and puts its real
+spelling (`_realDir`) in the scan payload, so the payload names one
+directory however the caller spelled it and a policy rule written for
+reads matches it. `ls` counts every entry
 against its cap and does not say when it stopped, so a listing that
 reaches the cap is reported as a failure. It is not returned as a
 shortened catalog. The per-tool reads
 of `impl.agency` and `meta.json` use `_read`, covered by that one scan
 approval. `runTool` and the post-publish read in `saveTool` raise the
 same scan for the one tool directory they read, so no `_read` runs
-without an approval that names its directory. A toolbox directory that does not exist
+without an approval that names its directory. Every one of those reads
+takes the toolbox root as its approved directory, so a symlinked tool
+directory cannot carry a scan approval elsewhere: `ls` leaves the link
+out of the catalog, and `runTool` does not find it. A toolbox directory that does not exist
 yet is an empty catalog.
 
 Each entry carries `module` (what `describe` says about `run`: signature,
@@ -189,10 +195,14 @@ stops the tool before it has side effects. It then runs `main` through
 `runFile`, with `wallClock` set to the tool's own `maxTime` plus
 headroom, so the guard trips before the subprocess is killed. `runFile`
 clamps `wallClock` to an hour, so `stage` refuses a `maxTime` above
-an hour minus that headroom. It then rewrites `meta.json` with
-one more use and the time. If that write fails, the returned failure
-carries the tool's result in its message, since the tool has already
-run. Otherwise it returns the node's own `Result`.
+an hour minus that headroom. It then counts the use in
+`meta.json`, behind a `std::toolbox::recordUse` interrupt naming the
+tool's directory. The write that fulfils the approval takes the toolbox
+root as its approved directory, like every other write. The count is best-effort: the tool has already run, so
+a declined interrupt or a failed write leaves the count where it was and
+`runTool` returns the node's own `Result`. Why the count is an effect of
+its own, and what the recommended policy does with it, is in
+`docs/dev/agents/approval-policies.md`.
 
 ## Model calls and mocks
 

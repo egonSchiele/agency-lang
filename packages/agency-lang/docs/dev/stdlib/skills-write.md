@@ -43,17 +43,13 @@ dangling symlink fails the open atomically — because the pre-interrupt
 check is stale by save time: approval can take arbitrarily long, and a
 file created in the meantime must never be overwritten.
 
-The `dir` in the interrupt payload is absolutized (`~` expanded,
-resolved against the process cwd), so relative and `~`-led spellings
-produce the same payload and an always-scope rule saved from a save
-approval names one directory regardless of how the caller spelled it.
-One gap remains: the write that follows realpaths its directory
-(`prepareContainedPath`), and the save payload cannot — the directory
-may not exist until `mkdir` runs after approval. So a directory reached
-through a symlinked ancestor still yields two spellings (on macOS,
-`/tmp/skills` for the save and `/private/tmp/skills` for the write),
-and one always-scope rule will not cover both interrupts there. An
-empty `dir` is refused before any prompt.
+The `dir` in the interrupt payload is the real spelling (`~` expanded,
+resolved against the process cwd, links in the spelling followed once:
+`_realDir` from `lib/stdlib/contained.ts`), so relative, `~`-led, and
+symlink-spelled directories produce the same payload the write that
+follows will report, and an always-scope rule saved from a save approval
+covers both interrupts. Every scan payload in this module is spelled the
+same way. An empty `dir` is refused before any prompt.
 
 ## The design loop
 
@@ -126,6 +122,13 @@ containment checks realpath through those ancestors consistently. An
 attacker who can replace an ancestor of the approved root controls the
 data's parent directory and is outside this (and every file effect's)
 threat model.
+
+## What the recommended policy approves
+
+`std::skills::skillsDir` and `std::skills::commandsDir` take the same
+read scope as `std::read` in the recommended policy (`readScopeRules`):
+the launch directory, the agency install, and the agent home's learned
+skills and tools. The save and review gates have no rule and prompt.
 
 ## The frontmatter round-trip
 

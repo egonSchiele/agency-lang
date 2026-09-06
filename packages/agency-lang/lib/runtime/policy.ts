@@ -2,6 +2,8 @@ import picomatch from "picomatch";
 import { realpathSync } from "fs";
 import { z } from "zod";
 import { getPackageRoot } from "../importPaths.js";
+import { agentHomeDir } from "./agentHome.js";
+import { root } from "../stdlib/contained.js";
 
 export const PolicyRuleSchema = z
   .object({
@@ -100,10 +102,6 @@ function stripDotSlash(s: string): string {
 // whose name contains glob characters (say `v*1`) would widen the rule to
 // its siblings — a safety boundary, so the substituted prefix must match
 // itself only. Glob syntax stays live only in the user-written suffix.
-function escapeForGlob(s: string): string {
-  return s.replace(/[\\*?[\]{}()!+@|]/g, "\\$&");
-}
-
 // In a `dir` pattern, `.` also means "wherever the agent was launched".
 // Tools absolutize the dir they put in interrupt data, so a literal `.` in
 // a policy file could never match those; resolving it lets a static policy
@@ -130,7 +128,7 @@ export function resolveDotDirPattern(pattern: string, cwd: string = process.cwd(
   // would otherwise be interpreted as replacement-string syntax.
   return pattern.replace(
     /(^|\{|,)\.(?=$|\/|,|\})/g,
-    (_match, prefix) => prefix + escapeForGlob(realCwd),
+    (_match, prefix) => prefix + escapeGlob(realCwd),
   );
 }
 
@@ -155,7 +153,34 @@ export function expandAgencyInstallDir(
   } catch {
     return pattern;
   }
-  return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeForGlob(resolved));
+  return pattern.split(AGENCY_INSTALL_DIR_PLACEHOLDER).join(escapeGlob(resolved));
+}
+
+/** In a `dir` pattern, `<agent-home>` stands for the agent home directory
+ *  (`AGENCY_AGENT_HOME`, or `~/.agency-agent`). The built-in read scope
+ *  uses it for the learned skills and tools directories, so a saved policy
+ *  keeps meaning "wherever the agent home is now". */
+export const AGENT_HOME_PLACEHOLDER = "<agent-home>";
+
+/** Expand `<agent-home>` at match time, like `<agency>`. The home is
+ *  escaped so a path containing glob or brace characters stays literal. */
+export function expandAgentHomeDir(
+  pattern: string,
+  home: () => string = canonicalAgentHome,
+): string {
+  if (!pattern.includes(AGENT_HOME_PLACEHOLDER)) return pattern;
+  return pattern.split(AGENT_HOME_PLACEHOLDER).join(escapeGlob(home()));
+}
+
+/** The real spelling of the agent home, the spelling file effects put in
+ *  their payloads. A home that does not exist yet keeps a lexical tail. */
+function canonicalAgentHome(): string {
+  const home = agentHomeDir();
+  try {
+    return root(home).real;
+  } catch {
+    return home;
+  }
 }
 
 function matchesRule(
@@ -185,12 +210,12 @@ function matchesRule(
       !raw &&
       key === "dir" &&
       picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
-    const viaInstall =
+    const viaPlaceholders =
       !raw &&
       !viaDot &&
       key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), expandAgencyInstallDir(pattern));
-    if (!raw && !viaDot && !viaInstall) {
+      picomatch.isMatch(stripDotSlash(value), expandAgentHomeDir(expandAgencyInstallDir(pattern)));
+    if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }
   }

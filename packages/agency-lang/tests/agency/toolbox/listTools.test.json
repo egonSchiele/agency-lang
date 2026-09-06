@@ -89,6 +89,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "scanPayloadIsTheRealDirectory",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -153,6 +153,7 @@ const EXPECTED: Record<string, string[]> = {
   // make the look meaningless, so nothing is pinned.
   "std::skills::review": [],
   "std::toolbox::scan": ["dir/**"],
+  "std::toolbox::recordUse": ["dir/**"],
   "std::toolbox::review": [],
   "std::toolbox::save": ["dir/**"],
   "std::memory::enableMemory": [],

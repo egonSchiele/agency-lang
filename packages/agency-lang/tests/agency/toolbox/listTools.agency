@@ -1,6 +1,9 @@
+import { mkdir, remove } from "std::fs"
+import { exists, exec } from "std::shell"
 import { listTools, ToolEntry } from "std::toolbox"
 
 const FIXTURES = __dirname + "/fixtures/tools"
+const OUT = __dirname + "/test-output"
 
 def catalog() {
   return listTools(FIXTURES) with approve
@@ -104,4 +107,29 @@ node missingToolboxIsEmpty(): boolean {
     return false
   }
   return entries.value.length == 0
+}
+
+// The scan payload names the real directory, the spelling a read would
+// report, so one policy rule covers both. The link is proven reachable
+// first.
+node scanPayloadIsTheRealDirectory(): boolean {
+  const link = "${OUT}/linked-tools"
+  mkdir(OUT) with approve
+  remove(link) with approve
+  const linked = exec("ln", ["-s", FIXTURES, link]) with approve
+  if (linked is failure || linked.exitCode != 0) {
+    return false
+  }
+  const reachable = exists("good/tool.agency", link)
+  let payloadDir = ""
+  handle {
+    listTools(link)
+  } with (intr) {
+    if (intr.effect == "std::toolbox::scan") {
+      payloadDir = intr.data.dir
+    }
+    return approve()
+  }
+  remove(link) with approve
+  return reachable && payloadDir == FIXTURES
 }

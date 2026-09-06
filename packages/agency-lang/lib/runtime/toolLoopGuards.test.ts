@@ -65,6 +65,12 @@ describe("repeated tool calls", () => {
 
   const fresh = freshRepeatStreak;
 
+  it("makes a key that survives JSON storage: the streak rides on the checkpoint, and Postgres jsonb rejects U+0000", () => {
+    const key = repeatKey("raiseInterrupt", { a: 1, b: "asdasd" });
+    expect(key).not.toContain("\u0000");
+    expect(JSON.parse(JSON.stringify({ key })).key).toBe(key);
+  });
+
   it("counts identical results in a row and starts over when the result changes", () => {
     const streak = fresh();
     const key = repeatKey("typecheck", { source: "def f() {}" });

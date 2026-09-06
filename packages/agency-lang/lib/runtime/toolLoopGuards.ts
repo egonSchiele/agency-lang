@@ -74,8 +74,12 @@ function digest(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+/** The key is stored on the checkpoint, and checkpoints are kept as JSON
+ *  in places that reject U+0000 (Postgres jsonb, for one), so the two parts
+ *  are joined with a colon. Tool names are identifiers and the digest is
+ *  hex, so the join cannot collide. */
 export function repeatKey(toolName: string, args: Record<string, unknown>): string {
-  return `${toolName}\u0000${digest(canonicalJson(args))}`;
+  return `${toolName}:${digest(canonicalJson(args))}`;
 }
 
 /** The current run of identical calls: one record, because only calls in a

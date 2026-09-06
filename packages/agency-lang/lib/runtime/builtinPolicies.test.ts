@@ -47,7 +47,7 @@ describe("builtinPolicy", () => {
     expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::recordUse"]).toBeUndefined();
   });
 
-  it("leaves the save and review gates undecided under every built-in but approve-all", () => {
+  it("leaves the save, review, and provider-load gates undecided under every built-in but approve-all", () => {
     for (const name of ["recommended", "minimal", "with-writes"]) {
       const p = builtinPolicy(name, "/tmp/base")!;
       for (const effect of [
@@ -55,6 +55,7 @@ describe("builtinPolicy", () => {
         "std::skills::review",
         "std::toolbox::save",
         "std::toolbox::review",
+        "std::llm::registerProvider",
       ]) {
         expect(p[effect]).toBeUndefined();
       }

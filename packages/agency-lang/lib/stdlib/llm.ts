@@ -1,4 +1,4 @@
-import { fixedPath, readText, type Located } from "./contained.js";
+import { fixedPath, resolveUnder, readText, type Located } from "./contained.js";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
@@ -67,10 +67,15 @@ export function _setLlmOptions(opts: LlmDefaults): void {
 
 /** Load a provider module by path at runtime and register its provider into
  *  agency's own smoltalk — the runtime counterpart of `loadProviderModules`
- *  (which runs at bootstrap). Lets any program register a custom provider on
- *  demand. */
-export async function _registerProviderModule(modulePath: string): Promise<void> {
-  await loadProviderModuleByPath(modulePath);
+ *  (which runs at bootstrap). The Agency wrapper raised
+ *  `std::llm::registerProvider` on the real path, so the default `locate`
+ *  refuses a link in it, and a link at the file itself is refused too. */
+export async function _registerProviderModule(
+  modulePath: string,
+  locate: (p: string) => Located = fixedPath,
+): Promise<void> {
+  const located = locate(modulePath);
+  await loadProviderModuleByPath(resolveUnder(located.root, located.target));
 }
 
 /**

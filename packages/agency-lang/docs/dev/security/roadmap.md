@@ -186,7 +186,9 @@ walking up from cwd; `client.providerModules` is a list of JS files loaded
 with a dynamic import at bootstrap. Fix: under `--agency-only`, never load
 provider modules named by a config discovered under the tree being run;
 longer term, find a pattern for provider modules that is not "a JS path in
-project config".
+project config". The runtime twin, `std::llm::registerProviderModule(path)`,
+is gated (#1021): it raises `std::llm::registerProvider` with the real path
+before the load, and no built-in policy approves it.
 
 ### C3. `agency.json` in the untrusted tree redirects `llm()`; `--agency-only` ignores the runner's config (#969)
 
@@ -383,6 +385,7 @@ it is what lets them become total denial rather than workdir-scoping.
 | B3 sandbox flags imply no policy | #970 | open |
 | C1 `node_modules` shadowing | #967 | open |
 | C2 provider modules from tree config | #968 | open |
+| `registerProviderModule` at runtime, gated by `std::llm::registerProvider` | #1021 | done |
 | C3 `llm()` redirect; `--agency-only` ignores config | #969 | open |
 | C4 child env allowlist | #990 | open |
 | C5 deny child OS capabilities (`--permission`) | #989 | open |

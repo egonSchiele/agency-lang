@@ -32,4 +32,17 @@ describe("_registerProviderModule", () => {
     await _registerProviderModule(p);
     expect(smoltalk.getClient({ model: "m", provider: "rpm-test" }).constructor.name).toBe("RPM");
   });
+
+  it("refuses a symlink at the module path and loads nothing", async () => {
+    const target = path.join(here, "__tmp_rpm_target.mjs");
+    fs.writeFileSync(
+      target,
+      `export function register({ registerProvider }) { registerProvider("rpm-test", class {}); }`,
+    );
+    const link = path.join(here, "__tmp_rpm_link.mjs");
+    fs.symlinkSync(target, link);
+    tmp.push(target, link);
+    await expect(_registerProviderModule(link)).rejects.toThrow(/symlink/);
+    expect(() => smoltalk.getClient({ model: "m", provider: "rpm-test" })).toThrow();
+  });
 });

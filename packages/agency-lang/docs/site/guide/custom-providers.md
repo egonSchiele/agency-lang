@@ -100,7 +100,10 @@ deep subagents stay local too; it ignores `--model`/`--provider`/`--fastmodel`/
 Programmatically, `std::agency/local` exposes the same operations
 (`downloadModel`, `listDownloadedModels`, `aliasModel`, `registerLocalModel`,
 …), and `std::llm`'s `registerProviderModule(path)` registers any custom
-provider module at runtime.
+provider module at runtime. That call raises `std::llm::registerProvider`
+with the module's real path, because the module runs as code in the
+process. Approve it interactively, or with a policy rule that names the
+path; no built-in policy approves it.
 
 The rest of this page covers the fully manual route for any custom provider.
 

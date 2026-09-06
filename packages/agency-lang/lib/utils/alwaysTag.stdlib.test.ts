@@ -73,6 +73,7 @@ const EXPECTED: Record<string, string[]> = {
   "std::copy": ["src/**", "dest/**"],
   "std::move": ["src/**", "dest/**"],
   "std::applyPatch": [],
+  "std::llm::registerProvider": ["path"],
   "std::exec": ["command", "subcommand"],
   "std::bash": ["command", "cwd"],
   "std::run": [],

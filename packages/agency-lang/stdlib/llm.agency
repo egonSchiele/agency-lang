@@ -126,14 +126,26 @@ export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Re
   return failure("No LLM API key found. Set one of: ${checked}")
 }
 
-export def registerProviderModule(path: string) {
+// Loading a provider module runs its JavaScript in this process, so the
+// load is gated like any other effect. The payload names the real path.
+@always(path)
+effect std::llm::registerProvider { path: string }
+
+export def registerProviderModule(path: string): Result {
   """
   Load a provider module by path at runtime and register its custom provider
   for llm() calls. The module must export register({ registerProvider }).
 
   @param path - Path to the provider module (.mjs/.js)
   """
-  _registerProviderModule(path)
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::llm::registerProvider("Load this provider module? It runs as code in this process.", {
+    path: real.value
+  })
+  return try _registerProviderModule(real.value)
 }
 
 // The TS HostedModelInfo in lib/stdlib/llm.ts mirrors this field order, and

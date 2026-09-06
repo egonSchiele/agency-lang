@@ -68,9 +68,20 @@ export type HostedModelInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L153))
 
 ## Effects
+
+### std::llm::registerProvider
+
+```ts
+@always(path)
+effect std::llm::registerProvider {
+  path: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L132))
 
 ### std::read
 
@@ -82,7 +93,7 @@ effect std::read {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L186))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L198))
 
 ## Functions
 
@@ -178,7 +189,7 @@ Return the first provider in `order` whose API-key environment variable
 ### registerProviderModule
 
 ```ts
-registerProviderModule(path: string)
+registerProviderModule(path: string): Result
 ```
 
 Load a provider module by path at runtime and register its custom provider
@@ -192,7 +203,11 @@ Load a provider module by path at runtime and register its custom provider
 |---|---|---|
 | path | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L129))
+**Returns:** `Result`
+
+**Throws:** `std::llm::registerProvider`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L134))
 
 ### listHostedModels
 
@@ -205,7 +220,7 @@ Return all known hosted text models (the built-in catalog plus any
 
 **Returns:** `HostedModelInfo[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L163))
 
 ### hostedModelInfo
 
@@ -226,7 +241,7 @@ Metadata for one hosted model by name, or null if the name is unknown or
 
 **Returns:** `HostedModelInfo | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L159))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L171))
 
 ### modelSupportsInput
 
@@ -251,7 +266,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 
 **Returns:** `boolean | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L181))
 
 ### loadModelData
 
@@ -276,4 +291,4 @@ Load model data from a JSON file (the shape `agency models refresh`
 
 **Throws:** `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/llm.agency#L212))

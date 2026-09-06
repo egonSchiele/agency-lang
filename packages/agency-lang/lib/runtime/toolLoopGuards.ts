@@ -76,8 +76,9 @@ function digest(text: string): string {
 
 /** The key is stored on the checkpoint, and checkpoints are kept as JSON
  *  in places that reject U+0000 (Postgres jsonb, for one), so the two parts
- *  are joined with a colon. Tool names are identifiers and the digest is
- *  hex, so the join cannot collide. */
+ *  are joined with a colon. A namespaced tool name has colons of its own,
+ *  but the digest is always 64 hex characters, so two different calls can
+ *  never produce the same key. */
 export function repeatKey(toolName: string, args: Record<string, unknown>): string {
   return `${toolName}:${digest(canonicalJson(args))}`;
 }

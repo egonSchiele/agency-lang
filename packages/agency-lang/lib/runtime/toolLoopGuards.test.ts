@@ -67,8 +67,13 @@ describe("repeated tool calls", () => {
 
   it("makes a key that survives JSON storage: the streak rides on the checkpoint, and Postgres jsonb rejects U+0000", () => {
     const key = repeatKey("raiseInterrupt", { a: 1, b: "asdasd" });
-    expect(key).not.toContain("\u0000");
-    expect(JSON.parse(JSON.stringify({ key })).key).toBe(key);
+    expect(key).not.toMatch(/[\u0000-\u001f]/);
+    // The separator also appears in namespaced tool names, so the parts are
+    // only unambiguous because the digest is a fixed 64 hex characters.
+    expect(repeatKey("std::read", { path: "a" })).not.toBe(repeatKey("std", { path: "a" }));
+    expect(repeatKey(`grep:${"0".repeat(64)}`, { pattern: "y" })).not.toBe(
+      repeatKey("grep", { pattern: "x" }),
+    );
   });
 
   it("counts identical results in a row and starts over when the result changes", () => {

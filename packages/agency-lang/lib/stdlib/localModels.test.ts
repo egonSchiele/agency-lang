@@ -22,6 +22,10 @@ import {
   fileSha256,
   verifyModelFile,
   pinnedSha256,
+  backendOfTarget,
+  isMlxUri,
+  parseMlxUri,
+  isModelDir,
 } from "./localModels.js";
 
 let dir: string;
@@ -807,5 +811,42 @@ describe("model file verification", () => {
     );
     // string alias governs → no pin (must NOT fall back to the curated hash)
     expect(pinnedSha256(k, aliasFile)).toBeUndefined();
+  });
+});
+
+describe("backend of a target", () => {
+  it("hf: URIs and .gguf paths are llama-cpp", () => {
+    expect(backendOfTarget("hf:org/repo:Q4_K_M")).toBe("llama-cpp");
+    expect(backendOfTarget("/models/x.gguf")).toBe("llama-cpp");
+  });
+
+  it("mlx: URIs are mlx, with and without a revision", () => {
+    expect(isMlxUri("mlx:mlx-community/Qwen3-Coder-Next-4bit")).toBe(true);
+    expect(parseMlxUri("mlx:mlx-community/Qwen3-Coder-Next-4bit")).toEqual({
+      repo: "mlx-community/Qwen3-Coder-Next-4bit",
+      revision: undefined,
+    });
+    expect(parseMlxUri("mlx:mlx-community/Qwen3-Coder-Next-4bit@7b9321e")).toEqual({
+      repo: "mlx-community/Qwen3-Coder-Next-4bit",
+      revision: "7b9321e",
+    });
+    expect(backendOfTarget("mlx:mlx-community/Qwen3-Coder-Next-4bit")).toBe("mlx");
+    expect(() => parseMlxUri("mlx:no-slash")).toThrow(/is not an mlx: URI/);
+  });
+
+  it("a directory with config.json and a safetensors file is an mlx model", () => {
+    const model = path.join(dir, "m");
+    fs.mkdirSync(model);
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    expect(isModelDir(model)).toBe(false);
+    fs.writeFileSync(path.join(model, "model.safetensors"), "");
+    expect(isModelDir(model)).toBe(true);
+    expect(backendOfTarget(model)).toBe("mlx");
+  });
+
+  it("a path that is neither is an error", () => {
+    expect(() => backendOfTarget(path.join(dir, "nothing-here"))).toThrow(
+      /not a model: expected a \.gguf file or a directory containing config\.json/,
+    );
   });
 });

@@ -9,6 +9,9 @@ import {
   stampFailureBoundary,
   markDestructiveWork,
   propagateFailure,
+  runtimeFailure,
+  guardFailureMessage,
+  type ResultFailure,
 } from "./result.js";
 import { AgencyAbort, AgencyCancelledError, makeAbortCause, type AbortCause } from "./errors.js";
 import { AbortedResult } from "./abortedResult.js";
@@ -35,7 +38,10 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
       { ownedGuardIds: ["g1"] },
     );
     expect(isFailure(result)).toBe(true);
-    expect((result as { error: { type: string; maxTime: number } }).error).toMatchObject({
+    expect((result as ResultFailure).error).toBe(
+      "Guard exceeded its time budget: ran 21ms of 20ms.",
+    );
+    expect((result as ResultFailure).data).toMatchObject({
       type: "timeoutFailure",
       maxTime: 20,
     });
@@ -55,7 +61,8 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
       },
       { ownedGuardIds: ["g2"] },
     );
-    expect((result as { error: { type: string; maxCost: number } }).error).toMatchObject({
+    expect((result as ResultFailure).error).toBe("Guard exceeded its cost budget: spent 3 of 2.");
+    expect((result as ResultFailure).data).toMatchObject({
       type: "guardFailure",
       maxCost: 2,
     });
@@ -147,7 +154,7 @@ describe("__tryCall — ownedGuardIds routing (C2)", () => {
       { ownedGuardIds: ["g1"] },
     );
     expect(isFailure(result)).toBe(true);
-    expect((result as { error: { type: string } }).error.type).toBe("timeoutFailure");
+    expect((result as ResultFailure).data.type).toBe("timeoutFailure");
   });
 
   it("re-throws an OUTER guard's trip (guardId not owned by this inner boundary)", async () => {
@@ -194,6 +201,7 @@ describe("failure", () => {
       __type: "resultType",
       success: false,
       error: "something went wrong",
+      data: {},
       checkpoint: null,
       neverStarted: false,
       destructiveRan: false,
@@ -204,12 +212,13 @@ describe("failure", () => {
     });
   });
 
-  it("creates a failure result with object error", () => {
+  it("coerces an object error into a message", () => {
     const result = failure({ code: 404, message: "not found" });
     expect(result).toEqual({
       __type: "resultType",
       success: false,
-      error: { code: 404, message: "not found" },
+      error: '{"code":404,"message":"not found"}',
+      data: {},
       checkpoint: null,
       neverStarted: false,
       destructiveRan: false,
@@ -228,18 +237,18 @@ describe("failure", () => {
   });
 
   it("honors an explicit rejected opt", () => {
-    const f = failure("no tools for you", { rejected: true });
+    const f = failure("no tools for you", null, { rejected: true });
     expect(f.rejected).toBe(true);
   });
 
   it("honors explicit neverStarted and destructiveRan opts", () => {
-    const f = failure("boom", { neverStarted: true, destructiveRan: true });
+    const f = failure("boom", null, { neverStarted: true, destructiveRan: true });
     expect(f.neverStarted).toBe(true);
     expect(f.destructiveRan).toBe(true);
   });
 
   it("propagateFailure preserves the new fields", () => {
-    const f = failure("boom", { destructiveRan: true, neverStarted: true });
+    const f = failure("boom", null, { destructiveRan: true, neverStarted: true });
     const p = propagateFailure(f, { name: "wrap", param: "x" });
     // propagateFailure spreads the original; the new classification fields
     // must survive onto the propagated copy, and a skip entry is appended.
@@ -271,7 +280,7 @@ describe("markDestructiveWork", () => {
 
   it("accepts opts with checkpoint, functionName, args", () => {
     const cp = { id: 1 };
-    const result = failure("error", {
+    const result = failure("error", null, {
       checkpoint: cp,
       functionName: "myFunc",
       args: { x: 10 },
@@ -437,5 +446,67 @@ describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () =>
       { ownedGuardIds: ["g1"] },
     );
     expect(isFailure(result)).toBe(true);
+  });
+});
+
+describe("failure message and data", () => {
+  it("keeps a string message and defaults data to an empty object", () => {
+    const failed = failure("boom");
+    expect(failed.error).toBe("boom");
+    expect(failed.data).toEqual({});
+  });
+
+  it("keeps the data object it was given", () => {
+    expect(failure("boom", { status: 404 }).data).toEqual({ status: 404 });
+  });
+
+  it("coerces an Error to its message", () => {
+    expect(failure(new Error("thrown")).error).toBe("thrown");
+  });
+
+  it("coerces a non-string, non-Error message", () => {
+    expect(failure({ a: 1 }).error).toBe('{"a":1}');
+  });
+
+  it("coerces data that is not a plain object to an empty object", () => {
+    expect(failure("boom", [1, 2] as any).data).toEqual({});
+    expect(failure("boom", null).data).toEqual({});
+  });
+
+  it("takes options in the third position", () => {
+    const failed = failure("boom", null, { functionName: "readFile", rejected: true });
+    expect(failed.functionName).toBe("readFile");
+    expect(failed.rejected).toBe(true);
+    expect(failed.data).toEqual({});
+  });
+
+  it("runtimeFailure coerces and leaves data empty", () => {
+    const failed = runtimeFailure(new Error("thrown"), { functionName: "readFile" });
+    expect(failed.error).toBe("thrown");
+    expect(failed.data).toEqual({});
+    expect(failed.functionName).toBe("readFile");
+  });
+
+  it("carries data through propagateFailure", () => {
+    const propagated = propagateFailure(failure("boom", { status: 404 }), {
+      name: "wordCount",
+      param: "text",
+    });
+    expect(propagated.data).toEqual({ status: 404 });
+    expect(propagated.skippedFunctions).toEqual([{ name: "wordCount", param: "text" }]);
+  });
+});
+
+describe("guard trip messages", () => {
+  it("names the label and both numbers for a cost trip", () => {
+    expect(guardFailureMessage("cost", 0.3, 0.42, "research")).toBe(
+      "Guard 'research' exceeded its cost budget: spent 0.42 of 0.3.",
+    );
+  });
+
+  it("says which budget without a label", () => {
+    expect(guardFailureMessage("time", 60000, 71200)).toBe(
+      "Guard exceeded its time budget: ran 71200ms of 60000ms.",
+    );
   });
 });

@@ -47,7 +47,7 @@ import {
   type RepeatStreak,
 } from "./toolLoopGuards.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
-import { failure, isFailure, isSuccess, markDestructiveWork } from "./result.js";
+import { failure, isFailure, isSuccess, markDestructiveWork, runtimeFailure } from "./result.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
@@ -183,14 +183,6 @@ function stringifyToolResult(result: any): string {
 function unwrapToolResultForLlm(result: any, toolName: string): any {
   if (!isSuccess(result)) return result;
   return result.value ?? `${toolName} ran successfully but did not return a value`;
-}
-
-/** Render a failure Result's error for the model. String errors pass
- *  through; structured errors (e.g. writeAgency's `{source, errors}`)
- *  JSON-stringify — `String(error)` would send the useless
- *  "[object Object]". */
-function toolErrorMessage(error: any): string {
-  return typeof error === "string" ? error : stringifyToolResult(error);
 }
 
 /** A failed tool is removed only after this many failures (the circuit
@@ -335,7 +327,6 @@ export const _internal = {
   capToolResultForLlm,
   assertUniqueToolNames,
   unwrapToolResultForLlm,
-  toolErrorMessage,
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
@@ -1176,7 +1167,7 @@ export async function runPrompt(args: {
         // to the neverStarted tier; any other crash is neutral.
         console.error(`Tool call "${handler.name}" crashed: ${errorMessage}`);
         const preExecution = !!(error as { preExecution?: boolean })?.preExecution;
-        toolResult = failure(errorMessage, { neverStarted: preExecution });
+        toolResult = runtimeFailure(errorMessage, { neverStarted: preExecution });
       } finally {
         ctx.exitToolCall();
       }
@@ -1241,11 +1232,11 @@ export async function runPrompt(args: {
       // immediately. (Stdlib tools gate BEFORE their destructive regions,
       // so their rejections are always clean.)
       if (isFailure(toolResult) && toolResult.rejected && !toolResult.destructiveRan) {
-        return recordRejection(toolErrorMessage(toolResult.error));
+        return recordRejection(toolResult.error);
       }
 
       if (isFailure(toolResult)) {
-        const errorMessage = toolErrorMessage(toolResult.error);
+        const errorMessage = toolResult.error;
         // Cap only what the LLM sees; statelog keeps the full message.
         const cappedError = String(capToolResultForLlm(errorMessage, toolResultCap));
         toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
@@ -1280,13 +1271,10 @@ export async function runPrompt(args: {
       }
 
       if (isRejected(toolResult)) {
-        // A structured reject value (e.g. reject({ code: "blocked" }))
-        // renders the same way a structured failure error does; only a
-        // reasonless rejection gets the generic message.
+        // `reject(reason)` takes a string, so the reason goes straight to the
+        // model. Only a reasonless rejection gets the generic message.
         return recordRejection(
-          toolResult.value == null
-            ? "Tool call rejected by policy"
-            : toolErrorMessage(toolResult.value),
+          toolResult.value == null ? "Tool call rejected by policy" : String(toolResult.value),
         );
       }
 

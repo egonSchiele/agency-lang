@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isAbortError, readCause } from "./errors.js";
+import { truncate } from "./truncate.js";
 import { isAborted } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
 
@@ -39,6 +40,22 @@ function guardFailureData(
     maxTime: null,
     actualTime: null,
   };
+}
+
+/** The sentence a tripped guard reports. The numbers are in the guard's own
+ *  unit: dollars for cost, milliseconds for time, matching the fields in
+ *  GuardFailureData. */
+export function guardFailureMessage(
+  dimension: "cost" | "time",
+  limit: number,
+  spent: number,
+  label?: string,
+): string {
+  const who = label ? `Guard '${label}'` : "Guard";
+  if (dimension === "time") {
+    return `${who} exceeded its time budget: ran ${spent}ms of ${limit}ms.`;
+  }
+  return `${who} exceeded its cost budget: spent ${spent} of ${limit}.`;
 }
 
 export type ResultValue = ResultSuccess | ResultFailure;
@@ -86,7 +103,11 @@ export type SkippedFunction = { name: string; param: string };
 export type ResultFailure = {
   __type: "resultType";
   success: false;
-  error: any;
+  error: string;
+  /** Extra structured detail, named by the second `Result` type parameter.
+   *  `{}` when the producer passed none. Never null: a reader may write
+   *  `err.data.status` without checking first. */
+  data: Record<string, any>;
   checkpoint: any;
   /** The call failed before its function body began. Birth default false;
    *  set only by the tool loop from the invoke layer's pre-execution tag.
@@ -110,11 +131,40 @@ export function success(value: any): ResultSuccess {
   return { __type: "resultType", success: true, value };
 }
 
-export function failure(error: any, opts?: FailureOpts): ResultFailure {
+/** A failure's message is always a string, so anything that shows a failure
+ *  can print it. A non-string only reaches here from imported TypeScript or
+ *  from a rejected interrupt's value. Agency code that writes `failure(42)`
+ *  is refused by the type checker. */
+function coerceMessage(error: unknown): string {
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return truncate(error);
+}
+
+/** Data is always an object, so a reader can write `err.data.status` without
+ *  checking first. */
+function coerceData(data: unknown): Record<string, any> {
+  const isPlainObject = data != null && typeof data === "object" && !Array.isArray(data);
+  if (!isPlainObject) {
+    return {};
+  }
+  return data as Record<string, any>;
+}
+
+export function failure(
+  error: unknown,
+  data?: Record<string, any> | null,
+  opts?: FailureOpts,
+): ResultFailure {
   return {
     __type: "resultType",
     success: false,
-    error,
+    error: coerceMessage(error),
+    data: coerceData(data),
     checkpoint: opts?.checkpoint ?? null,
     // Birth false: boundary stamps are the authority. A false birth
     // default for destructiveRan is safe because the exit stamp ORs the
@@ -127,6 +177,16 @@ export function failure(error: any, opts?: FailureOpts): ResultFailure {
     args: opts?.args ?? null,
     skippedFunctions: [],
   };
+}
+
+/** The failure a generated program or the runtime itself produces: a thrown
+ *  exception converted at a function boundary, a rejected interrupt, a tool
+ *  that crashed. None of these carry user data, and most of them are written
+ *  from templates the compiler does not check, so they get an entry point with
+ *  no positional slot to get wrong. It coerces too, so a caller hands it the
+ *  raw error rather than converting one by hand. */
+export function runtimeFailure(error: unknown, opts: FailureOpts): ResultFailure {
+  return failure(error, null, opts);
 }
 
 /** Fold an activation's destructive flag into a failure crossing a
@@ -208,6 +268,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
           return success(salvaged.value);
         }
         return failure(
+          guardFailureMessage(cause.dimension, cause.limit, cause.spent, cause.label),
           guardFailureData(cause.dimension, cause.limit, cause.spent, cause.label),
           opts,
         );
@@ -259,6 +320,12 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // frame existed to convert it into an AbortedResult. Exceptions
         // carry no partial — the value path above is the salvage path.
         return failure(
+          guardFailureMessage(
+            guardCause.dimension,
+            guardCause.limit,
+            guardCause.spent,
+            guardCause.label,
+          ),
           guardFailureData(
             guardCause.dimension,
             guardCause.limit,
@@ -278,7 +345,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     // the `guardCause?.kind === "guardTrip"` branch above already converts it
     // (reading the same dimension/limit/spent off the cause). That branch is
     // the single place a guard trip becomes a Failure.
-    return failure(error instanceof Error ? error.message : String(error), opts);
+    return failure(error, null, opts);
   }
 }
 

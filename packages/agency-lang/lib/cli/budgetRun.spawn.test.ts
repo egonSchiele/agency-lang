@@ -40,7 +40,7 @@ node main() {
     return "inner done"
   }
   if (isFailure(inner)) {
-    print("GUARD_ABSORBED:\${inner.error.type}")
+    print("GUARD_ABSORBED:\${inner.data.type}")
     return "absorbed"
   }
   return inner.value

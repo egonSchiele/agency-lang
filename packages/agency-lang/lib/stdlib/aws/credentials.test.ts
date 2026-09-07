@@ -15,7 +15,7 @@ describe("resolveAwsCredentials", () => {
     const result = resolveAwsCredentials();
     expect("error" in result).toBe(true);
     if ("error" in result) {
-      expect(result.error.message).toContain("AWS_ACCESS_KEY_ID");
+      expect(result.error).toContain("AWS_ACCESS_KEY_ID");
     }
   });
 

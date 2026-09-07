@@ -43,7 +43,7 @@ describe("_runGuarded — FailureOpts parity (C2)", () => {
       };
       const result = await _runGuarded(["g1"], block);
       expect(isFailure(result)).toBe(true);
-      expect((result as { error: { type: string } }).error.type).toBe("timeoutFailure");
+      expect((result as { data: { type: string } }).data.type).toBe("timeoutFailure");
       expect((result as { functionName: string | null }).functionName).toBe("guard");
     });
   });

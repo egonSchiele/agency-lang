@@ -29,7 +29,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
+  success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -307,15 +307,12 @@ if (__error instanceof AgencyAbort) {
     functionName: "patch",
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "patch",
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: "patch",
+  args: __stack.args,
+});
 
   } finally {
     __stateStack()?.pop()
@@ -433,7 +430,7 @@ await callHook({
             }
     return {
       messages: __threads(),
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+      data: runtimeFailure(__error, { functionName: "main" })
     };
   }
 })
@@ -531,7 +528,7 @@ await callHook({
             }
     return {
       messages: __threads(),
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "llmPatch" })
+      data: runtimeFailure(__error, { functionName: "llmPatch" })
     };
   }
 })

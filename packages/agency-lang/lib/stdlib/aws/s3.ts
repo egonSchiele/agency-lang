@@ -96,15 +96,13 @@ function keyFailure(key: string): ResultFailure | null {
   // PUT / creates the bucket (which for an already-owned us-east-1 bucket can
   // return 200 and reset ACLs) — under an object-read/write approval. Reject it.
   if (key.length === 0) {
-    return failure({
-      message: "Invalid S3 key: an empty key is not allowed for an object operation.",
-    });
+    return failure("Invalid S3 key: an empty key is not allowed for an object operation.");
   }
   for (const segment of key.split("/")) {
     if (segment === "." || segment === "..") {
-      return failure({
-        message: `Invalid S3 key ${JSON.stringify(key)}: "." and ".." segments are not allowed.`,
-      });
+      return failure(
+        `Invalid S3 key ${JSON.stringify(key)}: "." and ".." segments are not allowed.`,
+      );
     }
   }
   return null;
@@ -114,11 +112,10 @@ function keyFailure(key: string): ResultFailure | null {
 // 7-day link.
 function expiresFailure(expiresIn: number): ResultFailure | null {
   if (!Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > MAX_PRESIGN_MS) {
-    return failure({
-      message:
-        `Invalid expiresIn ${String(expiresIn)}: must be ` +
+    return failure(
+      `Invalid expiresIn ${String(expiresIn)}: must be ` +
         `an integer between 1 and ${MAX_PRESIGN_MS} (7 days).`,
-    });
+    );
   }
   return null;
 }
@@ -218,7 +215,7 @@ export async function runS3Operation(
         try {
           body = decodeBase64Strict(operation.base64);
         } catch (e) {
-          return failure({ message: (e as Error).message });
+          return failure((e as Error).message);
         }
       }
       const sizeError = objectSizeFailure(body);

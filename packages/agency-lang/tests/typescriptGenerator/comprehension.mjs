@@ -29,7 +29,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
+  success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -468,7 +468,7 @@ await callHook({
             }
     return {
       messages: __threads(),
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+      data: runtimeFailure(__error, { functionName: "main" })
     };
   }
 })

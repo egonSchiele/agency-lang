@@ -80,9 +80,7 @@ export function hostOutsidePartitionFailure(
   const wireUrl = `${target.origin}${target.canonicalUri}`;
   const hostname = new URL(wireUrl).hostname;
   if (!hostUnderSuffix(hostname, partition.dnsSuffix)) {
-    return failure({
-      message: `Refusing ${wireUrl}: hostname is not under ${partition.dnsSuffix}.`,
-    });
+    return failure(`Refusing ${wireUrl}: hostname is not under ${partition.dnsSuffix}.`);
   }
   return null;
 }

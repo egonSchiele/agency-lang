@@ -150,6 +150,7 @@ export { DebuggerState } from "../debugger/debuggerState.js";
 export {
   success,
   failure,
+  runtimeFailure,
   isSuccess,
   isFailure,
   stampFailureBoundary,

@@ -29,7 +29,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
+  success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -328,15 +328,12 @@ if (__error instanceof AgencyAbort) {
     functionName: "add",
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "add",
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: "add",
+  args: __stack.args,
+});
 
   } finally {
     __stateStack()?.pop()
@@ -502,15 +499,12 @@ if (__error instanceof AgencyAbort) {
     functionName: "greet",
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "greet",
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: "greet",
+  args: __stack.args,
+});
 
   } finally {
     __stateStack()?.pop()
@@ -675,15 +669,12 @@ if (__error instanceof AgencyAbort) {
     functionName: "mixed",
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "mixed",
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: "mixed",
+  args: __stack.args,
+});
 
   } finally {
     __stateStack()?.pop()
@@ -849,15 +840,12 @@ if (__error instanceof AgencyAbort) {
     functionName: "processArray",
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "processArray",
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: "processArray",
+  args: __stack.args,
+});
 
   } finally {
     __stateStack()?.pop()
@@ -1016,15 +1004,12 @@ if (__error instanceof AgencyAbort) {
     functionName: "flexible",
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "flexible",
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: "flexible",
+  args: __stack.args,
+});
 
   } finally {
     __stateStack()?.pop()
@@ -1145,7 +1130,7 @@ await callHook({
             }
     return {
       messages: __threads(),
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "foo" })
+      data: runtimeFailure(__error, { functionName: "foo" })
     };
   }
 })
@@ -1300,7 +1285,7 @@ await callHook({
             }
     return {
       messages: __threads(),
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+      data: runtimeFailure(__error, { functionName: "main" })
     };
   }
 })

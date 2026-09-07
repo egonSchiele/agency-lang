@@ -240,7 +240,7 @@ export async function _eagerSummarizeIfNeeded(evt: {
       );
       ctxMaybe?.statelogClient?.threadEndHookError?.({
         threadId: evt.threadId,
-        error: String((result as any).error),
+        error: (result as any).error,
       });
       return;
     }

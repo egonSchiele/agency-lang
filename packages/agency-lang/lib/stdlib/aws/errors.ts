@@ -27,13 +27,12 @@ export function s3ErrorToFailure(
 ): ResultFailure {
   const { code, message } = parseS3Error(body);
   const label = code || normalizeSnippet(body) || statusText || "error";
-  return failure({
+  return failure(`S3 ${status} for ${url}: ${label}`, {
     status,
     statusText,
     url,
     code,
     s3Message: message,
     body: normalizeSnippet(body),
-    message: `S3 ${status} for ${url}: ${label}`,
   });
 }

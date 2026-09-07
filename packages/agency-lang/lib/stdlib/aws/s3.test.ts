@@ -341,7 +341,7 @@ describe("S3 result metadata and errors", () => {
         statusText: "Not Found",
       });
       const result = (await _s3Get("abc", "k", "us-east-1")) as any;
-      expect(result.error.status).toBe(404);
-      expect(result.error.code).toBe("NoSuchBucket");
+      expect(result.data.status).toBe(404);
+      expect(result.data.code).toBe("NoSuchBucket");
     }));
 });

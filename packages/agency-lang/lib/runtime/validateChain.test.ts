@@ -6,7 +6,7 @@ import {
   type AgencyValidator,
   type TypeValidationDescriptor,
 } from "./validateChain.js";
-import { success, failure, isFailure, isSuccess } from "./result.js";
+import { success, failure, isFailure, isSuccess, type ResultFailure } from "./result.js";
 
 const ctx = {};
 
@@ -150,13 +150,12 @@ describe("__validateChainRecursive", () => {
 
     const r = await __validateChainRecursive(v, desc, { maxDepth: 3 });
     expect(isFailure(r)).toBe(true);
-    const err = (
-      r as { error: { reason: string; limit: number; kind: string; valuePreview: unknown } }
-    ).error;
-    expect(err.reason).toMatch(/recursion depth/);
-    expect(err.limit).toBe(3);
-    expect(err.kind).toBe("array");
-    expect(typeof err.valuePreview === "string").toBe(true);
+    const failed = r as ResultFailure;
+    expect(failed.error).toMatch(/recursion depth/);
+    expect(failed.data.reason).toMatch(/recursion depth/);
+    expect(failed.data.limit).toBe(3);
+    expect(failed.data.kind).toBe("array");
+    expect(typeof failed.data.valuePreview === "string").toBe(true);
   });
 });
 

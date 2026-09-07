@@ -2612,11 +2612,18 @@ export class TypeScriptBuilder {
     }
 
     if (node.functionName === "failure" && this.scopes.current().type === "function") {
-      // Inside functions, inject checkpoint, function name, and args
+      // The options object is injected POSITIONALLY, so the call must always
+      // reach it at the same arity. A user-written `failure(msg)` pads the
+      // data slot with null, which failure() turns into {}. Without the pad, a
+      // two-argument failure would put the user's data where the options
+      // belong and lose its checkpoint, which breaks resume from that line.
       const scope = this.scopes.current() as FunctionScope;
       const argNodes: TsNode[] = node.arguments.map((arg) => this.processCallArg(arg));
+      const message = argNodes[0] ?? ts.raw("null");
+      const data = argNodes[1] ?? ts.raw("null");
       return ts.call(ts.id("failure"), [
-        ...argNodes,
+        message,
+        data,
         ts.raw(
           // Strict accessor — emitted inside the function body's
           // withAlsFrame wrap. See processTryExpression above for the
@@ -3129,7 +3136,7 @@ export class TypeScriptBuilder {
             ts.obj({
               messages: ts.runtime.threads,
               data: ts.raw(
-                `failure(__error instanceof Error ? __error.message : String(__error), { functionName: ${JSON.stringify(nodeName)} })`,
+                `runtimeFailure(__error, { functionName: ${JSON.stringify(nodeName)} })`,
               ),
             }),
           ),

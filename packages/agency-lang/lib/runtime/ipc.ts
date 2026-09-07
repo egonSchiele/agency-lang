@@ -129,12 +129,11 @@ export function makeLimitFailure(
   // channels for limit violations.
   const line = `[ipc:${role}] ${new Date().toISOString().slice(11, 23)} send limit_violation limit=${limit} value=${value} threshold=${threshold}\n`;
   process.stderr.write(line);
-  return failure({
+  return failure(message, {
     reason: "limit_exceeded",
     limit,
     threshold,
     value,
-    message,
     ...extras,
   });
 }

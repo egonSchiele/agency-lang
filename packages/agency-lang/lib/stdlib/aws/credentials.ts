@@ -16,11 +16,10 @@ export function resolveAwsCredentials(): AwsCredentials | ResultFailure {
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID ?? "";
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY ?? "";
   if (!accessKeyId || !secretAccessKey) {
-    return failure({
-      message:
-        "AWS credentials not found. Set AWS_ACCESS_KEY_ID and " +
+    return failure(
+      "AWS credentials not found. Set AWS_ACCESS_KEY_ID and " +
         "AWS_SECRET_ACCESS_KEY in the environment.",
-    });
+    );
   }
   return {
     accessKeyId,

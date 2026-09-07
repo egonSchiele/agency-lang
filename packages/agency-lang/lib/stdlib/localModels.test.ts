@@ -1118,3 +1118,19 @@ describe("_removeMlxModel", () => {
     expect(_removeMlxModel("../../etc", dir)).toBe(false);
   });
 });
+
+describe("_downloadModel for mlx", () => {
+  it("says MLX downloads are not supported yet", async () => {
+    await expect(_downloadModel("mlx:org/repo", dir)).rejects.toThrow(
+      "Downloading MLX models is not supported yet. Download it another way and alias its directory: agency local alias add <name> <dir>",
+    );
+  });
+
+  it("returns a model directory as is", async () => {
+    const model = path.join(dir, "m");
+    fs.mkdirSync(model);
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "");
+    await expect(_downloadModel(model, dir)).resolves.toBe(model);
+  });
+});

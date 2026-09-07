@@ -1315,8 +1315,18 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
 
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
 export async function _downloadModel(value: string, cacheDir: string = ""): Promise<string> {
+  const model = _resolveModel(value);
+  if (model.backend === "mlx") {
+    if (isModelDir(model.target)) {
+      return path.resolve(model.target);
+    }
+    throw new Error(
+      "Downloading MLX models is not supported yet. Download it another way and alias " +
+        "its directory: agency local alias add <name> <dir>",
+    );
+  }
   requireSupport();
-  const target = _resolveModelName(value);
+  const target = model.target;
   const dir = resolveCacheDir(cacheDir);
   const mod = await loadLocalProvider();
   // Snapshot freshness BEFORE resolving so we verify the bytes only once, right

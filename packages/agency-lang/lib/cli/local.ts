@@ -90,13 +90,16 @@ export function downloadChoices(entries: ModelNameEntry[]): { title: string; val
         : e.name,
     value: e.name,
   }));
-  return [...rows, { title: "custom (hf: URI or .gguf path)…", value: CUSTOM_CHOICE }];
+  return [
+    ...rows,
+    { title: "custom (hf: URI, .gguf path, mlx: URI, or model directory)…", value: CUSTOM_CHOICE },
+  ];
 }
 
 export async function runDownload(value?: string): Promise<void> {
-  gate();
   let picked = value;
   if (picked === undefined) {
+    gate();
     // Prompting needs BOTH ends of the terminal: a TTY stdout to draw on and
     // a TTY stdin to read from (`agency local download < /dev/null` from a
     // terminal has a TTY stdout but nothing to read).
@@ -121,7 +124,7 @@ export async function runDownload(value?: string): Promise<void> {
       const custom = await prompts({
         type: "text",
         name: "value",
-        message: "hf: URI or .gguf path:",
+        message: "hf: URI, .gguf path, mlx: URI, or model directory:",
       });
       if (custom.value == null || custom.value === "") return;
       picked = custom.value as string;
@@ -130,7 +133,11 @@ export async function runDownload(value?: string): Promise<void> {
   // Show the source it resolved to (the hf: URI for a name/alias) and the
   // local path it landed at. For a .gguf-path input the two are the same, so
   // the source line is skipped.
-  const source = _resolveModelName(picked);
+  const resolved = _resolveModel(picked);
+  if (resolved.backend === "llama-cpp") {
+    gate();
+  }
+  const source = resolved.target;
   const modelPath = await _downloadModel(picked);
   if (source !== modelPath) {
     console.log(`source: ${source}`);

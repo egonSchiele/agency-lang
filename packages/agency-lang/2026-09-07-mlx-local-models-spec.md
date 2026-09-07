@@ -9,8 +9,11 @@ Written 2026-09-07 on branch `adit/mlx-spike`. The smoltalk half is
 # Download a model. Resumes if interrupted.
 agency local download mlx:mlx-community/Qwen3-Coder-Next-4bit
 
-# Start a server on it. Stays in this terminal. Ctrl-C stops it.
+# Serve it. Stays in this terminal. Ctrl-C stops it.
 agency local serve mlx:mlx-community/Qwen3-Coder-Next-4bit
+
+# Or serve two models at once, if they both fit in memory.
+agency local serve mlx:mlx-community/Qwen3-Coder-Next-4bit mlx:mlx-community/Qwen3.8-27B-4bit
 
 # In another terminal, use it.
 agency run --local mlx:mlx-community/Qwen3-Coder-Next-4bit my.agency
@@ -110,10 +113,10 @@ The server loads the model once, keeps it in memory, and answers requests in
 the OpenAI format. Agency reaches it through a new smoltalk provider named
 `mlx`. That provider is specified in the smoltalk document linked above.
 
-Agency will not start this server in the background for you. Two large
-models cannot share memory, so a background service that swapped models
-would surprise someone. Instead you run one server, on one model, in a
-terminal where you can see its logs.
+Agency will not start this server in the background for you, and it never
+loads a model you did not name. You run `agency local serve` with the models
+you want, in a terminal where you can see the logs. A request for any other
+model is an error.
 
 Four facts about the server shape the design:
 
@@ -121,8 +124,9 @@ Four facts about the server shape the design:
    is to send a request and wait.
 2. Its `--max-tokens` flag defaults to 512. Agency does not set `max_tokens`
    on requests, so without a larger value every long reply is cut off.
-3. It loads any model a request names, even if a different one is loaded.
-   The smoltalk provider handles this by always sending `default_model`.
+3. It loads any model a request names, even if a different one is loaded,
+   and there is no flag to stop it. Each process holds one model at a time.
+   This is why `serve` puts its own small server in front of it. See 3.5.
 4. `ps` shows about 3GB for a server holding a 42GB model. Activity Monitor
    shows the real number.
 
@@ -296,26 +300,67 @@ write bytes at an offset inside an existing file. So `hubDownload.ts` uses
 ### 3.5 `agency local serve`
 
 ```
-agency local serve <model> [--port 8080] [--max-tokens 16384] [--venv <dir>]
+agency local serve <model> [<model> ...] [--port 8080] [--max-tokens 16384] [--venv <dir>]
 ```
 
-This runs `mlx_lm.server` in your terminal. It exists so you do not have to
-know five things: which Python to use, where the weights are, the 512-token
-default, the port, and how to tell the model has loaded.
+This serves the models you name, in your terminal, and nothing else. It
+exists so you do not have to know five things: which Python to use, where
+the weights are, the 512-token default, the port, and how to tell a model
+has loaded.
 
-What happens:
+Here is what you see:
 
-1. The model name is resolved. A GGUF model is an error:
+```
+$ agency local serve mlx:mlx-community/Qwen3-Coder-Next-4bit mlx:mlx-community/Qwen3.8-27B-4bit
+Loading mlx-community/Qwen3-Coder-Next-4bit (44.9 GB)… ready in 2m 14s
+Loading mlx-community/Qwen3.8-27B-4bit (15.0 GB)… ready in 48s
+Serving 2 models on http://127.0.0.1:8080/v1:
+  mlx-community/Qwen3-Coder-Next-4bit
+  mlx-community/Qwen3.8-27B-4bit
+
+  agency run --local mlx:mlx-community/Qwen3-Coder-Next-4bit your.agency
+  agency agent --local mlx:mlx-community/Qwen3-Coder-Next-4bit
+```
+
+**How it works.** `mlx_lm.server` holds one model per process and loads any
+model a request names. So `serve` does not expose it directly. It starts one
+`mlx_lm.server` process per model on internal ports, and listens on port
+8080 itself. Each request's `model` field picks the process to forward to.
+Responses stream back unchanged. A request for a model you did not name
+never reaches any process. It gets this reply:
+
+```
+HTTP 404
+{ "error": { "message": "This server is serving mlx-community/Qwen3-Coder-Next-4bit and mlx-community/Qwen3.8-27B-4bit. It is not serving mlx-community/DeepSeek-V4-Flash-4bit. Start it with: agency local serve mlx:mlx-community/DeepSeek-V4-Flash-4bit" } }
+```
+
+The smoltalk provider shows that message as the error. Nothing in Agency or
+smoltalk ever loads a model on its own.
+
+To serve models on two ports, run `serve` twice in two terminals with
+different `--port` values, and set `MLX_BASE_URL` for the run that should
+use the second one.
+
+**Steps, in order:**
+
+1. Each name is resolved. A GGUF model is an error:
 
    ```
    "qwen3.5-2b" is a GGUF model. agency local serve is for MLX models;
    run it with agency run --local qwen3.5-2b instead.
    ```
 
-2. If the model directory is missing or incomplete, it is downloaded first.
-   Progress prints before the server starts.
+2. The sizes are added up and compared to the machine's memory. If they do
+   not fit, `serve` warns and continues:
 
-3. The Python environment is found: `--venv`, then `client.mlx.venv` in
+   ```
+   Warning: these models total 196.4 GB and this machine has 64 GB of memory.
+   ```
+
+3. A missing or incomplete model is downloaded first. Progress prints before
+   any server starts.
+
+4. The Python environment is found: `--venv`, then `client.mlx.venv` in
    `agency.json`, then `AGENCY_MLX_VENV`, then `~/.agency-agent/mlx-env`. If
    there is no `bin/mlx_lm.server` in it, the command prints this and exits:
 
@@ -329,31 +374,26 @@ What happens:
    Python 3.11 or newer is required. Then run this command again.
    ```
 
-4. The server starts with its output in your terminal:
+5. One `mlx_lm.server` starts per model, one at a time, with its output in
+   your terminal:
 
    ```
-   <venv>/bin/mlx_lm.server --model <dir> --host 127.0.0.1 --port 8080 --max-tokens 16384
+   <venv>/bin/mlx_lm.server --model <dir> --host 127.0.0.1 --port <internal> --max-tokens 16384
    ```
 
-5. Agency prints `Loading mlx-community/Qwen3-Coder-Next-4bit (44.9 GB)…`,
-   then sends one request with `max_tokens: 1` and waits. The server answers
-   when the model is loaded. Then Agency prints:
+   The server prints nothing when a model finishes loading. So after each
+   start, `serve` sends one request with `max_tokens: 1` and waits. The
+   reply means the model is loaded. Then it prints `ready in 2m 14s`.
 
-   ```
-   Ready in 2m 14s. Serving on http://127.0.0.1:8080/v1.
+6. The front door starts on `--port` and prints the model list.
 
-     agency run --local mlx:mlx-community/Qwen3-Coder-Next-4bit your.agency
-     agency agent --local mlx:mlx-community/Qwen3-Coder-Next-4bit
-   ```
+7. Ctrl-C stops everything. The command exits non-zero if any process died.
 
-6. Ctrl-C stops the server. The command exits with the server's exit code.
-
-The command does not check the port or free memory. The server's own errors
-cover both.
-
-The code is `lib/cli/localServe.ts`. Building the server's arguments is a
-pure function, `serveArgs(dir, opts)`, so it can be tested without starting
-anything.
+The front door and the argument builder are in `lib/cli/localServe.ts`.
+`serveArgs(dir, port, opts)` is a pure function. The forwarder is a plain
+`http.createServer` that reads the `model` field from the request body,
+picks the matching internal port, and pipes the request and response
+through.
 
 ### 3.6 Running against the server
 
@@ -364,9 +404,9 @@ slot. The agent's `PROVIDER_CAPABILITIES` table gets an `mlx` entry with
 `memory: false` and nothing else. MLX models are large enough for the full
 prompt.
 
-The model string must match what `serve` gave the server, because the
-smoltalk provider compares them. A test checks that `serve` and `run --local`
-produce the same string for the same name.
+The model string must match what `serve` used, or the front door refuses
+the request. A test checks that `serve` and `run --local` produce the same
+string for the same name.
 
 If no server is running, the error is:
 
@@ -374,6 +414,9 @@ If no server is running, the error is:
 Could not reach the MLX server at http://127.0.0.1:8080/v1. Start one with:
   agency local serve <model>
 ```
+
+If the server is running but not serving that model, the error is the front
+door's message from 3.5.
 
 ### 3.7 `list`, `resolve`, `remove`
 
@@ -398,9 +441,12 @@ removes the directory. It refuses a directory outside the models directory.
 registers nothing. One new function:
 
 ```ts
-// The model the server on baseUrl reports, or null if it is not running.
-export def mlxServerModel(baseUrl: string = ""): string | null
+// The models the server on baseUrl is serving, or null if it is not running.
+export def mlxServerModels(baseUrl: string = ""): string[] | null
 ```
+
+The front door answers `GET /v1/models` with the list it serves, which is
+what this function reads.
 
 ### 3.9 Not in this spec
 
@@ -422,24 +468,31 @@ Pure unit tests:
 4. Chunk planning skips done chunks and complete files.
 5. `serveArgs` builds the right argv for each flag.
 6. `serve` and `run --local` produce the same model string.
-7. `formatLocalList` renders the BACKEND column and the MLX tick.
+7. The memory warning appears when the sizes exceed a given total, and
+   not otherwise.
+8. `formatLocalList` renders the BACKEND column and the MLX tick.
 
 Against a fake Hugging Face, a local `http.createServer` that implements the
 model API, the tree API, and `resolve/` with redirects and `Range`:
 
-8. A clean download produces byte-identical files.
-9. An interrupted download resumes without re-requesting done chunks. The
-   fake counts requests per range.
-10. A corrupted file is quarantined, and the next run re-downloads only it.
-11. A `403` on a cached CDN URL causes one re-resolve.
-12. A changed revision refuses with the message in 3.4.
-13. A gated `401` gives the token message. With a token, the header is sent.
+9. A clean download produces byte-identical files.
+10. An interrupted download resumes without re-requesting done chunks. The
+    fake counts requests per range.
+11. A corrupted file is quarantined, and the next run re-downloads only it.
+12. A `403` on a cached CDN URL causes one re-resolve.
+13. A changed revision refuses with the message in 3.4.
+14. A gated `401` gives the token message. With a token, the header is sent.
 
-Against a fake chat server:
+Against fake chat servers standing in for `mlx_lm.server`, with `spawn`
+stubbed:
 
-14. `serve` prints the Ready line after the fake answers the readiness
-    request, with `spawn` stubbed.
-15. `mlxServerModel` returns the fake's model name.
+15. `serve` prints `ready` for each model after its fake answers the
+    one-token request.
+16. The front door forwards a request to the fake whose model matches, and
+    streams the reply through unchanged.
+17. A request for a model not on the list gets the 404 message and reaches
+    no fake.
+18. `mlxServerModels` returns the list the front door serves.
 
 ### 3.11 Documentation
 

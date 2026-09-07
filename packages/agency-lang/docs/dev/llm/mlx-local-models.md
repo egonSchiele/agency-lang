@@ -14,7 +14,8 @@ agency agent --local coder
 ```
 
 The server is `mlx_lm.server`, a Python program from the `mlx-lm` package.
-The user starts it on a model:
+`agency local serve` starts it (see "The serve command" below). By hand, it
+is:
 
 ```bash
 ~/mlx-env/bin/python -m mlx_lm.server --model /Volumes/models/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/7b93 --port 8080 --max-tokens 16384
@@ -41,6 +42,19 @@ The directory rule is what makes models downloaded by other tools usable.
 Every model in Hugging Face's standard layout has a `config.json` and its
 weights in `.safetensors` files. That is what `mlx_lm.server` loads. A GGUF
 model is one file with that information inside it, so it never matches.
+
+A Hugging Face cache snapshot, `hf/hub/models--org--repo/snapshots/<sha>/`,
+holds no real files. Every entry is a symlink into `blobs/`. `contained.ts`
+drops symlinked entries, so a check built on it saw an empty directory and
+refused the snapshot. `modelDirEntries` in `lib/stdlib/modelBackend.ts` is
+the one place that follows links: `readdirSync` plus `statSync`, names and
+sizes only, never contents. `isModelDir` and the size sum in
+`_modelFilesOnDisk` both read through it, so a snapshot alias reports its
+real size and the memory warning in `serve` sees it. `modelBackend.ts` is on
+the `FS_IMPORTERS` allow-list in `eslint.config.js` for this. Everything
+else, including `remove -f`, stays behind `contained.ts` and still refuses
+to follow a link. The decision, 2026-09-07: people who already have a cache
+should be able to use it with no copying step.
 
 `_resolveModel(value)` turns a name, alias, URI, or path into
 `{ backend, target }`. `_resolveModelName` returns only the target and stays
@@ -108,6 +122,62 @@ model downloaded, and to show an incomplete one under OTHER FILES. A pinned
 revision in an `mlx:` URI must match the record's commit, by prefix, to get
 the tick. `_listDownloadedModels` returns GGUF files and recorded MLX
 directories together, each tagged with its backend.
+
+## The serve command
+
+```
+agency local serve <model>... [--port 8080] [--max-tokens 16384] [--python <path>]
+```
+
+`runServe` in `lib/cli/localServe.ts` does, in order: resolve each name
+(a GGUF model is an error), find the directory (an `mlx:` model needs a
+complete record under `<modelsDir>/mlx/`; `serve` never downloads), print
+the memory warning if the sizes exceed `os.totalmem()` and continue, choose
+a Python and check it, start one process per model, then open the front door.
+
+**One process per model.** `mlx_lm.server` holds one model per process and
+loads whatever model a request names. From `ModelProvider.load` in
+`mlx_lm/server.py`, the loaded model is keyed on the exact `model` string,
+and only the literal `"default_model"` maps to the `--model` flag. So the
+server cannot be exposed directly: a typo in a model name would load a
+second model. `serve` starts one process per model on a free internal port
+and puts its own server in front.
+
+**The front door** (`lib/cli/mlxFrontDoor.ts`) listens on `--port`, reads
+the request body, and forwards to the process whose public name matches the
+`model` field. It rewrites `model` to the string the process was started
+with, the model directory, because that is the key the process holds. A
+request for any other model gets a 404 and reaches no process:
+
+```
+This server is serving X and Y. It is not serving Z. Start it with: agency local serve mlx:Z
+```
+
+`GET /v1/models` answers with the served list. `mlxServerModels` in
+`std::agency/local` reads it. Replies are piped through, so streaming
+works.
+
+**Readiness.** The server prints nothing when a model has loaded. After
+each start, `waitUntilLoaded` posts a one-token completion to the internal
+port, naming the model directory, and retries every 500 ms while the port
+is closed. The reply means the model is loaded. If the process exits first,
+the wait rejects with the exit code and every process started so far is
+killed.
+
+**Python.** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`,
+then `~/.agency-agent/mlx-env/bin/python`. `serve` runs
+`<python> -c "import mlx_lm"` and, on failure, prints the venv commands for
+the default environment and exits. Agency does not install Python.
+
+**Stopping.** Ctrl-C reaches the children before `serve`, since they share
+its process group. `runServe` marks itself stopping before killing anything,
+so those exits are not reported as failures. A process that dies on its own
+after it was ready resolves the handle's `failure` promise, and the command
+prints why, kills the rest, and exits 1.
+
+Nothing in `runServe` touches `process`: `spawn`, `fetch`, `exec`,
+`totalmem`, `log`, `freePort`, the cache directory, and the config all come
+in through `ServeDeps`, so the tests drive it with fakes.
 
 ## `remove` and `-f`
 

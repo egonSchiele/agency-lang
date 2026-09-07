@@ -1,0 +1,5 @@
+{
+  "tests": [
+    { "nodeName": "noServerIsNull", "description": "mlxServerModels is null when nothing listens", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

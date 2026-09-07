@@ -1,3 +1,7 @@
+## Sep 6 2026 — v0.18.1
+
+- don't add U+0000 separator in checkpoints, otherwise they can't be stored in postgres
+
 ## Sep 5 2026 — v0.18.0
 
 ### Standard Library

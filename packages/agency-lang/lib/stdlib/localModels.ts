@@ -22,6 +22,7 @@ import {
 } from "../runtime/localProvider.js";
 import { __ctx } from "../runtime/asyncContext.js";
 import { recordDownload } from "./localModelManifest.js";
+import { MLX_SUBDIR, readMlxModelRecord, isMlxModelComplete } from "./mlxModelRecord.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** Which engine runs a model. GGUF files run in-process through llama.cpp.
@@ -676,15 +677,58 @@ export function _unaliasModel(name: string, file: string = ""): UnaliasResult {
   return { file: resolved, removed: true };
 }
 
-export function _listDownloadedModels(
-  cacheDir: string = "",
-): { name: string; path: string; sizeBytes: number }[] {
+/** One model on disk. For a GGUF file, `name` is the file name. For an MLX
+ *  model, `name` is the repo id and `path` is its directory. */
+export type DownloadedModel = {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  backend: Backend;
+  /** False for an MLX model whose download was interrupted. */
+  complete: boolean;
+};
+
+export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
   const dir = resolveCacheDir(cacheDir);
-  return ggufEntries(dir).map((entry) => ({
+  const gguf: DownloadedModel[] = ggufEntries(dir).map((entry) => ({
     name: entry.name,
     path: path.join(dir, entry.name),
     sizeBytes: entry.size,
+    backend: "llama-cpp",
+    complete: true,
   }));
+  return [...gguf, ...mlxEntries(dir)];
+}
+
+/** The MLX model directories under `<dir>/mlx` that carry a record. */
+function mlxEntries(dir: string): DownloadedModel[] {
+  const mlxDir = path.join(dir, MLX_SUBDIR);
+  const cache = root(dir);
+  if (stat(cache, MLX_SUBDIR) === null) {
+    return [];
+  }
+  const out: DownloadedModel[] = [];
+  for (const entry of list(cache, MLX_SUBDIR)) {
+    if (entry.type !== "dir") {
+      continue;
+    }
+    const modelDir = path.join(mlxDir, entry.name);
+    const record = readMlxModelRecord(modelDir);
+    if (record === null) {
+      continue;
+    }
+    const sizeBytes = list(root(modelDir), ".")
+      .filter((f) => f.type === "file")
+      .reduce((sum, f) => sum + f.size, 0);
+    out.push({
+      name: record.repo,
+      path: modelDir,
+      sizeBytes,
+      backend: "mlx",
+      complete: isMlxModelComplete(record),
+    });
+  }
+  return out;
 }
 
 /** The `.gguf` files directly in `dir`, by name. A missing dir has none. */
@@ -1286,16 +1330,28 @@ export function formatLocalList(args: {
   dir: string;
   entries: ModelNameEntry[];
   manifest: Record<string, string>;
-  files: { name: string; path: string; sizeBytes: number }[];
+  files: DownloadedModel[];
   long?: boolean;
 }): string {
   const byName = Object.fromEntries(args.files.map((f) => [f.name, f]));
+  const byPath = Object.fromEntries(args.files.map((f) => [f.path, f]));
+  // The file on disk that backs a catalog row, if any. A GGUF row goes
+  // through the manifest. An MLX row matches by repo id, or by directory
+  // for an alias that points straight at one.
+  const fileFor = (e: ModelNameEntry): DownloadedModel | undefined => {
+    if (e.backend === "llama-cpp") {
+      const manifestFile = args.manifest[e.target];
+      return manifestFile === undefined ? undefined : byName[manifestFile];
+    }
+    const file = isMlxUri(e.target) ? byName[parseMlxUri(e.target).repo] : byPath[e.target];
+    return file !== undefined && file.complete ? file : undefined;
+  };
   const rows = args.entries.map((e) => {
-    const manifestFile = args.manifest[e.target];
-    const file = manifestFile === undefined ? undefined : byName[manifestFile];
+    const file = fileFor(e);
     return {
       mark: file !== undefined ? "✓" : "",
       name: e.name,
+      backend: e.backend,
       params: e.params ?? "",
       size:
         file !== undefined
@@ -1312,11 +1368,12 @@ export function formatLocalList(args: {
   // Only files claimed by a CATALOG row are excluded from OTHER FILES. The
   // manifest also records raw-URI downloads, which have no row here — their
   // files must stay visible.
-  const claimedFiles: string[] = args.entries
-    .map((e) => args.manifest[e.target])
-    .filter((f): f is string => f !== undefined);
-  const others = args.files.filter((f) => !claimedFiles.includes(f.name));
-  const headers = ["", "NAME", "PARAMS", "SIZE", "CONTEXT", "CATEGORY", "LICENSE"];
+  const claimedPaths: string[] = args.entries
+    .map(fileFor)
+    .filter((f): f is DownloadedModel => f !== undefined)
+    .map((f) => f.path);
+  const others = args.files.filter((f) => !claimedPaths.includes(f.path));
+  const headers = ["", "NAME", "BACKEND", "PARAMS", "SIZE", "CONTEXT", "CATEGORY", "LICENSE"];
   const cols = [
     colWidth(
       headers[0],
@@ -1328,22 +1385,26 @@ export function formatLocalList(args: {
     ),
     colWidth(
       headers[2],
-      rows.map((r) => r.params),
+      rows.map((r) => r.backend),
     ),
     colWidth(
       headers[3],
-      rows.map((r) => r.size),
+      rows.map((r) => r.params),
     ),
     colWidth(
       headers[4],
-      rows.map((r) => r.ctx),
+      rows.map((r) => r.size),
     ),
     colWidth(
       headers[5],
-      rows.map((r) => r.category),
+      rows.map((r) => r.ctx),
     ),
     colWidth(
       headers[6],
+      rows.map((r) => r.category),
+    ),
+    colWidth(
+      headers[7],
       rows.map((r) => r.license),
     ),
   ];
@@ -1360,14 +1421,17 @@ export function formatLocalList(args: {
     // Blank line *between* models, not after the last one, so the sections
     // below (which push their own leading "") aren't double-spaced.
     if (args.long === true && i > 0) lines.push("");
-    lines.push(render([r.mark, r.name, r.params, r.size, r.ctx, r.category, r.license]));
+    lines.push(render([r.mark, r.name, r.backend, r.params, r.size, r.ctx, r.category, r.license]));
     if (args.long === true && r.description !== "") {
       lines.push(ttyColor.dim(`${descIndent}${r.description}`));
     }
   });
   if (others.length > 0) {
     lines.push("", "OTHER FILES");
-    for (const f of others) lines.push(`  ${f.name}  ${formatGB(f.sizeBytes)}`);
+    for (const f of others) {
+      const tag = f.backend === "mlx" ? (f.complete ? "  (mlx)" : "  (mlx, incomplete)") : "";
+      lines.push(`  ${f.name}${tag}  ${formatGB(f.sizeBytes)}`);
+    }
   }
   const total = args.files.reduce((sum, f) => sum + f.sizeBytes, 0);
   lines.push("", `Total downloaded: ${formatGB(total)}`);

@@ -325,6 +325,7 @@ describe("formatLocalList", () => {
   const entries: ModelNameEntry[] = [
     {
       name: "tiny",
+      backend: "llama-cpp",
       target: "hf:o/tiny:Q4",
       source: "curated",
       params: "135M",
@@ -334,6 +335,7 @@ describe("formatLocalList", () => {
     },
     {
       name: "mid",
+      backend: "llama-cpp",
       target: "hf:o/mid:Q4",
       source: "curated",
       params: "2B",
@@ -349,7 +351,15 @@ describe("formatLocalList", () => {
       dir: "/home/u/.agency-agent/models",
       entries,
       manifest: { "hf:o/tiny:Q4": "tiny.Q4.gguf" },
-      files: [{ name: "tiny.Q4.gguf", path: "/x/tiny.Q4.gguf", sizeBytes: 99_000_000 }],
+      files: [
+        {
+          name: "tiny.Q4.gguf",
+          path: "/x/tiny.Q4.gguf",
+          sizeBytes: 99_000_000,
+          backend: "llama-cpp",
+          complete: true,
+        },
+      ],
     });
     const lines = out.split("\n");
     expect(lines[0]).toBe("Models directory: /home/u/.agency-agent/models");
@@ -366,7 +376,15 @@ describe("formatLocalList", () => {
       dir: "/d",
       entries,
       manifest: { "hf:o/tiny:Q4": "gone.gguf" },
-      files: [{ name: "mystery.gguf", path: "/d/mystery.gguf", sizeBytes: 2_100_000_000 }],
+      files: [
+        {
+          name: "mystery.gguf",
+          path: "/d/mystery.gguf",
+          sizeBytes: 2_100_000_000,
+          backend: "llama-cpp",
+          complete: true,
+        },
+      ],
     });
     expect(out.split("\n").find((l) => l.includes("tiny"))).not.toContain("✓");
     expect(out).toContain("OTHER FILES");
@@ -379,7 +397,15 @@ describe("formatLocalList", () => {
       dir: "/d",
       entries,
       manifest: { "hf:raw/repo:Q4": "raw.gguf" },
-      files: [{ name: "raw.gguf", path: "/d/raw.gguf", sizeBytes: 500_000_000 }],
+      files: [
+        {
+          name: "raw.gguf",
+          path: "/d/raw.gguf",
+          sizeBytes: 500_000_000,
+          backend: "llama-cpp",
+          complete: true,
+        },
+      ],
     });
     expect(out).toContain("OTHER FILES");
     expect(out).toContain("raw.gguf");
@@ -407,7 +433,15 @@ describe("formatLocalList", () => {
       dir: "/d",
       entries,
       manifest: {},
-      files: [{ name: "raw.gguf", path: "/d/raw.gguf", sizeBytes: 500_000_000 }],
+      files: [
+        {
+          name: "raw.gguf",
+          path: "/d/raw.gguf",
+          sizeBytes: 500_000_000,
+          backend: "llama-cpp",
+          complete: true,
+        },
+      ],
       long: true,
     });
     const lines = out.split("\n");
@@ -977,5 +1011,96 @@ describe("_resolveModel", () => {
     expect(() => _resolveModel("nope")).toThrow(
       /or pass a \.gguf path, an "hf:" URI, an "mlx:" URI, or a model directory/,
     );
+  });
+});
+
+describe("formatLocalList with mlx models", () => {
+  const entries: ModelNameEntry[] = [
+    {
+      name: "coder",
+      backend: "mlx",
+      target: "mlx:org/coder",
+      source: "alias",
+      sizeBytes: 44_900_000_000,
+    },
+    { name: "tiny", backend: "llama-cpp", target: "hf:o/tiny:Q4", source: "curated" },
+  ];
+  const files = [
+    {
+      name: "org/coder",
+      path: "/d/mlx/org--coder",
+      sizeBytes: 44_000_000_000,
+      backend: "mlx" as const,
+      complete: true,
+    },
+    {
+      name: "org/other",
+      path: "/d/mlx/org--other",
+      sizeBytes: 1_000_000_000,
+      backend: "mlx" as const,
+      complete: false,
+    },
+  ];
+
+  it("shows a BACKEND column and ticks a complete mlx model by repo id", () => {
+    const out = formatLocalList({ dir: "/d", entries, manifest: {}, files });
+    const lines = out.split("\n");
+    expect(lines[2]).toContain("BACKEND");
+    const coder = lines.find((l) => l.includes("coder"));
+    expect(coder).toContain("✓");
+    expect(coder).toContain("mlx");
+    expect(coder).toContain("44.00 GB");
+    expect(lines.find((l) => l.includes("tiny"))).toContain("llama-cpp");
+  });
+
+  it("lists an unclaimed mlx directory under OTHER FILES with its state", () => {
+    const out = formatLocalList({ dir: "/d", entries, manifest: {}, files });
+    expect(out).toContain("OTHER FILES");
+    expect(out).toContain("org/other  (mlx, incomplete)  1.00 GB");
+    expect(out).not.toMatch(/OTHER FILES[\s\S]*org\/coder/);
+  });
+
+  it("does not tick an incomplete mlx model", () => {
+    const out = formatLocalList({
+      dir: "/d",
+      entries,
+      manifest: {},
+      files: [{ ...files[0], complete: false }],
+    });
+    expect(out.split("\n").find((l) => l.includes("coder"))).not.toContain("✓");
+  });
+});
+
+describe("_listDownloadedModels with mlx directories", () => {
+  it("lists a recorded mlx directory by repo id with its size and completeness", () => {
+    const cache = path.join(dir, "models");
+    const model = path.join(cache, "mlx", "org--repo");
+    fs.mkdirSync(model, { recursive: true });
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "xxxxxxxx");
+    fs.writeFileSync(
+      path.join(model, ".agency-model.json"),
+      JSON.stringify({
+        repo: "org/repo",
+        revision: "abc",
+        files: {
+          "config.json": { size: 2, complete: true },
+          "model.safetensors": { size: 8, complete: true },
+        },
+      }),
+    );
+    // A directory with no record is not a model.
+    fs.mkdirSync(path.join(cache, "mlx", "junk"));
+    const listed = _listDownloadedModels(cache);
+    expect(listed).toEqual([
+      {
+        name: "org/repo",
+        path: model,
+        sizeBytes: expect.any(Number),
+        backend: "mlx",
+        complete: true,
+      },
+    ]);
+    expect(listed[0].sizeBytes).toBeGreaterThan(10);
   });
 });

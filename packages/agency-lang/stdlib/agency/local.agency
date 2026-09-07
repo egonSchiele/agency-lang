@@ -33,14 +33,20 @@ import {
   ```
 */
 
+/** A model on disk. For a GGUF file, `name` is the file name. For an MLX
+    model, `name` is the repo id and `path` is its directory. `complete` is
+    false for an MLX model whose download was interrupted. */
 export type DownloadedModel = {
   name: string;
   path: string;
-  sizeBytes: number
+  sizeBytes: number;
+  backend: string;
+  complete: bool
 }
 
 export type ModelName = {
   name: string;
+  backend: string;
   target: string;
   source: string;
   params?: string;
@@ -81,7 +87,7 @@ export def downloadModel(value: string, cacheDir: string = ""): string {
 
 export def listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
   """
-  List downloaded .gguf models.
+  List downloaded models: .gguf files and MLX model directories.
 
   @param cacheDir - models dir (empty string = per-user cache)
   """

@@ -39,6 +39,12 @@ in Agency sees diagnostic AG2013 and never reaches this code. The coercion
 exists because two callers are outside the type checker's view: imported
 TypeScript, and a rejected interrupt's value.
 
+There is a third way in that does not go through `failure()` at all.
+Imported TypeScript can hand back a Result-shaped object it built by hand,
+with an object error and no `data` field. `__tryCall` is where such a value
+becomes an Agency Result, so `normalizeForeignResult` runs there and
+restores both fields. A well-formed failure is returned unchanged.
+
 ## `runtimeFailure`, and the arity that codegen depends on
 
 Codegen calls `failure()` from three mustache templates and two raw strings
@@ -59,6 +65,13 @@ options always land in the third slot. Without the pad, a two-argument
 `failure(msg, data)` puts the user's data where the options belong, the
 failure loses its checkpoint, and the program cannot resume from that line.
 `tests/agency/result/failure-with-data-args.agency` is the test for this.
+
+A splat has the same problem and cannot be padded around, because its width
+is unknown at compile time: `failure(...args)` would emit
+`failure(...args, null, opts)`, and with two elements in `args` the padding
+lands in the options slot. So a splatted `failure` is refused outright
+(AG2017), and the builder throws rather than emitting one, in case that check
+ever moves.
 
 ## Why the second type parameter is the data type
 
@@ -99,11 +112,12 @@ author to pass string data, which is advice nobody can act on.
 mean `.data` can come back null: at runtime it is always `{}`. Code that
 wants to tell the two apart tests a field of the data, not the data itself.
 
-One consequence, worth knowing if it ever bites: for a
-`Result<T, D | null>` that is itself validated (a `!` return, or structured
-output), the generated Zod schema is `data: z.union([D, z.null()])`, and a
-runtime `{}` matches neither arm when `D` has required fields. Widening the
-schema would stop it checking `D` at all, so the schema is left strict.
+This is also why the generated Zod schema checks only that `data` is an
+object, never its shape. A `Result<T, D | null>` that is itself validated (a
+`!` return, or structured output) can hold `{}`, which no schema for a real
+`D` matches. Checking the shape there would reject the bare `failure(msg)`
+that `| null` exists to permit. What the data holds is settled statically by
+AG2014 through AG2016 instead.
 
 ## Files
 
@@ -114,4 +128,8 @@ schema would stop it checking `D` at all, so the schema is left strict.
 - `lib/typeChecker/synthesizer.ts` — `synthFailureCall`, AG2013, AG2014.
 - `lib/typeChecker/utils.ts` — AG2015 and AG2016.
 - `lib/typeChecker/dataShape.ts` — `isDataShaped`, shared by the two above.
-- `lib/backends/typescriptBuilder.ts:2614` — the arity padding.
+- `lib/backends/typescriptBuilder.ts:2614` — the arity padding and the splat
+  guard.
+- `lib/typeChecker/builtins.ts` — `reject`'s signature. Note that generated
+  modules define their own `reject` from `imports.mustache`, so narrowing the
+  runtime helper alone would not have reached Agency code.

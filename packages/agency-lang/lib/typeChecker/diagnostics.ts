@@ -227,6 +227,12 @@ export const DIAGNOSTICS = {
     message:
       "A Result's second type parameter is its failure data, and failure data must be an object. Got '{actual}' ({context}). A failure's message is always a string and is not named in the type.",
   },
+  failureSplatArgument: {
+    code: "AG2017",
+    severity: "error",
+    message:
+      "failure() cannot take a splat. Codegen appends the checkpoint and function name to every failure() call by position, and a splat of unknown width would displace them. Pass the message and data directly.",
+  },
   dimensionMismatch: {
     code: "AG2010",
     severity: "error",

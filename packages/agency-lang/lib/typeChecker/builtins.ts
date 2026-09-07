@@ -303,10 +303,13 @@ export const BUILTIN_FUNCTION_TYPES: Record<string, BuiltinSignature> = {
       "Inside a `handle ... with` block, approve the wrapped action (optionally substituting a return value).",
   },
   reject: {
-    params: [ANY_T],
+    // The reason is only ever shown to a person or to a model, so it is a
+    // string. Structured refusal detail belongs in the failure's data.
+    params: [string],
     minParams: 0,
     returnType: ANY_T,
-    description: "Inside a `handle ... with` block, block the wrapped action.",
+    description:
+      "Inside a `handle ... with` block, block the wrapped action, optionally with a reason.",
   },
   propagate: {
     params: [],

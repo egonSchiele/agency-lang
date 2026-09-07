@@ -149,7 +149,7 @@ describe("variableTypeToString: object rendering hook", () => {
       expected: "Result<OBJECT<number>, OBJECT<string>>",
     },
     {
-      name: "Result success type with string datare shorthand",
+      name: "Result success type with string data, no shorthand",
       type: {
         type: "resultType",
         successType: objectOf(numberType),

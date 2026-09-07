@@ -2618,6 +2618,11 @@ export class TypeScriptBuilder {
       // two-argument failure would put the user's data where the options
       // belong and lose its checkpoint, which breaks resume from that line.
       const scope = this.scopes.current() as FunctionScope;
+      if (node.arguments.some((arg) => arg.type === "splat")) {
+        // The type checker refuses this (AG2017). Throwing rather than
+        // emitting keeps a miscompile impossible if that check ever moves.
+        throw new Error("failure() cannot take a splat: the injected options are positional");
+      }
       const argNodes: TsNode[] = node.arguments.map((arg) => this.processCallArg(arg));
       const message = argNodes[0] ?? ts.raw("null");
       const data = argNodes[1] ?? ts.raw("null");

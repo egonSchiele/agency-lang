@@ -510,3 +510,22 @@ describe("guard trip messages", () => {
     );
   });
 });
+
+describe("a Result built by hand in imported TypeScript", () => {
+  it("has its object error and missing data normalized by try", async () => {
+    const foreign = { __type: "resultType", success: false, error: { code: 404 } };
+    const result = (await __tryCall(() => foreign)) as ResultFailure;
+    expect(result.error).toBe('{"code":404}');
+    expect(result.data).toEqual({});
+  });
+
+  it("passes a well-formed failure through unchanged", async () => {
+    const wellFormed = failure("boom", { status: 404 });
+    expect(await __tryCall(() => wellFormed)).toBe(wellFormed);
+  });
+
+  it("leaves a success alone", async () => {
+    const ok = { __type: "resultType", success: true, value: 42 };
+    expect(await __tryCall(() => ok)).toBe(ok);
+  });
+});

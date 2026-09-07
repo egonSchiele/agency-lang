@@ -85,7 +85,7 @@ const graph = __globalCtx.graph;
 
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
-export function reject(value?: any) { return { type: "reject" as const, value }; }
+export function reject(reason?: string) { return { type: "reject" as const, value: reason }; }
 function propagate() { return { type: "propagate" as const }; }
 function pass() { return { type: "pass" as const }; }
 

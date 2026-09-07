@@ -224,3 +224,19 @@ def half(x: number): Result<number> {
   return success(x / 2)
 }
 ```
+
+<a id="ag2017"></a>
+
+## AG2017 — failure() cannot take a splat. Codegen appends the checkpoint and function name to every failure() call by position, and a splat of unknown width would displace them. Pass the message and data directly.
+
+*Default severity: error.*
+
+Every `failure()` call inside a function gets a third argument appended by the compiler, carrying the checkpoint, the function name, and the call's arguments. That argument is positional. A splat expands to a number of arguments the compiler cannot know, so it would push the appended one out of its slot and the failure would lose the state it needs to resume.
+
+**How to fix:** pass the message and the data directly.
+
+```agency
+def lookup(id: string): Result {
+  return failure("no record for that id", { id: id })
+}
+```

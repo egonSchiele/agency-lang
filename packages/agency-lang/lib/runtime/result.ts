@@ -145,11 +145,14 @@ function coerceMessage(error: unknown): string {
   return truncate(error);
 }
 
+function isPlainObject(value: unknown): boolean {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
 /** Data is always an object, so a reader can write `err.data.status` without
  *  checking first. */
 function coerceData(data: unknown): Record<string, any> {
-  const isPlainObject = data != null && typeof data === "object" && !Array.isArray(data);
-  if (!isPlainObject) {
+  if (!isPlainObject(data)) {
     return {};
   }
   return data as Record<string, any>;
@@ -187,6 +190,18 @@ export function failure(
  *  raw error rather than converting one by hand. */
 export function runtimeFailure(error: unknown, opts: FailureOpts): ResultFailure {
   return failure(error, null, opts);
+}
+
+/** A Result that imported TypeScript built by hand, rather than by calling
+ *  `failure()`, can carry an object error and no data at all. `try` is where
+ *  such a value becomes an Agency Result, so it is where the invariant the
+ *  type checker relies on gets restored: `error` is a string, `data` is an
+ *  object. A well-formed Result is returned unchanged. */
+function normalizeForeignResult(value: any): any {
+  if (value.success !== false) return value;
+  const wellFormed = typeof value.error === "string" && isPlainObject(value.data);
+  if (wellFormed) return value;
+  return { ...value, error: coerceMessage(value.error), data: coerceData(value.data) };
 }
 
 /** Fold an activation's destructive flag into a failure crossing a
@@ -281,7 +296,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
       // through the graph engine exactly as before.
       return value as any;
     }
-    if (resultValueSchema.safeParse(value).success) return value;
+    if (resultValueSchema.safeParse(value).success) return normalizeForeignResult(value);
     return success(value);
   } catch (error) {
     // Cancellation must always propagate — never get silently

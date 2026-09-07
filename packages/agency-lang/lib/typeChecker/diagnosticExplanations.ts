@@ -184,6 +184,16 @@ def half(x: number): Result<number> {
 }
 \`\`\``,
 
+  failureSplatArgument: `Every \`failure()\` call inside a function gets a third argument appended by the compiler, carrying the checkpoint, the function name, and the call's arguments. That argument is positional. A splat expands to a number of arguments the compiler cannot know, so it would push the appended one out of its slot and the failure would lose the state it needs to resume.
+
+**How to fix:** pass the message and the data directly.
+
+\`\`\`agency
+def lookup(id: string): Result {
+  return failure("no record for that id", { id: id })
+}
+\`\`\``,
+
   resultBranchFieldAccess: `A \`Result\` is either a success or a failure, and the field you accessed only exists on one of those branches. Reading it without first checking which branch you have would be unsafe.
 
 **How to fix:** guard with \`if (isSuccess(r))\` or \`if (isFailure(r))\`, use \`r catch …\`, or handle both arms with \`match\`.

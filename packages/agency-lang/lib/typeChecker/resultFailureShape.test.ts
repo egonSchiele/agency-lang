@@ -114,3 +114,42 @@ node main() {
     expect(errors.join("\n")).not.toContain("needs a second argument");
   });
 });
+
+describe("failure() and splats", () => {
+  it("refuses a splatted failure", () => {
+    const { errors } = check(`
+def f(args: any[]): Result {
+  return failure(...args)
+}`);
+    expect(errors.join("\n")).toContain("failure() cannot take a splat");
+  });
+});
+
+describe("reject takes a string", () => {
+  it("refuses a non-string reason", () => {
+    const { errors } = check(`
+node main() {
+  handle {
+    print("x")
+  } with (intr) {
+    return reject(42)
+  }
+}`);
+    expect(errors.join("\n")).toContain("not assignable");
+  });
+
+  it("accepts a string reason and no reason at all", () => {
+    const { errors } = check(`
+node main() {
+  handle {
+    print("x")
+  } with (intr) {
+    if (intr.effect == "std::read") {
+      return reject("not allowed")
+    }
+    return reject()
+  }
+}`);
+    expect(errors).toEqual([]);
+  });
+});

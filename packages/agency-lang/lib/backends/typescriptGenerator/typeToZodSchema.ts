@@ -295,8 +295,12 @@ export function mapTypeToValidationSchema(
     typeAliases,
     (vt, ta) => {
       const successSchema = mapTypeToValidationSchema((vt as any).successType, ta, typeAliasesFull);
-      const dataSchema = mapTypeToValidationSchema((vt as any).dataType, ta, typeAliasesFull);
-      return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.string(), data: ${dataSchema} })])`;
+      // The data slot checks only that it IS an object, not its shape. The
+      // runtime turns absent data into `{}`, which no schema for a real `D`
+      // matches, so checking the shape here would reject the bare
+      // `failure(msg)` that a `D | null` data type exists to permit. What the
+      // data holds is settled statically by AG2014 through AG2016.
+      return `z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: ${successSchema} }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.string(), data: z.record(z.any()) })])`;
     },
     typeAliasesFull,
     "optional-coalesce",

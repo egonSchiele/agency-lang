@@ -827,6 +827,12 @@ function synthFunctionCall(
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
   // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in
   // index.ts), so shadowing is impossible — no gating needed here.
+  if (expr.functionName === "failure" && expr.arguments.some((arg) => arg.type === "splat")) {
+    // A splat of unknown width would displace the options object codegen
+    // appends by position. See the AG2017 explanation.
+    ctx.errors.push(diagnostic("failureSplatArgument", {}, expr.loc ?? null));
+    return { type: "resultType", successType: ANY_T, dataType: ANY_T };
+  }
   if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {

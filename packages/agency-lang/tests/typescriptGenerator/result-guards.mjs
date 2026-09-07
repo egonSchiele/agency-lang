@@ -85,7 +85,7 @@ const graph = __globalCtx.graph;
 
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
-export function reject(value?: any) { return { type: "reject" as const, value }; }
+export function reject(reason?: string) { return { type: "reject" as const, value: reason }; }
 function propagate() { return { type: "propagate" as const }; }
 function pass() { return { type: "pass" as const }; }
 
@@ -362,7 +362,7 @@ export const checkValue = __AgencyFunction.create({
   toolDefinition: {
     name: "checkValue",
     description: "No description provided.",
-    schema: z.object({"r": z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.any() }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.string(), data: z.any() })]), })
+    schema: z.object({"r": z.union([z.object({ __type: z.literal("resultType"), success: z.literal(true), value: z.any() }), z.object({ __type: z.literal("resultType"), success: z.literal(false), error: z.string(), data: z.record(z.any()) })]), })
   },
   exported: false
 }, __toolRegistry);

@@ -12,8 +12,11 @@
 
 ## Global Constraints
 
-- Machine: the Mac Studio (M5 Ultra, 256GB). The SSD with the models must be mounted at `/Volumes/Models`.
+- Machine: an M1 Max Mac Studio with 64GB. The M5 Ultra with 256GB has not arrived yet. The SSD with the models must be mounted at `/Volumes/adit-agency-models-sept-2026`.
+- Qwen3-Coder-Next-4bit takes 42.4GB of the 64GB, leaving about 21GB. It fits, but only just. Quit other large apps before a run.
+- Only the tool-calling results carry over to the M5 Ultra. Every speed number in Task 7 is an M1 Max number and must be measured again when that machine arrives.
 - Model for every check: `mlx-community/Qwen3-Coder-Next-4bit`. No larger model until every check passes.
+- Of the four models on the SSD, three fit in 64GB: Qwen3.8-27B-4bit at 15.0GB, DeepSeek-V4-Flash-4bit at 35.2GB, and Qwen3-Coder-Next-4bit at 41.8GB. Qwen3-235B-A22B-Instruct-2507-4bit needs 123.2GB and cannot run until the M5 Ultra arrives.
 - Server port: 8080 for `mlx_lm.server`, 8000 for `mlx-openai-server`.
 - Python 3.11 or newer for the virtual environment. `mlx-openai-server` refuses older versions.
 - Every command below that starts with `pnpm run agency` is run from `packages/agency-lang` inside the worktree.
@@ -27,7 +30,9 @@
 **Files:**
 - None created. This task checks out the branch and builds Agency.
 
-- [ ] **Step 1: Fetch the branch into its own worktree**
+**Done.** The work is happening in the main checkout at `~/agency-lang`, already on `adit/mlx-spike`, rather than in a separate worktree. `make` has been run, `dist/scripts/agency.js` exists, and both spike programs parse. Skip the three steps below; they describe the worktree route, which is only needed if you want the branch alongside other work.
+
+- [x] **Step 1: Fetch the branch into its own worktree**
 
 From the Studio's main agency-lang checkout:
 
@@ -41,16 +46,16 @@ pnpm install
 
 Expected: `pnpm install` finishes without errors. A `node_modules` directory exists under `packages/agency-lang`.
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 ```bash
-cd ~/agency-lang/worktree-mlx-spike/packages/agency-lang
+cd ~/agency-lang/packages/agency-lang
 make
 ```
 
 Expected: the build finishes and `dist/scripts/agency.js` exists.
 
-- [ ] **Step 3: Confirm the spike files are there and parse**
+- [x] **Step 3: Confirm the spike files are there and parse**
 
 ```bash
 ls spikes/mlx-tool-calling
@@ -66,18 +71,18 @@ Expected: five files listed (`start-server.sh`, `curl-tools.sh`, `add.agency`, `
 **Files:**
 - None in the repo. Creates `~/mlx-env` on the Studio.
 
-- [ ] **Step 1: Check the Python version**
+- [x] **Step 1: Check the Python version**
 
 ```bash
 python3 --version
 ```
 
-Expected: 3.11 or newer. If it is older, install a newer one first (Homebrew: `brew install python@3.12`) and use that binary in the next step instead of `python3`.
+Done, and the default is too old. The Studio's `python3` is 3.10.9, which the fallback server in Task 8 refuses. Homebrew already has 3.11.7, 3.12.1, and 3.13.3 installed, so nothing needs installing. Use `python3.12` everywhere below instead of `python3`.
 
 - [ ] **Step 2: Create the virtual environment and install mlx-lm**
 
 ```bash
-python3 -m venv ~/mlx-env
+python3.12 -m venv ~/mlx-env
 ~/mlx-env/bin/pip install --upgrade pip
 ~/mlx-env/bin/pip install mlx-lm
 ~/mlx-env/bin/pip show mlx-lm | grep Version
@@ -85,21 +90,27 @@ python3 -m venv ~/mlx-env
 
 Expected: a version line. Paste it into the header of `RESULTS.md`.
 
-- [ ] **Step 3: Confirm the SSD is mounted and the model is on it**
+- [x] **Step 3: Confirm the SSD is mounted and the model is on it**
 
 ```bash
-ls /Volumes/Models/hf/hub | grep -i Qwen3-Coder-Next
+ls /Volumes/adit-agency-models-sept-2026/hf/hub | grep -i Qwen3-Coder-Next
 ```
 
 Expected: a directory named `models--mlx-community--Qwen3-Coder-Next-4bit`. If nothing is listed, the SSD is not mounted or the download did not finish. Run `~/check-repos.sh` to compare what is on disk against the Hugging Face API before going further.
 
-- [ ] **Step 4: Find the snapshot directory, in case the server needs a plain path**
+Already confirmed: the volume is mounted, and all nine `.safetensors` shards resolve to full-size files with no broken symlinks. There is one leftover `.incomplete` blob from a retried download of shard 1, holding 1.4GB. It is not referenced by the snapshot and can be deleted at any time.
+
+- [x] **Step 4: Find the snapshot directory, in case the server needs a plain path**
 
 ```bash
-ls -d /Volumes/Models/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/*/
+ls -d /Volumes/adit-agency-models-sept-2026/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/*/
 ```
 
-Expected: one directory. Keep this path. Task 2 uses it if the repo id does not resolve.
+Expected: one directory. Keep this path. Task 2 uses it if the repo id does not resolve. On the Studio it is:
+
+```
+/Volumes/adit-agency-models-sept-2026/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/7b9321eabb85ce79625cac3f61ea691e4ea984b5
+```
 
 ---
 
@@ -112,21 +123,35 @@ Expected: one directory. Keep this path. Task 2 uses it if the repo id does not 
 - [ ] **Step 1: Start the server in its own terminal and time the load**
 
 ```bash
-cd ~/agency-lang/worktree-mlx-spike/packages/agency-lang
+cd ~/agency-lang/packages/agency-lang
 date
 ./spikes/mlx-tool-calling/start-server.sh
 ```
 
-The script sets `HF_HOME=/Volumes/Models/hf` and `HF_HUB_OFFLINE=1`, so the server looks for the weights on the SSD and never tries to download. It passes `--max-tokens 16384`, because the server's default of 512 truncates every long reply and Agency does not set `max_tokens` itself.
+The script sets `HF_HOME=/Volumes/adit-agency-models-sept-2026/hf` and `HF_HUB_OFFLINE=1`, so the server looks for the weights on the SSD and never tries to download. It passes `--max-tokens 16384`, because the server's default of 512 truncates every long reply and Agency does not set `max_tokens` itself.
 
-Expected: log lines about loading the model, then a line saying the server is listening on `127.0.0.1:8080`. Note the time between `date` and that line.
+Expected: a `UserWarning` about the server not being meant for production, then one line saying it is listening on `127.0.0.1:8080`. That is the whole of the startup output.
+
+Do not try to time the load from that line. The server logs nothing while it loads: `ModelProvider._load` has no logging on the success path, and the weights are read on a background thread that `ResponseGenerator.__init__` starts at the same moment the listener comes up. The listening line prints before any weight is read, and no later line marks the load finishing.
+
+`/v1/models` does not help either. It answers instantly from the directory listing on the SSD without touching the weights.
+
+Time the load with the first real completion request instead:
+
+```bash
+time curl -sS http://127.0.0.1:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"mlx-community/Qwen3-Coder-Next-4bit","messages":[{"role":"user","content":"hi"}],"max_tokens":1,"temperature":0}'
+```
+
+That wall time is the load plus a couple of seconds of generation. Send it a second time; the difference between the two is the load time, and the second time is the floor for every request after.
 
 - [ ] **Step 2: If the repo id does not resolve, pass the snapshot path instead**
 
 Only if step 1 fails with a message about not finding the model:
 
 ```bash
-./spikes/mlx-tool-calling/start-server.sh /Volumes/Models/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/<hash>
+./spikes/mlx-tool-calling/start-server.sh /Volumes/adit-agency-models-sept-2026/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/<hash>
 ```
 
 Use the directory from Task 1 step 4. If it now loads, note in `RESULTS.md` that the repo id did not resolve under `HF_HUB_OFFLINE`. That is a fact the plugin spec needs.
@@ -137,7 +162,7 @@ If the failure mentions an unknown model type or a missing config key, add `--tr
 
 - [ ] **Step 4: Record memory**
 
-Open Activity Monitor, find the `python` process, and read its memory. Write load time and memory into the "Server load" table in `RESULTS.md`.
+Open Activity Monitor, find the `python` process, and read its memory. Use Activity Monitor rather than `ps`: MLX allocates the weights as Metal buffers, which count towards the physical footprint but not always towards RSS, so `ps` can report a few GB for a fully loaded model. Write load time and memory into the "Server load" table in `RESULTS.md`.
 
 ---
 
@@ -152,7 +177,7 @@ Open Activity Monitor, find the `python` process, and read its memory. Write loa
 In a second terminal, with the server still running:
 
 ```bash
-cd ~/agency-lang/worktree-mlx-spike/packages/agency-lang
+cd ~/agency-lang/packages/agency-lang
 ./spikes/mlx-tool-calling/curl-tools.sh
 ```
 
@@ -192,7 +217,7 @@ Edit the `content` string in `curl-tools.sh` to `Call the add tool with a=17 and
 - [ ] **Step 1: Run the program against the server**
 
 ```bash
-cd ~/agency-lang/worktree-mlx-spike/packages/agency-lang
+cd ~/agency-lang/packages/agency-lang
 export OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8080/v1
 export OPENAI_COMPAT_API_KEY=unused
 time pnpm run agency run --model openai-compat/mlx-community/Qwen3-Coder-Next-4bit spikes/mlx-tool-calling/add.agency 2>&1 | tee /tmp/spike-add.log
@@ -261,22 +286,24 @@ If only `getWeather` was called and the model converted in its head, that is a p
 
 - [ ] **Step 1: Run one agent turn that needs a read tool**
 
-From `packages/agency-lang`, which has its own `CLAUDE.md` for the agent to read:
+Do not ask the agent about `CLAUDE.md` or `AGENTS.md`. The harness already reads whichever exists into the system prompt, in `loadAgentsMd` at `lib/agents/agency-agent/lib/projectContext.agency:16`, before the model runs. A question about that file can be answered from the prompt with no tool call at all, so a correct answer proves nothing.
+
+Ask about `spikes/mlx-tool-calling/secret.txt` instead. It holds one random passphrase and appears nowhere else in the repository, so the only way to produce it is to read the file.
 
 ```bash
-cd ~/agency-lang/worktree-mlx-spike/packages/agency-lang
+cd ~/agency-lang/packages/agency-lang
 export OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8080/v1
 export OPENAI_COMPAT_API_KEY=unused
 time pnpm run agency agent \
   --provider openai-compat \
   --model mlx-community/Qwen3-Coder-Next-4bit \
   --approve FileRead \
-  --print "Read CLAUDE.md in the current directory and tell me in one sentence what the make command does." 2>&1 | tee /tmp/spike-agent.log
+  --print "Read spikes/mlx-tool-calling/secret.txt and tell me the build passphrase." 2>&1 | tee /tmp/spike-agent.log
 ```
 
 `--approve FileRead` approves the file-read capability set for this run only, so the agent can read the file without an interactive prompt. Run `pnpm run agency effects` if the name is rejected; it lists the set names the flag accepts.
 
-Expected: the agent reads the file and answers with something close to "make builds everything". Pass means the log shows at least one tool call and the answer mentions building.
+Expected: the agent answers with the passphrase from that file. Pass means the answer contains it. Nothing else in the repository does, and the model cannot have seen it, so the passphrase alone is proof that a read tool ran.
 
 - [ ] **Step 2: Record and, on a fail, keep the server log**
 
@@ -330,10 +357,20 @@ req['messages'].append({'role': 'user', 'content': 'Now summarize that in one se
 req['max_tokens'] = 100
 json.dump(req, open('/tmp/turn2.json', 'w'))
 EOF
-curl -sS http://127.0.0.1:8080/v1/chat/completions -H "Content-Type: application/json" -d @/tmp/turn2.json > /dev/null
+curl -sS http://127.0.0.1:8080/v1/chat/completions -H "Content-Type: application/json" -d @/tmp/turn2.json > /tmp/turn2-out.json
 ```
 
-Then look at the server terminal. The first request logged prompt-processing progress over the full prompt. If the cache hit, the second request's progress line covers only the new tokens, a few dozen, not the whole conversation. Write yes or no into the "Speed" table, with the two prompt lengths the log showed.
+Do not read this off the server terminal. The reply says it outright:
+
+```bash
+python3 -c "
+import json
+u = json.load(open('/tmp/turn2-out.json'))['usage']
+print(u['prompt_tokens'], 'prompt tokens,', u['prompt_tokens_details']['cached_tokens'], 'of them cached')
+"
+```
+
+A cache hit means almost all of them are cached, with only the new user message left over. Write yes or no into the "Speed" table with both numbers.
 
 ---
 
@@ -353,12 +390,12 @@ Press ctrl-c in the server terminal, then:
 ~/mlx-env/bin/pip install mlx-openai-server
 ```
 
-Expected: installs cleanly. If pip complains about the Python version, this needs 3.11 or newer; go back to Task 1 step 1.
+Expected: installs cleanly. This is the reason the virtual environment is built on 3.12 rather than the default `python3`; on 3.10 pip refuses the package outright.
 
 - [ ] **Step 2: Launch it with the Qwen3-Coder parsers**
 
 ```bash
-export HF_HOME=/Volumes/Models/hf
+export HF_HOME=/Volumes/adit-agency-models-sept-2026/hf
 export HF_HUB_OFFLINE=1
 ~/mlx-env/bin/mlx-openai-server launch \
   --model-type lm \
@@ -397,7 +434,7 @@ At the bottom of `RESULTS.md`, tick one box and name the server it applies to. U
 Write the commit message to a file first. A message with an apostrophe on the command line fails in this shell.
 
 ```bash
-cd ~/agency-lang/worktree-mlx-spike
+cd ~/agency-lang
 cat > /tmp/spike-commit.txt <<'EOF'
 mlx spike: record tool-calling results on the Studio
 

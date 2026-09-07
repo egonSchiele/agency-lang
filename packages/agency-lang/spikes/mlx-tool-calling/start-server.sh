@@ -16,7 +16,7 @@ VENV="${MLX_VENV:-$HOME/mlx-env}"
 # The weights live under HF_HOME on the external SSD. Same value as
 # ~/download-models.sh, so huggingface_hub finds the downloaded snapshot
 # instead of downloading it again.
-export HF_HOME="${HF_HOME:-/Volumes/Models/hf}"
+export HF_HOME="${HF_HOME:-/Volumes/adit-agency-models-sept-2026/hf}"
 export HF_HUB_OFFLINE=1
 
 if [ ! -d "$HF_HOME" ]; then

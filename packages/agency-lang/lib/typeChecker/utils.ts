@@ -176,19 +176,65 @@ export function checkType(
 }
 
 /**
+ * Two Result-specific replacements for the generic assignability message,
+ * which would otherwise read "Result<any, null> is not assignable to
+ * Result<Policy, ParsePolicyFailure>" and tell the author nothing they can act
+ * on. Returns true when it reported one, meaning the caller should not also
+ * report the generic message.
+ */
+function reportFailureDataError(
+  actual: VariableType,
+  expected: VariableType,
+  loc: SourceLocation | undefined,
+  context: string,
+  ctx: TypeCheckerContext,
+): boolean {
+  const aliases = ctx.getTypeAliases();
+  // Resolve so an alias for the Result (`type Outcome = Result<T, D>`) reaches
+  // this check rather than falling through as a typeAliasVariable.
+  const target = safeResolveType(expected, aliases);
+  if (actual.type !== "resultType" || target.type !== "resultType") {
+    return false;
+  }
+  // The annotation itself is wrong: no failure() can produce data of this
+  // shape, so telling the author to pass a second argument would send them in
+  // circles. Say the annotation is the problem instead.
+  if (!isDataShaped(target.dataType, aliases)) {
+    ctx.errors.push(
+      diagnostic(
+        "resultDataNotObject",
+        { actual: formatTypeHint(target.dataType), context },
+        loc ?? null,
+      ),
+    );
+    return true;
+  }
+  // A one-argument `failure(msg)` synthesizes null data (see
+  // synthFailureCall), so getting here means the target declared real data and
+  // the failure supplied none.
+  if (isNullType(actual.dataType)) {
+    ctx.errors.push(
+      diagnostic(
+        "failureNeedsData",
+        {
+          expected: formatTypeHint(target.dataType),
+          success: formatTypeHint(target.successType),
+        },
+        loc ?? null,
+      ),
+    );
+    return true;
+  }
+  return false;
+}
+
+/**
  * The single "X is not assignable to Y" diagnostic construction site. No-op
  * when `actual` is `any` or already assignable to `expected`; otherwise pushes
  * the standard assignability error. Shared by `checkType` (assignment / return
  * checking) and the expression-match `matchExprSource` check in scopes.ts so
  * neither hand-rolls the message.
  */
-/** A one-argument `failure(msg)` synthesizes null data (see synthFailureCall).
- *  Reaching an assignability failure with one of these on the source side means
- *  the target declared real data and the failure supplied none. */
-function isBareFailureResult(t: VariableType): boolean {
-  return t.type === "resultType" && isNullType(t.dataType);
-}
-
 export function emitAssignabilityError(
   actual: VariableType,
   expected: VariableType,
@@ -198,39 +244,7 @@ export function emitAssignabilityError(
 ): void {
   if (isAnyType(actual)) return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
-  // The generic message here would read "Result<any, null> is not assignable to
-  // Result<Policy, ParsePolicyFailure>", which does not tell anyone what to do.
-  // Resolve the target first so an alias for the Result reaches this check.
-  const aliases = ctx.getTypeAliases();
-  const resolvedExpected = safeResolveType(expected, aliases);
-  if (actual.type === "resultType" && resolvedExpected.type === "resultType") {
-    // The annotation itself is wrong: no failure() can produce data of this
-    // shape, so telling the author to pass a second argument would send them
-    // in circles. Say the annotation is the problem instead.
-    if (!isDataShaped(resolvedExpected.dataType, aliases)) {
-      ctx.errors.push(
-        diagnostic(
-          "resultDataNotObject",
-          { actual: formatTypeHint(resolvedExpected.dataType), context },
-          loc ?? null,
-        ),
-      );
-      return;
-    }
-    if (isBareFailureResult(actual)) {
-      ctx.errors.push(
-        diagnostic(
-          "failureNeedsData",
-          {
-            expected: formatTypeHint(resolvedExpected.dataType),
-            success: formatTypeHint(resolvedExpected.successType),
-          },
-          loc ?? null,
-        ),
-      );
-      return;
-    }
-  }
+  if (reportFailureDataError(actual, expected, loc, context, ctx)) return;
   ctx.errors.push(
     diagnostic(
       "typeNotAssignableInContext",

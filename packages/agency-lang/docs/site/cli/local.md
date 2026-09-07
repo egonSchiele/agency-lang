@@ -61,7 +61,7 @@ Agency sends the server the same string you gave `--model`: the directory path f
 
 The server listens on `http://127.0.0.1:8080/v1` by default. For another port, set `MLX_BASE_URL` or `client.baseUrl.mlx` in `agency.json`.
 
-The directory must hold real files. A Hugging Face cache snapshot directory holds symlinks, which Agency does not follow. Download with `hf download <repo> --local-dir <dir>` to get real files.
+A Hugging Face cache snapshot directory (`hf/hub/models--<org>--<repo>/snapshots/<sha>`) works as is. Its entries are symlinks into `blobs/`, and Agency follows them for this one check.
 
 Downloading an MLX model with `agency local download` is not supported yet.
 

@@ -28,6 +28,7 @@ import {
   isMlxUri,
   parseMlxUri,
   isModelDir,
+  modelDirEntries,
   backendOfTarget,
 } from "./modelBackend.js";
 export {
@@ -35,6 +36,7 @@ export {
   isMlxUri,
   parseMlxUri,
   isModelDir,
+  modelDirEntries,
   backendOfTarget,
 } from "./modelBackend.js";
 import {
@@ -762,9 +764,7 @@ export function _modelFilesOnDisk(
     return found((f) => f.path === modelDir);
   }
   const target = path.resolve(resolved.target);
-  const sizeBytes = list(root(target), ".")
-    .filter((f) => f.type === "file")
-    .reduce((sum, f) => sum + f.size, 0);
+  const sizeBytes = modelDirEntries(target).reduce((sum, f) => sum + f.size, 0);
   return { path: target, sizeBytes, insideCache: onDisk.some((f) => f.path === target) };
 }
 

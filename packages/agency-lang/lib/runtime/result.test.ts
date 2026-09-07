@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   success,
   failure,
@@ -227,6 +227,31 @@ describe("failure", () => {
       args: null,
       skippedFunctions: [],
     });
+  });
+
+  it("drops non-object data with a warning", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(failure("boom", [1, 2] as any).data).toEqual({});
+      expect(failure("boom", "text" as any).data).toEqual({});
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(warn.mock.calls[0][0]).toContain("dropped an array");
+      expect(warn.mock.calls[1][0]).toContain("dropped a string");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not warn when data is absent", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      failure("boom");
+      failure("boom", null);
+      failure("boom", undefined);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("births neverStarted, destructiveRan, and rejected false", () => {

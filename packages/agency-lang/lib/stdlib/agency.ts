@@ -643,14 +643,14 @@ export function _filterImports(
   return { source: generateAgency(ast), filtered };
 }
 
-/** Deterministic text for a run failure carried into case feedback:
- *  strings verbatim, structured failures as stable JSON. */
-export function _failureFeedback(err: unknown): string {
-  if (typeof err === "string") return err;
+/** Deterministic text for a run failure carried into case feedback: the
+ *  message, followed by the failure's data as stable JSON when it has any. */
+export function _failureFeedback(message: string, data: Record<string, unknown>): string {
+  if (Object.keys(data).length === 0) return message;
   try {
-    return JSON.stringify(err);
+    return `${message} ${JSON.stringify(data)}`;
   } catch {
-    return String(err);
+    return message;
   }
 }
 

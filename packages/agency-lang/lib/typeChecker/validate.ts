@@ -84,7 +84,11 @@ function checkValueArgsArity(
   return false;
 }
 
-export function validateTypeReferences(
+/** A `Result`'s second type parameter is read as `.data.field`, so it has to
+ *  be an object. Checked wherever a type is written down: alias bodies and
+ *  `let`/`const` hints through validateTypeReferences, and function
+ *  parameters and return types directly (scopes.ts). */
+export function validateResultDataTypes(
   vt: VariableType,
   context: string,
   typeAliases: Record<string, TypeAliasEntry>,
@@ -101,6 +105,18 @@ export function validateTypeReferences(
         ),
       );
     }
+  });
+}
+
+export function validateTypeReferences(
+  vt: VariableType,
+  context: string,
+  typeAliases: Record<string, TypeAliasEntry>,
+  errors: TypeCheckError[],
+  loc?: SourceLocation,
+): void {
+  validateResultDataTypes(vt, context, typeAliases, errors, loc);
+  visitTypes(vt, (t) => {
     if (t.type === "typeAliasVariable") {
       const entry = typeAliases[t.aliasName];
       if (!entry) {

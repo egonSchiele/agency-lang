@@ -233,7 +233,7 @@ export function checkResultMethodCall(obj: unknown, prop: string | number): void
     }
   }
   const message = isFailureObj
-    ? `called '.${String(prop)}()' on a failure produced by '${origin(obj as ResultFailure)}' (${(obj as ResultFailure).error}). Check the Result before using it.`
+    ? `called '.${String(prop)}()' on a failure produced by '${origin(obj as ResultFailure)}' (${truncate((obj as ResultFailure).error)}). Check the Result before using it.`
     : `called '.${String(prop)}()' on a success Result. Did you mean .value.${String(prop)}(...)?`;
   const consoleLine = isFailureObj
     ? `called '.${String(prop)}()' on a failure produced by '${origin(obj as ResultFailure)}' — check the Result before using it`

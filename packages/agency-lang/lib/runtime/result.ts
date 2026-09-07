@@ -3,6 +3,7 @@ import { isAbortError, readCause } from "./errors.js";
 import { truncate } from "./truncate.js";
 import { isAborted } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
+import { agencyStore } from "./asyncContext.js";
 
 /** Structured `GuardFailureData` for a tripped guard. Shared by the
  *  `guardTrip`-cause path (a trip that surfaced as an aborted leaf op)
@@ -150,12 +151,29 @@ function isPlainObject(value: unknown): boolean {
 }
 
 /** Data is always an object, so a reader can write `err.data.status` without
- *  checking first. */
+ *  checking first. Absent data is the normal one-argument `failure(msg)`.
+ *  Anything else that is not an object can only come from imported
+ *  TypeScript (Agency refuses it statically, AG2014), so dropping it is
+ *  worth a warning: the producer meant to attach something. */
 function coerceData(data: unknown): Record<string, any> {
+  if (data == null) {
+    return {};
+  }
   if (!isPlainObject(data)) {
+    warnDroppedData(data);
     return {};
   }
   return data as Record<string, any>;
+}
+
+function warnDroppedData(data: unknown): void {
+  const kind = Array.isArray(data) ? "an array" : `a ${typeof data}`;
+  const message = `failure() data must be an object; dropped ${kind}`;
+  const ctx = agencyStore.getStore()?.ctx;
+  // Fire-and-forget, like failurePropagation's logWarn. The console line
+  // carries no payload: the dropped value may hold anything.
+  void ctx?.statelogClient?.warn?.({ warnType: "failureData", message, error: data });
+  console.warn(message);
 }
 
 export function failure(
@@ -192,12 +210,14 @@ export function runtimeFailure(error: unknown, opts: FailureOpts): ResultFailure
 }
 
 /** A Result that imported TypeScript built by hand, rather than by calling
- *  `failure()`, can carry an object error and no data at all. `try` is where
- *  such a value becomes an Agency Result, so it is where the invariant the
- *  type checker relies on gets restored: `error` is a string, `data` is an
- *  object. A well-formed Result is returned unchanged. */
-function normalizeForeignResult(value: any): any {
-  if (value.success !== false) return value;
+ *  `failure()`, can carry an object error and no data at all. Every place a
+ *  value crosses from JavaScript into Agency (`try`, a call through
+ *  `__call`, an `AgencyFunction` wrapping a TypeScript function) runs it
+ *  through here so the invariant the type checker relies on holds: `error`
+ *  is a string, `data` is an object. Anything that is not a failure, and a
+ *  well-formed failure, is returned unchanged by identity. */
+export function normalizeForeignResult<T>(value: T): T {
+  if (!isFailure(value)) return value;
   const wellFormed = typeof value.error === "string" && isPlainObject(value.data);
   if (wellFormed) return value;
   return { ...value, error: coerceMessage(value.error), data: coerceData(value.data) };

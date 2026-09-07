@@ -613,9 +613,9 @@ export node maxCostTripsWholeCall(): string {
       [{ node: "spends", expected: "llm done" }],
       maxCost: 0.0000001,
     )
-    if (r is failure(err)) {
-      if (err.reason == "limit_exceeded") {
-        if (err.limit == "cost") {
+    if (r is failure) {
+      if (r.data.reason == "limit_exceeded") {
+        if (r.data.limit == "cost") {
           return "ok"
         }
       }

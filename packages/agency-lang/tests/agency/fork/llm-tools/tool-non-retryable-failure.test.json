@@ -2,7 +2,7 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "Tool returns failure(..., { retryable: false }). runPrompt's isFailure path pushes a 'cannot be retried' tool message and removes the tool. The LLM should not retry the call.",
+      "description": "A destructive def fails, so its failure carries destructiveRan. runPrompt's isFailure path pushes a 'can no longer be called' tool message and removes the tool. The LLM should not retry the call.",
       "input": "",
       "expectedOutput": "\"tool-removed\"",
       "evaluationCriteria": [{ "type": "exact" }],

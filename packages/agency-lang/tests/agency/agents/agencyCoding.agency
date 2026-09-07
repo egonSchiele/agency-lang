@@ -13,8 +13,8 @@ node retriesUntilValid(): boolean {
 // All mocks broken: the failure carries the last source AND its problems.
 node failureCarriesSourceAndProblems(): boolean {
   const result = agencyCodingAgent("return one", maxAttempts: 2)
-  if (result is failure(f)) {
-    return f.source =~ re/node/ && f.problems.length > 0
+  if (result is failure) {
+    return result.data.source =~ re/node/ && result.data.problems.length > 0
   }
   return false
 }

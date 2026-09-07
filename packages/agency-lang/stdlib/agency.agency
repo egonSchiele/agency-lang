@@ -406,13 +406,13 @@ export def test(
       } else if (scripted.index < answers.length) {
         feedback = "expected ${answers.length} interrupt(s), saw ${scripted.index}"
       } else if (runResult is failure(runErr)) {
-        feedback = "run failed: ${_failureFeedback(runErr)}"
+        feedback = "run failed: ${_failureFeedback(runErr, runResult.data)}"
       } else if (runResult is success(envelope)) {
         // A tested node can RETURN a failure (a rejected interrupt inside
         // it, or its own failure()). Unwrap before the TS verdict seam —
         // failure propagation forbids handing tagged failures to TS.
         if (envelope.data is failure(nodeErr)) {
-          feedback = "the node returned a failure: ${_failureFeedback(nodeErr)}"
+          feedback = "the node returned a failure: ${_failureFeedback(nodeErr, envelope.data.data)}"
         } else {
           feedback = _exactVerdictFeedback(envelope.data, testCase.expected)
         }
@@ -1086,47 +1086,54 @@ export def cli(args: string[], cwd: string = "."): Result<ExecResult> {
   }
 }
 
+// Each wrapper returns the underlying failure as it is, so its data,
+// checkpoint, and origin reach the caller.
 def cliTest(cwd: string, file: string): Result<ExecResult> {
-  return match(testFile(cwd, file)) {
-    success(report) => success(renderTestReport(report))
-    failure(err) => failure(err)
+  const report = testFile(cwd, file)
+  if (report is failure) {
+    return report
   }
+  return success(renderTestReport(report.value))
 }
 
 def cliTypecheck(cwd: string, file: string): Result<ExecResult> {
-  return match(typecheckFile(cwd, file)) {
-    success(report) => success(renderTypeCheck(report))
-    failure(err) => failure(err)
+  const report = typecheckFile(cwd, file)
+  if (report is failure) {
+    return report
   }
+  return success(renderTypeCheck(report.value))
 }
 
 def cliRun(cwd: string, file: string): Result<ExecResult> {
-  return match(runFile(cwd, file, "main")) {
-    success(value) => success(cliOutput(JSON.stringify(value)))
-    failure(err) => failure(err)
+  const value = runFile(cwd, file, "main")
+  if (value is failure) {
+    return value
   }
+  return success(cliOutput(JSON.stringify(value.value)))
 }
 
 def cliAst(cwd: string, file: string): Result<ExecResult> {
   const source = read(file, cwd)
-  if (source is failure(err)) {
-    return failure(err)
+  if (source is failure) {
+    return source
   }
-  return match(parseAST(source.value)) {
-    success(tree) => success(cliOutput(JSON.stringify(tree, null, 2)))
-    failure(err) => failure(err)
+  const tree = parseAST(source.value)
+  if (tree is failure) {
+    return tree
   }
+  return success(cliOutput(JSON.stringify(tree.value, null, 2)))
 }
 
 def cliFmt(cwd: string, file: string): Result<ExecResult> {
   const source = read(file, cwd)
-  if (source is failure(err)) {
-    return failure(err)
+  if (source is failure) {
+    return source
   }
-  return match(format(source.value)) {
-    success(formatted) => success(cliOutput("${formatted}"))
-    failure(err) => failure(err)
+  const formatted = format(source.value)
+  if (formatted is failure) {
+    return formatted
   }
+  return success(cliOutput("${formatted.value}"))
 }
 
 def cliOutput(stdout: string): ExecResult {

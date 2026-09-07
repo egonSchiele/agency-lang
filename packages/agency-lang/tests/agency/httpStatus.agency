@@ -1,8 +1,8 @@
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 
 // std::http fetch functions must fail on a non-2xx status instead of returning the
-// error body as success. On failure the error is a STRUCTURED object
-// { status, statusText, url, body, message }, so tests assert the fields directly.
+// error body as success. On failure the message names the status and the data
+// carries { status, statusText, url, body }, so tests assert the fields directly.
 // Each node returns a stable marker so the .test.json can assert exactly.
 // `with approve` auto-approves the fetch interrupt so the mocked response is reached.
 
@@ -11,10 +11,10 @@ import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 node jsonNotFound(): string {
   const r = fetchJSON("https://api.example.com", "/x") with approve
   if (r is failure(e)) {
-    if (e.status == 404 && e.body.includes("nope") && e.message.includes("HTTP 404")) {
+    if (r.data.status == 404 && r.data.body.includes("nope") && e.includes("HTTP 404")) {
       return "OK"
     }
-    return "BAD: ${e.message}"
+    return "BAD: ${e}"
   }
   return "UNEXPECTED_SUCCESS"
 }
@@ -22,10 +22,10 @@ node jsonNotFound(): string {
 node jsonServerError(): string {
   const r = fetchJSON("https://api.example.com", "/err500") with approve
   if (r is failure(e)) {
-    if (e.status == 500) {
+    if (r.data.status == 500) {
       return "OK"
     }
-    return "BAD: ${e.message}"
+    return "BAD: ${e}"
   }
   return "UNEXPECTED_SUCCESS"
 }
@@ -33,10 +33,10 @@ node jsonServerError(): string {
 node fetchNotFound(): string {
   const r = fetch("https://api.example.com", "/page") with approve
   if (r is failure(e)) {
-    if (e.status == 404) {
+    if (r.data.status == 404) {
       return "OK"
     }
-    return "BAD: ${e.message}"
+    return "BAD: ${e}"
   }
   return "UNEXPECTED_SUCCESS"
 }
@@ -44,10 +44,10 @@ node fetchNotFound(): string {
 node markdownGone(): string {
   const r = fetchMarkdown("https://api.example.com", "/md") with approve
   if (r is failure(e)) {
-    if (e.status == 503) {
+    if (r.data.status == 503) {
       return "OK"
     }
-    return "BAD: ${e.message}"
+    return "BAD: ${e}"
   }
   return "UNEXPECTED_SUCCESS"
 }

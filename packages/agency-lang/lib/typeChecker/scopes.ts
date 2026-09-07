@@ -16,7 +16,7 @@ import { synthType, synthValueAccess } from "./synthesizer.js";
 import type { AccessChainElement, ValueAccess } from "../types/access.js";
 import type { VariableNameLiteral } from "../types/literals.js";
 import { resultTypeForValidation } from "./validation.js";
-import { validateTypeReferences } from "./validate.js";
+import { validateResultDataTypes, validateTypeReferences } from "./validate.js";
 import { ScopeInfo, TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
 import type { FlowNode } from "./flow.js";
@@ -65,8 +65,27 @@ function buildDefScope(
   // def (lookup only — the boundary flag keeps declarations local, and the
   // top-level scope is fully walked before any def scope is built).
   const scope = new Scope(sk, topLevelScope, true);
+  const aliases = ctx.getTypeAliases();
   for (const param of def.parameters) {
+    if (param.typeHint) {
+      validateResultDataTypes(
+        param.typeHint,
+        `parameter '${param.name}'`,
+        aliases,
+        ctx.errors,
+        def.loc,
+      );
+    }
     scope.declare(param.name, param.typeHint ?? ANY_T);
+  }
+  if (def.returnType) {
+    validateResultDataTypes(
+      def.returnType,
+      `return type of '${name}'`,
+      aliases,
+      ctx.errors,
+      def.loc,
+    );
   }
   ctx.withScope(sk, () => {
     walkScopeBody(def.body, scope, ctx);

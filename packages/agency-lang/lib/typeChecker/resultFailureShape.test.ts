@@ -39,6 +39,32 @@ def g(): string {
     expect(errors).toEqual([]);
   });
 
+  it("reads .data as D when the data type is D | null", () => {
+    const { errors } = check(`
+type D = { status: string }
+def f(): Result<number, D | null> { return failure("boom") }
+def g(): string {
+  const outcome = f()
+  if (isFailure(outcome)) { return outcome.data.status }
+  return ""
+}`);
+    expect(errors).toEqual([]);
+  });
+
+  it("reads .data as D when a def returns failures with and without data", () => {
+    const { errors } = check(`
+def f(flag: boolean) {
+  if (flag) { return failure("boom") }
+  return failure("boom", { a: 1 })
+}
+def g(): number {
+  const outcome = f(true)
+  if (isFailure(outcome)) { return outcome.data.a }
+  return 0
+}`);
+    expect(errors).toEqual([]);
+  });
+
   it("leaves .data open when no data type is declared", () => {
     const { errors } = check(`
 def f(): Result<number> { return failure("boom", { anything: 1 }) }
@@ -67,6 +93,18 @@ describe("failure argument diagnostics", () => {
 type D = { status: string }
 def f(): Result<number, D> { return failure("boom") }`);
     expect(errors.join("\n")).toContain("needs a second argument");
+  });
+
+  it("keeps the generic message when the null data comes from a call, not a failure()", () => {
+    const { errors } = check(`
+type Foo = { line: number }
+def helper(): Result<number, null> { return failure("x") }
+def main(): number {
+  const r: Result<number, Foo> = helper()
+  return 1
+}`);
+    expect(errors.join("\n")).toContain("not assignable");
+    expect(errors.join("\n")).not.toContain("needs a second argument");
   });
 
   it("refuses a bare failure through a type alias for the Result", () => {
@@ -112,6 +150,27 @@ node main() {
     const { errors } = check(`def f(): Result<number, string> { return failure("boom") }`);
     expect(errors.join("\n")).toContain("failure data must be an object");
     expect(errors.join("\n")).not.toContain("needs a second argument");
+  });
+
+  it("is refused on a parameter annotation", () => {
+    const { errors } = check(`def h(r: Result<number, string>): number { return 1 }`);
+    expect(errors.join("\n")).toContain("failure data must be an object");
+  });
+
+  it("is refused on a return annotation even when no failure is returned", () => {
+    const { errors } = check(`def g(): Result<number, string> { return success(1) }`);
+    expect(errors.join("\n")).toContain("failure data must be an object");
+  });
+
+  it("is reported once, not once per return", () => {
+    const { errors } = check(`
+def g(x: number): Result<number, string> {
+  if (x == 1) { return failure("one") }
+  if (x == 2) { return failure("two") }
+  return failure("three")
+}`);
+    expect(errors.filter((e) => e.includes("failure data must be an object"))).toHaveLength(1);
+    expect(errors).toHaveLength(1);
   });
 });
 

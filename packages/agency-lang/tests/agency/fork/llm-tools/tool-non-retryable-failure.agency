@@ -1,9 +1,9 @@
-// A failure that reports destructive work already ran. runPrompt tells the
-// model this tool can no longer be called and drops it, so the next round
-// answers without it.
+// A destructive def commits at entry, so its failure reports that destructive
+// work already ran. runPrompt tells the model this tool can no longer be
+// called and drops it, so the next round answers without it.
 
-def alwaysFail(): string {
-  return failure("permanent failure", { destructiveRan: true })
+destructive def alwaysFail(): Result<string> {
+  return failure("permanent failure")
 }
 
 type Resp = {

@@ -1,8 +1,7 @@
 # The `Result` failure
 
 Every failure in Agency carries a string message, and optionally an object
-of extra data. This note records the shape, the places that depend on it,
-and the two things that are easy to break later.
+of extra data.
 
 ## The shape
 
@@ -49,17 +48,13 @@ restores both fields. A well-formed failure is returned unchanged.
 
 Codegen calls `failure()` from three mustache templates and two raw strings
 inside the TypeScript builder. None of those are typechecked: they are text
-that becomes source later.
+that becomes source later. The twelve of those calls that carry no user data
+go through `runtimeFailure(error, opts)` instead, which keeps the
+three-argument positional shape in one place a compiler can see.
 
-Two things follow.
-
-First, twelve of those calls carry no user data, so they go through
-`runtimeFailure(error, opts)` instead. That keeps the three-argument
-positional shape in one place a compiler can see.
-
-Second, the builder at `lib/backends/typescriptBuilder.ts:2614` injects an
-options object carrying the checkpoint, the function name, and the call's
-arguments, and it injects it **positionally**. A user-written
+The builder at `lib/backends/typescriptBuilder.ts:2614` injects an options
+object carrying the checkpoint, the function name, and the call's
+arguments, and it injects it by position. A user-written
 `failure(msg)` must therefore be padded with a `null` data argument so the
 options always land in the third slot. Without the pad, a two-argument
 `failure(msg, data)` puts the user's data where the options belong, the
@@ -69,9 +64,8 @@ failure loses its checkpoint, and the program cannot resume from that line.
 A splat has the same problem and cannot be padded around, because its width
 is unknown at compile time: `failure(...args)` would emit
 `failure(...args, null, opts)`, and with two elements in `args` the padding
-lands in the options slot. So a splatted `failure` is refused outright
-(AG2017), and the builder throws rather than emitting one, in case that check
-ever moves.
+lands in the options slot. A splatted `failure` is refused (AG2017), and the
+builder throws rather than emitting one.
 
 ## Why the second type parameter is the data type
 
@@ -90,17 +84,18 @@ A function that declares `Result<Policy, ParsePolicyFailure>` and then
 returns a bare `failure(msg)` is a compile error. Otherwise the type says
 the data is there when it is not.
 
-This needed no new machinery. A one-argument `failure` synthesizes as
-`Result<any, null>` (`synthFailureCall` in `synthesizer.ts`), and the
-Result branch of `isAssignable` is covariant in both parameters, so `null`
-is assignable to `any` and to `D | null` and not to a real object type.
+A one-argument `failure` synthesizes as `Result<any, null>`
+(`synthFailureCall` in `synthesizer.ts`), and the Result branch of
+`isAssignable` is covariant in both parameters, so `null` is assignable to
+`any` and to `D | null` and not to a real object type. That is the whole
+mechanism.
 
-What it did need is a message. The generic one reads "Result<any, null> is
-not assignable to Result<Policy, ParsePolicyFailure>", which does not tell
-anyone what to do. `emitAssignabilityError` in `lib/typeChecker/utils.ts`
-intercepts that case and reports AG2015 instead, naming the second argument
-and the `| null` alternative. It resolves the target type first, so an
-alias for the Result reaches the check.
+The generic message for it reads "Result<any, null> is not assignable to
+Result<Policy, ParsePolicyFailure>", which does not tell anyone what to do,
+so `emitAssignabilityError` in `lib/typeChecker/utils.ts` intercepts that
+case and reports AG2015 instead, naming the second argument and the
+`| null` alternative. It resolves the target type first, so an alias for
+the Result reaches the check.
 
 The same site reports AG2016 when the declared data type is not an object,
 ahead of AG2015 — otherwise a `Result<T, string>` annotation would tell the
@@ -130,6 +125,6 @@ AG2014 through AG2016 instead.
 - `lib/typeChecker/dataShape.ts` — `isDataShaped`, shared by the two above.
 - `lib/backends/typescriptBuilder.ts:2614` — the arity padding and the splat
   guard.
-- `lib/typeChecker/builtins.ts` — `reject`'s signature. Note that generated
-  modules define their own `reject` from `imports.mustache`, so narrowing the
-  runtime helper alone would not have reached Agency code.
+- `lib/typeChecker/builtins.ts` — `reject`'s signature. Generated modules
+  define their own `reject` from `imports.mustache`, so that constructor has
+  to agree with this signature and with `lib/runtime/interruptResponse.ts`.

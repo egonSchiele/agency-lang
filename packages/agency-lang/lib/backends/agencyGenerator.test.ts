@@ -529,8 +529,6 @@ describe("AgencyGenerator - Result type formatting", () => {
   });
 
   it("should keep Result<Foo, string> as written", () => {
-    // `string` is no longer the default data type, so the printer no longer
-    // elides it. Only `Result<T, any>` shortens to `Result<T>`.
     const input = `def check(): Result<number, string> {\n  return success(42)\n}`;
     expect(formatAgency(input)).toContain("Result<number, string>");
   });

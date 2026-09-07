@@ -184,10 +184,9 @@ export function failure(
 
 /** The failure a generated program or the runtime itself produces: a thrown
  *  exception converted at a function boundary, a rejected interrupt, a tool
- *  that crashed. None of these carry user data, and most of them are written
- *  from templates the compiler does not check, so they get an entry point with
- *  no positional slot to get wrong. It coerces too, so a caller hands it the
- *  raw error rather than converting one by hand. */
+ *  that crashed. None of these carry user data. Most are written from
+ *  templates the compiler does not check, which is why they get an entry point
+ *  with no positional slot to get wrong. Pass the raw error; it coerces. */
 export function runtimeFailure(error: unknown, opts: FailureOpts): ResultFailure {
   return failure(error, null, opts);
 }

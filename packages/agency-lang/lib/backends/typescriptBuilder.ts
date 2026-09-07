@@ -2612,15 +2612,15 @@ export class TypeScriptBuilder {
     }
 
     if (node.functionName === "failure" && this.scopes.current().type === "function") {
-      // The options object is injected POSITIONALLY, so the call must always
+      // The options object is injected by position, so the call must always
       // reach it at the same arity. A user-written `failure(msg)` pads the
       // data slot with null, which failure() turns into {}. Without the pad, a
       // two-argument failure would put the user's data where the options
       // belong and lose its checkpoint, which breaks resume from that line.
       const scope = this.scopes.current() as FunctionScope;
       if (node.arguments.some((arg) => arg.type === "splat")) {
-        // The type checker refuses this (AG2017). Throwing rather than
-        // emitting keeps a miscompile impossible if that check ever moves.
+        // AG2017 refuses this. The throw is the backstop: a splat's width is
+        // unknown, so there is no arity to pad to.
         throw new Error("failure() cannot take a splat: the injected options are positional");
       }
       const argNodes: TsNode[] = node.arguments.map((arg) => this.processCallArg(arg));

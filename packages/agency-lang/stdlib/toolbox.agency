@@ -843,8 +843,6 @@ def oneRound(
 ): RoundOutcome {
   const prepared = prepareDraft(settings, feedback)
   if (prepared is failure(problem)) {
-    // A retryable problem becomes the next round's feedback. Anything else
-    // ends the loop.
     if (prepared.data.retryable == true) {
       return { done: null, feedback: problem }
     }

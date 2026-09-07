@@ -4485,6 +4485,10 @@ describe("TypeChecker", () => {
     const str: VariableType = { type: "primitiveType", value: "string" };
     const anyT: VariableType = { type: "primitiveType", value: "any" };
     const nullT: VariableType = { type: "primitiveType", value: "null" };
+    const detail: VariableType = {
+      type: "objectType",
+      properties: [{ key: "code", value: { type: "primitiveType", value: "number" } }],
+    };
     const result = (s: VariableType, f: VariableType): VariableType => ({
       type: "resultType",
       successType: s,
@@ -4735,7 +4739,7 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "specific",
             parameters: [],
-            returnType: result(num, str),
+            returnType: result(num, detail),
             body: [],
           },
           {

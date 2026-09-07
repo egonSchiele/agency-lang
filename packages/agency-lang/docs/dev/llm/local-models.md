@@ -1,6 +1,8 @@
 # Local models
 
-How `agency`'s local-model support is wired, end to end.
+How `agency`'s local-model support is wired, end to end. This page covers
+the `llama-cpp` backend, which runs GGUF files inside the Agency process.
+MLX models, which run in a server, are in `mlx-local-models.md`.
 
 ## Provider
 
@@ -143,8 +145,8 @@ file, or sharded, as described below. We then verify integrity:
 
 Because we verify only freshly-downloaded files, a pin change (e.g. via
 `agency local refresh`) does **not** retroactively re-check a file you already
-have cached. Run `agency local remove <name>` to force a fresh, verified
-re-download.
+have cached. Run `agency local remove <name> -f` to delete the file and force
+a fresh, verified re-download.
 
 ### Updating the pins
 

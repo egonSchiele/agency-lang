@@ -1,11 +1,12 @@
 import * as path from "node:path";
 import type { ResolvedModelFlag } from "@/config.js";
-import { _registerLocalModel } from "@/stdlib/localModels.js";
+import { _registerLocalModel, _resolveModel, _mlxServedName } from "@/stdlib/localModels.js";
 
 /** Turn `agency run --local <value>` into the shared model-flag shape:
- *  resolve the name (curated / alias / hf: URI / .gguf path), download and
- *  verify if needed (progress prints here, in the parent, before the program
- *  starts), and pin the llama-cpp provider. Errors (package missing, unknown
+ *  resolve the name, and for a GGUF model download and verify if needed
+ *  (progress prints here, in the parent, before the program starts) and pin
+ *  the llama-cpp provider. An MLX model pins the mlx provider and the name
+ *  the running server knows it by. Errors (package missing, unknown
  *  name, failed download) carry user-ready messages from localModels.
  *
  *  The path is absolutized before it is baked into config: LlamaCPP rejects a
@@ -13,6 +14,12 @@ import { _registerLocalModel } from "@/stdlib/localModels.js";
  *  a user-supplied `--local model.gguf` would otherwise arrive as, and an
  *  absolute path also keeps the child process independent of cwd drift. */
 export async function resolveLocalRunFlag(value: string): Promise<ResolvedModelFlag> {
+  const resolved = _resolveModel(value);
+  if (resolved.backend === "mlx") {
+    // The user has already started mlx_lm.server on this model.
+    // Nothing to download or register.
+    return { model: _mlxServedName(resolved), explicitProvider: "mlx" };
+  }
   const modelPath = await _registerLocalModel(value);
   return { model: path.resolve(modelPath), explicitProvider: "llama-cpp" };
 }

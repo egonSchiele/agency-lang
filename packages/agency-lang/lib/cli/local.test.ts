@@ -8,6 +8,8 @@ import {
   aliasRemove,
   formatRefreshOutput,
   runList,
+  runResolve,
+  runRemove,
   runDownload,
   downloadChoices,
   CUSTOM_CHOICE,
@@ -75,12 +77,13 @@ describe("downloadChoices", () => {
     const choices = downloadChoices([
       {
         name: "tiny",
+        backend: "llama-cpp",
         target: "hf:o/t:Q4",
         source: "curated",
         params: "135M",
         sizeBytes: 100_000_000,
       },
-      { name: "plain-alias", target: "hf:x/y:Q4", source: "alias" },
+      { name: "plain-alias", backend: "llama-cpp", target: "hf:x/y:Q4", source: "alias" },
     ]);
     expect(choices[0]).toEqual({ title: "tiny  (135M, 0.10 GB)", value: "tiny" });
     expect(choices[1]).toEqual({ title: "plain-alias", value: "plain-alias" });
@@ -89,6 +92,33 @@ describe("downloadChoices", () => {
 });
 
 describe("runDownload without a value, non-interactive", () => {
+  it("does not need smoltalk-llama-cpp before the user has picked a model", async () => {
+    // No override and no package: the non-interactive path must still print
+    // the catalog and the hint rather than the install message.
+    delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
+    const savedIn = process.stdin.isTTY;
+    Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code}`);
+    }) as never);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(runDownload(undefined)).rejects.toThrow("exit:1");
+      expect(errSpy.mock.calls.some((c) => String(c[0]).includes("smoltalk-llama-cpp"))).toBe(
+        false,
+      );
+      expect(
+        errSpy.mock.calls.some((c) => String(c[0]).includes("agency local download <name>")),
+      ).toBe(true);
+    } finally {
+      Object.defineProperty(process.stdin, "isTTY", { value: savedIn, configurable: true });
+      exitSpy.mockRestore();
+      logSpy.mockRestore();
+      errSpy.mockRestore();
+    }
+  });
+
   /** Run runDownload(undefined) with the given TTY shape; expect the
    *  non-interactive path: catalog + hint + exit 1. */
   async function expectNonInteractive(stdinTTY: boolean, stdoutTTY: boolean) {
@@ -148,5 +178,142 @@ describe("formatRefreshOutput", () => {
     expect(
       lines.some((l) => l.includes("2 added, 0 updated, 1 unchanged, 1 removed, 1 skipped")),
     ).toBe(true);
+  });
+});
+
+describe("runResolve", () => {
+  it("prints the backend and the target", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      runResolve("smollm2-135m");
+      expect(log).toHaveBeenCalledWith("llama-cpp  hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M");
+      runResolve("mlx:mlx-community/Qwen3-Coder-Next-4bit");
+      expect(log).toHaveBeenCalledWith("mlx  mlx:mlx-community/Qwen3-Coder-Next-4bit");
+    } finally {
+      log.mockRestore();
+    }
+  });
+});
+
+describe("runRemove", () => {
+  let cwd: string;
+  let models: string;
+  let gguf: string;
+  let output: string[];
+  let log: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    cwd = process.cwd();
+    process.chdir(dir);
+    models = path.join(dir, "models");
+    fs.mkdirSync(models);
+    gguf = path.join(models, "coder.gguf");
+    fs.writeFileSync(gguf, "xxxx");
+    fs.writeFileSync(
+      path.join(models, "downloads.json"),
+      JSON.stringify({ "hf:org/coder:Q4_K_M": "coder.gguf" }),
+    );
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { coder: "hf:org/coder:Q4_K_M" } } }),
+    );
+    process.env.AGENCY_MODELS_DIR = models;
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = "/nonexistent/fake.mjs";
+    output = [];
+    log = vi.spyOn(console, "log").mockImplementation((line: string) => {
+      output.push(line);
+    });
+  });
+  afterEach(() => {
+    log.mockRestore();
+    delete process.env.AGENCY_MODELS_DIR;
+    delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
+    process.chdir(cwd);
+  });
+
+  it("without -f removes the alias, keeps the files, and says how to delete them", () => {
+    runRemove("coder", { force: false });
+    expect(output[0]).toBe(`Removed alias "coder" from ${aliasFile}.`);
+    expect(output[1]).toBe(`The model files are still at ${gguf} (0.00 GB).`);
+    expect(output[2]).toBe("Run again with -f to delete them.");
+    expect(fs.existsSync(gguf)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases).toEqual({});
+  });
+
+  it("with -f deletes the files", () => {
+    runRemove("coder", { force: true });
+    expect(output[0]).toBe(`Removed alias "coder" from ${aliasFile}.`);
+    expect(output[1]).toBe(`Deleted ${gguf} (0.00 GB)`);
+    expect(fs.existsSync(gguf)).toBe(false);
+  });
+
+  it("a curated name without -f says there is no alias and where the file is", () => {
+    runRemove("smollm2-135m", { force: false });
+    expect(output[0]).toBe(
+      '"smollm2-135m" is a built-in catalog entry, so there is no alias to remove.',
+    );
+    expect(output.length).toBe(1);
+  });
+
+  it("with -f deletes an mlx model directory under the cache", () => {
+    const model = path.join(models, "mlx", "org--repo");
+    fs.mkdirSync(model, { recursive: true });
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "xx");
+    fs.writeFileSync(
+      path.join(model, ".agency-model.json"),
+      JSON.stringify({ repo: "org/repo", revision: "a", files: {} }),
+    );
+    runRemove("mlx:org/repo", { force: true });
+    expect(output[0]).toMatch(/^Deleted .*org--repo/);
+    expect(fs.existsSync(model)).toBe(false);
+  });
+
+  it("with -f removes the alias as well as the files", () => {
+    runRemove("coder", { force: true });
+    expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases).toEqual({});
+    expect(fs.existsSync(gguf)).toBe(false);
+  });
+
+  it("removes an alias whose directory has gone", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { gone: path.join(dir, "vanished") } } }),
+    );
+    runRemove("gone", { force: false });
+    expect(output[0]).toBe(`Removed alias "gone" from ${aliasFile}.`);
+    expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases).toEqual({});
+  });
+
+  it("without -f, an alias to a directory outside the cache says to delete it yourself", () => {
+    const outside = path.join(dir, "elsewhere");
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, "config.json"), "{}");
+    fs.writeFileSync(path.join(outside, "model.safetensors"), "xx");
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { ext: outside } } }));
+    runRemove("ext", { force: false });
+    expect(output[0]).toBe(`Removed alias "ext" from ${aliasFile}.`);
+    expect(output[1]).toContain("outside the models directory, so delete them yourself");
+    expect(output.some((l) => l.includes("-f"))).toBe(false);
+  });
+
+  it("refuses to delete a model directory outside the cache", () => {
+    const outside = path.join(dir, "elsewhere");
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, "config.json"), "{}");
+    fs.writeFileSync(path.join(outside, "model.safetensors"), "xx");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit called");
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(() => runRemove(outside, { force: true })).toThrow("exit called");
+      expect(err).toHaveBeenCalledWith(
+        "That model is not in the models directory; remove it yourself.",
+      );
+      expect(fs.existsSync(outside)).toBe(true);
+    } finally {
+      exitSpy.mockRestore();
+      err.mockRestore();
+    }
   });
 });

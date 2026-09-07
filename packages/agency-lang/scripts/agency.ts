@@ -1746,9 +1746,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(localDownload);
   localCmd
     .command("remove")
-    .description("Delete a downloaded model")
+    .description("Remove a model's alias. With -f, also delete its files from the models directory")
     .argument("<name>")
-    .action(localRemove);
+    .option("-f, --force", "Delete the model files")
+    .action((name: string, opts: { force?: boolean }) =>
+      localRemove(name, { force: opts.force === true }),
+    );
   localCmd
     .command("resolve")
     .description("Show what a name/alias resolves to")

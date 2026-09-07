@@ -398,7 +398,8 @@ function checkLocalIsolated() {
   const resolved = runInstalledAgency(localDir, ["local", "resolve", "smollm2-135m"], { env });
   assertBlank(resolved.stderr, "[local resolve] stderr");
   assert(
-    resolved.stdout.replace(/\r\n/g, "\n").trim() === "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
+    resolved.stdout.replace(/\r\n/g, "\n").trim() ===
+      "llama-cpp  hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
     `local resolve returned: ${resolved.stdout}`,
   );
   console.log("[cli-tier2] local isolated ✓");

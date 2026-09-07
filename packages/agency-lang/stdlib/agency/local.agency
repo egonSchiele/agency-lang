@@ -9,16 +9,18 @@ import {
   _removeModel,
   _registerLocalProvider,
   _registerLocalModel,
+  _resolveModel,
+  _mlxServedName,
   _printLocalCatalog,
   _refreshCatalog,
  } from "agency-lang/stdlib-lib/localModels.js"
 
 /** @module
-  @summary Manage and run local GGUF models: download by short name or Hugging Face URI, alias them, and register the local provider.
-  Manage and run local GGUF models. Download models by curated short name or
-  Hugging Face URI, alias them, list or remove downloads, and register the local
-  provider so `llm()` calls can use them. Requires the smoltalk-llama-cpp
-  package.
+  @summary Manage and run local models: GGUF files through llama.cpp, and MLX models through a server.
+  Manage and run local models. A GGUF model downloads by curated short name
+  or Hugging Face URI and runs inside the Agency process; that needs the
+  smoltalk-llama-cpp package. An MLX model is named with an mlx: URI or a
+  model directory and runs in mlx_lm.server, which you start yourself.
 
   ```ts
   import { registerLocalModel } from "std::agency/local"
@@ -31,14 +33,20 @@ import {
   ```
 */
 
+/** A model on disk. For a GGUF file, `name` is the file name. For an MLX
+    model, `name` is the repo id and `path` is its directory. `complete` is
+    false for an MLX model whose download was interrupted. */
 export type DownloadedModel = {
   name: string;
   path: string;
-  sizeBytes: number
+  sizeBytes: number;
+  backend: string;
+  complete: boolean
 }
 
 export type ModelName = {
   name: string;
+  backend: string;
   target: string;
   source: string;
   params?: string;
@@ -58,17 +66,19 @@ export def localModelsSupported(): bool {
 
 export def resolveModelName(value: string): string {
   """
-  Map a curated short name or alias to its Hugging Face URI. Pass URIs and
-  .gguf paths through unchanged.
+  Map a curated short name or alias to its target: an hf: URI or .gguf path
+  for a GGUF model, an mlx: URI or directory for an MLX model. Pass URIs and
+  paths through unchanged.
 
-  @param value - name, alias, hf: URI, or .gguf path
+  @param value - name, alias, hf: URI, mlx: URI, .gguf path, or model directory
   """
   return _resolveModelName(value)
 }
 
 export def downloadModel(value: string, cacheDir: string = ""): string {
   """
-  Download a model and return its local .gguf path.
+  Download a model and return its local .gguf path. For an MLX model this
+  returns the model directory; downloading one is not supported yet.
   Skips the download if the file already exists in the cache dir.
 
   @param value - what to download
@@ -79,7 +89,7 @@ export def downloadModel(value: string, cacheDir: string = ""): string {
 
 export def listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
   """
-  List downloaded .gguf models.
+  List downloaded models: .gguf files and MLX model directories.
 
   @param cacheDir - models dir (empty string = per-user cache)
   """
@@ -99,7 +109,7 @@ export def aliasModel(name: string, uri: string): string {
   Returns the path to the agency.json file that the alias was written to.
 
   @param name - the alias
-  @param uri - the hf: URI it maps to
+  @param uri - the hf: URI, mlx: URI, .gguf path, or model directory it maps to
   """
   return _aliasModel(name, uri)
 }
@@ -116,13 +126,35 @@ export def unaliasModel(name: string): string {
 
 export def removeModel(name: string, cacheDir: string = ""): bool {
   """
-  Delete a downloaded model file.
-  Returns false if the model was not present.
+  Delete a downloaded GGUF file from the models directory. This is what
+  `agency local remove -f` does; without -f that command only removes the
+  alias. Returns false if the file was not present.
 
   @param name - the .gguf filename
   @param cacheDir - models dir (empty string = per-user cache)
   """
   return _removeModel(name, cacheDir)
+}
+
+export def localModelBackend(value: string): string {
+  """
+  Which engine runs a model: "llama-cpp" for GGUF files, "mlx" for MLX
+  models served by mlx_lm.server.
+
+  @param value - name, alias, hf: URI, mlx: URI, .gguf path, or model directory
+  """
+  return _resolveModel(value).backend
+}
+
+export def mlxServedName(value: string): string {
+  """
+  The model name to send to the MLX server for this model: the repo id for
+  an mlx: URI, or the absolute path for a model directory. Start
+  mlx_lm.server with the same string.
+
+  @param value - name, alias, mlx: URI, or model directory
+  """
+  return _mlxServedName(_resolveModel(value))
 }
 
 export def registerLocalProvider() {
@@ -136,8 +168,10 @@ export def registerLocalModel(value: string, cacheDir: string = ""): string {
   """
   Register the provider and ensure the model is downloaded. Returns the local
   .gguf path to use as the model for LLM calls with provider "llama-cpp".
+  For an MLX model this registers nothing and returns the name to send to
+  the server. Start mlx_lm.server on that model first.
 
-  @param value - name, alias, hf: URI, or .gguf path
+  @param value - name, alias, hf: URI, mlx: URI, .gguf path, or model directory
   @param cacheDir - download dir (empty string = per-user cache)
   """
   return _registerLocalModel(value, cacheDir)

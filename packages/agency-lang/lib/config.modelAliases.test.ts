@@ -13,6 +13,7 @@ describe("config client.modelAliases", () => {
     // what the refresh actually puts on disk (this is what broke: refresh
     // wrote objects that the config loader then rejected on the next run).
     const entry = {
+      backend: "llama-cpp",
       uri: "hf:unsloth/Qwen3.5-2B-GGUF:Q4_K_M",
       source: "remote",
       params: "2B",
@@ -28,11 +29,16 @@ describe("config client.modelAliases", () => {
   });
   it("accepts string and object aliases side by side", () => {
     const parsed = AgencyConfigSchema.parse({
-      client: { modelAliases: { my7b: "hf:org/repo:Q4_K_M", managed: { uri: "hf:o/m:Q4" } } },
+      client: {
+        modelAliases: {
+          my7b: "hf:org/repo:Q4_K_M",
+          managed: { backend: "llama-cpp", uri: "hf:o/m:Q4" },
+        },
+      },
     });
     expect(parsed.client?.modelAliases).toEqual({
       my7b: "hf:org/repo:Q4_K_M",
-      managed: { uri: "hf:o/m:Q4" },
+      managed: { backend: "llama-cpp", uri: "hf:o/m:Q4" },
     });
   });
   it("rejects a value that is neither a string nor an object", () => {
@@ -42,5 +48,11 @@ describe("config client.modelAliases", () => {
     expect(() =>
       AgencyConfigSchema.parse({ client: { modelAliases: { x: { params: "2B" } } } }),
     ).toThrow();
+  });
+  it("an object alias needs a backend", () => {
+    const result = AgencyConfigSchema.safeParse({
+      client: { modelAliases: { x: { uri: "hf:org/repo:Q4_K_M" } } },
+    });
+    expect(result.success).toBe(false);
   });
 });

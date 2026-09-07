@@ -1,6 +1,15 @@
 import prompts from "prompts";
+import * as path from "node:path";
 import {
+  CURATED_LOCAL_MODELS,
+  _resolveModel,
   _resolveModelName,
+  _removeMlxModel,
+  _modelFilesOnDisk,
+  readModelAliases,
+  type ResolvedModel,
+  isMlxUri,
+  parseMlxUri,
   _downloadModel,
   _listDownloadedModels,
   _listModelNames,
@@ -82,11 +91,13 @@ export function downloadChoices(entries: ModelNameEntry[]): { title: string; val
         : e.name,
     value: e.name,
   }));
-  return [...rows, { title: "custom (hf: URI or .gguf path)…", value: CUSTOM_CHOICE }];
+  return [
+    ...rows,
+    { title: "custom (hf: URI, .gguf path, mlx: URI, or model directory)…", value: CUSTOM_CHOICE },
+  ];
 }
 
 export async function runDownload(value?: string): Promise<void> {
-  gate();
   let picked = value;
   if (picked === undefined) {
     // Prompting needs BOTH ends of the terminal: a TTY stdout to draw on and
@@ -113,7 +124,7 @@ export async function runDownload(value?: string): Promise<void> {
       const custom = await prompts({
         type: "text",
         name: "value",
-        message: "hf: URI or .gguf path:",
+        message: "hf: URI, .gguf path, mlx: URI, or model directory:",
       });
       if (custom.value == null || custom.value === "") return;
       picked = custom.value as string;
@@ -122,7 +133,11 @@ export async function runDownload(value?: string): Promise<void> {
   // Show the source it resolved to (the hf: URI for a name/alias) and the
   // local path it landed at. For a .gguf-path input the two are the same, so
   // the source line is skipped.
-  const source = _resolveModelName(picked);
+  const resolved = _resolveModel(picked);
+  if (resolved.backend === "llama-cpp") {
+    gate();
+  }
+  const source = resolved.target;
   const modelPath = await _downloadModel(picked);
   if (source !== modelPath) {
     console.log(`source: ${source}`);
@@ -130,14 +145,74 @@ export async function runDownload(value?: string): Promise<void> {
   console.log(`model:  ${modelPath}`);
 }
 
-export function runRemove(name: string): void {
+/** Without `-f`: drop the alias, keep the files, and say where they are.
+ *  With `-f`: delete the files too. Models are large, so deleting is the
+ *  step that needs the flag. */
+export function runRemove(name: string, opts: { force: boolean }): void {
+  const aliases = readModelAliases();
+  const isAlias = Object.hasOwn(aliases, name);
+  const isCurated = Object.hasOwn(CURATED_LOCAL_MODELS, name);
+
+  // Resolve before touching the alias, but let a stale alias (its directory
+  // moved or deleted) still be removed: the alias is the thing being removed,
+  // and its target no longer matters.
+  let resolved: ResolvedModel | null;
+  try {
+    resolved = _resolveModel(name);
+  } catch (err) {
+    if (!isAlias) {
+      throw err;
+    }
+    resolved = null;
+  }
+  const files = resolved === null ? null : _modelFilesOnDisk(resolved);
+  const where = files === null ? null : `${files.path} (${formatGB(files.sizeBytes)})`;
+
+  if (isAlias) {
+    const { file } = _unaliasModel(name);
+    console.log(`Removed alias "${name}" from ${file}.`);
+  } else if (isCurated && !opts.force) {
+    console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
+  }
+
+  if (!opts.force) {
+    if (files !== null && !files.insideCache) {
+      console.log(
+        `The model files are still at ${where}. They are outside the models directory, so delete them yourself if you want them gone.`,
+      );
+    } else if (where !== null) {
+      console.log(`The model files are still at ${where}.`);
+      console.log("Run again with -f to delete them.");
+    } else if (!isAlias && !isCurated) {
+      console.log(`Nothing to remove for "${name}".`);
+    }
+    return;
+  }
+
+  if (files === null || resolved === null) {
+    console.log(`Not found: ${name}`);
+    return;
+  }
+  if (!files.insideCache) {
+    console.error("That model is not in the models directory; remove it yourself.");
+    process.exit(1);
+  }
+  if (resolved.backend === "mlx") {
+    const repo = isMlxUri(resolved.target)
+      ? parseMlxUri(resolved.target).repo
+      : path.basename(files.path).replace("--", "/");
+    const removed = _removeMlxModel(repo);
+    console.log(removed ? `Deleted ${where}` : `Not found: ${name}`);
+    return;
+  }
   gate();
-  const removed = _removeModel(name);
-  console.log(removed ? `Removed ${name}` : `Not found: ${name}`);
+  const removed = _removeModel(path.basename(files.path));
+  console.log(removed ? `Deleted ${where}` : `Not found: ${name}`);
 }
 
 export function runResolve(value: string): void {
-  console.log(_resolveModelName(value));
+  const { backend, target } = _resolveModel(value);
+  console.log(`${backend}  ${target}`);
 }
 
 export function runAliasList(): void {

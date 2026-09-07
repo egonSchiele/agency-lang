@@ -75,10 +75,11 @@ The first line of `agency local list` names the models directory. By default it 
 }
 ```
 
-To free up disk space, delete a downloaded file by name:
+To free up disk space, delete a model's files with `-f`. Without `-f` the
+command only removes the alias and tells you where the files are.
 
 ```bash
-agency local remove hf_unsloth_Qwen3.5-2B.Q4_K_M.gguf
+agency local remove qwen3.5-2b -f
 ```
 
 ## Refresh the catalog

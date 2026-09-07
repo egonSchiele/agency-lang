@@ -8,6 +8,7 @@ import {
   aliasRemove,
   formatRefreshOutput,
   runList,
+  runResolve,
   runDownload,
   downloadChoices,
   CUSTOM_CHOICE,
@@ -149,5 +150,19 @@ describe("formatRefreshOutput", () => {
     expect(
       lines.some((l) => l.includes("2 added, 0 updated, 1 unchanged, 1 removed, 1 skipped")),
     ).toBe(true);
+  });
+});
+
+describe("runResolve", () => {
+  it("prints the backend and the target", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      runResolve("smollm2-135m");
+      expect(log).toHaveBeenCalledWith("llama-cpp  hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M");
+      runResolve("mlx:mlx-community/Qwen3-Coder-Next-4bit");
+      expect(log).toHaveBeenCalledWith("mlx  mlx:mlx-community/Qwen3-Coder-Next-4bit");
+    } finally {
+      log.mockRestore();
+    }
   });
 });

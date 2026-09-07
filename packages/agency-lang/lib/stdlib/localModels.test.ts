@@ -23,6 +23,7 @@ import {
   verifyModelFile,
   pinnedSha256,
   backendOfTarget,
+  _resolveModel,
   isMlxUri,
   parseMlxUri,
   isModelDir,
@@ -950,5 +951,31 @@ describe("backend field", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "missing"'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "wrong"'));
     warn.mockRestore();
+  });
+});
+
+describe("_resolveModel", () => {
+  it("returns backend and target for a curated name", () => {
+    expect(_resolveModel("smollm2-135m")).toEqual({
+      backend: "llama-cpp",
+      target: CURATED_LOCAL_MODELS["smollm2-135m"].uri,
+    });
+  });
+
+  it("returns mlx for an mlx: URI and for a directory alias", () => {
+    const model = path.join(dir, "m");
+    fs.mkdirSync(model);
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "");
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { local: model } } }));
+    expect(_resolveModel("mlx:org/repo")).toEqual({ backend: "mlx", target: "mlx:org/repo" });
+    expect(_resolveModel("local", aliasFile)).toEqual({ backend: "mlx", target: model });
+    expect(_resolveModel(model)).toEqual({ backend: "mlx", target: model });
+  });
+
+  it("the unknown-name error mentions mlx: URIs", () => {
+    expect(() => _resolveModel("nope")).toThrow(
+      /or pass a \.gguf path, an "hf:" URI, an "mlx:" URI, or a model directory/,
+    );
   });
 });

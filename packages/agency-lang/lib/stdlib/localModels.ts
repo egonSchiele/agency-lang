@@ -558,23 +558,34 @@ export type ModelNameEntry = {
   sha256?: string;
 };
 
-export function _resolveModelName(value: string, file: string = ""): string {
-  if (isGgufPath(value) || isModelUri(value)) {
-    return value;
+/** A model name resolved to the engine that runs it and the target that
+ *  engine takes: an `hf:` URI or `.gguf` path for llama-cpp, an `mlx:` URI
+ *  or a model directory for mlx. */
+export type ResolvedModel = { backend: Backend; target: string };
+
+export function _resolveModel(value: string, file: string = ""): ResolvedModel {
+  if (isGgufPath(value) || isModelUri(value) || isModelDir(value)) {
+    return { backend: backendOfTarget(value), target: value };
   }
   const aliases = readModelAliases(file);
   const aliasVal = aliases[value];
-  const aliasTarget = aliasVal === undefined ? undefined : aliasUri(aliasVal);
-  const curated = CURATED_LOCAL_MODELS[value];
-  const mapped = aliasTarget ?? curated?.uri;
-  if (!mapped) {
-    const names = [...Object.keys(CURATED_LOCAL_MODELS), ...Object.keys(aliases)].join(", ");
-    throw new Error(
-      `Unknown local model "${value}". Known names: ${names || "(none)"}; ` +
-        `or pass a .gguf path or an "hf:" URI.`,
-    );
+  if (aliasVal !== undefined) {
+    const target = aliasUri(aliasVal);
+    return { backend: backendOfTarget(target), target };
   }
-  return mapped;
+  const curated = CURATED_LOCAL_MODELS[value];
+  if (curated !== undefined) {
+    return { backend: curated.backend, target: curated.uri };
+  }
+  const names = [...Object.keys(CURATED_LOCAL_MODELS), ...Object.keys(aliases)].join(", ");
+  throw new Error(
+    `Unknown local model "${value}". Known names: ${names || "(none)"}; ` +
+      `or pass a .gguf path, an "hf:" URI, an "mlx:" URI, or a model directory.`,
+  );
+}
+
+export function _resolveModelName(value: string, file: string = ""): string {
+  return _resolveModel(value, file).target;
 }
 
 type EntryMeta = Pick<

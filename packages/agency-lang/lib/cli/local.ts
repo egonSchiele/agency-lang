@@ -1,5 +1,6 @@
 import prompts from "prompts";
 import {
+  _resolveModel,
   _resolveModelName,
   _downloadModel,
   _listDownloadedModels,
@@ -137,7 +138,8 @@ export function runRemove(name: string): void {
 }
 
 export function runResolve(value: string): void {
-  console.log(_resolveModelName(value));
+  const { backend, target } = _resolveModel(value);
+  console.log(`${backend}  ${target}`);
 }
 
 export function runAliasList(): void {

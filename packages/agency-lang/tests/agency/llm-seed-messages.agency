@@ -1,0 +1,16 @@
+import { systemMessage, listThreads, getThread } from "std::thread"
+
+// Seeding llm() with `messages` adds those messages to the active thread.
+// Anything already on the thread (here a system message) stays, and the
+// seeded messages stay visible after the call.
+node seedKeepsSystemMessage(): string {
+  systemMessage("Call yourself Agency.")
+  const answer = llm(
+    "What's your name?",
+    messages: [{ role: "user", content: "Some earlier context." }],
+  )
+  const threads = listThreads(lazySummarize: false) catch []
+  const messages = getThread(threads[0].id, 0, 100) catch []
+  const roles = map(messages, \m -> m.role)
+  return "${answer}|${roles}"
+}

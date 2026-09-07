@@ -809,10 +809,12 @@ export async function runPrompt(args: {
     backoff: ccBackoff,
     validationRetries: ccValidationRetries,
     label: ccLabel,
+    messages: seedMessages,
     ...restClientConfig
   } = (args.clientConfig || {}) as Partial<smoltalk.SmolConfig> &
     RetryConfig & {
       tools?: any[];
+      messages?: smoltalk.MessageJSON[];
       memory?: boolean | { model?: string };
       maxToolResultChars?: number;
       maxRepeatedToolCalls?: number;
@@ -890,15 +892,19 @@ export async function runPrompt(args: {
   //
   // See restoreThreadForResume for how the alias is preserved and when a
   // restore is refused (a snapshot that predates a thread repair).
+  //
+  // The `messages` option seeds the conversation: its messages are appended
+  // to the thread ahead of the prompt. They join the thread rather than
+  // replacing it, so a system message pushed earlier is still sent and the
+  // seed stays readable after the call.
   let messages: MessageThread;
   if (self.messagesJSON) {
     messages = restoreThreadForResume(self.messagesJSON, args.messages);
-  } else if (clientConfig.messages) {
-    messages = MessageThread.fromJSON(clientConfig.messages);
-  } else if (args.messages) {
-    messages = args.messages;
   } else {
-    messages = new MessageThread();
+    messages = args.messages ?? new MessageThread();
+    for (const seeded of MessageThread.fromJSON(seedMessages ?? []).getMessages()) {
+      messages.push(seeded);
+    }
   }
 
   /** The ONE way this function snapshots the thread for checkpoint/resume.
@@ -1133,8 +1139,8 @@ export async function runPrompt(args: {
         // A handoff continues this prompt's conversation: the body's llm()
         // calls append to `messages`, the thread that carries the marker.
         // That is usually the active thread, but an async prompt runs on a
-        // subthread and explicit `messages` are not in the store at all,
-        // so bind the body to `messages` rather than to whatever is active.
+        // subthread, so bind the body to `messages` rather than to whatever
+        // is active.
         // Every other tool gets a fresh store.
         const continuesCallerThread = !!handler.markers?.handoff;
         if (continuesCallerThread) {

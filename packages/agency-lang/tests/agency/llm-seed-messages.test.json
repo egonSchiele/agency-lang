@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "nodeName": "seedKeepsSystemMessage",
+      "input": "",
+      "expectedOutput": "\"Agency|system,user,user,assistant\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "Agency" }],
+      "description": "messages: seeds the active thread instead of replacing it, so an earlier systemMessage is still sent"
+    }
+  ]
+}

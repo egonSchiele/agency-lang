@@ -204,8 +204,8 @@ node cancelledHandoff(): any {
   return map(infos, \info -> getThread(info.id, 0, 1000) catch [])
 }
 
-// Explicit messages give the prompt a thread the store has never seen. A
-// handoff inside it must land on that thread.
+// Explicit messages seed the active thread. A handoff inside the prompt
+// lands on that thread, and the next prompt sees the whole conversation.
 node explicitMessages() {
   const options: any = {
     tools: [subagent],

@@ -447,7 +447,7 @@ export def configureModels(
 /** Apply a local model (from `--local`) as BOTH the fast and slow model,
  *  so a fully-local run needs no hosted-provider key. A GGUF model: register
  *  the llama-cpp provider and download if needed. An MLX model: point every
- *  slot at the server the user started with `agency local serve`. */
+ *  slot at the mlx_lm.server the user started. */
 export def configureLocalModel(value: string) {
   // An MLX model runs in a server the user started. Nothing to download or
   // register: point every slot at the name the server knows it by.

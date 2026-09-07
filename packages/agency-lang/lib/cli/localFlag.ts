@@ -16,7 +16,7 @@ import { _registerLocalModel, _resolveModel, _mlxServedName } from "@/stdlib/loc
 export async function resolveLocalRunFlag(value: string): Promise<ResolvedModelFlag> {
   const resolved = _resolveModel(value);
   if (resolved.backend === "mlx") {
-    // The server is already running, started with `agency local serve`.
+    // The user has already started mlx_lm.server on this model.
     // Nothing to download or register.
     return { model: _mlxServedName(resolved), explicitProvider: "mlx" };
   }

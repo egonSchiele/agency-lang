@@ -43,7 +43,7 @@ node main() {
     return "no-trip"
   }
   if (isFailure(outer)) {
-    return "nested-trip:${outer.error.actualCost > 0.000005}"
+    return "nested-trip:${outer.data.actualCost > 0.000005}"
   }
   return "unexpected: ${outer.value}"
 }

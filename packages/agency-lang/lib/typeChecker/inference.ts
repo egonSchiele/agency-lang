@@ -132,7 +132,7 @@ function mergeResultTypes(results: ResultTypes): VariableType {
   return {
     type: "resultType",
     successType: mergeResultParam(results.map((r) => r.successType)),
-    failureType: mergeResultParam(results.map((r) => r.failureType)),
+    dataType: mergeResultParam(results.map((r) => r.dataType)),
   };
 }
 

@@ -12,7 +12,7 @@ node main() {
     return "did not trip"
   }
   if (isFailure(result)) {
-    return "tripped:${result.error.type}:maxTime=${result.error.maxTime}:maxCost=${result.error.maxCost}"
+    return "tripped:${result.data.type}:maxTime=${result.data.maxTime}:maxCost=${result.data.maxCost}"
   }
   return result.value
 }

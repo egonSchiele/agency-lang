@@ -91,7 +91,7 @@ node main() {
   handle {
     const result = runCode(source, maxCost: 0.000003)
     if (isFailure(result)) {
-      return "tripped:${result.error.reason}:${result.error.limit}"
+      return "tripped:${result.data.reason}:${result.data.limit}"
     }
     return "did not trip"
   } with (e) {

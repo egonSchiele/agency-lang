@@ -8,17 +8,20 @@ describe("applyValidationFlag", () => {
     aliasName: "Person",
   };
   const stringT: VariableType = { type: "primitiveType", value: "string" };
+  const anyT: VariableType = { type: "primitiveType", value: "any" };
 
   it("returns the type unchanged when validated is false/undefined", () => {
     expect(resultTypeForValidation(person, false)).toEqual(person);
     expect(resultTypeForValidation(person, undefined)).toEqual(person);
   });
 
-  it("wraps a non-Result type in Result<T, string> when validated", () => {
+  it("wraps a non-Result type in Result<T, any> when validated", () => {
+    // The data type is left open. A validation failure carries a message and
+    // no structured data, so naming `string` here would claim string data.
     expect(resultTypeForValidation(person, true)).toEqual({
       type: "resultType",
       successType: person,
-      failureType: stringT,
+      dataType: anyT,
     });
   });
 
@@ -26,17 +29,17 @@ describe("applyValidationFlag", () => {
     const result: VariableType = {
       type: "resultType",
       successType: person,
-      failureType: stringT,
+      dataType: stringT,
     };
     expect(resultTypeForValidation(result, true)).toEqual(result);
   });
 
-  it("wraps an array type in Result<T[], string>", () => {
+  it("wraps an array type in Result<T[], any>", () => {
     const arr: VariableType = { type: "arrayType", elementType: person };
     expect(resultTypeForValidation(arr, true)).toEqual({
       type: "resultType",
       successType: arr,
-      failureType: stringT,
+      dataType: anyT,
     });
   });
 });
@@ -47,6 +50,7 @@ describe("effectiveReturnType", () => {
     aliasName: "Person",
   };
   const stringT: VariableType = { type: "primitiveType", value: "string" };
+  const anyT: VariableType = { type: "primitiveType", value: "any" };
 
   function fn(
     returnType: VariableType | null | undefined,
@@ -75,7 +79,7 @@ describe("effectiveReturnType", () => {
     expect(effectiveReturnType(fn(person, true))).toEqual({
       type: "resultType",
       successType: person,
-      failureType: stringT,
+      dataType: anyT,
     });
   });
 });

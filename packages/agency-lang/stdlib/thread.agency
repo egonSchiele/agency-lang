@@ -267,6 +267,9 @@ export def getModelCosts(): ModelCost[] {
   return _getModelCosts()
 }
 
+/** The structured detail on a tripped guard's failure. It is the failure's
+  `data`; the failure's message is a sentence naming the guard and its
+  budget. */
 export type GuardFailureData = {
   type: string;
   label: string | null;

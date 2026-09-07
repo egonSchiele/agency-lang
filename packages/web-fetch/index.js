@@ -32,7 +32,7 @@ import {
   __registerGlobalsInit,
   __registerCallbacksInit,
   registerModuleFingerprint as __registerModuleFingerprint,
-  failure,
+  runtimeFailure,
   isFailure,
   stampFailureBoundary,
   AgencyFunction as __AgencyFunction,
@@ -92,8 +92,8 @@ const graph = __globalCtx.graph;
 function approve(value) {
   return { type: "approve", value };
 }
-function reject(value) {
-  return { type: "reject", value };
+function reject(reason) {
+  return { type: "reject", value: reason };
 }
 function propagate() {
   return { type: "propagate" };
@@ -280,15 +280,12 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
         functionName: "fetchPage"
       });
     }
-    return failure(
-      __error instanceof Error ? __error.message : String(__error),
-      {
-        checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-        destructiveRan: __self.__destructiveRan,
-        functionName: "fetchPage",
-        args: __stack.args
-      }
-    );
+    return runtimeFailure(__error, {
+      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      destructiveRan: __self.__destructiveRan,
+      functionName: "fetchPage",
+      args: __stack.args
+    });
   } finally {
     __stateStack()?.pop();
     if (__functionCompleted) {
@@ -337,7 +334,7 @@ const fetchPage = __AgencyFunction.create({
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:fetchPage": { "1": { "line": 24, "col": 2 } } };
-__registerModuleFingerprint("index.agency", "1990f1876c655c3da4493d2831e9752af5ccb4a224ba0e9541de1c7945f94e25", import.meta.url);
+__registerModuleFingerprint("index.agency", "2a47c103e6585100941ad5c4d62f9f1899872c88c5398619b653d1c5cd7cc992", import.meta.url);
 export {
   __getCheckpoints,
   __invokeFunction,

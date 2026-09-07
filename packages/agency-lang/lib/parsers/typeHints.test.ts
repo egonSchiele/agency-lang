@@ -2165,7 +2165,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "any" },
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       });
     }
   });
@@ -2177,7 +2177,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "string" },
-        failureType: { type: "primitiveType", value: "number" },
+        dataType: { type: "primitiveType", value: "number" },
       });
     }
   });
@@ -2189,7 +2189,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "string" },
-        failureType: {
+        dataType: {
           type: "objectType",
           properties: [{ key: "message", value: { type: "primitiveType", value: "string" } }],
         },
@@ -2204,19 +2204,30 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "typeAliasVariable", aliasName: "MySuccess" },
-        failureType: { type: "typeAliasVariable", aliasName: "MyError" },
+        dataType: { type: "typeAliasVariable", aliasName: "MyError" },
       });
     }
   });
 
-  it("parses Result<Foo> with single type param as sugar for Result<Foo, string>", () => {
+  it("parses Result<Foo> with single type param as sugar for Result<Foo, any>", () => {
     const result = resultTypeParser("Result<number>");
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "number" },
-        failureType: { type: "primitiveType", value: "string" },
+        dataType: { type: "primitiveType", value: "any" },
+      });
+    }
+  });
+
+  it("names the data type in Result<T, D>", () => {
+    const parsed = resultTypeParser("Result<number, MyData>");
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.result).toMatchObject({
+        type: "resultType",
+        dataType: { type: "typeAliasVariable", aliasName: "MyData" },
       });
     }
   });
@@ -2233,7 +2244,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "any" },
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       });
     }
   });
@@ -2256,7 +2267,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "any" },
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       });
     }
   });
@@ -2268,7 +2279,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "number" },
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       });
     }
   });
@@ -2280,7 +2291,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "any" },
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       });
     }
   });
@@ -2292,7 +2303,7 @@ describe("resultTypeParser", () => {
       expect(result.result).toEqual({
         type: "resultType",
         successType: { type: "primitiveType", value: "any" },
-        failureType: { type: "primitiveType", value: "string" },
+        dataType: { type: "primitiveType", value: "string" },
       });
     }
   });

@@ -59,7 +59,7 @@ function canonical(t: VariableType): string {
     case "arrayType":
       return `{"array":${canonical(t.elementType)}}`;
     case "resultType":
-      return `{"result":[${canonical(t.successType)},${canonical(t.failureType)}]}`;
+      return `{"result":[${canonical(t.successType)},${canonical(t.dataType)}]}`;
     case "schemaType":
       return `{"schema":${canonical(t.inner)}}`;
     case "genericType":

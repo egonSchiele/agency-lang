@@ -12,7 +12,6 @@ const {
   capToolResultForLlm,
   assertUniqueToolNames,
   unwrapToolResultForLlm,
-  toolErrorMessage,
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
@@ -117,16 +116,6 @@ describe("unwrapToolResultForLlm", () => {
   it("passes a failure Result through unchanged (handled upstream)", () => {
     const fail = { __type: "resultType", success: false, error: "boom" };
     expect(unwrapToolResultForLlm(fail, "myTool")).toBe(fail);
-  });
-});
-
-describe("toolErrorMessage", () => {
-  it("passes string errors through", () => {
-    expect(toolErrorMessage("boom")).toBe("boom");
-  });
-
-  it("JSON-stringifies object errors instead of [object Object]", () => {
-    expect(toolErrorMessage({ source: "x", errors: [] })).toBe('{"source":"x","errors":[]}');
   });
 });
 

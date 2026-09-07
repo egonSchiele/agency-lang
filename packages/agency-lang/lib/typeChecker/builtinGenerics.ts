@@ -46,7 +46,9 @@ type BuiltinGeneric = {
   ) => VariableType;
 };
 
-function isNullType(t: VariableType): boolean {
+/** The `null` primitive. Exported because dataShape.ts asks the same
+ *  question. */
+export function isNullType(t: VariableType): boolean {
   return t.type === "primitiveType" && t.value === "null";
 }
 
@@ -69,7 +71,7 @@ function addNull(t: VariableType): VariableType {
  * `undefined` for the empty case and also strips `undefined`); this one is
  * type-level and must produce `never`. Do not deduplicate them.
  */
-function stripNull(t: VariableType): VariableType {
+export function stripNull(t: VariableType): VariableType {
   if (isNullType(t)) return NEVER_T;
   if (t.type !== "unionType") return t;
   const kept = t.types.filter((m) => !isNullType(m));

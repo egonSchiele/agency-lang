@@ -3949,7 +3949,7 @@ describe("TypeChecker", () => {
                 typeHint: {
                   type: "resultType",
                   successType: { type: "primitiveType", value: "number" },
-                  failureType: { type: "primitiveType", value: "any" },
+                  dataType: { type: "primitiveType", value: "any" },
                 },
               },
             ],
@@ -3985,7 +3985,7 @@ describe("TypeChecker", () => {
                 typeHint: {
                   type: "resultType",
                   successType: { type: "primitiveType", value: "number" },
-                  failureType: { type: "primitiveType", value: "any" },
+                  dataType: { type: "primitiveType", value: "any" },
                 },
               },
             ],
@@ -4010,7 +4010,7 @@ describe("TypeChecker", () => {
     });
 
     it("failure(msg) synths as Result<any, typeof msg>", () => {
-      // failure("err") → Result<any, string>; should be assignable to Result<any, any>.
+      // failure("err") → Result<any>; should be assignable to Result<any, any>.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4020,7 +4020,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "any" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "functionCall",
@@ -4051,7 +4051,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "tryExpression",
@@ -4075,7 +4075,7 @@ describe("TypeChecker", () => {
             returnType: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             body: [],
           },
@@ -4085,7 +4085,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "tryExpression",
@@ -4173,7 +4173,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4210,7 +4210,7 @@ describe("TypeChecker", () => {
             returnType: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             body: [],
           },
@@ -4220,7 +4220,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4269,7 +4269,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "string" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4310,8 +4310,8 @@ describe("TypeChecker", () => {
       // def foo(b: boolean): Result {
       //   if (b) { return success(10) } else { return failure("err") }
       // }
-      // Inferred return should be Result<number, string>, so this assignment
-      // accepts and `failure(42)` would NOT (failureType is string).
+      // Inferred return should be Result<number>, so this assignment
+      // accepts and `failure(42)` would NOT (dataType is string).
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4358,7 +4358,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "string" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "functionCall",
@@ -4459,7 +4459,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "string" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4484,10 +4484,15 @@ describe("TypeChecker", () => {
     const num: VariableType = { type: "primitiveType", value: "number" };
     const str: VariableType = { type: "primitiveType", value: "string" };
     const anyT: VariableType = { type: "primitiveType", value: "any" };
+    const nullT: VariableType = { type: "primitiveType", value: "null" };
+    const detail: VariableType = {
+      type: "objectType",
+      properties: [{ key: "code", value: { type: "primitiveType", value: "number" } }],
+    };
     const result = (s: VariableType, f: VariableType): VariableType => ({
       type: "resultType",
       successType: s,
-      failureType: f,
+      dataType: f,
     });
 
     it("success({a:1, b:'x'}) synths as Result<{a:number,b:string}, any>", () => {
@@ -4615,7 +4620,7 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
-    it("all-failure returns infer as Result<any, E>", () => {
+    it("all-failure returns infer as Result<any, null>", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4659,7 +4664,9 @@ describe("TypeChecker", () => {
           {
             type: "assignment",
             variableName: "r",
-            typeHint: result(anyT, str),
+            // Both returns are one-argument failures, so neither names any
+            // data. `null` is what a failure with no data synthesizes.
+            typeHint: result(anyT, nullT),
             value: {
               type: "functionCall",
               functionName: "f",
@@ -4724,7 +4731,7 @@ describe("TypeChecker", () => {
       expect(typeCheck(program).errors).toHaveLength(0);
     });
 
-    it("Result<number, string> widens to Result<any, any>", () => {
+    it("Result<number> widens to Result<any, any>", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4732,7 +4739,7 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "specific",
             parameters: [],
-            returnType: result(num, str),
+            returnType: result(num, detail),
             body: [],
           },
           {
@@ -4746,7 +4753,7 @@ describe("TypeChecker", () => {
       expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
-    it("Result<any, any> 'narrows' to Result<number, string> (any goes both ways)", () => {
+    it("Result<any, any> 'narrows' to Result<number> (any goes both ways)", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4760,7 +4767,7 @@ describe("TypeChecker", () => {
           {
             type: "assignment",
             variableName: "r",
-            typeHint: result(num, str),
+            typeHint: result(num, anyT),
             value: { type: "functionCall", functionName: "wide", arguments: [] },
           },
         ],
@@ -4768,7 +4775,7 @@ describe("TypeChecker", () => {
       expect(typeCheck(program, DR_SILENT).errors).toHaveLength(0);
     });
 
-    it("Result<number, string> is not assignable to plain number", () => {
+    it("Result<number> is not assignable to plain number", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4776,7 +4783,7 @@ describe("TypeChecker", () => {
             type: "function",
             functionName: "f",
             parameters: [],
-            returnType: result(num, str),
+            returnType: result(num, anyT),
             body: [],
           },
           {
@@ -4791,14 +4798,14 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /not assignable/.test(e.message))).toBe(true);
     });
 
-    it("type alias Result<number, string> resolves through assignability", () => {
+    it("type alias Result<number> resolves through assignability", () => {
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "typeAlias",
             aliasName: "MyResult",
-            aliasedType: result(num, str),
+            aliasedType: result(num, anyT),
           },
           {
             type: "function",
@@ -5011,22 +5018,22 @@ describe("TypeChecker", () => {
       type: "objectType",
       properties: [{ key: "name", value: str }],
     };
-    const resultPersonStr: VariableType = {
+    const resultPerson: VariableType = {
       type: "resultType",
       successType: person,
-      failureType: str,
+      dataType: { type: "primitiveType", value: "any" },
     };
 
-    it("declares a validated variable as Result<T, string>", () => {
+    it("declares a validated variable as Result<T>", () => {
       // const x: Person! = { name: "alice" }; expectResult(x)
-      // expectResult takes Result<Person, string>; passing x must typecheck.
+      // expectResult takes Result<Person>; passing x must typecheck.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPerson }],
             body: [],
           },
           {
@@ -5055,20 +5062,20 @@ describe("TypeChecker", () => {
     });
 
     it("does not rewrap a Result type with bang", () => {
-      // const x: Result<Person, string>! = success({...}); expectResult(x)
+      // const x: Result<Person>! = success({...}); expectResult(x)
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPerson }],
             body: [],
           },
           {
             type: "assignment",
             variableName: "x",
-            typeHint: resultPersonStr,
+            typeHint: resultPerson,
             validated: true,
             value: {
               type: "functionCall",
@@ -5098,7 +5105,7 @@ describe("TypeChecker", () => {
 
     it("exposes a function's bang-annotated return as Result at call sites", () => {
       // def getPerson(): Person! { return { name: "alice" } }
-      // expectResult(getPerson())  // expectResult: Result<Person, string>
+      // expectResult(getPerson())  // expectResult: Result<Person>
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -5126,7 +5133,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPerson }],
             body: [],
           },
           {
@@ -5157,13 +5164,13 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /validated parameters/i.test(e.message))).toBe(true);
     });
 
-    it("infers Result<T, string> when validated params + no return annotation", () => {
+    it("infers Result<T> when validated params + no return annotation", () => {
       // def greet(name: string!) { return 5 }
-      // expectResult(greet("alice"))  // expectResult: Result<number, string>
-      const resultNumStr: VariableType = {
+      // expectResult(greet("alice"))  // expectResult: Result<number>
+      const resultNum: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: str,
+        dataType: { type: "primitiveType", value: "any" },
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5177,7 +5184,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [{ type: "functionParameter", name: "r", typeHint: resultNumStr }],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultNum }],
             body: [],
           },
           {
@@ -5200,7 +5207,7 @@ describe("TypeChecker", () => {
       const resultNum: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5249,18 +5256,19 @@ describe("TypeChecker", () => {
     });
 
     it("accepts a Result failure as input to a validated param", () => {
-      // def greet(name: string!): Result<number, string> { ... }
-      // const f: Result<string, string> = failure("oops")
+      // def greet(name: string!): Result<number> { ... }
+      // const f: Result<string> = failure("oops")
       // greet(f)  // should accept — failures pass through unvalidated
+      // The data type is left open: a one-argument failure names no data.
       const resultStrStr: VariableType = {
         type: "resultType",
         successType: str,
-        failureType: str,
+        dataType: { type: "primitiveType", value: "any" },
       };
       const resultNum: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5306,7 +5314,7 @@ describe("TypeChecker", () => {
       const resultNum: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5424,7 +5432,7 @@ describe("TypeChecker", () => {
 
     it("errors on arbitrary property access on a validated Result (the bug class this catches)", () => {
       // const r: Person! = {...}; const n = r.name
-      // r is Result<Person, string>; r.name is bogus until narrowing (#14).
+      // r is Result<Person>; r.name is bogus until narrowing (#14).
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -5460,7 +5468,7 @@ describe("TypeChecker", () => {
 
     it("imported function with bang return type is seen as Result at call sites", () => {
       // Imported `def getPerson(): Person!` — at the import boundary the
-      // return is pre-wrapped to Result<Person, string>, so calling it from
+      // return is pre-wrapped to Result<Person>, so calling it from
       // another file types as a Result like a local def would.
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5468,7 +5476,7 @@ describe("TypeChecker", () => {
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPerson }],
             body: [],
           },
           {
@@ -5480,7 +5488,7 @@ describe("TypeChecker", () => {
       };
       // Imported sigs are post-wrap by convention (see compilationUnit.ts).
       const info = withImports(program, {
-        getPerson: { parameters: [], returnType: resultPersonStr },
+        getPerson: { parameters: [], returnType: resultPerson },
       });
       expect(typeCheck(program, {}, info).errors).toHaveLength(0);
     });
@@ -5508,14 +5516,14 @@ describe("TypeChecker", () => {
     });
 
     it("const x: Person! = llm() composes with the bang", () => {
-      // x's declared type should be Result<Person, string>.
+      // x's declared type should be Result<Person>.
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
           {
             type: "function",
             functionName: "expectResult",
-            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPersonStr }],
+            parameters: [{ type: "functionParameter", name: "r", typeHint: resultPerson }],
             body: [],
           },
           {
@@ -5591,8 +5599,12 @@ describe("TypeChecker", () => {
     });
 
     it("pipe with bare-var RHS unwraps Result LHS for the first-arg check", () => {
-      // r: Result<number, string> |> half  — half takes number, success type is number → ok
-      const resultNumStr: VariableType = { type: "resultType", successType: num, failureType: str };
+      // r: Result<number> |> half  — half takes number, success type is number → ok
+      const resultNum: VariableType = {
+        type: "resultType",
+        successType: num,
+        dataType: { type: "primitiveType", value: "any" },
+      };
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -5606,7 +5618,7 @@ describe("TypeChecker", () => {
           {
             type: "assignment",
             variableName: "r",
-            typeHint: resultNumStr,
+            typeHint: resultNum,
             value: {
               type: "functionCall",
               functionName: "success",

@@ -32,7 +32,7 @@ node withInterrupt(c: boolean): string {
 }
 
 // An `is`-pattern condition binds into the then-branch, like a statement `if`.
-def tryParse(s: string): Result<number, string> {
+def tryParse(s: string): Result<number> {
   if (s == "ok") { return success(42) }
   return failure("bad input")
 }

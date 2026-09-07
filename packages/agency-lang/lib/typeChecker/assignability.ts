@@ -422,7 +422,7 @@ export function widenType(vt: VariableType): VariableType {
       return {
         type: "resultType",
         successType: widenType(vt.successType),
-        failureType: widenType(vt.failureType),
+        dataType: widenType(vt.dataType),
       };
     case "schemaType":
       return {
@@ -675,12 +675,7 @@ function isAssignableInner(
         typeAliases,
         inProgress,
       ) &&
-      isAssignableGuarded(
-        resolvedSource.failureType,
-        resolvedTarget.failureType,
-        typeAliases,
-        inProgress,
-      )
+      isAssignableGuarded(resolvedSource.dataType, resolvedTarget.dataType, typeAliases, inProgress)
     );
   }
 

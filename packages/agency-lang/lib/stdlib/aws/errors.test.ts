@@ -21,15 +21,15 @@ describe("s3ErrorToFailure", () => {
   it("carries status, the parsed code, and a human summary", () => {
     const xml = `<Error><Code>AccessDenied</Code><Message>nope</Message></Error>`;
     const failure = s3ErrorToFailure(403, "Forbidden", "https://b.s3.amazonaws.com/k", xml);
-    expect(failure.error.status).toBe(403);
-    expect(failure.error.code).toBe("AccessDenied");
-    expect(failure.error.s3Message).toBe("nope");
-    expect(failure.error.message).toContain("AccessDenied");
+    expect(failure.data.status).toBe(403);
+    expect(failure.data.code).toBe("AccessDenied");
+    expect(failure.data.s3Message).toBe("nope");
+    expect(failure.error).toContain("AccessDenied");
   });
 
   it("falls back to a body snippet when there is no code", () => {
     const failure = s3ErrorToFailure(500, "Server Error", "https://b.s3.amazonaws.com/k", "boom");
-    expect(failure.error.code).toBe("");
-    expect(failure.error.message).toContain("boom");
+    expect(failure.data.code).toBe("");
+    expect(failure.error).toContain("boom");
   });
 });

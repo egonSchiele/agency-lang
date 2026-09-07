@@ -197,8 +197,8 @@ export def runApproved(
   // approval prompt reflects what the user is actually approving.
   const gate = try requestApproval(plan, src, renderEffects(eff))
   return match(gate) {
-    failure(_) => rejectedState(state)
-    success(_) => afterRun(task, src, state)
+    failure => rejectedState(state)
+    success => afterRun(task, src, state)
   }
 }
 

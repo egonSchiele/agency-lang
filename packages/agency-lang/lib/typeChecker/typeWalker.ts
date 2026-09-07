@@ -31,7 +31,7 @@ export function mapTypes(t: VariableType, fn: (t: VariableType) => VariableType)
       return fn({
         ...t,
         successType: mapTypes(t.successType, fn),
-        failureType: mapTypes(t.failureType, fn),
+        dataType: mapTypes(t.dataType, fn),
       });
     case "schemaType":
       return fn({ ...t, inner: mapTypes(t.inner, fn) });
@@ -88,7 +88,7 @@ export function visitTypes(t: VariableType, visit: (t: VariableType) => boolean 
       for (const p of t.properties) if (visitTypes(p.value, visit)) return true;
       return false;
     case "resultType":
-      return visitTypes(t.successType, visit) || visitTypes(t.failureType, visit);
+      return visitTypes(t.successType, visit) || visitTypes(t.dataType, visit);
     case "schemaType":
       return visitTypes(t.inner, visit);
     case "keyofType":

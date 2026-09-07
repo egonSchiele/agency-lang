@@ -226,11 +226,20 @@ export function variableTypeToString(
         : "";
     return `(${params}) ${arrow} ${ret}${raisesStr}`;
   } else if (variableType.type === "resultType") {
-    const s = variableTypeToString(variableType.successType, typeAliases, forFormatting, hooks);
-    const f = variableTypeToString(variableType.failureType, typeAliases, forFormatting, hooks);
-    if (s === "any" && f === "any") return "Result";
-    if (f === "string") return `Result<${s}>`;
-    return `Result<${s}, ${f}>`;
+    const successText = variableTypeToString(
+      variableType.successType,
+      typeAliases,
+      forFormatting,
+      hooks,
+    );
+    const dataText = variableTypeToString(variableType.dataType, typeAliases, forFormatting, hooks);
+    if (successText === "any" && dataText === "any") {
+      return "Result";
+    }
+    if (dataText === "any") {
+      return `Result<${successText}>`;
+    }
+    return `Result<${successText}, ${dataText}>`;
   } else if (variableType.type === "genericType") {
     const args = variableType.typeArgs
       .map((a) => variableTypeToString(a, typeAliases, forFormatting, hooks))

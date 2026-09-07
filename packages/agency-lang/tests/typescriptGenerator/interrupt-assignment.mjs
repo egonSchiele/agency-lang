@@ -29,7 +29,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
+  success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -85,7 +85,7 @@ const graph = __globalCtx.graph;
 
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
-export function reject(value?: any) { return { type: "reject" as const, value }; }
+export function reject(reason?: string) { return { type: "reject" as const, value: reason }; }
 function propagate() { return { type: "propagate" as const }; }
 function pass() { return { type: "pass" as const }; }
 
@@ -234,7 +234,7 @@ if (__response) {
   } else if (__response.type === "reject") {
     // rejected, halt
     
-    runner.halt({ messages: __threads(), data: failure(__response.value ?? "interrupt rejected", { rejected: true }) });
+    runner.halt({ messages: __threads(), data: runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;
@@ -244,7 +244,7 @@ if (__response) {
   const __handlerResult = await interruptWithHandlers("unknown", `What is your name?`, {}, "./interrupt-assignment.agency", __ctx, __stateStack(), { expectsValue: true });
   if (isRejected(__handlerResult)) {
     
-    runner.halt({ messages: __threads(), data: failure(__handlerResult.value ?? "interrupt rejected", { rejected: true }) });
+    runner.halt({ messages: __threads(), data: runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true }) });
     
     
     return;
@@ -331,7 +331,7 @@ await callHook({
             }
     return {
       messages: __threads(),
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+      data: runtimeFailure(__error, { functionName: "main" })
     };
   }
 })

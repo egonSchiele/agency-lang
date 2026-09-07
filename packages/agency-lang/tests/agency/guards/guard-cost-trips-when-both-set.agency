@@ -11,7 +11,7 @@ node main() {
     return reply
   }
   if (isFailure(result)) {
-    return "tripped:${result.error.type}:maxCost=${result.error.maxCost}:maxTime=${result.error.maxTime}"
+    return "tripped:${result.data.type}:maxCost=${result.data.maxCost}:maxTime=${result.data.maxTime}"
   }
   return "did not trip"
 }

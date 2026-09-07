@@ -43,6 +43,11 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG2010](checking.md#ag2010) | Cannot &#123;op&#125; values of different dimensions (&#123;leftDim&#125; and &#123;rightDim&#125;): '&#123;left&#125;' and '&#123;right&#125;'. |
 | [AG2011](checking.md#ag2011) | Property '&#123;property&#125;' does not exist on type '&#123;type&#125;'. |
 | [AG2012](checking.md#ag2012) | Not all code paths return a value in '&#123;fn&#125;'. |
+| [AG2013](checking.md#ag2013) | The first argument to failure() is the message shown to a person or a model, so it must be a string. Got '&#123;actual&#125;'. |
+| [AG2014](checking.md#ag2014) | The second argument to failure() is its structured data, so it must be an object. Got '&#123;actual&#125;'. |
+| [AG2015](checking.md#ag2015) | This function declares '&#123;expected&#125;' as its failure data, so failure() needs a second argument. To allow a failure with no data, declare the return type as 'Result&lt;&#123;success&#125;, &#123;expected&#125; \| null&gt;'. |
+| [AG2016](checking.md#ag2016) | A Result's second type parameter is its failure data, and failure data must be an object. Got '&#123;actual&#125;' (&#123;context&#125;). A failure's message is always a string and is not named in the type. |
+| [AG2017](checking.md#ag2017) | failure() cannot take a splat. Codegen appends the checkpoint and function name to every failure() call by position, and a splat of unknown width would displace them. Pass the message and data directly. |
 
 ## Interrupts, effects, and handlers
 

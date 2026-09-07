@@ -25,9 +25,9 @@ const REGION_SYNTAX = /^[a-z0-9]+(?:-[a-z0-9]+)+$/;
  */
 export function resolveAwsPartition(region: string): AwsPartition | ResultFailure {
   if (!REGION_SYNTAX.test(region)) {
-    return failure({
-      message: `Invalid AWS region ${JSON.stringify(region)}. Expected a value like "us-east-1".`,
-    });
+    return failure(
+      `Invalid AWS region ${JSON.stringify(region)}. Expected a value like "us-east-1".`,
+    );
   }
   if (region.startsWith("us-iso-")) return { region, dnsSuffix: "c2s.ic.gov" };
   if (region.startsWith("us-gov-")) return { region, dnsSuffix: "amazonaws.com" };
@@ -35,9 +35,7 @@ export function resolveAwsPartition(region: string): AwsPartition | ResultFailur
   if (/^(af|ap|ca|eu|il|me|mx|sa|us)-/.test(region)) {
     return { region, dnsSuffix: "amazonaws.com" };
   }
-  return failure({
-    message: `Unsupported AWS partition for region ${JSON.stringify(region)}.`,
-  });
+  return failure(`Unsupported AWS partition for region ${JSON.stringify(region)}.`);
 }
 
 export type BucketAddressing = "virtualHosted" | "pathStyle";
@@ -62,7 +60,7 @@ const RESERVED_SUFFIXES = ["-s3alias", "--ol-s3", ".mrap", "--x-s3", "--table-s3
 /** Validate an S3 general-purpose bucket name and choose its addressing style. */
 export function validateBucket(name: string): ValidatedBucket | ResultFailure {
   const reject = (reason: string): ResultFailure =>
-    failure({ message: `Invalid S3 bucket name ${JSON.stringify(name)}: ${reason}.` });
+    failure(`Invalid S3 bucket name ${JSON.stringify(name)}: ${reason}.`);
 
   if (name.length < BUCKET_NAME_MIN_LENGTH || name.length > BUCKET_NAME_MAX_LENGTH) {
     return reject(`length must be ${BUCKET_NAME_MIN_LENGTH}-${BUCKET_NAME_MAX_LENGTH} characters`);

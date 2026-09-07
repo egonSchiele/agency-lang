@@ -436,8 +436,7 @@ export type ParsePolicyFailureStatus =
   | "policy-not-valid"
 
 export type ParsePolicyFailure = {
-  status: ParsePolicyFailureStatus;
-  error?: string
+  status: ParsePolicyFailureStatus
 }
 
 /**
@@ -461,29 +460,28 @@ export def parsePolicyFile(path: string): Result<Policy, ParsePolicyFailure> {
   const dir = dirname(path)
   const name = basename(path)
   if (!exists(name, dir)) {
-    return failure({
-      status: "doesnt-exist"
-    })
+    return failure("No policy file at ${path}.", { status: "doesnt-exist" })
   }
   const readResult = read(name, dir) with approve
   if (isFailure(readResult)) {
-    return failure({
-      status: "read-error",
-      error: readResult.error
-    })
+    return failure(
+      "Could not read the policy file at ${path}: ${readResult.error}",
+      { status: "read-error" }
+    )
   }
   const parsed = try JSON.parse(readResult.value)
   if (isFailure(parsed)) {
-    return failure({
-      status: "malformed-json"
-    })
+    return failure(
+      "The policy file at ${path} is not valid JSON.",
+      { status: "malformed-json" }
+    )
   }
   const valid = validatePolicy(parsed.value)
   if (!valid.success) {
-    return failure({
-      status: "policy-not-valid",
-      error: valid.error
-    })
+    return failure(
+      "The policy file at ${path} does not match the policy schema: ${valid.error}",
+      { status: "policy-not-valid" }
+    )
   }
   return parsed
 }
@@ -542,14 +540,8 @@ def maybeLoadPolicy() {
       // A missing file is a normal first run. Anything else means the
       // user's saved decisions are NOT in effect — say so, or a
       // non-interactive run rejects everything with no visible cause.
-      if (loaded.error.status != "doesnt-exist") {
-        let detail = ""
-        if (loaded.error.error != null) {
-          detail = ": ${loaded.error.error}"
-        }
-        print(
-          "Warning: could not load policy file ${globalCliPolicyOpts.file} (${loaded.error.status}${detail}). Starting from an empty policy.",
-        )
+      if (loaded.data.status != "doesnt-exist") {
+        print("Warning: ${loaded.error} Starting from an empty policy.")
       }
       _policy = {}
     } else {

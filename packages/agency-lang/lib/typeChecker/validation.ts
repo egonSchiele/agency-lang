@@ -1,11 +1,12 @@
 import type { VariableType, FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
-import { STRING_T } from "./primitives.js";
+import { ANY_T } from "./primitives.js";
 
 /**
- * Wrap `t` in Result<T, string> when `validated` is true, mirroring the
- * runtime's __validateType wrapping. An already-Result type passes through
- * without re-wrapping.
+ * Wrap `t` in Result<T, any> when `validated` is true, mirroring the runtime's
+ * __validateType wrapping. The data type is left open: a validation failure
+ * carries a message and no structured data. An already-Result type passes
+ * through without re-wrapping.
  */
 export function resultTypeForValidation(
   t: VariableType,
@@ -16,7 +17,7 @@ export function resultTypeForValidation(
   return {
     type: "resultType",
     successType: t,
-    failureType: STRING_T,
+    dataType: ANY_T,
   };
 }
 

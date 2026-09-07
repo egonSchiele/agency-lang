@@ -1,5 +1,18 @@
 import type { ResultType, UnionType, VariableType, TypeAliasEntry } from "../types/typeHints.js";
-import { ANY_T, BOOLEAN_T, STRING_T, NULL_T } from "./primitives.js";
+import { ANY_T, BOOLEAN_T, STRING_T, NULL_T, NEVER_T } from "./primitives.js";
+import { stripNull } from "./builtinGenerics.js";
+
+/** What a reader sees in `.data`. The `null` in `Result<T, D | null>` is a
+ *  permission for the producer to omit the data; at runtime `.data` is `{}`
+ *  then, never null. So the reader's type is `D` alone, and a data type that
+ *  is only `null` reads as an empty object. */
+function readerDataType(dataType: VariableType): VariableType {
+  const stripped = stripNull(dataType);
+  if (stripped === NEVER_T) {
+    return { type: "objectType", properties: [] };
+  }
+  return stripped;
+}
 
 const bool = (v: "true" | "false"): VariableType => ({
   type: "booleanLiteralType",
@@ -30,7 +43,11 @@ export function resultToObjectUnion(
         type: "objectType",
         properties: [
           { key: "success", value: bool("false") },
-          { key: "error", value: rt.failureType },
+          // The message. Always a string: `failure()` coerces anything else
+          // (lib/runtime/result.ts).
+          { key: "error", value: STRING_T },
+          // Extra structured detail, named by the second type parameter.
+          { key: "data", value: readerDataType(rt.dataType) },
           { key: "checkpoint", value: ANY_T },
           // Tool-failure classification (lib/runtime/result.ts).
           { key: "neverStarted", value: BOOLEAN_T },

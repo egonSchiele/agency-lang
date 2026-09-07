@@ -33,10 +33,10 @@ node exhausts() {
   if (result is success(src)) {
     return "unexpected success"
   }
-  if (result is failure(err)) {
+  if (result is failure) {
     // agencyCodingAgent is unmarked (neutral tier), so the failure is not
     // destructive and the tool loop keeps it callable.
-    return [err.source.includes("const x: number"), err.problems.length > 0, result.destructiveRan]
+    return [result.data.source.includes("const x: number"), result.data.problems.length > 0, result.destructiveRan]
   }
   return "unreachable"
 }

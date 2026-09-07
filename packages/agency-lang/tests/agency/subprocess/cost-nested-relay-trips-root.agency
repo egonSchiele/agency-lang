@@ -47,7 +47,7 @@ node main(grandSource: string) {
       )
     }
     if (isFailure(result)) {
-      return "tripped:${result.error.type}"
+      return "tripped:${result.data.type}"
     }
     return "did not trip"
   } with (e) {

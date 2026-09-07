@@ -528,11 +528,16 @@ describe("AgencyGenerator - Result type formatting", () => {
     expect(output).toContain("Result<number, number>");
   });
 
-  it("should normalize Result<Foo, string> to Result<Foo>", () => {
+  it("should keep Result<Foo, string> as written", () => {
     const input = `def check(): Result<number, string> {\n  return success(42)\n}`;
+    expect(formatAgency(input)).toContain("Result<number, string>");
+  });
+
+  it("should normalize Result<Foo, any> to Result<Foo>", () => {
+    const input = `def check(): Result<number, any> {\n  return success(42)\n}`;
     const output = formatAgency(input);
     expect(output).toContain("Result<number>");
-    expect(output).not.toContain("Result<number, string>");
+    expect(output).not.toContain("Result<number, any>");
   });
 });
 

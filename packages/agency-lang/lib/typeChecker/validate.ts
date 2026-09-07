@@ -6,6 +6,8 @@ import { visitTypes } from "./typeWalker.js";
 // Built-in generic forms (Array, Schema, Record, utility types) and their
 // arities come from the single registry in builtinGenerics.ts.
 import { BUILTIN_GENERIC_ARITY } from "./builtinGenerics.js";
+import { isDataShaped } from "./dataShape.js";
+import { formatTypeHint } from "../utils/formatType.js";
 
 /**
  * Validate value-param arity at a use site. Pushes one error to `errors`
@@ -82,6 +84,30 @@ function checkValueArgsArity(
   return false;
 }
 
+/** A `Result`'s second type parameter is read as `.data.field`, so it has to
+ *  be an object. Checked wherever a type is written down: alias bodies and
+ *  `let`/`const` hints through validateTypeReferences, and function
+ *  parameters and return types directly (scopes.ts). */
+export function validateResultDataTypes(
+  vt: VariableType,
+  context: string,
+  typeAliases: Record<string, TypeAliasEntry>,
+  errors: TypeCheckError[],
+  loc?: SourceLocation,
+): void {
+  visitTypes(vt, (t) => {
+    if (t.type === "resultType" && !isDataShaped(t.dataType, typeAliases)) {
+      errors.push(
+        diagnostic(
+          "resultDataNotObject",
+          { actual: formatTypeHint(t.dataType), context },
+          loc ?? null,
+        ),
+      );
+    }
+  });
+}
+
 export function validateTypeReferences(
   vt: VariableType,
   context: string,
@@ -89,6 +115,7 @@ export function validateTypeReferences(
   errors: TypeCheckError[],
   loc?: SourceLocation,
 ): void {
+  validateResultDataTypes(vt, context, typeAliases, errors, loc);
   visitTypes(vt, (t) => {
     if (t.type === "typeAliasVariable") {
       const entry = typeAliases[t.aliasName];

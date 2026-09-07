@@ -24,7 +24,7 @@ node main() {
     return "block ran to completion"
   }
   if (isFailure(result)) {
-    return "guard:${result.error.type}"
+    return "guard:${result.data.type}"
   }
   return "no trip: ${result.value}"
   } with (i) {

@@ -62,13 +62,13 @@ describe("mapTypes", () => {
     const r: VariableType = {
       type: "resultType",
       successType: numberType,
-      failureType: booleanType,
+      dataType: booleanType,
     };
     const result = mapTypes(r, (t) => (isNumber(t) ? stringType : t));
     expect(result).toEqual({
       type: "resultType",
       successType: stringType,
-      failureType: booleanType,
+      dataType: booleanType,
     });
   });
 

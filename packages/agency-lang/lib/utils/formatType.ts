@@ -79,10 +79,15 @@ export function formatTypeHint(
         : base;
     }
     case "resultType": {
-      const s = recurse(vt.successType);
-      const f = recurse(vt.failureType);
-      if (s === "any" && f === "any") return "Result";
-      return `Result<${s}, ${f}>`;
+      const successText = recurse(vt.successType);
+      const dataText = recurse(vt.dataType);
+      if (successText === "any" && dataText === "any") {
+        return "Result";
+      }
+      if (dataText === "any") {
+        return `Result<${successText}>`;
+      }
+      return `Result<${successText}, ${dataText}>`;
     }
     case "schemaType":
       return `Schema<${recurse(vt.inner)}>`;

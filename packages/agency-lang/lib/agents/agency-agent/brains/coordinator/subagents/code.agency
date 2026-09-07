@@ -255,7 +255,7 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
       maxTime: ESCALATE_MAX_TIME,
     )
     if (isFailure(written)) {
-      return failure("could not write valid Agency code: ${written.error.problems}")
+      return failure("could not write valid Agency code: ${written.error}")
     }
     if (target != "") {
       const saved = write(target, written.value, useAgentCwd: true)

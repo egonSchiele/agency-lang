@@ -201,7 +201,7 @@ async function walk(
   refHops: number = 0,
 ): Promise<ResultValue> {
   if (depth > maxDepth) {
-    return failure({
+    return failure(`Validation recursion depth exceeded: more than ${maxDepth} levels.`, {
       reason: "validation recursion depth exceeded",
       limit: maxDepth,
       kind: descriptor.kind,
@@ -215,7 +215,7 @@ async function walk(
     // increment it — but consecutive ref hops are capped so a descriptor
     // cycle built purely from refs fails instead of hanging.
     if (refHops >= MAX_CONSECUTIVE_REF_HOPS) {
-      return failure({
+      return failure(`Validation descriptor ref chain exceeded ${MAX_CONSECUTIVE_REF_HOPS} hops.`, {
         reason: "validation descriptor ref chain exceeded",
         limit: MAX_CONSECUTIVE_REF_HOPS,
         valuePreview: previewValue(value),

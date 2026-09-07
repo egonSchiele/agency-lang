@@ -1,0 +1,20 @@
+import { GuardFailureData } from "std::thread"
+
+// The other guard fixtures prove the data survived. This one proves the
+// message is a sentence, which is what a person and a model actually see.
+// The spent amount is a synthetic cost from the deterministic provider, so
+// the test asserts the part before the colon.
+def spend(): Result<string, GuardFailureData> {
+  return guard(cost: 0.000001, label: "research") {
+    const reply = llm("Reply with: pong")
+    return reply
+  }
+}
+
+node main() {
+  const tripped = spend()
+  if (isFailure(tripped)) {
+    return "${tripped.error.split(":")[0]}|${tripped.data.label}"
+  }
+  return "did not trip"
+}

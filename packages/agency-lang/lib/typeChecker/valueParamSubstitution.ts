@@ -622,7 +622,7 @@ function checkType(vt: VariableType, paramNames: Set<string>, aliasName: string)
       break;
     case "resultType":
       checkType(vt.successType, paramNames, aliasName);
-      checkType(vt.failureType, paramNames, aliasName);
+      checkType(vt.dataType, paramNames, aliasName);
       break;
     case "schemaType":
       checkType(vt.inner, paramNames, aliasName);
@@ -711,7 +711,7 @@ export function substituteValueArgsInType(
       return {
         ...vt,
         successType: substituteValueArgsInType(vt.successType, bindings),
-        failureType: substituteValueArgsInType(vt.failureType, bindings),
+        dataType: substituteValueArgsInType(vt.dataType, bindings),
       };
     case "schemaType":
       return {

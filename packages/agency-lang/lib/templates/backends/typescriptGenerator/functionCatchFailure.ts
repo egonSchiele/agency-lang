@@ -39,15 +39,12 @@ if (__error instanceof AgencyAbort) {
     functionName: {{{functionName}}},
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: {{{functionName}}},
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: {{{functionName}}},
+  args: __stack.args,
+});
 `;
 
 export type TemplateType = {

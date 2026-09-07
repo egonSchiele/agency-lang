@@ -5,6 +5,8 @@ import type { BlockType } from "../types/typeHints.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { isAssignable, isOptionalType, safeResolveType } from "./assignability.js";
 import { BOOLEAN_T } from "./primitives.js";
+import { isNullType } from "./builtinGenerics.js";
+import { isDataShaped } from "./dataShape.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -167,10 +169,58 @@ export function checkType(
 
   // Literal value nodes may carry no loc of their own; anchor on the
   // enclosing statement when the caller supplied one.
-  emitAssignabilityError(actualType, expectedType, expr.loc ?? fallbackLoc, context, ctx);
+  emitAssignabilityError(actualType, expectedType, expr.loc ?? fallbackLoc, context, ctx, expr);
   if (expr.type === "agencyObject") {
     checkExcessObjectProperties(expr, expectedType, context, ctx);
   }
+}
+
+/**
+ * A Result-specific replacement for the generic assignability message, which
+ * would otherwise read "Result<any, null> is not assignable to
+ * Result<Policy, ParsePolicyFailure>" and tell the author nothing they can act
+ * on. Returns true when the caller should not report the generic message.
+ */
+function reportFailureDataError(
+  actual: VariableType,
+  expected: VariableType,
+  loc: SourceLocation | undefined,
+  ctx: TypeCheckerContext,
+  expr: AgencyNode | undefined,
+): boolean {
+  const aliases = ctx.getTypeAliases();
+  // Resolve so an alias for the Result (`type Outcome = Result<T, D>`) reaches
+  // this check rather than falling through as a typeAliasVariable.
+  const target = safeResolveType(expected, aliases);
+  if (actual.type !== "resultType" || target.type !== "resultType") {
+    return false;
+  }
+  // The annotation itself is wrong, and validateResultDataTypes already said
+  // so where it was written. Repeating the generic message at every failure
+  // that fails to match it would only bury that.
+  if (!isDataShaped(target.dataType, aliases)) {
+    return true;
+  }
+  // A one-argument `failure(msg)` synthesizes null data (see
+  // synthFailureCall), so a `failure(...)` call landing here means the target
+  // declared real data and the call supplied none. Anything else with null
+  // data (a call to a function declared `Result<T, null>`, a variable) has no
+  // second argument to add, so it gets the generic message.
+  const isFailureCall = expr?.type === "functionCall" && expr.functionName === "failure";
+  if (isFailureCall && isNullType(actual.dataType)) {
+    ctx.errors.push(
+      diagnostic(
+        "failureNeedsData",
+        {
+          expected: formatTypeHint(target.dataType),
+          success: formatTypeHint(target.successType),
+        },
+        loc ?? null,
+      ),
+    );
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -186,9 +236,11 @@ export function emitAssignabilityError(
   loc: SourceLocation | undefined,
   context: string,
   ctx: TypeCheckerContext,
+  expr?: AgencyNode,
 ): void {
   if (isAnyType(actual)) return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
+  if (reportFailureDataError(actual, expected, loc, ctx, expr)) return;
   ctx.errors.push(
     diagnostic(
       "typeNotAssignableInContext",

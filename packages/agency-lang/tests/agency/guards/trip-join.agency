@@ -48,7 +48,7 @@ node grantFollowsBudget() {
       }
       return "done"
     }
-    if (isFailure(r)) { return "unexpected-failure:${r.error.label}" }
+    if (isFailure(r)) { return "unexpected-failure:${r.data.label}" }
     return "${r.value}|parent-grants:${log.length}"
   } with (i) {
     if (i.effect == "std::guard") {
@@ -81,10 +81,10 @@ node enclosingUntouched() {
         }
         return "inner-done"
       }
-      if (isFailure(inner)) { return "inner-failed:${inner.error.label}" }
+      if (isFailure(inner)) { return "inner-failed:${inner.data.label}" }
       return inner.value
     }
-    if (isFailure(r)) { return "encl-tripped:${r.error.label}" }
+    if (isFailure(r)) { return "encl-tripped:${r.data.label}" }
     return "BUG:grant-crossed-budgets:${r.value}"
   } with (i) {
     if (i.effect == "std::guard") {

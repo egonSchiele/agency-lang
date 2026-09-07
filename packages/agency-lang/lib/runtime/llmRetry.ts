@@ -333,7 +333,7 @@ export function decideValidationRetry(
   if (isSuccess(extracted)) {
     return { kind: "accept", value: extracted.value };
   }
-  const error = String(extracted.error);
+  const error = extracted.error;
   if (attempt >= policy.validationRetries) {
     const message =
       `LLM structured output failed validation: ${error}. ` +

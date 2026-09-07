@@ -10,7 +10,7 @@ node main(args: { policyFile: string, missingFile: string }) {
   // Missing file → reports a typed failure.
   const p2 = parsePolicyFile(args.missingFile) with approve
   if (!isFailure(p2)) { return "FAIL: missing file should fail" }
-  if (p2.error.status != "doesnt-exist") { return "FAIL: missing file status" }
+  if (p2.data.status != "doesnt-exist") { return "FAIL: missing file status" }
 
   return "pass"
 }

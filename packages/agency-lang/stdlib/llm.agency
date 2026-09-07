@@ -96,7 +96,7 @@ export def envVarFor(provider: string): string {
   return ""
 }
 
-export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Result<string, string> {
+export def pickProvider(order: string[] = ["anthropic", "google", "openai"]): Result<string> {
   """
   Return the first provider in `order` whose API-key environment variable
   is set, or a failure if none are. Checkable providers are anthropic,
@@ -209,7 +209,7 @@ effect std::read {
 // is resolved relative to the working directory, or used as-is if absolute.
 // The interrupt names the real spelling of the file, and the read refuses a
 // link planted in that spelling afterwards.
-export def loadModelData(path: string): Result<number, string> {
+export def loadModelData(path: string): Result<number> {
   """
   Load model data from a JSON file (the shape `agency models refresh`
   prints) and register it so `llm()` and the model catalog recognize

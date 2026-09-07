@@ -29,7 +29,7 @@ import {
   __registerStaticInit, __registerGlobalsInit, __registerCallbacksInit, __awaitStaticInit, __awaitGlobalsInit, __registerAlwaysScope,
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
-  success, failure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
+  success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __validateChain, __validateChainRecursive, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
@@ -85,7 +85,7 @@ const graph = __globalCtx.graph;
 
 // Handler result builtins and interrupt response constructors (unified types)
 export function approve(value?: any) { return { type: "approve" as const, value }; }
-export function reject(value?: any) { return { type: "reject" as const, value }; }
+export function reject(reason?: string) { return { type: "reject" as const, value: reason }; }
 function propagate() { return { type: "propagate" as const }; }
 function pass() { return { type: "pass" as const }; }
 
@@ -430,15 +430,12 @@ if (__error instanceof AgencyAbort) {
     functionName: "toDigit",
   });
 }
-return failure(
-  __error instanceof Error ? __error.message : String(__error),
-  {
-    checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-    destructiveRan: __self.__destructiveRan,
-    functionName: "toDigit",
-    args: __stack.args,
-  }
-);
+return runtimeFailure(__error, {
+  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  destructiveRan: __self.__destructiveRan,
+  functionName: "toDigit",
+  args: __stack.args,
+});
 
   } finally {
     __stateStack()?.pop()
@@ -599,7 +596,7 @@ await callHook({
             }
     return {
       messages: __threads(),
-      data: failure(__error instanceof Error ? __error.message : String(__error), { functionName: "main" })
+      data: runtimeFailure(__error, { functionName: "main" })
     };
   }
 })

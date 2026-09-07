@@ -4,6 +4,7 @@ import { approve, pass } from "./interrupts.js";
 import { agencyStore, withPushedHandler } from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
 import { checkFailureArgs } from "./failurePropagation.js";
+import { normalizeForeignResult } from "./result.js";
 import { formatRequiredUnboundRuntimeError } from "./toolBlockDiagnostics.js";
 
 export const UNSET: unique symbol = Symbol("UNSET");
@@ -179,7 +180,7 @@ export class AgencyFunction {
     // grows the promise chain until the process OOMs. The limit (config-
     // overridable `maxCallDepth`) is resolved from the active execution context
     // inside `withCallDepth`, once per lineage. See lib/runtime/callDepth.ts.
-    return withCallDepth(this.name, () => {
+    return withCallDepth(this.name, async () => {
       let args: unknown[];
       try {
         args = this._isBound
@@ -209,7 +210,8 @@ export class AgencyFunction {
           return propagated;
         }
       }
-      return this._fn(...args);
+      // `_fn` may be imported TypeScript that built a Result by hand.
+      return normalizeForeignResult(await this._fn(...args));
     });
   }
 

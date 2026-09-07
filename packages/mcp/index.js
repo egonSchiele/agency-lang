@@ -32,7 +32,7 @@ import {
   __registerGlobalsInit,
   __registerCallbacksInit,
   registerModuleFingerprint as __registerModuleFingerprint,
-  failure,
+  runtimeFailure,
   isFailure,
   stampFailureBoundary,
   AgencyFunction as __AgencyFunction,
@@ -92,8 +92,8 @@ const graph = __globalCtx.graph;
 function approve(value) {
   return { type: "approve", value };
 }
-function reject(value) {
-  return { type: "reject", value };
+function reject(reason) {
+  return { type: "reject", value: reason };
 }
 function propagate() {
   return { type: "propagate" };
@@ -271,15 +271,12 @@ async function __mcp_impl(serverName, onOAuthRequired = __UNSET) {
         functionName: "mcp"
       });
     }
-    return failure(
-      __error instanceof Error ? __error.message : String(__error),
-      {
-        checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
-        destructiveRan: __self.__destructiveRan,
-        functionName: "mcp",
-        args: __stack.args
-      }
-    );
+    return runtimeFailure(__error, {
+      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      destructiveRan: __self.__destructiveRan,
+      functionName: "mcp",
+      args: __stack.args
+    });
   } finally {
     __stateStack()?.pop();
     if (__functionCompleted) {
@@ -321,7 +318,7 @@ const mcp = __AgencyFunction.create({
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:mcp": { "1": { "line": 41, "col": 2 } } };
-__registerModuleFingerprint("index.agency", "88aa10cf49ffe15275ad810b34030a3b5edbe96142467819f310bb4ef151d16b", import.meta.url);
+__registerModuleFingerprint("index.agency", "9fa5de379a8bd48f59469caacda45b9ba532e60feae23f87a4a44f96baaa3438", import.meta.url);
 export {
   __getCheckpoints,
   __invokeFunction,

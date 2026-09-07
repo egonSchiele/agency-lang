@@ -5,7 +5,7 @@ import {
   checkResultMethodCall,
   describeFailureCallTarget,
 } from "./failurePropagation.js";
-import { isFailure } from "./result.js";
+import { isFailure, normalizeForeignResult } from "./result.js";
 import { hasInterrupts } from "./interrupts.js";
 import { type AbortedResult, isAborted } from "./abortedResult.js";
 
@@ -121,7 +121,7 @@ export async function __call(
     target.name || "(anonymous)",
     descriptor.args,
   );
-  return target(...descriptor.args);
+  return normalizeForeignResult(await target(...descriptor.args));
 }
 
 export async function __callMethod(

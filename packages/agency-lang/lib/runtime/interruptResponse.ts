@@ -8,13 +8,13 @@
 // working.
 
 export type InterruptApprove = { type: "approve"; value?: any };
-export type InterruptReject = { type: "reject"; value?: any };
+export type InterruptReject = { type: "reject"; value?: string };
 export type InterruptResponse = InterruptApprove | InterruptReject;
 
 export function approve(value?: any): InterruptResponse {
   return { type: "approve", value };
 }
 
-export function reject(value?: any): InterruptResponse {
-  return { type: "reject", value };
+export function reject(reason?: string): InterruptResponse {
+  return { type: "reject", value: reason };
 }

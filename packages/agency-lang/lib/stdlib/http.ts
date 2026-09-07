@@ -140,12 +140,11 @@ function httpStatusFailure(result: Response, url: string, body: string): ResultF
   const statusText = result.statusText ? ` ${result.statusText}` : "";
   const message =
     `HTTP ${result.status}${statusText} from ${url}` + (snippet ? `: ${snippet}` : "");
-  return failure({
+  return failure(message, {
     status: result.status,
     statusText: result.statusText,
     url,
     body: snippet,
-    message,
   });
 }
 

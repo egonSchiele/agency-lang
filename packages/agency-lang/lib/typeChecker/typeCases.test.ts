@@ -8,7 +8,7 @@ import type { TypeAliasEntry } from "../types/typeHints.js";
 const RESULT: VariableType = {
   type: "resultType",
   successType: NUMBER_T,
-  failureType: STRING_T,
+  dataType: STRING_T,
 };
 const lit = (value: string): VariableType => ({ type: "stringLiteralType", value });
 const numLit = (value: string): VariableType => ({ type: "numberLiteralType", value });

@@ -1,4 +1,5 @@
 import { isAnyType } from "./utils.js";
+import { isDataShaped } from "./dataShape.js";
 import { diagnostic } from "./diagnostics.js";
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
 import type { TypeTestExpression } from "../types/pattern.js";
@@ -68,6 +69,7 @@ import type { ResultType, UnionType, TypeAliasEntry } from "../types/typeHints.j
 import type { SourceLocation } from "../types/base.js";
 import { resultToObjectUnion } from "./resultUnion.js";
 import type { NamedArgument, SplatExpression } from "../types/dataStructures.js";
+import type { FunctionCall } from "../types/function.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import {
   BUILTIN_FUNCTION_TYPES,
@@ -109,6 +111,7 @@ const RESULT_CONSTRUCTORS = new Set<string>(["success", "failure"]);
 const RESULT_FIELDS = new Set<string>([
   "value",
   "error",
+  "data",
   "checkpoint",
   "functionName",
   "args",
@@ -308,6 +311,38 @@ function asPositionalArg(
   return arg;
 }
 
+/** The type of a `failure(...)` call. A one-argument failure has `null` data,
+ *  which is what makes a declared data type required: null is assignable to
+ *  `any` and to `D | null`, and not to a real object type, so the return-type
+ *  check rejects a bare failure(msg) in a function that promised D. */
+function synthFailureCall(expr: FunctionCall, scope: Scope, ctx: TypeCheckerContext): VariableType {
+  const aliases = ctx.getTypeAliases();
+  const message = asPositionalArg(expr.arguments[0]);
+  if (message !== undefined) {
+    const messageType = synthType(message, scope, ctx);
+    if (!isAnyType(messageType) && !isAssignable(messageType, STRING_T, aliases)) {
+      ctx.errors.push(
+        diagnostic(
+          "failureMessageNotString",
+          { actual: formatTypeHint(messageType) },
+          expr.loc ?? null,
+        ),
+      );
+    }
+  }
+  const dataArg = expr.arguments[1] === undefined ? undefined : asPositionalArg(expr.arguments[1]);
+  if (dataArg === undefined) {
+    return { type: "resultType", successType: ANY_T, dataType: NULL_T };
+  }
+  const dataType = synthType(dataArg, scope, ctx);
+  if (!isDataShaped(dataType, aliases)) {
+    ctx.errors.push(
+      diagnostic("failureDataNotObject", { actual: formatTypeHint(dataType) }, expr.loc ?? null),
+    );
+  }
+  return { type: "resultType", successType: ANY_T, dataType };
+}
+
 export function synthType(expr: AgencyNode, scope: Scope, ctx: TypeCheckerContext): VariableType {
   switch (expr.type) {
     case "variableName": {
@@ -501,7 +536,7 @@ function synthTryExpression(
   const inner = synthType(expr.call, scope, ctx);
   if (isAnyType(inner)) return inner;
   if (inner.type === "resultType") return inner;
-  return { type: "resultType", successType: inner, failureType: ANY_T };
+  return { type: "resultType", successType: inner, dataType: ANY_T };
 }
 
 const BOOLEAN_OPS = new Set([
@@ -676,7 +711,7 @@ function synthPipe(
   const right = synthPipeRhs(expr.right, scope, ctx);
   if (isAnyType(right)) return right;
   if (right.type === "resultType") return right;
-  return { type: "resultType", successType: right, failureType: ANY_T };
+  return { type: "resultType", successType: right, dataType: ANY_T };
 }
 
 /**
@@ -752,7 +787,7 @@ const BLOCK_CALL_RESULT: Record<string, (element: VariableType) => VariableType>
   _guard: (element) => ({
     type: "resultType",
     successType: element,
-    failureType: ANY_T,
+    dataType: ANY_T,
   }),
   // fork joins every branch into a list. The list shape is kept even
   // for an `any` element - any[] still catches scalar annotations.
@@ -792,13 +827,18 @@ function synthFunctionCall(
   // get `Result<T, any>` (success) or `Result<any, T>` (failure). The names
   // are reserved at the typechecker level (see RESERVED_FUNCTION_NAMES in
   // index.ts), so shadowing is impossible — no gating needed here.
+  if (expr.functionName === "failure" && expr.arguments.some((arg) => arg.type === "splat")) {
+    // A splat of unknown width would displace the options object codegen
+    // appends by position. See the AG2017 explanation.
+    ctx.errors.push(diagnostic("failureSplatArgument", {}, expr.loc ?? null));
+    return { type: "resultType", successType: ANY_T, dataType: ANY_T };
+  }
   if (RESULT_CONSTRUCTORS.has(expr.functionName) && expr.arguments.length >= 1) {
     const inner = asPositionalArg(expr.arguments[0]);
     if (inner) {
-      const innerType = synthType(inner, scope, ctx);
       return expr.functionName === "success"
-        ? { type: "resultType", successType: innerType, failureType: ANY_T }
-        : { type: "resultType", successType: ANY_T, failureType: innerType };
+        ? { type: "resultType", successType: synthType(inner, scope, ctx), dataType: ANY_T }
+        : synthFailureCall(expr, scope, ctx);
     }
   }
   const fn = ctx.functionDefs[expr.functionName];
@@ -1198,7 +1238,7 @@ export function synthValueAccess(
             currentType = {
               type: "resultType",
               successType: resolved.inner,
-              failureType: ANY_T,
+              dataType: ANY_T,
             };
             break;
           }

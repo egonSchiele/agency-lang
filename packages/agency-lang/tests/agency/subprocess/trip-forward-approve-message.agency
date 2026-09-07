@@ -37,7 +37,7 @@ node main() {
   handle {
     const result = run(compiled: compileResult.value, node: "main")
     if (isFailure(result)) {
-      return "run failed:${result.error.type}"
+      return "run failed:${result.data.type}"
     }
     return result.value.data
   } with (e) {

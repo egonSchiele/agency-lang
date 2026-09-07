@@ -60,7 +60,7 @@ node main() {
   if (isFailure(outer)) {
     // Pre-gate works: actualCost ∈ {$0.000006, $0.000008}.
     // Pre-gate broken: actualCost == $0.000010 (or "too many calls").
-    return "pre-gate-trip:${outer.error.actualCost < 0.00001}"
+    return "pre-gate-trip:${outer.data.actualCost < 0.00001}"
   }
   return "unexpected: ${outer.value}"
 }

@@ -26,7 +26,7 @@ node main(tag: string) {
       return results
     }
     if (isFailure(result)) {
-      return "tripped:${result.error.type}"
+      return "tripped:${result.data.type}"
     }
     return "did not trip"
   } with (e) {

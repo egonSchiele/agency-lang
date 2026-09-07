@@ -22,7 +22,7 @@ describe("propagateFailure", () => {
   });
 
   it("appends a skip entry, preserving every other field, without mutating the original", () => {
-    const orig = failure("boom", {
+    const orig = failure("boom", null, {
       functionName: "getReport",
       destructiveRan: true,
       checkpoint: { step: 3 },
@@ -77,7 +77,7 @@ describe("acceptsFailures / isFailureTolerant", () => {
 });
 
 describe("checkFailureArgs", () => {
-  const f = failure("boom", { functionName: "origin" });
+  const f = failure("boom", null, { functionName: "origin" });
 
   it("propagates when a rejecting param receives a failure", () => {
     const out = checkFailureArgs("target", [param("x", { acceptsResult: false })], [f]);
@@ -205,7 +205,7 @@ describe("checkFailureArgs", () => {
 });
 
 describe("checkTsFunctionArgs", () => {
-  const f = failure("boom", { functionName: "origin" });
+  const f = failure("boom", null, { functionName: "origin" });
 
   it("throws a plain Error naming the producer for untagged functions", () => {
     const target = function formatDate() {};
@@ -251,7 +251,7 @@ describe("checkTsFunctionArgs", () => {
 
 describe("checkResultMethodCall", () => {
   it("throws for a method call on a failure, naming the producer", () => {
-    const f = failure("nope", { functionName: "getF" });
+    const f = failure("nope", null, { functionName: "getF" });
     expect(() => checkResultMethodCall(f, "split")).toThrowError(/split.*getF/s);
   });
 
@@ -271,7 +271,7 @@ describe("checkResultMethodCall", () => {
   });
 
   it("an own field that is NOT callable still throws (f.error() where error is a string)", () => {
-    const f = failure("nope", { functionName: "getF" });
+    const f = failure("nope", null, { functionName: "getF" });
     expect(() => checkResultMethodCall(f, "error")).toThrowError(/error.*getF/s);
   });
 
@@ -281,7 +281,7 @@ describe("checkResultMethodCall", () => {
   });
 
   it("warn mode logs without throwing; off mode does neither", () => {
-    const f = failure("nope", { functionName: "getF" });
+    const f = failure("nope", null, { functionName: "getF" });
     for (const [mode, expectedLogs] of [
       ["warn", 1],
       ["off", 0],
@@ -321,7 +321,7 @@ function makeFn(params: Array<Partial<FuncParam> & { name: string }>, fn: (...ar
 }
 
 describe("invoke() failure propagation", () => {
-  const f = failure("boom", { functionName: "origin" });
+  const f = failure("boom", null, { functionName: "origin" });
 
   it("skips the body and propagates for a rejecting param", async () => {
     let ran = false;
@@ -389,7 +389,7 @@ describe("invoke() failure propagation", () => {
 import { __call, __callMethod } from "./call.js";
 
 describe("dispatcher failure checks", () => {
-  const f = failure("boom", { functionName: "origin" });
+  const f = failure("boom", null, { functionName: "origin" });
 
   it("__call: failure arg into an untagged plain TS function throws", async () => {
     const target = function formatDate() {};
@@ -488,7 +488,7 @@ describe("warn-mode console echo", () => {
         checkFailureArgs(
           "target",
           [param("x", { acceptsResult: false })],
-          [failure("SECRET-PAYLOAD", { functionName: "origin" })],
+          [failure("SECRET-PAYLOAD", null, { functionName: "origin" })],
         );
       });
       expect(spy).toHaveBeenCalledTimes(1);

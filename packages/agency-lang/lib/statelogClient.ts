@@ -1437,7 +1437,7 @@ export class StatelogClient {
     schemaChars,
     threshold,
   }: {
-    warnType: "failurePropagation" | "toolSchemaSize";
+    warnType: "failurePropagation" | "toolSchemaSize" | "failureData";
     message: string;
     functionName?: string;
     param?: string;

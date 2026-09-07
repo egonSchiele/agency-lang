@@ -303,9 +303,7 @@ export def runSeedTurn(target: string, msg: string) {
   saveSeedTurn(msg)
 }
 
-export def renderAgentResponse(
-  response: Result<string | null, { error: string }>,
-): void {
+export def renderAgentResponse(response: Result<string | null>): void {
   if (response is success(reply)) {
     if (reply != "" && reply != null) {
       renderReply(reply)
@@ -313,7 +311,7 @@ export def renderAgentResponse(
       pushMessage(color.red("No reply generated."))
     }
   } else if (response is failure(f)) {
-    pushMessage(color.red(formatTurnFailure("${f.error}")))
+    pushMessage(color.red(formatTurnFailure(f)))
   }
 }
 

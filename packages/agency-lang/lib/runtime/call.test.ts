@@ -34,6 +34,21 @@ describe("__call", () => {
     await __call(fn, { type: "positional", args: [1] }, { somethingCustom: true });
   });
 
+  it("normalizes a Result a plain TS function built by hand", async () => {
+    const foreign = { __type: "resultType", success: false, error: { code: 404 } };
+    const result = (await __call(() => foreign, { type: "positional", args: [] })) as any;
+    expect(result.error).toBe('{"code":404}');
+    expect(result.data).toEqual({});
+  });
+
+  it("normalizes a Result an AgencyFunction wrapping TS built by hand", async () => {
+    const foreign = { __type: "resultType", success: false, error: { code: 404 } };
+    const fn = makeAgencyFn(async () => foreign);
+    const result = (await __call(fn, { type: "positional", args: [] })) as any;
+    expect(result.error).toBe('{"code":404}');
+    expect(result.data).toEqual({});
+  });
+
   it("calls plain TS function by spreading positional args", async () => {
     const fn = (a: number, b: number) => a + b;
     const result = await __call(fn, { type: "positional", args: [3, 4] });

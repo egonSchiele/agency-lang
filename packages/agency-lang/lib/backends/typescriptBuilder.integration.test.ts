@@ -391,7 +391,7 @@ describe("mapTypeToValidationSchema", () => {
       {
         type: "resultType",
         successType: { type: "primitiveType", value: "any" },
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       },
       {},
     );
@@ -404,7 +404,7 @@ describe("mapTypeToValidationSchema", () => {
       {
         type: "resultType",
         successType: { type: "primitiveType", value: "number" },
-        failureType: { type: "primitiveType", value: "string" },
+        dataType: { type: "primitiveType", value: "string" },
       },
       {},
     );

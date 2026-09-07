@@ -1,4 +1,4 @@
-def validate(input: string): Result<number, string> {
+def validate(input: string): Result<number> {
   if (input == "42") {
     return success(42)
   }

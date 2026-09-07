@@ -353,7 +353,7 @@ describe("wall-clock timer is per execution segment", () => {
       expect(outcomes).toHaveLength(1);
       expect(outcomes[0].kind).toBe("resolve");
       expect(outcomes[0].v.type).toBe("result");
-      expect(outcomes[0].v.value.error.limit).toBe("wall_clock");
+      expect(outcomes[0].v.value.data.limit).toBe("wall_clock");
     } finally {
       vi.useRealTimers();
     }

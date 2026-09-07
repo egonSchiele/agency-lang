@@ -89,7 +89,7 @@ export async function _loadMcpToolsForServer(
     return [];
   }
   if (!res.success || !res.value) {
-    console.warn(`[mcp] server "${server}" unavailable: ${String(res.error)}`);
+    console.warn(`[mcp] server "${server}" unavailable: ${res.error}`);
     return [];
   }
   const { tools, callTool } = res.value;

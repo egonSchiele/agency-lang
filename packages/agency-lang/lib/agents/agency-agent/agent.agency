@@ -52,7 +52,7 @@ def oneShotAgent(target: string, prompt: string): string {
     if (result is success(r)) {
       reply = r
     } else if (result is failure(f)) {
-      reply = formatTurnFailure("${f.error}")
+      reply = formatTurnFailure(f)
     }
   }
   evalOutput(reply)

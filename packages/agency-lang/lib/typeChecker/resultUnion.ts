@@ -30,7 +30,7 @@ export function resultToObjectUnion(
         type: "objectType",
         properties: [
           { key: "success", value: bool("false") },
-          { key: "error", value: rt.failureType },
+          { key: "error", value: rt.dataType },
           { key: "checkpoint", value: ANY_T },
           // Tool-failure classification (lib/runtime/result.ts).
           { key: "neverStarted", value: BOOLEAN_T },

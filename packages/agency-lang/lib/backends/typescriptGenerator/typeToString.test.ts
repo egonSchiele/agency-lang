@@ -144,18 +144,18 @@ describe("variableTypeToString: object rendering hook", () => {
       type: {
         type: "resultType",
         successType: objectOf(numberType),
-        failureType: objectOf(stringType),
+        dataType: objectOf(stringType),
       },
       expected: "Result<OBJECT<number>, OBJECT<string>>",
     },
     {
-      name: "Result success type with string failure shorthand",
+      name: "Result success type with string datare shorthand",
       type: {
         type: "resultType",
         successType: objectOf(numberType),
-        failureType: stringType,
+        dataType: stringType,
       },
-      expected: "Result<OBJECT<number>>",
+      expected: "Result<OBJECT<number>, string>",
     },
     {
       name: "block parameters, return type, and raises type",

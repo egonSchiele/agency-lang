@@ -2322,13 +2322,13 @@ export const resultTypeParser: Parser<ResultType> = memo(
           optionalSpaces,
           capture(
             lazy(() => variableTypeParser),
-            "failureType",
+            "dataType",
           ),
           char(">"),
         ),
       ),
     ),
-    // Result<SuccessType> — single type param (sugar for Result<SuccessType, string>)
+    // Result<SuccessType> — single type param (sugar for Result<SuccessType, any>)
     seqC(
       set("type", "resultType"),
       str("Result"),
@@ -2342,7 +2342,7 @@ export const resultTypeParser: Parser<ResultType> = memo(
           char(">"),
         ),
       ),
-      set("failureType", { type: "primitiveType", value: "string" }),
+      set("dataType", { type: "primitiveType", value: "any" }),
     ),
     // Bare Result (sugar for Result<any, any>)
     // Use not(varNameChar) to avoid matching "ResultFoo" as bare Result
@@ -2351,7 +2351,7 @@ export const resultTypeParser: Parser<ResultType> = memo(
       str("Result"),
       not(varNameChar),
       set("successType", { type: "primitiveType", value: "any" }),
-      set("failureType", { type: "primitiveType", value: "any" }),
+      set("dataType", { type: "primitiveType", value: "any" }),
     ),
     // Success<T> — sugar for Result<T, any>
     seqC(
@@ -2367,7 +2367,7 @@ export const resultTypeParser: Parser<ResultType> = memo(
           char(">"),
         ),
       ),
-      set("failureType", { type: "primitiveType", value: "any" }),
+      set("dataType", { type: "primitiveType", value: "any" }),
     ),
     // Bare Success (sugar for Result<any, any>)
     seqC(
@@ -2375,9 +2375,9 @@ export const resultTypeParser: Parser<ResultType> = memo(
       str("Success"),
       not(varNameChar),
       set("successType", { type: "primitiveType", value: "any" }),
-      set("failureType", { type: "primitiveType", value: "any" }),
+      set("dataType", { type: "primitiveType", value: "any" }),
     ),
-    // Failure<E> — sugar for Result<any, E>
+    // Failure<D> — sugar for Result<any, D>
     seqC(
       set("type", "resultType"),
       str("Failure"),
@@ -2386,7 +2386,7 @@ export const resultTypeParser: Parser<ResultType> = memo(
         seqC(
           capture(
             lazy(() => variableTypeParser),
-            "failureType",
+            "dataType",
           ),
           char(">"),
         ),
@@ -2399,7 +2399,7 @@ export const resultTypeParser: Parser<ResultType> = memo(
       str("Failure"),
       not(varNameChar),
       set("successType", { type: "primitiveType", value: "any" }),
-      set("failureType", { type: "primitiveType", value: "any" }),
+      set("dataType", { type: "primitiveType", value: "any" }),
     ),
   ),
 );

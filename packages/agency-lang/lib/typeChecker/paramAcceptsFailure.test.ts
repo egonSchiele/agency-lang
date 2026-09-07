@@ -4,7 +4,7 @@ import type { FunctionParameter } from "../types/function.js";
 
 const ANY = { type: "primitiveType", value: "any" } as const;
 const STR = { type: "primitiveType", value: "string" } as const;
-const RESULT = { type: "resultType", successType: ANY, failureType: ANY } as const;
+const RESULT = { type: "resultType", successType: ANY, dataType: ANY } as const;
 
 function makeParam(overrides: Record<string, unknown>): FunctionParameter {
   return { name: "x", ...overrides } as unknown as FunctionParameter;
@@ -24,7 +24,7 @@ describe("paramAcceptsFailure", () => {
     expect(paramAcceptsFailure(makeParam({ typeHint: RESULT }))).toBe(true);
     expect(
       paramAcceptsFailure(
-        makeParam({ typeHint: { type: "resultType", successType: STR, failureType: STR } }),
+        makeParam({ typeHint: { type: "resultType", successType: STR, dataType: STR } }),
       ),
     ).toBe(true);
   });

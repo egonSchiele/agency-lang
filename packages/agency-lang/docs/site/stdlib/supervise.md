@@ -54,7 +54,7 @@ supervise(
   maxTime: number,
   check: (elapsed: number, draft: any) -> SuperviseDecision,
   block: () -> any,
-): Result<any>
+): Result
 ```
 
 Run a block, pausing it every interval to check progress and steer it.
@@ -80,7 +80,7 @@ Run a block, pausing it every interval to check progress and steer it.
 | check | `(elapsed: number, draft: any) => SuperviseDecision` |  |
 | block | `() => any` |  |
 
-**Returns:** `Result<any>`
+**Returns:** `Result`
 
 **Throws:** `std::guard`
 

@@ -90,13 +90,13 @@ describe("substituteTypeParams", () => {
     const body: VariableType = {
       type: "resultType",
       successType: tparam("T"),
-      failureType: tparam("E"),
+      dataType: tparam("E"),
     };
     const result = substituteTypeParams(body, ["T", "E"], [stringType, numberType]);
     expect(result).toEqual({
       type: "resultType",
       successType: stringType,
-      failureType: numberType,
+      dataType: numberType,
     });
   });
 

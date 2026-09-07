@@ -501,7 +501,7 @@ function synthTryExpression(
   const inner = synthType(expr.call, scope, ctx);
   if (isAnyType(inner)) return inner;
   if (inner.type === "resultType") return inner;
-  return { type: "resultType", successType: inner, failureType: ANY_T };
+  return { type: "resultType", successType: inner, dataType: ANY_T };
 }
 
 const BOOLEAN_OPS = new Set([
@@ -676,7 +676,7 @@ function synthPipe(
   const right = synthPipeRhs(expr.right, scope, ctx);
   if (isAnyType(right)) return right;
   if (right.type === "resultType") return right;
-  return { type: "resultType", successType: right, failureType: ANY_T };
+  return { type: "resultType", successType: right, dataType: ANY_T };
 }
 
 /**
@@ -752,7 +752,7 @@ const BLOCK_CALL_RESULT: Record<string, (element: VariableType) => VariableType>
   _guard: (element) => ({
     type: "resultType",
     successType: element,
-    failureType: ANY_T,
+    dataType: ANY_T,
   }),
   // fork joins every branch into a list. The list shape is kept even
   // for an `any` element - any[] still catches scalar annotations.
@@ -797,8 +797,8 @@ function synthFunctionCall(
     if (inner) {
       const innerType = synthType(inner, scope, ctx);
       return expr.functionName === "success"
-        ? { type: "resultType", successType: innerType, failureType: ANY_T }
-        : { type: "resultType", successType: ANY_T, failureType: innerType };
+        ? { type: "resultType", successType: innerType, dataType: ANY_T }
+        : { type: "resultType", successType: ANY_T, dataType: innerType };
     }
   }
   const fn = ctx.functionDefs[expr.functionName];
@@ -1198,7 +1198,7 @@ export function synthValueAccess(
             currentType = {
               type: "resultType",
               successType: resolved.inner,
-              failureType: ANY_T,
+              dataType: ANY_T,
             };
             break;
           }

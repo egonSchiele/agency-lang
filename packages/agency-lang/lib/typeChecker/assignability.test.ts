@@ -228,7 +228,7 @@ describe("narrowed Result member assignable to Result type", () => {
   const resultT: VariableType = {
     type: "resultType",
     successType: STRING_T,
-    failureType: STRING_T,
+    dataType: STRING_T,
   };
   // The success member shape produced by resultToObjectUnion narrowing.
   const successMember: VariableType = {

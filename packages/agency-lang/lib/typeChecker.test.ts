@@ -3949,7 +3949,7 @@ describe("TypeChecker", () => {
                 typeHint: {
                   type: "resultType",
                   successType: { type: "primitiveType", value: "number" },
-                  failureType: { type: "primitiveType", value: "any" },
+                  dataType: { type: "primitiveType", value: "any" },
                 },
               },
             ],
@@ -3985,7 +3985,7 @@ describe("TypeChecker", () => {
                 typeHint: {
                   type: "resultType",
                   successType: { type: "primitiveType", value: "number" },
-                  failureType: { type: "primitiveType", value: "any" },
+                  dataType: { type: "primitiveType", value: "any" },
                 },
               },
             ],
@@ -4020,7 +4020,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "any" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "functionCall",
@@ -4051,7 +4051,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "tryExpression",
@@ -4075,7 +4075,7 @@ describe("TypeChecker", () => {
             returnType: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             body: [],
           },
@@ -4085,7 +4085,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "tryExpression",
@@ -4173,7 +4173,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4210,7 +4210,7 @@ describe("TypeChecker", () => {
             returnType: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             body: [],
           },
@@ -4220,7 +4220,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4269,7 +4269,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "string" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4311,7 +4311,7 @@ describe("TypeChecker", () => {
       //   if (b) { return success(10) } else { return failure("err") }
       // }
       // Inferred return should be Result<number, string>, so this assignment
-      // accepts and `failure(42)` would NOT (failureType is string).
+      // accepts and `failure(42)` would NOT (dataType is string).
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [
@@ -4358,7 +4358,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "number" },
-              failureType: { type: "primitiveType", value: "string" },
+              dataType: { type: "primitiveType", value: "string" },
             },
             value: {
               type: "functionCall",
@@ -4459,7 +4459,7 @@ describe("TypeChecker", () => {
             typeHint: {
               type: "resultType",
               successType: { type: "primitiveType", value: "string" },
-              failureType: { type: "primitiveType", value: "any" },
+              dataType: { type: "primitiveType", value: "any" },
             },
             value: {
               type: "binOpExpression",
@@ -4487,7 +4487,7 @@ describe("TypeChecker", () => {
     const result = (s: VariableType, f: VariableType): VariableType => ({
       type: "resultType",
       successType: s,
-      failureType: f,
+      dataType: f,
     });
 
     it("success({a:1, b:'x'}) synths as Result<{a:number,b:string}, any>", () => {
@@ -5014,7 +5014,7 @@ describe("TypeChecker", () => {
     const resultPersonStr: VariableType = {
       type: "resultType",
       successType: person,
-      failureType: str,
+      dataType: str,
     };
 
     it("declares a validated variable as Result<T, string>", () => {
@@ -5163,7 +5163,7 @@ describe("TypeChecker", () => {
       const resultNumStr: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: str,
+        dataType: str,
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5200,7 +5200,7 @@ describe("TypeChecker", () => {
       const resultNum: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5255,12 +5255,12 @@ describe("TypeChecker", () => {
       const resultStrStr: VariableType = {
         type: "resultType",
         successType: str,
-        failureType: str,
+        dataType: str,
       };
       const resultNum: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5306,7 +5306,7 @@ describe("TypeChecker", () => {
       const resultNum: VariableType = {
         type: "resultType",
         successType: num,
-        failureType: { type: "primitiveType", value: "any" },
+        dataType: { type: "primitiveType", value: "any" },
       };
       const program: AgencyProgram = {
         type: "agencyProgram",
@@ -5592,7 +5592,7 @@ describe("TypeChecker", () => {
 
     it("pipe with bare-var RHS unwraps Result LHS for the first-arg check", () => {
       // r: Result<number, string> |> half  — half takes number, success type is number → ok
-      const resultNumStr: VariableType = { type: "resultType", successType: num, failureType: str };
+      const resultNumStr: VariableType = { type: "resultType", successType: num, dataType: str };
       const program: AgencyProgram = {
         type: "agencyProgram",
         nodes: [

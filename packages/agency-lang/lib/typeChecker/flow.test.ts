@@ -279,7 +279,7 @@ describe("widenAtLoopBackEdge", () => {
 });
 
 // ── Property paths (M1) ─────────────────────────────────────────────────────
-const RESULT: VariableType = { type: "resultType", successType: NUM, failureType: STR };
+const RESULT: VariableType = { type: "resultType", successType: NUM, dataType: STR };
 // box : { r: Result<number, string> }
 const boxType: VariableType = { type: "objectType", properties: [{ key: "r", value: RESULT }] };
 const pathRef = (variable: string, ...names: string[]) => ({ variable, chain: names.map(prop) });

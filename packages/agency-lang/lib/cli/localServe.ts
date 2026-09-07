@@ -8,6 +8,7 @@ import {
   _mlxServedName,
   defaultCacheDir,
   readClientConfig,
+  formatGB,
 } from "../stdlib/localModels.js";
 import { mlxModelDir, readMlxModelRecord, isMlxModelComplete } from "../stdlib/mlxModelRecord.js";
 import { startFrontDoor, type FrontDoor, type Route } from "./mlxFrontDoor.js";
@@ -52,10 +53,6 @@ export function choosePython(
   return path.join(defaultMlxEnv(home), "bin", "python");
 }
 
-function gb(bytes: number): string {
-  return `${(bytes / 1e9).toFixed(1)} GB`;
-}
-
 /** A line to print when the models add up to more than the machine has.
  *  Null when they fit. The caller prints it and continues. */
 export function memoryWarning(sizesBytes: number[], totalMemBytes: number): string | null {
@@ -63,7 +60,7 @@ export function memoryWarning(sizesBytes: number[], totalMemBytes: number): stri
   if (total <= totalMemBytes) {
     return null;
   }
-  return `Warning: these models total ${gb(total)} and this machine has ${gb(totalMemBytes)} of memory.`;
+  return `Warning: these models total ${formatGB(total)} and this machine has ${formatGB(totalMemBytes)} of memory.`;
 }
 
 function joinNames(names: string[]): string {
@@ -338,7 +335,7 @@ export async function runServe(
     children.push(child);
     const gone = exitOf(child, model.name);
     exits.push(gone);
-    deps.log(`Loading ${model.name} (${gb(model.sizeBytes)})…`);
+    deps.log(`Loading ${model.name} (${formatGB(model.sizeBytes)})…`);
     const started = Date.now();
     try {
       await waitUntilLoaded(internalPort, model.dir, { fetch: deps.fetch, gone });

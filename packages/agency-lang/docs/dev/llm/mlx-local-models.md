@@ -47,14 +47,14 @@ A Hugging Face cache snapshot, `hf/hub/models--org--repo/snapshots/<sha>/`,
 holds no real files. Every entry is a symlink into `blobs/`. `contained.ts`
 drops symlinked entries, so a check built on it saw an empty directory and
 refused the snapshot. `modelDirEntries` in `lib/stdlib/modelBackend.ts` is
-the one place that follows links: `readdirSync` plus `statSync`, names and
-sizes only, never contents. `isModelDir` and the size sum in
+the one place that follows links. It is `readdirSync` plus `statSync`, and
+it reads names and sizes. It does not read contents. `isModelDir` and the size sum in
 `_modelFilesOnDisk` both read through it, so a snapshot alias reports its
 real size and the memory warning in `serve` sees it. `modelBackend.ts` is on
 the `FS_IMPORTERS` allow-list in `eslint.config.js` for this. Everything
 else, including `remove -f`, stays behind `contained.ts` and still refuses
-to follow a link. The decision, 2026-09-07: people who already have a cache
-should be able to use it with no copying step.
+to follow a link. This was decided on 2026-09-07 so that people who already
+have a cache can use it without a copying step.
 
 `_resolveModel(value)` turns a name, alias, URI, or path into
 `{ backend, target }`. `_resolveModelName` returns only the target and stays
@@ -139,7 +139,7 @@ a Python and check it, start one process per model, then open the front door.
 loads whatever model a request names. From `ModelProvider.load` in
 `mlx_lm/server.py`, the loaded model is keyed on the exact `model` string,
 and only the literal `"default_model"` maps to the `--model` flag. So the
-server cannot be exposed directly: a typo in a model name would load a
+server is not exposed directly, because a typo in a model name would load a
 second model. `serve` starts one process per model on a free internal port
 and puts its own server in front.
 
@@ -175,9 +175,9 @@ so those exits are not reported as failures. A process that dies on its own
 after it was ready resolves the handle's `failure` promise, and the command
 prints why, kills the rest, and exits 1.
 
-Nothing in `runServe` touches `process`: `spawn`, `fetch`, `exec`,
-`totalmem`, `log`, `freePort`, the cache directory, and the config all come
-in through `ServeDeps`, so the tests drive it with fakes.
+`runServe` does not touch `process`. Its `spawn`, `fetch`, `exec`,
+`totalmem`, `log`, `freePort`, cache directory, and config all come in
+through `ServeDeps`, so the tests drive it with fakes.
 
 ## `remove` and `-f`
 

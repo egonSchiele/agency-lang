@@ -56,7 +56,7 @@ describe("choosePython", () => {
 describe("memoryWarning", () => {
   it("warns when the models do not fit, in GB", () => {
     expect(memoryWarning([150e9, 46.4e9], 64e9)).toBe(
-      "Warning: these models total 196.4 GB and this machine has 64.0 GB of memory.",
+      "Warning: these models total 196.40 GB and this machine has 64.00 GB of memory.",
     );
   });
 
@@ -281,9 +281,9 @@ describe("runServe", () => {
       ],
     ]);
     expect(log[0]).toBe(
-      "Warning: these models total 1.2 GB and this machine has 1.0 GB of memory.",
+      "Warning: these models total 1.20 GB and this machine has 1.00 GB of memory.",
     );
-    expect(log[1]).toBe("Loading org/a (0.6 GB)…");
+    expect(log[1]).toBe("Loading org/a (0.60 GB)…");
     expect(log[2]).toMatch(/^ {2}ready in \d+s$/);
     expect(log[5]).toBe(`Serving 2 models on http://127.0.0.1:${handle.port}/v1:`);
     expect(handle.models).toEqual(["org/a", "org/b"]);

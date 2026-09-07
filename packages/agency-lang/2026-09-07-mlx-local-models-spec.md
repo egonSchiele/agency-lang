@@ -171,7 +171,7 @@ agency local download mlx:mlx-community/Qwen3-Coder-Next-4bit@7b9321e  # pinned 
 ```
 
 `hf:` URIs and `.gguf` paths still mean GGUF. A directory path means an MLX
-model if the directory contains a `config.json`:
+model if it contains a `config.json` and at least one `.safetensors` file:
 
 ```bash
 agency local alias add coder /Volumes/adit-agency-models-sept-2026/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/7b9321eabb85ce79625cac3f61ea691e4ea984b5
@@ -179,6 +179,12 @@ agency local alias add coder /Volumes/adit-agency-models-sept-2026/hf/hub/models
 
 This is how models you already downloaded another way become usable without
 moving them.
+
+Every model in Hugging Face's standard layout has a `config.json` describing
+its architecture, and its weights in `.safetensors` files. That layout is
+what `mlx_lm.server` loads. A GGUF model is one file with that information
+inside it, so it never has a `config.json`. Agency does not create either
+file.
 
 ### 3.2 The `backend` field
 
@@ -208,7 +214,7 @@ a user's `agency.json` or a remote catalog. A remote catalog entry without
 the field is skipped with a warning.
 
 A string-form alias like `"my7b": "hf:…"` has no field. Its prefix says what
-it is. See the decisions at the end.
+it is.
 
 ### 3.3 Where MLX models are stored
 
@@ -295,12 +301,12 @@ file verifies.
 `contained.ts`, and a lint rule enforces it. `contained.ts` has no way to
 write bytes at an offset inside an existing file. So `hubDownload.ts` uses
 `fs` directly for that one operation and is added to the lint allow-list,
-`FS_IMPORTERS` in `eslint.config.js`. See the decisions at the end.
+`FS_IMPORTERS` in `eslint.config.js`, with that reason.
 
 ### 3.5 `agency local serve`
 
 ```
-agency local serve <model> [<model> ...] [--port 8080] [--max-tokens 16384] [--venv <dir>]
+agency local serve <model> [<model> ...] [--port 8080] [--max-tokens 16384] [--python <path>]
 ```
 
 This serves the models you name, in your terminal, and nothing else. It
@@ -357,28 +363,35 @@ use the second one.
    Warning: these models total 196.4 GB and this machine has 64 GB of memory.
    ```
 
-3. A missing or incomplete model is downloaded first. Progress prints before
-   any server starts.
-
-4. The Python environment is found: `--venv`, then `client.mlx.venv` in
-   `agency.json`, then `AGENCY_MLX_VENV`, then `~/.agency-agent/mlx-env`. If
-   there is no `bin/mlx_lm.server` in it, the command prints this and exits:
+3. A missing or incomplete model is an error. `serve` never downloads:
 
    ```
-   No MLX environment at /Users/me/.agency-agent/mlx-env.
-   Agency does not install Python. Create the environment once:
+   mlx-community/Qwen3-Coder-Next-4bit is not downloaded. Run:
+     agency local download mlx:mlx-community/Qwen3-Coder-Next-4bit
+   ```
+
+4. A Python is chosen: `--python`, then `client.mlx.python` in
+   `agency.json`, then `AGENCY_MLX_PYTHON`, then
+   `~/.agency-agent/mlx-env/bin/python`. `serve` runs
+   `<python> -c "import mlx_lm"` to check it. If that fails, the command
+   prints this and exits:
+
+   ```
+   /Users/me/.agency-agent/mlx-env/bin/python cannot import mlx_lm.
+   Agency does not install Python. Create an environment once:
 
      python3.12 -m venv /Users/me/.agency-agent/mlx-env
      /Users/me/.agency-agent/mlx-env/bin/pip install mlx-lm
 
-   Python 3.11 or newer is required. Then run this command again.
+   Python 3.11 or newer is required. Or point --python at a Python that has
+   mlx-lm installed.
    ```
 
 5. One `mlx_lm.server` starts per model, one at a time, with its output in
    your terminal:
 
    ```
-   <venv>/bin/mlx_lm.server --model <dir> --host 127.0.0.1 --port <internal> --max-tokens 16384
+   <python> -m mlx_lm.server --model <dir> --host 127.0.0.1 --port <internal> --max-tokens 16384
    ```
 
    The server prints nothing when a model finishes loading. So after each
@@ -430,8 +443,20 @@ under OTHER FILES.
 mlx  mlx:mlx-community/Qwen3-Coder-Next-4bit
 ```
 
-`agency local remove` accepts an MLX model's repo id or directory name and
-removes the directory. It refuses a directory outside the models directory.
+`agency local remove <name>` no longer deletes files by default. It removes
+the alias, if there is one, and says where the files are:
+
+```
+$ agency local remove coder
+Removed alias "coder" from /Users/me/agency.json.
+The model files are still at /Volumes/…/mlx/mlx-community--Qwen3-Coder-Next-4bit (44.9 GB).
+Run again with -f to delete them.
+```
+
+For a built-in catalog name the first line says there is no alias to remove.
+`-f` deletes the files: the `.gguf` file, or the whole MLX directory. A
+directory outside the models directory is never deleted. This changes the
+GGUF behaviour, which deletes the file at once today.
 
 ### 3.8 The stdlib wrapper
 
@@ -515,13 +540,18 @@ already on disk.
 3. `agency local serve`.
 4. The downloader.
 
-## Decisions for the owner
+## Decisions
 
-1. **String-form aliases.** `"my7b": "hf:…"` has no `backend` field. Keep
-   the shorthand, or retire it so every entry has the field?
-2. **Offset writes.** Add `hubDownload.ts` to the `fs` allow-list, or add a
-   `writeAt` primitive to `contained.ts` with its symlink tests? The
-   primitive costs about a day.
-3. **`serve` downloads on demand.** Download a missing model first, like
-   `run --local` does, or refuse and tell you to run `download`?
-4. **Built-in provider or separate package.** Raised in the smoltalk spec.
+Decided on 2026-09-07:
+
+- The `mlx` provider is a built-in smoltalk client, not a package.
+- `hubDownload.ts` goes on the `fs` allow-list.
+- `serve` does not download. It tells you to run `download`.
+- `remove` keeps files unless you pass `-f`, for GGUF and MLX alike.
+- `mlx:` is a prefix, not a flag.
+
+Still open:
+
+1. **String-form aliases.** `"my7b": "hf:…"` has no `backend` field. The
+   plans keep the shorthand and read the backend from the prefix. Say so if
+   you want it retired instead.

@@ -31,6 +31,20 @@ export function mlxModelDir(cacheDir: string, repo: string): string {
   return path.join(cacheDir, MLX_SUBDIR, mlxModelDirName(repo));
 }
 
+function isFileRecord(v: unknown): v is MlxFileRecord {
+  if (v === null || typeof v !== "object") {
+    return false;
+  }
+  const f = v as Record<string, unknown>;
+  return (
+    typeof f.size === "number" &&
+    typeof f.complete === "boolean" &&
+    (f.sha256 === undefined || typeof f.sha256 === "string") &&
+    (f.chunks === undefined ||
+      (Array.isArray(f.chunks) && f.chunks.every((c) => typeof c === "number")))
+  );
+}
+
 /** The record in `dir`, or null when it is missing or not a valid record. */
 export function readMlxModelRecord(dir: string): MlxModelRecord | null {
   const r = root(dir);
@@ -47,7 +61,8 @@ export function readMlxModelRecord(dir: string): MlxModelRecord | null {
       typeof rec.repo !== "string" ||
       typeof rec.revision !== "string" ||
       rec.files === null ||
-      typeof rec.files !== "object"
+      typeof rec.files !== "object" ||
+      !Object.values(rec.files).every(isFileRecord)
     ) {
       return null;
     }

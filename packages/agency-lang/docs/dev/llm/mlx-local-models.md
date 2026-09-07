@@ -14,9 +14,15 @@ agency agent --local coder
 ```
 
 The server is `mlx_lm.server`, a Python program from the `mlx-lm` package.
-The user starts it. Agency reaches it through smoltalk's built-in `mlx`
-provider, which speaks the OpenAI chat format to `http://127.0.0.1:8080/v1`
-by default. The spec for the whole feature is
+The user starts it on a model:
+
+```bash
+~/mlx-env/bin/python -m mlx_lm.server --model /Volumes/models/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/7b93 --port 8080 --max-tokens 16384
+```
+
+Agency reaches it through smoltalk's built-in `mlx` provider, which speaks
+the OpenAI chat format to `http://127.0.0.1:8080/v1` by default, or to
+`MLX_BASE_URL`. The spec for the whole feature is
 `2026-09-07-mlx-local-models-spec.md` in the package root.
 
 ## Two backends
@@ -71,17 +77,18 @@ provider to `mlx` and the model to `_mlxServedName(resolved)`:
 - a repo id for an `mlx:` URI, so `mlx:org/repo@rev` sends `org/repo`;
 - the absolute directory path for a model directory.
 
-`agency local serve` gives `mlx_lm.server` the same string. The server serves
-whatever model a request names, and loads it if it is not loaded, so the two
-sides must agree or a run can trigger a load. Both sides call the one
-function. The agent's `PROVIDER_CAPABILITIES` table has an `mlx` entry with
-`memory: false` only; the server has no embeddings endpoint, and the models
-are large enough for the full prompt.
+The server serves whatever model a request names, and loads it if it is not
+loaded. So the string Agency sends must be the string the server was started
+with, or a run can trigger a load of another model. Start the server with
+the repo id or the absolute directory path, whichever `resolve` prints.
+
+The agent's `PROVIDER_CAPABILITIES` table has an `mlx` entry with
+`memory: false` only. The server has no embeddings endpoint, so the agent's
+memory stays off. The models are large enough for the full prompt.
 
 ## The record file and the directory layout
 
-Models Agency downloads itself go under the models directory, one folder per
-repo:
+MLX models under the models directory sit one folder per repo:
 
 ```
 <modelsDir>/
@@ -95,22 +102,22 @@ repo:
 ```
 
 `lib/stdlib/mlxModelRecord.ts` owns `.agency-model.json`: the repo, the commit
-it came from, and per-file size, hash, and progress. `list` reads it to mark
-a model downloaded, and to show an interrupted download as incomplete under
-OTHER FILES. `_listDownloadedModels` returns GGUF files and recorded MLX
+it came from, and per-file size, hash, and progress. A directory under `mlx/`
+without a valid record is not a model. `list` reads the record to mark a
+model downloaded, and to show an incomplete one under OTHER FILES. A pinned
+revision in an `mlx:` URI must match the record's commit, by prefix, to get
+the tick. `_listDownloadedModels` returns GGUF files and recorded MLX
 directories together, each tagged with its backend.
 
 ## `remove` and `-f`
 
 `agency local remove <name>` removes the alias and keeps the files. It prints
-where they are and says to run again with `-f` to delete them. `-f` deletes
-the `.gguf` file or the whole MLX directory. A directory outside the models
-directory is never deleted. This holds for GGUF models too, which used to be
-deleted on the first call.
+where they are and says to run again with `-f` to delete them. `-f` removes
+the alias and deletes the `.gguf` file or the whole MLX directory. A directory
+outside the models directory is never deleted. An alias whose directory has
+gone can still be removed. This holds for GGUF models too.
 
-## Not here yet
+## Downloading
 
-`agency local serve`, which starts the server and refuses models it was not
-given, and `agency local download mlx:…`, which fetches a repo from Hugging
-Face, are the next two PRs. Until then `download` of an `mlx:` URI says so
-and points at `alias add`.
+`agency local download` of an `mlx:` URI is refused with a message that
+points at `alias add`. A model directory passed to it is returned as is.

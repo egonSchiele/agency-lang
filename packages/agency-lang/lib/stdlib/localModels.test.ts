@@ -970,6 +970,19 @@ describe("backend field", () => {
     expect(entry?.backend).toBe("mlx");
   });
 
+  it("a catalog entry with a valid backend and a bad uri is skipped, not thrown", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const parsed = parseCatalog(
+      JSON.stringify({
+        version: 1,
+        models: { bad: { backend: "llama-cpp", uri: "ftp://nope" } },
+      }),
+    );
+    expect(Object.keys(parsed)).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "bad"'));
+    warn.mockRestore();
+  });
+
   it("a remote catalog entry without backend, or with the wrong one, is skipped with a warning", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const parsed = parseCatalog(
@@ -1061,6 +1074,22 @@ describe("formatLocalList with mlx models", () => {
     expect(out).not.toMatch(/OTHER FILES[\s\S]*org\/coder/);
   });
 
+  it("ticks a pinned revision only when it matches the record", () => {
+    const pinned: ModelNameEntry[] = [
+      { name: "coder", backend: "mlx", target: "mlx:org/coder@7b93", source: "alias" },
+    ];
+    const withRev = [{ ...files[0], revision: "7b9321eabb85ce79625cac3f61ea691e4ea984b5" }];
+    const ok = formatLocalList({ dir: "/d", entries: pinned, manifest: {}, files: withRev });
+    expect(ok.split("\n").find((l) => l.includes("coder"))).toContain("✓");
+    const other = formatLocalList({
+      dir: "/d",
+      entries: pinned,
+      manifest: {},
+      files: [{ ...files[0], revision: "9c1f0a2" }],
+    });
+    expect(other.split("\n").find((l) => l.includes("coder"))).not.toContain("✓");
+  });
+
   it("does not tick an incomplete mlx model", () => {
     const out = formatLocalList({
       dir: "/d",
@@ -1100,6 +1129,7 @@ describe("_listDownloadedModels with mlx directories", () => {
         sizeBytes: expect.any(Number),
         backend: "mlx",
         complete: true,
+        revision: "abc",
       },
     ]);
     expect(listed[0].sizeBytes).toBeGreaterThan(10);

@@ -51,5 +51,10 @@ describe("mlx model record", () => {
     expect(readMlxModelRecord(model)).toBeNull();
     fs.writeFileSync(path.join(model, RECORD_FILE), JSON.stringify({ repo: 1 }));
     expect(readMlxModelRecord(model)).toBeNull();
+    fs.writeFileSync(
+      path.join(model, RECORD_FILE),
+      JSON.stringify({ repo: "o/r", revision: "x", files: { model: null } }),
+    );
+    expect(readMlxModelRecord(model)).toBeNull();
   });
 });

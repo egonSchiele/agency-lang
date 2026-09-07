@@ -692,6 +692,8 @@ export type DownloadedModel = {
   backend: Backend;
   /** False for an MLX model whose download was interrupted. */
   complete: boolean;
+  /** The commit an MLX model was downloaded from. Absent for GGUF. */
+  revision?: string;
 };
 
 export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
@@ -732,6 +734,7 @@ function mlxEntries(dir: string): DownloadedModel[] {
       sizeBytes,
       backend: "mlx",
       complete: isMlxModelComplete(record),
+      revision: record.revision,
     });
   }
   return out;
@@ -872,7 +875,7 @@ const CatalogModelSchema = z
       .optional()
       .catch(undefined),
   })
-  .refine((m) => m.backend === backendOfTarget(m.uri), {
+  .refine((m) => !isCatalogUri(m.uri) || m.backend === backendOfTarget(m.uri), {
     message: "backend does not match the uri",
   });
 
@@ -1403,8 +1406,21 @@ export function formatLocalList(args: {
       const manifestFile = args.manifest[e.target];
       return manifestFile === undefined ? undefined : byName[manifestFile];
     }
-    const file = isMlxUri(e.target) ? byName[parseMlxUri(e.target).repo] : byPath[e.target];
-    return file !== undefined && file.complete ? file : undefined;
+    if (!isMlxUri(e.target)) {
+      const file = byPath[e.target];
+      return file !== undefined && file.complete ? file : undefined;
+    }
+    // A pinned revision must match what was downloaded. The pin may be a
+    // short prefix of the full commit hash.
+    const { repo, revision } = parseMlxUri(e.target);
+    const file = byName[repo];
+    if (file === undefined || !file.complete) {
+      return undefined;
+    }
+    if (revision !== undefined && !(file.revision ?? "").startsWith(revision)) {
+      return undefined;
+    }
+    return file;
   };
   const rows = args.entries.map((e) => {
     const file = fileFor(e);

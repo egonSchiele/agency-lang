@@ -7,6 +7,7 @@ import {
   _removeMlxModel,
   _modelFilesOnDisk,
   readModelAliases,
+  type ResolvedModel,
   isMlxUri,
   parseMlxUri,
   _downloadModel,
@@ -99,7 +100,6 @@ export function downloadChoices(entries: ModelNameEntry[]): { title: string; val
 export async function runDownload(value?: string): Promise<void> {
   let picked = value;
   if (picked === undefined) {
-    gate();
     // Prompting needs BOTH ends of the terminal: a TTY stdout to draw on and
     // a TTY stdin to read from (`agency local download < /dev/null` from a
     // terminal has a TTY stdout but nothing to read).
@@ -149,21 +149,38 @@ export async function runDownload(value?: string): Promise<void> {
  *  With `-f`: delete the files too. Models are large, so deleting is the
  *  step that needs the flag. */
 export function runRemove(name: string, opts: { force: boolean }): void {
-  const resolved = _resolveModel(name);
   const aliases = readModelAliases();
-  const files = _modelFilesOnDisk(resolved);
-  const where = files === null ? null : `${files.path} (${formatGB(files.sizeBytes)})`;
   const isAlias = Object.hasOwn(aliases, name);
   const isCurated = Object.hasOwn(CURATED_LOCAL_MODELS, name);
 
-  if (!opts.force) {
-    if (isAlias) {
-      const { file } = _unaliasModel(name);
-      console.log(`Removed alias "${name}" from ${file}.`);
-    } else if (isCurated) {
-      console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
+  // Resolve before touching the alias, but let a stale alias (its directory
+  // moved or deleted) still be removed: the alias is the thing being removed,
+  // and its target no longer matters.
+  let resolved: ResolvedModel | null;
+  try {
+    resolved = _resolveModel(name);
+  } catch (err) {
+    if (!isAlias) {
+      throw err;
     }
-    if (where !== null) {
+    resolved = null;
+  }
+  const files = resolved === null ? null : _modelFilesOnDisk(resolved);
+  const where = files === null ? null : `${files.path} (${formatGB(files.sizeBytes)})`;
+
+  if (isAlias) {
+    const { file } = _unaliasModel(name);
+    console.log(`Removed alias "${name}" from ${file}.`);
+  } else if (isCurated && !opts.force) {
+    console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
+  }
+
+  if (!opts.force) {
+    if (files !== null && !files.insideCache) {
+      console.log(
+        `The model files are still at ${where}. They are outside the models directory, so delete them yourself if you want them gone.`,
+      );
+    } else if (where !== null) {
       console.log(`The model files are still at ${where}.`);
       console.log("Run again with -f to delete them.");
     } else if (!isAlias && !isCurated) {
@@ -172,7 +189,7 @@ export function runRemove(name: string, opts: { force: boolean }): void {
     return;
   }
 
-  if (files === null) {
+  if (files === null || resolved === null) {
     console.log(`Not found: ${name}`);
     return;
   }

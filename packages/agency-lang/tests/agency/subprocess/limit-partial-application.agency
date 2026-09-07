@@ -17,7 +17,7 @@ node main() {
   handle {
     const result = safeRun(node: "main", args: {})
     if (isFailure(result)) {
-      if (result.error.reason == "limit_exceeded" && result.error.limit == "wall_clock") {
+      if (result.data.reason == "limit_exceeded" && result.data.limit == "wall_clock") {
         return "partial-applied limit hit"
       }
       return "wrong failure"

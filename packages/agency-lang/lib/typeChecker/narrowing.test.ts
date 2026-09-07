@@ -319,7 +319,7 @@ function check(source: string): string[] {
 }
 
 const TRY_PARSE = `
-def tryParse(input: string): Result<number, string> {
+def tryParse(input: string): Result<number> {
   if (input == "ok") { return success(42) }
   return failure("bad")
 }
@@ -408,7 +408,7 @@ node main() {
     // not via a let-style declaration. The lookup path differs; a regression
     // that restricts narrowing to let-bindings would slip past every other test.
     const errs = check(`${TRY_PARSE}
-def consume(r: Result<number, string>) {
+def consume(r: Result<number>) {
   if (isSuccess(r)) {
     let n: string = r.value
   }
@@ -426,7 +426,7 @@ node main() { consume(tryParse("ok")) }`);
     const errs = check(`${TRY_PARSE}
 node main() {
   let r = tryParse("ok")
-  let r2: Result<number, string> = failure("init")
+  let r2: Result<number> = failure("init")
   if (isSuccess(r)) {
     r2 = r
   }
@@ -443,7 +443,7 @@ node main() {
     // silently doesn't, and Increment 3's hard-error flip would leave
     // alias-typed Results un-narrowable (user adds the guard, still errors).
     const errs = check(`${TRY_PARSE}
-type R = Result<number, string>
+type R = Result<number>
 
 node main() {
   let r: R = tryParse("ok")

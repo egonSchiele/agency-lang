@@ -22,12 +22,12 @@ node main() {
       return "inner did not trip"
     }
     if (isFailure(inner)) {
-      return "inner:${inner.error.type}:${inner.error.maxTime}"
+      return "inner:${inner.data.type}:${inner.data.maxTime}"
     }
     return "no trip"
   }
   if (isFailure(outer)) {
-    return "outer:${outer.error.type}"
+    return "outer:${outer.data.type}"
   }
   return outer.value
   } with (i) {

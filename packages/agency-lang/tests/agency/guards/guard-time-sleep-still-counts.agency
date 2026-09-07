@@ -15,7 +15,7 @@ node main() {
     return "did not trip"
   }
   if (isFailure(result)) {
-    return "tripped:${result.error.type}"
+    return "tripped:${result.data.type}"
   }
   return result.value
   } with (i) {

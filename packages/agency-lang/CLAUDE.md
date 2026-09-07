@@ -224,6 +224,7 @@ Other process docs:
 - `docs/dev/language/parallel-blocks-v2-dataflow.md` — A spec for grouping parallel statements automatically by dataflow. Not implemented.
 - `docs/dev/language/parallel-blocks.md` — The shipped design for `parallel` and `seq` blocks: what they lower to and what they refuse.
 - `docs/dev/language/pkg-imports.md` — Importing Agency code from npm packages with the `pkg::` prefix.
+- `docs/dev/language/result-failures.md` — The `Result` failure: why every failure carries a string message, what the second type parameter means, and the arity padding codegen depends on.
 - `docs/dev/language/splices.md` — Compile-time splices `$( ... )`, which run a generator during compilation and paste the code it returns into the file.
 - `docs/dev/language/template-agency.md` — How templates work under the hood: holes, `fill`, and hygiene.
 - `docs/dev/language/triple-quoted-string-escapes.md` — The two escapes a raw `"""` string honours, `\${` and `\"""`, and the three places (parser, generator, optimizer) that must agree on them.

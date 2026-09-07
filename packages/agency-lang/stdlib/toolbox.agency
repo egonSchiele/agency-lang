@@ -513,17 +513,16 @@ def callsUnpredictable(source: string): boolean {
 
 // ---- the designTool pipeline ----
 
-/** A failure the next draft can fix, as opposed to one it cannot (a
+/** Marks a failure the next draft can fix, as opposed to one it cannot (a
   refused write, a review agent that did not run). Only these become
-  feedback for another round. */
+  feedback for another round. It rides in the failure's data; the failure's
+  message is the problem itself. */
 type DraftProblem = {
-  problem: string
+  retryable: boolean
 }
 
-def draftProblem(message: string): Result {
-  return failure({
-    problem: message
-  })
+def draftProblem(message: string): Result<any, DraftProblem> {
+  return failure(message, { retryable: true })
 }
 
 def draftSource(settings: DraftSettings, feedback: string): Result<string> {
@@ -535,7 +534,7 @@ def draftSource(settings: DraftSettings, feedback: string): Result<string> {
     provider: settings.provider,
   )
   if (drafted is failure(writeFailure)) {
-    return draftProblem(writeFailure.problems.join("\n"))
+    return draftProblem(writeFailure)
   }
   return drafted
 }
@@ -843,17 +842,15 @@ def oneRound(
   feedback: string,
 ): RoundOutcome {
   const prepared = prepareDraft(settings, feedback)
-  return match(prepared) {
-    failure(err) => match(err) {
-      { problem }: DraftProblem => ({
-        done: null,
-        feedback: problem
-      })
-      _ => ({
-        done: failure(err),
-        feedback: ""
-      })
+  if (prepared is failure(problem)) {
+    // A retryable problem becomes the next round's feedback. Anything else
+    // ends the loop.
+    if (prepared.data.retryable == true) {
+      return { done: null, feedback: problem }
     }
+    return { done: failure(problem), feedback: "" }
+  }
+  return match(prepared) {
     success(draft) => {
       const answer = askUser(name, settings, draft)
       if (answer is failure(rejected)) {
@@ -1031,14 +1028,6 @@ export def designTool(
   return clearStaging(outcome, staged.value.settings.stagingDir)
 }
 
-// A DraftProblem from assembleTool, as a plain failure message.
-def problemText(err: any): string {
-  return match(err) {
-    { problem }: DraftProblem => problem
-    _ => "${err}"
-  }
-}
-
 def assembleAndSave(
   root: string,
   name: string,
@@ -1047,7 +1036,7 @@ def assembleAndSave(
 ): Result<ToolEntry> {
   const assembled = assembleTool(source, settings)
   if (assembled is failure(assembleErr)) {
-    return failure(problemText(assembleErr))
+    return failure(assembleErr)
   }
   return gateAndSave(root, name, settings, source, assembled.value.effects)
 }

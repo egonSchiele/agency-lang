@@ -31,7 +31,7 @@ node main() {
     // asserting is that actualTime is a real measurement rather than a
     // 0/sentinel value, so require it to reach half the budget: immune
     // to any plausible clock skew, still catches a broken measurement.
-    return "tripped:${result.error.type}:${result.error.maxTime}:${result.error.actualTime >= result.error.maxTime / 2}"
+    return "tripped:${result.data.type}:${result.data.maxTime}:${result.data.actualTime >= result.data.maxTime / 2}"
   }
   return result.value
   } with (i) {

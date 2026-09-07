@@ -46,7 +46,7 @@ node main() {
     return "fork-completed"
   }
   if (isFailure(result)) {
-    return "tripped-after-resume:${result.error.actualCost > 0.000008}"
+    return "tripped-after-resume:${result.data.actualCost > 0.000008}"
   }
   return result.value
 }

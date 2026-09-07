@@ -25,7 +25,7 @@ node trips() {
   handle {
     const result = run(compiled: compileResult.value, node: "main", maxCost: 0.000003)
     if (isFailure(result)) {
-      return "tripped:${result.error.reason}:${result.error.limit}"
+      return "tripped:${result.data.reason}:${result.data.limit}"
     }
     return "did not trip"
   } with (e) {
@@ -68,10 +68,10 @@ node nested() {
       return run(compiled: compileResult.value, node: "main", maxCost: 0.000003)
     }
     if (isFailure(outer)) {
-      if (outer.error.type == "guardFailure") {
+      if (outer.data.type == "guardFailure") {
         return "outer tripped"
       }
-      return "inner only:${outer.error.limit}"
+      return "inner only:${outer.data.limit}"
     }
     return "nothing tripped"
   } with (e) {
@@ -91,7 +91,7 @@ node passthrough() {
   handle {
     const result = run(compiled: compileResult.value, node: "missing", maxCost: 1.0)
     if (isFailure(result)) {
-      if (result.error.reason == "limit_exceeded") {
+      if (result.data.reason == "limit_exceeded") {
         return "wrongly translated"
       }
       return "passthrough-ok"
@@ -115,7 +115,7 @@ node runFileTrips() {
       maxCost: 0.000003,
     )
     if (isFailure(result)) {
-      return "tripped:${result.error.reason}:${result.error.limit}"
+      return "tripped:${result.data.reason}:${result.data.limit}"
     }
     return "did not trip"
   } with (e) {

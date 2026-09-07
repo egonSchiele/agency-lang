@@ -43,6 +43,31 @@ const result = divide(10, 0)
   }
 ```
 
+## The message, and extra data
+
+A failure always carries a string message. It can also carry an object of
+extra detail:
+
+```ts
+def parseConfig(path: string): Result {
+  return failure("Bad syntax in ${path}", { line: 4, column: 12 })
+}
+```
+
+Read the message with `.error` and the detail with `.data`:
+
+```ts
+const result = parseConfig("app.json")
+if (isFailure(result)) {
+  print("${result.error} (line ${result.data.line})")
+}
+```
+
+`.data` is an empty object when the producer passed none, so reading a field
+off it gives null rather than an error.
+
+## Unwrapping, continued
+
 Or more idiomatically with pattern matching:
 
 ```ts
@@ -168,15 +193,45 @@ node main() {
 
 ## `Result` type parameters
 
-The `Result` type has two type parameters, the success type and the failure type. If you don't specify them, they default to `any`:
+The `Result` type has two type parameters: the success type and the failure's data type. The failure's message is always a string, so it is never named here. Both parameters default to `any`:
 
 ```ts
-// success value is `any`, failure value is `any`
+// success value is `any`, failure data is `any`
 const result1: Result = divide(10, 0)
 
-// success value is `number`, failure value is `any`
+// success value is `number`, failure data is `any`
 const result2: Result<number> = divide(10, 0)
 
-// success value is `number`, failure value is `string`
-const result3: Result<number, string> = divide(10, 0)
+// success value is `number`, failure data is a `ParseFailure`
+const result3: Result<number, ParseFailure> = parseConfig("app.json")
 ```
+
+The second parameter must be an object type. `Result<number, string>` is a compile error, because no `failure()` call can produce string data.
+
+### A declared data type is required
+
+If a function names a data type, every `failure` in it has to supply that data:
+
+```ts
+type ParseFailure = { line: number }
+
+def loadConfig(path: string): Result<Config, ParseFailure> {
+  // compile error: this function promised ParseFailure data
+  return failure("No config at ${path}")
+}
+```
+
+Otherwise the type says the data is there when it is not, and a caller reading `result.data.line` gets null with nothing to explain why.
+
+To allow both forms in one function, add `null` to the data type:
+
+```ts
+def loadConfig(path: string): Result<Config, ParseFailure | null> {
+  if (!exists(path)) {
+    return failure("No config at ${path}")
+  }
+  return failure("Bad syntax in ${path}", { line: 4 })
+}
+```
+
+At runtime `.data` is always an object, so `result.data == null` is never true. The `null` in `ParseFailure | null` says the producer may omit the data. To tell the two apart, test a field: `if (result.data.line != null)`.

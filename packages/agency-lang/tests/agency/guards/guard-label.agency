@@ -1,6 +1,6 @@
 
 // guard(label:) names the guard. On a trip the label reaches user code
-// on the failure (error.label) so a scope with several guards can tell
+// on the failure (data.label) so a scope with several guards can tell
 // which one fired. Unlabeled guards keep a null label.
 node main() {
   const labeled = guard(label: "research-budget", cost: 0.000001) {
@@ -12,7 +12,7 @@ node main() {
     return b
   }
   if (isFailure(labeled) && isFailure(unlabeled)) {
-    return "${labeled.error.label}|${unlabeled.error.label}"
+    return "${labeled.data.label}|${unlabeled.data.label}"
   }
   return "unexpected-success"
 }

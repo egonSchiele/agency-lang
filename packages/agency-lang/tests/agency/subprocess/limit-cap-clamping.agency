@@ -16,8 +16,8 @@ node main() {
     // covered by lib/runtime/ipc.test.ts unit tests.
     const result = run(compiled: c.value, node: "main", args: {}, wallClock: 1s)
     if (isFailure(result)) {
-      if (result.error.reason == "limit_exceeded" && result.error.limit == "wall_clock") {
-        if (result.error.threshold == 1000) {
+      if (result.data.reason == "limit_exceeded" && result.data.limit == "wall_clock") {
+        if (result.data.threshold == 1000) {
           return "threshold preserved"
         }
         return "wrong threshold"

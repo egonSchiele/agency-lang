@@ -14,7 +14,7 @@ node main() {
     return "got:${answer}"
   }
   if (isFailure(result)) {
-    return "tripped:${result.error.type}"
+    return "tripped:${result.data.type}"
   }
   return result.value
 }

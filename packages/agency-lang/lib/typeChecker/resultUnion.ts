@@ -30,7 +30,12 @@ export function resultToObjectUnion(
         type: "objectType",
         properties: [
           { key: "success", value: bool("false") },
-          { key: "error", value: rt.dataType },
+          // The message. Always a string: `failure()` coerces anything else
+          // (lib/runtime/result.ts).
+          { key: "error", value: STRING_T },
+          // Extra structured detail, named by the second type parameter. `{}`
+          // at runtime when the producer passed none, so it is never null.
+          { key: "data", value: rt.dataType },
           { key: "checkpoint", value: ANY_T },
           // Tool-failure classification (lib/runtime/result.ts).
           { key: "neverStarted", value: BOOLEAN_T },

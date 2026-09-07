@@ -71,7 +71,7 @@ export def getPolicyForAgent(
   if (_policyArg == "") {
     const policy = parsePolicyFile(POLICY_PATH)
     if (policy is failure(f)) {
-      if (f.status == "doesnt-exist") {
+      if (policy.data.status == "doesnt-exist") {
         if (interactive) {
           print(color.yellow("No existing policy found at ${POLICY_PATH}."))
           const chosen = givePolicyChoice()
@@ -82,7 +82,7 @@ export def getPolicyForAgent(
           basePolicy = recommendedAutoApprovePolicy
         }
       } else {
-        print(color.red("Failed to load policy: ${JSON.stringify(f.error)}"))
+        print(color.red("Failed to load policy: ${f}"))
         process.exit(1)
       }
     } else {
@@ -100,7 +100,7 @@ export def getPolicyForAgent(
       if (loaded is failure(f)) {
         print(
           color.red(
-          "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${f.status}).",
+          "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${loaded.data.status}).",
         ),
         )
         process.exit(1)

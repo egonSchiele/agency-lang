@@ -24,7 +24,7 @@ node main() {
   handle {
     const result = run(compiled: c.value, node: "main", ipcPayload: 1mb)
     if (isFailure(result)) {
-      if (result.error.reason == "limit_exceeded" && result.error.limit == "ipc_payload") {
+      if (result.data.reason == "limit_exceeded" && result.data.limit == "ipc_payload") {
         return "ipc_payload limit hit on pause"
       }
       return "wrong failure"

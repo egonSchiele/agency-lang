@@ -2,7 +2,7 @@ import { resolveDetected, planModels } from "../../../lib/agents/agency-agent/li
 
 // Stringify a Result so the JS side can assert both the success and the
 // failure messages. Mirrors the llm-pick-provider test's `describe`.
-def describe(r: Result<string, string>): string {
+def describe(r: Result<string>): string {
   if (isFailure(r)) {
     return "FAIL:${r.error}"
   }

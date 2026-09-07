@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"Guard 'research' exceeded its cost budget|research\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "pong" }],
+      "description": "A tripped guard reports a sentence naming the guard and its budget, with the numbers in data.",
+      "interruptHandlers": [{ "action": "reject" }]
+    }
+  ]
+}

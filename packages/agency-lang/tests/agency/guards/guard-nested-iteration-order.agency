@@ -19,7 +19,7 @@ node main() {
       return r
     }
     if (isFailure(inner)) {
-      return "inner.max=${inner.error.maxCost}"
+      return "inner.max=${inner.data.maxCost}"
     }
     return "no trip"
   }

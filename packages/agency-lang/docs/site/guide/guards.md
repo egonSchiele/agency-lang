@@ -17,14 +17,14 @@ node main() {
 
   match(result) {
     success(value) => print("Category: ${value}")
-    failure(error) => printJSON(error)
+    failure(error) => print(error)
   }
 }
 ```
 
 Things to note:
 - You don't have access to all the variables inside the guard, only to the return value.
-- `result` is a `Result` type. On success, it has the return value. On failure, it has this data:
+- `result` is a `Result` type. On success, it has the return value. On failure, its message says which guard tripped and by how much, and its `data` holds the numbers:
 
 ```ts
 // "guardFailure" = cost, "timeoutFailure" = time.
@@ -44,14 +44,16 @@ type GuardFailureData = {
 - `cost:` — a `number` of dollars, eg `$2.0`.
 - `time:` — a `number` of milliseconds (or use the [unit literals](/guide/basic-syntax.html#unit-literals): `30s`, `5m`, `100ms`, `1h`).
 
-You can also name a guard with `label:`. The label shows up on the failure (`error.label`) and in error messages, so code with several guards can tell which one fired:
+You can also name a guard with `label:`. The label appears in the failure's message and in its data (`data.label`), so code with several guards can tell which one fired:
 
 ```ts
 const result = guard(label: "research", cost: $0.50) {
   return research(topic)
 }
 if (isFailure(result)) {
-  print("Guard '" + result.error.label + "' tripped")
+  // "Guard 'research' exceeded its cost budget: spent 0.62 of 0.5."
+  print(result.error)
+  print("Guard '" + result.data.label + "' tripped")
 }
 ```
 

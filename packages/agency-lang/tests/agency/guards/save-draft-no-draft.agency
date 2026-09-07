@@ -4,6 +4,6 @@ node main() {
     const reply = llm("Reply with: pong")
     return reply
   }
-  if (isFailure(result)) { return "failed:${result.error.type}" }
+  if (isFailure(result)) { return "failed:${result.data.type}" }
   return "no trip"
 }

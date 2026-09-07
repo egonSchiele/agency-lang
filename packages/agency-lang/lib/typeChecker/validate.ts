@@ -6,6 +6,8 @@ import { visitTypes } from "./typeWalker.js";
 // Built-in generic forms (Array, Schema, Record, utility types) and their
 // arities come from the single registry in builtinGenerics.ts.
 import { BUILTIN_GENERIC_ARITY } from "./builtinGenerics.js";
+import { isDataShaped } from "./dataShape.js";
+import { formatTypeHint } from "../utils/formatType.js";
 
 /**
  * Validate value-param arity at a use site. Pushes one error to `errors`
@@ -90,6 +92,15 @@ export function validateTypeReferences(
   loc?: SourceLocation,
 ): void {
   visitTypes(vt, (t) => {
+    if (t.type === "resultType" && !isDataShaped(t.dataType, typeAliases)) {
+      errors.push(
+        diagnostic(
+          "resultDataNotObject",
+          { actual: formatTypeHint(t.dataType), context },
+          loc ?? null,
+        ),
+      );
+    }
     if (t.type === "typeAliasVariable") {
       const entry = typeAliases[t.aliasName];
       if (!entry) {

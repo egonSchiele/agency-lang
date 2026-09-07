@@ -11,7 +11,7 @@ function check(source: string): string[] {
 }
 
 const TRY = `
-def tryParse(s: string): Result<number, string> {
+def tryParse(s: string): Result<number> {
   if (s == "ok") { return success(42) }
   return failure("bad")
 }`;
@@ -20,7 +20,7 @@ describe("member-path scrutinee narrowing (M1)", () => {
   it("member-path Result guard narrows (no spurious strict-access error)", () => {
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   if (isSuccess(b.r)) {
     let n: number = b.r.value
@@ -32,7 +32,7 @@ def f(b: Box): void {
   it("nested object Result pattern narrows the binder (uses v in a numeric context)", () => {
     expect(
       check(`${TRY}
-type Env = { result: Result<number, string> }
+type Env = { result: Result<number> }
 def takesNumber(n: number): number { return n }
 def f(env: Env): number {
   return match (env) {
@@ -46,7 +46,7 @@ def f(env: Env): number {
   it("CRITICAL: un-narrowed member-path access STILL errors (gate doesn't over-suppress)", () => {
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   let n: number = b.r.value
 }`).some((m) => /only available on a success Result/.test(m)),
@@ -80,7 +80,7 @@ def f(c: Cfg): void {
   it("member-path else-branch (isFailure else → success)", () => {
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   if (isFailure(b.r)) {
   } else {
@@ -93,7 +93,7 @@ def f(b: Box): void {
   it("member-path post-guard return (the major Result idiom)", () => {
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   if (isFailure(b.r)) { return }
   let n: number = b.r.value
@@ -103,7 +103,7 @@ def f(b: Box): void {
 
   it("SOUNDNESS: reassigning the base drops the path narrowing — exactly one error", () => {
     const errs = check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def other(): Box { return { r: failure("x") } }
 def f(b: Box): void {
   if (isSuccess(b.r)) {
@@ -120,7 +120,7 @@ def f(b: Box): void {
     // the flow-aware checkScopes pass is the single source of the diagnostic.
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   if (isSuccess(b.r)) {
     let v = b.r.value
@@ -134,7 +134,7 @@ def f(b: Box): void {
     // re-synthesizes the access with flow and reports it.
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   let v = b.r.value
 }`).some((m) => /only available on a success Result/.test(m)),
@@ -187,7 +187,7 @@ node main() {
   it("member path narrows inside an expression-position trailing block", () => {
     expect(
       check(`${TRY}${BLOCKDEFS}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   if (isSuccess(b.r)) {
     let n: number = wrap(3) as value {
@@ -202,7 +202,7 @@ def f(b: Box): void {
   it("member path narrows inside an inline block", () => {
     expect(
       check(`${TRY}${BLOCKDEFS}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   if (isSuccess(b.r)) {
     let n: number = applyN(3, \\x -> b.r.value)
@@ -289,7 +289,7 @@ describe("member-path scrutinee narrowing — multi-hop + index (M2)", () => {
   it("literal-index Result guard narrows (rs[0].value)", () => {
     expect(
       check(`${TRY}
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   if (isSuccess(rs[0])) {
     let n: number = rs[0].value
   }
@@ -301,7 +301,7 @@ def f(rs: Result<number, string>[]): void {
     expect(
       check(`${TRY}
 def takesNumber(n: number): number { return n }
-def f(pair: Result<number, string>[]): number {
+def f(pair: Result<number>[]): number {
   return match (pair) {
     [success(v), _] => takesNumber(v)
     _ => 0
@@ -313,7 +313,7 @@ def f(pair: Result<number, string>[]): number {
   it("multi-hop property guard narrows (o.inner.r)", () => {
     expect(
       check(`${TRY}
-type Inner = { r: Result<number, string> }
+type Inner = { r: Result<number> }
 type Outer = { inner: Inner }
 def f(o: Outer): void {
   if (isSuccess(o.inner.r)) {
@@ -326,7 +326,7 @@ def f(o: Outer): void {
   it("CRITICAL: un-narrowed index access STILL errors", () => {
     expect(
       check(`${TRY}
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   let n: number = rs[0].value
 }`).some((m) => /only available on a success Result/.test(m)),
     ).toBe(true);
@@ -335,7 +335,7 @@ def f(rs: Result<number, string>[]): void {
   it("index narrowing does not leak across indices (rs[0] guarded, rs[1] not)", () => {
     expect(
       check(`${TRY}
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   if (isSuccess(rs[0])) {
     let n: number = rs[1].value
   }
@@ -350,7 +350,7 @@ def f(rs: Result<number, string>[]): void {
     expect(
       check(`${TRY}
 def double(x: number): number { return x * 2 }
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   if (isSuccess(rs[0])) {
     let n = rs[0].value |> double
   }
@@ -362,7 +362,7 @@ def f(rs: Result<number, string>[]): void {
     expect(
       check(`${TRY}
 def wrap(value: number, block: (number) => number): number { return block(value) }
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   if (isSuccess(rs[0])) {
     let n: number = wrap(3) as value {
       let inner: number = rs[0].value
@@ -376,7 +376,7 @@ def f(rs: Result<number, string>[]): void {
   it("LONGEST PREFIX: o.inner.r.value reads the longer (more precise) narrowing", () => {
     expect(
       check(`${TRY}
-type In = { r: Result<number, string> }
+type In = { r: Result<number> }
 type Out = { inner: In | null }
 def f(o: Out): void {
   if (o.inner != null) {
@@ -411,7 +411,7 @@ def f(t: Top): void {
   it("deeper multi-hop: isSuccess(x.a.b.c) narrows x.a.b.c.value", () => {
     expect(
       check(`${TRY}
-type C = { c: Result<number, string> }
+type C = { c: Result<number> }
 type B = { b: C }
 type A = { a: B }
 def f(x: A): void {
@@ -436,7 +436,7 @@ def f(rs: Ev[]): void {
   it("index else-branch (isFailure(rs[0]) else → success)", () => {
     expect(
       check(`${TRY}
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   if (isFailure(rs[0])) {
   } else {
     let n: number = rs[0].value
@@ -448,7 +448,7 @@ def f(rs: Result<number, string>[]): void {
   it("index post-guard return (the major Result idiom)", () => {
     expect(
       check(`${TRY}
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   if (isFailure(rs[0])) { return }
   let n: number = rs[0].value
 }`),
@@ -459,7 +459,7 @@ def f(rs: Result<number, string>[]): void {
 describe("member-path scrutinee narrowing — write invalidation (M2 soundness)", () => {
   it("SOUNDNESS: mutating the path (b.r = …) drops the narrowing — exactly one error", () => {
     const errs = check(`${TRY}
-type Box = { r: Result<number, string> }
+type Box = { r: Result<number> }
 def f(b: Box): void {
   if (isSuccess(b.r)) {
     b.r = failure("x")
@@ -471,7 +471,7 @@ def f(b: Box): void {
 
   it("SOUNDNESS: writing rs[0] = failure(…) drops rs[0] narrowing — exactly one error", () => {
     const errs = check(`${TRY}
-def f(rs: Result<number, string>[]): void {
+def f(rs: Result<number>[]): void {
   if (isSuccess(rs[0])) {
     rs[0] = failure("x")
     let n: number = rs[0].value
@@ -483,7 +483,7 @@ def f(rs: Result<number, string>[]): void {
   it("SOUNDNESS: writing b.other = … keeps b.r narrowed (no spurious error)", () => {
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string>, other: number }
+type Box = { r: Result<number>, other: number }
 def f(b: Box): void {
   if (isSuccess(b.r)) {
     b.other = 5
@@ -495,7 +495,7 @@ def f(b: Box): void {
 
   it("SOUNDNESS: writing b.inner = … drops the b.inner.r narrowing — exactly one error", () => {
     const errs = check(`${TRY}
-type In = { r: Result<number, string> }
+type In = { r: Result<number> }
 type Box = { inner: In }
 def otherIn(): In { return { r: failure("x") } }
 def f(b: Box): void {
@@ -510,7 +510,7 @@ def f(b: Box): void {
   it("SOUNDNESS: an unstable write target neither errors nor drops unrelated narrowing", () => {
     expect(
       check(`${TRY}
-type Box = { r: Result<number, string>, xs: number[] }
+type Box = { r: Result<number>, xs: number[] }
 def idx(): number { return 0 }
 def f(b: Box): void {
   if (isSuccess(b.r)) {

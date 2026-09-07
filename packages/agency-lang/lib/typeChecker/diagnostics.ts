@@ -203,6 +203,30 @@ export const DIAGNOSTICS = {
     message:
       "'.{field}' is only available on a {branch} Result; guard with 'if (isSuccess(r))' / 'if (isFailure(r))', use 'r catch …', or 'match (r) {{ … }}'.",
   },
+  failureMessageNotString: {
+    code: "AG2013",
+    severity: "error",
+    message:
+      "The first argument to failure() is the message shown to a person or a model, so it must be a string. Got '{actual}'.",
+  },
+  failureDataNotObject: {
+    code: "AG2014",
+    severity: "error",
+    message:
+      "The second argument to failure() is its structured data, so it must be an object. Got '{actual}'.",
+  },
+  failureNeedsData: {
+    code: "AG2015",
+    severity: "error",
+    message:
+      "This function declares '{expected}' as its failure data, so failure() needs a second argument. To allow a failure with no data, declare the return type as 'Result<{success}, {expected} | null>'.",
+  },
+  resultDataNotObject: {
+    code: "AG2016",
+    severity: "error",
+    message:
+      "A Result's second type parameter is its failure data, and failure data must be an object. Got '{actual}' ({context}). A failure's message is always a string and is not named in the type.",
+  },
   dimensionMismatch: {
     code: "AG2010",
     severity: "error",

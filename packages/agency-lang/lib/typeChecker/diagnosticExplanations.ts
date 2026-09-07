@@ -136,6 +136,54 @@ node main() {
 
 **How to fix:** narrow the value first — for example with a guard that establishes which member you have — then access the field inside that narrowed branch.`,
 
+  failureMessageNotString: `Every failure carries a string message, because anything that shows a failure to a person or to a model prints that message. The first argument to \`failure()\` is that message.
+
+**How to fix:** pass a sentence, and put any structured detail in the second argument.
+
+\`\`\`agency
+def parseConfig(path: string): Result {
+  return failure("Bad syntax in the config file", { line: 4 })
+}
+\`\`\``,
+
+  failureDataNotObject: `A failure's second argument is its structured data, which callers read as \`.data.someField\`. That only makes sense for an object.
+
+**How to fix:** wrap the value in an object, or fold it into the message.
+
+\`\`\`agency
+def parseConfig(path: string): Result {
+  return failure("Bad syntax in the config file", { line: 4 })
+}
+\`\`\``,
+
+  failureNeedsData: `The function's return type names a data type, so every failure it returns has to supply that data. Otherwise the type says the data is there when it is not, and a caller reading a field off it gets null with nothing to explain why.
+
+**How to fix:** pass the data as a second argument, or add \`| null\` to the data type to allow a failure without it.
+
+\`\`\`agency
+type ParseFailure = { line: number }
+
+def loadConfig(path: string): Result<string, ParseFailure | null> {
+  if (path == "") {
+    return failure("No config file was named")
+  }
+  return failure("Bad syntax in the config file", { line: 4 })
+}
+\`\`\``,
+
+  resultDataNotObject: `A \`Result\`'s second type parameter is the failure's structured data, which callers read as \`.data.someField\`. That only makes sense for an object. The failure's message is always a string and is never named in the type, so \`Result<T, string>\` says "fails with string data", which no \`failure()\` call can produce.
+
+**How to fix:** drop the second parameter if the failure carries no data, or name an object type.
+
+\`\`\`agency
+def half(x: number): Result<number> {
+  if (x % 2 != 0) {
+    return failure("Number must be even to be halved")
+  }
+  return success(x / 2)
+}
+\`\`\``,
+
   resultBranchFieldAccess: `A \`Result\` is either a success or a failure, and the field you accessed only exists on one of those branches. Reading it without first checking which branch you have would be unsafe.
 
 **How to fix:** guard with \`if (isSuccess(r))\` or \`if (isFailure(r))\`, use \`r catch …\`, or handle both arms with \`match\`.

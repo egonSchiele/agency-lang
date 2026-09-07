@@ -33,7 +33,7 @@ node main() {
     // total past 0.000003). With the OLD per-branch isolation, no
     // branch would individually exceed its $0.000003 clone, so the
     // outer wouldn't trip mid-fork at all.
-    const billed = result.error.actualCost > 0.000003
+    const billed = result.data.actualCost > 0.000003
     return "tripped-mid-fork:${billed}"
   }
   return "did not trip"

@@ -149,7 +149,7 @@ def f(u: U): void {
 const RESULT_PHRASE = "only available on a";
 
 const TRY = `
-def tryParse(s: string): Result<number, string> {
+def tryParse(s: string): Result<number> {
   if (s == "ok") { return success(42) }
   return failure("bad")
 }`;

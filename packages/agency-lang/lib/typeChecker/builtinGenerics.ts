@@ -46,7 +46,9 @@ type BuiltinGeneric = {
   ) => VariableType;
 };
 
-function isNullType(t: VariableType): boolean {
+/** The `null` primitive. Exported because dataShape.ts asks the same
+ *  question. */
+export function isNullType(t: VariableType): boolean {
   return t.type === "primitiveType" && t.value === "null";
 }
 

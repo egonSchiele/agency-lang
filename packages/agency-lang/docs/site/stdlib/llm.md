@@ -164,7 +164,7 @@ Return the environment variable that holds the API key for a recognized
 ```ts
 pickProvider(
   order: string[] = ["anthropic", "google", "openai"],
-): Result<string, string>
+): Result<string>
 ```
 
 Return the first provider in `order` whose API-key environment variable
@@ -180,7 +180,7 @@ Return the first provider in `order` whose API-key environment variable
 |---|---|---|
 | order | `string[]` | ["anthropic", "google", "openai"] |
 
-**Returns:** `Result<string, string>`
+**Returns:** `Result<string>`
 
 **Throws:** `std::env`
 
@@ -271,7 +271,7 @@ Whether a model accepts a given input modality ("image" or "pdf").
 ### loadModelData
 
 ```ts
-loadModelData(path: string): Result<number, string>
+loadModelData(path: string): Result<number>
 ```
 
 Load model data from a JSON file (the shape `agency models refresh`
@@ -287,7 +287,7 @@ Load model data from a JSON file (the shape `agency models refresh`
 |---|---|---|
 | path | `string` |  |
 
-**Returns:** `Result<number, string>`
+**Returns:** `Result<number>`
 
 **Throws:** `std::read`
 

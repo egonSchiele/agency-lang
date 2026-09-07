@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"no record for abc|abc|lookup|abc\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

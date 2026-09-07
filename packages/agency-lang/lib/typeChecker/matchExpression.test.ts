@@ -15,7 +15,7 @@ function check(source: string, config: Partial<AgencyConfig> = {}): string[] {
 // Typed Result so the success payload is `number` (bare `Result` would widen it
 // to `any`, collapsing the narrowed-binding union). Mirrors the TRY helper in
 // matchExhaustiveness.test.ts.
-const TRY = `def tryParse(input: string): Result<number, string> {
+const TRY = `def tryParse(input: string): Result<number> {
   if (input == "ok") {
     return success(42)
   }

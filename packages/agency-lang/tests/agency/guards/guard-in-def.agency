@@ -16,7 +16,7 @@ def doGuardedWork(): Result<string, GuardFailureData> {
 node main() {
   const result = doGuardedWork()
   if (isFailure(result)) {
-    return "def-trip:${result.error.maxCost}"
+    return "def-trip:${result.data.maxCost}"
   }
   return "did not trip"
 }

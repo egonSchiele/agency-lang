@@ -1,0 +1,15 @@
+// A two-argument failure inside a def must still reach the options object
+// codegen injects, which carries the function name and the call's arguments.
+// Those ride in the THIRD argument, so this is the test that the arity
+// padding is right: without it the data object would land in that slot.
+def lookup(id: string): Result<string> {
+  return failure("no record for ${id}", { id: id })
+}
+
+node main() {
+  const looked = lookup("abc")
+  if (isFailure(looked)) {
+    return "${looked.error}|${looked.data.id}|${looked.functionName}|${looked.args.id}"
+  }
+  return "unexpected success"
+}

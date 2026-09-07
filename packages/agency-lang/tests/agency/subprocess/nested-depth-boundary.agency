@@ -57,7 +57,7 @@ node main() {
   handle {
     const result = run(compiled: c.value, node: "main")
     if (isFailure(result)) {
-      if (result.error.reason == "limit_exceeded" && result.error.limit == "depth") {
+      if (result.data.reason == "limit_exceeded" && result.data.limit == "depth") {
         return "depth-capped"
       }
       return "wrong failure"

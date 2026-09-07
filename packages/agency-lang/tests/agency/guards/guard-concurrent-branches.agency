@@ -22,7 +22,7 @@ node main() {
         return "A did not trip"
       }
       if (isFailure(a)) {
-        return "A:${a.error.type}"
+        return "A:${a.data.type}"
       }
       return "A:ok"
     }
@@ -31,7 +31,7 @@ node main() {
       return "B ran"
     }
     if (isFailure(b)) {
-      return "B:${b.error.type}"
+      return "B:${b.data.type}"
     }
     return "B:${b.value}"
   }

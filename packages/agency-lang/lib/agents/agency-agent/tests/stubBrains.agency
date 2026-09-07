@@ -136,7 +136,7 @@ def guardedRunTurn(
     return llm("Return the test reply.")
   }
   if (isFailure(result)) {
-    return "stopped|${result.error.label}"
+    return "stopped|${result.data.label}"
   }
   return "finished|${result.value}"
 }

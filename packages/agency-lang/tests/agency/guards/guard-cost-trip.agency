@@ -9,7 +9,7 @@ node main() {
     return reply
   }
   if (isFailure(result)) {
-    return "tripped:${result.error.type}:${result.error.maxCost}:${result.error.actualCost > 0}"
+    return "tripped:${result.data.type}:${result.data.maxCost}:${result.data.actualCost > 0}"
   }
   return "did not trip"
 }

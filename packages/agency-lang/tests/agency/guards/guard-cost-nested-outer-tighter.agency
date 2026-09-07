@@ -14,12 +14,12 @@ node main() {
       return r
     }
     if (isFailure(inner)) {
-      return "inner:${inner.error.type}"
+      return "inner:${inner.data.type}"
     }
     return "no inner trip"
   }
   if (isFailure(outer)) {
-    return "outer:${outer.error.type}"
+    return "outer:${outer.data.type}"
   }
   return "no outer trip"
 }

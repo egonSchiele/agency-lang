@@ -1,0 +1,13 @@
+// A failure with no data still has a data object, so reading a field off it
+// gives null instead of an error.
+def noData(): Result {
+  return failure("plain")
+}
+
+node main() {
+  const plain = noData()
+  if (isFailure(plain)) {
+    return "${plain.error}|${plain.data.anything == null}"
+  }
+  return "unexpected success"
+}

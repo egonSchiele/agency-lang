@@ -5,6 +5,8 @@ import type { BlockType } from "../types/typeHints.js";
 import { formatTypeHint } from "../utils/formatType.js";
 import { isAssignable, isOptionalType, safeResolveType } from "./assignability.js";
 import { BOOLEAN_T } from "./primitives.js";
+import { isNullType } from "./builtinGenerics.js";
+import { isDataShaped } from "./dataShape.js";
 import { synthType } from "./synthesizer.js";
 import { TypeCheckerContext } from "./types.js";
 import { Scope } from "./scope.js";
@@ -180,6 +182,13 @@ export function checkType(
  * checking) and the expression-match `matchExprSource` check in scopes.ts so
  * neither hand-rolls the message.
  */
+/** A one-argument `failure(msg)` synthesizes null data (see synthFailureCall).
+ *  Reaching an assignability failure with one of these on the source side means
+ *  the target declared real data and the failure supplied none. */
+function isBareFailureResult(t: VariableType): boolean {
+  return t.type === "resultType" && isNullType(t.dataType);
+}
+
 export function emitAssignabilityError(
   actual: VariableType,
   expected: VariableType,
@@ -189,6 +198,39 @@ export function emitAssignabilityError(
 ): void {
   if (isAnyType(actual)) return;
   if (isAssignable(actual, expected, ctx.getTypeAliases())) return;
+  // The generic message here would read "Result<any, null> is not assignable to
+  // Result<Policy, ParsePolicyFailure>", which does not tell anyone what to do.
+  // Resolve the target first so an alias for the Result reaches this check.
+  const aliases = ctx.getTypeAliases();
+  const resolvedExpected = safeResolveType(expected, aliases);
+  if (actual.type === "resultType" && resolvedExpected.type === "resultType") {
+    // The annotation itself is wrong: no failure() can produce data of this
+    // shape, so telling the author to pass a second argument would send them
+    // in circles. Say the annotation is the problem instead.
+    if (!isDataShaped(resolvedExpected.dataType, aliases)) {
+      ctx.errors.push(
+        diagnostic(
+          "resultDataNotObject",
+          { actual: formatTypeHint(resolvedExpected.dataType), context },
+          loc ?? null,
+        ),
+      );
+      return;
+    }
+    if (isBareFailureResult(actual)) {
+      ctx.errors.push(
+        diagnostic(
+          "failureNeedsData",
+          {
+            expected: formatTypeHint(resolvedExpected.dataType),
+            success: formatTypeHint(resolvedExpected.successType),
+          },
+          loc ?? null,
+        ),
+      );
+      return;
+    }
+  }
   ctx.errors.push(
     diagnostic(
       "typeNotAssignableInContext",

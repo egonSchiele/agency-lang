@@ -4,7 +4,7 @@
 // __agency_descriptor initializer read itself mid-assignment (undefined),
 // so walking into `children` hit a dead descriptor and nested validation
 // broke — rejectsNested() proves the validator now fires one level down.
-def positive(n: number): Result<number, string> {
+def positive(n: number): Result<number> {
   if (n > 0) {
     return success(n)
   }

@@ -169,7 +169,7 @@ export type ResultType = {
   type: "resultType";
   successType: VariableType;
   /** The failure's structured data, named by the second type parameter. The
-   *  failure's MESSAGE is always a string and is not named here. */
+   *  failure's message is always a string and is not named here. */
   dataType: VariableType;
   tags?: Tag[];
 };

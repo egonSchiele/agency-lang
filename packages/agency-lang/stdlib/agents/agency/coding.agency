@@ -250,7 +250,7 @@ def outcomeToResult(outcome: WriteOutcome): Result<string, WriteFailure> {
   if (outcome.valid) {
     return success(outcome.source)
   }
-  return failure({
+  return failure(outcome.problems.join("\n"), {
     source: outcome.source,
     problems: outcome.problems
   })
@@ -427,6 +427,7 @@ export def agencyCodingAgent(
   if (isFailure(captured)) {
     // Nothing was ever drafted: the run stopped before the first attempt.
     return failure(
+      "agencyCodingAgent stopped before generating: ${captured.error}",
       {
         source: "",
         problems: ["agencyCodingAgent stopped before generating: ${captured.error}"]
@@ -466,7 +467,7 @@ node evalMain(input: CodingEvalInput): string {
   // requireMain is this agent's own knob, not part of the suite contract:
   // the assignment text says what shape the deliverable takes, and the
   // harness judges the outcome. So no mechanical main-node check here.
-  let written: Result<string, WriteFailure> = failure({
+  let written: Result<string, WriteFailure> = failure("the writer never ran", {
     source: "",
     problems: ["the writer never ran"]
   })
@@ -478,7 +479,7 @@ node evalMain(input: CodingEvalInput): string {
     source = code
   }
   if (written is failure(gaveUp)) {
-    source = gaveUp.source
+    source = written.data.source
   }
   if (source == "") {
     return "the writer produced no source"
@@ -488,7 +489,7 @@ node evalMain(input: CodingEvalInput): string {
     return "could not save ${input.outFile}: ${writeErr}"
   }
   if (written is failure(err)) {
-    return "saved the last draft, but the writer gave up: ${err.problems}"
+    return "saved the last draft, but the writer gave up: ${err}"
   }
   return source
 }

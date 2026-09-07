@@ -22,7 +22,7 @@ node main() {
     return after
   }
   if (isFailure(result)) {
-    return "tripped-mid-fork:${result.error.actualCost > 0}"
+    return "tripped-mid-fork:${result.data.actualCost > 0}"
   }
   return "did not trip"
 }

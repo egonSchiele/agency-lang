@@ -5,6 +5,9 @@ import {
   memoryWarning,
   notServedMessage,
   pythonMissingMessage,
+  waitUntilLoaded,
+  checkPython,
+  freePort,
 } from "./localServe.js";
 
 describe("serveArgs", () => {
@@ -72,5 +75,71 @@ describe("messages", () => {
     expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
     expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install mlx-lm");
     expect(msg).toContain("point --python at a Python that has");
+  });
+});
+
+describe("waitUntilLoaded", () => {
+  it("sends a one-token completion naming the model and resolves when it answers", async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(init.body as string) });
+      return new Response(JSON.stringify({ choices: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await waitUntilLoaded(8081, "/m/dir", { fetch: fetchFn });
+    expect(calls).toEqual([
+      {
+        url: "http://127.0.0.1:8081/v1/chat/completions",
+        body: { model: "/m/dir", messages: [{ role: "user", content: "hi" }], max_tokens: 1 },
+      },
+    ]);
+  });
+
+  it("retries while the port is not open yet, then resolves", async () => {
+    let n = 0;
+    const fetchFn = (async () => {
+      n += 1;
+      if (n < 3) throw new Error("ECONNREFUSED");
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    await waitUntilLoaded(8081, "/m/dir", { fetch: fetchFn, retryMs: 1 });
+    expect(n).toBe(3);
+  });
+
+  it("stops retrying when told the process is gone", async () => {
+    let n = 0;
+    const gone = new Promise<string>((resolve) => setTimeout(() => resolve("exited with 1"), 15));
+    const fetchFn = (async () => {
+      n += 1;
+      throw new Error("ECONNREFUSED");
+    }) as unknown as typeof fetch;
+    await expect(
+      waitUntilLoaded(8081, "/m/dir", { fetch: fetchFn, retryMs: 1, gone }),
+    ).rejects.toThrow("mlx_lm.server for /m/dir exited with 1 before it was ready.");
+    const after = n;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(n).toBe(after);
+  });
+});
+
+describe("checkPython", () => {
+  it("passes when `python -c import mlx_lm` exits 0", () => {
+    const seen: string[][] = [];
+    const exec = (cmd: string, args: string[]) => {
+      seen.push([cmd, ...args]);
+      return { status: 0 };
+    };
+    expect(checkPython("/x/python", exec)).toBe(true);
+    expect(seen).toEqual([["/x/python", "-c", "import mlx_lm"]]);
+    expect(checkPython("/x/python", () => ({ status: 1 }))).toBe(false);
+    expect(checkPython("/x/python", () => ({ status: null }))).toBe(false);
+  });
+});
+
+describe("freePort", () => {
+  it("returns a port nothing is listening on", async () => {
+    const port = await freePort();
+    expect(port).toBeGreaterThan(0);
+    const again = await freePort();
+    expect(again).toBeGreaterThan(0);
   });
 });

@@ -1,4 +1,6 @@
 import * as path from "node:path";
+import * as net from "node:net";
+import { spawnSync } from "node:child_process";
 import { isMlxUri } from "../stdlib/modelBackend.js";
 
 export type ServeOptions = { port: number; maxTokens: number; python?: string };
@@ -89,4 +91,77 @@ export function pythonMissingMessage(python: string, home: string): string {
     "Python 3.11 or newer is required. Or point --python at a Python that has",
     "mlx-lm installed.",
   ].join("\n");
+}
+
+export type ReadinessOptions = {
+  fetch?: typeof fetch;
+  retryMs?: number;
+  /** Resolves with a description when the process exits. Readiness stops
+   *  waiting and rejects. */
+  gone?: Promise<string>;
+};
+
+/** `mlx_lm.server` prints nothing when its model has loaded. The only
+ *  readiness signal is a completion request that answers. Send a one-token
+ *  one, naming the model the process was started with, and retry while the
+ *  port is not open. */
+export async function waitUntilLoaded(
+  port: number,
+  upstreamModel: string,
+  options: ReadinessOptions = {},
+): Promise<void> {
+  const fetchFn = options.fetch ?? fetch;
+  const retryMs = options.retryMs ?? 500;
+  let exited: string | null = null;
+  if (options.gone !== undefined) {
+    void options.gone.then((why) => {
+      exited = why;
+    });
+  }
+  const body = JSON.stringify({
+    model: upstreamModel,
+    messages: [{ role: "user", content: "hi" }],
+    max_tokens: 1,
+  });
+  for (;;) {
+    if (exited !== null) {
+      throw new Error(`mlx_lm.server for ${upstreamModel} ${exited} before it was ready.`);
+    }
+    try {
+      const res = await fetchFn(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      });
+      if (res.ok) {
+        return;
+      }
+    } catch {
+      // Not listening yet.
+    }
+    await new Promise((r) => setTimeout(r, retryMs));
+  }
+}
+
+export type Exec = (cmd: string, args: string[]) => { status: number | null };
+
+function execSync(cmd: string, args: string[]): { status: number | null } {
+  return { status: spawnSync(cmd, args, { stdio: "ignore" }).status };
+}
+
+/** Whether `python` can import mlx_lm. */
+export function checkPython(python: string, exec: Exec = execSync): boolean {
+  return exec(python, ["-c", "import mlx_lm"]).status === 0;
+}
+
+/** A port nothing is listening on right now, for one mlx_lm.server. */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.on("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const port = (probe.address() as { port: number }).port;
+      probe.close(() => resolve(port));
+    });
+  });
 }

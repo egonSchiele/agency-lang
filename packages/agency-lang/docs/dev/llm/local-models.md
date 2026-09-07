@@ -1,6 +1,8 @@
 # Local models
 
-How `agency`'s local-model support is wired, end to end.
+How `agency`'s local-model support is wired, end to end. This page covers
+the `llama-cpp` backend, which runs GGUF files inside the Agency process.
+MLX models, which run in a server, are in `mlx-local-models.md`.
 
 ## Provider
 

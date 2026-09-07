@@ -6,7 +6,7 @@
  *   - Enable persistent memory so each subagent's `remember`/`recall`
  *     calls land in a stable on-disk knowledge graph.
  */
-import { registerLocalModel } from "std::agency/local"
+import { registerLocalModel, localModelBackend, mlxServedName } from "std::agency/local"
 import { keys } from "std::object"
 import { setLlmOptions, envVarFor } from "std::llm"
 import { enableMemory, MemoryConfig } from "std::memory"
@@ -444,11 +444,35 @@ export def configureModels(
   applyResolved(promoteAll(all.value))
 }
 
-/** Apply a local model (from `--local-model`) as BOTH the fast and slow
- *  model: register the llama-cpp provider, download the model if needed into
- *  the agent's models cache, and point every LLM call — including the deep
- *  subagents — at it, so a fully-local run needs no hosted-provider key. */
+/** Apply a local model (from `--local`) as BOTH the fast and slow model,
+ *  so a fully-local run needs no hosted-provider key. A GGUF model: register
+ *  the llama-cpp provider and download if needed. An MLX model: point every
+ *  slot at the server the user started with `agency local serve`. */
 export def configureLocalModel(value: string) {
+  // An MLX model runs in a server the user started with `agency local
+  // serve`. Nothing to download or register: point every slot at the name
+  // the server knows it by.
+  const backend = localModelBackend(value)
+  if (backend == "mlx") {
+    const m: Resolved = {
+      model: mlxServedName(value),
+      provider: "mlx",
+      via: "local"
+    }
+    applyResolved(
+      {
+      main: m,
+      reasoning: m,
+      embedding: {
+        model: "",
+        provider: "mlx",
+        via: "local"
+      }
+    },
+    )
+    refreshCapabilities(value, "mlx")
+    return
+  }
   // `try` captures any failure (smoltalk-llama-cpp not installed, an unknown
   // model name, a download error) as a Result instead of letting the runtime
   // convert the throw to a Failure and silently continue into the REPL. A

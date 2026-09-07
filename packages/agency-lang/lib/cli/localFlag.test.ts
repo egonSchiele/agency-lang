@@ -62,3 +62,27 @@ describe("resolveLocalRunFlag", () => {
     await expect(resolveLocalRunFlag("qwen3.5-0.8b")).rejects.toThrow(/smoltalk-llama-cpp/);
   });
 });
+
+describe("resolveLocalRunFlag for mlx", () => {
+  it("pins the mlx provider and passes the repo id, with no download", async () => {
+    const flag = await resolveLocalRunFlag("mlx:mlx-community/Qwen3-Coder-Next-4bit");
+    expect(flag).toEqual({
+      model: "mlx-community/Qwen3-Coder-Next-4bit",
+      explicitProvider: "mlx",
+    });
+    expect(smoltalkPkg.hasProvider("llama-cpp")).toBe(false);
+  });
+
+  it("passes a model directory as its absolute path", async () => {
+    const model = path.join(here, `__tmp_model_${process.pid}`);
+    fs.mkdirSync(model, { recursive: true });
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "");
+    try {
+      const flag = await resolveLocalRunFlag(model);
+      expect(flag).toEqual({ model, explicitProvider: "mlx" });
+    } finally {
+      fs.rmSync(model, { recursive: true, force: true });
+    }
+  });
+});

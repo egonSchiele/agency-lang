@@ -98,7 +98,7 @@ export def parseAgentArgs() {
         local: {
           type: "string",
           optional: true,
-          description: "Run a local model (downloads if needed): a curated short name, an hf: URI, or a .gguf path. Run without a value for guided setup. Pins all slots to the local model; mutually exclusive with --model/--fastmodel/--slowmodel. Requires: npm i -g smoltalk-llama-cpp"
+          description: "Run a local model: a curated short name, an alias, an hf: URI, a .gguf path, an mlx: URI, or a model directory. GGUF models download if needed and need: npm i -g smoltalk-llama-cpp. MLX models need a running server: agency local serve <model>. Run without a value for guided setup. Pins all slots to the local model; mutually exclusive with --model/--fastmodel/--slowmodel."
         },
         "local-model": {
           type: "string",

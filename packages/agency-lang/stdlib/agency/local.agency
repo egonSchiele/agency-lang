@@ -9,6 +9,8 @@ import {
   _removeModel,
   _registerLocalProvider,
   _registerLocalModel,
+  _resolveModel,
+  _mlxServedName,
   _printLocalCatalog,
   _refreshCatalog,
  } from "agency-lang/stdlib-lib/localModels.js"
@@ -125,6 +127,26 @@ export def removeModel(name: string, cacheDir: string = ""): bool {
   return _removeModel(name, cacheDir)
 }
 
+export def localModelBackend(value: string): string {
+  """
+  Which engine runs a model: "llama-cpp" for GGUF files, "mlx" for MLX
+  models served by `agency local serve`.
+
+  @param value - name, alias, hf: URI, mlx: URI, .gguf path, or model directory
+  """
+  return _resolveModel(value).backend
+}
+
+export def mlxServedName(value: string): string {
+  """
+  The model name to send to the MLX server for this model. It is the same
+  string `agency local serve` gives the server.
+
+  @param value - name, alias, mlx: URI, or model directory
+  """
+  return _mlxServedName(_resolveModel(value))
+}
+
 export def registerLocalProvider() {
   """
   Register the llama-cpp provider so local models can be used for LLM calls.
@@ -136,8 +158,10 @@ export def registerLocalModel(value: string, cacheDir: string = ""): string {
   """
   Register the provider and ensure the model is downloaded. Returns the local
   .gguf path to use as the model for LLM calls with provider "llama-cpp".
+  For an MLX model this registers nothing and returns the name to send to
+  the server. Start the server first with `agency local serve`.
 
-  @param value - name, alias, hf: URI, or .gguf path
+  @param value - name, alias, hf: URI, mlx: URI, .gguf path, or model directory
   @param cacheDir - download dir (empty string = per-user cache)
   """
   return _registerLocalModel(value, cacheDir)

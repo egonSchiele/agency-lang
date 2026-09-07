@@ -114,6 +114,10 @@ export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
     summarize: false,
     memory: false,
     maxTokens: 2000
+  },
+  // No embeddings endpoint. The models are large enough for the full prompt.
+  mlx: {
+    memory: false
   }
 }
 

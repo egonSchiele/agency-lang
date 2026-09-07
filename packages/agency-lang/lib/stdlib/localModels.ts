@@ -588,6 +588,17 @@ export function _resolveModelName(value: string, file: string = ""): string {
   return _resolveModel(value, file).target;
 }
 
+/** The model name to send to the MLX server for this model. `agency local
+ *  serve` gives the server the same string, so a run against your own server
+ *  never names a model it is not serving. A repo id for an `mlx:` URI; the
+ *  absolute directory path for a model directory. */
+export function _mlxServedName(resolved: ResolvedModel): string {
+  if (isMlxUri(resolved.target)) {
+    return parseMlxUri(resolved.target).repo;
+  }
+  return path.resolve(resolved.target);
+}
+
 type EntryMeta = Pick<
   ModelNameEntry,
   "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license" | "sha256"
@@ -1231,6 +1242,10 @@ export async function _downloadModel(value: string, cacheDir: string = ""): Prom
 
 /** Convenience: register the provider + ensure the model is downloaded. */
 export async function _registerLocalModel(value: string, cacheDir: string = ""): Promise<string> {
+  const resolved = _resolveModel(value);
+  if (resolved.backend === "mlx") {
+    return _mlxServedName(resolved);
+  }
   await _registerLocalProvider();
   return await _downloadModel(value, cacheDir);
 }

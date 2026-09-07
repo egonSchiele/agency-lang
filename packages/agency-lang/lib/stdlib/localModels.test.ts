@@ -24,6 +24,7 @@ import {
   pinnedSha256,
   backendOfTarget,
   _resolveModel,
+  _removeMlxModel,
   isMlxUri,
   parseMlxUri,
   isModelDir,
@@ -1102,5 +1103,18 @@ describe("_listDownloadedModels with mlx directories", () => {
       },
     ]);
     expect(listed[0].sizeBytes).toBeGreaterThan(10);
+  });
+});
+
+describe("_removeMlxModel", () => {
+  it("deletes the model directory under mlx/ and refuses anything else", () => {
+    const model = path.join(dir, "mlx", "org--repo");
+    fs.mkdirSync(model, { recursive: true });
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    expect(_removeMlxModel("org/repo", dir)).toBe(true);
+    expect(fs.existsSync(model)).toBe(false);
+    expect(_removeMlxModel("org/repo", dir)).toBe(false);
+    // The slash becomes "--", so a repo id cannot name a path outside mlx/.
+    expect(_removeMlxModel("../../etc", dir)).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ import {
   formatRefreshOutput,
   runList,
   runResolve,
+  runRemove,
   runDownload,
   downloadChoices,
   CUSTOM_CHOICE,
@@ -163,6 +164,100 @@ describe("runResolve", () => {
       expect(log).toHaveBeenCalledWith("mlx  mlx:mlx-community/Qwen3-Coder-Next-4bit");
     } finally {
       log.mockRestore();
+    }
+  });
+});
+
+describe("runRemove", () => {
+  let cwd: string;
+  let models: string;
+  let gguf: string;
+  let output: string[];
+  let log: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    cwd = process.cwd();
+    process.chdir(dir);
+    models = path.join(dir, "models");
+    fs.mkdirSync(models);
+    gguf = path.join(models, "coder.gguf");
+    fs.writeFileSync(gguf, "xxxx");
+    fs.writeFileSync(
+      path.join(models, "downloads.json"),
+      JSON.stringify({ "hf:org/coder:Q4_K_M": "coder.gguf" }),
+    );
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { coder: "hf:org/coder:Q4_K_M" } } }),
+    );
+    process.env.AGENCY_MODELS_DIR = models;
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = "/nonexistent/fake.mjs";
+    output = [];
+    log = vi.spyOn(console, "log").mockImplementation((line: string) => {
+      output.push(line);
+    });
+  });
+  afterEach(() => {
+    log.mockRestore();
+    delete process.env.AGENCY_MODELS_DIR;
+    delete process.env.AGENCY_LLAMA_PROVIDER_MODULE;
+    process.chdir(cwd);
+  });
+
+  it("without -f removes the alias, keeps the files, and says how to delete them", () => {
+    runRemove("coder", { force: false });
+    expect(output[0]).toBe(`Removed alias "coder" from ${aliasFile}.`);
+    expect(output[1]).toBe(`The model files are still at ${gguf} (0.00 GB).`);
+    expect(output[2]).toBe("Run again with -f to delete them.");
+    expect(fs.existsSync(gguf)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases).toEqual({});
+  });
+
+  it("with -f deletes the files", () => {
+    runRemove("coder", { force: true });
+    expect(output[0]).toBe(`Deleted ${gguf} (0.00 GB)`);
+    expect(fs.existsSync(gguf)).toBe(false);
+  });
+
+  it("a curated name without -f says there is no alias and where the file is", () => {
+    runRemove("smollm2-135m", { force: false });
+    expect(output[0]).toBe(
+      '"smollm2-135m" is a built-in catalog entry, so there is no alias to remove.',
+    );
+    expect(output.length).toBe(1);
+  });
+
+  it("with -f deletes an mlx model directory under the cache", () => {
+    const model = path.join(models, "mlx", "org--repo");
+    fs.mkdirSync(model, { recursive: true });
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "xx");
+    fs.writeFileSync(
+      path.join(model, ".agency-model.json"),
+      JSON.stringify({ repo: "org/repo", revision: "a", files: {} }),
+    );
+    runRemove("mlx:org/repo", { force: true });
+    expect(output[0]).toMatch(/^Deleted .*org--repo/);
+    expect(fs.existsSync(model)).toBe(false);
+  });
+
+  it("refuses to delete a model directory outside the cache", () => {
+    const outside = path.join(dir, "elsewhere");
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, "config.json"), "{}");
+    fs.writeFileSync(path.join(outside, "model.safetensors"), "xx");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit called");
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(() => runRemove(outside, { force: true })).toThrow("exit called");
+      expect(err).toHaveBeenCalledWith(
+        "That model is not in the models directory; remove it yourself.",
+      );
+      expect(fs.existsSync(outside)).toBe(true);
+    } finally {
+      exitSpy.mockRestore();
+      err.mockRestore();
     }
   });
 });

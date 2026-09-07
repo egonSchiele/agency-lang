@@ -1,7 +1,14 @@
 import prompts from "prompts";
+import * as path from "node:path";
 import {
+  CURATED_LOCAL_MODELS,
   _resolveModel,
   _resolveModelName,
+  _removeMlxModel,
+  _modelFilesOnDisk,
+  readModelAliases,
+  isMlxUri,
+  parseMlxUri,
   _downloadModel,
   _listDownloadedModels,
   _listModelNames,
@@ -131,10 +138,52 @@ export async function runDownload(value?: string): Promise<void> {
   console.log(`model:  ${modelPath}`);
 }
 
-export function runRemove(name: string): void {
+/** Without `-f`: drop the alias, keep the files, and say where they are.
+ *  With `-f`: delete the files too. Models are large, so deleting is the
+ *  step that needs the flag. */
+export function runRemove(name: string, opts: { force: boolean }): void {
+  const resolved = _resolveModel(name);
+  const aliases = readModelAliases();
+  const files = _modelFilesOnDisk(resolved);
+  const where = files === null ? null : `${files.path} (${formatGB(files.sizeBytes)})`;
+  const isAlias = Object.hasOwn(aliases, name);
+  const isCurated = Object.hasOwn(CURATED_LOCAL_MODELS, name);
+
+  if (!opts.force) {
+    if (isAlias) {
+      const { file } = _unaliasModel(name);
+      console.log(`Removed alias "${name}" from ${file}.`);
+    } else if (isCurated) {
+      console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
+    }
+    if (where !== null) {
+      console.log(`The model files are still at ${where}.`);
+      console.log("Run again with -f to delete them.");
+    } else if (!isAlias && !isCurated) {
+      console.log(`Nothing to remove for "${name}".`);
+    }
+    return;
+  }
+
+  if (files === null) {
+    console.log(`Not found: ${name}`);
+    return;
+  }
+  if (!files.insideCache) {
+    console.error("That model is not in the models directory; remove it yourself.");
+    process.exit(1);
+  }
+  if (resolved.backend === "mlx") {
+    const repo = isMlxUri(resolved.target)
+      ? parseMlxUri(resolved.target).repo
+      : path.basename(files.path).replace("--", "/");
+    const removed = _removeMlxModel(repo);
+    console.log(removed ? `Deleted ${where}` : `Not found: ${name}`);
+    return;
+  }
   gate();
-  const removed = _removeModel(name);
-  console.log(removed ? `Removed ${name}` : `Not found: ${name}`);
+  const removed = _removeModel(path.basename(files.path));
+  console.log(removed ? `Deleted ${where}` : `Not found: ${name}`);
 }
 
 export function runResolve(value: string): void {

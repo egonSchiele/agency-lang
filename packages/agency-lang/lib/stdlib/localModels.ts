@@ -21,8 +21,14 @@ import {
   resolveSmoltalkLlamaCppEntry,
 } from "../runtime/localProvider.js";
 import { __ctx } from "../runtime/asyncContext.js";
-import { recordDownload } from "./localModelManifest.js";
-import { MLX_SUBDIR, readMlxModelRecord, isMlxModelComplete } from "./mlxModelRecord.js";
+import { recordDownload, readDownloadManifest } from "./localModelManifest.js";
+import {
+  MLX_SUBDIR,
+  mlxModelDir,
+  mlxModelDirName,
+  readMlxModelRecord,
+  isMlxModelComplete,
+} from "./mlxModelRecord.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** Which engine runs a model. GGUF files run in-process through llama.cpp.
@@ -753,6 +759,50 @@ export function _removeModel(name: string, cacheDir: string = ""): boolean {
   }
   remove(cache, name);
   return true;
+}
+
+/** Delete an MLX model directory from the cache. Only a directory under
+ *  `<cacheDir>/mlx` is ever removed; `remove` refuses symlinks. */
+export function _removeMlxModel(repo: string, cacheDir: string = ""): boolean {
+  const cache = root(path.join(resolveCacheDir(cacheDir), MLX_SUBDIR));
+  const name = mlxModelDirName(repo);
+  const info = stat(cache, name);
+  if (info === null || !info.isDirectory()) {
+    return false;
+  }
+  remove(cache, name);
+  return true;
+}
+
+/** Where a resolved model's files are on disk, or null when nothing is
+ *  there. A GGUF model is found through the download manifest; an MLX model
+ *  through its record under the cache, or the directory it points at. */
+export function _modelFilesOnDisk(
+  resolved: ResolvedModel,
+  cacheDir: string = "",
+): { path: string; sizeBytes: number; insideCache: boolean } | null {
+  const dir = resolveCacheDir(cacheDir);
+  const onDisk = _listDownloadedModels(dir);
+  const found = (match: (f: DownloadedModel) => boolean) => {
+    const f = onDisk.find(match);
+    return f === undefined ? null : { path: f.path, sizeBytes: f.sizeBytes, insideCache: true };
+  };
+  if (resolved.backend === "llama-cpp") {
+    if (isGgufPath(resolved.target)) {
+      return found((f) => f.path === path.resolve(resolved.target));
+    }
+    const fileName = readDownloadManifest(dir)[resolved.target];
+    return fileName === undefined ? null : found((f) => f.name === fileName);
+  }
+  if (isMlxUri(resolved.target)) {
+    const modelDir = mlxModelDir(dir, parseMlxUri(resolved.target).repo);
+    return found((f) => f.path === modelDir);
+  }
+  const target = path.resolve(resolved.target);
+  const sizeBytes = list(root(target), ".")
+    .filter((f) => f.type === "file")
+    .reduce((sum, f) => sum + f.size, 0);
+  return { path: target, sizeBytes, insideCache: onDisk.some((f) => f.path === target) };
 }
 
 // =============================================================================

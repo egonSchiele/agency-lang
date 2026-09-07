@@ -124,8 +124,9 @@ export def unaliasModel(name: string): string {
 
 export def removeModel(name: string, cacheDir: string = ""): bool {
   """
-  Delete a downloaded model file.
-  Returns false if the model was not present.
+  Delete a downloaded GGUF file from the models directory. This is what
+  `agency local remove -f` does; without -f that command only removes the
+  alias. Returns false if the file was not present.
 
   @param name - the .gguf filename
   @param cacheDir - models dir (empty string = per-user cache)

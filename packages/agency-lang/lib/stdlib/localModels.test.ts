@@ -88,6 +88,7 @@ describe("aliases", () => {
     expect(_resolveModelName("my7b", aliasFile)).toBe("hf:org/repo:Q4_K_M");
     expect(_listModelNames(aliasFile)).toContainEqual({
       name: "my7b",
+      backend: "llama-cpp",
       target: "hf:org/repo:Q4_K_M",
       source: "alias",
     });
@@ -254,7 +255,9 @@ describe("provider register + download (fake plugin module)", () => {
       .digest("hex");
     fs.writeFileSync(
       aliasFile,
-      JSON.stringify({ client: { modelAliases: { mymodel: { uri: target, sha256: sha } } } }),
+      JSON.stringify({
+        client: { modelAliases: { mymodel: { backend: "llama-cpp", uri: target, sha256: sha } } },
+      }),
     );
     const cwd = process.cwd();
     process.chdir(dir);
@@ -272,7 +275,11 @@ describe("provider register + download (fake plugin module)", () => {
     fs.writeFileSync(
       aliasFile,
       JSON.stringify({
-        client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } },
+        client: {
+          modelAliases: {
+            mymodel: { backend: "llama-cpp", uri: "hf:org/x:Q4", sha256: "0".repeat(64) },
+          },
+        },
       }),
     );
     const cwd = process.cwd();
@@ -295,7 +302,11 @@ describe("provider register + download (fake plugin module)", () => {
     fs.writeFileSync(
       aliasFile,
       JSON.stringify({
-        client: { modelAliases: { mymodel: { uri: "hf:org/x:Q4", sha256: "0".repeat(64) } } },
+        client: {
+          modelAliases: {
+            mymodel: { backend: "llama-cpp", uri: "hf:org/x:Q4", sha256: "0".repeat(64) },
+          },
+        },
       }),
     );
     const cwd = process.cwd();
@@ -422,7 +433,9 @@ describe("object-valued aliases", () => {
   it("resolves an object alias to its uri", () => {
     fs.writeFileSync(
       aliasFile,
-      JSON.stringify({ client: { modelAliases: { foo: { uri: "hf:org/repo:Q4_K_M" } } } }),
+      JSON.stringify({
+        client: { modelAliases: { foo: { backend: "llama-cpp", uri: "hf:org/repo:Q4_K_M" } } },
+      }),
     );
     expect(_resolveModelName("foo", aliasFile)).toBe("hf:org/repo:Q4_K_M");
   });
@@ -441,7 +454,12 @@ describe("object-valued aliases", () => {
       JSON.stringify({
         client: {
           modelAliases: {
-            "smollm2-135m": { uri: "hf:custom/smol:Q4_K_M", params: "999M", source: "remote" },
+            "smollm2-135m": {
+              backend: "llama-cpp",
+              uri: "hf:custom/smol:Q4_K_M",
+              params: "999M",
+              source: "remote",
+            },
           },
         },
       }),
@@ -468,6 +486,7 @@ describe("formatModelCatalog with rich aliases", () => {
           client: {
             modelAliases: {
               "rich-model": {
+                backend: "llama-cpp",
                 uri: "hf:org/rich:Q4_K_M",
                 params: "7B",
                 sizeBytes: 4_000_000_000,
@@ -522,7 +541,15 @@ describe("resolveCatalogUrl", () => {
 describe("parseCatalog", () => {
   const good = JSON.stringify({
     version: 1,
-    models: { m1: { uri: "hf:org/m1:Q4_K_M", params: "2B", sizeBytes: 1, category: "general" } },
+    models: {
+      m1: {
+        backend: "llama-cpp",
+        uri: "hf:org/m1:Q4_K_M",
+        params: "2B",
+        sizeBytes: 1,
+        category: "general",
+      },
+    },
   });
   it("parses a valid catalog", () => {
     const out = parseCatalog(good);
@@ -541,7 +568,10 @@ describe("parseCatalog", () => {
   it("skips an entry with a bad uri but keeps the good ones", () => {
     const mixed = JSON.stringify({
       version: 1,
-      models: { bad: { uri: "ftp://nope" }, good: { uri: "hf:org/g:Q4_K_M" } },
+      models: {
+        bad: { uri: "ftp://nope" },
+        good: { backend: "llama-cpp", uri: "hf:org/g:Q4_K_M" },
+      },
     });
     // Silence the expected `console.warn("[catalog] skipping …")` so the
     // suite output stays clean; also asserts the warn fires.
@@ -564,9 +594,9 @@ describe("parseCatalog", () => {
           version: 1,
           models: {
             insecure: { uri: "http://example.com/m.gguf" },
-            secureHttps: { uri: "https://example.com/m.gguf" },
-            hf: { uri: "hf:org/m:Q4_K_M" },
-            gguf: { uri: "/abs/path/m.gguf" },
+            secureHttps: { backend: "llama-cpp", uri: "https://example.com/m.gguf" },
+            hf: { backend: "llama-cpp", uri: "hf:org/m:Q4_K_M" },
+            gguf: { backend: "llama-cpp", uri: "/abs/path/m.gguf" },
           },
         }),
       );
@@ -584,7 +614,9 @@ describe("parseCatalog", () => {
     const out = parseCatalog(
       JSON.stringify({
         version: 1,
-        models: { m: { uri: "hf:org/m:Q4_K_M", params: 7, sizeBytes: "big" } },
+        models: {
+          m: { backend: "llama-cpp", uri: "hf:org/m:Q4_K_M", params: 7, sizeBytes: "big" },
+        },
       }),
     );
     expect(out.m.uri).toBe("hf:org/m:Q4_K_M");
@@ -598,9 +630,9 @@ describe("parseCatalog", () => {
       JSON.stringify({
         version: 1,
         models: {
-          good: { uri: "hf:org/g:Q4_K_M", sha256: upper },
-          tooShort: { uri: "hf:org/s:Q4_K_M", sha256: "abc123" },
-          notString: { uri: "hf:org/n:Q4_K_M", sha256: 123 },
+          good: { backend: "llama-cpp", uri: "hf:org/g:Q4_K_M", sha256: upper },
+          tooShort: { backend: "llama-cpp", uri: "hf:org/s:Q4_K_M", sha256: "abc123" },
+          notString: { backend: "llama-cpp", uri: "hf:org/n:Q4_K_M", sha256: 123 },
         },
       }),
     );
@@ -617,12 +649,14 @@ describe("_refreshCatalog", () => {
     fs.writeFileSync(aliasFile, "{}");
     const r = await _refreshCatalog({
       file: aliasFile,
-      fetcher: async () => blob({ "qwen3.5-2b": { uri: "hf:org/q:Q4_K_M", params: "2B" } }),
+      fetcher: async () =>
+        blob({ "qwen3.5-2b": { backend: "llama-cpp", uri: "hf:org/q:Q4_K_M", params: "2B" } }),
     });
     expect(r.added).toEqual(["qwen3.5-2b"]);
     expect(r.modelCount).toBe(1); // total catalog entries
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases["qwen3.5-2b"]).toEqual({
+      backend: "llama-cpp",
       uri: "hf:org/q:Q4_K_M",
       params: "2B",
       source: "remote",
@@ -636,7 +670,8 @@ describe("_refreshCatalog", () => {
     );
     const r = await _refreshCatalog({
       file: aliasFile,
-      fetcher: async () => blob({ "qwen3.5-2b": { uri: "hf:org/remote:Q4_K_M" } }),
+      fetcher: async () =>
+        blob({ "qwen3.5-2b": { backend: "llama-cpp", uri: "hf:org/remote:Q4_K_M" } }),
     });
     expect(r.skipped).toEqual([
       { name: "qwen3.5-2b", keptUri: "hf:mine/custom:Q4_K_M", remoteUri: "hf:org/remote:Q4_K_M" },
@@ -654,8 +689,8 @@ describe("_refreshCatalog", () => {
       file: aliasFile,
       fetcher: async () =>
         blob({
-          a: { uri: "hf:org/a:Q4_K_M", params: "1B" },
-          b: { uri: "hf:org/b:Q4_K_M" },
+          a: { backend: "llama-cpp", uri: "hf:org/a:Q4_K_M", params: "1B" },
+          b: { backend: "llama-cpp", uri: "hf:org/b:Q4_K_M" },
         }),
     });
     // Second run: `a` unchanged, `b` dropped, `c` added with same-uri but no
@@ -665,8 +700,8 @@ describe("_refreshCatalog", () => {
       file: aliasFile,
       fetcher: async () =>
         blob({
-          a: { uri: "hf:org/a:Q4_K_M", params: "2B" }, // metadata changed
-          c: { uri: "hf:org/c:Q4_K_M" }, // new
+          a: { backend: "llama-cpp", uri: "hf:org/a:Q4_K_M", params: "2B" }, // metadata changed
+          c: { backend: "llama-cpp", uri: "hf:org/c:Q4_K_M" }, // new
         }),
     });
     expect(r.added).toEqual(["c"]);
@@ -680,7 +715,8 @@ describe("_refreshCatalog", () => {
 
   it("reports unchanged when a re-run writes a byte-identical value", async () => {
     fs.writeFileSync(aliasFile, "{}");
-    const fetcher = async () => blob({ a: { uri: "hf:org/a:Q4_K_M", params: "1B" } });
+    const fetcher = async () =>
+      blob({ a: { backend: "llama-cpp", uri: "hf:org/a:Q4_K_M", params: "1B" } });
     await _refreshCatalog({ file: aliasFile, fetcher });
     const r = await _refreshCatalog({ file: aliasFile, fetcher });
     expect(r.added).toEqual([]);
@@ -707,7 +743,10 @@ describe("_refreshCatalog", () => {
     await _refreshCatalog({
       file: aliasFile,
       fetcher: async () =>
-        JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", sha256: sha } } }),
+        JSON.stringify({
+          version: 1,
+          models: { m: { backend: "llama-cpp", uri: "hf:org/m:Q4_K_M", sha256: sha } },
+        }),
     });
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.m.sha256).toBe(sha);
@@ -719,7 +758,7 @@ describe("_refreshCatalog", () => {
     // would falsely report a collision. With own-property checks it's added.
     const r = await _refreshCatalog({
       file: aliasFile,
-      fetcher: async () => blob({ toString: { uri: "hf:org/ts:Q4_K_M" } }),
+      fetcher: async () => blob({ toString: { backend: "llama-cpp", uri: "hf:org/ts:Q4_K_M" } }),
     });
     expect(r.added).toEqual(["toString"]);
     expect(r.skipped).toEqual([]);
@@ -734,12 +773,16 @@ describe("_refreshCatalog", () => {
     const catalogPath = path.join(dir, "catalog.json");
     fs.writeFileSync(
       catalogPath,
-      JSON.stringify({ version: 1, models: { m: { uri: "hf:org/m:Q4_K_M", params: "2B" } } }),
+      JSON.stringify({
+        version: 1,
+        models: { m: { backend: "llama-cpp", uri: "hf:org/m:Q4_K_M", params: "2B" } },
+      }),
     );
     const r = await _refreshCatalog({ url: catalogPath, file: aliasFile });
     expect(r.added).toEqual(["m"]);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.m).toEqual({
+      backend: "llama-cpp",
       uri: "hf:org/m:Q4_K_M",
       params: "2B",
       source: "remote",
@@ -791,7 +834,7 @@ describe("model file verification", () => {
       JSON.stringify({
         client: {
           modelAliases: {
-            obj: { uri: "hf:o/x:Q4", sha256: "aa" },
+            obj: { backend: "llama-cpp", uri: "hf:o/x:Q4", sha256: "aa" },
             str: "hf:o/y:Q4",
           },
         },
@@ -848,5 +891,64 @@ describe("backend of a target", () => {
     expect(() => backendOfTarget(path.join(dir, "nothing-here"))).toThrow(
       /not a model: expected a \.gguf file or a directory containing config\.json/,
     );
+  });
+});
+
+describe("backend field", () => {
+  it("every curated entry has a backend that matches its uri", () => {
+    for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
+      expect(info.backend, name).toBe(backendOfTarget(info.uri));
+    }
+  });
+
+  it("an object alias without backend is an error naming the file", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({ client: { modelAliases: { coder: { uri: "hf:org/repo:Q4_K_M" } } } }),
+    );
+    expect(() => _resolveModelName("coder", aliasFile)).toThrow(
+      `alias "coder" has no "backend". Add "backend": "llama-cpp" or "backend": "mlx" to the entry in ${aliasFile}.`,
+    );
+  });
+
+  it("an object alias whose backend disagrees with its uri is an error", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: { modelAliases: { coder: { backend: "mlx", uri: "hf:org/repo:Q4_K_M" } } },
+      }),
+    );
+    expect(() => _resolveModelName("coder", aliasFile)).toThrow(
+      /says backend "mlx" but its uri "hf:org\/repo:Q4_K_M" is a GGUF file/,
+    );
+  });
+
+  it("a string alias reads its backend from the prefix", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: { modelAliases: { coder: "mlx:mlx-community/Qwen3-Coder-Next-4bit" } },
+      }),
+    );
+    const entry = _listModelNames(aliasFile).find((e) => e.name === "coder");
+    expect(entry?.backend).toBe("mlx");
+  });
+
+  it("a remote catalog entry without backend, or with the wrong one, is skipped with a warning", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const parsed = parseCatalog(
+      JSON.stringify({
+        version: 1,
+        models: {
+          ok: { backend: "llama-cpp", uri: "hf:org/ok:Q4_K_M" },
+          missing: { uri: "hf:org/bad:Q4_K_M" },
+          wrong: { backend: "mlx", uri: "hf:org/wrong:Q4_K_M" },
+        },
+      }),
+    );
+    expect(Object.keys(parsed)).toEqual(["ok"]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "missing"'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "wrong"'));
+    warn.mockRestore();
   });
 });

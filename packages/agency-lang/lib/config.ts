@@ -449,6 +449,7 @@ export const ModelAliasSchema = z.union([
   z.string(),
   z
     .object({
+      backend: z.enum(["llama-cpp", "mlx"]),
       uri: z.string(),
       source: z.literal("remote").optional(),
       params: z.string().optional(),

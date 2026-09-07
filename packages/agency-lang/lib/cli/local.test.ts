@@ -75,12 +75,13 @@ describe("downloadChoices", () => {
     const choices = downloadChoices([
       {
         name: "tiny",
+        backend: "llama-cpp",
         target: "hf:o/t:Q4",
         source: "curated",
         params: "135M",
         sizeBytes: 100_000_000,
       },
-      { name: "plain-alias", target: "hf:x/y:Q4", source: "alias" },
+      { name: "plain-alias", backend: "llama-cpp", target: "hf:x/y:Q4", source: "alias" },
     ]);
     expect(choices[0]).toEqual({ title: "tiny  (135M, 0.10 GB)", value: "tiny" });
     expect(choices[1]).toEqual({ title: "plain-alias", value: "plain-alias" });

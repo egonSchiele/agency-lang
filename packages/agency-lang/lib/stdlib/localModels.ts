@@ -24,6 +24,10 @@ import { __ctx } from "../runtime/asyncContext.js";
 import { recordDownload } from "./localModelManifest.js";
 import { ttyColor } from "../utils/termcolors.js";
 
+/** Which engine runs a model. GGUF files run in-process through llama.cpp.
+ *  MLX models run in a server started with `agency local serve`. */
+export type Backend = "llama-cpp" | "mlx";
+
 /** What a model is FOR — a single axis, orthogonal to size (size is conveyed
  *  by `params` / `sizeBytes`). Lets the CLI group + filter without parsing the
  *  description. */
@@ -34,7 +38,10 @@ export type ModelCategory =
   | "embedding"; // returns vectors, not text
 
 export type ModelInfo = {
-  /** Hugging Face URI passed to `node-llama-cpp`'s `resolveModelFile`. */
+  /** Which engine runs the model. Required; must agree with `uri`. */
+  backend: Backend;
+  /** For llama-cpp, an `hf:` URI passed to `node-llama-cpp`'s
+   *  `resolveModelFile`. For mlx, an `mlx:` URI naming a Hugging Face repo. */
   uri: string;
   /** Human-readable parameter count, e.g. "1.7B" or "70B". */
   params: string;
@@ -68,6 +75,7 @@ export type ModelInfo = {
 export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // ── General ─────────────────────────────────────────────────────────────
   "smollm2-135m": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
     params: "135M",
     sizeBytes: 105000000,
@@ -79,6 +87,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "ed5fa30c487b282ec156c29062f1222e5c20875a944ac98289dbd242e947f747",
   },
   "qwen3.5-0.8b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M",
     params: "0.8B",
     sizeBytes: 500000000,
@@ -89,6 +98,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
   },
   "qwen3.5-2b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3.5-2B-GGUF:Q4_K_M",
     params: "2B",
     sizeBytes: 1280000000,
@@ -99,6 +109,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
   },
   "qwen3.5-4b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
     params: "4B",
     sizeBytes: 2400000000,
@@ -109,6 +120,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
   },
   "gemma-4-e2b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/gemma-4-E2B-it-GGUF:Q4_K_M",
     params: "2B (E2B)",
     sizeBytes: 3110000000,
@@ -119,6 +131,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
   },
   "gemma-4-e4b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
     params: "4B (E4B)",
     sizeBytes: 4980000000,
@@ -130,6 +143,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87",
   },
   "granite-4.1-8b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/granite-4.1-8b-GGUF:Q4_K_M",
     params: "8B",
     sizeBytes: 5350000000,
@@ -140,6 +154,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "0f45c1af986e9900bb3b6ba46a25937e1bb80426935bc242d88c9ca90e9f5c88",
   },
   "qwen3.5-9b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
     params: "9B",
     sizeBytes: 5500000000,
@@ -150,6 +165,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
   },
   "gemma-4-12b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/gemma-4-12b-it-GGUF:Q4_K_M",
     params: "12B",
     sizeBytes: 7120000000,
@@ -160,6 +176,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "0a270ec9fe6b34f4a0d33992b6135117b484ebc4766ab76b51d4ae8c457e4c42",
   },
   "gpt-oss-20b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
     params: "20B",
     sizeBytes: 12000000000,
@@ -170,6 +187,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f",
   },
   "mistral-small-3.1": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14000000000,
@@ -180,6 +198,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "6d670773c3908584349d41a5048d1472226b593c881fd394e8ac196c802e81e2",
   },
   "mistral-small-3.2": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14333000000,
@@ -191,6 +210,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "a3cc56310807ed0d145eaf9f018ccda9ae7ad8edb41ec870aa2454b0d4700b3c",
   },
   "qwen3.5-27b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
     params: "27B",
     sizeBytes: 16000000000,
@@ -201,6 +221,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
   },
   "gemma-4-26b-a4b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
     params: "26B (A4B)",
     sizeBytes: 16900000000,
@@ -211,6 +232,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
   },
   "gemma-4-31b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/gemma-4-31B-it-GGUF:Q4_K_M",
     params: "31B",
     sizeBytes: 18300000000,
@@ -221,6 +243,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "38bd64c852c4b460434cc7162fa9bdcf242faf86502581a754cb72956bb17f84",
   },
   "qwen3.5-35b-a3b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3.5-35B-A3B-GGUF:Q4_K_M",
     params: "35B (A3B)",
     sizeBytes: 22016000000,
@@ -231,6 +254,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
   },
   "deepseek-r1-distill-llama-8b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
     params: "8B",
     sizeBytes: 4920000000,
@@ -241,6 +265,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "0addb1339a82385bcd973186cd80d18dcc71885d45eabd899781a118d03827d9",
   },
   "deepseek-r1-0528-qwen3-8b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:Q4_K_M",
     params: "8B",
     sizeBytes: 5030000000,
@@ -251,6 +276,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "a86349a4180c4e6bb43f874c29c404fa2be3f90b15509bd6d86f697dba724ec1",
   },
   "phi-4-reasoning": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
     params: "14B",
     sizeBytes: 9050000000,
@@ -262,6 +288,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "960d3870b218f91116c55bf81dc313e6cdbce31b1047bb2bc8bc7ea47899b032",
   },
   "magistral-small-2509": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Magistral-Small-2509-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14333000000,
@@ -273,6 +300,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "6d3e5f2a83ed9d64bd3382fb03be2f6e0bc7596a9de16e107bf22f959891945b",
   },
   "devstral-small-2507": {
+    backend: "llama-cpp",
     uri: "hf:mistralai/Devstral-Small-2507_gguf:Q4_K_M",
     params: "24B",
     sizeBytes: 14300000000,
@@ -283,6 +311,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "1bcc2b1b7b7ea3168ba2dbe782432c464f2240598bd193930122c41b117c1796",
   },
   "devstral-small-2-24b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14334000000,
@@ -293,6 +322,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
   },
   "qwen3-coder-30b-a3b": {
+    backend: "llama-cpp",
     uri: "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",
     params: "30B (A3B)",
     sizeBytes: 19000000000,
@@ -303,6 +333,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     sha256: "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
   },
   "nomic-embed-text": {
+    backend: "llama-cpp",
     uri: "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
     params: "137M",
     sizeBytes: 89000000,
@@ -351,10 +382,6 @@ function isGgufPath(v: string): boolean {
 function isModelUri(v: string): boolean {
   return /^(hf:|https?:|mlx:)/.test(v);
 }
-
-/** Which engine runs a model. GGUF files run in-process through llama.cpp.
- *  MLX models run in a server started with `agency local serve`. */
-export type Backend = "llama-cpp" | "mlx";
 
 /** `mlx:<org>/<repo>` with an optional `@<revision>`. */
 const MLX_URI = /^mlx:([^@\s/]+\/[^@\s/]+)(?:@([\w.-]+))?$/;
@@ -469,6 +496,7 @@ function writeJson(file: string, value: unknown): void {
  *  marks an entry written by `agency local refresh` (see `_refreshCatalog`);
  *  hand-added aliases have no `source`. */
 export type AliasObject = {
+  backend: Backend;
   uri: string;
   source?: "remote";
   params?: string;
@@ -487,14 +515,38 @@ export function aliasUri(value: AliasValue): string {
   return typeof value === "string" ? value : value.uri;
 }
 
+/** Read `client.modelAliases`. An object alias must carry a `backend` that
+ *  agrees with its uri; a string alias reads its backend from its prefix. */
 export function readModelAliases(file: string = ""): Record<string, AliasValue> {
-  const cfg = readJson(resolveAliasFile(file));
-  return (cfg.client?.modelAliases ?? {}) as Record<string, AliasValue>;
+  const resolved = resolveAliasFile(file);
+  const cfg = readJson(resolved);
+  const aliases = (cfg.client?.modelAliases ?? {}) as Record<string, AliasValue>;
+  for (const [name, value] of Object.entries(aliases)) {
+    if (typeof value === "string") {
+      continue;
+    }
+    if (value.backend === undefined) {
+      throw new Error(
+        `${path.basename(resolved)}: alias "${name}" has no "backend". ` +
+          `Add "backend": "llama-cpp" or "backend": "mlx" to the entry in ${resolved}.`,
+      );
+    }
+    const fromUri = backendOfTarget(value.uri);
+    if (value.backend !== fromUri) {
+      const what = fromUri === "llama-cpp" ? "a GGUF file" : "an MLX model";
+      throw new Error(
+        `${path.basename(resolved)}: alias "${name}" says backend "${value.backend}" ` +
+          `but its uri "${value.uri}" is ${what}. Change one of them in ${resolved}.`,
+      );
+    }
+  }
+  return aliases;
 }
 
 /** Entry returned by `_listModelNames`. */
 export type ModelNameEntry = {
   name: string;
+  backend: Backend;
   target: string;
   source: "curated" | "alias";
   params?: string;
@@ -552,6 +604,7 @@ export function _listModelNames(file: string = ""): ModelNameEntry[] {
   const curatedEntries: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
     ([name, info]) => ({
       name,
+      backend: info.backend,
       target: info.uri,
       source: "curated",
       ...metaFrom(info),
@@ -560,6 +613,7 @@ export function _listModelNames(file: string = ""): ModelNameEntry[] {
   const aliasEntries: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
     ([name, value]) => ({
       name,
+      backend: backendOfTarget(aliasUri(value)),
       target: aliasUri(value),
       source: "alias",
       ...metaFrom(value),
@@ -647,6 +701,7 @@ const SUPPORTED_CATALOG_VERSION = 1;
 /** A validated entry from the remote catalog. Mirrors `AliasObject` minus the
  *  `source` tag (which `_refreshCatalog` adds on write). */
 export type CatalogModel = {
+  backend: Backend;
   uri: string;
   params?: string;
   sizeBytes?: number;
@@ -682,23 +737,28 @@ const CATALOG_MAX_BYTES = 5_000_000;
 // metadata fields are `.optional().catch(undefined)` so a wrongly-typed field
 // is dropped rather than failing the whole entry (lenient metadata); a
 // missing/insecure `uri` fails the entry (it's then skipped + warned).
-const CatalogModelSchema = z.object({
-  uri: z.string().refine(isCatalogUri, "uri must be an hf:/https: URI or a .gguf path"),
-  params: z.string().optional().catch(undefined),
-  sizeBytes: z.number().optional().catch(undefined),
-  category: z.enum(CATALOG_CATEGORIES).optional().catch(undefined),
-  contextWindow: z.number().optional().catch(undefined),
-  license: z.string().optional().catch(undefined),
-  description: z.string().optional().catch(undefined),
-  // Must be a 64-hex SHA-256; normalized to lowercase. A malformed value (from
-  // an untrusted catalog) is dropped via `.catch`, not stored as a bad pin.
-  sha256: z
-    .string()
-    .regex(/^[0-9a-fA-F]{64}$/)
-    .transform((s) => s.toLowerCase())
-    .optional()
-    .catch(undefined),
-});
+const CatalogModelSchema = z
+  .object({
+    backend: z.enum(["llama-cpp", "mlx"]),
+    uri: z.string().refine(isCatalogUri, "uri must be an hf:/mlx:/https: URI or a .gguf path"),
+    params: z.string().optional().catch(undefined),
+    sizeBytes: z.number().optional().catch(undefined),
+    category: z.enum(CATALOG_CATEGORIES).optional().catch(undefined),
+    contextWindow: z.number().optional().catch(undefined),
+    license: z.string().optional().catch(undefined),
+    description: z.string().optional().catch(undefined),
+    // Must be a 64-hex SHA-256; normalized to lowercase. A malformed value (from
+    // an untrusted catalog) is dropped via `.catch`, not stored as a bad pin.
+    sha256: z
+      .string()
+      .regex(/^[0-9a-fA-F]{64}$/)
+      .transform((s) => s.toLowerCase())
+      .optional()
+      .catch(undefined),
+  })
+  .refine((m) => m.backend === backendOfTarget(m.uri), {
+    message: "backend does not match the uri",
+  });
 
 // Top-level catalog shape: a supported version + a name→entry object. Entries
 // are validated individually (below) so one bad entry is skipped, not fatal.
@@ -753,6 +813,7 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
       }
       const d = parsed.data;
       const model: CatalogModel = {
+        backend: d.backend,
         uri: d.uri,
         ...compact({
           params: d.params,

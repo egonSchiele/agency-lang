@@ -265,16 +265,6 @@
       "description": "Returns 768-dim embeddings. Pair with a chat model for RAG.",
       "sha256": "d4e388894e09cf3816e8b0896d81d265b55e7a9fff9ab03fe8bf4ef5e11295ac"
     },
-    "deepseek-v4-flash-mlx": {
-      "backend": "mlx",
-      "uri": "mlx:mlx-community/DeepSeek-V4-Flash-4bit",
-      "params": "284B (A13B)",
-      "sizeBytes": 151500000000,
-      "category": "coding",
-      "contextWindow": 1048576,
-      "license": "mit",
-      "description": "DeepSeek's sparse coder, 79% on SWE-bench Verified. Needs about 160 GB of memory."
-    },
     "qwen3-coder-next-mlx": {
       "backend": "mlx",
       "uri": "mlx:mlx-community/Qwen3-Coder-Next-4bit",

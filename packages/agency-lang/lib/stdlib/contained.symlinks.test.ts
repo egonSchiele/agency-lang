@@ -9,6 +9,7 @@ import {
   readStream,
   writeText,
   writeBytes,
+  openForWrite,
   list,
   stat,
   mkdir,
@@ -95,6 +96,11 @@ const ADAPTERS: Record<Primitive, Run> = {
   },
   writeText: (r, t) => writeText(r, t, "payload"),
   writeBytes: (r, t) => writeBytes(r, t, Buffer.from("payload")),
+  openForWrite: (r, t) => {
+    const file = openForWrite(r, t);
+    file.writeAt(Buffer.from("payload"), 0);
+    file.close();
+  },
   list: (r, t) => list(r, t),
   stat: (r, t) => stat(r, t),
   mkdir: (r, t) => mkdir(r, t),
@@ -135,7 +141,7 @@ function checkPositive(name: Primitive, fixture: Fixture, result: unknown): void
   if (name === "readText") expect(result).toBe("inside");
   if (name === "readBytes") expect((result as Buffer).toString()).toBe("inside");
   if (name === "readStream") expect(result).toBeInstanceOf(fs.ReadStream);
-  if (name === "writeText" || name === "writeBytes") {
+  if (name === "writeText" || name === "writeBytes" || name === "openForWrite") {
     expect(fs.readFileSync(inside, "utf8")).toBe("payload");
   }
   if (name === "list") expect(result).toEqual([]);

@@ -327,20 +327,69 @@ export function writeBytes(
   }
 }
 
-/** Open an existing file for append, or create a new one. A new file's
+function openForAppend(root: Root, resolved: string, fileMode: number): number {
+  return openOrCreate(root, resolved, fs.constants.O_WRONLY | fs.constants.O_APPEND, fileMode);
+}
+
+/** Open an existing file with `flags`, or create a new one. A new file's
  *  parent is checked to be a real directory inside the root first, so a
  *  linked directory cannot receive a file. */
-function openForAppend(root: Root, resolved: string, fileMode: number): number {
-  const appendFlags = fs.constants.O_WRONLY | fs.constants.O_APPEND | NO_FOLLOW;
+function openOrCreate(root: Root, resolved: string, flags: number, fileMode: number): number {
   try {
-    return fs.openSync(resolved, appendFlags);
+    return fs.openSync(resolved, flags | NO_FOLLOW);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw error;
     }
   }
   requireRealParent(root, resolved);
-  return fs.openSync(resolved, appendFlags | fs.constants.O_CREAT | fs.constants.O_EXCL, fileMode);
+  return fs.openSync(
+    resolved,
+    flags | NO_FOLLOW | fs.constants.O_CREAT | fs.constants.O_EXCL,
+    fileMode,
+  );
+}
+
+/** A file held open for writes at any offset, for a download whose
+ *  chunks land out of order. The descriptor stays inside; call `close`
+ *  when the file is done. */
+export type WritableFile = {
+  /** Write all of `data` at `position`, looping over a short write. */
+  writeAt(data: Uint8Array, position: number): void;
+  truncate(size: number): void;
+  close(): void;
+};
+
+/** Open an existing regular file for read-write, or create it, through
+ *  the same validated descriptor as every other write. */
+export function openForWrite(root: Root, target: string, options: WriteOptions = {}): WritableFile {
+  const resolved = resolveUnder(root, target);
+  const fd = openOrCreate(
+    root,
+    resolved,
+    fs.constants.O_RDWR,
+    options.fileMode ?? DEFAULT_FILE_MODE,
+  );
+  try {
+    validateDescriptor(fd, root, resolved, options.seams ?? {}, "write");
+  } catch (error) {
+    fs.closeSync(fd);
+    throw error;
+  }
+  return {
+    writeAt(data, position) {
+      let written = 0;
+      while (written < data.length) {
+        written += fs.writeSync(fd, data, written, data.length - written, position + written);
+      }
+    },
+    truncate(size) {
+      fs.ftruncateSync(fd, size);
+    },
+    close() {
+      fs.closeSync(fd);
+    },
+  };
 }
 
 /** Write the whole content to a sibling temporary file, then hard-link it
@@ -590,6 +639,7 @@ export const PRIMITIVES = [
   "readStream",
   "writeText",
   "writeBytes",
+  "openForWrite",
   "list",
   "stat",
   "mkdir",

@@ -66,7 +66,7 @@ export function readMlxModelRecord(dir: string): MlxModelRecord | null {
     ) {
       return null;
     }
-    return rec;
+    return { ...rec, files: Object.assign(Object.create(null), rec.files) };
   } catch {
     return null;
   }

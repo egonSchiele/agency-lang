@@ -11,6 +11,7 @@ import {
   runResolve,
   runRemove,
   runDownload,
+  printDownloadEvent,
   downloadChoices,
   CUSTOM_CHOICE,
 } from "./local.js";
@@ -315,5 +316,69 @@ describe("runRemove", () => {
       exitSpy.mockRestore();
       err.mockRestore();
     }
+  });
+});
+
+describe("printDownloadEvent", () => {
+  it("prints a line per file, a rewritten counter on a TTY, and the verify lines", () => {
+    const out: string[] = [];
+    let clock = 0;
+    const print = printDownloadEvent(
+      true,
+      (s) => out.push(s),
+      () => clock,
+    );
+    print({ kind: "file-start", path: "a.safetensors", size: 5e9, resumedBytes: 0 });
+    print({ kind: "bytes", done: 1e9, total: 5e9 });
+    clock = 2000;
+    print({ kind: "bytes", done: 2e9, total: 5e9 });
+    print({ kind: "file-done", path: "a.safetensors" });
+    print({ kind: "verify", path: "a.safetensors", ok: true });
+    print({ kind: "file-start", path: "b.safetensors", size: 3e9, resumedBytes: 1e9 });
+    expect(out).toEqual([
+      "a.safetensors  5.00 GB\n",
+      "\r\x1b[2K  1.00 GB / 5.00 GB  20%",
+      "\r\x1b[2K  2.00 GB / 5.00 GB  40%  500.0 MB/s  6s left",
+      "\n",
+      "  verified a.safetensors\n",
+      "b.safetensors  3.00 GB  (resuming from 1.00 GB)\n",
+    ]);
+  });
+
+  it("ends the counter line itself when the last byte lands", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(true, (s) => out.push(s));
+    print({ kind: "bytes", done: 1, total: 2 });
+    print({ kind: "bytes", done: 2, total: 2 });
+    print({ kind: "verify", path: "a", ok: true });
+    expect(out).toEqual([
+      "\r\x1b[2K  0.00 GB / 0.00 GB  50%",
+      "\r\x1b[2K  0.00 GB / 0.00 GB  100%",
+      "\n",
+      "  verified a\n",
+    ]);
+  });
+
+  it("quotes a file path that could move the cursor", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(false, (s) => out.push(s));
+    print({ kind: "verify", path: "a\x1b[2Jb\nforged", ok: true });
+    expect(out).toEqual(['  verified "a\\u001b[2Jb\\nforged"\n']);
+  });
+
+  it("off a TTY prints a line at each tenth percent and nothing in between", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(false, (s) => out.push(s));
+    print({ kind: "bytes", done: 1, total: 20 });
+    print({ kind: "bytes", done: 2, total: 20 });
+    print({ kind: "bytes", done: 3, total: 20 });
+    print({ kind: "bytes", done: 20, total: 20 });
+    print({ kind: "verify", path: "a", ok: false });
+    expect(out).toEqual([
+      "  0.00 GB / 0.00 GB  5%\n",
+      "  0.00 GB / 0.00 GB  10%\n",
+      "  0.00 GB / 0.00 GB  100%\n",
+      "  a failed verification\n",
+    ]);
   });
 });

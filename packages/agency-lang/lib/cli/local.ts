@@ -26,7 +26,9 @@ import {
   type RefreshResult,
 } from "../stdlib/localModels.js";
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
+import type { DownloadEvent } from "../stdlib/hubDownload.js";
 import { ttyColor } from "../utils/termcolors.js";
+import { terminalSafe } from "./remote/secretsInput.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
  *  override the same way `requireSupport()` in `localModels.ts` does — a
@@ -138,11 +140,96 @@ export async function runDownload(value?: string): Promise<void> {
     gate();
   }
   const source = resolved.target;
-  const modelPath = await _downloadModel(picked);
+  const modelPath = await _downloadModel(picked, "", {
+    onEvent: printDownloadEvent(process.stdout.isTTY === true),
+  });
   if (source !== modelPath) {
     console.log(`source: ${source}`);
   }
   console.log(`model:  ${modelPath}`);
+}
+
+/** One line per event. The byte counter rewrites one terminal line with
+ *  the percent, the rate, and the time left, and off a terminal prints a
+ *  line at every tenth percent instead, so a log of a long download still
+ *  shows how far it got. */
+export function printDownloadEvent(
+  tty: boolean,
+  write: (s: string) => void = (s) => process.stdout.write(s),
+  now: () => number = Date.now,
+): (e: DownloadEvent) => void {
+  const rate = new RateMeter(now);
+  let counterShown = false;
+  let lastTenth = -1;
+  const endCounter = () => {
+    if (counterShown) {
+      write("\n");
+      counterShown = false;
+    }
+  };
+  return (e) => {
+    if (e.kind === "bytes") {
+      const percent = e.total === 0 ? 100 : Math.floor((100 * e.done) / e.total);
+      const line = `  ${formatGB(e.done)} / ${formatGB(e.total)}  ${percent}%`;
+      if (tty) {
+        write(`\r\x1b[2K${line}${rate.describe(e.done, e.total)}`);
+        counterShown = true;
+        if (e.done >= e.total) {
+          endCounter();
+        }
+      } else if (Math.floor(percent / 10) > lastTenth) {
+        lastTenth = Math.floor(percent / 10);
+        write(`${line}\n`);
+      }
+      return;
+    }
+    endCounter();
+    // The path comes from the repo's tree, so it is quoted if it could
+    // move the cursor or forge a line.
+    const name = terminalSafe(e.path);
+    if (e.kind === "file-start") {
+      const resumed = e.resumedBytes > 0 ? `  (resuming from ${formatGB(e.resumedBytes)})` : "";
+      write(`${name}  ${formatGB(e.size)}${resumed}\n`);
+    } else if (e.kind === "adopt") {
+      write(`${name}  already on disk, verified\n`);
+    } else if (e.kind === "verify") {
+      write(e.ok ? `  verified ${name}\n` : `  ${name} failed verification\n`);
+    }
+  };
+}
+
+/** The download rate over the last few seconds and the time it implies
+ *  for the rest, as `  45.2 MB/s  12m left`. Blank until there are two
+ *  samples to compare. */
+class RateMeter {
+  private samples: { at: number; done: number }[] = [];
+
+  constructor(private readonly now: () => number) {}
+
+  describe(done: number, total: number): string {
+    const at = this.now();
+    this.samples.push({ at, done });
+    this.samples = this.samples.filter((s) => at - s.at <= RATE_WINDOW_MS);
+    const first = this.samples[0];
+    if (at - first.at < 1000 || done <= first.done) {
+      return "";
+    }
+    const bytesPerSecond = ((done - first.done) * 1000) / (at - first.at);
+    const left = Math.round((total - done) / bytesPerSecond);
+    return `  ${(bytesPerSecond / 1e6).toFixed(1)} MB/s  ${formatDuration(left)} left`;
+  }
+}
+
+const RATE_WINDOW_MS = 10_000;
+
+function formatDuration(seconds: number): string {
+  if (seconds >= 3600) {
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+  }
+  if (seconds >= 60) {
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
 }
 
 /** Without `-f`: drop the alias, keep the files, and say where they are.

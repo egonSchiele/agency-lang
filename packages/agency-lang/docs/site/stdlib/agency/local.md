@@ -141,9 +141,9 @@ Map a curated short name or alias to its target: an hf: URI or .gguf path
 downloadModel(value: string, cacheDir: string = ""): string
 ```
 
-Download a model and return its local .gguf path. For an MLX model this
-  returns the model directory; downloading one is not supported yet.
-  Skips the download if the file already exists in the cache dir.
+Download a model and return its local .gguf path, or the model directory
+  for an MLX model. Skips what is already in the cache dir. An MLX download
+  resumes if it was interrupted.
 
   @param value - what to download
   @param cacheDir - download dir (empty string = per-user cache)

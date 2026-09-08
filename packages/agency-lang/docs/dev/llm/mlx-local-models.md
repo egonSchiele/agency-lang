@@ -187,5 +187,39 @@ gone can still be removed. This holds for GGUF models too.
 
 ## Downloading
 
-`agency local download` of an `mlx:` URI is refused with a message that
-points at `alias add`. A model directory passed to it is returned as is.
+`agency local download mlx:<org>/<repo>[@<rev>]` fetches the repo with
+direct HTTPS requests into `<modelsDir>/mlx/<org>--<repo>/`. The files land under
+their own names, so the directory is a normal model directory that
+`mlx_lm.load` and `agency local serve` take as it is. Beside them,
+`.agency-model.json` records the commit sha and, per file, its size, its
+sha256 when the Hub publishes one, and which chunks are on disk.
+
+Two files split the work:
+
+- `lib/stdlib/hubClient.ts` talks to the Hub: the model API for the
+  commit sha and the gated flag, the tree API for the file list (paged
+  through a `Link` header), `resolve/` for the URL a file's bytes come
+  from, and one byte range of a file. Every request goes through one
+  method that refuses http and sends `HF_TOKEN` to the hub host only. A range that delivers no bytes for a minute is
+  abandoned so a dead connection cannot hang a download.
+- `lib/stdlib/hubDownload.ts` plans the chunks (64 MiB each), runs a pool
+  of `client.mlx.downloadConcurrency` workers over them, writes each
+  piece at its offset through `openForWrite` from `contained.ts`, and
+  keeps the record current. A chunk gets several attempts with growing
+  waits. An expired CDN URL is resolved again and does not count as an
+  attempt.
+
+**Resume.** A second run reads the record and plans only the chunks it
+does not list. A record from another revision is refused with a message
+naming both shas and the `@<rev>` pin. A directory with files but no
+record adopts the ones whose size and hash match. A file with no chunks
+recorded is truncated before its first chunk, so a stale copy cannot
+leave bytes behind. An empty file is created without a request.
+
+**Verification.** When a file's last chunk lands, an LFS file is hashed
+and a plain one is checked by size. A bad LFS file goes to
+`<file>.invalidSha` through `verifyModelFile`; either kind resets the
+file's record entry, fails the run, and is fetched whole next time.
+
+The tests run against `lib/stdlib/__tests__/fakeHub.ts`, a `node:http`
+server that answers the same routes and redirect shapes as the Hub.

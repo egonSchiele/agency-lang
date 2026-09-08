@@ -11,19 +11,36 @@ export function isGgufPath(v: string): boolean {
 }
 
 /** `mlx:<org>/<repo>` with an optional `@<revision>`. */
-const MLX_URI = /^mlx:([^@\s/]+\/[^@\s/]+)(?:@([\w.-]+))?$/;
+/** A repo id is two names made of letters, digits, `.`, `_` and `-`.
+ *  The Hub allows nothing else, and the id becomes a directory name, so
+ *  a backslash or a `..` component must not get through. */
+const MLX_URI = /^mlx:([\w.-]+\/[\w.-]+)(?:@([\w.-]+))?$/;
 
 export function isMlxUri(v: string): boolean {
-  return MLX_URI.test(v);
+  return mlxUriParts(v) !== null;
 }
 
 /** Split "mlx:org/repo@rev" into its parts. Throws on any other shape. */
 export function parseMlxUri(v: string): { repo: string; revision: string | undefined } {
-  const m = MLX_URI.exec(v);
-  if (m === null) {
+  const parts = mlxUriParts(v);
+  if (parts === null) {
     throw new Error(
       `"${v}" is not an mlx: URI. Expected mlx:<org>/<repo> or mlx:<org>/<repo>@<revision>.`,
     );
+  }
+  return parts;
+}
+
+/** The match, unless a component is only dots, which a URL or a path
+ *  would read as the current or parent directory. */
+function mlxUriParts(v: string): { repo: string; revision: string | undefined } | null {
+  const m = MLX_URI.exec(v);
+  if (m === null) {
+    return null;
+  }
+  const components = [...m[1].split("/"), ...(m[2] === undefined ? [] : [m[2]])];
+  if (components.some((c) => /^\.+$/.test(c))) {
+    return null;
   }
   return { repo: m[1], revision: m[2] };
 }

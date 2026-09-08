@@ -4,15 +4,13 @@ import {
   stat,
   list,
   remove,
-  move,
   readText,
-  readStream,
   writeText,
+  type Root,
 } from "./contained.js";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import { findFileUp } from "../importPaths.js";
 import {
@@ -22,6 +20,14 @@ import {
 } from "../runtime/localProvider.js";
 import { __ctx } from "../runtime/asyncContext.js";
 import { recordDownload, readDownloadManifest } from "./localModelManifest.js";
+import { fileSha256, verifyModelFile } from "./modelVerify.js";
+import {
+  fetchHubSnapshot,
+  downloadHubSnapshot,
+  DEFAULT_CONCURRENCY,
+  type DownloadOptions,
+} from "./hubDownload.js";
+export { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {
   type Backend,
   isGgufPath,
@@ -694,9 +700,7 @@ function mlxEntries(dir: string): DownloadedModel[] {
     if (record === null) {
       continue;
     }
-    const sizeBytes = list(root(modelDir), ".")
-      .filter((f) => f.type === "file")
-      .reduce((sum, f) => sum + f.size, 0);
+    const sizeBytes = treeSizeBytes(root(modelDir), ".");
     out.push({
       name: record.repo,
       path: modelDir,
@@ -707,6 +711,20 @@ function mlxEntries(dir: string): DownloadedModel[] {
     });
   }
   return out;
+}
+
+/** Every regular file under `target`, subdirectories included, summed. */
+function treeSizeBytes(r: Root, target: string): number {
+  let sum = 0;
+  for (const entry of list(r, target)) {
+    const child = path.join(target, entry.name);
+    if (entry.type === "file") {
+      sum += entry.size;
+    } else if (entry.type === "dir") {
+      sum += treeSizeBytes(r, child);
+    }
+  }
+  return sum;
 }
 
 /** The `.gguf` files directly in `dir`, by name. A missing dir has none. */
@@ -1199,63 +1217,6 @@ export async function _registerLocalProvider(): Promise<void> {
   });
 }
 
-/** Stream-hash a file's SHA-256 (hex), never buffering the whole file. The
- *  `update` is guarded so a synchronous throw in the data handler rejects the
- *  promise instead of escaping it. */
-export function fileSha256(filePath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const hash = createHash("sha256");
-    let stream: ReturnType<typeof readStream>;
-    try {
-      const located = wholePath(filePath);
-      stream = readStream(located.root, located.target);
-    } catch (err) {
-      reject(err as Error);
-      return;
-    }
-    stream.on("error", reject);
-    stream.on("data", (chunk) => {
-      try {
-        hash.update(chunk);
-      } catch (err) {
-        stream.destroy();
-        reject(err as Error);
-      }
-    });
-    stream.on("end", () => resolve(hash.digest("hex")));
-  });
-}
-
-/** Verify `filePath` against the expected hex SHA-256. On mismatch, rename the
- *  file to `<filePath>.invalidSha` (kept for inspection; won't be picked up, so
- *  the next run re-downloads) and throw. A failed rename is logged (not
- *  swallowed) and reflected in the thrown message. */
-export async function verifyModelFile(
-  filePath: string,
-  expected: string,
-  name: string,
-): Promise<void> {
-  // `fileSha256` returns lowercase hex; normalize the expected pin so a
-  // valid-but-uppercase hash (e.g. from a hand-written alias) still matches.
-  const want = expected.toLowerCase();
-  const actual = await fileSha256(filePath);
-  if (actual === want) return;
-  const quarantine = `${filePath}.invalidSha`;
-  let moved = true;
-  try {
-    move(wholePath(filePath), wholePath(quarantine));
-  } catch (err) {
-    moved = false;
-    console.warn(`Could not move "${filePath}" to "${quarantine}" after SHA-256 mismatch:`, err);
-  }
-  throw new Error(
-    `SHA-256 verification failed for "${name}": expected ${expected}, got ${actual}. ` +
-      (moved
-        ? `The downloaded file was moved to ${quarantine} for inspection and will be re-downloaded next time.`
-        : `The downloaded file at ${filePath} could NOT be moved aside — delete it manually before re-running.`),
-  );
-}
-
 /** The pinned SHA-256 for a model name/alias, or undefined when none is known
  *  (raw uri/path, string alias, alias/curated without a hash, or a sharded
  *  model). An alias entry governs the name entirely — a user alias shadowing a
@@ -1283,17 +1244,42 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
   return (resolved) => !present.includes(path.basename(resolved));
 }
 
-/** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
-export async function _downloadModel(value: string, cacheDir: string = ""): Promise<string> {
+/** `client.mlx.downloadConcurrency` from the nearest `agency.json`, else 8.
+ *  The file is read raw here, so the value is checked by hand. */
+export function configuredDownloadConcurrency(): number {
+  const n: unknown = readClientConfig().mlx?.downloadConcurrency;
+  if (n === undefined) {
+    return DEFAULT_CONCURRENCY;
+  }
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1) {
+    throw new Error(
+      `client.mlx.downloadConcurrency in ${resolveAliasConfigPath()} must be a positive integer, got ${JSON.stringify(n)}`,
+    );
+  }
+  return n;
+}
+
+/** Download a model and return where it is: the `.gguf` path, or the MLX
+ *  model directory. `hubOptions` lets the CLI watch progress and lets tests
+ *  point at a fake hub. */
+export async function _downloadModel(
+  value: string,
+  cacheDir: string = "",
+  hubOptions: DownloadOptions = {},
+): Promise<string> {
   const model = _resolveModel(value);
   if (model.backend === "mlx") {
     if (isModelDir(model.target)) {
       return path.resolve(model.target);
     }
-    throw new Error(
-      "Downloading MLX models is not supported yet. Download it another way and alias " +
-        "its directory: agency local alias add <name> <dir>",
-    );
+    const { repo, revision } = parseMlxUri(model.target);
+    const opts: DownloadOptions = {
+      concurrency: configuredDownloadConcurrency(),
+      ...hubOptions,
+      token: hubOptions.token ?? process.env.HF_TOKEN,
+    };
+    const snapshot = await fetchHubSnapshot(repo, revision, opts);
+    return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), opts);
   }
   requireSupport();
   const target = model.target;

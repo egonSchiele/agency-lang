@@ -3,9 +3,12 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { createHash } from "node:crypto";
+import { startFakeHub } from "./__tests__/fakeHub.js";
+import { readMlxModelRecord, isMlxModelComplete } from "./mlxModelRecord.js";
 import {
   CURATED_LOCAL_MODELS,
   _resolveModelName,
+  configuredDownloadConcurrency,
   _listModelNames,
   _aliasModel,
   _unaliasModel,
@@ -122,6 +125,29 @@ describe("aliases", () => {
     expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: true });
     // Idempotent: a second remove is a no-op and reports removed=false.
     expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: false });
+  });
+});
+
+describe("configuredDownloadConcurrency", () => {
+  it("defaults to 8, takes a positive integer, and refuses anything else", () => {
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      expect(configuredDownloadConcurrency()).toBe(8);
+      fs.writeFileSync(aliasFile, JSON.stringify({ client: { mlx: { downloadConcurrency: 3 } } }));
+      expect(configuredDownloadConcurrency()).toBe(3);
+      for (const bad of ["bad", 0, -1, 2.5]) {
+        fs.writeFileSync(
+          aliasFile,
+          JSON.stringify({ client: { mlx: { downloadConcurrency: bad } } }),
+        );
+        expect(() => configuredDownloadConcurrency()).toThrow(
+          `client.mlx.downloadConcurrency in ${aliasFile} must be a positive integer, got ${JSON.stringify(bad)}`,
+        );
+      }
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
 
@@ -911,6 +937,19 @@ describe("backend of a target", () => {
       repo: "mlx-community/Qwen3-Coder-Next-4bit",
       revision: "7b9321e",
     });
+    for (const bad of [
+      "mlx:..\\escape/repo",
+      "mlx:org/re po",
+      "mlx:org/repo/extra",
+      "mlx:org",
+      "mlx:../repo",
+      "mlx:org/..",
+      "mlx:org/repo@..",
+      "mlx:./repo",
+    ]) {
+      expect(isMlxUri(bad)).toBe(false);
+      expect(() => parseMlxUri(bad)).toThrow(/is not an mlx: URI/);
+    }
     expect(backendOfTarget("mlx:mlx-community/Qwen3-Coder-Next-4bit")).toBe("mlx");
     expect(() => parseMlxUri("mlx:no-slash")).toThrow(/is not an mlx: URI/);
   });
@@ -1183,10 +1222,39 @@ describe("_removeMlxModel", () => {
 });
 
 describe("_downloadModel for mlx", () => {
-  it("says MLX downloads are not supported yet", async () => {
-    await expect(_downloadModel("mlx:org/repo", dir)).rejects.toThrow(
-      "Downloading MLX models is not supported yet. Download it another way and alias its directory: agency local alias add <name> <dir>",
+  it("passes HF_TOKEN to the snapshot request as well as the download", async () => {
+    const hub = await startFakeHub(
+      "org/repo",
+      [{ path: "config.json", bytes: Buffer.from("{}") }],
+      { gated: true },
     );
+    process.env.HF_TOKEN = "hf_test";
+    try {
+      const out = await _downloadModel("mlx:org/repo", dir, {
+        hubUrl: hub.baseUrl,
+        allowHttp: true,
+      });
+      expect(fs.readFileSync(path.join(out, "config.json"), "utf-8")).toBe("{}");
+      expect(hub.authSeen.api.every((a) => a === "Bearer hf_test")).toBe(true);
+    } finally {
+      delete process.env.HF_TOKEN;
+      await hub.close();
+    }
+  });
+
+  it("downloads an mlx: URI into <cacheDir>/mlx/<org>--<repo> and lists it", async () => {
+    const big = Buffer.alloc(1500, 7);
+    const hub = await startFakeHub("org/repo", [
+      { path: "config.json", bytes: Buffer.from("{}") },
+      { path: "model.safetensors", bytes: big },
+    ]);
+    const out = await _downloadModel("mlx:org/repo", dir, { hubUrl: hub.baseUrl, allowHttp: true });
+    expect(out).toBe(path.join(dir, "mlx", "org--repo"));
+    expect(fs.readFileSync(path.join(out, "config.json"), "utf-8")).toBe("{}");
+    expect(fs.readFileSync(path.join(out, "model.safetensors")).equals(big)).toBe(true);
+    expect(isMlxModelComplete(readMlxModelRecord(out)!)).toBe(true);
+    expect(_listDownloadedModels(dir).map((m) => m.name)).toEqual(["org/repo"]);
+    await hub.close();
   });
 
   it("returns a model directory as is", async () => {

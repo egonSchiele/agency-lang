@@ -31,11 +31,10 @@ export function parseMlxUri(v: string): { repo: string; revision: string | undef
 export type ModelDirEntry = { name: string; size: number };
 
 /** The files in a model directory, by name and size. This follows symlinks,
- *  which `contained.ts` never does: a Hugging Face cache snapshot
+ *  which `contained.ts` does not, because a Hugging Face cache snapshot
  *  (`hf/hub/models--org--repo/snapshots/<sha>/`) is all links into
- *  `blobs/`, and people who downloaded a model that way should be able to
- *  use it without copying it. Only names and sizes are read, never
- *  contents. A dangling link is skipped. */
+ *  `blobs/` and should work without copying. It reads names and sizes
+ *  only. A dangling link is skipped. */
 export function modelDirEntries(dir: string): ModelDirEntry[] {
   const out: ModelDirEntry[] = [];
   for (const name of fs.readdirSync(dir)) {

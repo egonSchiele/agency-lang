@@ -425,8 +425,8 @@ function resolveAliasFile(file: string): string {
 
 /** Read a JSON file as a plain object. A missing file reads as `{}`. */
 /** The `client` object of the nearest `agency.json`, or `{}` when there is
- *  none. For settings read at runtime: the models directory, the MLX Python,
- *  the download concurrency. */
+ *  none. For settings read at runtime rather than compiled in: the models
+ *  directory, the MLX Python, the MLX base URL. */
 export function readClientConfig(): Record<string, any> {
   return readJson(resolveAliasConfigPath()).client ?? {};
 }

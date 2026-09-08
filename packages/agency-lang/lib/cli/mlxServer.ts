@@ -1,4 +1,5 @@
 import * as http from "node:http";
+import { parseJsonBody } from "../serve/util.js";
 import { notServedMessage } from "./localServe.js";
 
 /** One mlx_lm.server process: the name requests use for it, the string it
@@ -7,15 +8,6 @@ import { notServedMessage } from "./localServe.js";
 export type Route = { model: string; upstreamModel: string; port: number };
 
 export type FrontDoor = { port: number; close: () => Promise<void> };
-
-function readBody(req: http.IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on("data", (c: Buffer) => chunks.push(c));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { "content-type": "application/json" });
@@ -26,24 +18,78 @@ function error(res: http.ServerResponse, status: number, message: string): void 
   json(res, status, { error: { message } });
 }
 
+/** Headers that describe the connection or the framing of the body we
+ *  already read. The forwarded request gets its own. */
+const HOP_HEADERS = ["transfer-encoding", "host", "connection", "content-length"];
+
+function forwardHeaders(
+  incoming: http.IncomingHttpHeaders,
+  bodyLength: number,
+): http.OutgoingHttpHeaders {
+  const headers: http.OutgoingHttpHeaders = {};
+  for (const [name, value] of Object.entries(incoming)) {
+    if (!HOP_HEADERS.includes(name)) {
+      headers[name] = value;
+    }
+  }
+  headers["content-length"] = String(bodyLength);
+  return headers;
+}
+
 function forward(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   route: Route,
   body: Buffer,
 ): void {
-  const headers = { ...req.headers, "content-length": String(body.length) };
   const upstream = http.request(
-    { host: "127.0.0.1", port: route.port, method: req.method, path: req.url, headers },
+    {
+      host: "127.0.0.1",
+      port: route.port,
+      method: req.method,
+      path: req.url,
+      headers: forwardHeaders(req.headers, body.length),
+    },
     (up) => {
       res.writeHead(up.statusCode ?? 502, up.headers);
       up.pipe(res);
+      // The process died mid-reply: end our side too, or the client waits.
+      up.on("close", () => {
+        if (!up.complete) {
+          res.destroy();
+        }
+      });
     },
   );
   upstream.on("error", (err) =>
     error(res, 502, `mlx_lm.server for ${route.model}: ${err.message}`),
   );
+  // The client went away mid-reply: stop the generation instead of letting
+  // it run to --max-tokens for nobody.
+  res.on("close", () => {
+    if (!res.writableFinished) {
+      upstream.destroy();
+    }
+  });
   upstream.end(body);
+}
+
+async function readRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const parsed = await parseJsonBody(req);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      error(res, 400, "Request body is not a JSON object.");
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch (err) {
+    const message = (err as Error).message;
+    error(res, message === "Request body too large" ? 413 : 400, `${message}.`);
+    return null;
+  }
 }
 
 /** Listen on `port` (0 for any) and forward each request to the route whose
@@ -56,12 +102,8 @@ export function startFrontDoor(port: number, routes: Route[]): Promise<FrontDoor
       json(res, 200, { object: "list", data: served.map((id) => ({ id, object: "model" })) });
       return;
     }
-    const body = await readBody(req);
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(body.toString("utf-8"));
-    } catch {
-      error(res, 400, "Request body is not JSON.");
+    const parsed = await readRequest(req, res);
+    if (parsed === null) {
       return;
     }
     if (typeof parsed.model !== "string") {
@@ -85,11 +127,18 @@ export function startFrontDoor(port: number, routes: Route[]): Promise<FrontDoor
       Buffer.from(JSON.stringify({ ...parsed, model: route.upstreamModel })),
     );
   });
+  // closeAllConnections: a reply still streaming from a process we just
+  // killed would otherwise keep close() from ever finishing.
+  const close = () =>
+    new Promise<void>((r) => {
+      server.close(() => r());
+      server.closeAllConnections();
+    });
   return new Promise((resolve, reject) => {
     server.on("error", reject);
     server.listen(port, "127.0.0.1", () => {
       const bound = (server.address() as { port: number }).port;
-      resolve({ port: bound, close: () => new Promise((r) => server.close(() => r())) });
+      resolve({ port: bound, close });
     });
   });
 }

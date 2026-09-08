@@ -4138,6 +4138,9 @@ export class TypeScriptBuilder {
     if (cfg.client?.baseUrl?.deepInfra) {
       baseUrlFields.deepInfra = ts.str(cfg.client.baseUrl.deepInfra);
     }
+    if (cfg.client?.baseUrl?.mlx) {
+      baseUrlFields.mlx = ts.str(cfg.client.baseUrl.mlx);
+    }
 
     const smoltalkFields: Record<string, TsNode> = {
       // API keys are nested under `apiKey`, each falling back to its

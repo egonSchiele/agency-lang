@@ -11,7 +11,10 @@ import {
   formatGB,
 } from "../stdlib/localModels.js";
 import { mlxModelDir, readMlxModelRecord, isMlxModelComplete } from "../stdlib/mlxModelRecord.js";
-import { startFrontDoor, type FrontDoor, type Route } from "./mlxFrontDoor.js";
+import { startFrontDoor, type FrontDoor, type Route } from "./mlxServer.js";
+import { formatElapsed } from "../eval/run/statusBoard.js";
+
+export { formatElapsed };
 
 export type ServeOptions = { port: number; maxTokens: number; python?: string };
 
@@ -82,13 +85,18 @@ export function notServedMessage(served: string[], requested: string): string {
   );
 }
 
-/** What to print when `<python> -c "import mlx_lm"` fails. The venv
- *  commands create the default environment; a user who pointed --python at
- *  their own Python is told the flag is the other way out. */
-export function pythonMissingMessage(python: string, home: string): string {
+export type PythonProblem = "missing" | "no-mlx-lm";
+
+/** What to print when the chosen Python is not there, or cannot import
+ *  mlx_lm. The venv commands create the default environment; a user who
+ *  pointed --python at their own Python is told the flag is the other way
+ *  out. */
+export function pythonMissingMessage(python: string, home: string, problem: PythonProblem): string {
   const venv = defaultMlxEnv(home);
+  const what =
+    problem === "missing" ? `${python} does not exist.` : `${python} cannot import mlx_lm.`;
   return [
-    `${python} cannot import mlx_lm.`,
+    what,
     "Agency does not install Python. Create an environment once:",
     "",
     `  python3.12 -m venv ${venv}`,
@@ -110,7 +118,8 @@ export type ReadinessOptions = {
 /** `mlx_lm.server` prints nothing when its model has loaded. The only
  *  readiness signal is a completion request that answers. Send a one-token
  *  one, naming the model the process was started with, and retry while the
- *  port is not open. */
+ *  port is not open. A reply other than 2xx is a misconfigured server, and
+ *  the wait fails with the status and body. */
 export async function waitUntilLoaded(
   port: number,
   upstreamModel: string,
@@ -118,46 +127,61 @@ export async function waitUntilLoaded(
 ): Promise<void> {
   const fetchFn = options.fetch ?? fetch;
   const retryMs = options.retryMs ?? 500;
-  let exited: string | null = null;
-  if (options.gone !== undefined) {
-    void options.gone.then((why) => {
-      exited = why;
-    });
-  }
+  // Raced against every attempt, so a process that exits while a request is
+  // still open (the server blocks while loading) ends the wait at once.
+  const goneFails: Promise<never> =
+    options.gone === undefined
+      ? new Promise<never>(() => {})
+      : options.gone.then((why) => Promise.reject(new Error(`${why} before it was ready.`)));
+  goneFails.catch(() => {});
   const body = JSON.stringify({
     model: upstreamModel,
     messages: [{ role: "user", content: "hi" }],
     max_tokens: 1,
   });
-  for (;;) {
-    if (exited !== null) {
-      throw new Error(`${exited} before it was ready.`);
-    }
+  const attempt = async (): Promise<"ready" | "retry"> => {
+    let res: Response;
     try {
-      const res = await fetchFn(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      res = await fetchFn(`http://127.0.0.1:${port}/v1/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body,
       });
-      if (res.ok) {
-        return;
-      }
     } catch {
-      // Not listening yet.
+      return "retry";
     }
-    await new Promise((r) => setTimeout(r, retryMs));
+    if (res.ok) {
+      return "ready";
+    }
+    const text = (await res.text()).slice(0, 500);
+    throw new Error(
+      `mlx_lm.server for ${upstreamModel} answered ${res.status} to the readiness request: ${text}`,
+    );
+  };
+  for (;;) {
+    const outcome = await Promise.race([attempt(), goneFails]);
+    if (outcome === "ready") {
+      return;
+    }
+    await Promise.race([new Promise((r) => setTimeout(r, retryMs)), goneFails]);
   }
 }
 
-export type Exec = (cmd: string, args: string[]) => { status: number | null };
+export type ExecResult = { status: number | null; error?: { code?: string } };
+export type Exec = (cmd: string, args: string[]) => ExecResult;
 
-function execSync(cmd: string, args: string[]): { status: number | null } {
-  return { status: spawnSync(cmd, args, { stdio: "ignore" }).status };
+function execSync(cmd: string, args: string[]): ExecResult {
+  const run = spawnSync(cmd, args, { stdio: "ignore" });
+  return { status: run.status, error: run.error as { code?: string } | undefined };
 }
 
-/** Whether `python` can import mlx_lm. */
-export function checkPython(python: string, exec: Exec = execSync): boolean {
-  return exec(python, ["-c", "import mlx_lm"]).status === 0;
+/** Whether `python` exists and can import mlx_lm. */
+export function checkPython(python: string, exec: Exec = execSync): PythonProblem | "ok" {
+  const run = exec(python, ["-c", "import mlx_lm"]);
+  if (run.error?.code === "ENOENT") {
+    return "missing";
+  }
+  return run.status === 0 ? "ok" : "no-mlx-lm";
 }
 
 /** A port nothing is listening on right now, for one mlx_lm.server. */
@@ -240,11 +264,19 @@ function planModel(value: string, cacheDir: string): Planned {
   }
   const name = _mlxServedName(resolved);
   if (isMlxUri(resolved.target)) {
-    const { repo } = parseMlxUri(resolved.target);
+    const { repo, revision } = parseMlxUri(resolved.target);
     const dir = mlxModelDir(cacheDir, repo);
     const record = readMlxModelRecord(dir);
     if (record === null || !isMlxModelComplete(record)) {
-      throw new Error(`${repo} is not downloaded. Run:\n  agency local download mlx:${repo}`);
+      throw new Error(
+        `${repo} is not downloaded. Run:\n  agency local download ${resolved.target}`,
+      );
+    }
+    if (revision !== undefined && !record.revision.startsWith(revision)) {
+      throw new Error(
+        `${dir} holds ${repo} at ${record.revision.slice(0, 7)}, and you asked for ${revision}. Run:\n` +
+          `  agency local download ${resolved.target}`,
+      );
     }
     const sizeBytes = Object.values(record.files).reduce((sum, f) => sum + f.size, 0);
     return { name, dir, sizeBytes };
@@ -252,14 +284,6 @@ function planModel(value: string, cacheDir: string): Planned {
   const dir = path.resolve(resolved.target);
   const sizeBytes = modelDirEntries(dir).reduce((sum, f) => sum + f.size, 0);
   return { name, dir, sizeBytes };
-}
-
-export function formatElapsed(ms: number): string {
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
 /** Resolves with a description once the child exits. */
@@ -315,8 +339,9 @@ export async function runServe(
     deps.env.AGENCY_MLX_PYTHON,
     deps.home,
   );
-  if (!checkPython(python, deps.exec)) {
-    throw new Error(pythonMissingMessage(python, deps.home));
+  const problem = checkPython(python, deps.exec);
+  if (problem !== "ok") {
+    throw new Error(pythonMissingMessage(python, deps.home, problem));
   }
 
   const children: Child[] = [];
@@ -333,12 +358,15 @@ export async function runServe(
     const internalPort = await deps.freePort();
     const child = deps.spawn(python, serveArgs(model.dir, internalPort, maxTokens));
     children.push(child);
-    const gone = exitOf(child, model.name);
-    exits.push(gone);
+    exits.push(exitOf(child, model.name));
     deps.log(`Loading ${model.name} (${formatGB(model.sizeBytes)})…`);
     const started = Date.now();
     try {
-      await waitUntilLoaded(internalPort, model.dir, { fetch: deps.fetch, gone });
+      // Any process started so far dying ends the wait, not only this one.
+      await waitUntilLoaded(internalPort, model.dir, {
+        fetch: deps.fetch,
+        gone: Promise.race(exits),
+      });
     } catch (err) {
       killAll();
       throw err;
@@ -357,9 +385,13 @@ export async function runServe(
   for (const line of servingBanner(door.port, names)) {
     deps.log(line);
   }
-  const failure = Promise.race(exits).then((why) =>
-    stopping ? new Promise<string>(() => {}) : `${why}.`,
-  );
+  // A terminal Ctrl-C reaches the children before this process, so a
+  // child's exit can arrive before the signal handler runs. Wait a moment
+  // before calling it a failure.
+  const failure = Promise.race(exits).then(async (why) => {
+    await new Promise((r) => setTimeout(r, 250));
+    return stopping ? new Promise<string>(() => {}) : `${why}.`;
+  });
   return {
     port: door.port,
     models: names,
@@ -383,8 +415,8 @@ export async function localServe(values: string[], flags: ServeFlags): Promise<v
   const stop = () => {
     void handle.close().then(() => process.exit(0));
   };
-  process.on("SIGINT", stop);
-  process.on("SIGTERM", stop);
+  process.once("SIGINT", stop);
+  process.once("SIGTERM", stop);
   const why = await handle.failure;
   console.error(why);
   await handle.close();

@@ -14,7 +14,7 @@ import {
   _printLocalCatalog,
   _refreshCatalog,
  } from "agency-lang/stdlib-lib/localModels.js"
-import { _mlxServerModels } from "agency-lang/stdlib-lib/mlxServer.js"
+import { _mlxServerModels } from "agency-lang/stdlib-lib/mlxServerModels.js"
 
 /** @module
   @summary Manage and run local models: GGUF files through llama.cpp, and MLX models through a server.
@@ -216,6 +216,16 @@ export def mlxServerModels(baseUrl: string = ""): string[] | null {
     `MLX_BASE_URL` or `http://127.0.0.1:8080/v1`)
   """
   return _mlxServerModels(baseUrl)
+}
+
+export def mlxServerRunning(baseUrl: string = ""): boolean {
+  """
+  Whether an MLX server answers at the base URL. The same probe as
+  `mlxServerModels`, as a yes or no.
+
+  @param baseUrl - the server's URL (empty string = the mlx provider's default)
+  """
+  return mlxServerModels(baseUrl) != null
 }
 
 /** Same operation as the `agency local refresh` CLI command. */

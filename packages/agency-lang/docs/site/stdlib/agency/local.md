@@ -371,6 +371,27 @@ The models the MLX server is serving, or null if no server is running.
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L209))
 
+### mlxServerRunning
+
+```ts
+mlxServerRunning(baseUrl: string = ""): boolean
+```
+
+Whether an MLX server answers at the base URL. The same probe as
+  `mlxServerModels`, as a yes or no.
+
+  @param baseUrl - the server's URL (empty string = the mlx provider's default)
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| baseUrl | `string` | "" |
+
+**Returns:** `boolean`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L221))
+
 ### refreshCatalog
 
 ```ts
@@ -397,4 +418,4 @@ Same operation as the `agency local refresh` CLI command.
 
 **Returns:** [RefreshResult](#refreshresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L222))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L232))

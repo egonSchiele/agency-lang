@@ -44,17 +44,15 @@ weights in `.safetensors` files. That is what `mlx_lm.server` loads. A GGUF
 model is one file with that information inside it, so it never matches.
 
 A Hugging Face cache snapshot, `hf/hub/models--org--repo/snapshots/<sha>/`,
-holds no real files. Every entry is a symlink into `blobs/`. `contained.ts`
-drops symlinked entries, so a check built on it saw an empty directory and
-refused the snapshot. `modelDirEntries` in `lib/stdlib/modelBackend.ts` is
-the one place that follows links. It is `readdirSync` plus `statSync`, and
-it reads names and sizes. It does not read contents. `isModelDir` and the size sum in
-`_modelFilesOnDisk` both read through it, so a snapshot alias reports its
-real size and the memory warning in `serve` sees it. `modelBackend.ts` is on
-the `FS_IMPORTERS` allow-list in `eslint.config.js` for this. Everything
-else, including `remove -f`, stays behind `contained.ts` and still refuses
-to follow a link. This was decided on 2026-09-07 so that people who already
-have a cache can use it without a copying step.
+holds no real files. Every entry is a symlink into `blobs/`, and
+`contained.ts` drops symlinked entries. So `modelDirEntries` in
+`lib/stdlib/modelBackend.ts` is the one place in the stdlib that follows
+links: `readdirSync` plus `statSync`, reading names and sizes and nothing
+else. `isModelDir` and the size sum in `_modelFilesOnDisk` both go through
+it, so a snapshot alias works as is and reports its real size.
+`modelBackend.ts` is on the `FS_IMPORTERS` allow-list in `eslint.config.js`
+for this. Everything else, including `remove -f`, stays behind
+`contained.ts` and refuses to follow a link.
 
 `_resolveModel(value)` turns a name, alias, URI, or path into
 `{ backend, target }`. `_resolveModelName` returns only the target and stays
@@ -143,7 +141,7 @@ server is not exposed directly, because a typo in a model name would load a
 second model. `serve` starts one process per model on a free internal port
 and puts its own server in front.
 
-**The front door** (`lib/cli/mlxFrontDoor.ts`) listens on `--port`, reads
+**The front door** (`lib/cli/mlxServer.ts`) listens on `--port`, reads
 the request body, and forwards to the process whose public name matches the
 `model` field. It rewrites `model` to the string the process was started
 with, the model directory, because that is the key the process holds. A
@@ -153,16 +151,18 @@ request for any other model gets a 404 and reaches no process:
 This server is serving X and Y. It is not serving Z. Start it with: agency local serve mlx:Z
 ```
 
-`GET /v1/models` answers with the served list. `mlxServerModels` in
-`std::agency/local` reads it. Replies are piped through, so streaming
-works.
+`GET /v1/models` answers with the served list. `mlxServerModels` and
+`mlxServerRunning` in `std::agency/local` read it. Replies are piped
+through, so streaming works. A client that disconnects mid-reply destroys
+the upstream request, so the server stops generating.
 
 **Readiness.** The server prints nothing when a model has loaded. After
 each start, `waitUntilLoaded` posts a one-token completion to the internal
 port, naming the model directory, and retries every 500 ms while the port
-is closed. The reply means the model is loaded. If the process exits first,
-the wait rejects with the exit code and every process started so far is
-killed.
+is closed. A 2xx reply means the model is loaded. Any other status is a
+server that refuses the model, and the wait fails with the status and
+body. If any process started so far exits during the wait, it fails with
+the exit code and every process is killed.
 
 **Python.** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`,
 then `~/.agency-agent/mlx-env/bin/python`. `serve` runs
@@ -170,14 +170,12 @@ then `~/.agency-agent/mlx-env/bin/python`. `serve` runs
 the default environment and exits. Agency does not install Python.
 
 **Stopping.** Ctrl-C reaches the children before `serve`, since they share
-its process group. `runServe` marks itself stopping before killing anything,
-so those exits are not reported as failures. A process that dies on its own
-after it was ready resolves the handle's `failure` promise, and the command
-prints why, kills the rest, and exits 1.
-
-`runServe` does not touch `process`. Its `spawn`, `fetch`, `exec`,
-`totalmem`, `log`, `freePort`, cache directory, and config all come in
-through `ServeDeps`, so the tests drive it with fakes.
+its process group, so a child's exit can arrive before the signal handler
+runs. `runServe` waits a moment after an exit and reports it only if it is
+not already stopping. A process that dies on its own after it was ready
+makes the command print why, kill the rest, and exit 1. Closing the front
+door closes its open connections too, or a reply still streaming from a
+killed process would keep it from ever closing.
 
 ## `remove` and `-f`
 

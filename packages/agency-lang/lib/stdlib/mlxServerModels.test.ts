@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as http from "node:http";
-import { _mlxServerModels, mlxBaseUrl, MLX_DEFAULT_BASE_URL } from "./mlxServer.js";
+import { _mlxServerModels, mlxBaseUrl, MLX_DEFAULT_BASE_URL } from "./mlxServerModels.js";
 
 describe("mlxBaseUrl", () => {
   it("an explicit URL, then MLX_BASE_URL, then the default", () => {

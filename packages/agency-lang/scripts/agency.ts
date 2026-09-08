@@ -1749,8 +1749,8 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("serve")
     .description("Serve MLX models in this terminal: one mlx_lm.server per model, behind one port")
     .argument("<models...>", "mlx: URIs, aliases, or model directories")
-    .option("--port <n>", "Port to listen on", parseInt, 8080)
-    .option("--max-tokens <n>", "Longest reply the server allows", parseInt, 16384)
+    .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
+    .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
     .option("--python <path>", "Python with mlx-lm installed")
     .action((models: string[], opts: { port: number; maxTokens: number; python?: string }) =>
       localServe(models, opts),

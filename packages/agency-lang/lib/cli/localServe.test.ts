@@ -79,11 +79,21 @@ describe("messages", () => {
   });
 
   it("pythonMissingMessage shows the venv commands for the default environment", () => {
-    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me");
+    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me", "no-mlx-lm");
     expect(msg).toContain("/usr/bin/python3 cannot import mlx_lm.");
     expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
     expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install mlx-lm");
     expect(msg).toContain("point --python at a Python that has");
+  });
+
+  it("pythonMissingMessage says when the Python itself is not there", () => {
+    const msg = pythonMissingMessage(
+      "/home/me/.agency-agent/mlx-env/bin/python",
+      "/home/me",
+      "missing",
+    );
+    expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/python does not exist.");
+    expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
   });
 });
 
@@ -130,19 +140,45 @@ describe("waitUntilLoaded", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(n).toBe(after);
   });
+
+  it("stops waiting on a request still open when the process is gone", async () => {
+    const gone = new Promise<string>((resolve) =>
+      setTimeout(() => resolve("mlx_lm.server for /m/dir exited with 1"), 15),
+    );
+    const fetchFn = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+    await expect(waitUntilLoaded(8081, "/m/dir", { fetch: fetchFn, gone })).rejects.toThrow(
+      "mlx_lm.server for /m/dir exited with 1 before it was ready.",
+    );
+  });
+
+  it("fails with the status and body when the server refuses the request", async () => {
+    const fetchFn = (async () =>
+      new Response(JSON.stringify({ error: "chat template missing" }), {
+        status: 400,
+      })) as unknown as typeof fetch;
+    await expect(waitUntilLoaded(8081, "/m/dir", { fetch: fetchFn })).rejects.toThrow(
+      'mlx_lm.server for /m/dir answered 400 to the readiness request: {"error":"chat template missing"}',
+    );
+  });
 });
 
 describe("checkPython", () => {
-  it("passes when `python -c import mlx_lm` exits 0", () => {
+  it("ok when `python -c import mlx_lm` exits 0, else says which problem", () => {
     const seen: string[][] = [];
     const exec = (cmd: string, args: string[]) => {
       seen.push([cmd, ...args]);
       return { status: 0 };
     };
-    expect(checkPython("/x/python", exec)).toBe(true);
+    expect(checkPython("/x/python", exec)).toBe("ok");
     expect(seen).toEqual([["/x/python", "-c", "import mlx_lm"]]);
-    expect(checkPython("/x/python", () => ({ status: 1 }))).toBe(false);
-    expect(checkPython("/x/python", () => ({ status: null }))).toBe(false);
+    expect(checkPython("/x/python", () => ({ status: 1 }))).toBe("no-mlx-lm");
+    expect(checkPython("/x/python", () => ({ status: null, error: { code: "ENOENT" } }))).toBe(
+      "missing",
+    );
+  });
+
+  it("reports a Python that does not exist", () => {
+    expect(checkPython("/no/such/python")).toBe("missing");
   });
 });
 
@@ -327,12 +363,32 @@ describe("runServe", () => {
     expect(spawned).toEqual([]);
   });
 
-  it("refuses a Python without mlx_lm, before starting anything", async () => {
+  it("refuses a Python without mlx_lm, or without a Python, before starting anything", async () => {
     recordedModel("org/a", true);
     await expect(
       runServe(["mlx:org/a"], {}, { ...deps, exec: () => ({ status: 1 }) }),
     ).rejects.toThrow(/cannot import mlx_lm/);
+    await expect(
+      runServe(
+        ["mlx:org/a"],
+        {},
+        { ...deps, exec: () => ({ status: null, error: { code: "ENOENT" } }) },
+      ),
+    ).rejects.toThrow("/home/me/.agency-agent/mlx-env/bin/python does not exist.");
     expect(spawned).toEqual([]);
+  });
+
+  it("refuses a pinned revision the record does not match, and keeps the pin in the command", async () => {
+    const model = recordedModel("org/a", true);
+    await expect(runServe(["mlx:org/a@9c1f0a2"], {}, deps)).rejects.toThrow(
+      `${model} holds org/a at abc, and you asked for 9c1f0a2. Run:\n  agency local download mlx:org/a@9c1f0a2`,
+    );
+    await expect(runServe(["mlx:org/b@abc"], {}, deps)).rejects.toThrow(
+      "org/b is not downloaded. Run:\n  agency local download mlx:org/b@abc",
+    );
+    const handle = await runServe(["mlx:org/a@ab"], { port: 0 }, deps);
+    expect(handle.models).toEqual(["org/a"]);
+    await handle.close();
   });
 
   it("refuses the same model twice", async () => {
@@ -365,6 +421,53 @@ describe("runServe", () => {
       "mlx_lm.server for org/b exited with 1 before it was ready.",
     );
     expect(killed).toBe(2);
+  });
+
+  it("stops everything when an earlier process dies while a later one is loading", async () => {
+    recordedModel("org/a", true);
+    recordedModel("org/b", true);
+    const children: ReturnType<typeof fakeChild>[] = [];
+    const failing: ServeDeps = {
+      ...deps,
+      spawn: () => {
+        const child = fakeChild();
+        children.push(child);
+        return child;
+      },
+      fetch: (async (url: string) => {
+        if (url.includes(":9000/")) return new Response("{}", { status: 200 });
+        // b never answers; a dies meanwhile.
+        setTimeout(() => children[0].exit(9), 5);
+        return new Promise<Response>(() => {});
+      }) as unknown as typeof fetch,
+    };
+    await expect(runServe(["mlx:org/a", "mlx:org/b"], { port: 0 }, failing)).rejects.toThrow(
+      "mlx_lm.server for org/a exited with 9 before it was ready.",
+    );
+    expect(killed).toBe(2);
+  });
+
+  it("does not report a child that exits just before close(), as on Ctrl-C", async () => {
+    recordedModel("org/a", true);
+    let child: ReturnType<typeof fakeChild> | undefined;
+    const handle = await runServe(
+      ["mlx:org/a"],
+      { port: 0 },
+      {
+        ...deps,
+        spawn: () => {
+          child = fakeChild();
+          return child;
+        },
+      },
+    );
+    child!.exit(130);
+    await handle.close();
+    const outcome = await Promise.race([
+      handle.failure,
+      new Promise<string>((r) => setTimeout(() => r("quiet"), 400)),
+    ]);
+    expect(outcome).toBe("quiet");
   });
 
   it("reports a process that dies after it was ready, and stays quiet after close", async () => {

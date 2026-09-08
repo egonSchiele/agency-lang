@@ -212,8 +212,6 @@ export interface AgencyConfig {
        *  by `--python` and the `AGENCY_MLX_PYTHON` env var; defaults to
        *  `~/.agency-agent/mlx-env/bin/python`. */
       python: string;
-      /** Parallel range requests during an MLX download. Default 8. */
-      downloadConcurrency: number;
     }>;
     statelog?: Partial<{
       host: string;
@@ -579,7 +577,6 @@ export const AgencyConfigSchema = z
         mlx: z
           .object({
             python: z.string(),
-            downloadConcurrency: z.number(),
           })
           .partial(),
         statelog: z

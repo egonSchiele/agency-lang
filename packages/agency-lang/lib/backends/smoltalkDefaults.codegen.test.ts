@@ -61,6 +61,12 @@ describe("smoltalkDefaults codegen", () => {
     expect(out).toContain("https://proxy.test/v1");
   });
 
+  it("bakes a configured mlx base URL, and omits it otherwise", () => {
+    const out = generate(PROGRAM, { client: { baseUrl: { mlx: "http://127.0.0.1:9090/v1" } } });
+    expect(out).toContain("http://127.0.0.1:9090/v1");
+    expect(generate(PROGRAM)).not.toMatch(/\bmlx:/);
+  });
+
   it("bakes the built-in provider with the built-in model when nothing is configured", () => {
     const out = generate(PROGRAM);
     expect(out).toMatch(/model:\s*"gpt-5-mini"/);

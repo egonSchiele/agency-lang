@@ -4,10 +4,46 @@
       "nodeName": "seedKeepsSystemMessage",
       "input": "",
       "expectedOutput": "\"Agency|system,user,user,assistant\"",
-      "evaluationCriteria": [{ "type": "exact" }],
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
       "useTestLLMProvider": true,
-      "llmMocks": [{ "return": "Agency" }],
+      "llmMocks": [
+        {
+          "return": "Agency"
+        }
+      ],
       "description": "messages: seeds the active thread instead of replacing it, so an earlier systemMessage is still sent"
+    },
+    {
+      "nodeName": "seedWithHandoff",
+      "input": "",
+      "expectedOutput": "\"done|system,user,user,assistant,user,assistant,user,assistant|[dispatching helper: {\\\"question\\\":\\\"hi\\\"}]|[helper finished. helper says hi]\\nContinue with the user's request.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "toolCall": {
+            "name": "helper",
+            "args": {
+              "question": "hi"
+            }
+          }
+        },
+        {
+          "return": "helper says hi"
+        },
+        {
+          "return": "done"
+        }
+      ],
+      "description": "a handoff inside a seeded prompt lands on the active thread, next to the system message and the seed"
     }
   ]
 }

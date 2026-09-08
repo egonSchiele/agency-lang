@@ -912,23 +912,35 @@ function topLevelTypeAliases(nodes: AgencyNode[]): Record<string, TypeAlias> {
 function typeValueArgRefs(type: VariableType, aliases: Record<string, TypeAlias>): FreeRef[] {
   const out: FreeRef[] = [];
   const followed: string[] = [];
-  const visit = (current: VariableType): void => {
+  // `bound` holds the value parameters of the alias whose body is being
+  // walked. A body reference to one of them is the alias's own formal, as
+  // in `type Above(floor) = GreaterThan(floor)`, and names nothing at top
+  // level; the argument it stands for was collected at the use site.
+  const visit = (current: VariableType, bound: string[]): void => {
     visitTypes(current, (inner) => {
       if (inner.type !== "typeAliasVariable" && inner.type !== "genericType") {
         return;
       }
       for (const arg of inner.valueArgs ?? []) {
-        out.push(...collectFreeIdentifiers(arg));
+        for (const ref of collectFreeIdentifiers(arg)) {
+          if (ref.kind === "name" && bound.includes(ref.name)) {
+            continue;
+          }
+          out.push(ref);
+        }
       }
       const name = inner.type === "typeAliasVariable" ? inner.aliasName : inner.name;
       const alias = aliases[name];
       if (alias && !followed.includes(name)) {
         followed.push(name);
-        visit(alias.aliasedType);
+        visit(
+          alias.aliasedType,
+          (alias.valueParams ?? []).map((param) => param.name),
+        );
       }
     });
   };
-  visit(type);
+  visit(type, []);
   return out;
 }
 

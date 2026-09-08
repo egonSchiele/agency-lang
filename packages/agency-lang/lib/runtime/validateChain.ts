@@ -178,7 +178,18 @@ export function __withUseSiteValidators(
     return descriptor;
   }
   if (descriptor.kind === "ref") {
-    return { kind: "ref", get: () => __withUseSiteValidators(descriptor.get(), validators) };
+    // Merged once: the walker resolves the same ref for every element of an
+    // array or record.
+    let merged: TypeValidationDescriptor | undefined;
+    return {
+      kind: "ref",
+      get: () => {
+        if (merged === undefined) {
+          merged = __withUseSiteValidators(descriptor.get(), validators);
+        }
+        return merged;
+      },
+    };
   }
   return { ...descriptor, validators: [...descriptor.validators, ...validators] };
 }

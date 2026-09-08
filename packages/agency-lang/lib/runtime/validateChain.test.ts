@@ -402,6 +402,16 @@ describe("__withUseSiteValidators", () => {
     expect(isFailure(await __validateChainRecursive(3, merged))).toBe(true);
   });
 
+  it("merges a ref once, however many times the walker resolves it", () => {
+    const leaf: TypeValidationDescriptor = { kind: "leaf", schema: z.number(), validators: [] };
+    const get = vi.fn(() => leaf);
+    const merged = __withUseSiteValidators({ kind: "ref", get }, [isPos]);
+    const first = (merged as { get: () => TypeValidationDescriptor }).get();
+    const second = (merged as { get: () => TypeValidationDescriptor }).get();
+    expect(second).toBe(first);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
   it("returns the descriptor itself when there is nothing to add", () => {
     const leaf: TypeValidationDescriptor = { kind: "leaf", schema: z.number(), validators: [] };
     expect(__withUseSiteValidators(leaf, [])).toBe(leaf);

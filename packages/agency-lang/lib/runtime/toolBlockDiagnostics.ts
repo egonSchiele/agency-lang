@@ -8,14 +8,14 @@ import { DIAGNOSTICS, renderMessage } from "../typeChecker/diagnostics.js";
  * (`lib/typeChecker/toolBlockBinding.ts`) and the runtime backstop
  * (`AgencyFunction.validateForLLM` in `agencyFunction.ts`) emit messages
  * built from `formatUnboundClause`. The canonical clause
- *   `required function-typed parameter '<name>' is unbound`
+ *   `a required function-typed parameter '<name>' that is unbound`
  * appears in both messages — the test plan (§5.4 #42) pins that overlap
  * explicitly so the checker and runtime cannot drift apart silently.
  */
 
 /** Canonical clause shared by compile-time and runtime errors. */
 export function formatUnboundClause(paramName: string): string {
-  return `required function-typed parameter '${paramName}' is unbound`;
+  return `a required function-typed parameter '${paramName}' that is unbound`;
 }
 
 /** Compile-time tool-binding diagnostic — rendered from the diagnostic
@@ -42,8 +42,8 @@ export function formatRequiredUnboundError(
 /** Runtime backstop diagnostic — same canonical clause, slightly different framing. */
 export function formatRequiredUnboundRuntimeError(toolName: string, paramName: string): string {
   return (
-    `Tool '${toolName}' cannot be passed to llm(): ${formatUnboundClause(paramName)}. ` +
-    `Use ${toolName}.partial(${paramName}: <value>) before passing.`
+    `Tool '${toolName}' cannot be passed to llm(): it has ${formatUnboundClause(paramName)}. ` +
+    `Bind it with ${toolName}.partial(${paramName}: <value>) before passing it.`
   );
 }
 

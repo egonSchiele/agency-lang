@@ -28,6 +28,7 @@ function makeGraph(opts: {
       varName: n.name,
       kind: n.kind ?? "static",
       initExpr: { type: "number", value: "0", loc: { line: 0, col: 0 } } as any,
+      typeRefs: [],
       loc: { line: n.line ?? 0, col: 0, start: 0, end: 0 },
       exported: false,
       sequenceHint: n.hint ?? 0,

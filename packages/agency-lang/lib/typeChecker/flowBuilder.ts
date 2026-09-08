@@ -99,6 +99,65 @@ export function attachExpressionsToFlow(
 }
 
 /**
+ * `T | null` for a local that may not have been assigned yet when a side
+ * branch (a finalize, an inline handler) runs. A `!= null` guard inside the
+ * branch narrows it back through the ordinary machinery.
+ *
+ * A union-typed local is flattened before the null is added: uniteTypes
+ * dedupes but does not flatten, and presence narrowing only drops TOP-LEVEL
+ * null members, so `(T | null) | null` would keep its inner null through an
+ * `if (x != null)` guard.
+ */
+function maybeUnset(declared: ScopeType, env: FlowEnvironment): ScopeType {
+  if (isAnyType(declared)) return declared;
+  const members =
+    (declared as VariableType).type === "unionType"
+      ? (declared as { types: VariableType[] }).types
+      : [declared];
+  return uniteTypes([...members, NULL_T], env.typeAliases);
+}
+
+/**
+ * The flow an inline handler body starts from. The raise that runs the
+ * handler can happen after any prefix of the handle body, so the pre-body
+ * flow is adjusted for what the body may have done by then: a name it
+ * rebinds is reset to its declared type, and a name it declares may not
+ * exist yet, so it is `T | null`. The handler's own parameter is always
+ * bound on entry, so a body local of the same name does not widen it.
+ */
+function handlerEntryFlow(
+  flow: FlowNode,
+  body: AgencyNode[],
+  param: string,
+  env: FlowEnvironment,
+): FlowNode {
+  const widened: Record<string, ScopeType> = Object.create(null);
+  for (const name of assignedNames(body)) {
+    if (name === param) continue;
+    const ref: Reference = { variable: name, chain: [] };
+    widened[referenceKey(ref)] = declaredPathType(env.scope, ref, env.typeAliases);
+  }
+  for (const name of declaredNames(body)) {
+    if (name === param) continue;
+    const ref: Reference = { variable: name, chain: [] };
+    widened[referenceKey(ref)] = maybeUnset(declaredPathType(env.scope, ref, env.typeAliases), env);
+  }
+  return { kind: "loop", prev: flow, widened };
+}
+
+/** Names a body declares with `let`/`const`, outside nested definitions. */
+function declaredNames(body: AgencyNode[]): string[] {
+  const names: string[] = [];
+  for (const { node, ancestors } of walkNodes(body)) {
+    const insideNestedDef = ancestors.some((a) => a.type === "function" || a.type === "graphNode");
+    if (!insideNestedDef && node.type === "assignment" && node.declKind) {
+      names.push(node.variableName);
+    }
+  }
+  return names;
+}
+
+/**
  * Names of variables a body rebinds (for loop widening). Bare `x = …` only —
  * access-chain mutations and destructuring patterns are excluded, matching the
  * `assignment` rule below.
@@ -303,7 +362,10 @@ const statementRules: StatementRuleTable = {
   handleBlock: (node, flow, env) => {
     const afterBody = buildFlowGraph(node.body, flow, env);
     if (node.handler.kind === "inline") {
-      buildFlowGraph(node.handler.body, afterBody, env);
+      // The handler runs when a statement in the body raises, so it starts
+      // from the pre-body flow, not from `afterBody` (issue #612).
+      const entry = handlerEntryFlow(flow, node.body, node.handler.param.name, env);
+      buildFlowGraph(node.handler.body, entry, env);
     }
     return afterBody;
   },
@@ -380,18 +442,25 @@ const passThrough = (node: AgencyNode, flow: FlowNode, env: FlowEnvironment): Fl
 };
 
 /**
- * Build the flow graph for one body. A pure fold: each statement's rule maps
- * the incoming flow to the next. Once `flow` is `exit`, the remaining
- * statements are unreachable, so the rule is not applied (no node is built
- * rooted at `exit`, where typeAt throws; dead-code refs go unattached, which
- * is harmless — PR 2 falls back to scope.lookup for nodes with no flow).
+ * Build the flow graph for one body. A fold: each statement's rule maps the
+ * incoming flow to the next. Once `flow` is `exit`, the remaining statements
+ * are unreachable and the fold's result stays `exit`. Those statements are
+ * still walked, on a side flow rooted at the flow before the exit, so that
+ * narrowing inside dead code works the same as anywhere else and what was
+ * known before the exit stays known (issue #538). No node is ever rooted at
+ * `exit`, where typeAt throws.
  */
 export function buildFlowGraph(
   nodes: AgencyNode[],
   entry: FlowNode,
   env: FlowEnvironment,
 ): FlowNode {
-  return nodes.reduce<FlowNode>((flow, node) => {
+  // `live` is the fold's result. `dead` is the side flow the statements
+  // after an exit are walked on, so their guards still narrow. It is null
+  // while the body is live; a body entered at `exit` gets a fresh start.
+  type Fold = { live: FlowNode; dead: FlowNode | null };
+  const step = ({ live, dead }: Fold, node: AgencyNode): Fold => {
+    const flow = live;
     if (node.type === "finalizeBlock") {
       // A finalize is a declaration: position-free, and NOT dead code
       // after an unconditional return (which turns `flow` to exit). Its
@@ -406,32 +475,25 @@ export function buildFlowGraph(
       const widened: Record<string, ScopeType> = Object.create(null);
       for (const name of env.scope.declaredNames()) {
         const ref: Reference = { variable: name, chain: [] };
-        const declared = typeAt(ref, start, env);
-        // Flatten a union-typed local before re-uniting: uniteTypes
-        // dedupes but does not flatten, and presence narrowing only
-        // drops TOP-LEVEL null members — `(T | null) | null` would
-        // keep its inner null through an `if (x != null)` guard.
-        const members =
-          !isAnyType(declared) && (declared as VariableType).type === "unionType"
-            ? (declared as { types: VariableType[] }).types
-            : [declared];
-        widened[referenceKey(ref)] = isAnyType(declared)
-          ? declared
-          : uniteTypes([...members, NULL_T], env.typeAliases);
+        widened[referenceKey(ref)] = maybeUnset(typeAt(ref, start, env), env);
       }
       buildFlowGraph(node.body, { kind: "loop", prev: start, widened }, env);
-      return flow;
-    }
-    if (flow.kind === "exit") {
-      return flow;
+      return { live, dead };
     }
     const rule = (statementRules[node.type] ?? passThrough) as (
       node: AgencyNode,
       flow: FlowNode,
       env: FlowEnvironment,
     ) => FlowNode;
-    return rule(node, flow, env);
-  }, entry);
+    if (flow.kind === "exit") {
+      const root = dead ?? { kind: "start", scope: env.scope };
+      const next = rule(node, root, env);
+      return { live, dead: next.kind === "exit" ? root : next };
+    }
+    const next = rule(node, flow, env);
+    return { live: next, dead: next.kind === "exit" ? flow : null };
+  };
+  return nodes.reduce<Fold>(step, { live: entry, dead: null }).live;
 }
 
 /**

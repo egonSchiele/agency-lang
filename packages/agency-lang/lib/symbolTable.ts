@@ -22,6 +22,7 @@ import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
 import { effectDeclarationsWithTags } from "./utils/tagsAbove.js";
 import { resolveAgencyImportPath, isAgencyImport, isNonTemplatedStdlib } from "./importPaths.js";
+import { ImportResolutionError } from "./importResolutionError.js";
 
 export type InterruptEffect = {
   effect: string;
@@ -246,11 +247,13 @@ export class SymbolTable {
       for (const node of entry.program.nodes) {
         if (node.type !== "exportFromStatement") continue;
         if (!isAgencyImport(node.modulePath)) {
-          throw new Error(
+          throw new ImportResolutionError(
             `Re-export source must be an Agency module (std::, pkg::, or .agency path): '${node.modulePath}'`,
+            node.loc,
+            filePath,
           );
         }
-        const sourcePath = resolveAgencyImportPath(node.modulePath, filePath);
+        const sourcePath = resolveReExportSource(node.modulePath, filePath, node.loc);
         resolveReExports(sourcePath, newVisiting);
         mergeExportsFrom(files, filePath, sourcePath, node);
       }
@@ -547,6 +550,25 @@ function symbolKindLabel(sym: SymbolInfo): string {
   }
 }
 
+/** `resolveAgencyImportPath` for a re-export, with the statement's file and
+ *  position stamped on an uninstalled-package error so the CLI can print
+ *  `file:line:col`. */
+function resolveReExportSource(
+  modulePath: string,
+  fromFile: string,
+  loc: SourceLocation | undefined,
+): string {
+  try {
+    return resolveAgencyImportPath(modulePath, fromFile);
+  } catch (error) {
+    if (error instanceof ImportResolutionError) {
+      error.file = error.file ?? fromFile;
+      error.loc = error.loc ?? loc;
+    }
+    throw error;
+  }
+}
+
 /**
  * Merge symbols flowing through one `exportFromStatement` from `sourcePath`
  * into the re-exporter's `FileSymbols`. Hard errors on missing symbols,
@@ -560,7 +582,11 @@ export function mergeExportsFrom(
 ): void {
   const sourceSymbols = files[sourcePath];
   if (!sourceSymbols) {
-    throw new Error(`Re-export source '${stmt.modulePath}' could not be resolved`);
+    throw new ImportResolutionError(
+      `Re-export source '${stmt.modulePath}' could not be resolved`,
+      stmt.loc,
+      reExporterPath,
+    );
   }
   const targetSymbols: FileSymbols = files[reExporterPath] ?? {};
   files[reExporterPath] = targetSymbols;
@@ -570,7 +596,7 @@ export function mergeExportsFrom(
       if (!isExportedSymbol(sym)) continue;
       // Star re-exports carry no per-name modifiers; markers are inherited
       // from the source symbol via the spread inside mergeOne.
-      mergeOne(targetSymbols, name, name, sym, false, false, sourcePath, stmt);
+      mergeOne(targetSymbols, name, name, sym, false, false, sourcePath, stmt, reExporterPath);
     }
     return;
   }
@@ -579,26 +605,36 @@ export function mergeExportsFrom(
   for (const originalName of stmt.body.names) {
     const sym = sourceSymbols[originalName];
     if (!sym) {
-      throw new Error(`Symbol '${originalName}' is not defined in '${stmt.modulePath}'`);
+      throw new ImportResolutionError(
+        `Symbol '${originalName}' is not defined in '${stmt.modulePath}'`,
+        stmt.loc,
+        reExporterPath,
+      );
     }
     if (!isExportedSymbol(sym)) {
-      throw new Error(
+      throw new ImportResolutionError(
         `${symbolKindLabel(sym)} '${originalName}' in '${stmt.modulePath}' is not exported. Add the 'export' keyword to its definition.`,
+        stmt.loc,
+        reExporterPath,
       );
     }
     const localName = stmt.body.aliases[originalName] ?? originalName;
     if (sym.kind === "node" && localName !== originalName) {
-      throw new Error(
+      throw new ImportResolutionError(
         `Node '${originalName}' from '${stmt.modulePath}' cannot be re-exported under a different name. ` +
           `Re-exported nodes preserve their original name because the source graph is merged wholesale.`,
+        stmt.loc,
+        reExporterPath,
       );
     }
     const isDestructive = stmt.body.destructiveNames?.includes(originalName) ?? false;
     const isIdempotent = stmt.body.idempotentNames?.includes(originalName) ?? false;
     if (sym.kind === "node" && (isDestructive || isIdempotent)) {
-      throw new Error(
+      throw new ImportResolutionError(
         `A retry-safety marker (destructive/idempotent) cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
           `Markers are only meaningful for functions.`,
+        stmt.loc,
+        reExporterPath,
       );
     }
     mergeOne(
@@ -610,6 +646,7 @@ export function mergeExportsFrom(
       isIdempotent,
       sourcePath,
       stmt,
+      reExporterPath,
     );
   }
 }
@@ -623,19 +660,26 @@ function mergeOne(
   forceIdempotent: boolean,
   sourcePath: string,
   stmt: ExportFromStatement,
+  reExporterPath: string,
 ): void {
   const existing = targetSymbols[localName];
   if (existing) {
     if (!("reExportedFrom" in existing) || !existing.reExportedFrom) {
       const at = existing.loc ? ` at line ${existing.loc.line + 1}` : "";
-      throw new Error(`Re-exported name '${localName}' collides with local declaration${at}`);
+      throw new ImportResolutionError(
+        `Re-exported name '${localName}' collides with local declaration${at}`,
+        stmt.loc,
+        reExporterPath,
+      );
     }
     const sameSource =
       existing.reExportedFrom.sourceFile === sourcePath &&
       existing.reExportedFrom.originalName === originalName;
     if (!sameSource) {
-      throw new Error(
+      throw new ImportResolutionError(
         `Name '${localName}' is re-exported from both '${existing.reExportedFrom.sourceFile}' and '${sourcePath}'. Disambiguate with explicit 'export { ${localName} as ... } from ...'.`,
+        stmt.loc,
+        reExporterPath,
       );
     }
     return; // idempotent re-merge

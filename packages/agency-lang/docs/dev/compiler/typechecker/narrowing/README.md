@@ -193,6 +193,22 @@ Success for the rest of the block. `alwaysExits` decides this and is deliberatel
 conservative: it counts only `return` (a `raise`/interrupt may resume, and
 `propagate` semantics are non-trivial, so treating them as exits could be unsound).
 
+### Inline handler bodies and dead code
+
+An inline handler (`handle { … } with (e) { … }`) runs when a statement in the
+handle body raises, so it can start after any prefix of that body. Its flow
+starts from the pre-body flow, adjusted for what the body may have done by
+then: a name the body rebinds is reset to its declared type, and a name it
+declares is `T | null`, since the declaration may not have run yet. This is
+the same `T | null` treatment a finalize block gets. The handler's own
+parameter is always bound on entry, so a body local of the same name leaves
+it alone. See `handlerEntryFlow` in `flowBuilder.ts`.
+
+Statements after an unconditional `return` are still walked, on a side flow
+rooted at the flow before the exit, so guards in dead code narrow like
+anywhere else and a narrowing established before the exit stays visible. The
+scope's terminal flow stays `exit`, so definite-return checking is unchanged.
+
 ### Soundness
 
 Every narrowing is a false-negative-only approximation. A whole-body reassignment

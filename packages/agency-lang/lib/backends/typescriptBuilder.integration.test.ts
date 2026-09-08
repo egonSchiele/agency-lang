@@ -492,11 +492,10 @@ node main() {
   return h
 }
 `);
-    // Use-site validators must be concatenated via an IIFE that binds the
-    // factory call to a local, so the factory (and its min.partial(...)
-    // allocations) is evaluated exactly once, not twice.
-    expect(out).toContain("(__d) =>");
-    // The factory call appears once (as the IIFE argument), not spread + read.
+    // Use-site validators are merged by the runtime helper, which takes the
+    // factory call as an argument, so the factory (and its min.partial(...)
+    // allocations) is evaluated exactly once.
+    expect(out).toContain("__withUseSiteValidators(");
     const calls = out.match(/NumberInRange\(1, 10\)/g) ?? [];
     expect(calls.length).toBe(1);
   });

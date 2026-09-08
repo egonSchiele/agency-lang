@@ -79,6 +79,7 @@ import { buildCompilationUnit } from "@/compilationUnit.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { formatSpliceDiagnostic } from "@/compiler/splice/report.js";
 import { SymbolTable } from "@/symbolTable.js";
+import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError } from "@/vendor/commander/index.js";
 import * as fs from "fs";
@@ -1579,13 +1580,55 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // whole directory complete. The symbol table stays file-keyed, so adding
       // more entrypoints never merges or pollutes across files.
       const filePaths = sources.filter((s) => s.kind === "file").map((s) => path.resolve(s.path));
-      const symbolTable = filePaths.length ? SymbolTable.build(filePaths, config) : undefined;
+      // A bad import (a re-export of a name the source lacks, an uninstalled
+      // pkg::) is a user error: print its message once, not a stack trace.
+      const printed: string[] = [];
+      const reportImportError = (error: unknown, file?: string): void => {
+        if (!(error instanceof ImportResolutionError)) throw error;
+        const line = formatImportResolutionError(error, file);
+        if (!printed.includes(line)) {
+          console.error(line);
+        }
+        printed.push(line);
+        hasErrors = true;
+      };
+      // One shared table for every file. When an input file's own imports
+      // break the build, that file is reported and dropped, and the table is
+      // rebuilt for the rest. When the bad import is in a file the inputs only
+      // reach through imports, the shared build cannot succeed, so each file
+      // builds its own table; the ones that reach the bad file repeat the
+      // same error, which is printed once.
+      const dropped: string[] = [];
+      let remaining = filePaths;
+      let sharedTable: SymbolTable | undefined;
+      while (remaining.length > 0 && sharedTable === undefined) {
+        try {
+          sharedTable = SymbolTable.build(remaining, config);
+        } catch (error) {
+          reportImportError(error);
+          const bad = (error as ImportResolutionError).file;
+          if (bad === undefined || !remaining.includes(bad)) {
+            break;
+          }
+          dropped.push(bad);
+          remaining = remaining.filter((file) => file !== bad);
+        }
+      }
       for (const src of sources) {
-        const contents = await readSource(src);
         if (src.kind === "stdin") {
-          runTypeCheck(contents);
-        } else {
-          runTypeCheck(contents, src.path, symbolTable);
+          runTypeCheck(await readSource(src));
+          continue;
+        }
+        const filePath = path.resolve(src.path);
+        if (dropped.includes(filePath)) {
+          continue;
+        }
+        const contents = await readSource(src);
+        try {
+          const table = sharedTable ?? SymbolTable.build([filePath], config);
+          runTypeCheck(contents, src.path, table);
+        } catch (error) {
+          reportImportError(error, src.path);
         }
       }
       if (hasErrors) process.exit(1);
@@ -2407,7 +2450,17 @@ export async function runCli(
   const program = createProgram(deps);
   // No argv rewriting: the program boundary and flag ownership live inside
   // the vendored commander fork (passThroughOptions, fallbackCommand).
-  await program.parseAsync(argv);
+  try {
+    await program.parseAsync(argv);
+  } catch (error) {
+    // A bad import (a re-export of a name the source lacks, an uninstalled
+    // pkg::) is a user error: print its message, not a stack trace. The
+    // compiler throws it rather than exiting so programmatic callers can
+    // catch it; this is the one place the CLI turns it into an exit.
+    if (!(error instanceof ImportResolutionError)) throw error;
+    console.error(formatImportResolutionError(error));
+    process.exit(1);
+  }
 }
 
 const isMain =

@@ -23,19 +23,19 @@
  */
 import type { AgencyProgram, AgencyNode, Assignment } from "../types.js";
 import type { TypeCheckError } from "./types.js";
-import { checkBannedBuiltinCalls, checkStaticMutation } from "./staticInitRules.js";
+import {
+  checkBannedBuiltinCalls,
+  checkStaticMutation,
+  topLevelAssignments,
+} from "./staticInitRules.js";
 
 export function validateStaticInit(program: AgencyProgram, errors: TypeCheckError[]): void {
   // First sweep: collect static names so the mutation rule has
-  // something to match against. Both `static const` and `with handler
-  // { static const ... }` shapes count; the `withModifier` wrapper
-  // here mirrors how `sectionAssembler` / `initDepGraph` peel it off.
+  // something to match against.
   const staticNames: Record<string, true> = {};
-  for (const node of program.nodes) {
-    const inner = node.type === "withModifier" ? node.statement : node;
-    if (inner.type !== "assignment") continue;
-    if ((inner as Assignment).static) {
-      staticNames[(inner as Assignment).variableName] = true;
+  for (const assignment of topLevelAssignments(program.nodes)) {
+    if (assignment.static) {
+      staticNames[assignment.variableName] = true;
     }
   }
 

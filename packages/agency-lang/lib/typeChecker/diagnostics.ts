@@ -530,6 +530,12 @@ export const DIAGNOSTICS = {
     message:
       "'{name}' is not accessible under --agency-only. It reaches JavaScript's Function or prototype chain, which pure Agency code may not use.",
   },
+  parameterRedeclared: {
+    code: "AG4012",
+    severity: "error",
+    message:
+      "Cannot redeclare parameter '{name}' with '{declKind}'. Reads after the redeclare would still see the parameter. Assign to it instead, or pick a different name.",
+  },
   undefinedVariable: {
     code: "AG4007",
     severity: "error",
@@ -555,13 +561,13 @@ export const DIAGNOSTICS = {
     code: "AG6028",
     severity: "error",
     message:
-      "Tool '{tool}' has required function-typed parameter '{param}' is unbound. Bind it with .partial({param}: <value>) before passing as a tool.",
+      "Tool '{tool}' has a required function-typed parameter '{param}' that is unbound. Bind it with .partial({param}: <value>) before passing it as a tool.",
   },
   toolRequiredParamUnboundTyped: {
     code: "AG6029",
     severity: "error",
     message:
-      "Tool '{tool}' has required function-typed parameter '{param}' is unbound ({type}). Bind it with .partial({param}: <value>) before passing as a tool.",
+      "Tool '{tool}' has a required function-typed parameter '{param}' that is unbound (its type is {type}). Bind it with .partial({param}: <value>) before passing it as a tool.",
   },
   toolOptionalParamsDropped: {
     code: "AG6030",
@@ -639,6 +645,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message:
       "Function '{name}' cannot be both destructive and idempotent — those markers are contradictory. Pick one.",
+  },
+  valueArgNotStatic: {
+    code: "AG7007",
+    severity: "error",
+    message:
+      "Type '{alias}' takes value argument '{name}', which is {what}. A value argument must be a literal, a 'static const', an imported name, or a value parameter of the enclosing type alias.",
   },
   unfilledHoles: {
     code: "AG8001",

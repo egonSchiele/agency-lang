@@ -90,6 +90,50 @@ describe("buildInitDepGraphs", () => {
     }
   });
 
+  it("adds an edge for a static the declaration's type reads through a value argument", () => {
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "entry.agency":
+        `def gt(minValue: number, value: number): Result<number> { return success(value) }\n` +
+        `@validate(gt.partial(minValue: minValue))\n` +
+        `type GreaterThan(minValue: number) = number\n` +
+        `type Age = GreaterThan(minAge)\n` +
+        `static const age: Age! = 10\n` +
+        `static const minAge: number = 5\n` +
+        `node main() { return age }\n`,
+    });
+    try {
+      const { staticGraph } = buildInitDepGraphs(programs, symbolTable, abs("entry.agency"));
+      const keyAge = makeKey(abs("entry.agency"), "age");
+      const keyMin = makeKey(abs("entry.agency"), "minAge");
+      expect(staticGraph.edges[keyAge]).toEqual([keyMin]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not treat a followed alias's own value parameter as a reference", () => {
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "entry.agency":
+        `def gt(minValue: number, value: number): Result<number> { return success(value) }\n` +
+        `@validate(gt.partial(minValue: minValue))\n` +
+        `type GreaterThan(minValue: number) = number\n` +
+        `type Above(floor: number) = GreaterThan(floor)\n` +
+        `type Age = Above(minAge)\n` +
+        `static const minAge: number = 5\n` +
+        `static const age: Age! = 10\n` +
+        `const floor: number = 1\n` +
+        `node main() { return age }\n`,
+    });
+    try {
+      const { staticGraph } = buildInitDepGraphs(programs, symbolTable, abs("entry.agency"));
+      const keyAge = makeKey(abs("entry.agency"), "age");
+      const keyMin = makeKey(abs("entry.agency"), "minAge");
+      expect(staticGraph.edges[keyAge]).toEqual([keyMin]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("adds a cross-module edge when an import is referenced", () => {
     const { dir, programs, symbolTable, abs } = writeFixture({
       "foo.agency":

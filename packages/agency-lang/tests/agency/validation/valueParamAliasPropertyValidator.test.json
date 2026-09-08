@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"big\":false,\"ok\":true,\"small\":false}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A property-level validator on a value-parameterized alias field runs together with the alias validator."
+    }
+  ]
+}

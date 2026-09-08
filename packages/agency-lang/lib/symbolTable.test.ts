@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { ImportResolutionError } from "./importResolutionError.js";
 import { classifySymbols, SymbolTable } from "./symbolTable.js";
 import { parseAgency } from "./parser.js";
 import { writeFileSync, unlinkSync } from "fs";
@@ -299,6 +300,27 @@ describe("SymbolTable: re-export reachability and merging", () => {
       const reSyms = st.getFile(path.resolve(paths.reexporter))!;
       expect((reSyms["foo"] as any).markers?.destructive).toBe(true);
       expect((reSyms["bar"] as any).markers?.destructive).toBeFalsy();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("throws an ImportResolutionError carrying the re-exporter file and statement position", () => {
+    const { paths, cleanup } = withTempFiles({
+      source: `export def foo() { return 1 }`,
+      reexporter: `export { nope } from "@source@"`,
+    });
+    try {
+      let thrown: unknown;
+      try {
+        SymbolTable.build(paths.reexporter);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(ImportResolutionError);
+      const err = thrown as ImportResolutionError;
+      expect(err.file).toBe(paths.reexporter);
+      expect(err.loc?.line).toBe(0);
     } finally {
       cleanup();
     }

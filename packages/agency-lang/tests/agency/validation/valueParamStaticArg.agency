@@ -1,0 +1,22 @@
+// A top-level alias may pass a `static const` as a value argument. The
+// alias is declared at module load, before static init runs, so the
+// factory call has to be deferred until validation time (issue #440).
+static const minAge: number = 5
+
+def greaterThan(minValue: number, value: number): Result<number> {
+  if (value > minValue) {
+    return success(value)
+  }
+  return failure("expected ${value} to be > ${minValue}")
+}
+
+@validate(greaterThan.partial(minValue: minValue))
+type GreaterThan(minValue: number) = number
+
+type Age = GreaterThan(minAge)
+
+node main() {
+  const bad: Age[]! = [-1, 20]
+  const ok: Age[]! = [10, 20]
+  return { bad: isSuccess(bad), ok: isSuccess(ok) }
+}

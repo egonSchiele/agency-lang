@@ -362,6 +362,9 @@ node main() {
 **How to fix:** write the block without \`as\`, e.g. the keyword followed immediately by its \`{ ... }\` body.`,
 
   sandboxForbiddenProperty: `Under \`--agency-only\` (\`typechecker.jsGlobals: "sandbox"\`), a program may not read \`constructor\`, \`prototype\`, or \`__proto__\` from a value, spelled or as a string-literal key. Those property names walk from any value to JavaScript's \`Function\` and the prototype chain, which is a way for pure Agency code to reach the host with no interrupt. This is a best-effort compile-time catch; the runtime backstop is code-generation-from-strings being disabled.`,
+  parameterRedeclared: `A \`let\` or \`const\` inside a function or node body reuses the name of one of its parameters. Parameters and locals live in different slots at runtime, and a read after the redeclare still resolves to the parameter slot, so the new value would silently never be seen.
+
+Assign to the parameter instead (\`u = { tag: "b", n: 1 }\`), or give the local a different name.`,
   undefinedVariable: `The type checker walks every scope — nodes, function bodies, blocks — and resolves each name to a declaration. This error means a name was used with no \`let\`, \`const\`, parameter, or import that introduces it in reach.
 
 **How to fix:** declare it before use (\`let x = …\` / \`const x = …\`), fix a typo in the name, or import it if it lives in another module. Agency has no implicit variables: a bare assignment like \`x = 5\` without a prior \`let\`/\`const\` is not a declaration.`,
@@ -578,6 +581,14 @@ def f(): string {
 
 **How to fix:** keep the one marker that describes the function and remove the other.`,
 
+  valueArgNotStatic: `A value-parameterized type was instantiated with a plain top-level variable, a parameter, or a local. The validator the compiler generates for a type is module-level JavaScript, and it names a value argument as a bare identifier. A \`static const\` and an imported name are identifiers there. A plain top-level variable lives in the global store and a parameter or local lives on the stack frame, so the generated code cannot reach them and the program would crash at validation time. What works is a literal, a \`static const\`, an imported name, or a value parameter of the enclosing type alias (\`type Above(floor: number) = GreaterThan(floor)\`). A value parameter's default follows the same rule, and may also name an earlier parameter of the same alias.
+
+Mark the variable \`static const\`, or pass a literal:
+
+\`\`\`agency
+static const minAge: number = 5
+type Adult = GreaterThan(minAge)
+\`\`\``,
   // ---- AG8: code templates and holes ----
   spliceTopLevelStatement: `A splice at the top level of a file adds the generator's output to the file, so that output is held to the same rule as anything you write there yourself: top-level code runs at initialization and cannot branch, loop, or wait.
 

@@ -11,6 +11,7 @@ import {
   runResolve,
   runRemove,
   runDownload,
+  printDownloadEvent,
   downloadChoices,
   CUSTOM_CHOICE,
 } from "./local.js";
@@ -315,5 +316,34 @@ describe("runRemove", () => {
       exitSpy.mockRestore();
       err.mockRestore();
     }
+  });
+});
+
+describe("printDownloadEvent", () => {
+  it("prints a line per file, a rewritten counter on a TTY, and the verify lines", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(true, (s) => out.push(s));
+    print({ kind: "file-start", path: "a.safetensors", size: 5e9, resumedBytes: 0 });
+    print({ kind: "bytes", done: 1e9, total: 5e9 });
+    print({ kind: "bytes", done: 2e9, total: 5e9 });
+    print({ kind: "file-done", path: "a.safetensors" });
+    print({ kind: "verify", path: "a.safetensors", ok: true });
+    print({ kind: "file-start", path: "b.safetensors", size: 3e9, resumedBytes: 1e9 });
+    expect(out).toEqual([
+      "a.safetensors  5.00 GB\n",
+      "\r  1.00 GB / 5.00 GB",
+      "\r  2.00 GB / 5.00 GB",
+      "\n",
+      "  verified a.safetensors\n",
+      "b.safetensors  3.00 GB  (resuming from 1.00 GB)\n",
+    ]);
+  });
+
+  it("prints no counter off a TTY", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(false, (s) => out.push(s));
+    print({ kind: "bytes", done: 1, total: 2 });
+    print({ kind: "verify", path: "a", ok: false });
+    expect(out).toEqual(["  a failed verification\n"]);
   });
 });

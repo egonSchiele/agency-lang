@@ -1,12 +1,4 @@
-import {
-  root,
-  wholePath,
-  stat,
-  list,
-  remove,
-  readText,
-  writeText,
-} from "./contained.js";
+import { root, wholePath, stat, list, remove, readText, writeText } from "./contained.js";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +12,12 @@ import {
 import { __ctx } from "../runtime/asyncContext.js";
 import { recordDownload, readDownloadManifest } from "./localModelManifest.js";
 import { fileSha256, verifyModelFile } from "./modelVerify.js";
+import {
+  fetchHubSnapshot,
+  downloadHubSnapshot,
+  DEFAULT_CONCURRENCY,
+  type DownloadOptions,
+} from "./hubDownload.js";
 export { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {
   type Backend,
@@ -1226,16 +1224,32 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
 }
 
 /** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
-export async function _downloadModel(value: string, cacheDir: string = ""): Promise<string> {
+/** `client.mlx.downloadConcurrency` from the nearest `agency.json`, else 8. */
+export function configuredDownloadConcurrency(): number {
+  const n = readClientConfig().mlx?.downloadConcurrency;
+  return typeof n === "number" && n >= 1 ? Math.floor(n) : DEFAULT_CONCURRENCY;
+}
+
+/** Download a model and return where it is: the `.gguf` path, or the MLX
+ *  model directory. `hubOptions` lets the CLI watch progress and lets tests
+ *  point at a fake hub. */
+export async function _downloadModel(
+  value: string,
+  cacheDir: string = "",
+  hubOptions: DownloadOptions = {},
+): Promise<string> {
   const model = _resolveModel(value);
   if (model.backend === "mlx") {
     if (isModelDir(model.target)) {
       return path.resolve(model.target);
     }
-    throw new Error(
-      "Downloading MLX models is not supported yet. Download it another way and alias " +
-        "its directory: agency local alias add <name> <dir>",
-    );
+    const { repo, revision } = parseMlxUri(model.target);
+    const snapshot = await fetchHubSnapshot(repo, revision, hubOptions);
+    return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), {
+      concurrency: configuredDownloadConcurrency(),
+      ...hubOptions,
+      token: hubOptions.token ?? process.env.HF_TOKEN,
+    });
   }
   requireSupport();
   const target = model.target;

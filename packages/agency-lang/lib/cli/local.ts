@@ -26,6 +26,7 @@ import {
   type RefreshResult,
 } from "../stdlib/localModels.js";
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
+import type { DownloadEvent } from "../stdlib/hubDownload.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
@@ -138,11 +139,46 @@ export async function runDownload(value?: string): Promise<void> {
     gate();
   }
   const source = resolved.target;
-  const modelPath = await _downloadModel(picked);
+  const modelPath = await _downloadModel(picked, "", {
+    onEvent: printDownloadEvent(process.stdout.isTTY === true),
+  });
   if (source !== modelPath) {
     console.log(`source: ${source}`);
   }
   console.log(`model:  ${modelPath}`);
+}
+
+/** One line per event, except the byte counter, which rewrites one line
+ *  on a terminal and prints nothing otherwise. */
+export function printDownloadEvent(
+  tty: boolean,
+  write: (s: string) => void = (s) => process.stdout.write(s),
+): (e: DownloadEvent) => void {
+  let counterShown = false;
+  const endCounter = () => {
+    if (counterShown) {
+      write("\n");
+      counterShown = false;
+    }
+  };
+  return (e) => {
+    if (e.kind === "bytes") {
+      if (tty) {
+        write(`\r  ${formatGB(e.done)} / ${formatGB(e.total)}`);
+        counterShown = true;
+      }
+      return;
+    }
+    endCounter();
+    if (e.kind === "file-start") {
+      const resumed = e.resumedBytes > 0 ? `  (resuming from ${formatGB(e.resumedBytes)})` : "";
+      write(`${e.path}  ${formatGB(e.size)}${resumed}\n`);
+    } else if (e.kind === "adopt") {
+      write(`${e.path}  already on disk, verified\n`);
+    } else if (e.kind === "verify") {
+      write(e.ok ? `  verified ${e.path}\n` : `  ${e.path} failed verification\n`);
+    }
+  };
 }
 
 /** Without `-f`: drop the alias, keep the files, and say where they are.

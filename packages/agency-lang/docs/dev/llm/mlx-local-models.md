@@ -187,5 +187,46 @@ gone can still be removed. This holds for GGUF models too.
 
 ## Downloading
 
-`agency local download` of an `mlx:` URI is refused with a message that
-points at `alias add`. A model directory passed to it is returned as is.
+`agency local download mlx:<org>/<repo>[@<rev>]` is `lib/stdlib/hubDownload.ts`.
+It needs no Python and no new dependency, because the Hub gives a plain
+HTTP client everything:
+
+- `GET /api/models/<repo>` (or `/revision/<rev>` for a pinned one, short
+  shas accepted) returns the commit sha and whether the repo is gated.
+- `GET /api/models/<repo>/tree/<sha>?recursive=true` lists every file with
+  its size, and for LFS files `lfs.oid`, which is the file's SHA-256. Small
+  text files are plain git blobs with no usable hash and are checked by
+  size. A large repo pages this with a `Link: …; rel="next"` header, which
+  is followed.
+- `GET /<repo>/resolve/<sha>/<path>` redirects to a signed CDN URL. Small
+  files take a relative hop through the hub first, so each location is
+  resolved against the URL it came from, and the walk stops at the first
+  URL off the hub host. Every hop must be https. The token, when there is
+  one, goes to the hub host only.
+- The CDN URL honours `Range` with 206 and a `content-range` whose total is
+  checked against the tree's size. The signature expires, and a 403 on it
+  means resolve again, once.
+
+**Chunks and the record.** Each file is split into 64 MiB chunks. A pool
+of `client.mlx.downloadConcurrency` workers (default 8) fetches them and
+writes each at its offset. This is why the file is on `FS_IMPORTERS`:
+`contained.ts` can overwrite or append but has no write-at-offset, and
+every path still goes through `resolveUnder` first, so a tree entry like
+`../x` is refused. After each chunk the index is added to the file's entry
+in `.agency-model.json`. A second run plans only the chunks not recorded;
+a record from another revision is refused with the message naming both
+shas and the `@<rev>` pin. A directory with files but no record adopts
+the ones whose size and hash match, so a copy made by hand is not fetched
+again.
+
+**Verification.** When a file's last chunk lands it is hashed. A mismatch
+moves it to `<file>.invalidSha` through `verifyModelFile`, resets its
+record entry to no chunks, and fails the run. The next run fetches that
+file whole and nothing else. `fileSha256` and `verifyModelFile` live in
+`modelVerify.ts` so this file and `localModels.ts` can both import them.
+
+**Tests** run against `lib/stdlib/__tests__/fakeHub.ts`, a `node:http`
+server with the four routes above, the same redirect shapes, byte ranges,
+a per-range hit counter, a gated mode, and switches for an expired CDN URL
+and a failing resolve. It answers as `127.0.0.1` for the hub and
+`localhost` for the CDN so a test can see the token stop at the hub.

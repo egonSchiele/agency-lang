@@ -3,6 +3,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { createHash } from "node:crypto";
+import { startFakeHub } from "./__tests__/fakeHub.js";
+import { readMlxModelRecord, isMlxModelComplete } from "./mlxModelRecord.js";
 import {
   CURATED_LOCAL_MODELS,
   _resolveModelName,
@@ -1183,10 +1185,19 @@ describe("_removeMlxModel", () => {
 });
 
 describe("_downloadModel for mlx", () => {
-  it("says MLX downloads are not supported yet", async () => {
-    await expect(_downloadModel("mlx:org/repo", dir)).rejects.toThrow(
-      "Downloading MLX models is not supported yet. Download it another way and alias its directory: agency local alias add <name> <dir>",
-    );
+  it("downloads an mlx: URI into <cacheDir>/mlx/<org>--<repo> and lists it", async () => {
+    const big = Buffer.alloc(1500, 7);
+    const hub = await startFakeHub("org/repo", [
+      { path: "config.json", bytes: Buffer.from("{}") },
+      { path: "model.safetensors", bytes: big },
+    ]);
+    const out = await _downloadModel("mlx:org/repo", dir, { hubUrl: hub.baseUrl, allowHttp: true });
+    expect(out).toBe(path.join(dir, "mlx", "org--repo"));
+    expect(fs.readFileSync(path.join(out, "config.json"), "utf-8")).toBe("{}");
+    expect(fs.readFileSync(path.join(out, "model.safetensors")).equals(big)).toBe(true);
+    expect(isMlxModelComplete(readMlxModelRecord(out)!)).toBe(true);
+    expect(_listDownloadedModels(dir).map((m) => m.name)).toEqual(["org/repo"]);
+    await hub.close();
   });
 
   it("returns a model directory as is", async () => {

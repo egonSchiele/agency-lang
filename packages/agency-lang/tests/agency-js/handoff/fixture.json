@@ -264,9 +264,16 @@
       "user"
     ],
     "activeThreadRoles": [
+      "user",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+      "assistant",
       "user"
     ],
-    "activeThreadSawHandoff": 0
+    "activeThreadSawHandoff": 3
   },
   "callerSystemVisible": {
     "result": "caller done",

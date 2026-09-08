@@ -398,9 +398,8 @@ const results = {};
   };
 }
 
-// A handoff inside a prompt with explicit messages lands on that thread,
-// which the store had never seen. The active thread's next request must
-// not see any of it.
+// Explicit messages seed the active thread, so a handoff inside that
+// prompt lands on the active thread and the next request sees all of it.
 {
   const { state, callbacks } = makeCapture();
   const result = await explicitMessages({ callbacks });

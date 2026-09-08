@@ -11,6 +11,16 @@ import {
 
 const anyArray = { type: "arrayType", elementType: ANY_T } as const;
 const stringArray = { type: "arrayType", elementType: string } as const;
+const messageArray: VariableType = {
+  type: "arrayType",
+  elementType: {
+    type: "objectType",
+    properties: [
+      { key: "role", value: string },
+      { key: "content", value: ANY_T },
+    ],
+  },
+};
 
 /** Types for `BUILTIN_VARIABLES` (lib/config.ts) that the checker knows.
  *  `__dirname` is the per-module directory constant every compiled module
@@ -82,6 +92,9 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
     }),
   },
   { key: "tools", value: optional(anyArray) },
+  // Seed the conversation: these messages are appended to the active thread
+  // ahead of the prompt. See the `messages` handling in lib/runtime/prompt.ts.
+  { key: "messages", value: optional(messageArray) },
   // Provider hosted tools (server-side) to enable for this call, by
   // capability name, e.g. ["web_search"]. Forwarded to smoltalk via the
   // LLMClient PromptConfig. See lib/runtime/llmClient.ts.

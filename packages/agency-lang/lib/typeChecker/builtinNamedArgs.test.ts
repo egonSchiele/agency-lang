@@ -122,6 +122,29 @@ describe("builtin named-arg validation (llm options)", () => {
   });
 });
 
+describe("llm() messages option", () => {
+  it("accepts messages: as a named argument", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", messages: [{ role: "user", content: "earlier" }])\n print(r) }`,
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("accepts messages: in the options object", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", { messages: [{ role: "user", content: "earlier" }] })\n print(r) }`,
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("rejects a message without a role", () => {
+    const errors = errorsFrom(
+      `node main() { let r = llm("hi", messages: [{ content: "earlier" }])\n print(r) }`,
+    );
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
 describe("llm() validationRetries option", () => {
   it("accepts validationRetries on llm()", () => {
     const errors = errorsFrom(

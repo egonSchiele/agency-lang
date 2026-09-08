@@ -28,10 +28,9 @@ the body's messages can land on the caller's thread as valid history.
 3. `runInvokeStep` runs the body in a frame whose thread store is a
    view of the caller's store with the prompt's own thread active, the
    thread carrying the marker (`ThreadStore.viewWithActive`). That is
-   the active thread for an ordinary prompt, a subthread for an `async`
-   prompt, and an unregistered thread for a prompt given explicit
-   `messages`; in every case the body's `llm()` calls land on the same
-   thread as the marker. The view has its own active stack, so two
+   the active thread for an ordinary prompt and a subthread for an
+   `async` prompt; in either case the body's `llm()` calls land on the
+   same thread as the marker. The view has its own active stack, so two
    prompts running at once cannot disturb each other.
 4. When the body returns, `finishHandoff` removes every system-role
    message after this dispatch's marker and pushes a user-role

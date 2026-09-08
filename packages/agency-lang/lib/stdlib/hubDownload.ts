@@ -266,6 +266,7 @@ async function fetchRange(
   chunk: Chunk,
   size: number,
   options: HubOptions,
+  onBytes: (n: number) => void,
 ): Promise<Buffer> {
   const fetchFn = options.fetch ?? fetch;
   const res = await fetchFn(url, { headers: { range: `bytes=${chunk.start}-${chunk.end - 1}` } });
@@ -281,13 +282,27 @@ async function fetchRange(
       `${chunk.path}: the server reports ${total ?? "no"} bytes, the tree said ${size}`,
     );
   }
-  const buf = Buffer.from(await res.arrayBuffer());
+  const buf = await readBody(res, onBytes);
   if (buf.length !== chunk.end - chunk.start) {
     throw new Error(
       `${chunk.path}: got ${buf.length} bytes for a ${chunk.end - chunk.start}-byte range`,
     );
   }
   return buf;
+}
+
+/** The body as one buffer, reporting each piece as it arrives so the
+ *  counter moves inside a chunk, not only between chunks. */
+async function readBody(res: Response, onBytes: (n: number) => void): Promise<Buffer> {
+  if (res.body === null) {
+    return Buffer.alloc(0);
+  }
+  const pieces: Buffer[] = [];
+  for await (const piece of res.body as unknown as AsyncIterable<Uint8Array>) {
+    pieces.push(Buffer.from(piece));
+    onBytes(piece.length);
+  }
+  return Buffer.concat(pieces);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -315,12 +330,13 @@ export async function downloadHubSnapshot(
 
   const total = snapshot.files.reduce((sum, f) => sum + f.size, 0);
   let done = total - plan.reduce((sum, c) => sum + (c.end - c.start), 0);
+  let inFlight = 0;
   let lastBytesEvent = 0;
   const progress = (force: boolean) => {
     const now = Date.now();
     if (force || now - lastBytesEvent >= 500) {
       lastBytesEvent = now;
-      emit({ kind: "bytes", done, total });
+      emit({ kind: "bytes", done: done + inFlight, total });
     }
   };
 
@@ -374,9 +390,23 @@ export async function downloadHubSnapshot(
   const fetchChunk = async (chunk: Chunk): Promise<Buffer> => {
     let lastError: Error = new Error("no attempt");
     for (let attempt = 0; attempt < RETRIES; attempt++) {
+      let received = 0;
+      const onBytes = (n: number) => {
+        received += n;
+        inFlight += n;
+        progress(false);
+      };
       try {
-        return await fetchRange(await cdnUrl(chunk.path), chunk, sizes[chunk.path], options);
+        return await fetchRange(
+          await cdnUrl(chunk.path),
+          chunk,
+          sizes[chunk.path],
+          options,
+          onBytes,
+        );
       } catch (err) {
+        // A failed attempt's bytes are not on disk; count them out again.
+        inFlight -= received;
         lastError = err as Error;
         if (err instanceof Expired) {
           // A signed URL past its window: resolve it again, once.
@@ -426,6 +456,7 @@ export async function downloadHubSnapshot(
         const entry = record.files[chunk.path];
         entry.chunks = [...(entry.chunks ?? []), chunk.index];
         writeMlxModelRecord(dir, record);
+        inFlight -= buf.length;
         done += buf.length;
         progress(false);
         remaining[chunk.path] -= 1;

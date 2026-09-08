@@ -188,7 +188,7 @@ gone can still be removed. This holds for GGUF models too.
 ## Downloading
 
 `agency local download mlx:<org>/<repo>[@<rev>]` fetches the repo with
-plain HTTP into `<modelsDir>/mlx/<org>--<repo>/`. The files land under
+direct HTTPS requests into `<modelsDir>/mlx/<org>--<repo>/`. The files land under
 their own names, so the directory is a normal model directory that
 `mlx_lm.load` and `agency local serve` take as it is. Beside them,
 `.agency-model.json` records the commit sha and, per file, its size, its

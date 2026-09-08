@@ -110,6 +110,9 @@ export async function downloadHubSnapshot(
   const ledger = await Ledger.open(r, dir, snapshot, emit);
   const plan = planChunks(snapshot, ledger.record, chunkBytes);
   ledger.expect(plan);
+  for (const filePath of ledger.unverified()) {
+    await verifyFile(r, ledger, filePath, emit);
+  }
   announceFiles(plan, ledger.record, chunkBytes, emit);
   const progress = new Progress(snapshot, plan, emit);
   const files = new OpenFiles(r, ledger);
@@ -167,7 +170,7 @@ async function runPool<T>(
       try {
         await work(items[next++]);
       } catch (err) {
-        failed = err as Error;
+        failed = failed ?? (err as Error);
       }
     }
   };
@@ -209,9 +212,15 @@ async function withRetries(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** A record keyed by Hub file paths, which are outside our control, so a
+ *  file named `constructor` or `__proto__` is an own key like any other. */
+function dictionary<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
+}
+
 /** One resolve per file, even when several workers start on it at once. */
 class FileUrls {
-  private urls: Record<string, Promise<string>> = {};
+  private urls: Record<string, Promise<string>> = dictionary();
 
   constructor(
     private readonly hub: HubClient,
@@ -220,7 +229,11 @@ class FileUrls {
 
   get(filePath: string): Promise<string> {
     if (this.urls[filePath] === undefined) {
-      this.urls[filePath] = this.hub.resolveFileUrl(this.snapshot, filePath);
+      // A failed resolve is forgotten, so the next attempt asks again.
+      this.urls[filePath] = this.hub.resolveFileUrl(this.snapshot, filePath).catch((err) => {
+        this.forget(filePath);
+        throw err;
+      });
     }
     return this.urls[filePath];
   }
@@ -233,7 +246,7 @@ class FileUrls {
 /** The record on disk, kept current as chunks land. Every write goes
  *  through here, so a Ctrl-C loses at most the chunk in flight. */
 class Ledger {
-  private left: Record<string, number> = {};
+  private left: Record<string, number> = dictionary();
 
   private constructor(
     private readonly dir: string,
@@ -249,7 +262,7 @@ class Ledger {
     if (existing !== null && existing.revision !== snapshot.revision) {
       throw revisionMismatch(dir, snapshot, existing.revision);
     }
-    const files: Record<string, MlxFileRecord> = {};
+    const files: Record<string, MlxFileRecord> = dictionary();
     for (const file of snapshot.files) {
       const kept = existing?.files[file.path];
       if (kept !== undefined && kept.size === file.size) {
@@ -261,11 +274,13 @@ class Ledger {
         entry.sha256 = file.sha256;
       }
       if (file.size === 0) {
+        emit({ kind: "file-start", path: file.path, size: 0, resumedBytes: 0 });
         mkdir(r, path.dirname(file.path));
         writeBytes(r, file.path, Buffer.alloc(0));
         entry.complete = true;
         delete entry.chunks;
         emit({ kind: "file-done", path: file.path });
+        emit({ kind: "verify", path: file.path, ok: true });
       } else if (existing === null && (await matchesOnDisk(r, file))) {
         entry.complete = true;
         delete entry.chunks;
@@ -283,6 +298,14 @@ class Ledger {
     for (const chunk of plan) {
       this.left[chunk.path] = (this.left[chunk.path] ?? 0) + 1;
     }
+  }
+
+  /** Files whose chunks all landed but were never verified: a run that
+   *  died between the last chunk and the hash leaves one of these. */
+  unverified(): string[] {
+    return Object.keys(this.record.files).filter(
+      (filePath) => !this.record.files[filePath].complete && this.left[filePath] === undefined,
+    );
   }
 
   sizeOf(filePath: string): number {
@@ -373,7 +396,7 @@ async function verifyFile(r: Root, ledger: Ledger, filePath: string, emit: Emit)
  *  with no chunks on disk is truncated first, so bytes left by an older
  *  or larger copy cannot outlive the download. */
 class OpenFiles {
-  private handles: Record<string, WritableFile> = {};
+  private handles: Record<string, WritableFile> = dictionary();
 
   constructor(
     private readonly root: Root,
@@ -459,7 +482,10 @@ function announceFiles(plan: Chunk[], record: MlxModelRecord, chunkBytes: number
         kind: "file-start",
         path: chunk.path,
         size: entry.size,
-        resumedBytes: (entry.chunks ?? []).length * chunkBytes,
+        resumedBytes: (entry.chunks ?? []).reduce(
+          (sum, i) => sum + Math.min(entry.size, (i + 1) * chunkBytes) - i * chunkBytes,
+          0,
+        ),
       });
     }
   }

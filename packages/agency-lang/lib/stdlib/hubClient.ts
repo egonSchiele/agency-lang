@@ -8,6 +8,8 @@ export const DEFAULT_HUB_URL = "https://huggingface.co";
 export const GATED_MESSAGE =
   "This repo is gated. Set HF_TOKEN to a Hugging Face token that has accepted its terms.";
 
+import { RECORD_FILE } from "./mlxModelRecord.js";
+
 const MAX_REDIRECTS = 5;
 
 export type HubFile = { path: string; size: number; sha256?: string };
@@ -66,6 +68,13 @@ export class HubClient {
           ? { path: e.path, size: e.size }
           : { path: e.path, size: e.size, sha256: e.lfs.oid },
       );
+    for (const file of files) {
+      if (isReservedPath(file.path)) {
+        throw new Error(
+          `${repo} contains ${file.path}, a name the downloader keeps for itself. It cannot be downloaded with agency local download.`,
+        );
+      }
+    }
     return { repo, revision: info.sha, files };
   }
 
@@ -78,7 +87,7 @@ export class HubClient {
     const encodedPath = filePath.split("/").map(encodeURIComponent).join("/");
     let url = `${this.hubUrl}/${snapshot.repo}/resolve/${snapshot.revision}/${encodedPath}`;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const res = await this.request(url, { method: "HEAD", redirect: "manual" });
+      const res = await this.request(url, { method: "HEAD" });
       const location = res.headers.get("location");
       if (res.status >= 300 && res.status < 400 && location !== null) {
         url = new URL(location, url).toString();
@@ -118,11 +127,10 @@ export class HubClient {
       if (res.status !== 206) {
         throw new Error(`${chunk.path}: expected 206 for a byte range, got ${res.status}`);
       }
-      const total = res.headers.get("content-range")?.split("/")[1];
-      if (total !== String(size)) {
-        throw new Error(
-          `${chunk.path}: the server reports ${total ?? "no"} bytes, the tree said ${size}`,
-        );
+      const want = `bytes ${chunk.start}-${chunk.end - 1}/${size}`;
+      const got = res.headers.get("content-range") ?? "none";
+      if (got !== want) {
+        throw new Error(`${chunk.path}: asked for ${want}, the server sent ${got}`);
       }
       if (res.body !== null) {
         for await (const piece of res.body as unknown as AsyncIterable<Uint8Array>) {
@@ -149,7 +157,9 @@ export class HubClient {
 
   /** Every request goes through here. Refuses http, attaches the token
    *  when the URL is on the hub host, and turns a 401 or 403 into a
-   *  message that says whether a token was sent. */
+   *  message that says whether a token was sent. Redirects are never
+   *  followed by `fetch` itself, so no hop can skip the https check;
+   *  `resolveFileUrl` walks its own. */
   private async request(url: string, init: RequestInit): Promise<Response> {
     this.requireHttps(url);
     const fetchFn = this.options.fetch ?? fetch;
@@ -158,7 +168,7 @@ export class HubClient {
     if (onHub && this.hasToken()) {
       headers.authorization = `Bearer ${this.options.token}`;
     }
-    const res = await fetchFn(url, { ...init, headers });
+    const res = await fetchFn(url, { ...init, headers, redirect: "manual" });
     if (onHub && (res.status === 401 || res.status === 403)) {
       throw new Error(deniedMessage(url, res.status, this.hasToken()));
     }
@@ -195,6 +205,15 @@ export class HubClient {
       throw new Error(`Refusing to download over ${new URL(url).protocol.slice(0, -1)}: ${url}`);
     }
   }
+}
+
+/** The downloader writes its record as `.agency-model.json` and moves a
+ *  file that fails its hash to `<file>.invalidSha`. A repo file with
+ *  either name would collide with those, so such a repo is refused.
+ *  Case is ignored, for case-insensitive filesystems. */
+export function isReservedPath(filePath: string): boolean {
+  const name = filePath.split("/").pop()?.toLowerCase() ?? "";
+  return name === RECORD_FILE.toLowerCase() || name.endsWith(".invalidsha");
 }
 
 function deniedMessage(url: string, status: number, tokenSent: boolean): string {

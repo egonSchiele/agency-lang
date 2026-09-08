@@ -1246,8 +1246,7 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
 
 /** `client.mlx.downloadConcurrency` from the nearest `agency.json`, else 8. */
 export function configuredDownloadConcurrency(): number {
-  const n = readClientConfig().mlx?.downloadConcurrency;
-  return typeof n === "number" && n >= 1 ? Math.floor(n) : DEFAULT_CONCURRENCY;
+  return readClientConfig().mlx?.downloadConcurrency ?? DEFAULT_CONCURRENCY;
 }
 
 /** Download a model and return where it is: the `.gguf` path, or the MLX

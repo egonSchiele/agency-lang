@@ -337,8 +337,8 @@ describe("printDownloadEvent", () => {
     print({ kind: "file-start", path: "b.safetensors", size: 3e9, resumedBytes: 1e9 });
     expect(out).toEqual([
       "a.safetensors  5.00 GB\n",
-      "\r  1.00 GB / 5.00 GB  20%",
-      "\r  2.00 GB / 5.00 GB  40%  500.0 MB/s  6s left",
+      "\r\x1b[2K  1.00 GB / 5.00 GB  20%",
+      "\r\x1b[2K  2.00 GB / 5.00 GB  40%  500.0 MB/s  6s left",
       "\n",
       "  verified a.safetensors\n",
       "b.safetensors  3.00 GB  (resuming from 1.00 GB)\n",
@@ -352,8 +352,8 @@ describe("printDownloadEvent", () => {
     print({ kind: "bytes", done: 2, total: 2 });
     print({ kind: "verify", path: "a", ok: true });
     expect(out).toEqual([
-      "\r  0.00 GB / 0.00 GB  50%",
-      "\r  0.00 GB / 0.00 GB  100%",
+      "\r\x1b[2K  0.00 GB / 0.00 GB  50%",
+      "\r\x1b[2K  0.00 GB / 0.00 GB  100%",
       "\n",
       "  verified a\n",
     ]);

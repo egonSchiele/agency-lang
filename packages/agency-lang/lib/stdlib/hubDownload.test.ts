@@ -125,6 +125,36 @@ describe("fetchHubSnapshot", () => {
     ).rejects.toThrow("Refusing to download over http: http://hub.test/next");
   });
 
+  it("does not follow a redirect from the model API", async () => {
+    const redirecting = (async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/api/models/org/repo")) {
+        return new Response(null, { status: 302, headers: { location: "http://elsewhere/x" } });
+      }
+      return fetch(url, init);
+    }) as unknown as typeof fetch;
+    await expect(
+      fetchHubSnapshot("org/repo", undefined, {
+        hubUrl: hub.baseUrl,
+        allowHttp: true,
+        fetch: redirecting,
+      }),
+    ).rejects.toThrow(/api\/models\/org\/repo answered 302/);
+  });
+
+  it("refuses a repo with a file named like the record or a quarantined file", async () => {
+    for (const name of [
+      ".agency-model.json",
+      "sub/.Agency-Model.JSON",
+      "model.safetensors.invalidSha",
+    ]) {
+      const clash = await startFakeHub("org/repo", [{ path: name, bytes: Buffer.from("x") }]);
+      await expect(
+        fetchHubSnapshot("org/repo", undefined, { hubUrl: clash.baseUrl, allowHttp: true }),
+      ).rejects.toThrow(`org/repo contains ${name}, a name the downloader keeps for itself`);
+      await clash.close();
+    }
+  });
+
   it("refuses a hub that is not https", async () => {
     await expect(fetchHubSnapshot("org/repo", undefined, { hubUrl: hub.baseUrl })).rejects.toThrow(
       `Refusing to download over http: ${hub.baseUrl}`,
@@ -326,9 +356,10 @@ describe("downloadHubSnapshot", () => {
           },
         });
         const res = await fetch(url, { method: "HEAD" });
+        const asked = (init.headers as Record<string, string>).range.slice("bytes=".length);
         return new Response(body, {
           status: 206,
-          headers: { "content-range": `bytes 0-0/${res.headers.get("content-length")}` },
+          headers: { "content-range": `bytes ${asked}/${res.headers.get("content-length")}` },
         });
       }
       return fetch(url, init);
@@ -339,13 +370,74 @@ describe("downloadHubSnapshot", () => {
   });
 
   it("says whether a token was sent when the hub refuses a request", async () => {
-    hub.failNextResolve = true;
+    hub.failResolves = RETRIES;
     await expect(download({ concurrency: 1 })).rejects.toThrow(
       /answered 403\. The repo may be private or gated\. Set HF_TOKEN/,
     );
-    hub.failNextResolve = true;
+    hub.failResolves = RETRIES;
     await expect(download({ concurrency: 1, token: "t" })).rejects.toThrow(
       /answered 403\. Check HF_TOKEN/,
+    );
+  });
+
+  it("asks again after a failed resolve instead of reusing the failure", async () => {
+    hub.failResolves = 1;
+    const out = await download({ concurrency: 1 });
+    expectFilesMatch(out);
+    expect(hub.authSeen.resolve.length).toBe(FILES.length + 1);
+  });
+
+  it("verifies a file whose chunks all landed but was never marked complete", async () => {
+    const out = await download();
+    const record = readMlxModelRecord(out)!;
+    const big = "model-00001-of-00002.safetensors";
+    record.files[big] = { ...record.files[big], complete: false, chunks: [0, 1, 2, 3, 4, 5] };
+    writeMlxModelRecord(out, record);
+    const before = { ...hub.rangeHits };
+    const events: DownloadEvent[] = [];
+    await download({ onEvent: (e: DownloadEvent) => events.push(e) });
+    expect(hub.rangeHits).toEqual(before);
+    expect(events).toContainEqual({ kind: "verify", path: big, ok: true });
+    expect(isMlxModelComplete(readMlxModelRecord(out)!)).toBe(true);
+    // The same state with wrong bytes on disk is caught, not skipped.
+    fs.writeFileSync(path.join(out, big), bytes(5300, 9));
+    writeMlxModelRecord(out, record);
+    await expect(download()).rejects.toThrow(/SHA-256 verification failed/);
+    expect(fs.existsSync(path.join(out, `${big}.invalidSha`))).toBe(true);
+  });
+
+  it("reports resumed bytes from the chunks recorded, last chunk at its real size", async () => {
+    const target = path.join(dir, "m");
+    fs.mkdirSync(target);
+    const big = "model-00001-of-00002.safetensors";
+    fs.writeFileSync(path.join(target, big), FILES[1].bytes);
+    writeMlxModelRecord(target, {
+      repo: "org/repo",
+      revision: hub.sha,
+      files: {
+        [big]: { size: 5300, sha256: sha256hex(FILES[1].bytes), complete: false, chunks: [5, 1] },
+      },
+    });
+    const events: DownloadEvent[] = [];
+    await download({ onEvent: (e: DownloadEvent) => events.push(e) }, target);
+    expect(events).toContainEqual({
+      kind: "file-start",
+      path: big,
+      size: 5300,
+      resumedBytes: 1300,
+    });
+  });
+
+  it("refuses a range answered for other bytes than the ones asked for", async () => {
+    const shifted = (async (url: string, init?: RequestInit) => {
+      const res = await fetch(url, init);
+      if (res.status !== 206) return res;
+      const headers = new Headers(res.headers);
+      headers.set("content-range", headers.get("content-range")!.replace(/^bytes 0-/, "bytes 1-"));
+      return new Response(res.body, { status: 206, headers });
+    }) as unknown as typeof fetch;
+    await expect(download({ fetch: shifted, concurrency: 1 })).rejects.toThrow(
+      /config\.json: asked for bytes 0-6\/7, the server sent bytes 1-6\/7/,
     );
   });
 

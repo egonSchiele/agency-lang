@@ -63,7 +63,7 @@ The server listens on `http://127.0.0.1:8080/v1` by default. For another port, s
 
 A Hugging Face cache snapshot directory (`hf/hub/models--<org>--<repo>/snapshots/<sha>`) works as is. Its entries are symlinks into `blobs/`, and Agency follows them for this one check.
 
-To download one, use its `mlx:` URI. The download runs as parallel byte-range requests, resumes if interrupted, and verifies every file against the hash Hugging Face publishes:
+To download one, use its `mlx:` URI. The download runs as parallel byte-range requests, resumes if interrupted, and verifies each file: against the SHA-256 Hugging Face publishes for large (LFS) files, and by size for small plain files such as `config.json`:
 
 ```bash
 agency local download mlx:mlx-community/Qwen3-Coder-Next-4bit

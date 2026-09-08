@@ -17,8 +17,8 @@ export type FakeHub = {
   rangeHits: Record<string, number>;
   /** Authorization header values seen per route. */
   authSeen: { api: string[]; resolve: string[]; cdn: string[] };
-  /** Next resolve/ answers 403 once. */
-  failNextResolve: boolean;
+  /** How many of the next resolve/ requests answer 403. */
+  failResolves: number;
   /** Next CDN request answers 403 once, as an expired signature does. */
   expireNextCdn: boolean;
   close: () => Promise<void>;
@@ -81,7 +81,7 @@ export function startFakeHub(
     sha,
     rangeHits: {},
     authSeen: { api: [], resolve: [], cdn: [] },
-    failNextResolve: false,
+    failResolves: 0,
     expireNextCdn: false,
     close: () => Promise.resolve(),
   };
@@ -145,8 +145,8 @@ export function startFakeHub(
         json(res, 401, { error: "Access to this resource is gated." });
         return;
       }
-      if (hub.failNextResolve) {
-        hub.failNextResolve = false;
+      if (hub.failResolves > 0) {
+        hub.failResolves -= 1;
         json(res, 403, { error: "forbidden" });
         return;
       }

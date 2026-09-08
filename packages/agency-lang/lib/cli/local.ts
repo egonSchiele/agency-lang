@@ -171,7 +171,7 @@ export function printDownloadEvent(
       const percent = e.total === 0 ? 100 : Math.floor((100 * e.done) / e.total);
       const line = `  ${formatGB(e.done)} / ${formatGB(e.total)}  ${percent}%`;
       if (tty) {
-        write(`\r${line}${rate.describe(e.done, e.total)}`);
+        write(`\r\x1b[2K${line}${rate.describe(e.done, e.total)}`);
         counterShown = true;
         if (e.done >= e.total) {
           endCounter();
@@ -220,7 +220,7 @@ const RATE_WINDOW_MS = 10_000;
 
 function formatDuration(seconds: number): string {
   if (seconds >= 3600) {
-    return `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
   }
   if (seconds >= 60) {
     return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;

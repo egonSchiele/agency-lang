@@ -579,7 +579,7 @@ export const AgencyConfigSchema = z
         mlx: z
           .object({
             python: z.string(),
-            downloadConcurrency: z.number(),
+            downloadConcurrency: z.number().int().positive(),
           })
           .partial(),
         statelog: z

@@ -913,7 +913,17 @@ describe("backend of a target", () => {
       repo: "mlx-community/Qwen3-Coder-Next-4bit",
       revision: "7b9321e",
     });
-    for (const bad of ["mlx:..\\escape/repo", "mlx:org/re po", "mlx:org/repo/extra", "mlx:org"]) {
+    for (const bad of [
+      "mlx:..\\escape/repo",
+      "mlx:org/re po",
+      "mlx:org/repo/extra",
+      "mlx:org",
+      "mlx:../repo",
+      "mlx:org/..",
+      "mlx:org/repo@..",
+      "mlx:./repo",
+    ]) {
+      expect(isMlxUri(bad)).toBe(false);
       expect(() => parseMlxUri(bad)).toThrow(/is not an mlx: URI/);
     }
     expect(backendOfTarget("mlx:mlx-community/Qwen3-Coder-Next-4bit")).toBe("mlx");

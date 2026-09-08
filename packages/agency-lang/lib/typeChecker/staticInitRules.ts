@@ -22,7 +22,7 @@
  * the inner expression / statement.
  */
 import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
-import type { AgencyNode, Expression } from "../types.js";
+import type { AgencyNode, Assignment, Expression } from "../types.js";
 import type { TypeCheckError } from "./types.js";
 import { walkNodes } from "../utils/node.js";
 
@@ -39,6 +39,23 @@ import { walkNodes } from "../utils/node.js";
  * surrounding shape, so we check both. See `checkInterruptStatement`
  * below for the statement form.
  */
+/**
+ * The assignments at module top level, with a `with handler { ... }`
+ * wrapper peeled off. Both `static const x = ...` and `with handler
+ * { static const x = ... }` count, the same way `sectionAssembler` and
+ * `initDepGraph` see them.
+ */
+export function topLevelAssignments(nodes: AgencyNode[]): Assignment[] {
+  const assignments: Assignment[] = [];
+  for (const node of nodes) {
+    const inner = node.type === "withModifier" ? node.statement : node;
+    if (inner.type === "assignment") {
+      assignments.push(inner as Assignment);
+    }
+  }
+  return assignments;
+}
+
 export const BANNED_BUILTINS_IN_STATIC_INIT: Record<string, string> = {
   llm: "`llm()` requires a per-run execution context",
   chat: "`chat()` requires a per-run execution context",

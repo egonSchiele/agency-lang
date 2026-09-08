@@ -430,17 +430,18 @@ function findPkgDir(
 }
 
 /**
- * Resolve a pkg:: import to an absolute filesystem path to the .agency file.
- * Uses createRequire rooted at the importing file's directory to find the
- * package via Node's module resolution, then reads its package.json "agency"
- * field for the entry point.
+ * `findPkgDir` for a package the user named in an import: a package that is
+ * not installed is a user error, reported as an ImportResolutionError on the
+ * importing file rather than as Node's MODULE_NOT_FOUND stack.
  */
-export function resolvePkgAgencyPath(importPath: string, fromFile: string): string {
-  const { packageName, subpath } = parsePkgImport(importPath);
-  const req = createRequire(fromFile);
-  let located: { pkgJsonPath: string; pkgDir: string };
+function findInstalledPkgDir(
+  packageName: string,
+  req: NodeRequire,
+  importPath: string,
+  fromFile: string,
+): { pkgJsonPath: string; pkgDir: string } {
   try {
-    located = findPkgDir(packageName, req);
+    return findPkgDir(packageName, req);
   } catch (e: any) {
     if (e?.code !== "MODULE_NOT_FOUND") throw e;
     throw new ImportResolutionError(
@@ -449,7 +450,18 @@ export function resolvePkgAgencyPath(importPath: string, fromFile: string): stri
       fromFile,
     );
   }
-  const { pkgJsonPath, pkgDir } = located;
+}
+
+/**
+ * Resolve a pkg:: import to an absolute filesystem path to the .agency file.
+ * Uses createRequire rooted at the importing file's directory to find the
+ * package via Node's module resolution, then reads its package.json "agency"
+ * field for the entry point.
+ */
+export function resolvePkgAgencyPath(importPath: string, fromFile: string): string {
+  const { packageName, subpath } = parsePkgImport(importPath);
+  const req = createRequire(fromFile);
+  const { pkgJsonPath, pkgDir } = findInstalledPkgDir(packageName, req, importPath, fromFile);
 
   if (subpath) {
     const resolved = path.join(pkgDir, subpath + ".agency");

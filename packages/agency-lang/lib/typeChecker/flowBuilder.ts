@@ -413,8 +413,11 @@ export function buildFlowGraph(
   entry: FlowNode,
   env: FlowEnvironment,
 ): FlowNode {
-  let deadFlow: FlowNode | null = null;
-  return nodes.reduce<FlowNode>((flow, node) => {
+  // `live` is the fold's result. `dead` is the side flow the statements
+  // after an exit are walked on, so their guards still narrow.
+  type Fold = { live: FlowNode; dead: FlowNode | null };
+  const step = ({ live, dead }: Fold, node: AgencyNode): Fold => {
+    const flow = live;
     if (node.type === "finalizeBlock") {
       // A finalize is a declaration: position-free, and NOT dead code
       // after an unconditional return (which turns `flow` to exit). Its
@@ -443,7 +446,7 @@ export function buildFlowGraph(
           : uniteTypes([...members, NULL_T], env.typeAliases);
       }
       buildFlowGraph(node.body, { kind: "loop", prev: start, widened }, env);
-      return flow;
+      return { live, dead };
     }
     const rule = (statementRules[node.type] ?? passThrough) as (
       node: AgencyNode,
@@ -451,12 +454,12 @@ export function buildFlowGraph(
       env: FlowEnvironment,
     ) => FlowNode;
     if (flow.kind === "exit") {
-      const next = rule(node, deadFlow ?? { kind: "start", scope: env.scope }, env);
-      deadFlow = next.kind === "exit" ? null : next;
-      return flow;
+      const next = rule(node, dead ?? { kind: "start", scope: env.scope }, env);
+      return { live, dead: next.kind === "exit" ? null : next };
     }
-    return rule(node, flow, env);
-  }, entry);
+    return { live: rule(node, flow, env), dead: null };
+  };
+  return nodes.reduce<Fold>(step, { live: entry, dead: null }).live;
 }
 
 /**

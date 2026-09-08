@@ -1,5 +1,4 @@
 import type { AgencyNode } from "../types.js";
-import type { FunctionParameter } from "../types/function.js";
 import { walkNodes, type WalkAncestor } from "../utils/node.js";
 import { diagnostic } from "./diagnostics.js";
 import type { TypeCheckerContext } from "./types.js";
@@ -20,7 +19,7 @@ import type { TypeCheckerContext } from "./types.js";
 export function checkParameterRedeclarations(ctx: TypeCheckerContext): void {
   const defs = [...Object.values(ctx.functionDefs), ...Object.values(ctx.nodeDefs)];
   for (const def of defs) {
-    const paramNames = def.parameters.map((p: FunctionParameter) => p.name);
+    const paramNames = def.parameters.map((param) => param.name);
     if (paramNames.length === 0) continue;
     for (const { node, ancestors } of walkNodes(def.body)) {
       if (node.type !== "assignment" || !node.declKind) continue;

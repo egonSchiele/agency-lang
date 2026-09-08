@@ -307,6 +307,65 @@ async function readBody(res: Response, onBytes: (n: number) => void): Promise<Bu
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** One descriptor per file being written, opened for read-write at any
+ *  offset, under the root. */
+class OpenFiles {
+  private descriptors: Record<string, number> = {};
+
+  constructor(private readonly root: Root) {}
+
+  open(filePath: string): number {
+    if (this.descriptors[filePath] === undefined) {
+      const resolved = resolveUnder(this.root, filePath);
+      mkdir(this.root, path.dirname(filePath));
+      this.descriptors[filePath] = fs.openSync(
+        resolved,
+        fs.constants.O_RDWR | fs.constants.O_CREAT,
+        0o644,
+      );
+    }
+    return this.descriptors[filePath];
+  }
+
+  close(filePath: string): void {
+    if (this.descriptors[filePath] !== undefined) {
+      fs.closeSync(this.descriptors[filePath]);
+      delete this.descriptors[filePath];
+    }
+  }
+
+  closeAll(): void {
+    for (const filePath of Object.keys(this.descriptors)) {
+      this.close(filePath);
+    }
+  }
+}
+
+/** Emits `file-start` once per file in the plan and returns how many
+ *  chunks each file still needs. */
+function announceFiles(
+  plan: Chunk[],
+  record: MlxModelRecord,
+  chunkBytes: number,
+  emit: (e: DownloadEvent) => void,
+): Record<string, number> {
+  const remaining: Record<string, number> = {};
+  for (const chunk of plan) {
+    if (remaining[chunk.path] === undefined) {
+      remaining[chunk.path] = 0;
+      const entry = record.files[chunk.path];
+      emit({
+        kind: "file-start",
+        path: chunk.path,
+        size: entry.size,
+        resumedBytes: (entry.chunks ?? []).length * chunkBytes,
+      });
+    }
+    remaining[chunk.path] += 1;
+  }
+  return remaining;
+}
+
 /** Downloads every chunk the record says is missing into `dir`, verifies
  *  each file as it completes, and returns `dir`. Running it again after an
  *  interruption fetches only what is missing. */
@@ -340,43 +399,8 @@ export async function downloadHubSnapshot(
     }
   };
 
-  const descriptors: Record<string, number> = {};
-  const openFile = (filePath: string): number => {
-    if (descriptors[filePath] === undefined) {
-      const resolved = resolveUnder(r, filePath);
-      mkdir(r, path.dirname(filePath));
-      descriptors[filePath] = fs.openSync(
-        resolved,
-        fs.constants.O_RDWR | fs.constants.O_CREAT,
-        0o644,
-      );
-    }
-    return descriptors[filePath];
-  };
-  const closeFile = (filePath: string) => {
-    if (descriptors[filePath] !== undefined) {
-      fs.closeSync(descriptors[filePath]);
-      delete descriptors[filePath];
-    }
-  };
-
-  const started: string[] = [];
-  for (const chunk of plan) {
-    if (!started.includes(chunk.path)) {
-      started.push(chunk.path);
-      const doneChunks = record.files[chunk.path].chunks ?? [];
-      emit({
-        kind: "file-start",
-        path: chunk.path,
-        size: sizes[chunk.path],
-        resumedBytes: doneChunks.length * (options.chunkBytes ?? CHUNK_BYTES),
-      });
-    }
-  }
-  const remaining: Record<string, number> = {};
-  for (const chunk of plan) {
-    remaining[chunk.path] = (remaining[chunk.path] ?? 0) + 1;
-  }
+  const files = new OpenFiles(r);
+  const remaining = announceFiles(plan, record, options.chunkBytes ?? CHUNK_BYTES, emit);
 
   // One resolve per file, even when several workers start on it at once.
   const cdnUrls: Record<string, Promise<string>> = {};
@@ -420,7 +444,7 @@ export async function downloadHubSnapshot(
   };
 
   const finishFile = async (filePath: string): Promise<void> => {
-    closeFile(filePath);
+    files.close(filePath);
     const resolved = resolveUnder(r, filePath);
     const entry = record.files[filePath];
     try {
@@ -452,7 +476,7 @@ export async function downloadHubSnapshot(
       const chunk = plan[next++];
       try {
         const buf = await fetchChunk(chunk);
-        fs.writeSync(openFile(chunk.path), buf, 0, buf.length, chunk.start);
+        fs.writeSync(files.open(chunk.path), buf, 0, buf.length, chunk.start);
         const entry = record.files[chunk.path];
         entry.chunks = [...(entry.chunks ?? []), chunk.index];
         writeMlxModelRecord(dir, record);
@@ -471,9 +495,7 @@ export async function downloadHubSnapshot(
   try {
     await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
   } finally {
-    for (const filePath of Object.keys(descriptors)) {
-      closeFile(filePath);
-    }
+    files.closeAll();
   }
   if (failed !== null) {
     throw failed;

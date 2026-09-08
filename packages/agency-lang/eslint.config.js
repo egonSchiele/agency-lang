@@ -9,6 +9,8 @@ const FS_IMPORTERS = {
   "lib/stdlib/contained.ts": "the module every other file operation goes through",
   "lib/stdlib/modelBackend.ts":
     "recognizes a model directory, including a Hugging Face cache snapshot whose entries are symlinks into blobs/; reads names and sizes only, never contents",
+  "lib/stdlib/hubDownload.ts":
+    "writes each downloaded chunk at its byte offset inside a file, which contained.ts has no primitive for; every path goes through resolveUnder first and the directory is the configured models dir",
   "lib/stdlib/gitignore.ts":
     "reads .gitignore rules from a walk root up to the filesystem root, ancestors included; the text becomes ignore rules and is never returned",
   "lib/stdlib/shell.ts": "which() probes PATH entries and exec() checks its cwd; no approval names either",

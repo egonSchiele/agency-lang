@@ -1,15 +1,24 @@
 import { systemMessage } from "std::thread"
 
-handoff def getCapital(country: string): string {
-  systemMessage("foo")
-  const capital = llm("What is the capital of ${country}?")
-  return capital
-}
-
 node main() {
-  const response = llm(
-    "Use your getCapital tool to get the capital of India.",
-    tools: [getCapital],
+  systemMessage(
+    "If anyone asks for your name, say 'the amazing Agency language'.",
   )
+  const response = llm(
+    "What's your name?",
+    model: "gpt-5.6-luna",
+    provider: "openai-responses",
+    messages: [{
+      role: "user",
+      content: "You are a helpful assistant."
+    }],
+  )
+  subthread {
+    llm(
+      "What's your favorite color?",
+      model: "gpt-5.6-luna",
+      provider: "openai-responses",
+    )
+  }
   print(response)
 }

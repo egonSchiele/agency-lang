@@ -1,3 +1,16 @@
+## Sep 7 2026 — v0.18.2
+
+### Language
+
+- **Every failure carries a message.** Earlier, failures could be of any type. Now they always have at least a string message, and optionally additional data as an object.
+
+### LLM
+
+- Bug fixes: `llm()` now accepts `messages` as a named argument. It did earlier, but the typechecker didn't think so. Also, passing in `messages` meant all messages in the current thread were dropped, and the thread was entirely replaced with the new messages. Now, the new messages are appended to the current thread.
+- Initial changes to support MLX models in `agency local`.
+- `agency local remove` keeps model files unless `-f` is passed.
+- smoltalk upgraded to 0.13.0, which adds an `mlx` provider.
+
 ## Sep 6 2026 — v0.18.1
 
 - don't add U+0000 separator in checkpoints, otherwise they can't be stored in postgres

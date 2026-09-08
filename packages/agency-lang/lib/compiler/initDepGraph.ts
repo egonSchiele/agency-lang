@@ -44,14 +44,16 @@
  *     no edge (statics are already initialized at Phase B time).
  */
 
-import type { AgencyProgram, AgencyNode, Expression } from "../types.js";
+import type { AgencyProgram, AgencyNode, Expression, VariableType } from "../types.js";
 import { declaredName } from "../types/hole.js";
 import type { Assignment } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { FunctionDefinition } from "../types/function.js";
+import type { TypeAlias } from "../types/typeHints.js";
 import type { SymbolTable } from "../symbolTable.js";
 import { isAgencyImport, resolveAgencyImportPath } from "../importPaths.js";
 import { walkNodes } from "../utils/node.js";
+import { visitTypes } from "../typeChecker/typeWalker.js";
 
 export type InitVarKind = "static" | "global";
 
@@ -76,6 +78,11 @@ export type InitVarNode = {
   /** For bare statements (global graph only) this is the wrapping
    * statement node; for assignments it's the right-hand side. */
   initExpr: Expression | AgencyNode;
+  /** Names the declaration's type annotation reads through value
+   *  arguments, as in `const age: Age! = 10` with
+   *  `type Age = GreaterThan(minAge)`. Validating the value reads
+   *  `minAge`, so it has to be initialized first. */
+  typeRefs: FreeRef[];
   loc?: SourceLocation;
   exported: boolean;
   sequenceHint: number;
@@ -415,8 +422,9 @@ export function buildInitDepGraphs(
     if (!program) continue;
     const depthBase = sequenceHints[moduleId] ?? 0;
 
+    const aliases = topLevelTypeAliases(program.nodes);
     for (const node of program.nodes) {
-      const varNode = nodeFromTopLevel(node, moduleId, depthBase);
+      const varNode = nodeFromTopLevel(node, moduleId, depthBase, aliases);
       if (!varNode) continue;
       const target = varNode.kind === "static" ? staticNodes : globalNodes;
       target[makeKey(varNode.moduleId, varNode.varName)] = varNode;
@@ -454,6 +462,7 @@ function nodeFromTopLevel(
   node: AgencyNode,
   moduleId: string,
   depthBase: number,
+  aliases: Record<string, TypeAlias>,
 ): InitVarNode | null {
   const { stmt: afterApprove, withApprove } = unwrapWithApprove(node);
   const { stmt, isStaticBare, wrapperLoc: staticWrapperLoc } = unwrapStaticStatement(afterApprove);
@@ -465,6 +474,7 @@ function nodeFromTopLevel(
       varName: stmt.variableName,
       kind: stmt.static ? "static" : "global",
       initExpr: stmt.value as Expression,
+      typeRefs: stmt.typeHint ? typeValueArgRefs(stmt.typeHint, aliases) : [],
       loc: stmt.loc,
       exported: !!stmt.exported,
       sequenceHint: depthBase + line,
@@ -499,6 +509,7 @@ function nodeFromTopLevel(
       varName: `__bareStmt_${line}_${col}`,
       kind: isStaticBare ? "static" : "global",
       initExpr: stmt,
+      typeRefs: [],
       loc: effectiveLoc,
       exported: false,
       sequenceHint: depthBase + line,
@@ -647,7 +658,7 @@ function depsFor(
     seen[refKey] = true;
     out.push(refKey);
   };
-  for (const ref of collectFreeIdentifiers(node.initExpr)) {
+  for (const ref of [...collectFreeIdentifiers(node.initExpr), ...node.typeRefs]) {
     if (ref.kind === "name" && ref.name === node.varName) continue;
     addRef(resolveFreeRef(ref, node.moduleId, resolver));
   }
@@ -703,7 +714,7 @@ function rejectStaticReferencesGlobal(
       const offender = globalNodes[refKey];
       if (offender) throw new StaticReferencesGlobalError(node, offender);
     };
-    for (const ref of collectFreeIdentifiers(node.initExpr)) {
+    for (const ref of [...collectFreeIdentifiers(node.initExpr), ...node.typeRefs]) {
       if (ref.kind === "name" && ref.name === node.varName) continue;
       check(resolveFreeRef(ref, node.moduleId, resolver));
     }
@@ -877,6 +888,47 @@ export function collectFreeIdentifiers(expr: Expression | AgencyNode): FreeRef[]
     }
     out.push({ kind: "name", name: node.value });
   }
+  return out;
+}
+
+/** The module's own top-level type aliases, by name. */
+function topLevelTypeAliases(nodes: AgencyNode[]): Record<string, TypeAlias> {
+  const aliases: Record<string, TypeAlias> = {};
+  for (const node of nodes) {
+    if (node.type === "typeAlias") {
+      aliases[node.aliasName] = node;
+    }
+  }
+  return aliases;
+}
+
+/**
+ * The free references inside the value arguments of a type, followed
+ * through the module's own aliases: `Age` with `type Age = GreaterThan(minAge)`
+ * yields `minAge`. An alias from another module is not followed; the
+ * runtime read-before-init trap covers that case, as it does depth-2
+ * function calls.
+ */
+function typeValueArgRefs(type: VariableType, aliases: Record<string, TypeAlias>): FreeRef[] {
+  const out: FreeRef[] = [];
+  const followed: string[] = [];
+  const visit = (current: VariableType): void => {
+    visitTypes(current, (inner) => {
+      if (inner.type !== "typeAliasVariable" && inner.type !== "genericType") {
+        return;
+      }
+      for (const arg of inner.valueArgs ?? []) {
+        out.push(...collectFreeIdentifiers(arg));
+      }
+      const name = inner.type === "typeAliasVariable" ? inner.aliasName : inner.name;
+      const alias = aliases[name];
+      if (alias && !followed.includes(name)) {
+        followed.push(name);
+        visit(alias.aliasedType);
+      }
+    });
+  };
+  visit(type);
   return out;
 }
 

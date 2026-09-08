@@ -189,11 +189,10 @@ function schemaNode(
  * descriptor expression. Returns `base` unchanged when there are none.
  * Shared by the `__agency_descriptor` and value-param factory-call paths.
  *
- * `base` is bound to a local via an IIFE so it is evaluated exactly once:
- * `((__d) => ({ ...__d, validators: [...(__d?.validators ?? []), ...useSite] }))(base)`.
- * For the factory-call path `base` is a function call (`NumberInRange(1, 10)`),
- * so spreading it AND reading `.validators` off it directly would rebuild the
- * whole descriptor — including the `min.partial(...)` allocations — twice.
+ * Emits `__withUseSiteValidators(base, [...useSite])`. The runtime helper
+ * evaluates `base` once, and when `base` is a `{ kind: "ref" }` it merges
+ * onto the descriptor the ref resolves to, since the walker follows a ref
+ * before it reads validators.
  */
 function withUseSiteValidators(base: TsNode, useSiteValidators: TsNode[]): TsNode {
   if (useSiteValidators.length === 0) {

@@ -1078,3 +1078,66 @@ describe("schedule --backend remote dispatch", () => {
     }
   });
 });
+
+describe("typecheck with a bad re-export among several files", () => {
+  const SRC = "export def src(): number {\n  return 1\n}\n";
+  const BAD_REEXPORT = 'export { nope } from "./src.agency"\n';
+  const CLEAN = 'node main() {\n  let y: number = "t"\n  return y\n}\n';
+  let exit: ReturnType<typeof vi.spyOn>;
+  let errors: string[];
+  let logs: string[];
+
+  beforeEach(() => {
+    errors = [];
+    logs = [];
+    exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.join(" "));
+    });
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.join(" "));
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const write = (name: string, contents: string): string => {
+    const file = path.join(tmpDir, name);
+    fs.writeFileSync(file, contents, "utf-8");
+    return file;
+  };
+
+  it("reports the bad input file once, drops it, and still checks the others", async () => {
+    write("src.agency", SRC);
+    const bad = write("bad.agency", BAD_REEXPORT + "node main() {\n  return 2\n}\n");
+    const clean = write("clean.agency", CLEAN);
+    await expect(
+      createProgram().parseAsync(["node", "agency", "typecheck", bad, clean]),
+    ).rejects.toThrow("exit 1");
+    const importLines = errors.filter((line) => line.includes("Symbol 'nope' is not defined"));
+    expect(importLines).toHaveLength(1);
+    expect(importLines[0]).toContain(`${bad}:1:1`);
+    expect(errors.some((line) => line.includes("AG2001"))).toBe(true);
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it("reports a bad dependency once and still checks the files that do not import it", async () => {
+    write("src.agency", SRC);
+    const lib = write("lib.agency", BAD_REEXPORT);
+    const importer = 'import { nope } from "./lib.agency"\nnode main() {\n  return 1\n}\n';
+    const a = write("a.agency", importer);
+    const b = write("b.agency", importer);
+    const clean = write("clean.agency", CLEAN);
+    await expect(
+      createProgram().parseAsync(["node", "agency", "typecheck", a, b, clean]),
+    ).rejects.toThrow("exit 1");
+    const importLines = errors.filter((line) => line.includes("Symbol 'nope' is not defined"));
+    expect(importLines).toHaveLength(1);
+    expect(importLines[0]).toContain(`${lib}:1:1`);
+    expect(errors.some((line) => line.includes("AG2001"))).toBe(true);
+  });
+});

@@ -96,6 +96,7 @@ import {
   runAliasAdd as localAliasAdd,
   runAliasRemove as localAliasRemove,
 } from "@/cli/local.js";
+import { localServe } from "@/cli/localServe.js";
 import { modelsList, modelsRefresh } from "@/cli/hostedModels.js";
 import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
@@ -1744,6 +1745,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Download a model (curated name, alias, or hf: URI); no argument opens a picker")
     .argument("[value]")
     .action(localDownload);
+  localCmd
+    .command("serve")
+    .description("Serve MLX models in this terminal: one mlx_lm.server per model, behind one port")
+    .argument("<models...>", "mlx: URIs, aliases, or model directories")
+    .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
+    .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
+    .option("--python <path>", "Python with mlx-lm installed")
+    .action((models: string[], opts: { port: number; maxTokens: number; python?: string }) =>
+      localServe(models, opts),
+    );
   localCmd
     .command("remove")
     .description("Remove a model's alias. With -f, also delete its files from the models directory")

@@ -164,6 +164,8 @@ export interface AgencyConfig {
       deepInfra?: string;
       liteLlm?: string;
       openAiCompat?: string;
+      /** Where the MLX server listens. Default `http://127.0.0.1:8080/v1`. */
+      mlx?: string;
     };
     /**
      * Max characters of a single tool result fed back to the LLM.
@@ -204,6 +206,13 @@ export interface AgencyConfig {
      *  `AGENCY_MODELS_DIR` env var; defaults to `~/.agency-agent/models`. Read
      *  at runtime by `std::agency/local` and the `agency local` CLI. */
     modelsDir: string;
+    /** Settings for MLX models, which run in a server. */
+    mlx?: Partial<{
+      /** Python with mlx-lm installed, used by `agency local serve`. Overridden
+       *  by `--python` and the `AGENCY_MLX_PYTHON` env var; defaults to
+       *  `~/.agency-agent/mlx-env/bin/python`. */
+      python: string;
+    }>;
     statelog?: Partial<{
       host: string;
       projectId: string;
@@ -557,6 +566,7 @@ export const AgencyConfigSchema = z
             deepInfra: z.string(),
             liteLlm: z.string(),
             openAiCompat: z.string(),
+            mlx: z.string(),
           })
           .partial(),
         maxToolResultChars: z.number(),
@@ -564,6 +574,11 @@ export const AgencyConfigSchema = z
         providerModules: z.array(z.string()),
         modelAliases: z.record(z.string(), ModelAliasSchema),
         modelsDir: z.string(),
+        mlx: z
+          .object({
+            python: z.string(),
+          })
+          .partial(),
         statelog: z
           .object({
             host: z.string(),

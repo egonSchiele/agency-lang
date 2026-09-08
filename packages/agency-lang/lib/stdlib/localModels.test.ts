@@ -28,6 +28,8 @@ import {
   isMlxUri,
   parseMlxUri,
   isModelDir,
+  modelDirEntries,
+  _modelFilesOnDisk,
 } from "./localModels.js";
 
 let dir: string;
@@ -921,6 +923,37 @@ describe("backend of a target", () => {
     fs.writeFileSync(path.join(model, "model.safetensors"), "");
     expect(isModelDir(model)).toBe(true);
     expect(backendOfTarget(model)).toBe("mlx");
+  });
+
+  it("a Hugging Face cache snapshot, whose entries are symlinks, is an mlx model", () => {
+    // hf/hub/models--org--repo/{blobs,snapshots/<sha>}: every entry in the
+    // snapshot is a link into blobs/. Sizes come from the blobs.
+    const blobs = path.join(dir, "blobs");
+    const snapshot = path.join(dir, "snapshots", "abc");
+    fs.mkdirSync(blobs);
+    fs.mkdirSync(snapshot, { recursive: true });
+    fs.writeFileSync(path.join(blobs, "c0"), "{}");
+    fs.writeFileSync(path.join(blobs, "w0"), Buffer.alloc(1000));
+    fs.symlinkSync("../../blobs/c0", path.join(snapshot, "config.json"));
+    fs.symlinkSync("../../blobs/w0", path.join(snapshot, "model.safetensors"));
+    expect(isModelDir(snapshot)).toBe(true);
+    expect(modelDirEntries(snapshot)).toEqual([
+      { name: "config.json", size: 2 },
+      { name: "model.safetensors", size: 1000 },
+    ]);
+    expect(_modelFilesOnDisk({ backend: "mlx", target: snapshot }, dir)).toEqual({
+      path: snapshot,
+      sizeBytes: 1002,
+      insideCache: false,
+    });
+  });
+
+  it("a dangling link in a model directory is skipped", () => {
+    const model = path.join(dir, "m");
+    fs.mkdirSync(model);
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.symlinkSync(path.join(dir, "gone"), path.join(model, "model.safetensors"));
+    expect(isModelDir(model)).toBe(false);
   });
 
   it("a path that is neither is an error", () => {

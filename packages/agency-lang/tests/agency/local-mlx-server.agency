@@ -1,0 +1,6 @@
+import { mlxServerModels } from "std::agency/local"
+
+// Port 1 has no listener, so this is the "no server running" answer.
+node noServerIsNull(): boolean {
+  return mlxServerModels("http://127.0.0.1:1/v1") == null
+}

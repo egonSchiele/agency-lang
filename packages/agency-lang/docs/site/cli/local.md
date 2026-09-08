@@ -61,7 +61,7 @@ Agency sends the server the same string you gave `--model`: the directory path f
 
 The server listens on `http://127.0.0.1:8080/v1` by default. For another port, set `MLX_BASE_URL` or `client.baseUrl.mlx` in `agency.json`.
 
-The directory must hold real files. A Hugging Face cache snapshot directory holds symlinks, which Agency does not follow. Download with `hf download <repo> --local-dir <dir>` to get real files.
+A Hugging Face cache snapshot directory (`hf/hub/models--<org>--<repo>/snapshots/<sha>`) works as is. Its entries are symlinks into `blobs/`, and Agency follows them for this one check.
 
 Downloading an MLX model with `agency local download` is not supported yet.
 
@@ -71,6 +71,7 @@ Downloading an MLX model with `agency local download` is not supported yet.
 |---|---|
 | `agency local list` | Show the full catalog with each model's backend, and a checkmark and on-disk size for downloaded models. The first line names the models directory. Files that match no catalog entry appear under `OTHER FILES`. Add `-l` / `--long` to print each model's description on its own line below its row. Works without `smoltalk-llama-cpp` installed. |
 | `agency local download [value]` | Download a GGUF model if not already cached; prints the source it resolved to and the local path. `<value>` may be a curated short name, an alias, an `hf:` URI, or an existing `.gguf` path. With no value, opens an interactive picker (in scripts it prints the catalog and exits 1 instead). An `mlx:` URI is refused: MLX downloads are not supported yet. |
+| `agency local serve <model>... [--port 8080] [--max-tokens 16384] [--python <path>]` | Serve one or more MLX models in this terminal. Starts one `mlx_lm.server` per model, waits until each has loaded, then listens on `--port`. A request for a model you did not name gets a 404 naming the command to start it. It never downloads. An `mlx:` model must be downloaded first, and a directory works as is. Ctrl-C stops everything. |
 | `agency local remove <name> [-f]` | Remove the alias for a model and keep its files, printing where they are. With `-f`, delete the files too: the `.gguf` file, or the whole MLX model directory. Files outside the models directory are never deleted. |
 | `agency local resolve <value>` | Show the backend and what a name/alias maps to, without downloading. |
 | `agency local refresh [url]` | Fetch the remote model catalog and update the `source:"remote"` aliases in `agency.json`. Adds/updates models from the catalog, removes ones it dropped, and skips any name you've aliased yourself (printing what it would have set). |

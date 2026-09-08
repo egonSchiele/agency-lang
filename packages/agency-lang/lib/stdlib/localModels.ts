@@ -28,6 +28,7 @@ import {
   isMlxUri,
   parseMlxUri,
   isModelDir,
+  modelDirEntries,
   backendOfTarget,
 } from "./modelBackend.js";
 export {
@@ -35,6 +36,7 @@ export {
   isMlxUri,
   parseMlxUri,
   isModelDir,
+  modelDirEntries,
   backendOfTarget,
 } from "./modelBackend.js";
 import {
@@ -374,7 +376,7 @@ export function defaultCacheDir(): string {
   if (process.env.AGENCY_MODELS_DIR) {
     return process.env.AGENCY_MODELS_DIR;
   }
-  const configured = readJson(resolveAliasConfigPath()).client?.modelsDir;
+  const configured = readClientConfig().modelsDir;
   if (typeof configured === "string" && configured.length > 0) {
     return configured;
   }
@@ -422,6 +424,13 @@ function resolveAliasFile(file: string): string {
 }
 
 /** Read a JSON file as a plain object. A missing file reads as `{}`. */
+/** The `client` object of the nearest `agency.json`, or `{}` when there is
+ *  none. For settings read at runtime rather than compiled in: the models
+ *  directory, the MLX Python, the MLX base URL. */
+export function readClientConfig(): Record<string, any> {
+  return readJson(resolveAliasConfigPath()).client ?? {};
+}
+
 function readJson(file: string): Record<string, any> {
   const located = wholePath(file);
   if (stat(located.root, located.target) === null) {
@@ -762,9 +771,7 @@ export function _modelFilesOnDisk(
     return found((f) => f.path === modelDir);
   }
   const target = path.resolve(resolved.target);
-  const sizeBytes = list(root(target), ".")
-    .filter((f) => f.type === "file")
-    .reduce((sum, f) => sum + f.size, 0);
+  const sizeBytes = modelDirEntries(target).reduce((sum, f) => sum + f.size, 0);
   return { path: target, sizeBytes, insideCache: onDisk.some((f) => f.path === target) };
 }
 

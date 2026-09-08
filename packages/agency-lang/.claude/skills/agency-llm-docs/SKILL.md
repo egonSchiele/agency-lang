@@ -10,6 +10,6 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/llm/smoltalk.md` — The external library Agency routes every LLM call through.
 - `docs/dev/llm/llm-clients.md` — The `LLMClient` interface, for swapping smoltalk out for something else.
 - `docs/dev/llm/local-models.md` — How local-model support is wired, from the provider to model download and verification.
-- `docs/dev/llm/mlx-local-models.md` — The `mlx` backend: the `backend` field and `mlx:` prefix, how a run finds the served model name, the per-model record file, and `remove -f`.
+- `docs/dev/llm/mlx-local-models.md` — The `mlx` backend: the `backend` field and `mlx:` prefix, how a run finds the served model name, the per-model record file, `remove -f`, why a snapshot directory of symlinks is accepted, and `agency local serve` with its one-process-per-model front door.
 - `docs/dev/llm/local-model-integration.md` — The integration suite that downloads and runs a real local model.
 - `docs/dev/llm/speech-via-smoltalk.md` — Speech-to-text and text-to-speech, routed through the LLM client so they inherit cost accounting and tracing.

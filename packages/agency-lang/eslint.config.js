@@ -7,6 +7,8 @@ import tseslint from "typescript-eslint";
 // which fixed file it touches and why no approval names that path.
 const FS_IMPORTERS = {
   "lib/stdlib/contained.ts": "the module every other file operation goes through",
+  "lib/stdlib/modelBackend.ts":
+    "recognizes a model directory, including a Hugging Face cache snapshot whose entries are symlinks into blobs/; reads names and sizes only, never contents",
   "lib/stdlib/gitignore.ts":
     "reads .gitignore rules from a walk root up to the filesystem root, ancestors included; the text becomes ignore rules and is never returned",
   "lib/stdlib/shell.ts": "which() probes PATH entries and exec() checks its cwd; no approval names either",

@@ -1,0 +1,32 @@
+// A property-level validator on a field whose type is a value-parameterized
+// alias runs alongside the alias's own validator.
+def greaterThan(minValue: number, value: number): Result<number> {
+  if (value > minValue) {
+    return success(value)
+  }
+  return failure("expected ${value} to be > ${minValue}")
+}
+
+def atMost(limit: number, value: number): Result<number> {
+  if (value <= limit) {
+    return success(value)
+  }
+  return failure("expected ${value} to be <= ${limit}")
+}
+
+@validate(greaterThan.partial(minValue: minValue))
+type GreaterThan(minValue: number) = number
+
+type Age = GreaterThan(5)
+
+type Person = {
+  @validate(atMost.partial(limit: 100))
+  age: Age
+}
+
+node main() {
+  const big: Person! = { age: 500 }
+  const ok: Person! = { age: 50 }
+  const small: Person! = { age: 1 }
+  return { big: isSuccess(big), ok: isSuccess(ok), small: isSuccess(small) }
+}

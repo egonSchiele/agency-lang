@@ -393,9 +393,9 @@ export class TypeChecker {
     // would keep reading the parameter slot (issue #717).
     checkParameterRedeclarations(ctx);
 
-    // A value argument to a value-parameterized type must be something the
-    // generated code can name where the type is declared (issue #441).
-    checkValueArgReferences(ctx);
+    // A value argument to a value-parameterized type must be a name the
+    // generated validator can reach (issue #441).
+    checkValueArgReferences(scopes, ctx);
 
     this.stampFileOnErrors();
 

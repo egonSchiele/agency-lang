@@ -63,3 +63,18 @@ Statics are deep-frozen after initialization, so mutating one through a method (
 A function was marked both `destructive` and `idempotent`, but those markers contradict each other: destructive means a retry can cause additional effects, while idempotent means a retry is safe to repeat. A function cannot be both.
 
 **How to fix:** keep the one marker that describes the function and remove the other.
+
+<a id="ag7007"></a>
+
+## AG7007 — Type '&#123;alias&#125;' takes value argument '&#123;name&#125;', which is &#123;what&#125;. A value argument must be a literal, a 'static const', an imported name, or a value parameter of the enclosing type alias.
+
+*Default severity: error.*
+
+A value-parameterized type was instantiated with a plain top-level variable, a parameter, or a local. The validator the compiler generates for a type is module-level JavaScript, and it names a value argument as a bare identifier. A `static const` and an imported name are identifiers there. A plain top-level variable lives in the global store and a parameter or local lives on the stack frame, so the generated code cannot reach them and the program would crash at validation time. What works is a literal, a `static const`, an imported name, or a value parameter of the enclosing type alias (`type Above(floor: number) = GreaterThan(floor)`). A value parameter's default follows the same rule, and may also name an earlier parameter of the same alias.
+
+Mark the variable `static const`, or pass a literal:
+
+```agency
+static const minAge: number = 5
+type Adult = GreaterThan(minAge)
+```

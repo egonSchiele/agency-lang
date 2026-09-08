@@ -91,6 +91,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG4009](names.md#ag4009) | Cannot find module '&#123;module&#125;'. |
 | [AG4010](names.md#ag4010) | '&#123;name&#125;' is defined in '&#123;module&#125;' but is not exported. Add the 'export' keyword to its definition. |
 | [AG4011](names.md#ag4011) | '&#123;name&#125;' is not accessible under --agency-only. It reaches JavaScript's Function or prototype chain, which pure Agency code may not use. |
+| [AG4012](names.md#ag4012) | Cannot redeclare parameter '&#123;name&#125;' with '&#123;declKind&#125;'. Reads after the redeclare would still see the parameter. Assign to it instead, or pick a different name. |
 
 ## Match and narrowing
 
@@ -130,8 +131,8 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6025](tools.md#ag6025) | Unknown named argument '&#123;name&#125;' in call to '&#123;fn&#125;'. |
 | [AG6026](tools.md#ag6026) | Named argument '&#123;name&#125;' conflicts with positional argument at position &#123;position&#125; in call to '&#123;fn&#125;'. |
 | [AG6027](tools.md#ag6027) | Positional argument cannot feed variadic parameter '&#123;param&#125;' when it is also bound by name in call to '&#123;fn&#125;'. |
-| [AG6028](tools.md#ag6028) | Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound. Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool. |
-| [AG6029](tools.md#ag6029) | Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound (&#123;type&#125;). Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool. |
+| [AG6028](tools.md#ag6028) | Tool '&#123;tool&#125;' has a required function-typed parameter '&#123;param&#125;' that is unbound. Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing it as a tool. |
+| [AG6029](tools.md#ag6029) | Tool '&#123;tool&#125;' has a required function-typed parameter '&#123;param&#125;' that is unbound (its type is &#123;type&#125;). Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing it as a tool. |
 | [AG6030](tools.md#ag6030) | Tool '&#123;tool&#125;' will be exposed to the LLM without optional function-typed parameter(s): &#123;params&#125;. The function body must be prepared to run with the declared default for each. |
 | [AG6031](tools.md#ag6031) | saveDraft() cannot be called at module top level — there is no enclosing function, node, or block scope to save a draft for. |
 | [AG6032](tools.md#ag6032) | A scope can declare at most one finalize block. Combine the logic into one block. |
@@ -153,6 +154,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG7004](static-init.md#ag7004) | Cannot reassign static `&#123;name&#125;` at module top level — statics are immutable after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value. |
 | [AG7005](static-init.md#ag7005) | Cannot mutate static `&#123;name&#125;` via `.&#123;method&#125;(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value. |
 | [AG7006](static-init.md#ag7006) | Function '&#123;name&#125;' cannot be both destructive and idempotent — those markers are contradictory. Pick one. |
+| [AG7007](static-init.md#ag7007) | Type '&#123;alias&#125;' takes value argument '&#123;name&#125;', which is &#123;what&#125;. A value argument must be a literal, a 'static const', an imported name, or a value parameter of the enclosing type alias. |
 
 ## Code templates and holes
 

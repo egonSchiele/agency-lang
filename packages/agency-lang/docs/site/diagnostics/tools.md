@@ -276,7 +276,7 @@ A positional argument would feed a variadic parameter that is also being bound b
 
 <a id="ag6028"></a>
 
-## AG6028 — Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound. Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool.
+## AG6028 — Tool '&#123;tool&#125;' has a required function-typed parameter '&#123;param&#125;' that is unbound. Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing it as a tool.
 
 *Default severity: error.*
 
@@ -286,7 +286,7 @@ A function passed as a tool has a required function-typed parameter that is stil
 
 <a id="ag6029"></a>
 
-## AG6029 — Tool '&#123;tool&#125;' has required function-typed parameter '&#123;param&#125;' is unbound (&#123;type&#125;). Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing as a tool.
+## AG6029 — Tool '&#123;tool&#125;' has a required function-typed parameter '&#123;param&#125;' that is unbound (its type is &#123;type&#125;). Bind it with .partial(&#123;param&#125;: &lt;value&gt;) before passing it as a tool.
 
 *Default severity: error.*
 

@@ -103,6 +103,24 @@ def work(u: U, other: U): string {
 `);
     expect(out.some((m) => m.includes("not available on every member"))).toBe(true);
   });
+
+  it("keeps the handler parameter bound when the handle body declares a local of the same name", () => {
+    expect(
+      errors(`
+${RAISER}
+def work(): string {
+  handle {
+    const data: number = 1
+    return raiser()
+  } with (data) {
+    let m: string = data.message
+    return approve()
+  }
+  return "x"
+}
+`),
+    ).toEqual([]);
+  });
 });
 
 describe("narrowing in code after a `return match(...)` (issue #538)", () => {
@@ -138,6 +156,49 @@ def f(): string {
   const r = try raiser()
   if (isFailure(r)) {
     return "failed"
+  }
+  return r.value
+}
+`),
+    ).toEqual([]);
+  });
+
+  it("keeps a narrowing established before the exit in the dead code after it", () => {
+    expect(
+      errors(`
+${RAISER}
+def f(): string {
+  const r = try raiser()
+  if (isFailure(r)) {
+    return "failed"
+  }
+  return r.value
+  let again: string = r.value
+  return again
+}
+`),
+    ).toEqual([]);
+  });
+
+  it("does not let a dead match yield undo narrowing established before the match", () => {
+    expect(
+      errors(`
+${RAISER}
+def f(c: boolean): string {
+  const r = try raiser()
+  if (isFailure(r)) {
+    return "f"
+  }
+  const x = match (r.value) {
+    "a" => {
+      if (c) {
+        return "1"
+      } else {
+        return "2"
+      }
+      return "3"
+    }
+    _ => "5"
   }
   return r.value
 }

@@ -164,6 +164,25 @@ export type TypeValidationDescriptor =
       get: () => TypeValidationDescriptor;
     };
 
+/**
+ * `descriptor` with `validators` added after its own. A ref is wrapped so
+ * the merge happens on the descriptor it resolves to: the walker follows a
+ * ref before it reads validators, so validators set on the ref itself would
+ * never run.
+ */
+export function __withUseSiteValidators(
+  descriptor: TypeValidationDescriptor,
+  validators: AgencyValidator[],
+): TypeValidationDescriptor {
+  if (validators.length === 0) {
+    return descriptor;
+  }
+  if (descriptor.kind === "ref") {
+    return { kind: "ref", get: () => __withUseSiteValidators(descriptor.get(), validators) };
+  }
+  return { ...descriptor, validators: [...descriptor.validators, ...validators] };
+}
+
 export type RecursiveValidationOpts = {
   /** Hard cap on traversal depth. Default 64. */
   maxDepth?: number;

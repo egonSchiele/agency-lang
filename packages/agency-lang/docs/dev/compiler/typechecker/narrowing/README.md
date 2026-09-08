@@ -197,19 +197,17 @@ conservative: it counts only `return` (a `raise`/interrupt may resume, and
 
 An inline handler (`handle { … } with (e) { … }`) runs when a statement in the
 handle body raises, so it can start after any prefix of that body. Its flow
-starts from the pre-body flow with every name the body rebinds reset to its
-declared type, and every name the body declares set to `T | null`, since the
-declaration may not have run yet (`handlerEntryFlow` in `flowBuilder.ts`; the
-same `T | null` treatment a finalize block gets). Starting it from the
-body's end flow was wrong: a body that always returns ends in `exit`, so the
-handler got no flow nodes at all and every guard inside it was ignored
-(issue #612).
+starts from the pre-body flow, adjusted for what the body may have done by
+then: a name the body rebinds is reset to its declared type, and a name it
+declares is `T | null`, since the declaration may not have run yet. This is
+the same `T | null` treatment a finalize block gets. The handler's own
+parameter is always bound on entry, so a body local of the same name leaves
+it alone. See `handlerEntryFlow` in `flowBuilder.ts`.
 
 Statements after an unconditional `return` are still walked, on a side flow
-rooted at a fresh `start` node, so guards in dead code narrow like anywhere
-else. The scope's terminal flow stays `exit`, so definite-return checking is
-unchanged. Without this, a guarded `r.value` after `return match(...)` fell
-back to the declared `Result` type and reported a false AG2009 (issue #538).
+rooted at the flow before the exit, so guards in dead code narrow like
+anywhere else and a narrowing established before the exit stays visible. The
+scope's terminal flow stays `exit`, so definite-return checking is unchanged.
 
 ### Soundness
 

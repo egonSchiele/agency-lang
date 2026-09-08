@@ -120,4 +120,69 @@ type Age = GreaterThan(mniAge)
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("mniAge");
   });
+  it("lets a static const win over a same-named local elsewhere in the body", () => {
+    expect(
+      codes(`
+static const minAge: number = 18
+${GREATER_THAN}
+def check(age: GreaterThan(minAge)): boolean {
+  if (age > 10) {
+    let minAge = 1
+  }
+  return true
+}
+`),
+    ).toEqual([]);
+  });
+
+  it("rejects a block parameter and a loop variable", () => {
+    const errors = codes(`
+${GREATER_THAN}
+def each(items: number[], cb: (number) => void): void {
+  for (item in items) {
+    cb(item)
+  }
+}
+def check(xs: number[]): boolean {
+  for (x in xs) {
+    const a: GreaterThan(x)! = 1
+  }
+  each(xs) as y {
+    const b: GreaterThan(y)! = 1
+  }
+  return true
+}
+`);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toContain("'x', which is a local variable");
+    expect(errors[1]).toContain("'y', which is a local variable");
+  });
+
+  it("lets a default name an earlier value parameter of the same alias", () => {
+    const src = `
+def between(low: number, high: number, value: number): Result<number> {
+  return success(value)
+}
+@validate(between.partial(low: low, high: high))
+type Between(low: number, high: number = low) = number
+`;
+    expect(codes(src)).toEqual([]);
+    expect(
+      typecheckSource(src, { typechecker: { undefinedVariables: "error" } }).filter(
+        (e) => e.code === "AG4007",
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not mistake a prototype property name for a known binding", () => {
+    const src = `
+${GREATER_THAN}
+type Age = GreaterThan(toString)
+`;
+    const errors = typecheckSource(src, { typechecker: { undefinedVariables: "error" } })
+      .filter((e) => e.code === "AG4007")
+      .map((e) => e.message);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("toString");
+  });
 });

@@ -353,7 +353,7 @@ enabled, disabled, and tested as a unit, and makes it cheap to add a new one.
 | `toolBlockBinding.ts` | `checkToolBlockBindings` | At each `llm(...)` with a known tools array, require every function-typed parameter to be bound. |
 | `validateStaticInit.ts` | `validateStaticInit` | Validate static initializers and `static <bare>` statements. |
 | `paramRedeclaration.ts` | `checkParameterRedeclarations` | A `let`/`const` may not reuse a parameter name (AG4012). Codegen keeps parameters and locals in different slots and resolves later reads to the parameter, so the redeclare would be invisible. |
-| `valueArgReferences.ts` | `checkValueArgReferences` | A value argument to a value-parameterized type must be a literal, a `static const`, an import, or a value parameter of the enclosing alias (AG7007). Anything else is not a JavaScript identifier where the type is declared. Covers annotations, alias bodies and value-parameter defaults, `schema(T)`, and `x is T`. A name that resolves to nothing is reported through the undefined-variable severity, since that pass does not look inside types. |
+| `valueArgReferences.ts` | `checkValueArgReferences` | A value argument to a value-parameterized type must be a literal, a `static const`, an import, or a value parameter of the enclosing alias (AG7007). The generated validator is module-level JavaScript, and a plain top-level variable, a parameter, or a local is not an identifier there. Walks every type-bearing AST position with the checker's scopes; a name that resolves to nothing is reported through the undefined-variable severity. |
 
 ### Import errors that are not diagnostics
 
@@ -363,9 +363,9 @@ before the checker runs. They throw `ImportResolutionError`
 (`lib/importResolutionError.ts`) with the statement's `loc` and file. The
 compiler lets that propagate so programmatic callers can catch it. The CLI
 catches it once, in `runCli`, and prints `file:line:col - error: message`
-with no stack trace; `agency typecheck` catches it per file so the other
-files still check. Any other error out of the symbol table keeps its stack,
-because it is a bug.
+with no stack trace. `agency typecheck` prints it once, drops the input file
+it is in, and checks the rest. Any other error out of the symbol table keeps
+its stack, because it is a bug.
 
 All modules are under `lib/typeChecker/`.
 

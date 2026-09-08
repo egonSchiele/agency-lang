@@ -196,19 +196,10 @@ function schemaNode(
  * whole descriptor — including the `min.partial(...)` allocations — twice.
  */
 function withUseSiteValidators(base: TsNode, useSiteValidators: TsNode[]): TsNode {
-  if (useSiteValidators.length === 0) return base;
-  const d = ts.id("__d");
-  const existingValidators = ts.binOp(
-    ts.prop(d, "validators", { optional: true }),
-    "??",
-    ts.arr([]),
-    { parenLeft: true },
-  );
-  const merged = ts.obj([
-    ts.setSpread(d),
-    ts.set('"validators"', ts.arr([ts.spread(existingValidators), ...useSiteValidators])),
-  ]);
-  return ts.call(ts.arrowFn([{ name: "__d" }], ts.statements([ts.return(merged)])), [base]);
+  if (useSiteValidators.length === 0) {
+    return base;
+  }
+  return ts.call(ts.id("__withUseSiteValidators"), [base, ts.arr(useSiteValidators)]);
 }
 
 /**
@@ -247,13 +238,10 @@ function valueParamDescriptor(
     const argList = (variableType.valueArgs ?? []).map((a) => tagArgToTs(a)).join(", ");
     const call = ts.raw(`${variableType.aliasName}(${argList})`);
     // Deferred, like the bare-alias ref below: a value argument can name a
-    // `static const`, and a top-level `type Age = GreaterThan(minAge)` would
-    // otherwise read it at module load, before static init has run, and
-    // hand the factory the uninitialized-static sentinel (issue #440).
-    // The walker resolves a ref once per element of an array, so the first
-    // result is cached: the arguments are literals, statics, or imports and
-    // cannot change between reads.
-    return cachedRef(withUseSiteValidators(call, useSiteValidators));
+    // `static const`, and a top-level `type Age = GreaterThan(minAge)` runs
+    // at module load, before static init (issue #440). The first result is
+    // cached because the walker resolves a ref once per array element.
+    return withUseSiteValidators(cachedRef(call), useSiteValidators);
   }
   const substituted = applyValueArgs(entry!, variableType.valueArgs, variableType.aliasName);
   const merged = mergeTagSets(substituted.tags, variableType.tags);

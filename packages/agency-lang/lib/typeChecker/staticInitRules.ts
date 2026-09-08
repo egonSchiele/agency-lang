@@ -27,19 +27,6 @@ import type { TypeCheckError } from "./types.js";
 import { walkNodes } from "../utils/node.js";
 
 /**
- * Per-run primitives that need an execution context to run. Calling
- * any of these from a `static` initializer (which runs once at
- * process startup, before any agent run has begun) is a logic error
- * — there is no per-run ctx, no thread, no checkpoint store, no LLM
- * client wired up yet.
- *
- * `interrupt` lives on this list as a *function name* even though
- * the parser usually emits an `interruptStatement` node — a bare
- * call like `interrupt("foo")` could parse as either depending on
- * surrounding shape, so we check both. See `checkInterruptStatement`
- * below for the statement form.
- */
-/**
  * The assignments at module top level, with a `with handler { ... }`
  * wrapper peeled off. Both `static const x = ...` and `with handler
  * { static const x = ... }` count, the same way `sectionAssembler` and
@@ -56,6 +43,19 @@ export function topLevelAssignments(nodes: AgencyNode[]): Assignment[] {
   return assignments;
 }
 
+/**
+ * Per-run primitives that need an execution context to run. Calling
+ * any of these from a `static` initializer (which runs once at
+ * process startup, before any agent run has begun) is a logic error
+ * — there is no per-run ctx, no thread, no checkpoint store, no LLM
+ * client wired up yet.
+ *
+ * `interrupt` lives on this list as a *function name* even though
+ * the parser usually emits an `interruptStatement` node — a bare
+ * call like `interrupt("foo")` could parse as either depending on
+ * surrounding shape, so we check both. See `checkInterruptStatement`
+ * below for the statement form.
+ */
 export const BANNED_BUILTINS_IN_STATIC_INIT: Record<string, string> = {
   llm: "`llm()` requires a per-run execution context",
   chat: "`chat()` requires a per-run execution context",

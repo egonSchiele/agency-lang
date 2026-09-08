@@ -581,7 +581,7 @@ def f(): string {
 
 **How to fix:** keep the one marker that describes the function and remove the other.`,
 
-  valueArgNotStatic: `A value-parameterized type was instantiated with a plain top-level variable, a parameter, or a local. The generated code reads a value argument once, when the type is declared, so none of those is in scope there and the program would crash with "<name> is not defined". What works is a literal, a \`static const\`, an imported name, or a value parameter of the enclosing type alias (\`type Above(floor: number) = GreaterThan(floor)\`). The same rule applies to a value parameter's default.
+  valueArgNotStatic: `A value-parameterized type was instantiated with a plain top-level variable, a parameter, or a local. The validator the compiler generates for a type is module-level JavaScript, and it names a value argument as a bare identifier. A \`static const\` and an imported name are identifiers there. A plain top-level variable lives in the global store and a parameter or local lives on the stack frame, so the generated code cannot reach them and the program would crash at validation time. What works is a literal, a \`static const\`, an imported name, or a value parameter of the enclosing type alias (\`type Above(floor: number) = GreaterThan(floor)\`). A value parameter's default follows the same rule, and may also name an earlier parameter of the same alias.
 
 Mark the variable \`static const\`, or pass a literal:
 

@@ -247,11 +247,13 @@ export class SymbolTable {
       for (const node of entry.program.nodes) {
         if (node.type !== "exportFromStatement") continue;
         if (!isAgencyImport(node.modulePath)) {
-          throw new Error(
+          throw new ImportResolutionError(
             `Re-export source must be an Agency module (std::, pkg::, or .agency path): '${node.modulePath}'`,
+            node.loc,
+            filePath,
           );
         }
-        const sourcePath = resolveAgencyImportPath(node.modulePath, filePath);
+        const sourcePath = resolveReExportSource(node.modulePath, filePath, node.loc);
         resolveReExports(sourcePath, newVisiting);
         mergeExportsFrom(files, filePath, sourcePath, node);
       }
@@ -545,6 +547,25 @@ function symbolKindLabel(sym: SymbolInfo): string {
     // ConstantSymbol is only ever added when `exported && static && const`.
     case "constant":
       return "Constant";
+  }
+}
+
+/** `resolveAgencyImportPath` for a re-export, with the statement's file and
+ *  position stamped on an uninstalled-package error so the CLI can print
+ *  `file:line:col`. */
+function resolveReExportSource(
+  modulePath: string,
+  fromFile: string,
+  loc: SourceLocation | undefined,
+): string {
+  try {
+    return resolveAgencyImportPath(modulePath, fromFile);
+  } catch (error) {
+    if (error instanceof ImportResolutionError) {
+      error.file = error.file ?? fromFile;
+      error.loc = error.loc ?? loc;
+    }
+    throw error;
   }
 }
 

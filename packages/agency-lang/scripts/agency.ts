@@ -1580,34 +1580,54 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // more entrypoints never merges or pollutes across files.
       const filePaths = sources.filter((s) => s.kind === "file").map((s) => path.resolve(s.path));
       // A bad import (a re-export of a name the source lacks, an uninstalled
-      // pkg::) is a user error: print its message, not a stack trace.
+      // pkg::) is a user error: print its message once, not a stack trace.
+      const printed: string[] = [];
       const reportImportError = (error: unknown, file?: string): void => {
         if (!(error instanceof ImportResolutionError)) throw error;
-        console.error(formatImportResolutionError(error, file));
+        const line = formatImportResolutionError(error, file);
+        if (!printed.includes(line)) {
+          console.error(line);
+        }
+        printed.push(line);
         hasErrors = true;
       };
-      // One shared table for every file. When one file's imports make the
-      // shared build fail, each file gets its own table instead, so the bad
-      // import is reported against its file and the other files still check.
+      // One shared table for every file. When an input file's own imports
+      // break the build, that file is reported and dropped, and the table is
+      // rebuilt for the rest. When the bad import is in a file the inputs only
+      // reach through imports, the shared build cannot succeed, so each file
+      // builds its own table; the ones that reach the bad file repeat the
+      // same error, which is printed once.
+      const dropped: string[] = [];
+      let remaining = filePaths;
       let sharedTable: SymbolTable | undefined;
-      try {
-        sharedTable = filePaths.length ? SymbolTable.build(filePaths, config) : undefined;
-      } catch (error) {
-        if (!(error instanceof ImportResolutionError)) throw error;
-        sharedTable = undefined;
+      while (remaining.length > 0 && sharedTable === undefined) {
+        try {
+          sharedTable = SymbolTable.build(remaining, config);
+        } catch (error) {
+          reportImportError(error);
+          const bad = (error as ImportResolutionError).file;
+          if (bad === undefined || !remaining.includes(bad)) {
+            break;
+          }
+          dropped.push(bad);
+          remaining = remaining.filter((file) => file !== bad);
+        }
       }
-      const tableFor = (file: string): SymbolTable =>
-        sharedTable ?? SymbolTable.build([path.resolve(file)], config);
       for (const src of sources) {
+        if (src.kind === "stdin") {
+          runTypeCheck(await readSource(src));
+          continue;
+        }
+        const filePath = path.resolve(src.path);
+        if (dropped.includes(filePath)) {
+          continue;
+        }
         const contents = await readSource(src);
         try {
-          if (src.kind === "stdin") {
-            runTypeCheck(contents);
-          } else {
-            runTypeCheck(contents, src.path, tableFor(src.path));
-          }
+          const table = sharedTable ?? SymbolTable.build([filePath], config);
+          runTypeCheck(contents, src.path, table);
         } catch (error) {
-          reportImportError(error, src.kind === "file" ? src.path : undefined);
+          reportImportError(error, src.path);
         }
       }
       if (hasErrors) process.exit(1);

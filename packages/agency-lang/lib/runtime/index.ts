@@ -166,7 +166,11 @@ export { __coarseTypeTest } from "./typeTest.js";
 export { __eq } from "./eq.js";
 export { __requireLength } from "./requireLength.js";
 export { __nn } from "./nn.js";
-export { __validateChain, __validateChainRecursive } from "./validateChain.js";
+export {
+  __validateChain,
+  __validateChainRecursive,
+  __withUseSiteValidators,
+} from "./validateChain.js";
 export type {
   AgencyValidator,
   TypeValidationDescriptor,

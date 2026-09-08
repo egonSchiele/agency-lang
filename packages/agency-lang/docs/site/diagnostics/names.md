@@ -119,3 +119,13 @@ An import names a symbol that its target module defines but does not `export`. A
 *Default severity: error.*
 
 Under `--agency-only` (`typechecker.jsGlobals: "sandbox"`), a program may not read `constructor`, `prototype`, or `__proto__` from a value, spelled or as a string-literal key. Those property names walk from any value to JavaScript's `Function` and the prototype chain, which is a way for pure Agency code to reach the host with no interrupt. This is a best-effort compile-time catch; the runtime backstop is code-generation-from-strings being disabled.
+
+<a id="ag4012"></a>
+
+## AG4012 — Cannot redeclare parameter '&#123;name&#125;' with '&#123;declKind&#125;'. Reads after the redeclare would still see the parameter. Assign to it instead, or pick a different name.
+
+*Default severity: error.*
+
+A `let` or `const` inside a function or node body reuses the name of one of its parameters. Parameters and locals live in different slots at runtime, and a read after the redeclare still resolves to the parameter slot, so the new value would silently never be seen.
+
+Assign to the parameter instead (`u = { tag: "b", n: 1 }`), or give the local a different name.

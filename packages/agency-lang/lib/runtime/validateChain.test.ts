@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   __validateChain,
   __validateChainRecursive,
+  __withUseSiteValidators,
   type AgencyValidator,
   type TypeValidationDescriptor,
 } from "./validateChain.js";
@@ -373,5 +374,36 @@ describe("the predicate contract (validators may not modify the value)", () => {
     await expect(
       __validateChain(1, z.number(), [async (v) => success((v as number) + 1)]),
     ).rejects.toThrow(/validator '\(anonymous\)' modified the value/);
+  });
+});
+
+describe("__withUseSiteValidators", () => {
+  it("appends to a plain descriptor's own validators", async () => {
+    const leaf: TypeValidationDescriptor = {
+      kind: "leaf",
+      schema: z.number(),
+      validators: [isPos],
+    };
+    const merged = __withUseSiteValidators(leaf, [isEven]);
+    expect(isSuccess(await __validateChainRecursive(4, merged))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(3, merged))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(-2, merged))).toBe(true);
+  });
+
+  it("merges onto the descriptor a ref resolves to, so the walker runs them", async () => {
+    const leaf: TypeValidationDescriptor = {
+      kind: "leaf",
+      schema: z.number(),
+      validators: [isPos],
+    };
+    const ref: TypeValidationDescriptor = { kind: "ref", get: () => leaf };
+    const merged = __withUseSiteValidators(ref, [isEven]);
+    expect(isSuccess(await __validateChainRecursive(4, merged))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(3, merged))).toBe(true);
+  });
+
+  it("returns the descriptor itself when there is nothing to add", () => {
+    const leaf: TypeValidationDescriptor = { kind: "leaf", schema: z.number(), validators: [] };
+    expect(__withUseSiteValidators(leaf, [])).toBe(leaf);
   });
 });

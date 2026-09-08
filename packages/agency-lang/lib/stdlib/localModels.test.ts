@@ -68,11 +68,22 @@ describe("name resolution", () => {
 
 describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, and a known category", () => {
-    const validCategories = new Set(["general", "coding", "reasoning", "embedding"]);
+    const validCategories = new Set([
+      "general",
+      "coding",
+      "reasoning",
+      "writing",
+      "science",
+      "uncensored",
+      "embedding",
+    ]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
     for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
-      expect(info.uri, `${name}.uri`).toMatch(/^hf:/);
+      expect(info.uri, `${name}.uri`).toMatch(/^(hf|mlx):/);
+      expect(info.backend, `${name}.backend`).toBe(
+        info.uri.startsWith("mlx:") ? "mlx" : "llama-cpp",
+      );
       expect(info.params.length, `${name}.params`).toBeGreaterThan(0);
       expect(info.description.length, `${name}.description`).toBeGreaterThan(0);
       expect(info.sizeBytes, `${name}.sizeBytes`).toBeGreaterThan(0);

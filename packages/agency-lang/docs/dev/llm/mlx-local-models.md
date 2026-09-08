@@ -223,3 +223,13 @@ file's record entry, fails the run, and is fetched whole next time.
 
 The tests run against `lib/stdlib/__tests__/fakeHub.ts`, a `node:http`
 server that answers the same routes and redirect shapes as the Hub.
+
+## Catalog entries
+
+The built-in catalog lives in `lib/stdlib/modelCatalog.ts` (moved out of
+`localModels.ts` for the line limit) and is mirrored in
+`data/model-catalog.json`. MLX entries use an `mlx:` URI, carry no
+`sha256` because the downloader verifies each file from the Hub's own
+hashes, and end in `-mlx` when a GGUF entry of the same model exists.
+Sizes are the whole repo, read from the Hub API. Three categories were
+added with them: `writing`, `science`, and `uncensored`.

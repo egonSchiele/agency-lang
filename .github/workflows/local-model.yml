@@ -20,6 +20,9 @@ on:
     branches: [ "main" ]
     paths:
       - "packages/agency-lang/lib/stdlib/localModels.ts"
+      - "packages/agency-lang/lib/stdlib/modelCatalog.ts"
+      - "packages/agency-lang/data/model-catalog.json"
+      - "packages/agency-lang/lib/stdlib/hubClient.ts"
       - "packages/agency-lang/lib/stdlib/providers/**"
       - "packages/agency-lang/tests/integration/local-model/**"
       - ".github/workflows/local-model.yml"

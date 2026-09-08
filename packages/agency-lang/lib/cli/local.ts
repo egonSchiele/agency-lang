@@ -148,13 +148,18 @@ export async function runDownload(value?: string): Promise<void> {
   console.log(`model:  ${modelPath}`);
 }
 
-/** One line per event, except the byte counter, which rewrites one line
- *  on a terminal and prints nothing otherwise. */
+/** One line per event. The byte counter rewrites one terminal line with
+ *  the percent, the rate, and the time left, and off a terminal prints a
+ *  line at every tenth percent instead, so a log of a long download still
+ *  shows how far it got. */
 export function printDownloadEvent(
   tty: boolean,
   write: (s: string) => void = (s) => process.stdout.write(s),
+  now: () => number = Date.now,
 ): (e: DownloadEvent) => void {
+  const rate = new RateMeter(now);
   let counterShown = false;
+  let lastTenth = -1;
   const endCounter = () => {
     if (counterShown) {
       write("\n");
@@ -163,9 +168,17 @@ export function printDownloadEvent(
   };
   return (e) => {
     if (e.kind === "bytes") {
+      const percent = e.total === 0 ? 100 : Math.floor((100 * e.done) / e.total);
+      const line = `  ${formatGB(e.done)} / ${formatGB(e.total)}  ${percent}%`;
       if (tty) {
-        write(`\r  ${formatGB(e.done)} / ${formatGB(e.total)}`);
+        write(`\r${line}${rate.describe(e.done, e.total)}`);
         counterShown = true;
+        if (e.done >= e.total) {
+          endCounter();
+        }
+      } else if (Math.floor(percent / 10) > lastTenth) {
+        lastTenth = Math.floor(percent / 10);
+        write(`${line}\n`);
       }
       return;
     }
@@ -179,6 +192,40 @@ export function printDownloadEvent(
       write(e.ok ? `  verified ${e.path}\n` : `  ${e.path} failed verification\n`);
     }
   };
+}
+
+/** The download rate over the last few seconds and the time it implies
+ *  for the rest, as `  45.2 MB/s  12m left`. Blank until there are two
+ *  samples to compare. */
+class RateMeter {
+  private samples: { at: number; done: number }[] = [];
+
+  constructor(private readonly now: () => number) {}
+
+  describe(done: number, total: number): string {
+    const at = this.now();
+    this.samples.push({ at, done });
+    this.samples = this.samples.filter((s) => at - s.at <= RATE_WINDOW_MS);
+    const first = this.samples[0];
+    if (at - first.at < 1000 || done <= first.done) {
+      return "";
+    }
+    const bytesPerSecond = ((done - first.done) * 1000) / (at - first.at);
+    const left = Math.round((total - done) / bytesPerSecond);
+    return `  ${(bytesPerSecond / 1e6).toFixed(1)} MB/s  ${formatDuration(left)} left`;
+  }
+}
+
+const RATE_WINDOW_MS = 10_000;
+
+function formatDuration(seconds: number): string {
+  if (seconds >= 3600) {
+    return `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`;
+  }
+  if (seconds >= 60) {
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
 }
 
 /** Without `-f`: drop the alias, keep the files, and say where they are.

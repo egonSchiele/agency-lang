@@ -15,6 +15,7 @@ import {
   readBytes,
   writeText,
   writeBytes,
+  openForWrite,
   list,
   stat,
   mkdir,
@@ -340,6 +341,56 @@ describe("writeText modes", () => {
       expect(() => writeText(root(dir), "f.txt", "a", { mode: "bogus" as WriteMode })).toThrow(
         /Invalid mode/,
       );
+    } finally {
+      cleanup(dir);
+    }
+  });
+});
+
+describe("openForWrite", () => {
+  test("creates the file, writes at any offset in any order, and truncates", () => {
+    const dir = makeDir(".ct-openwrite-");
+    try {
+      const r = root(dir);
+      mkdir(r, "sub");
+      const f = openForWrite(r, "sub/f.bin");
+      f.writeAt(Buffer.from("cd"), 2);
+      f.writeAt(Buffer.from("ab"), 0);
+      expect(fs.readFileSync(path.join(dir, "sub", "f.bin"), "utf8")).toBe("abcd");
+      f.truncate(1);
+      f.close();
+      expect(fs.readFileSync(path.join(dir, "sub", "f.bin"), "utf8")).toBe("a");
+      const again = openForWrite(r, "sub/f.bin");
+      again.writeAt(Buffer.from("z"), 1);
+      again.close();
+      expect(fs.readFileSync(path.join(dir, "sub", "f.bin"), "utf8")).toBe("az");
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("refuses a symlink at the target and a symlinked parent", () => {
+    const dir = makeDir(".ct-openwrite-link-");
+    try {
+      const r = root(dir);
+      fs.mkdirSync(path.join(dir, "real"));
+      fs.symlinkSync(path.join(dir, "real"), path.join(dir, "linkdir"));
+      fs.symlinkSync(path.join(dir, "real", "out.bin"), path.join(dir, "link.bin"));
+      expect(() => openForWrite(r, "link.bin")).toThrow(/symlink/);
+      expect(() => openForWrite(r, "linkdir/f.bin")).toThrow(/symlink/);
+      expect(fs.existsSync(path.join(dir, "real", "out.bin"))).toBe(false);
+      expect(fs.existsSync(path.join(dir, "real", "f.bin"))).toBe(false);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test("a target swapped for a directory after the walk is refused", () => {
+    const dir = makeDir(".ct-openwrite-swap-");
+    try {
+      const r = root(dir);
+      fs.mkdirSync(path.join(dir, "f.bin"));
+      expect(() => openForWrite(r, "f.bin")).toThrow(/not a regular file|EISDIR/);
     } finally {
       cleanup(dir);
     }

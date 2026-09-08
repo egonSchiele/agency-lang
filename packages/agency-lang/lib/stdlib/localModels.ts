@@ -1,4 +1,13 @@
-import { root, wholePath, stat, list, remove, readText, writeText } from "./contained.js";
+import {
+  root,
+  wholePath,
+  stat,
+  list,
+  remove,
+  readText,
+  writeText,
+  type Root,
+} from "./contained.js";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -691,9 +700,7 @@ function mlxEntries(dir: string): DownloadedModel[] {
     if (record === null) {
       continue;
     }
-    const sizeBytes = list(root(modelDir), ".")
-      .filter((f) => f.type === "file")
-      .reduce((sum, f) => sum + f.size, 0);
+    const sizeBytes = treeSizeBytes(root(modelDir), ".");
     out.push({
       name: record.repo,
       path: modelDir,
@@ -704,6 +711,20 @@ function mlxEntries(dir: string): DownloadedModel[] {
     });
   }
   return out;
+}
+
+/** Every regular file under `target`, subdirectories included, summed. */
+function treeSizeBytes(r: Root, target: string): number {
+  let sum = 0;
+  for (const entry of list(r, target)) {
+    const child = path.join(target, entry.name);
+    if (entry.type === "file") {
+      sum += entry.size;
+    } else if (entry.type === "dir") {
+      sum += treeSizeBytes(r, child);
+    }
+  }
+  return sum;
 }
 
 /** The `.gguf` files directly in `dir`, by name. A missing dir has none. */
@@ -1223,7 +1244,6 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
   return (resolved) => !present.includes(path.basename(resolved));
 }
 
-/** Resolve a name/uri/path to a local .gguf path, downloading if needed. */
 /** `client.mlx.downloadConcurrency` from the nearest `agency.json`, else 8. */
 export function configuredDownloadConcurrency(): number {
   const n = readClientConfig().mlx?.downloadConcurrency;
@@ -1244,12 +1264,13 @@ export async function _downloadModel(
       return path.resolve(model.target);
     }
     const { repo, revision } = parseMlxUri(model.target);
-    const snapshot = await fetchHubSnapshot(repo, revision, hubOptions);
-    return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), {
+    const opts: DownloadOptions = {
       concurrency: configuredDownloadConcurrency(),
       ...hubOptions,
       token: hubOptions.token ?? process.env.HF_TOKEN,
-    });
+    };
+    const snapshot = await fetchHubSnapshot(repo, revision, opts);
+    return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), opts);
   }
   requireSupport();
   const target = model.target;

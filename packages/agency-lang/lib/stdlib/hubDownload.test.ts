@@ -9,6 +9,7 @@ import {
   planChunks,
   downloadHubSnapshot,
   GATED_MESSAGE,
+  RETRIES,
   type DownloadEvent,
   type HubSnapshot,
 } from "./hubDownload.js";
@@ -109,6 +110,21 @@ describe("fetchHubSnapshot", () => {
     await gated.close();
   });
 
+  it("refuses a tree page linked over http, even from an https hub", async () => {
+    const canned = async (url: string) => {
+      if (url.includes("/tree/")) {
+        return new Response("[]", { headers: { link: '<http://hub.test/next>; rel="next"' } });
+      }
+      return new Response(JSON.stringify({ sha: "abc", gated: false }));
+    };
+    await expect(
+      fetchHubSnapshot("org/repo", undefined, {
+        hubUrl: "https://hub.test",
+        fetch: canned as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow("Refusing to download over http: http://hub.test/next");
+  });
+
   it("refuses a hub that is not https", async () => {
     await expect(fetchHubSnapshot("org/repo", undefined, { hubUrl: hub.baseUrl })).rejects.toThrow(
       `Refusing to download over http: ${hub.baseUrl}`,
@@ -137,7 +153,7 @@ describe("planChunks", () => {
     ]);
   });
 
-  it("ignores a record whose size disagrees, and plans one chunk for an empty file", () => {
+  it("ignores a record whose size disagrees, and plans nothing for an empty file", () => {
     const snap: HubSnapshot = {
       repo: "r",
       revision: "s",
@@ -147,10 +163,7 @@ describe("planChunks", () => {
       ],
     };
     const record = { repo: "r", revision: "s", files: { a: { size: 9, complete: true } } };
-    expect(planChunks(snap, record, 64)).toEqual([
-      { path: "a", index: 0, start: 0, end: 10 },
-      { path: "e", index: 0, start: 0, end: 0 },
-    ]);
+    expect(planChunks(snap, record, 64)).toEqual([{ path: "a", index: 0, start: 0, end: 10 }]);
   });
 });
 
@@ -172,8 +185,10 @@ describe("downloadHubSnapshot", () => {
     expect(
       events.filter((e) => e.kind === "verify").every((e) => e.kind === "verify" && e.ok),
     ).toBe(true);
-    const last = events[events.length - 1];
-    expect(last).toEqual({ kind: "bytes", done: 8907, total: 8907 });
+    // The last byte lands, the counter reports it, then the file is verified.
+    const lastBytes = events.filter((e) => e.kind === "bytes").pop();
+    expect(lastBytes).toEqual({ kind: "bytes", done: 8907, total: 8907 });
+    expect(events[events.length - 1].kind).toBe("verify");
     // The token never reaches the CDN, and the fake saw no token at all here.
     expect(hub.authSeen.cdn.every((a) => a === "")).toBe(true);
   });
@@ -252,6 +267,105 @@ describe("downloadHubSnapshot", () => {
     expectFilesMatch(out);
     expect(events.some((e) => e.kind === "adopt" && e.path === FILES[1].path)).toBe(true);
     expect(Object.keys(hub.rangeHits).some((k) => k.startsWith(FILES[1].path))).toBe(false);
+  });
+
+  it("creates an empty file without a request and records it complete", async () => {
+    const withEmpty = await startFakeHub("org/repo", [
+      ...FILES,
+      { path: "added_tokens.json", bytes: Buffer.alloc(0) },
+    ]);
+    const snap = await fetchHubSnapshot("org/repo", undefined, {
+      hubUrl: withEmpty.baseUrl,
+      allowHttp: true,
+    });
+    const out = await downloadHubSnapshot(snap, path.join(dir, "m"), {
+      ...opts(),
+      hubUrl: withEmpty.baseUrl,
+    });
+    expect(fs.statSync(path.join(out, "added_tokens.json")).size).toBe(0);
+    expect(readMlxModelRecord(out)!.files["added_tokens.json"]).toEqual({
+      size: 0,
+      complete: true,
+    });
+    expect(Object.keys(withEmpty.rangeHits).some((k) => k.startsWith("added_tokens"))).toBe(false);
+    await withEmpty.close();
+  });
+
+  it("replaces a plain file on disk that is larger than the tree says", async () => {
+    const target = path.join(dir, "m");
+    fs.mkdirSync(target);
+    fs.writeFileSync(path.join(target, "config.json"), '{"stale":"and longer"}');
+    const out = await download({}, target);
+    expectFilesMatch(out);
+  });
+
+  it("re-resolves when the CDN URL has expired, without spending a retry", async () => {
+    // Every attempt but the last on the first chunk dies in transport; the
+    // last one meets an expired URL. A fresh URL must still be fetched.
+    let rangeRequests = 0;
+    const flaky = (async (url: string, init?: RequestInit) => {
+      if (url.includes("/cdn/") && init?.headers !== undefined && "range" in init.headers) {
+        rangeRequests += 1;
+        if (rangeRequests < RETRIES) throw new Error("connection reset");
+        if (rangeRequests === RETRIES) hub.expireNextCdn = true;
+      }
+      return fetch(url, init);
+    }) as unknown as typeof fetch;
+    const out = await download({ fetch: flaky, concurrency: 1 });
+    expectFilesMatch(out);
+    expect(hub.authSeen.resolve.length).toBe(FILES.length + 1);
+  });
+
+  it("abandons and retries a range that stops delivering bytes", async () => {
+    const stalled = (async (url: string, init?: RequestInit) => {
+      if (url.includes("/cdn/") && init?.headers !== undefined && "range" in init.headers) {
+        // A body that never yields, torn down on abort as a real fetch's is.
+        const body = new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            init.signal?.addEventListener("abort", () => controller.error(new Error("aborted")));
+          },
+        });
+        const res = await fetch(url, { method: "HEAD" });
+        return new Response(body, {
+          status: 206,
+          headers: { "content-range": `bytes 0-0/${res.headers.get("content-length")}` },
+        });
+      }
+      return fetch(url, init);
+    }) as unknown as typeof fetch;
+    await expect(download({ fetch: stalled, concurrency: 1, stallTimeoutMs: 20 })).rejects.toThrow(
+      "no data for 0s",
+    );
+  });
+
+  it("says whether a token was sent when the hub refuses a request", async () => {
+    hub.failNextResolve = true;
+    await expect(download({ concurrency: 1 })).rejects.toThrow(
+      /answered 403\. The repo may be private or gated\. Set HF_TOKEN/,
+    );
+    hub.failNextResolve = true;
+    await expect(download({ concurrency: 1, token: "t" })).rejects.toThrow(
+      /answered 403\. Check HF_TOKEN/,
+    );
+  });
+
+  it("sends the token on a range the hub serves itself, and still not to the CDN", async () => {
+    const direct = await startFakeHub("org/repo", FILES, { gated: true, directBlobs: true });
+    const snap = await fetchHubSnapshot("org/repo", undefined, {
+      hubUrl: direct.baseUrl,
+      allowHttp: true,
+      token: "t",
+    });
+    const out = await downloadHubSnapshot(snap, path.join(dir, "m"), {
+      ...opts(),
+      hubUrl: direct.baseUrl,
+      token: "t",
+    });
+    expectFilesMatch(out);
+    expect(direct.rangeHits["config.json 0-6"]).toBe(1);
+    expect(direct.authSeen.resolve.every((a) => a === "Bearer t")).toBe(true);
+    expect(direct.authSeen.cdn.every((a) => a === "")).toBe(true);
+    await direct.close();
   });
 
   it("refuses a tree entry that escapes the directory", async () => {

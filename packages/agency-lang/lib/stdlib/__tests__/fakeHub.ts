@@ -24,7 +24,14 @@ export type FakeHub = {
   close: () => Promise<void>;
 };
 
-export type FakeHubOptions = { gated?: boolean; sha?: string; treePageSize?: number };
+export type FakeHubOptions = {
+  gated?: boolean;
+  sha?: string;
+  treePageSize?: number;
+  /** Serve non-LFS files from `resolve/` itself with a 200, as the real
+   *  Hub does, instead of redirecting to the CDN. */
+  directBlobs?: boolean;
+};
 
 /** Files at or above this size get an LFS entry with a sha256, as on the
  *  real Hub, where small text files are plain git blobs. */
@@ -147,6 +154,10 @@ export function startFakeHub(
         json(res, 404, { error: "Entry not found" });
         return;
       }
+      if (opts.directBlobs === true && byPath[resolve[2]].length < LFS_THRESHOLD) {
+        serveBytes(hub, req, res, resolve[2], byPath[resolve[2]]);
+        return;
+      }
       // Relative hop, as the real Hub does for small files.
       res.writeHead(302, { location: `/cache/${resolve[2]}` });
       res.end();
@@ -173,21 +184,7 @@ export function startFakeHub(
         json(res, 403, { error: "Request has expired" });
         return;
       }
-      const range = req.headers.range?.match(/^bytes=(\d+)-(\d+)$/);
-      if (range === undefined || range === null) {
-        res.writeHead(200, { "content-length": String(bytes.length) });
-        res.end(bytes);
-        return;
-      }
-      const start = Number(range[1]);
-      const end = Math.min(Number(range[2]), bytes.length - 1);
-      const key = `${file} ${start}-${end}`;
-      hub.rangeHits[key] = (hub.rangeHits[key] ?? 0) + 1;
-      res.writeHead(206, {
-        "content-range": `bytes ${start}-${end}/${bytes.length}`,
-        "content-length": String(end - start + 1),
-      });
-      res.end(bytes.subarray(start, end + 1));
+      serveBytes(hub, req, res, file, bytes);
       return;
     }
     json(res, 404, { error: `fake hub: no route for ${p}` });
@@ -205,4 +202,29 @@ export function startFakeHub(
       resolve(hub);
     });
   });
+}
+
+/** The whole file, or the requested range with a 206, counted in `rangeHits`. */
+function serveBytes(
+  hub: FakeHub,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  file: string,
+  bytes: Buffer,
+): void {
+  const range = req.headers.range?.match(/^bytes=(\d+)-(\d+)$/);
+  if (range === undefined || range === null) {
+    res.writeHead(200, { "content-length": String(bytes.length) });
+    res.end(req.method === "HEAD" ? undefined : bytes);
+    return;
+  }
+  const start = Number(range[1]);
+  const end = Math.min(Number(range[2]), bytes.length - 1);
+  const key = `${file} ${start}-${end}`;
+  hub.rangeHits[key] = (hub.rangeHits[key] ?? 0) + 1;
+  res.writeHead(206, {
+    "content-range": `bytes ${start}-${end}/${bytes.length}`,
+    "content-length": String(end - start + 1),
+  });
+  res.end(bytes.subarray(start, end + 1));
 }

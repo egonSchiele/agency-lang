@@ -1,6 +1,14 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
-import { root, resolveUnder, mkdir, stat, type Root } from "./contained.js";
+import {
+  root,
+  resolveUnder,
+  mkdir,
+  stat,
+  writeBytes,
+  openForWrite,
+  type Root,
+  type WritableFile,
+} from "./contained.js";
 import {
   readMlxModelRecord,
   writeMlxModelRecord,
@@ -8,124 +16,56 @@ import {
   type MlxFileRecord,
 } from "./mlxModelRecord.js";
 import { fileSha256, verifyModelFile } from "./modelVerify.js";
+import {
+  HubClient,
+  Expired,
+  type Chunk,
+  type HubFile,
+  type HubOptions,
+  type HubSnapshot,
+} from "./hubClient.js";
 
-/** Downloads a Hugging Face model repo with plain HTTP: the tree API for
- *  the file list and hashes, `resolve/` for a CDN URL per file, and byte
- *  ranges so a file downloads as parallel chunks and resumes at any chunk.
- *  This is the one stdlib file that writes through `fs`, because a chunk
- *  lands at a byte offset inside a file `contained.ts` has no primitive
- *  for. Every path still goes through `resolveUnder` first. */
+export {
+  DEFAULT_HUB_URL,
+  GATED_MESSAGE,
+  fetchHubSnapshot,
+  type Chunk,
+  type HubFile,
+  type HubOptions,
+  type HubSnapshot,
+} from "./hubClient.js";
 
-export const DEFAULT_HUB_URL = "https://huggingface.co";
+/** Downloads a Hugging Face model repo as parallel byte ranges into a
+ *  directory that mlx-lm can load as it is. The repo's files land under
+ *  their own names; `.agency-model.json` beside them records which
+ *  chunks are on disk, so a second run fetches only what is missing. */
+
 export const CHUNK_BYTES = 64 * 1024 * 1024;
 export const DEFAULT_CONCURRENCY = 8;
-const MAX_REDIRECTS = 5;
-const RETRIES = 3;
+/** Attempts per chunk before the run fails. The waits between them
+ *  double from `retryDelayMs`. */
+export const RETRIES = 5;
 
-export const GATED_MESSAGE =
-  "This repo is gated. Set HF_TOKEN to a Hugging Face token that has accepted its terms.";
+export type DownloadEvent =
+  | { kind: "file-start"; path: string; size: number; resumedBytes: number }
+  | { kind: "bytes"; done: number; total: number }
+  | { kind: "file-done"; path: string }
+  | { kind: "verify"; path: string; ok: boolean }
+  | { kind: "adopt"; path: string };
 
-export type HubFile = { path: string; size: number; sha256?: string };
-export type HubSnapshot = { repo: string; revision: string; files: HubFile[] };
-
-export type HubOptions = {
-  hubUrl?: string;
-  token?: string;
-  fetch?: typeof fetch;
-  /** Tests run a fake hub over http. Nothing else sets this. */
-  allowHttp?: boolean;
+export type DownloadOptions = HubOptions & {
+  concurrency?: number;
+  chunkBytes?: number;
+  /** Base of the 1s, 2s, 4s… retry waits. Tests shorten it. */
+  retryDelayMs?: number;
+  onEvent?: (e: DownloadEvent) => void;
 };
 
-function hubUrlOf(options: HubOptions): string {
-  const url = options.hubUrl ?? DEFAULT_HUB_URL;
-  requireHttps(url, options);
-  return url.replace(/\/+$/, "");
-}
+type Emit = (e: DownloadEvent) => void;
 
-function requireHttps(url: string, options: HubOptions): void {
-  if (options.allowHttp === true) {
-    return;
-  }
-  if (!url.startsWith("https://")) {
-    throw new Error(`Refusing to download over ${new URL(url).protocol.slice(0, -1)}: ${url}`);
-  }
-}
-
-/** The token goes only to the hub host. A CDN URL is signed and takes none. */
-function authHeaders(url: string, options: HubOptions): Record<string, string> {
-  if (options.token === undefined || options.token === "") {
-    return {};
-  }
-  const hub = new URL(hubUrlOf(options));
-  return new URL(url).host === hub.host ? { authorization: `Bearer ${options.token}` } : {};
-}
-
-async function hubJson(
-  url: string,
-  options: HubOptions,
-): Promise<{ body: unknown; link: string | null }> {
-  const fetchFn = options.fetch ?? fetch;
-  const res = await fetchFn(url, { headers: authHeaders(url, options) });
-  if (res.status === 401 || res.status === 403) {
-    throw new Error(GATED_MESSAGE);
-  }
-  if (!res.ok) {
-    throw new Error(`${url} answered ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  }
-  return { body: await res.json(), link: res.headers.get("link") };
-}
-
-type TreeEntry = { type: string; path: string; size: number; lfs?: { oid: string } };
-
-/** Follows the `Link: <…>; rel="next"` header the tree API sends for a
- *  repo with more entries than one page holds. */
-async function fetchTree(url: string, options: HubOptions): Promise<TreeEntry[]> {
-  const out: TreeEntry[] = [];
-  let next: string | null = url;
-  while (next !== null) {
-    const page = await hubJson(next, options);
-    out.push(...(page.body as TreeEntry[]));
-    const m = page.link?.match(/<([^>]+)>;\s*rel="next"/);
-    next = m === undefined || m === null ? null : m[1];
-  }
-  return out;
-}
-
-/** The commit and the file list, with a size for every file and a sha256
- *  for every LFS file. `revision` defaults to `main`; a given one may be a
- *  short sha. Gated repos need `token`. */
-export async function fetchHubSnapshot(
-  repo: string,
-  revision: string | undefined,
-  options: HubOptions = {},
-): Promise<HubSnapshot> {
-  const hub = hubUrlOf(options);
-  const modelUrl =
-    revision === undefined
-      ? `${hub}/api/models/${repo}`
-      : `${hub}/api/models/${repo}/revision/${encodeURIComponent(revision)}`;
-  const info = (await hubJson(modelUrl, options)).body as { sha: string; gated?: unknown };
-  if (info.gated !== undefined && info.gated !== false && (options.token ?? "") === "") {
-    throw new Error(GATED_MESSAGE);
-  }
-  const entries = await fetchTree(
-    `${hub}/api/models/${repo}/tree/${info.sha}?recursive=true`,
-    options,
-  );
-  const files: HubFile[] = entries
-    .filter((e) => e.type === "file")
-    .map((e) =>
-      e.lfs === undefined
-        ? { path: e.path, size: e.size }
-        : { path: e.path, size: e.size, sha256: e.lfs.oid },
-    );
-  return { repo, revision: info.sha, files };
-}
-
-export type Chunk = { path: string; index: number; start: number; end: number };
-
-/** Which chunks still need fetching: none for a complete file of the right
- *  size, and only the ones not yet recorded for a partial one. */
+/** Which chunks still need fetching: none for a complete file of the
+ *  right size, only the unrecorded ones for a partial file, and none for
+ *  an empty file, which the ledger creates without a request. */
 export function planChunks(
   snapshot: HubSnapshot,
   record: MlxModelRecord | null,
@@ -138,7 +78,7 @@ export function planChunks(
       continue;
     }
     const done = rec?.size === file.size ? (rec.chunks ?? []) : [];
-    const count = Math.max(1, Math.ceil(file.size / chunkBytes));
+    const count = Math.ceil(file.size / chunkBytes);
     for (let i = 0; i < count; i++) {
       if (!done.includes(i)) {
         out.push({
@@ -153,20 +93,237 @@ export function planChunks(
   return out;
 }
 
-export type DownloadEvent =
-  | { kind: "file-start"; path: string; size: number; resumedBytes: number }
-  | { kind: "bytes"; done: number; total: number }
-  | { kind: "file-done"; path: string }
-  | { kind: "verify"; path: string; ok: boolean }
-  | { kind: "adopt"; path: string };
+/** Downloads every chunk the record says is missing into `dir`, verifies
+ *  each file as it completes, and returns `dir`. Running it again after
+ *  an interruption fetches only what is missing. */
+export async function downloadHubSnapshot(
+  snapshot: HubSnapshot,
+  dir: string,
+  options: DownloadOptions = {},
+): Promise<string> {
+  const emit = options.onEvent ?? (() => {});
+  const chunkBytes = options.chunkBytes ?? CHUNK_BYTES;
+  const hub = new HubClient(options);
+  const r = root(dir);
+  mkdir(r, ".");
 
-export type DownloadOptions = HubOptions & {
-  concurrency?: number;
-  chunkBytes?: number;
-  /** Base of the 1s, 2s, 4s retry waits. Tests shorten it. */
-  retryDelayMs?: number;
-  onEvent?: (e: DownloadEvent) => void;
-};
+  const ledger = await Ledger.open(r, dir, snapshot, emit);
+  const plan = planChunks(snapshot, ledger.record, chunkBytes);
+  ledger.expect(plan);
+  announceFiles(plan, ledger.record, chunkBytes, emit);
+  const progress = new Progress(snapshot, plan, emit);
+  const files = new OpenFiles(r, ledger);
+  const urls = new FileUrls(hub, snapshot);
+
+  const fetchChunk = async (chunk: Chunk): Promise<void> => {
+    const file = files.open(chunk.path);
+    let received = 0;
+    try {
+      await hub.fetchRange(
+        await urls.get(chunk.path),
+        chunk,
+        ledger.sizeOf(chunk.path),
+        (piece) => {
+          file.writeAt(piece, chunk.start + received);
+          received += piece.length;
+          progress.streamed(piece.length);
+        },
+      );
+    } catch (err) {
+      progress.discard(received);
+      throw err;
+    }
+  };
+
+  const downloadChunk = async (chunk: Chunk): Promise<void> => {
+    await withRetries(chunk, options.retryDelayMs ?? 1000, urls, () => fetchChunk(chunk));
+    ledger.chunkDone(chunk);
+    progress.landed(chunk.end - chunk.start);
+    if (ledger.remaining(chunk.path) === 0) {
+      files.close(chunk.path);
+      await verifyFile(r, ledger, chunk.path, emit);
+    }
+  };
+
+  try {
+    await runPool(options.concurrency ?? DEFAULT_CONCURRENCY, plan, downloadChunk);
+  } finally {
+    files.closeAll();
+  }
+  return dir;
+}
+
+/** Runs `work` over `items` from `size` workers, and stops handing out
+ *  items once one has failed. Rejects with that first failure. */
+async function runPool<T>(
+  size: number,
+  items: T[],
+  work: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  let failed: Error | null = null;
+  const worker = async (): Promise<void> => {
+    while (failed === null && next < items.length) {
+      try {
+        await work(items[next++]);
+      } catch (err) {
+        failed = err as Error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, size) }, worker));
+  if (failed !== null) {
+    throw failed;
+  }
+}
+
+/** Retries a chunk through transport failures, waiting longer each time.
+ *  An expired CDN URL does not count as a failure. The file is resolved
+ *  again, once. */
+async function withRetries(
+  chunk: Chunk,
+  delayMs: number,
+  urls: FileUrls,
+  attempt: () => Promise<void>,
+): Promise<void> {
+  let failures = 0;
+  let refreshed = false;
+  for (;;) {
+    try {
+      await attempt();
+      return;
+    } catch (err) {
+      if (err instanceof Expired && !refreshed) {
+        refreshed = true;
+        urls.forget(chunk.path);
+        continue;
+      }
+      failures += 1;
+      if (failures >= RETRIES) {
+        throw err;
+      }
+      await sleep(delayMs * 2 ** (failures - 1));
+    }
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** One resolve per file, even when several workers start on it at once. */
+class FileUrls {
+  private urls: Record<string, Promise<string>> = {};
+
+  constructor(
+    private readonly hub: HubClient,
+    private readonly snapshot: HubSnapshot,
+  ) {}
+
+  get(filePath: string): Promise<string> {
+    if (this.urls[filePath] === undefined) {
+      this.urls[filePath] = this.hub.resolveFileUrl(this.snapshot, filePath);
+    }
+    return this.urls[filePath];
+  }
+
+  forget(filePath: string): void {
+    delete this.urls[filePath];
+  }
+}
+
+/** The record on disk, kept current as chunks land. Every write goes
+ *  through here, so a Ctrl-C loses at most the chunk in flight. */
+class Ledger {
+  private left: Record<string, number> = {};
+
+  private constructor(
+    private readonly dir: string,
+    readonly record: MlxModelRecord,
+  ) {}
+
+  /** The record to download against: the one on disk when it is for this
+   *  revision, else a fresh one. A file already on disk with no record
+   *  and the right hash is adopted rather than fetched again. An empty
+   *  file is created here, since it has no bytes to fetch. */
+  static async open(r: Root, dir: string, snapshot: HubSnapshot, emit: Emit): Promise<Ledger> {
+    const existing = readMlxModelRecord(dir);
+    if (existing !== null && existing.revision !== snapshot.revision) {
+      throw revisionMismatch(dir, snapshot, existing.revision);
+    }
+    const files: Record<string, MlxFileRecord> = {};
+    for (const file of snapshot.files) {
+      const kept = existing?.files[file.path];
+      if (kept !== undefined && kept.size === file.size) {
+        files[file.path] = kept;
+        continue;
+      }
+      const entry: MlxFileRecord = { size: file.size, complete: false, chunks: [] };
+      if (file.sha256 !== undefined) {
+        entry.sha256 = file.sha256;
+      }
+      if (file.size === 0) {
+        mkdir(r, path.dirname(file.path));
+        writeBytes(r, file.path, Buffer.alloc(0));
+        entry.complete = true;
+        delete entry.chunks;
+        emit({ kind: "file-done", path: file.path });
+      } else if (existing === null && (await matchesOnDisk(r, file))) {
+        entry.complete = true;
+        delete entry.chunks;
+        emit({ kind: "adopt", path: file.path });
+      }
+      files[file.path] = entry;
+    }
+    const ledger = new Ledger(dir, { repo: snapshot.repo, revision: snapshot.revision, files });
+    ledger.save();
+    return ledger;
+  }
+
+  /** Tells the ledger which chunks this run will fetch. */
+  expect(plan: Chunk[]): void {
+    for (const chunk of plan) {
+      this.left[chunk.path] = (this.left[chunk.path] ?? 0) + 1;
+    }
+  }
+
+  sizeOf(filePath: string): number {
+    return this.record.files[filePath].size;
+  }
+
+  /** True when no chunk of the file is on disk yet, so the file can be
+   *  started from nothing. */
+  startsFresh(filePath: string): boolean {
+    return (this.record.files[filePath].chunks ?? []).length === 0;
+  }
+
+  remaining(filePath: string): number {
+    return this.left[filePath];
+  }
+
+  chunkDone(chunk: Chunk): void {
+    const entry = this.record.files[chunk.path];
+    entry.chunks = [...(entry.chunks ?? []), chunk.index];
+    this.left[chunk.path] -= 1;
+    this.save();
+  }
+
+  fileVerified(filePath: string): void {
+    const entry = this.record.files[filePath];
+    entry.complete = true;
+    delete entry.chunks;
+    this.save();
+  }
+
+  /** Forget the file's chunks, so the next run fetches it whole. */
+  fileRejected(filePath: string): void {
+    const entry = this.record.files[filePath];
+    this.record.files[filePath] = { ...entry, complete: false, chunks: [] };
+    this.save();
+  }
+
+  private save(): void {
+    writeMlxModelRecord(this.dir, this.record);
+  }
+}
 
 function revisionMismatch(dir: string, snapshot: HubSnapshot, held: string): Error {
   return new Error(
@@ -174,40 +331,6 @@ function revisionMismatch(dir: string, snapshot: HubSnapshot, held: string): Err
       `${snapshot.revision.slice(0, 7)}. Remove it or pin the old revision with ` +
       `mlx:${snapshot.repo}@${held.slice(0, 7)}.`,
   );
-}
-
-/** The record to download against: the one on disk when it is for this
- *  revision, else a fresh one. A file already on disk with no record and
- *  the right hash is adopted rather than fetched again. */
-async function startingRecord(
-  r: Root,
-  dir: string,
-  snapshot: HubSnapshot,
-  emit: (e: DownloadEvent) => void,
-): Promise<MlxModelRecord> {
-  const existing = readMlxModelRecord(dir);
-  if (existing !== null && existing.revision !== snapshot.revision) {
-    throw revisionMismatch(dir, snapshot, existing.revision);
-  }
-  const files: Record<string, MlxFileRecord> = {};
-  for (const file of snapshot.files) {
-    const kept = existing?.files[file.path];
-    if (kept !== undefined && kept.size === file.size) {
-      files[file.path] = kept;
-      continue;
-    }
-    const entry: MlxFileRecord = { size: file.size, complete: false, chunks: [] };
-    if (file.sha256 !== undefined) {
-      entry.sha256 = file.sha256;
-    }
-    if (existing === null && (await matchesOnDisk(r, file))) {
-      entry.complete = true;
-      delete entry.chunks;
-      emit({ kind: "adopt", path: file.path });
-    }
-    files[file.path] = entry;
-  }
-  return { repo: snapshot.repo, revision: snapshot.revision, files };
 }
 
 async function matchesOnDisk(r: Root, file: HubFile): Promise<boolean> {
@@ -221,138 +344,116 @@ async function matchesOnDisk(r: Root, file: HubFile): Promise<boolean> {
   return (await fileSha256(resolveUnder(r, file.path))) === file.sha256.toLowerCase();
 }
 
-/** Follows `resolve/` to the CDN URL for one file. Each hop is resolved
- *  against the URL it came from, since the Hub sends relative locations,
- *  and each must be https. The walk stops at the first URL off the hub
- *  host: that is the signed CDN URL, and it is not requested here. */
-async function resolveCdnUrl(
-  snapshot: HubSnapshot,
-  filePath: string,
-  options: HubOptions,
-): Promise<string> {
-  const fetchFn = options.fetch ?? fetch;
-  const hubHost = new URL(hubUrlOf(options)).host;
-  let url = `${hubUrlOf(options)}/${snapshot.repo}/resolve/${snapshot.revision}/${filePath}`;
-  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const res = await fetchFn(url, {
-      method: "HEAD",
-      redirect: "manual",
-      headers: authHeaders(url, options),
-    });
-    if (res.status === 401 || res.status === 403) {
-      throw new Error(GATED_MESSAGE);
-    }
-    const location = res.headers.get("location");
-    if (res.status >= 300 && res.status < 400 && location !== null) {
-      url = new URL(location, url).toString();
-      requireHttps(url, options);
-      if (new URL(url).host !== hubHost) {
-        return url;
+/** Hashes a finished LFS file, or checks the size of a plain one. A bad
+ *  LFS file is moved aside by `verifyModelFile`; a bad plain file is
+ *  truncated on the next run, since it starts from no chunks. Either way
+ *  the run fails and the next one fetches that file whole. */
+async function verifyFile(r: Root, ledger: Ledger, filePath: string, emit: Emit): Promise<void> {
+  const entry = ledger.record.files[filePath];
+  try {
+    if (entry.sha256 !== undefined) {
+      await verifyModelFile(resolveUnder(r, filePath), entry.sha256, filePath);
+    } else {
+      const size = stat(r, filePath)?.size ?? -1;
+      if (size !== entry.size) {
+        throw new Error(`${filePath} is ${size} bytes, expected ${entry.size}`);
       }
-      continue;
     }
-    if (res.ok) {
-      return url;
-    }
-    throw new Error(`${url} answered ${res.status} while resolving ${filePath}`);
+  } catch (err) {
+    ledger.fileRejected(filePath);
+    emit({ kind: "verify", path: filePath, ok: false });
+    throw err;
   }
-  throw new Error(`Too many redirects while resolving ${filePath}`);
+  ledger.fileVerified(filePath);
+  emit({ kind: "file-done", path: filePath });
+  emit({ kind: "verify", path: filePath, ok: true });
 }
 
-class Expired extends Error {}
-
-async function fetchRange(
-  url: string,
-  chunk: Chunk,
-  size: number,
-  options: HubOptions,
-  onBytes: (n: number) => void,
-): Promise<Buffer> {
-  const fetchFn = options.fetch ?? fetch;
-  const res = await fetchFn(url, { headers: { range: `bytes=${chunk.start}-${chunk.end - 1}` } });
-  if (res.status === 403) {
-    throw new Expired(`${chunk.path}: the CDN URL was refused`);
-  }
-  if (res.status !== 206) {
-    throw new Error(`${chunk.path}: expected 206 for a byte range, got ${res.status}`);
-  }
-  const total = res.headers.get("content-range")?.split("/")[1];
-  if (total !== String(size)) {
-    throw new Error(
-      `${chunk.path}: the server reports ${total ?? "no"} bytes, the tree said ${size}`,
-    );
-  }
-  const buf = await readBody(res, onBytes);
-  if (buf.length !== chunk.end - chunk.start) {
-    throw new Error(
-      `${chunk.path}: got ${buf.length} bytes for a ${chunk.end - chunk.start}-byte range`,
-    );
-  }
-  return buf;
-}
-
-/** The body as one buffer, reporting each piece as it arrives so the
- *  counter moves inside a chunk, not only between chunks. */
-async function readBody(res: Response, onBytes: (n: number) => void): Promise<Buffer> {
-  if (res.body === null) {
-    return Buffer.alloc(0);
-  }
-  const pieces: Buffer[] = [];
-  for await (const piece of res.body as unknown as AsyncIterable<Uint8Array>) {
-    pieces.push(Buffer.from(piece));
-    onBytes(piece.length);
-  }
-  return Buffer.concat(pieces);
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** One descriptor per file being written, opened for read-write at any
- *  offset, under the root. */
+/** One descriptor per file being written, opened on first use. A file
+ *  with no chunks on disk is truncated first, so bytes left by an older
+ *  or larger copy cannot outlive the download. */
 class OpenFiles {
-  private descriptors: Record<string, number> = {};
+  private handles: Record<string, WritableFile> = {};
 
-  constructor(private readonly root: Root) {}
+  constructor(
+    private readonly root: Root,
+    private readonly ledger: Ledger,
+  ) {}
 
-  open(filePath: string): number {
-    if (this.descriptors[filePath] === undefined) {
-      const resolved = resolveUnder(this.root, filePath);
+  open(filePath: string): WritableFile {
+    if (this.handles[filePath] === undefined) {
       mkdir(this.root, path.dirname(filePath));
-      this.descriptors[filePath] = fs.openSync(
-        resolved,
-        fs.constants.O_RDWR | fs.constants.O_CREAT,
-        0o644,
-      );
+      const file = openForWrite(this.root, filePath);
+      if (this.ledger.startsFresh(filePath)) {
+        file.truncate(0);
+      }
+      this.handles[filePath] = file;
     }
-    return this.descriptors[filePath];
+    return this.handles[filePath];
   }
 
   close(filePath: string): void {
-    if (this.descriptors[filePath] !== undefined) {
-      fs.closeSync(this.descriptors[filePath]);
-      delete this.descriptors[filePath];
+    if (this.handles[filePath] !== undefined) {
+      this.handles[filePath].close();
+      delete this.handles[filePath];
     }
   }
 
   closeAll(): void {
-    for (const filePath of Object.keys(this.descriptors)) {
+    for (const filePath of Object.keys(this.handles)) {
       this.close(filePath);
     }
   }
 }
 
-/** Emits `file-start` once per file in the plan and returns how many
- *  chunks each file still needs. */
-function announceFiles(
-  plan: Chunk[],
-  record: MlxModelRecord,
-  chunkBytes: number,
-  emit: (e: DownloadEvent) => void,
-): Record<string, number> {
-  const remaining: Record<string, number> = {};
+/** Bytes on disk plus bytes in flight, reported at most twice a second,
+ *  and once more, unconditionally, when the last byte lands. */
+class Progress {
+  private inFlight = 0;
+  private done: number;
+  private readonly total: number;
+  private lastEvent = 0;
+
+  constructor(
+    snapshot: HubSnapshot,
+    plan: Chunk[],
+    private readonly emit: Emit,
+  ) {
+    this.total = snapshot.files.reduce((sum, f) => sum + f.size, 0);
+    this.done = this.total - plan.reduce((sum, c) => sum + (c.end - c.start), 0);
+  }
+
+  streamed(n: number): void {
+    this.inFlight += n;
+    this.report(false);
+  }
+
+  /** A failed attempt's bytes are not on disk; count them out again. */
+  discard(n: number): void {
+    this.inFlight -= n;
+  }
+
+  landed(n: number): void {
+    this.inFlight -= n;
+    this.done += n;
+    this.report(this.done === this.total);
+  }
+
+  private report(force: boolean): void {
+    const now = Date.now();
+    if (force || now - this.lastEvent >= 500) {
+      this.lastEvent = now;
+      this.emit({ kind: "bytes", done: this.done + this.inFlight, total: this.total });
+    }
+  }
+}
+
+/** Emits `file-start` once per file in the plan. */
+function announceFiles(plan: Chunk[], record: MlxModelRecord, chunkBytes: number, emit: Emit) {
+  const seen: string[] = [];
   for (const chunk of plan) {
-    if (remaining[chunk.path] === undefined) {
-      remaining[chunk.path] = 0;
+    if (!seen.includes(chunk.path)) {
+      seen.push(chunk.path);
       const entry = record.files[chunk.path];
       emit({
         kind: "file-start",
@@ -361,145 +462,5 @@ function announceFiles(
         resumedBytes: (entry.chunks ?? []).length * chunkBytes,
       });
     }
-    remaining[chunk.path] += 1;
   }
-  return remaining;
-}
-
-/** Downloads every chunk the record says is missing into `dir`, verifies
- *  each file as it completes, and returns `dir`. Running it again after an
- *  interruption fetches only what is missing. */
-export async function downloadHubSnapshot(
-  snapshot: HubSnapshot,
-  dir: string,
-  options: DownloadOptions = {},
-): Promise<string> {
-  const emit = options.onEvent ?? (() => {});
-  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
-  const retryDelay = options.retryDelayMs ?? 1000;
-  const r = root(dir);
-  mkdir(r, ".");
-  const record = await startingRecord(r, dir, snapshot, emit);
-  writeMlxModelRecord(dir, record);
-  const plan = planChunks(snapshot, record, options.chunkBytes);
-  const sizes: Record<string, number> = {};
-  for (const file of snapshot.files) {
-    sizes[file.path] = file.size;
-  }
-
-  const total = snapshot.files.reduce((sum, f) => sum + f.size, 0);
-  let done = total - plan.reduce((sum, c) => sum + (c.end - c.start), 0);
-  let inFlight = 0;
-  let lastBytesEvent = 0;
-  const progress = (force: boolean) => {
-    const now = Date.now();
-    if (force || now - lastBytesEvent >= 500) {
-      lastBytesEvent = now;
-      emit({ kind: "bytes", done: done + inFlight, total });
-    }
-  };
-
-  const files = new OpenFiles(r);
-  const remaining = announceFiles(plan, record, options.chunkBytes ?? CHUNK_BYTES, emit);
-
-  // One resolve per file, even when several workers start on it at once.
-  const cdnUrls: Record<string, Promise<string>> = {};
-  const cdnUrl = (filePath: string): Promise<string> => {
-    if (cdnUrls[filePath] === undefined) {
-      cdnUrls[filePath] = resolveCdnUrl(snapshot, filePath, options);
-    }
-    return cdnUrls[filePath];
-  };
-
-  const fetchChunk = async (chunk: Chunk): Promise<Buffer> => {
-    let lastError: Error = new Error("no attempt");
-    for (let attempt = 0; attempt < RETRIES; attempt++) {
-      let received = 0;
-      const onBytes = (n: number) => {
-        received += n;
-        inFlight += n;
-        progress(false);
-      };
-      try {
-        return await fetchRange(
-          await cdnUrl(chunk.path),
-          chunk,
-          sizes[chunk.path],
-          options,
-          onBytes,
-        );
-      } catch (err) {
-        // A failed attempt's bytes are not on disk; count them out again.
-        inFlight -= received;
-        lastError = err as Error;
-        if (err instanceof Expired) {
-          // A signed URL past its window: resolve it again, once.
-          delete cdnUrls[chunk.path];
-          continue;
-        }
-        await sleep(retryDelay * 2 ** attempt);
-      }
-    }
-    throw lastError;
-  };
-
-  const finishFile = async (filePath: string): Promise<void> => {
-    files.close(filePath);
-    const resolved = resolveUnder(r, filePath);
-    const entry = record.files[filePath];
-    try {
-      if (entry.sha256 !== undefined) {
-        await verifyModelFile(resolved, entry.sha256, filePath);
-      } else if (fs.statSync(resolved).size !== entry.size) {
-        throw new Error(
-          `${filePath} is ${fs.statSync(resolved).size} bytes, expected ${entry.size}`,
-        );
-      }
-    } catch (err) {
-      // The file was moved aside or is wrong: the next run fetches it whole.
-      record.files[filePath] = { ...entry, complete: false, chunks: [] };
-      writeMlxModelRecord(dir, record);
-      emit({ kind: "verify", path: filePath, ok: false });
-      throw err;
-    }
-    entry.complete = true;
-    delete entry.chunks;
-    writeMlxModelRecord(dir, record);
-    emit({ kind: "file-done", path: filePath });
-    emit({ kind: "verify", path: filePath, ok: true });
-  };
-
-  let next = 0;
-  let failed: Error | null = null;
-  const worker = async (): Promise<void> => {
-    while (failed === null && next < plan.length) {
-      const chunk = plan[next++];
-      try {
-        const buf = await fetchChunk(chunk);
-        fs.writeSync(files.open(chunk.path), buf, 0, buf.length, chunk.start);
-        const entry = record.files[chunk.path];
-        entry.chunks = [...(entry.chunks ?? []), chunk.index];
-        writeMlxModelRecord(dir, record);
-        inFlight -= buf.length;
-        done += buf.length;
-        progress(false);
-        remaining[chunk.path] -= 1;
-        if (remaining[chunk.path] === 0) {
-          await finishFile(chunk.path);
-        }
-      } catch (err) {
-        failed = err as Error;
-      }
-    }
-  };
-  try {
-    await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker));
-  } finally {
-    files.closeAll();
-  }
-  if (failed !== null) {
-    throw failed;
-  }
-  progress(true);
-  return dir;
 }

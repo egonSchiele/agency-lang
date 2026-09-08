@@ -11,7 +11,10 @@ export function isGgufPath(v: string): boolean {
 }
 
 /** `mlx:<org>/<repo>` with an optional `@<revision>`. */
-const MLX_URI = /^mlx:([^@\s/]+\/[^@\s/]+)(?:@([\w.-]+))?$/;
+/** A repo id is two names made of letters, digits, `.`, `_` and `-`.
+ *  The Hub allows nothing else, and the id becomes a directory name, so
+ *  a backslash or a `..` component must not get through. */
+const MLX_URI = /^mlx:([\w.-]+\/[\w.-]+)(?:@([\w.-]+))?$/;
 
 export function isMlxUri(v: string): boolean {
   return MLX_URI.test(v);

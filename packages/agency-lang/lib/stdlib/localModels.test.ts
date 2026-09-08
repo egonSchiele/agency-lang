@@ -913,6 +913,9 @@ describe("backend of a target", () => {
       repo: "mlx-community/Qwen3-Coder-Next-4bit",
       revision: "7b9321e",
     });
+    for (const bad of ["mlx:..\\escape/repo", "mlx:org/re po", "mlx:org/repo/extra", "mlx:org"]) {
+      expect(() => parseMlxUri(bad)).toThrow(/is not an mlx: URI/);
+    }
     expect(backendOfTarget("mlx:mlx-community/Qwen3-Coder-Next-4bit")).toBe("mlx");
     expect(() => parseMlxUri("mlx:no-slash")).toThrow(/is not an mlx: URI/);
   });
@@ -1185,6 +1188,26 @@ describe("_removeMlxModel", () => {
 });
 
 describe("_downloadModel for mlx", () => {
+  it("passes HF_TOKEN to the snapshot request as well as the download", async () => {
+    const hub = await startFakeHub(
+      "org/repo",
+      [{ path: "config.json", bytes: Buffer.from("{}") }],
+      { gated: true },
+    );
+    process.env.HF_TOKEN = "hf_test";
+    try {
+      const out = await _downloadModel("mlx:org/repo", dir, {
+        hubUrl: hub.baseUrl,
+        allowHttp: true,
+      });
+      expect(fs.readFileSync(path.join(out, "config.json"), "utf-8")).toBe("{}");
+      expect(hub.authSeen.api.every((a) => a === "Bearer hf_test")).toBe(true);
+    } finally {
+      delete process.env.HF_TOKEN;
+      await hub.close();
+    }
+  });
+
   it("downloads an mlx: URI into <cacheDir>/mlx/<org>--<repo> and lists it", async () => {
     const big = Buffer.alloc(1500, 7);
     const hub = await startFakeHub("org/repo", [

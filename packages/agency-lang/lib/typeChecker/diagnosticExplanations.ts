@@ -581,7 +581,7 @@ def f(): string {
 
 **How to fix:** keep the one marker that describes the function and remove the other.`,
 
-  valueArgNotStatic: `A value-parameterized type was instantiated with a variable that is not a \`static const\`. The generated code reads a value argument once, when the type is declared, so a plain top-level \`const\`, a parameter, or a local is not in scope there and the program would crash with "<name> is not defined".
+  valueArgNotStatic: `A value-parameterized type was instantiated with a plain top-level variable, a parameter, or a local. The generated code reads a value argument once, when the type is declared, so none of those is in scope there and the program would crash with "<name> is not defined". What works is a literal, a \`static const\`, an imported name, or a value parameter of the enclosing type alias (\`type Above(floor: number) = GreaterThan(floor)\`). The same rule applies to a value parameter's default.
 
 Mark the variable \`static const\`, or pass a literal:
 

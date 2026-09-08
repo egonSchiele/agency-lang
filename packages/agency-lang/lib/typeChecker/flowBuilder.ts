@@ -99,10 +99,31 @@ export function attachExpressionsToFlow(
 }
 
 /**
- * The flow an inline handler body starts from. The pre-body flow, with every
- * name the handle body rebinds reset to its declared type: the raise that
- * runs the handler can happen after any of those assignments, and the body's
- * end flow says nothing about them when the body always returns.
+ * `T | null` for a local that may not have been assigned yet when a side
+ * branch (a finalize, an inline handler) runs. A `!= null` guard inside the
+ * branch narrows it back through the ordinary machinery.
+ *
+ * A union-typed local is flattened before the null is added: uniteTypes
+ * dedupes but does not flatten, and presence narrowing only drops TOP-LEVEL
+ * null members, so `(T | null) | null` would keep its inner null through an
+ * `if (x != null)` guard.
+ */
+function maybeUnset(declared: ScopeType, env: FlowEnvironment): ScopeType {
+  if (isAnyType(declared)) return declared;
+  const members =
+    (declared as VariableType).type === "unionType"
+      ? (declared as { types: VariableType[] }).types
+      : [declared];
+  return uniteTypes([...members, NULL_T], env.typeAliases);
+}
+
+/**
+ * The flow an inline handler body starts from. The raise that runs the
+ * handler can happen after any prefix of the handle body, so the pre-body
+ * flow is adjusted for what the body may have done by then: a name it
+ * rebinds is reset to its declared type, and a name it declares may not
+ * exist yet, so it is `T | null`. The body's end flow says nothing about
+ * either when the body always returns.
  */
 function handlerEntryFlow(flow: FlowNode, body: AgencyNode[], env: FlowEnvironment): FlowNode {
   const widened: Record<string, ScopeType> = Object.create(null);
@@ -110,7 +131,23 @@ function handlerEntryFlow(flow: FlowNode, body: AgencyNode[], env: FlowEnvironme
     const ref: Reference = { variable: name, chain: [] };
     widened[referenceKey(ref)] = declaredPathType(env.scope, ref, env.typeAliases);
   }
+  for (const name of declaredNames(body)) {
+    const ref: Reference = { variable: name, chain: [] };
+    widened[referenceKey(ref)] = maybeUnset(declaredPathType(env.scope, ref, env.typeAliases), env);
+  }
   return { kind: "loop", prev: flow, widened };
+}
+
+/** Names a body declares with `let`/`const`, outside nested definitions. */
+function declaredNames(body: AgencyNode[]): string[] {
+  const names: string[] = [];
+  for (const { node, ancestors } of walkNodes(body)) {
+    const insideNestedDef = ancestors.some((a) => a.type === "function" || a.type === "graphNode");
+    if (!insideNestedDef && node.type === "assignment" && node.declKind) {
+      names.push(node.variableName);
+    }
+  }
+  return names;
 }
 
 /**
@@ -432,18 +469,7 @@ export function buildFlowGraph(
       const widened: Record<string, ScopeType> = Object.create(null);
       for (const name of env.scope.declaredNames()) {
         const ref: Reference = { variable: name, chain: [] };
-        const declared = typeAt(ref, start, env);
-        // Flatten a union-typed local before re-uniting: uniteTypes
-        // dedupes but does not flatten, and presence narrowing only
-        // drops TOP-LEVEL null members — `(T | null) | null` would
-        // keep its inner null through an `if (x != null)` guard.
-        const members =
-          !isAnyType(declared) && (declared as VariableType).type === "unionType"
-            ? (declared as { types: VariableType[] }).types
-            : [declared];
-        widened[referenceKey(ref)] = isAnyType(declared)
-          ? declared
-          : uniteTypes([...members, NULL_T], env.typeAliases);
+        widened[referenceKey(ref)] = maybeUnset(typeAt(ref, start, env), env);
       }
       buildFlowGraph(node.body, { kind: "loop", prev: start, widened }, env);
       return { live, dead };

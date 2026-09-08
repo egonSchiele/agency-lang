@@ -65,6 +65,25 @@ def work(): string {
     ).toEqual([]);
   });
 
+  it("treats a local the handle body declares as possibly unset in the handler", () => {
+    const out = errors(`
+${RAISER}
+def work(): string {
+  handle {
+    const name: string = raiser()
+    return name
+  } with (data) {
+    let seen: string = name
+    return approve()
+  }
+  return "x"
+}
+`);
+    expect(out.some((m) => m.includes("'string | null' is not assignable to type 'string'"))).toBe(
+      true,
+    );
+  });
+
   it("does not keep a narrowing the handle body may have undone", () => {
     const out = errors(`
 type U = { kind: "a", v: string } | { kind: "b", w: number }

@@ -198,7 +198,9 @@ conservative: it counts only `return` (a `raise`/interrupt may resume, and
 An inline handler (`handle { … } with (e) { … }`) runs when a statement in the
 handle body raises, so it can start after any prefix of that body. Its flow
 starts from the pre-body flow with every name the body rebinds reset to its
-declared type (`handlerEntryFlow` in `flowBuilder.ts`). Starting it from the
+declared type, and every name the body declares set to `T | null`, since the
+declaration may not have run yet (`handlerEntryFlow` in `flowBuilder.ts`; the
+same `T | null` treatment a finalize block gets). Starting it from the
 body's end flow was wrong: a body that always returns ends in `exit`, so the
 handler got no flow nodes at all and every guard inside it was ignored
 (issue #612).

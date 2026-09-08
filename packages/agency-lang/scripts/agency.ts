@@ -1586,20 +1586,25 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.error(formatImportResolutionError(error, file));
         hasErrors = true;
       };
-      let symbolTable: SymbolTable | undefined;
+      // One shared table for every file. When one file's imports make the
+      // shared build fail, each file gets its own table instead, so the bad
+      // import is reported against its file and the other files still check.
+      let sharedTable: SymbolTable | undefined;
       try {
-        symbolTable = filePaths.length ? SymbolTable.build(filePaths, config) : undefined;
+        sharedTable = filePaths.length ? SymbolTable.build(filePaths, config) : undefined;
       } catch (error) {
-        reportImportError(error);
-        process.exit(1);
+        if (!(error instanceof ImportResolutionError)) throw error;
+        sharedTable = undefined;
       }
+      const tableFor = (file: string): SymbolTable =>
+        sharedTable ?? SymbolTable.build([path.resolve(file)], config);
       for (const src of sources) {
         const contents = await readSource(src);
         try {
           if (src.kind === "stdin") {
             runTypeCheck(contents);
           } else {
-            runTypeCheck(contents, src.path, symbolTable);
+            runTypeCheck(contents, src.path, tableFor(src.path));
           }
         } catch (error) {
           reportImportError(error, src.kind === "file" ? src.path : undefined);

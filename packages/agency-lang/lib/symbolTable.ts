@@ -575,7 +575,7 @@ export function mergeExportsFrom(
       if (!isExportedSymbol(sym)) continue;
       // Star re-exports carry no per-name modifiers; markers are inherited
       // from the source symbol via the spread inside mergeOne.
-      mergeOne(targetSymbols, name, name, sym, false, false, sourcePath, stmt);
+      mergeOne(targetSymbols, name, name, sym, false, false, sourcePath, stmt, reExporterPath);
     }
     return;
   }
@@ -625,6 +625,7 @@ export function mergeExportsFrom(
       isIdempotent,
       sourcePath,
       stmt,
+      reExporterPath,
     );
   }
 }
@@ -638,6 +639,7 @@ function mergeOne(
   forceIdempotent: boolean,
   sourcePath: string,
   stmt: ExportFromStatement,
+  reExporterPath: string,
 ): void {
   const existing = targetSymbols[localName];
   if (existing) {
@@ -646,6 +648,7 @@ function mergeOne(
       throw new ImportResolutionError(
         `Re-exported name '${localName}' collides with local declaration${at}`,
         stmt.loc,
+        reExporterPath,
       );
     }
     const sameSource =
@@ -655,6 +658,7 @@ function mergeOne(
       throw new ImportResolutionError(
         `Name '${localName}' is re-exported from both '${existing.reExportedFrom.sourceFile}' and '${sourcePath}'. Disambiguate with explicit 'export { ${localName} as ... } from ...'.`,
         stmt.loc,
+        reExporterPath,
       );
     }
     return; // idempotent re-merge

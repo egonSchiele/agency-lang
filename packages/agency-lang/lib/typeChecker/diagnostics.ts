@@ -650,7 +650,7 @@ export const DIAGNOSTICS = {
     code: "AG7007",
     severity: "error",
     message:
-      "Type '{alias}' takes value argument '{name}', which is {what}. A value argument is read when the type is declared, so it must be a literal, a 'static const', or a value parameter of the enclosing type alias.",
+      "Type '{alias}' takes value argument '{name}', which is {what}. A value argument is read when the type is declared, so it must be a literal, a 'static const', an imported name, or a value parameter of the enclosing type alias.",
   },
   unfilledHoles: {
     code: "AG8001",

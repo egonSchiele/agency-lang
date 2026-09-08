@@ -85,9 +85,10 @@ export function resolveImports(
         ...resolveImportStatement(node, symbolTable, currentFile, allowTestImports, onUnresolvable),
       );
     } catch (error) {
-      // Stamp the file so the CLI can print `file:line:col` for it.
-      if (error instanceof ImportResolutionError && error.file === undefined) {
-        error.file = currentFile;
+      // Stamp the file and the statement so the CLI can print `file:line:col`.
+      if (error instanceof ImportResolutionError) {
+        error.file = error.file ?? currentFile;
+        error.loc = error.loc ?? node.loc;
       }
       throw error;
     }

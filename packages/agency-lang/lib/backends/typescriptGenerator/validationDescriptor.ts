@@ -250,11 +250,10 @@ function valueParamDescriptor(
     // `static const`, and a top-level `type Age = GreaterThan(minAge)` would
     // otherwise read it at module load, before static init has run, and
     // hand the factory the uninitialized-static sentinel (issue #440).
-    const resolved = withUseSiteValidators(call, useSiteValidators);
-    return ts.obj([
-      ts.set('"kind"', ts.str("ref")),
-      ts.set('"get"', ts.arrowFn([], ts.statements([ts.return(resolved)]))),
-    ]);
+    // The walker resolves a ref once per element of an array, so the first
+    // result is cached: the arguments are literals, statics, or imports and
+    // cannot change between reads.
+    return cachedRef(withUseSiteValidators(call, useSiteValidators));
   }
   const substituted = applyValueArgs(entry!, variableType.valueArgs, variableType.aliasName);
   const merged = mergeTagSets(substituted.tags, variableType.tags);
@@ -263,6 +262,25 @@ function valueParamDescriptor(
     tags: mergeTagSets(substituted.body.tags, merged),
   };
   return descriptor(bodyWithTags, typeAliases, typeAliasesFull, seen, pendingAliases);
+}
+
+/**
+ * `{ kind: "ref", get }` whose `get` builds `resolved` on the first call and
+ * hands back the same descriptor after that:
+ *
+ *   (() => { let __d: any; return { kind: "ref", get: () => { if (__d === undefined) { __d = <resolved>; } return __d; } }; })()
+ */
+function cachedRef(resolved: TsNode): TsNode {
+  const cached = ts.id("__cached");
+  const fill = ts.if(
+    ts.binOp(cached, "===", ts.raw("undefined")),
+    ts.statements([ts.assign(cached, resolved)]),
+  );
+  const get = ts.arrowFn([], ts.statements([fill, ts.return(cached)]));
+  const ref = ts.obj([ts.set('"kind"', ts.str("ref")), ts.set('"get"', get)]);
+  return ts.iife({
+    body: [ts.letDecl("__cached", undefined, "any"), ts.return(ref)],
+  });
 }
 
 function descriptor(

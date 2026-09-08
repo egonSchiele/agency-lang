@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { typecheckSource } from "./testUtils.js";
 
-const codes = (src: string): string[] =>
+const codes = (src: string, code = "AG7007"): string[] =>
   typecheckSource(src)
-    .filter((e) => e.code === "AG7007")
+    .filter((e) => e.code === code)
     .map((e) => e.message);
 
 const GREATER_THAN = `
@@ -65,5 +65,59 @@ node main() {
 }
 `),
     ).toEqual([]);
+  });
+
+  it("treats an aliased import by its local name, so a same-named parameter is still rejected", () => {
+    const errors = codes(`
+import { min as low } from "std::validation"
+${GREATER_THAN}
+def check(min: number, v: number): boolean {
+  const a: GreaterThan(low)! = v
+  const b: GreaterThan(min)! = v
+  return isSuccess(a) && isSuccess(b)
+}
+`);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("'min', which is a parameter");
+  });
+
+  it("checks schema(T) and `x is T` sites too", () => {
+    const errors = codes(`
+${GREATER_THAN}
+def check(low: number, v: number): boolean {
+  const s = schema(GreaterThan(low))
+  return v is GreaterThan(low)
+}
+`);
+    expect(errors).toHaveLength(2);
+  });
+
+  it("checks a value parameter default", () => {
+    const errors = codes(`
+const minAge: number = 5
+def atLeast(minValue: number, value: number): Result<number> {
+  return success(value)
+}
+@validate(atLeast.partial(minValue: floor))
+type AtLeast(floor: number = minAge) = number
+`);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain(
+      "Type 'AtLeast' takes value argument 'minAge', which is a top-level variable",
+    );
+  });
+
+  it("reports a name that resolves to nothing as an undefined variable when that pass is on", () => {
+    const src = `
+static const minAge: number = 5
+${GREATER_THAN}
+type Age = GreaterThan(mniAge)
+`;
+    expect(codes(src, "AG4007")).toEqual([]);
+    const errors = typecheckSource(src, { typechecker: { undefinedVariables: "error" } })
+      .filter((e) => e.code === "AG4007")
+      .map((e) => e.message);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("mniAge");
   });
 });

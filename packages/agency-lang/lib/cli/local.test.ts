@@ -359,6 +359,13 @@ describe("printDownloadEvent", () => {
     ]);
   });
 
+  it("quotes a file path that could move the cursor", () => {
+    const out: string[] = [];
+    const print = printDownloadEvent(false, (s) => out.push(s));
+    print({ kind: "verify", path: "a\x1b[2Jb\nforged", ok: true });
+    expect(out).toEqual(['  verified "a\\u001b[2Jb\\nforged"\n']);
+  });
+
   it("off a TTY prints a line at each tenth percent and nothing in between", () => {
     const out: string[] = [];
     const print = printDownloadEvent(false, (s) => out.push(s));

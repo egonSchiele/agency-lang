@@ -68,12 +68,21 @@ export class HubClient {
           ? { path: e.path, size: e.size }
           : { path: e.path, size: e.size, sha256: e.lfs.oid },
       );
+    const seen: Record<string, string> = Object.create(null);
     for (const file of files) {
       if (isReservedPath(file.path)) {
         throw new Error(
           `${repo} contains ${file.path}, a name the downloader keeps for itself. It cannot be downloaded with agency local download.`,
         );
       }
+      // Two paths that a case-insensitive disk would store as one file.
+      const key = file.path.normalize("NFC").toLowerCase();
+      if (seen[key] !== undefined) {
+        throw new Error(
+          `${repo} contains both ${seen[key]} and ${file.path}, which are one file on a case-insensitive disk. It cannot be downloaded with agency local download.`,
+        );
+      }
+      seen[key] = file.path;
     }
     return { repo, revision: info.sha, files };
   }
@@ -133,8 +142,12 @@ export class HubClient {
         throw new Error(`${chunk.path}: asked for ${want}, the server sent ${got}`);
       }
       if (res.body !== null) {
+        const want = chunk.end - chunk.start;
         for await (const piece of res.body as unknown as AsyncIterable<Uint8Array>) {
           stall.touch();
+          if (received + piece.length > want) {
+            throw new Error(`${chunk.path}: the server sent more than the ${want} bytes asked for`);
+          }
           sink(piece);
           received += piece.length;
         }

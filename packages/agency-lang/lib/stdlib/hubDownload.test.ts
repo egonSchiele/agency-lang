@@ -155,6 +155,17 @@ describe("fetchHubSnapshot", () => {
     }
   });
 
+  it("refuses a repo with two paths that are one file on a case-insensitive disk", async () => {
+    const clash = await startFakeHub("org/repo", [
+      { path: "Config.json", bytes: Buffer.from("x") },
+      { path: "config.json", bytes: Buffer.from("y") },
+    ]);
+    await expect(
+      fetchHubSnapshot("org/repo", undefined, { hubUrl: clash.baseUrl, allowHttp: true }),
+    ).rejects.toThrow("org/repo contains both Config.json and config.json, which are one file");
+    await clash.close();
+  });
+
   it("refuses a hub that is not https", async () => {
     await expect(fetchHubSnapshot("org/repo", undefined, { hubUrl: hub.baseUrl })).rejects.toThrow(
       `Refusing to download over http: ${hub.baseUrl}`,
@@ -426,6 +437,18 @@ describe("downloadHubSnapshot", () => {
       size: 5300,
       resumedBytes: 1300,
     });
+  });
+
+  it("refuses a range body longer than the bytes asked for, before writing it", async () => {
+    const padded = (async (url: string, init?: RequestInit) => {
+      const res = await fetch(url, init);
+      if (res.status !== 206) return res;
+      const body = Buffer.concat([Buffer.from(await res.arrayBuffer()), Buffer.from("extra")]);
+      return new Response(body, { status: 206, headers: res.headers });
+    }) as unknown as typeof fetch;
+    await expect(download({ fetch: padded, concurrency: 1 })).rejects.toThrow(
+      /config\.json: the server sent more than the 7 bytes asked for/,
+    );
   });
 
   it("refuses a range answered for other bytes than the ones asked for", async () => {

@@ -1244,9 +1244,19 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
   return (resolved) => !present.includes(path.basename(resolved));
 }
 
-/** `client.mlx.downloadConcurrency` from the nearest `agency.json`, else 8. */
+/** `client.mlx.downloadConcurrency` from the nearest `agency.json`, else 8.
+ *  The file is read raw here, so the value is checked by hand. */
 export function configuredDownloadConcurrency(): number {
-  return readClientConfig().mlx?.downloadConcurrency ?? DEFAULT_CONCURRENCY;
+  const n: unknown = readClientConfig().mlx?.downloadConcurrency;
+  if (n === undefined) {
+    return DEFAULT_CONCURRENCY;
+  }
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1) {
+    throw new Error(
+      `client.mlx.downloadConcurrency in ${resolveAliasConfigPath()} must be a positive integer, got ${JSON.stringify(n)}`,
+    );
+  }
+  return n;
 }
 
 /** Download a model and return where it is: the `.gguf` path, or the MLX

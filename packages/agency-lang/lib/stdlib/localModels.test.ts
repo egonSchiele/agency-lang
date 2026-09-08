@@ -8,6 +8,7 @@ import { readMlxModelRecord, isMlxModelComplete } from "./mlxModelRecord.js";
 import {
   CURATED_LOCAL_MODELS,
   _resolveModelName,
+  configuredDownloadConcurrency,
   _listModelNames,
   _aliasModel,
   _unaliasModel,
@@ -124,6 +125,29 @@ describe("aliases", () => {
     expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: true });
     // Idempotent: a second remove is a no-op and reports removed=false.
     expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: false });
+  });
+});
+
+describe("configuredDownloadConcurrency", () => {
+  it("defaults to 8, takes a positive integer, and refuses anything else", () => {
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      expect(configuredDownloadConcurrency()).toBe(8);
+      fs.writeFileSync(aliasFile, JSON.stringify({ client: { mlx: { downloadConcurrency: 3 } } }));
+      expect(configuredDownloadConcurrency()).toBe(3);
+      for (const bad of ["bad", 0, -1, 2.5]) {
+        fs.writeFileSync(
+          aliasFile,
+          JSON.stringify({ client: { mlx: { downloadConcurrency: bad } } }),
+        );
+        expect(() => configuredDownloadConcurrency()).toThrow(
+          `client.mlx.downloadConcurrency in ${aliasFile} must be a positive integer, got ${JSON.stringify(bad)}`,
+        );
+      }
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
 

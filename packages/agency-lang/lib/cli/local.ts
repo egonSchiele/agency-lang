@@ -28,6 +28,7 @@ import {
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
 import type { DownloadEvent } from "../stdlib/hubDownload.js";
 import { ttyColor } from "../utils/termcolors.js";
+import { terminalSafe } from "./remote/secretsInput.js";
 
 /** Install-gate for I/O commands. Honors the AGENCY_LLAMA_PROVIDER_MODULE
  *  override the same way `requireSupport()` in `localModels.ts` does — a
@@ -183,13 +184,16 @@ export function printDownloadEvent(
       return;
     }
     endCounter();
+    // The path comes from the repo's tree, so it is quoted if it could
+    // move the cursor or forge a line.
+    const name = terminalSafe(e.path);
     if (e.kind === "file-start") {
       const resumed = e.resumedBytes > 0 ? `  (resuming from ${formatGB(e.resumedBytes)})` : "";
-      write(`${e.path}  ${formatGB(e.size)}${resumed}\n`);
+      write(`${name}  ${formatGB(e.size)}${resumed}\n`);
     } else if (e.kind === "adopt") {
-      write(`${e.path}  already on disk, verified\n`);
+      write(`${name}  already on disk, verified\n`);
     } else if (e.kind === "verify") {
-      write(e.ok ? `  verified ${e.path}\n` : `  ${e.path} failed verification\n`);
+      write(e.ok ? `  verified ${name}\n` : `  ${name} failed verification\n`);
     }
   };
 }

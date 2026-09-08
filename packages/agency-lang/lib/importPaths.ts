@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { ImportResolutionError } from "./importResolutionError.js";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
@@ -437,7 +438,18 @@ function findPkgDir(
 export function resolvePkgAgencyPath(importPath: string, fromFile: string): string {
   const { packageName, subpath } = parsePkgImport(importPath);
   const req = createRequire(fromFile);
-  const { pkgJsonPath, pkgDir } = findPkgDir(packageName, req);
+  let located: { pkgJsonPath: string; pkgDir: string };
+  try {
+    located = findPkgDir(packageName, req);
+  } catch (e: any) {
+    if (e?.code !== "MODULE_NOT_FOUND") throw e;
+    throw new ImportResolutionError(
+      `Package '${packageName}' for import "${importPath}" is not installed. Add it to package.json and run pnpm install.`,
+      undefined,
+      fromFile,
+    );
+  }
+  const { pkgJsonPath, pkgDir } = located;
 
   if (subpath) {
     const resolved = path.join(pkgDir, subpath + ".agency");

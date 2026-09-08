@@ -362,6 +362,9 @@ node main() {
 **How to fix:** write the block without \`as\`, e.g. the keyword followed immediately by its \`{ ... }\` body.`,
 
   sandboxForbiddenProperty: `Under \`--agency-only\` (\`typechecker.jsGlobals: "sandbox"\`), a program may not read \`constructor\`, \`prototype\`, or \`__proto__\` from a value, spelled or as a string-literal key. Those property names walk from any value to JavaScript's \`Function\` and the prototype chain, which is a way for pure Agency code to reach the host with no interrupt. This is a best-effort compile-time catch; the runtime backstop is code-generation-from-strings being disabled.`,
+  parameterRedeclared: `A \`let\` or \`const\` inside a function or node body reuses the name of one of its parameters. Parameters and locals live in different slots at runtime, and a read after the redeclare still resolves to the parameter slot, so the new value would silently never be seen.
+
+Assign to the parameter instead (\`u = { tag: "b", n: 1 }\`), or give the local a different name.`,
   undefinedVariable: `The type checker walks every scope — nodes, function bodies, blocks — and resolves each name to a declaration. This error means a name was used with no \`let\`, \`const\`, parameter, or import that introduces it in reach.
 
 **How to fix:** declare it before use (\`let x = …\` / \`const x = …\`), fix a typo in the name, or import it if it lives in another module. Agency has no implicit variables: a bare assignment like \`x = 5\` without a prior \`let\`/\`const\` is not a declaration.`,
@@ -578,6 +581,14 @@ def f(): string {
 
 **How to fix:** keep the one marker that describes the function and remove the other.`,
 
+  valueArgNotStatic: `A value-parameterized type was instantiated with a variable that is not a \`static const\`. The generated code reads a value argument once, when the type is declared, so a plain top-level \`const\`, a parameter, or a local is not in scope there and the program would crash with "<name> is not defined".
+
+Mark the variable \`static const\`, or pass a literal:
+
+\`\`\`agency
+static const minAge: number = 5
+type Adult = GreaterThan(minAge)
+\`\`\``,
   // ---- AG8: code templates and holes ----
   spliceTopLevelStatement: `A splice at the top level of a file adds the generator's output to the file, so that output is held to the same rule as anything you write there yourself: top-level code runs at initialization and cannot branch, loop, or wait.
 

@@ -79,6 +79,7 @@ import { buildCompilationUnit } from "@/compilationUnit.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { formatSpliceDiagnostic } from "@/compiler/splice/report.js";
 import { SymbolTable } from "@/symbolTable.js";
+import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError } from "@/vendor/commander/index.js";
 import * as fs from "fs";
@@ -1578,13 +1579,30 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // whole directory complete. The symbol table stays file-keyed, so adding
       // more entrypoints never merges or pollutes across files.
       const filePaths = sources.filter((s) => s.kind === "file").map((s) => path.resolve(s.path));
-      const symbolTable = filePaths.length ? SymbolTable.build(filePaths, config) : undefined;
+      // A bad import (a re-export of a name the source lacks, an uninstalled
+      // pkg::) is a user error: print its message, not a stack trace.
+      const reportImportError = (error: unknown, file?: string): void => {
+        if (!(error instanceof ImportResolutionError)) throw error;
+        console.error(formatImportResolutionError(error, file));
+        hasErrors = true;
+      };
+      let symbolTable: SymbolTable | undefined;
+      try {
+        symbolTable = filePaths.length ? SymbolTable.build(filePaths, config) : undefined;
+      } catch (error) {
+        reportImportError(error);
+        process.exit(1);
+      }
       for (const src of sources) {
         const contents = await readSource(src);
-        if (src.kind === "stdin") {
-          runTypeCheck(contents);
-        } else {
-          runTypeCheck(contents, src.path, symbolTable);
+        try {
+          if (src.kind === "stdin") {
+            runTypeCheck(contents);
+          } else {
+            runTypeCheck(contents, src.path, symbolTable);
+          }
+        } catch (error) {
+          reportImportError(error, src.kind === "file" ? src.path : undefined);
         }
       }
       if (hasErrors) process.exit(1);
@@ -2396,7 +2414,17 @@ export async function runCli(
   const program = createProgram(deps);
   // No argv rewriting: the program boundary and flag ownership live inside
   // the vendored commander fork (passThroughOptions, fallbackCommand).
-  await program.parseAsync(argv);
+  try {
+    await program.parseAsync(argv);
+  } catch (error) {
+    // A bad import (a re-export of a name the source lacks, an uninstalled
+    // pkg::) is a user error: print its message, not a stack trace. The
+    // compiler throws it rather than exiting so programmatic callers can
+    // catch it; this is the one place the CLI turns it into an exit.
+    if (!(error instanceof ImportResolutionError)) throw error;
+    console.error(formatImportResolutionError(error));
+    process.exit(1);
+  }
 }
 
 const isMain =

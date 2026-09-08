@@ -74,7 +74,7 @@ describe("AgencyFunction.validateForLLM (runtime tool backstop)", () => {
   });
 
   // #42 — unified runtime/compile-time error wording. The canonical clause
-  // `required function-typed parameter '<name>' is unbound` appears in BOTH
+  // `a required function-typed parameter '<name>' that is unbound` appears in BOTH
   // the compile-time error message (toolBlockBinding.test.ts #12) and the
   // runtime error message thrown here. Pinning the shared substring keeps
   // the two paths from drifting apart silently.
@@ -82,7 +82,7 @@ describe("AgencyFunction.validateForLLM (runtime tool backstop)", () => {
     const fn = makeFn([{ name: "block", isFunctionTyped: true }]);
     expect(() => fn.validateForLLM()).toThrow(formatUnboundClause("block"));
     expect(formatUnboundClause("block")).toBe(
-      "required function-typed parameter 'block' is unbound",
+      "a required function-typed parameter 'block' that is unbound",
     );
   });
 });

@@ -541,6 +541,18 @@ The codegen divergence rule is expressed in exactly one predicate,
 `typeAliasVariable` should consult the same predicate to stay
 consistent.
 
+### The factory call is deferred
+
+A use site of a validated value-param alias emits
+`{ kind: "ref", get: () => GreaterThan(minAge) }` rather than the bare call.
+A top-level `type Age = GreaterThan(minAge)` runs at module load, before
+static init, so an eager call would hand the factory the uninitialized-static
+sentinel and the validator would fail with "Cannot convert a Symbol value to
+a number" (issue #440). The walker resolves the ref at validation time, when
+every static exists. The checker's AG7007 rejects a value argument that is
+not a literal, a `static const`, an import, or an enclosing value parameter,
+because nothing else is a JavaScript identifier at that point.
+
 ### Why inline-at-use-site instead of a schema factory function?
 
 A natural alternative is to emit a factory:

@@ -246,7 +246,15 @@ function valueParamDescriptor(
   if (entry && hasAliasValidate(entry, typeAliasesFull)) {
     const argList = (variableType.valueArgs ?? []).map((a) => tagArgToTs(a)).join(", ");
     const call = ts.raw(`${variableType.aliasName}(${argList})`);
-    return withUseSiteValidators(call, useSiteValidators);
+    // Deferred, like the bare-alias ref below: a value argument can name a
+    // `static const`, and a top-level `type Age = GreaterThan(minAge)` would
+    // otherwise read it at module load, before static init has run, and
+    // hand the factory the uninitialized-static sentinel (issue #440).
+    const resolved = withUseSiteValidators(call, useSiteValidators);
+    return ts.obj([
+      ts.set('"kind"', ts.str("ref")),
+      ts.set('"get"', ts.arrowFn([], ts.statements([ts.return(resolved)]))),
+    ]);
   }
   const substituted = applyValueArgs(entry!, variableType.valueArgs, variableType.aliasName);
   const merged = mergeTagSets(substituted.tags, variableType.tags);

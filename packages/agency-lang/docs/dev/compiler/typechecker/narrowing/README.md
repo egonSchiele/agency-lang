@@ -193,6 +193,22 @@ Success for the rest of the block. `alwaysExits` decides this and is deliberatel
 conservative: it counts only `return` (a `raise`/interrupt may resume, and
 `propagate` semantics are non-trivial, so treating them as exits could be unsound).
 
+### Inline handler bodies and dead code
+
+An inline handler (`handle { … } with (e) { … }`) runs when a statement in the
+handle body raises, so it can start after any prefix of that body. Its flow
+starts from the pre-body flow with every name the body rebinds reset to its
+declared type (`handlerEntryFlow` in `flowBuilder.ts`). Starting it from the
+body's end flow was wrong: a body that always returns ends in `exit`, so the
+handler got no flow nodes at all and every guard inside it was ignored
+(issue #612).
+
+Statements after an unconditional `return` are still walked, on a side flow
+rooted at a fresh `start` node, so guards in dead code narrow like anywhere
+else. The scope's terminal flow stays `exit`, so definite-return checking is
+unchanged. Without this, a guarded `r.value` after `return match(...)` fell
+back to the declared `Result` type and reported a false AG2009 (issue #538).
+
 ### Soundness
 
 Every narrowing is a false-negative-only approximation. A whole-body reassignment

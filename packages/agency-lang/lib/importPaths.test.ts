@@ -1,3 +1,4 @@
+import { ImportResolutionError } from "./importResolutionError.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   findPackageRoot,
@@ -553,5 +554,22 @@ describe("findFileUp", () => {
   });
   it("returns null when nothing matches", () => {
     expect(findFileUp(dir, "definitely-not-a-real-file.xyz")).toBeNull();
+  });
+});
+
+describe("resolvePkgAgencyPath", () => {
+  it("throws an ImportResolutionError naming the importer when the package is not installed", () => {
+    const fromFile = path.join(process.cwd(), "lib", "importPaths.test.ts");
+    let thrown: unknown;
+    try {
+      resolvePkgAgencyPath("pkg::agency-package-that-is-not-installed", fromFile);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ImportResolutionError);
+    const err = thrown as ImportResolutionError;
+    expect(err.message).toContain("'agency-package-that-is-not-installed'");
+    expect(err.message).toContain("is not installed");
+    expect(err.file).toBe(fromFile);
   });
 });

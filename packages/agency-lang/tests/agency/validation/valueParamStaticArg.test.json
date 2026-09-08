@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "{\"bad\":false,\"ok\":true}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A top-level alias whose value argument is a static const validates instead of reading the uninitialized static."
+    }
+  ]
+}

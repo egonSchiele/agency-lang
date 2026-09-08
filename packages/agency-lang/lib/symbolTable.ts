@@ -22,6 +22,7 @@ import type { EffectDeclaration } from "./types/effectDeclaration.js";
 import { walkNodes } from "./utils/node.js";
 import { effectDeclarationsWithTags } from "./utils/tagsAbove.js";
 import { resolveAgencyImportPath, isAgencyImport, isNonTemplatedStdlib } from "./importPaths.js";
+import { ImportResolutionError } from "./importResolutionError.js";
 
 export type InterruptEffect = {
   effect: string;
@@ -560,7 +561,11 @@ export function mergeExportsFrom(
 ): void {
   const sourceSymbols = files[sourcePath];
   if (!sourceSymbols) {
-    throw new Error(`Re-export source '${stmt.modulePath}' could not be resolved`);
+    throw new ImportResolutionError(
+      `Re-export source '${stmt.modulePath}' could not be resolved`,
+      stmt.loc,
+      reExporterPath,
+    );
   }
   const targetSymbols: FileSymbols = files[reExporterPath] ?? {};
   files[reExporterPath] = targetSymbols;
@@ -579,26 +584,36 @@ export function mergeExportsFrom(
   for (const originalName of stmt.body.names) {
     const sym = sourceSymbols[originalName];
     if (!sym) {
-      throw new Error(`Symbol '${originalName}' is not defined in '${stmt.modulePath}'`);
+      throw new ImportResolutionError(
+        `Symbol '${originalName}' is not defined in '${stmt.modulePath}'`,
+        stmt.loc,
+        reExporterPath,
+      );
     }
     if (!isExportedSymbol(sym)) {
-      throw new Error(
+      throw new ImportResolutionError(
         `${symbolKindLabel(sym)} '${originalName}' in '${stmt.modulePath}' is not exported. Add the 'export' keyword to its definition.`,
+        stmt.loc,
+        reExporterPath,
       );
     }
     const localName = stmt.body.aliases[originalName] ?? originalName;
     if (sym.kind === "node" && localName !== originalName) {
-      throw new Error(
+      throw new ImportResolutionError(
         `Node '${originalName}' from '${stmt.modulePath}' cannot be re-exported under a different name. ` +
           `Re-exported nodes preserve their original name because the source graph is merged wholesale.`,
+        stmt.loc,
+        reExporterPath,
       );
     }
     const isDestructive = stmt.body.destructiveNames?.includes(originalName) ?? false;
     const isIdempotent = stmt.body.idempotentNames?.includes(originalName) ?? false;
     if (sym.kind === "node" && (isDestructive || isIdempotent)) {
-      throw new Error(
+      throw new ImportResolutionError(
         `A retry-safety marker (destructive/idempotent) cannot be applied to node '${originalName}' from '${stmt.modulePath}'. ` +
           `Markers are only meaningful for functions.`,
+        stmt.loc,
+        reExporterPath,
       );
     }
     mergeOne(
@@ -628,14 +643,18 @@ function mergeOne(
   if (existing) {
     if (!("reExportedFrom" in existing) || !existing.reExportedFrom) {
       const at = existing.loc ? ` at line ${existing.loc.line + 1}` : "";
-      throw new Error(`Re-exported name '${localName}' collides with local declaration${at}`);
+      throw new ImportResolutionError(
+        `Re-exported name '${localName}' collides with local declaration${at}`,
+        stmt.loc,
+      );
     }
     const sameSource =
       existing.reExportedFrom.sourceFile === sourcePath &&
       existing.reExportedFrom.originalName === originalName;
     if (!sameSource) {
-      throw new Error(
+      throw new ImportResolutionError(
         `Name '${localName}' is re-exported from both '${existing.reExportedFrom.sourceFile}' and '${sourcePath}'. Disambiguate with explicit 'export { ${localName} as ... } from ...'.`,
+        stmt.loc,
       );
     }
     return; // idempotent re-merge

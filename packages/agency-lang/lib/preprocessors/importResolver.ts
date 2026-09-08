@@ -5,24 +5,11 @@ import type {
   NamedImport,
 } from "../types/importStatement.js";
 import type { SourceLocation } from "../types/base.js";
+import { ImportResolutionError } from "../importResolutionError.js";
 import type { SymbolTable, SymbolInfo, FileSymbols } from "../symbolTable.js";
 import { resolveAgencyImportPath, isAgencyImport, isPkgImport } from "../importPaths.js";
 
-/**
- * An import that cannot be resolved (unknown symbol, non-exported symbol, a
- * misused marker, …). Carries the offending import statement's `loc` so
- * callers can anchor a diagnostic to it instead of falling back to the top of
- * the file. The LSP relies on this to report the error on the import line
- * while still type-checking the rest of the document.
- */
-export class ImportResolutionError extends Error {
-  loc?: SourceLocation;
-  constructor(message: string, loc?: SourceLocation) {
-    super(message);
-    this.name = "ImportResolutionError";
-    this.loc = loc;
-  }
-}
+export { ImportResolutionError } from "../importResolutionError.js";
 
 /**
  * Resolve unified imports: rewrite `import { x, y } from "./foo.agency"`
@@ -93,9 +80,17 @@ export function resolveImports(
       newNodes.push(node);
       continue;
     }
-    newNodes.push(
-      ...resolveImportStatement(node, symbolTable, currentFile, allowTestImports, onUnresolvable),
-    );
+    try {
+      newNodes.push(
+        ...resolveImportStatement(node, symbolTable, currentFile, allowTestImports, onUnresolvable),
+      );
+    } catch (error) {
+      // Stamp the file so the CLI can print `file:line:col` for it.
+      if (error instanceof ImportResolutionError && error.file === undefined) {
+        error.file = currentFile;
+      }
+      throw error;
+    }
   }
 
   return { ...program, nodes: newNodes };

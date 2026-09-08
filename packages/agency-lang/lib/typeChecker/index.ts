@@ -57,6 +57,8 @@ import { checkToolBlockBindings } from "./toolBlockBinding.js";
 import { RESERVED_FUNCTION_NAMES } from "./resolveCall.js";
 import { RESERVED_GENERIC_NAMES } from "./builtinGenerics.js";
 import { validateStaticInit } from "./validateStaticInit.js";
+import { checkParameterRedeclarations } from "./paramRedeclaration.js";
+import { checkValueArgReferences } from "./valueArgReferences.js";
 import { walkNodes } from "../utils/node.js";
 import { diagnostic } from "./diagnostics.js";
 
@@ -386,6 +388,14 @@ export class TypeChecker {
     // `rejectStaticReferencesGlobal`, which has access to the full
     // import closure.
     validateStaticInit(this.program, this.errors);
+
+    // A `let`/`const` may not reuse a parameter name: the generated code
+    // would keep reading the parameter slot (issue #717).
+    checkParameterRedeclarations(ctx);
+
+    // A value argument to a value-parameterized type must be something the
+    // generated code can name where the type is declared (issue #441).
+    checkValueArgReferences(ctx);
 
     this.stampFileOnErrors();
 

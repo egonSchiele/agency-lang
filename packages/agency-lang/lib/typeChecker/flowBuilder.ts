@@ -99,6 +99,21 @@ export function attachExpressionsToFlow(
 }
 
 /**
+ * The flow an inline handler body starts from. The pre-body flow, with every
+ * name the handle body rebinds reset to its declared type: the raise that
+ * runs the handler can happen after any of those assignments, and the body's
+ * end flow says nothing about them when the body always returns.
+ */
+function handlerEntryFlow(flow: FlowNode, body: AgencyNode[], env: FlowEnvironment): FlowNode {
+  const widened: Record<string, ScopeType> = Object.create(null);
+  for (const name of assignedNames(body)) {
+    const ref: Reference = { variable: name, chain: [] };
+    widened[referenceKey(ref)] = declaredPathType(env.scope, ref, env.typeAliases);
+  }
+  return { kind: "loop", prev: flow, widened };
+}
+
+/**
  * Names of variables a body rebinds (for loop widening). Bare `x = …` only —
  * access-chain mutations and destructuring patterns are excluded, matching the
  * `assignment` rule below.
@@ -303,7 +318,11 @@ const statementRules: StatementRuleTable = {
   handleBlock: (node, flow, env) => {
     const afterBody = buildFlowGraph(node.body, flow, env);
     if (node.handler.kind === "inline") {
-      buildFlowGraph(node.handler.body, afterBody, env);
+      // The handler runs when a statement in the body raises, so it can start
+      // after any prefix of the body. Entering it from `afterBody` was wrong:
+      // a body that always returns leaves `afterBody` at `exit`, so the
+      // handler body got no flow nodes and lost all narrowing (issue #612).
+      buildFlowGraph(node.handler.body, handlerEntryFlow(flow, node.body, env), env);
     }
     return afterBody;
   },
@@ -380,17 +399,21 @@ const passThrough = (node: AgencyNode, flow: FlowNode, env: FlowEnvironment): Fl
 };
 
 /**
- * Build the flow graph for one body. A pure fold: each statement's rule maps
- * the incoming flow to the next. Once `flow` is `exit`, the remaining
- * statements are unreachable, so the rule is not applied (no node is built
- * rooted at `exit`, where typeAt throws; dead-code refs go unattached, which
- * is harmless — PR 2 falls back to scope.lookup for nodes with no flow).
+ * Build the flow graph for one body. A fold: each statement's rule maps the
+ * incoming flow to the next. Once `flow` is `exit`, the remaining statements
+ * are unreachable and the fold's result stays `exit`. Those statements are
+ * still walked, on a side flow rooted at a fresh `start` node, so that
+ * narrowing inside dead code works the same as anywhere else. Leaving them
+ * unattached made every reference fall back to its declared type, which
+ * turned a guarded `r.value` after `return match(...)` into a false AG2009
+ * (issue #538). No node is ever rooted at `exit`, where typeAt throws.
  */
 export function buildFlowGraph(
   nodes: AgencyNode[],
   entry: FlowNode,
   env: FlowEnvironment,
 ): FlowNode {
+  let deadFlow: FlowNode | null = null;
   return nodes.reduce<FlowNode>((flow, node) => {
     if (node.type === "finalizeBlock") {
       // A finalize is a declaration: position-free, and NOT dead code
@@ -422,14 +445,16 @@ export function buildFlowGraph(
       buildFlowGraph(node.body, { kind: "loop", prev: start, widened }, env);
       return flow;
     }
-    if (flow.kind === "exit") {
-      return flow;
-    }
     const rule = (statementRules[node.type] ?? passThrough) as (
       node: AgencyNode,
       flow: FlowNode,
       env: FlowEnvironment,
     ) => FlowNode;
+    if (flow.kind === "exit") {
+      const next = rule(node, deadFlow ?? { kind: "start", scope: env.scope }, env);
+      deadFlow = next.kind === "exit" ? null : next;
+      return flow;
+    }
     return rule(node, flow, env);
   }, entry);
 }

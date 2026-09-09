@@ -27,7 +27,7 @@ account and a live token.
 
 ## OCR (`std::ocr`, `readText` and `readTextBlocks`)
 
-Vision exists only on macOS, so `tests/agency/ocr.agency` carries
+Vision exists only on macOS, so `tests/agency/ocr.test.json` carries
 `skipUnlessPlatform: "darwin"` and CI never runs it.
 
 - a language Vision does not support returns a clear error

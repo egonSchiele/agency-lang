@@ -19,7 +19,7 @@
     "test:run": "vitest run"
   },
   "peerDependencies": {
-    "agency-lang": ">=0.9.0"
+    "agency-lang": ">=0.18.2"
   },
   "dependencies": {
     "tesseract.js": "7.0.0"

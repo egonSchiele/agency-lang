@@ -6,7 +6,7 @@
 # Usage: TESSDATA_COMMIT=<40-char-sha> bash scripts/generate-lockfile.sh eng
 set -euo pipefail
 
-if [ -z "${TESSDATA_COMMIT:-}" ]; then
+if ! [[ "${TESSDATA_COMMIT:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
   echo "TESSDATA_COMMIT env var required (40-char commit SHA of tesseract-ocr/tessdata_fast)"
   exit 1
 fi

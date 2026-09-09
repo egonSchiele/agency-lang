@@ -10,8 +10,8 @@
    honestly on Linux instead of failing or being hidden behind `skipOnCI`.
 
 The `agency-lang` package gains no new dependencies. The local macOS backend runs through a
-script we ship as a string constant. Tesseract lives in its own package, where its dependency
-does not reach the language.
+JavaScript for Automation file we ship beside the compiled helper. Tesseract lives in its own
+package, where its dependency does not reach the language.
 
 ## Background: why `viewFile` is worth adding
 

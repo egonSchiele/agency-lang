@@ -28,7 +28,12 @@ function run(argv) {
   const out = [];
   for (let i = 0; i < results.count; i++) {
     const observation = results.objectAtIndex(i);
-    const candidate = observation.topCandidates(1).objectAtIndex(0);
+    const candidates = observation.topCandidates(1);
+    // An observation can carry no candidate; skip it rather than crash.
+    if (candidates.count === 0) {
+      continue;
+    }
+    const candidate = candidates.objectAtIndex(0);
     const box = observation.boundingBox;
     out.push({
       text: ObjC.unwrap(candidate.string),

@@ -94,7 +94,8 @@ async function runVisionOnCopy(
   const tmpFile = path.join(tmpDir.real, tmpName);
   let owned = false;
   try {
-    writeBytes(tmpDir, tmpName, bytes, { mode: "create-only" });
+    // Owner-only: the temp directory is shared and the image may be private.
+    writeBytes(tmpDir, tmpName, bytes, { mode: "create-only", fileMode: 0o600 });
     owned = true;
     const args = ["-l", "JavaScript", VISION_SCRIPT_PATH, tmpFile, language, String(fast)];
     return await runner(args);

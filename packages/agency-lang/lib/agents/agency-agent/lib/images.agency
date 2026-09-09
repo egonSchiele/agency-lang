@@ -2,7 +2,7 @@ import { map } from "std::array"
 import { generateImage } from "std::image"
 import { applyAgentCwd } from "std::index"
 import { basename, dirname } from "std::path"
-import { attachToReply, image } from "std::thread"
+import { attachToReply, image, viewFile } from "std::thread"
 
 export def resolveEditInputs(images: string[]): string[] {
   return map(images) as inputPath {
@@ -59,4 +59,22 @@ export def generateImageFile(
   // path resolves the same way the write did.
   attachToReply(image(applyAgentCwd(path)))
   return "Saved image to ${path}"
+}
+
+// The model supplies a path relative to the agent cwd, like every other
+// agent file tool. The stdlib viewFile does not know about the agent
+// cwd, so resolve here first.
+export def viewImageFile(path: string): string {
+  """
+  Look at an image or PDF file. The file appears in the next message so
+  you can read a diagram, a screenshot, or a scanned page. Use this
+  before describing or editing an image.
+
+  @param path - Path to the image or PDF, relative to the working directory
+  """
+  const shown = viewFile(applyAgentCwd(path))
+  if (isFailure(shown)) {
+    return "Could not show ${path}: ${shown.error}"
+  }
+  return shown.value
 }

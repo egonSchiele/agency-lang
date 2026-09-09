@@ -10,7 +10,7 @@ import { edit } from "std::fs"
 import { setMemoryId } from "std::memory"
 import { Attachment, systemMessage } from "std::thread"
 
-import { generateImageFile } from "../../lib/images.agency"
+import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
@@ -49,6 +49,7 @@ static const mainAgentTools = [
   writingAgent,
   rewriteAgent,
   generateImageFile,
+  viewImageFile,
   ...readOnlyFileTools(),
   edit.partial(useAgentCwd: true),
 ]

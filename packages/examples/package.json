@@ -9,6 +9,7 @@
   "dependencies": {
     "agency-lang": "workspace:*",
     "@agency-lang/mcp": "workspace:*",
+    "@agency-lang/tesseract-local": "workspace:*",
     "zod": "^4.3.5"
   }
 }

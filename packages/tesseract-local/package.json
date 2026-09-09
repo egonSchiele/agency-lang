@@ -1,0 +1,39 @@
+{
+  "name": "@agency-lang/tesseract-local",
+  "version": "0.0.1",
+  "description": "Offline OCR for Agency using tesseract.js (WebAssembly, no native build)",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/ocr.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/ocr.d.ts",
+      "import": "./dist/src/ocr.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist/", "index.agency", "models.lock.json", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "peerDependencies": {
+    "agency-lang": ">=0.9.0"
+  },
+  "dependencies": {
+    "tesseract.js": "7.0.0"
+  },
+  "devDependencies": {
+    "agency-lang": "workspace:*",
+    "@types/node": "^25.0.6",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  },
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
+  "homepage": "https://github.com/egonSchiele/agency-lang"
+}

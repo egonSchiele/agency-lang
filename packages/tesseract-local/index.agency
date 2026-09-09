@@ -1,0 +1,39 @@
+/**
+## Installation
+
+```
+npm install @agency-lang/tesseract-local
+```
+
+No compiler, no native build. Works on macOS, Linux, and Windows.
+
+## Usage
+
+```ts
+import { readText } from "pkg::@agency-lang/tesseract-local"
+
+node main() {
+  const text = readText("scan.png")
+  print(text)
+}
+```
+
+The first call downloads English language data (about 4 MB) into
+`~/.agency/models/tesseract/` and checks it against the hash in
+`models.lock.json`. Later calls read the local file with no network access.
+*/
+
+import { readText as readTextImpl } from "./dist/src/ocr.js"
+
+/// Recognize the text in an image locally with tesseract.js. No network after the first run.
+export def readText(filepath: string, language: string = "eng"): string {
+  """
+  Recognize the text in an image locally with Tesseract. Nothing is
+  uploaded. Slower and less accurate than macOS Vision, but runs on any
+  platform.
+
+  @param filepath - Path to a PNG or JPEG image
+  @param language - Tesseract language code; only "eng" ships today
+  """
+  return readTextImpl(filepath, language)
+}

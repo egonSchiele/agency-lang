@@ -1,0 +1,8 @@
+// Offline OCR with @agency-lang/tesseract-local. The first run downloads
+// English language data (about 4 MB) and verifies it against the package
+// lockfile; later runs read the local copy with no network access.
+import { readText } from "pkg::@agency-lang/tesseract-local"
+
+node main() {
+  print(readText("scan.png"))
+}

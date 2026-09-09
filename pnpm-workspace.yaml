@@ -27,12 +27,14 @@ minimumReleaseAgeExclude:
 # every subdep resolves from the registry, where the cooldown and integrity
 # hashes apply.
 blockExoticSubdeps: true
-# Lifecycle (install) scripts are default-denied. These three ask to run one;
-# all three have been silently blocked since pnpm 10 and everything works:
-# esbuild ships platform binaries as optionalDependencies (its script is only
-# a validator fallback), and the genai/protobufjs postinstalls are not needed
-# at runtime. Flip to true only with a reason.
+# Lifecycle (install) scripts are default-denied. These four ask to run one;
+# all four are blocked and everything works: esbuild ships platform binaries
+# as optionalDependencies (its script is only a validator fallback), the
+# genai/protobufjs postinstalls are not needed at runtime, and tesseract.js's
+# postinstall is the OpenCollective donation banner. Flip to true only with a
+# reason.
 allowBuilds:
   '@google/genai': false
   esbuild: false
   protobufjs: false
+  tesseract.js: false

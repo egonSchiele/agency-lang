@@ -303,6 +303,7 @@ Other process docs:
 - `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.
 - `docs/dev/stdlib/grep-flags.md` — `std::grep`: why it is an in-process regex walk and not the `grep` program, the flag rule table that turns grep habits into regex flags or named parameters, and the messages a rejected flag sends back to the model.
 - `docs/dev/stdlib/github.md` — `std::github`: why it speaks REST directly, the three-source credential chain, why the token never becomes an Agency value, and the deliberate departures in its effect vocabulary.
+- `docs/dev/stdlib/ocr.md` — `std::ocr` and `viewFile`: the three effects and why they are separate, the before/after-approval split and where each function reads its bytes, the osascript bridge with a temp copy, the Vision y flip, why local never falls back to cloud, and why `viewFile` says "queued".
 - `docs/dev/stdlib/skills-write.md` — The `std::skills` write half: writeSkill's save gate, designSkill's review-and-redraft loop over it, the subdir scan's path-segment validation, and the frontmatter round-trip contract.
 - `docs/dev/stdlib/spill.md` — `std::spill`: long tool output saved to one fixed directory outside every project, the two effects and two name-only tools that read it back, and why the preview is bounded by characters.
 - `docs/dev/stdlib/std-agency-test.md` — `test()` and `testFile()` from `std::agency`, and the sandbox rules that are easy to get wrong.

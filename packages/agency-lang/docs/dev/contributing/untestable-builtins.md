@@ -25,6 +25,14 @@ account and a live token.
 - Region capture with valid coordinates produces a cropped image
 - Invalid filepath (e.g. non-existent directory) throws an error
 
+## OCR (`std::ocr`, `readText` and `readTextBlocks`)
+
+Vision exists only on macOS, so `tests/agency/ocr.test.json` carries
+`skipUnlessPlatform: "darwin"` and CI never runs it.
+
+- a language Vision does not support returns a clear error
+- `fast: true` returns the same lines as accurate on the fixture
+
 ## Local Text-to-Speech (`std::speech`, `say`)
 
 `say` speaks text through the operating system's own voice on macOS.

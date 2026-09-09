@@ -33,12 +33,17 @@ import {
   _fileAttachment,
   _audioAttachment,
   _attachToReply,
+  _insideToolCall,
+  _viewFilePrecheck,
   _getCost,
   _getTokens,
   _getModelCosts,
   _threadIsNew,
   _threadHasSystemMessage,
  } from "agency-lang/stdlib-lib/thread.js"
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _approvedFilePath } from "agency-lang/stdlib-lib/approvedPath.js"
+import { dirname, basename } from "std::path"
 
 import { _installSlowInputImpl } from "agency-lang/stdlib-lib/builtins.js"
 import {
@@ -186,6 +191,52 @@ export def attachToReply(attachment: Attachment) {
   @param attachment - The attachment to show the model
   """
   _attachToReply(attachment)
+}
+
+// viewFile sends a file's bytes to a model provider. That is a different
+// permission from std::readImage, which reads the bytes into a variable.
+// Approving one never authorizes the other.
+@alwaysUnder(dir)
+effect std::viewFile { dir: string, filename: string }
+
+export def viewFile(path: string): Result<string> {
+  """
+  Show an image or PDF file to yourself. The file is attached to the
+  message that follows this tool result. Only works when called as a
+  tool inside an llm() call. Accepts .png, .jpg, .jpeg, .gif, .webp,
+  and .pdf.
+
+  @param path - Path to the image or PDF file
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  // Before the interrupt: name and stat only, never the bytes.
+  const checked = try _viewFilePrecheck(real.value)
+  if (isFailure(checked)) {
+    return checked
+  }
+  if (!_insideToolCall()) {
+    return failure("viewFile only works when called as a tool inside an llm() call.")
+  }
+  return interrupt std::viewFile("Show this file to the model?", {
+    dir: dirname(real.value),
+    filename: basename(real.value),
+  })
+  // After approval: re-validate the exact spelling the approver saw. The
+  // reply pipeline reads the file itself at harvest, so it gets a path
+  // that fixedPath and a descriptor open have both accepted.
+  const approved = try _approvedFilePath(real.value)
+  if (isFailure(approved)) {
+    return approved
+  }
+  if (checked.value.kind == "pdf") {
+    attachToReply(file(approved.value))
+  } else {
+    attachToReply(image(approved.value))
+  }
+  return success("Queued ${basename(real.value)} for attachment.")
 }
 
 export def assistantMessage(msg: string, label: string = "") {

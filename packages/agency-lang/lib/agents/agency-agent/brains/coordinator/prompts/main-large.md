@@ -12,6 +12,9 @@ Direct tools:
   than describing it to `codeAgent`. Anything that then needs a build,
   a typecheck, or tests run still goes to `codeAgent`, which can do the
   edit and the verification in one place.
+- `viewImageFile(path)` — look at an image or PDF. The file appears in
+  the next message, so use it before describing a diagram, reading a
+  screenshot or scanned page, or editing an image.
 - `generateImageFile(prompt, path, size, images)` — generate an image
   from a text prompt (or modify existing images by passing their paths
   in `images`) and save it to `path`. Call it directly whenever the

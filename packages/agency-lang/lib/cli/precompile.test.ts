@@ -108,6 +108,26 @@ describe("groupTestSources", () => {
     expect(groups[0].files).toEqual([path.join(root, "live/main.agency")]);
   });
 
+  test("skipUnlessPlatform excludes a file that names another OS and keeps one that matches", () => {
+    const other = process.platform === "darwin" ? "linux" : "darwin";
+    const root = writeTree({
+      live: {
+        "main.agency": TRIVIAL,
+        "main.test.json": JSON.stringify({ skipUnlessPlatform: process.platform, tests: [] }),
+      },
+      elsewhere: {
+        "main.agency": "this does not even parse {{{",
+        "main.test.json": JSON.stringify({ skipUnlessPlatform: other, tests: [] }),
+      },
+    });
+    const groups = groupTestSources({}, [
+      path.join(root, "live/main.test.json"),
+      path.join(root, "elsewhere/main.test.json"),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].files).toEqual([path.join(root, "live/main.agency")]);
+  });
+
   test("expectedCompileError test files are excluded, even wrongly typed", () => {
     const root = writeTree({
       live: { "main.agency": TRIVIAL, "main.test.json": TEST_JSON },

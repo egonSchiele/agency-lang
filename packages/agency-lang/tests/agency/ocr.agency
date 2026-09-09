@@ -1,0 +1,32 @@
+// Local OCR through macOS Vision. Runs only on darwin (see the
+// skipUnlessPlatform field in ocr.test.json). No LLM call.
+import { readText, readTextBlocks } from "std::ocr"
+
+node readsKnownText(): string {
+  const text = readText("tests/agency/fixtures/ocr/hello.png") with approve
+  if (isFailure(text)) {
+    return "failure: ${text.error}"
+  }
+  return text.value
+}
+
+node blocksAreTopLeft(): string {
+  const blocks = readTextBlocks("tests/agency/fixtures/ocr/hello.png") with approve
+  if (isFailure(blocks)) {
+    return "failure: ${blocks.error}"
+  }
+  const count = blocks.value.length
+  if (count < 2) {
+    return "${count}|too few blocks"
+  }
+  const firstAbove = blocks.value[0].box.y < blocks.value[1].box.y
+  return "${count}|${firstAbove}"
+}
+
+node refusesWithoutApproval(): string {
+  const text = readText("tests/agency/fixtures/ocr/hello.png") with reject
+  if (isFailure(text)) {
+    return "rejected"
+  }
+  return "ran"
+}

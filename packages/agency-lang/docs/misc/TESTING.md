@@ -147,6 +147,7 @@ Per test case (entries inside `tests`):
 - `timeoutMs` (optional) — per-test timeout in milliseconds; clamped to a hard ceiling
 - `skip` (optional) — `true` to unconditionally skip this test
 - `skipOnCI` (optional) — `true` to skip when running in CI (`process.env.CI` is set)
+- `skipUnlessPlatform` (optional) — `"darwin"`, `"linux"`, or `"win32"`. Skip unless `process.platform` matches. Use it for a test that needs an OS feature, such as macOS Vision.
 - `llmMocks` (optional) — see [Deterministic LLM mode](#deterministic-llm-mode-no-api-key) below
 
 File-level fields (siblings of `tests`):
@@ -154,6 +155,7 @@ File-level fields (siblings of `tests`):
 - `sourceFile` (optional) — the `.agency` file (relative to the `.test.json` file)
 - `skip` (optional) — `true` to skip every test in the file
 - `skipOnCI` (optional) — `true` to skip every test in the file when running in CI
+- `skipUnlessPlatform` (optional) — `"darwin"`, `"linux"`, or `"win32"`. Skip every test in the file unless `process.platform` matches.
 - `skipReason` (optional) — human-readable reason printed when a file is skipped
 - `defaultTimeoutMs` (optional) — file-level default timeout, overridden by per-test `timeoutMs`
 - `expectedCompileError` (optional) — assert that the sibling `.agency` file **fails to compile**, and that the failure text contains this substring. A file that sets it has no `tests` array: the compile is the test. See below.

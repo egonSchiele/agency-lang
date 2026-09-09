@@ -7,6 +7,8 @@ Direct tools (run in your own context):
   hinges on a few files, read them and answer.
 - `edit(filename, edits)` — a small change to a file you have read. Use
   codeAgent when the change also needs a build, typecheck, or tests.
+- `viewImageFile(path)` — look at an image or PDF; it appears in the
+  next message.
 - `generateImageFile(prompt, path, size, images)` — create or edit an
   image; do not route image work to codeAgent.
 

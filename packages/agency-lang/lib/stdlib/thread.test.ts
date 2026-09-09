@@ -1,10 +1,58 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { AgencyAbort, makeAbortCause } from "../runtime/errors.js";
 import { isFailure } from "../runtime/result.js";
-import { _runGuarded } from "./thread.js";
+import { MAX_REPLY_ATTACHMENT_BYTES } from "../config.js";
+import { _runGuarded, _viewFilePrecheck } from "./thread.js";
+
+describe("_viewFilePrecheck", () => {
+  let tmp: string;
+  beforeEach(() => {
+    // realpath: on macOS os.tmpdir() sits under /var, which is a symlink.
+    tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "viewfile-")));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("classifies png as image and pdf as pdf", () => {
+    const png = path.join(tmp, "a.png");
+    const pdf = path.join(tmp, "b.pdf");
+    fs.writeFileSync(png, "x");
+    fs.writeFileSync(pdf, "x");
+    expect(_viewFilePrecheck(png)).toEqual({ kind: "image" });
+    expect(_viewFilePrecheck(pdf)).toEqual({ kind: "pdf" });
+  });
+
+  it("refuses an extension the reply pipeline cannot send", () => {
+    const txt = path.join(tmp, "notes.txt");
+    fs.writeFileSync(txt, "x");
+    expect(() => _viewFilePrecheck(txt)).toThrow(/\.txt.*\.png/);
+  });
+
+  it("refuses a missing file", () => {
+    expect(() => _viewFilePrecheck(path.join(tmp, "gone.png"))).toThrow(/not found/);
+  });
+
+  it("refuses a directory named like an image", () => {
+    const dir = path.join(tmp, "folder.png");
+    fs.mkdirSync(dir);
+    expect(() => _viewFilePrecheck(dir)).toThrow(/not a regular file/);
+  });
+
+  it("refuses a file over the size cap", () => {
+    const big = path.join(tmp, "big.png");
+    const fd = fs.openSync(big, "w");
+    fs.ftruncateSync(fd, MAX_REPLY_ATTACHMENT_BYTES + 1);
+    fs.closeSync(fd);
+    expect(() => _viewFilePrecheck(big)).toThrow(/attachment limit/);
+  });
+});
 
 function makeCtx() {
   return new RuntimeContext({

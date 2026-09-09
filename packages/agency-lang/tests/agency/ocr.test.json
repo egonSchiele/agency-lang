@@ -1,0 +1,24 @@
+{
+  "skipUnlessPlatform": "darwin",
+  "skipReason": "macOS Vision is not available on this platform",
+  "tests": [
+    {
+      "nodeName": "readsKnownText",
+      "input": "",
+      "expectedOutput": "\"HELLO AGENCY\\nOCR TEST\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "blocksAreTopLeft",
+      "input": "",
+      "expectedOutput": "\"2|true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "refusesWithoutApproval",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

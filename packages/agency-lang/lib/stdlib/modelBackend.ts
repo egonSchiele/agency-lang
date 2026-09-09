@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { wholePath, stat } from "./contained.js";
+import { wholePath, stat, root, readText } from "./contained.js";
 
 /** Which engine runs a model. GGUF files run in-process through llama.cpp.
  *  MLX models run in mlx_lm.server, which the user starts. */
@@ -119,13 +119,25 @@ export function hubRepoOfDirName(name: string): string | null {
   return `${rest.slice(0, cut)}/${rest.slice(cut + 2)}`;
 }
 
+/** The longest a revision can be. A sha is 40 characters; anything longer in
+ *  `refs/main` is not one, and only this much of it reaches an error message. */
+const REF_MAX = 64;
+
+/** The revision `refs/main` names, or null when the cache keeps no ref.
+ *  Read through `contained.ts`, which opens without following a final link,
+ *  so a ref that is a symlink cannot make Agency read a file elsewhere. */
 function readRef(dir: string): string | null {
   try {
-    return fs.readFileSync(path.join(dir, "refs", "main"), "utf8").trim();
-  } catch {
-    // No refs/main: a cache written by something that does not keep refs, or
-    // a directory that is not a Hub cache at all. The snapshot scan decides.
-    return null;
+    return readText(root(dir), path.join("refs", "main")).trim().slice(0, REF_MAX);
+  } catch (err) {
+    const message = (err as Error).message;
+    if (/ENOENT|no such file|not a directory/i.test(message)) {
+      // No refs/main: a cache written by something that does not keep refs,
+      // or a directory that is not a Hub cache at all. The snapshot scan
+      // decides which.
+      return null;
+    }
+    throw new Error(`${path.join(dir, "refs", "main")} is not a file Agency will read: ${message}`);
   }
 }
 
@@ -176,6 +188,12 @@ export function hubSnapshotDir(p: string): string | null {
     `${p} holds ${models.length} snapshots and no refs/main saying which is current. ` +
       `Name one of them instead:\n${models.map((m) => `  ${snapshot(m)}`).join("\n")}`,
   );
+}
+
+/** The cache folder name for a repo id: `org/repo` becomes
+ *  `models--org--repo`. */
+export function hubDirNameOfRepo(repo: string): string {
+  return `${HUB_DIR_PREFIX}${repo.replace("/", "--")}`;
 }
 
 /** Whether a path looks like a snapshot inside a Hugging Face cache:

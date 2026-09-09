@@ -354,22 +354,23 @@ function planModel(value: string, cacheDir: string): Planned {
   const name = _mlxServedName(resolved);
   if (isMlxUri(resolved.target)) {
     const { repo, revision } = parseMlxUri(resolved.target);
-    // Whichever layout holds it: our own directory with a record, or a
-    // Hugging Face cache someone else downloaded into.
-    const found = _findDownloadedMlxModel(repo, cacheDir);
-    if (found === null) {
+    // Whichever layout holds it, at the revision asked for: our own directory
+    // with a record, or a Hugging Face cache someone else downloaded into.
+    const found = _findDownloadedMlxModel(repo, cacheDir, revision);
+    if (found !== null) {
+      return { name, dir: found.path, sizeBytes: found.sizeBytes };
+    }
+    const anyRevision = _findDownloadedMlxModel(repo, cacheDir);
+    if (anyRevision === null) {
       throw new Error(
         `${repo} is not downloaded. Run:\n  agency local download ${resolved.target}`,
       );
     }
-    const at = found.revision ?? "";
-    if (revision !== undefined && !at.startsWith(revision)) {
-      throw new Error(
-        `${found.path} holds ${repo} at ${at.slice(0, 7)}, and you asked for ${revision}. Run:\n` +
-          `  agency local download ${resolved.target}`,
-      );
-    }
-    return { name, dir: found.path, sizeBytes: found.sizeBytes };
+    const at = (anyRevision.revision ?? "").slice(0, 7);
+    throw new Error(
+      `${anyRevision.path} holds ${repo} at ${at}, and you asked for ${revision}. Run:\n` +
+        `  agency local download ${resolved.target}`,
+    );
   }
   const dir = path.resolve(resolved.target);
   const sizeBytes = modelDirEntries(dir).reduce((sum, f) => sum + f.size, 0);

@@ -40,6 +40,7 @@ import {
   hubSnapshotDir,
   hubSnapshotRevision,
   isHubSnapshotPath,
+  hubDirNameOfRepo,
 } from "./modelBackend.js";
 export {
   type Backend,
@@ -453,15 +454,61 @@ function hubSnapshot(dir: string): string | null {
 
 /** The downloaded MLX model with this repo id, in whichever layout holds it.
  *  This is what makes `mlx:org/repo` mean the model rather than one place it
- *  might live. */
+ *  might live.
+ *
+ *  With a `revision`, only a copy at that commit counts. The prefix is
+ *  matched, the way a pin in an `mlx:` URI is written. A cache keeps every
+ *  revision it has fetched, and lists only the one `refs/main` names, so a
+ *  pinned revision is looked for among the others too. */
 export function _findDownloadedMlxModel(
   repo: string,
   cacheDir: string = "",
+  revision?: string,
 ): DownloadedModel | null {
-  const found = _listDownloadedModels(resolveCacheDir(cacheDir)).find(
+  const dir = resolveCacheDir(cacheDir);
+  const copies = _listDownloadedModels(dir).filter(
     (m) => m.backend === "mlx" && m.name === repo && m.complete,
   );
-  return found ?? null;
+  if (revision === undefined) {
+    return copies[0] ?? null;
+  }
+  const pinned = copies.find((m) => (m.revision ?? "").startsWith(revision));
+  return pinned ?? hubSnapshotAtRevision(dir, repo, revision);
+}
+
+/** A snapshot of `repo` at `revision` in a Hugging Face cache, even when it is
+ *  not the revision `refs/main` names. */
+function hubSnapshotAtRevision(
+  dir: string,
+  repo: string,
+  revision: string,
+): DownloadedModel | null {
+  for (const base of [dir, path.join(dir, "hub")]) {
+    const folder = path.join(base, hubDirNameOfRepo(repo));
+    const holder = root(folder);
+    if (stat(holder, "snapshots") === null) {
+      continue;
+    }
+    for (const entry of list(holder, "snapshots")) {
+      if (entry.type !== "dir" || !entry.name.startsWith(revision)) {
+        continue;
+      }
+      const modelDir = path.join(folder, "snapshots", entry.name);
+      if (!isModelDir(modelDir)) {
+        continue;
+      }
+      return {
+        name: repo,
+        path: modelDir,
+        sizeBytes: modelDirEntries(modelDir).reduce((sum, f) => sum + f.size, 0),
+        backend: "mlx",
+        complete: true,
+        revision: entry.name,
+        layout: "hub",
+      };
+    }
+  }
+  return null;
 }
 
 /** The MLX model directories under `<dir>/mlx` that carry a record. */

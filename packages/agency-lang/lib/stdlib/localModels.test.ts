@@ -1371,6 +1371,30 @@ describe("Hugging Face caches", () => {
     expect(_findDownloadedMlxModel("org/missing", cache)).toBe(null);
   });
 
+  it("_findDownloadedMlxModel finds a pinned revision that is not the current one", () => {
+    const cache = path.join(dir, "models-pin");
+    hubModel(cache, "org/repo", "aaa111");
+    // A second revision in the same cache. refs/main still names the first.
+    const older = path.join(cache, "models--org--repo", "snapshots", "bbb222");
+    fs.mkdirSync(older, { recursive: true });
+    fs.writeFileSync(path.join(older, "config.json"), "{}");
+    fs.writeFileSync(path.join(older, "model.safetensors"), "xxxxxxxxxx");
+    expect(_findDownloadedMlxModel("org/repo", cache)?.revision).toBe("aaa111");
+    expect(_findDownloadedMlxModel("org/repo", cache, "bbb")?.path).toBe(older);
+    expect(_findDownloadedMlxModel("org/repo", cache, "ccc")).toBe(null);
+  });
+
+  it("refuses a refs/main that is a symlink instead of reading what it points at", () => {
+    const cache = path.join(dir, "models-link");
+    hubModel(cache, "org/repo", "aaa111", { ref: "" });
+    const folder = path.join(cache, "models--org--repo");
+    const secret = path.join(dir, "secret.txt");
+    fs.writeFileSync(secret, "not a revision");
+    fs.mkdirSync(path.join(folder, "refs"), { recursive: true });
+    fs.symlinkSync(secret, path.join(folder, "refs", "main"));
+    expect(() => hubSnapshotDir(folder)).toThrow(/is not a file Agency will read/);
+  });
+
   it("_resolveModel takes a cache folder and resolves it to its snapshot", () => {
     const hub = path.join(dir, "hub-resolve");
     const snapshot = hubModel(hub, "org/repo", "abc123");

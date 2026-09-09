@@ -372,6 +372,17 @@ describe("runServe", () => {
     await handle.close();
   });
 
+  it("serves a pinned revision that is not the one refs/main names", async () => {
+    hubModel("org/hub", "abc123");
+    const older = path.join(cacheDir, "models--org--hub", "snapshots", "def456");
+    fs.mkdirSync(older, { recursive: true });
+    fs.writeFileSync(path.join(older, "config.json"), "{}");
+    fs.writeFileSync(path.join(older, "model.safetensors"), "xxxxxxxx");
+    const handle = await runServe(["mlx:org/hub@def456"], { port: 0 }, deps);
+    expect(spawned[0]).toContain(older);
+    await handle.close();
+  });
+
   it("refuses a pinned revision the cache does not hold", async () => {
     hubModel("org/hub", "abc123");
     await expect(runServe(["mlx:org/hub@ffffff"], { port: 0 }, deps)).rejects.toThrow(

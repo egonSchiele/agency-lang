@@ -93,13 +93,20 @@ Agency reads three shapes of downloaded model, all through
 
 `hubSnapshotDir` in `lib/stdlib/modelBackend.ts` turns a cache folder into the
 snapshot to load: `refs/main` if it names one, else a lone snapshot, else an
-error listing them, because guessing a revision is worse than asking.
+error listing them, because guessing a revision is worse than asking. A
+`refs/main` that names a snapshot which is missing or incomplete is an error
+too, for the same reason. The ref is read through `contained.ts`, not the raw
+`fs` this file is allowed to use for names and sizes, so a ref that is a
+symlink is refused instead of pointing Agency at a file outside the cache.
 `_resolveModel` runs every value and every alias target through it, so a repo
 folder and the snapshot inside it are the same model to every caller.
 
 `mlx:<org>/<repo>` names a model by its repo id, not by a place. Callers that
 need its files ask `_findDownloadedMlxModel`, which searches every layout, so
-the same URI serves a model we downloaded and one already in a Hub cache.
+the same URI serves a model we downloaded and one already in a Hub cache. Pass
+it the revision from an `mlx:` pin and only a copy at that commit counts. A
+cache keeps every revision it has fetched and lists only the one `refs/main`
+names, so the pinned lookup checks the other snapshots in the folder as well.
 `serve` starts the process on whichever directory holds it but keeps naming it
 by the repo id, which is also what `run --local mlx:<repo>` sends — the front
 door's `Route` has held those two strings apart since it was written.

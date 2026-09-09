@@ -843,6 +843,12 @@ async function runExpectedCompileError(
   return report("passed");
 }
 
+/** True when a `skipUnlessPlatform` value is set and does not match the
+ *  running OS. */
+function skippedForPlatform(wanted: string | undefined): boolean {
+  return wanted !== undefined && wanted !== process.platform;
+}
+
 async function runTestFile(
   config: AgencyConfig,
   testFile: string,
@@ -884,8 +890,16 @@ async function runTestFile(
     // level, skip every test in the file. This makes top-level skip work
     // the way authors typically expect (skip the whole file). The same
     // `skip` field can also be set per test case for finer-grained control.
-    if (tests.skip || (tests.skipOnCI && process.env.CI)) {
-      const skipKind = tests.skip ? "" : " on CI";
+    const platformSkip = skippedForPlatform(tests.skipUnlessPlatform);
+    if (tests.skip || (tests.skipOnCI && process.env.CI) || platformSkip) {
+      let skipKind: string;
+      if (tests.skip) {
+        skipKind = "";
+      } else if (platformSkip) {
+        skipKind = `: needs ${tests.skipUnlessPlatform}`;
+      } else {
+        skipKind = " on CI";
+      }
       const reasonStr = tests.skipReason ? ` (${tests.skipReason})` : "";
       log(color.yellow(`  ⊘ Skipped${skipKind} ${total} test(s) in ${testFile}${reasonStr}`));
       return {
@@ -1020,6 +1034,12 @@ async function runCases(args: {
 
     if (testCase.skipOnCI && process.env.CI) {
       log(color.yellow(`  ⊘ Skipped on CI`));
+      caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
+      continue;
+    }
+
+    if (skippedForPlatform(testCase.skipUnlessPlatform)) {
+      log(color.yellow(`  ⊘ Skipped: needs ${testCase.skipUnlessPlatform}`));
       caseReports.push({ ...describeCase(testCase), status: "skipped", durationMs: 0 });
       continue;
     }

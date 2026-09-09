@@ -30,7 +30,8 @@ export type { CompileGroup as PrecompileGroup };
 // Two kinds of .test.json must not be precompiled, both because their
 // source may intentionally not compile — and a failure in this pass ends
 // the process before any test runs:
-//   - `skip: true` (or `skipOnCI: true` under CI), mirroring runTestFile.
+//   - `skip: true` (or `skipOnCI: true` under CI, or a `skipUnlessPlatform`
+//     that names another OS), mirroring runTestFile.
 //   - `expectedCompileError`, whose whole point is a source that fails;
 //     runTestFile compiles it in a child process instead. Presence, not
 //     type: a wrongly-typed value must still keep the broken source out
@@ -53,6 +54,8 @@ function isExcludedFromPrecompile(testJsonFile: string, tests: FullTestFile | nu
     return (
       tests.skip === true ||
       (tests.skipOnCI === true && !!process.env.CI) ||
+      (typeof tests.skipUnlessPlatform === "string" &&
+        tests.skipUnlessPlatform !== process.platform) ||
       tests.expectedCompileError !== undefined
     );
   }
@@ -65,6 +68,7 @@ function isExcludedFromPrecompile(testJsonFile: string, tests: FullTestFile | nu
     return (
       raw.skip === true ||
       (raw.skipOnCI === true && !!process.env.CI) ||
+      (typeof raw.skipUnlessPlatform === "string" && raw.skipUnlessPlatform !== process.platform) ||
       raw.expectedCompileError !== undefined
     );
   } catch {

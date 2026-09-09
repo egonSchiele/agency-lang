@@ -129,6 +129,8 @@ describe("parseTestFileSandbox", () => {
     ["skip (case)", { tests: [{ ...VALID.tests[0], skip: true }] }],
     ["skip (file)", { skip: true }],
     ["skipOnCI", { tests: [{ ...VALID.tests[0], skipOnCI: true }] }],
+    ["skipUnlessPlatform (case)", { tests: [{ ...VALID.tests[0], skipUnlessPlatform: "darwin" }] }],
+    ["skipUnlessPlatform (file)", { skipUnlessPlatform: "darwin" }],
     ["skipReason", { skipReason: "because" }],
     ["useTestLLMProvider", { tests: [{ ...VALID.tests[0], useTestLLMProvider: true }] }],
     ["expectedCompileError", { expectedCompileError: "AG1234" }],
@@ -267,6 +269,25 @@ describe("parseTestFileFull", () => {
     expect(parsed.tests?.[0].interruptHandlers?.[1].resolvedValue).toBe("42");
   });
 
+  test("accepts skipUnlessPlatform at file and case level", () => {
+    const parsed = parseTestFileFull(
+      JSON.stringify({
+        ...VALID,
+        skipUnlessPlatform: "darwin",
+        tests: [{ ...VALID.tests[0], skipUnlessPlatform: "linux" }],
+      }),
+      "x.test.json",
+    );
+    expect(parsed.skipUnlessPlatform).toBe("darwin");
+    expect(parsed.tests?.[0].skipUnlessPlatform).toBe("linux");
+  });
+
+  test("refuses an unknown skipUnlessPlatform value", () => {
+    expect(() =>
+      parseTestFileFull(JSON.stringify({ ...VALID, skipUnlessPlatform: "amiga" }), "x.test.json"),
+    ).toThrow(/skipUnlessPlatform/);
+  });
+
   test("input is optional: a no-argument case may omit it", () => {
     const parsed = parseTestFileFull(
       JSON.stringify({
@@ -379,6 +400,7 @@ describe("parseTestFileEvalHarness", () => {
     ["argv", { argv: ["x"] }],
     ["skip", { skip: true }],
     ["skipOnCI", { skipOnCI: true }],
+    ["skipUnlessPlatform", { skipUnlessPlatform: "darwin" }],
     ["skipReason", { skipReason: "why" }],
   ])("case field %s is refused by name", (field, extra) => {
     expect(() => harness({ tests: [{ ...CASE, ...extra }] })).toThrow(new RegExp(field));
@@ -388,6 +410,7 @@ describe("parseTestFileEvalHarness", () => {
     ["fetchMocks", { fetchMocks: [] }],
     ["skip", { skip: true }],
     ["skipOnCI", { skipOnCI: true }],
+    ["skipUnlessPlatform", { skipUnlessPlatform: "darwin" }],
     ["skipReason", { skipReason: "why" }],
     ["expectedCompileError", { expectedCompileError: "AG1" }],
   ])("file field %s is refused by name", (field, extra) => {

@@ -95,6 +95,7 @@ const SANDBOX_REFUSED_FILE_FIELDS = [
   "fetchMocks",
   "skip",
   "skipOnCI",
+  "skipUnlessPlatform",
   "skipReason",
 ] as const;
 const SANDBOX_REFUSED_CASE_FIELDS = [
@@ -105,8 +106,12 @@ const SANDBOX_REFUSED_CASE_FIELDS = [
   "retry",
   "skip",
   "skipOnCI",
+  "skipUnlessPlatform",
   "useTestLLMProvider",
 ] as const;
+
+/** The `process.platform` values a `skipUnlessPlatform` field may name. */
+const PLATFORM_NAMES = ["darwin", "linux", "win32"] as const;
 
 // Strict: `{ type: "exact", judgePrompt: "…" }` must fail rather than
 // silently dropping the extra configuration.
@@ -256,6 +261,9 @@ const fullCaseSchema = z.strictObject({
   retry: z.number().optional(),
   skip: z.boolean().optional(),
   skipOnCI: z.boolean().optional(),
+  /** Skip unless process.platform equals this value. For a test that
+   *  needs an OS feature, such as macOS Vision. */
+  skipUnlessPlatform: z.enum(PLATFORM_NAMES).optional(),
   /** Documentation beside a per-case `skip`; only the file-level
    *  skipReason is printed by the runner. */
   skipReason: z.string().optional(),
@@ -275,6 +283,7 @@ const fullFileSchema = z.strictObject({
   fetchMocks: z.array(z.unknown()).optional(),
   skip: z.boolean().optional(),
   skipOnCI: z.boolean().optional(),
+  skipUnlessPlatform: z.enum(PLATFORM_NAMES).optional(),
   skipReason: z.string().optional(),
   defaultTimeoutMs: z.number().optional(),
 });
@@ -300,6 +309,7 @@ const EVAL_HARNESS_REFUSED_FILE_FIELDS = [
   "fetchMocks",
   "skip",
   "skipOnCI",
+  "skipUnlessPlatform",
   "skipReason",
   "expectedCompileError",
 ] as const;
@@ -312,6 +322,7 @@ const EVAL_HARNESS_REFUSED_CASE_FIELDS = [
   "argv",
   "skip",
   "skipOnCI",
+  "skipUnlessPlatform",
   "skipReason",
 ] as const;
 

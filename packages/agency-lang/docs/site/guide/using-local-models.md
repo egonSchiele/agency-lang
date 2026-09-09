@@ -176,6 +176,111 @@ agency local alias remove my7b
 
 Aliases work everywhere a model value is accepted: `agency local download`, `agency run --local`, `agency agent --local`, and `registerLocalModel`.
 
+## Run MLX models on a Mac
+
+MLX is Apple's array framework for Apple Silicon. Agency can run models through it as well as through llama.cpp. MLX models are often faster than GGUF models on a Mac, and the community publishes them at sizes llama.cpp builds rarely reach.
+
+An MLX model is not one file. It is a directory of `.safetensors` weights next to a `config.json`, the layout Hugging Face repos use. Agency does not run it in its own process. A Python program called `mlx_lm.server` loads the model, and Agency sends it requests.
+
+Set up Python once:
+
+```bash
+python3.12 -m venv ~/.agency-agent/mlx-env
+~/.agency-agent/mlx-env/bin/pip install mlx-lm
+```
+
+Agency looks for that environment by default. Agency never installs Python for you. To use a different Python, pass `--python`, or set `client.mlx.python` in `agency.json`.
+
+### Download a model
+
+```bash
+agency local download mlx:mlx-community/Qwen3.8-27B-4bit
+```
+
+An `mlx:` URI names a Hugging Face repo. The download fetches the repo in parallel and verifies each file against the hash Hugging Face publishes. Interrupt it and run the same command again, and it picks up where it stopped.
+
+Browse what is available with `agency local list`. MLX entries show `mlx` in the BACKEND column, and their names end in `-mlx` when a GGUF entry of the same model exists.
+
+### Start the server
+
+```bash
+agency local serve
+```
+
+With no model named, this shows you the MLX models you have downloaded, and you pick the ones to serve. Name them yourself to skip the picker:
+
+```bash
+agency local serve mlx:mlx-community/Qwen3.8-27B-4bit
+```
+
+The command runs in the foreground and prints the address it is listening on. Leave it running in its own terminal. Ctrl-C stops it and every model it loaded.
+
+You can serve several models at once. Agency starts one `mlx_lm.server` for each of them and puts a single port in front. Each model stays in memory for as long as the command runs, so watch the total against the memory your Mac has. Agency warns you when the models add up to more than that, and starts them anyway.
+
+### Run against the server
+
+```bash
+agency run --local mlx:mlx-community/Qwen3.8-27B-4bit hello.agency
+agency agent --local mlx:mlx-community/Qwen3.8-27B-4bit
+```
+
+These work the same way they do for a GGUF model, with one difference. Agency does not download or load anything here. The server has to be running already, and it has to be serving the model you name.
+
+A run sends the model name to the server, so the two must agree. `agency local resolve <name>` prints the name Agency will send.
+
+### Use a model you already have
+
+```bash
+agency local serve /Volumes/models/hf/hub/models--mlx-community--Qwen3.8-27B-4bit
+```
+
+Any directory holding `config.json` and `.safetensors` files works, so a model another tool downloaded needs no copying. A Hugging Face cache folder works too. Agency reads its `refs/main` to find the revision you last pulled.
+
+```bash
+agency local --model-dir /Volumes/models/hf/hub list
+agency local --model-dir /Volumes/models/hf/hub serve
+```
+
+`--model-dir` points the whole `local` command at another directory for one run. The picker then offers everything in that directory. Agency reads a Hugging Face cache but never writes to one, so `agency local remove -f` refuses to delete a model in one.
+
+### Watch what the server is doing
+
+The server prints one line per request:
+
+```
+POST /v1/chat/completions  mlx-community/Qwen3.8-27B-4bit  200  2.6s  16→129 tok
+```
+
+That line gives you the endpoint, the model, the status, the time the request took, and the tokens in and out. Add `--verbose` to see the whole request and the whole reply as well:
+
+```bash
+agency local serve mlx:mlx-community/Qwen3.8-27B-4bit --verbose
+```
+
+### Shorter names
+
+```bash
+agency local alias add coder mlx:mlx-community/Qwen3-Coder-Next-4bit
+agency local serve coder
+agency run --local coder hello.agency
+```
+
+An alias works everywhere a model value is accepted, the same as it does for a GGUF model.
+
+If you already have the model, you can also drop the prefix and use the repo id on its own:
+
+```bash
+agency local serve mlx-community/Qwen3-Coder-Next-4bit
+```
+
+The `mlx:` prefix is the spelling that always works. You need it for a model you have not downloaded yet, because that is what tells Agency where to fetch it from.
+
+### Differences from GGUF models
+
+1. You start the server yourself, and you stop it yourself. Nothing starts on demand.
+2. The agent's memory feature stays off, because `mlx_lm.server` has no endpoint for embeddings.
+3. MLX runs on Apple Silicon only. On any other machine, use the GGUF models above.
+
 ## What to expect
 
 - The first call in a process loads the model into memory, which takes a few seconds for small models and noticeably longer for large ones. After that, the loaded model is reused for every call in the run.

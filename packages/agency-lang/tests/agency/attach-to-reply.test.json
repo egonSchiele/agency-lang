@@ -62,6 +62,45 @@
         { "toolCalls": [{ "name": "showMap" }] },
         { "return": "done" }
       ]
+    },
+    {
+      "nodeName": "viewFileAttachesImage",
+      "input": "",
+      "expectedOutput": "\"done|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "lookAtChart" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "viewFileRefusesText",
+      "input": "",
+      "expectedOutput": "\"done|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "lookAtNotes" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "viewFileRefusesMissing",
+      "input": "",
+      "expectedOutput": "\"done|true\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "toolCalls": [{ "name": "lookAtMissing" }] },
+        { "return": "done" }
+      ]
+    },
+    {
+      "nodeName": "viewFileOutsideToolFails",
+      "input": "",
+      "expectedOutput": "\"viewFile only works when called as a tool inside an llm() call.\"",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

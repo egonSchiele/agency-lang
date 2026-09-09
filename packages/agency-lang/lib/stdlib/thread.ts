@@ -1,6 +1,10 @@
 import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
+import * as path from "node:path";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
+import { wholePath, stat as statUnder } from "./contained.js";
+import { MIME_TYPES } from "./mediaPathScan.js";
+import { MAX_REPLY_ATTACHMENT_BYTES } from "../config.js";
 import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
 import { __call } from "../runtime/call.js";
@@ -248,7 +252,7 @@ export function _attachToReply(attachment: unknown): void {
   if (!frame?.stack) {
     return;
   }
-  if (!frame.ctx?.isInsideToolCall()) {
+  if (!_insideToolCall()) {
     frame.ctx?.statelogClient?.error({
       errorType: "toolError",
       message: "attachToReply called outside a tool invocation; attachment dropped",
@@ -257,6 +261,39 @@ export function _attachToReply(attachment: unknown): void {
     return;
   }
   frame.stack.queueReplyAttachment(attachment as ReplyAttachmentPart);
+}
+
+/** True while a tool invocation is on the stack. attachToReply is a
+ *  no-op outside one, and viewFile must not report success there. */
+export function _insideToolCall(): boolean {
+  const frame = agencyStore.getStore();
+  return frame?.ctx?.isInsideToolCall() === true;
+}
+
+/** Backs `std::thread.viewFile`. Runs before the interrupt, so it may
+ *  only look at the name and the stat, never the bytes. `realPath` was
+ *  already resolved through contained.ts by the wrapper. */
+export function _viewFilePrecheck(realPath: string): { kind: "image" | "pdf" } {
+  const ext = path.extname(realPath).toLowerCase();
+  const mime = MIME_TYPES[ext];
+  if (mime === undefined) {
+    const accepted = Object.keys(MIME_TYPES).join(", ");
+    const what = ext === "" ? "file without an extension" : ext;
+    throw new Error(`viewFile cannot show a ${what}. Accepted: ${accepted}.`);
+  }
+  const located = wholePath(realPath);
+  const info = statUnder(located.root, located.target);
+  if (info === null) {
+    throw new Error(`viewFile: file not found: ${realPath}`);
+  }
+  if (!info.isFile()) {
+    throw new Error(`viewFile: not a regular file: ${realPath}`);
+  }
+  if (info.size > MAX_REPLY_ATTACHMENT_BYTES) {
+    const limitMb = Math.round(MAX_REPLY_ATTACHMENT_BYTES / (1024 * 1024));
+    throw new Error(`viewFile: ${realPath} is over the ${limitMb} MB attachment limit.`);
+  }
+  return { kind: mime === "application/pdf" ? "pdf" : "image" };
 }
 
 export async function __internal_getCost(

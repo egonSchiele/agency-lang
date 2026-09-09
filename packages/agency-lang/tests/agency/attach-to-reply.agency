@@ -2,7 +2,7 @@
 // marker to the tool result and injects a labeled user message after
 // the round. Asserted through getThread, whose reader renders
 // attachment parts as "[image attachment]".
-import { attachToReply, image, getThread } from "std::thread"
+import { attachToReply, image, getThread, viewFile } from "std::thread"
 
 static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 
@@ -113,4 +113,73 @@ node sequentialLlmCallsAreIsolated(): string {
   const mapLabel = convo.includes("[img_1 — image output of tool showMap]")
   const noCross = !convo.includes("img_2")
   return "${left}|${right}|${chartLabel}|${mapLabel}|${noCross}"
+}
+
+// viewFile: the one-call path form of attachToReply(image(path)).
+
+def lookAtChart(): string {
+  """
+  Look at the chart file.
+  """
+  const shown = viewFile("/tmp/tra-chart.png")
+  if (isFailure(shown)) {
+    return "failure: ${shown.error}"
+  }
+  return shown.value
+}
+
+def lookAtNotes(): string {
+  """
+  Look at the notes file.
+  """
+  const shown = viewFile("/tmp/tra-note.txt")
+  if (isFailure(shown)) {
+    return "failure: ${shown.error}"
+  }
+  return shown.value
+}
+
+def lookAtMissing(): string {
+  """
+  Look at a file that is not there.
+  """
+  const shown = viewFile("/tmp/tra-missing.png")
+  if (isFailure(shown)) {
+    return "failure: ${shown.error}"
+  }
+  return shown.value
+}
+
+node viewFileAttachesImage(): string {
+  writeBinary("tra-chart.png", PNG, "/tmp") with approve
+  const reply = llm("look at the chart", { tools: [lookAtChart] }) with approve
+  const convo = conversationText()
+  const queued = convo.includes("Queued tra-chart.png for attachment.")
+  const hasImage = convo.includes("[image attachment]")
+  return "${reply}|${queued}|${hasImage}"
+}
+
+node viewFileRefusesText(): string {
+  writeBinary("tra-note.txt", "aGk=", "/tmp") with approve
+  const reply = llm("look at the notes", { tools: [lookAtNotes] }) with approve
+  const convo = conversationText()
+  const refused = convo.includes("failure: viewFile cannot show a .txt")
+  const noImage = !convo.includes("[image attachment]")
+  return "${reply}|${refused}|${noImage}"
+}
+
+node viewFileRefusesMissing(): string {
+  const reply = llm("look", { tools: [lookAtMissing] }) with approve
+  const convo = conversationText()
+  const refused = convo.includes("failure: viewFile: file not found")
+  return "${reply}|${refused}"
+}
+
+node viewFileOutsideToolFails(): string {
+  writeBinary("tra-chart.png", PNG, "/tmp") with approve
+  const shown = viewFile("/tmp/tra-chart.png") with approve
+  if (isFailure(shown)) {
+    return shown.error
+  }
+  return "ran"
 }

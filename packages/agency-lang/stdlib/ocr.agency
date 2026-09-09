@@ -1,0 +1,161 @@
+/** @module
+@summary Read the text in an image, locally with macOS Vision or through a vision model.
+Read the text in an image. `readText` and `readTextBlocks` run macOS
+Vision on the machine and never touch the network. `readTextWithModel`
+sends the image to a model provider and asks for the text.
+
+  ```ts
+  import { readText, readTextBlocks } from "std::ocr"
+
+  // The text, one line per recognized line:
+  const text = readText("invoice.png") with approve
+
+  // Each line with its confidence and position:
+  const blocks = readTextBlocks("invoice.png") with approve
+  ```
+
+The local functions return a Failure on any platform that is not macOS.
+They never fall back to a model provider, because an approval that named
+a local read must not become an upload. For offline OCR on Linux or
+Windows, install `@agency-lang/tesseract-local`.
+*/
+import { _recognizeTextLocal } from "agency-lang/stdlib-lib/ocr.js"
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _approvedFilePath } from "agency-lang/stdlib-lib/approvedPath.js"
+import { dirname, basename } from "std::path"
+import { image } from "std::thread"
+
+// Local recognition. The file never leaves the machine.
+@alwaysUnder(dir)
+effect std::ocr { dir: string, filename: string }
+
+// Cloud recognition. The destination is whatever model the caller names,
+// or the run's default, and a custom LLM client may route it anywhere,
+// so the payload states the REQUESTED provider and configured model,
+// the same as std::transcribe. Approving std::ocr never authorizes this.
+effect std::ocrCloud {
+  requestedProvider: string,
+  configuredModel: string,
+  dir: string,
+  filename: string,
+}
+
+/** Normalized to 0..1 with the origin at the top left of the image, so
+`y` grows downward. */
+export type BoundingBox = {
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+}
+
+/** One recognized line. */
+export type TextBlock = {
+  text: string,
+  confidence: number,
+  box: BoundingBox,
+}
+
+static const OCR_INSTRUCTION = "Transcribe all text in this image exactly as written, preserving line breaks. Return only the text."
+
+export def readTextBlocks(
+  path: string,
+  language: string = "",
+  fast: boolean = false,
+): Result<TextBlock[]> {
+  """
+  Recognize the text in an image with macOS Vision and return each line
+  with its confidence and normalized top-left bounding box. Runs on the
+  machine; nothing is uploaded. Fails on any platform that is not macOS.
+  Prefer readText unless you need positions.
+
+  @param path - Path to a PNG, JPEG, GIF, or WebP image
+  @param language - Recognition language such as "en-US"; empty lets Vision choose
+  @param fast - Use Vision's fast recognition level instead of accurate
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::ocr("Read the text in this image with macOS Vision?", {
+    dir: dirname(real.value),
+    filename: basename(real.value),
+  })
+  // After approval the helper re-validates this exact spelling with
+  // fixedPath and reads through a descriptor. Vision gets a temp copy.
+  return try _recognizeTextLocal(real.value, language, fast)
+}
+
+export def readText(
+  path: string,
+  language: string = "",
+  fast: boolean = false,
+): Result<string> {
+  """
+  Recognize the text in an image with macOS Vision and return it as one
+  string, one recognized line per line. Runs on the machine; nothing is
+  uploaded. Fails on any platform that is not macOS.
+
+  @param path - Path to a PNG, JPEG, GIF, or WebP image
+  @param language - Recognition language such as "en-US"; empty lets Vision choose
+  @param fast - Use Vision's fast recognition level instead of accurate
+  """
+  const blocks = readTextBlocks(path, language, fast)
+  if (isFailure(blocks)) {
+    return blocks
+  }
+  const lines = map(blocks.value) as block {
+    return block.text
+  }
+  return success(lines.join("\n"))
+}
+
+export def readTextWithModel(
+  path: string,
+  model: string = "",
+  provider: string = "",
+  prompt: string = "",
+): Result<string> {
+  """
+  Send an image to a vision model and return the text it reads. The
+  image leaves the machine. A model generates text rather than
+  recognizing it, so it can return plausible content that is not on the
+  page; prefer readText when the output must be trusted, or check the
+  result against the image. Runs in its own thread so the image and the
+  instruction do not stay in your conversation.
+
+  @param path - Path to a PNG, JPEG, GIF, or WebP image
+  @param model - Model to use; empty means the run's default model
+  @param provider - Provider override; normally derived from the model name
+  @param prompt - Extra instruction, such as jargon or field names to expect
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  // Agency has no accessor for the resolved default model, so the payload
+  // says "default" and the message says where the image goes.
+  const configuredModel = if model == "" then "default" else model
+  return interrupt std::ocrCloud("Send this image to a model provider (${configuredModel} model) to read its text?", {
+    requestedProvider: provider,
+    configuredModel: configuredModel,
+    dir: dirname(real.value),
+    filename: basename(real.value),
+  })
+  // After approval: re-validate the exact spelling the approver saw. The
+  // llm message builder reads the file itself, so this hands it a path
+  // that fixedPath and a descriptor open have both accepted.
+  const approved = try _approvedFilePath(real.value)
+  if (isFailure(approved)) {
+    return approved
+  }
+  const instruction = if prompt == "" then OCR_INSTRUCTION else "${OCR_INSTRUCTION}\n\n${prompt}"
+  // Assigned inside the thread block: the documented way to get a value
+  // out of one (see mainAgent in coordinator.agency).
+  let text = ""
+  thread(label: "ocr") {
+    const recognized: string = llm([instruction, image(approved.value)], model: model, provider: provider)
+    text = recognized
+  }
+  return success(text)
+}

@@ -1,0 +1,6 @@
+{
+  "result": "HELLO AGENCY\nOCR TEST|false",
+  "callCount": 1,
+  "model": "test-model",
+  "hasImagePart": true
+}

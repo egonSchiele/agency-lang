@@ -439,6 +439,7 @@ export default defineConfig({
                 { text: "notes/apple", link: "/stdlib/notes/apple" },
               ],
             },
+            { text: "ocr", link: "/stdlib/ocr" },
             { text: "object", link: "/stdlib/object" },
             { text: "path", link: "/stdlib/path" },
             { text: "policy", link: "/stdlib/policy" },

@@ -1,0 +1,25 @@
+import { readTextWithModel } from "std::ocr"
+import { getThread } from "std::thread"
+
+export node main(): string {
+  const text = readTextWithModel("hello.png", model: "test-model") with approve
+  if (isFailure(text)) {
+    return "failure: ${text.error}"
+  }
+  // The caller's own thread must not have picked up the OCR messages.
+  const ocrLeaked = conversationText("t0").includes("Transcribe all text")
+  return "${text.value}|${ocrLeaked}"
+}
+
+// One thread's messages as a single string, the way
+// tests/agency/attach-to-reply.agency reads a conversation.
+def conversationText(threadId: string): string {
+  const messages = getThread(threadId, 0, 50)
+  if (isFailure(messages)) {
+    return ""
+  }
+  const lines = map(messages.value) as message {
+    return "<${message.role}> ${message.content}"
+  }
+  return lines.join("\n")
+}

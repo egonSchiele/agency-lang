@@ -67,7 +67,7 @@ type ColorMethods = {
 };
 
 // Type for the chainable color function
-type ColorFunction = ((...args: any[]) => string) & {
+export type ColorFunction = ((...args: any[]) => string) & {
   [K in StyleName]: ColorFunction;
 } & ColorMethods;
 
@@ -181,6 +181,13 @@ function createNoopColorFunction(): ColorFunction {
  * ```
  */
 export const ttyColor: ColorFunction = process.stdout.isTTY ? color : createNoopColorFunction();
+
+/**
+ * The same shape as `color`, but it never emits ANSI codes. Pass it where a
+ * caller has already decided that output should be plain (a test, or a
+ * command whose color setting resolved to off).
+ */
+export const plainColor: ColorFunction = createNoopColorFunction();
 
 /**
  * Resolve whether to emit ANSI color for an `"auto"` setting, following the

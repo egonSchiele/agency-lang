@@ -61,7 +61,27 @@ Agency sends the server the same string you gave `--model`: the directory path f
 
 The server listens on `http://127.0.0.1:8080/v1` by default. For another port, set `MLX_BASE_URL` or `client.baseUrl.mlx` in `agency.json`.
 
-A Hugging Face cache snapshot directory (`hf/hub/models--<org>--<repo>/snapshots/<sha>`) works as is. Its entries are symlinks into `blobs/`, and Agency follows them for this one check.
+A Hugging Face cache directory works as is, and you can name either the repo folder or one snapshot inside it:
+
+```bash
+agency local serve /Volumes/models/hf/hub/models--mlx-community--Qwen3.8-27B-4bit
+agency local serve /Volumes/models/hf/hub/models--mlx-community--Qwen3.8-27B-4bit/snapshots/3e6447f0
+```
+
+The repo folder resolves through its `refs/main` to the snapshot that ref names; with no ref and one snapshot, that snapshot is used; with several and no ref, Agency lists them and asks you to name one. A snapshot's entries are symlinks into `blobs/`, and Agency follows them for this one check.
+
+Use `--model-dir` to point the whole `local` command at another directory for one run — your own models directory, or somebody else's Hugging Face cache:
+
+```bash
+agency local --model-dir /Volumes/models/hf/hub list
+agency local --model-dir /Volumes/models/hf/hub serve      # a picker over everything there
+```
+
+It takes precedence over `AGENCY_MODELS_DIR` and `client.modelsDir`, and applies to `list`, `download`, `serve` and `remove` alike. Agency reads a Hugging Face cache but never writes one: `agency local download --model-dir <hub>` puts the model in Agency's own layout beside it, and `agency local remove -f` refuses a cache model, since deleting a snapshot of symlinks would leave the bytes in `blobs/` behind.
+
+### Naming a model
+
+The `mlx:` prefix names a model by its Hugging Face repo id, wherever its files are — Agency's models directory, or a Hugging Face cache. `agency local serve mlx:mlx-community/Qwen3.8-27B-4bit` serves it under that repo id, whichever layout holds it, and `agency run --local mlx:mlx-community/Qwen3.8-27B-4bit` sends the same name. If you already have the model, the prefix is optional: a bare `mlx-community/Qwen3.8-27B-4bit` works too. It is required only for a model you have not downloaded yet, which is why messages print that spelling.
 
 To download one, use its `mlx:` URI. The download runs as parallel byte-range requests, resumes if interrupted, and verifies each file: against the SHA-256 Hugging Face publishes for large (LFS) files, and by size for small plain files such as `config.json`:
 
@@ -70,15 +90,40 @@ agency local download mlx:mlx-community/Qwen3-Coder-Next-4bit
 agency local download mlx:mlx-community/Qwen3-Coder-Next-4bit@7b9321e   # a pinned commit
 ```
 
+### Serving models
+
+`agency local serve` starts the servers for you and puts one port in front of them:
+
+```bash
+agency local serve                                     # pick from what you have downloaded
+agency local serve mlx:mlx-community/Qwen3-Coder-Next-4bit coder
+agency local serve --port 8080 --verbose coder         # ...and log every request and reply in full
+```
+
+It prints a line for every request that reaches it:
+
+```
+POST /v1/chat/completions  mlx-community/Qwen3.5-4B-MLX-4bit  200  2.6s  16→129 tok
+```
+
+That is the method and path, the model the request named, the status, how long
+it took, and the prompt and completion tokens the server reported. With
+`--verbose` (or `--log-prompts`, the same thing), the whole request body (`→`)
+and the whole reply (`←`) follow underneath: indented JSON for a normal reply,
+and the `data:` frames exactly as they came for a streamed one. Color is on
+when the output is a terminal; `NO_COLOR` turns it off and `FORCE_COLOR` turns
+it on for a log file.
+
 A gated repo needs `HF_TOKEN` set to a token that has accepted its terms. The token is sent to huggingface.co only and never stored. `client.mlx.downloadConcurrency` in `agency.json` sets the number of parallel requests (default 8).
 
 ### Subcommands
 
 | command | purpose |
 |---|---|
+| `agency local --model-dir <path> <subcommand>` | Use `<path>` as the models directory for this run, ahead of `AGENCY_MODELS_DIR` and `client.modelsDir`. A Hugging Face cache under it is read too, so pointing at `hf/hub` lists and serves what another tool downloaded. |
 | `agency local list` | Show the full catalog with each model's backend, and a checkmark and on-disk size for downloaded models. The first line names the models directory. Files that match no catalog entry appear under `OTHER FILES`. Add `-l` / `--long` to print each model's description on its own line below its row. Works without `smoltalk-llama-cpp` installed. |
 | `agency local download [value]` | Download a model if not already cached; prints the source it resolved to and the local path. `<value>` may be a curated short name, an alias, an `hf:` URI, or an existing `.gguf` path. With no value, opens an interactive picker (in scripts it prints the catalog and exits 1 instead). An `mlx:` URI downloads the whole repo into `<modelsDir>/mlx/<org>--<repo>`, resuming if interrupted; a model directory is returned as is. |
-| `agency local serve <model>... [--port 8080] [--max-tokens 16384] [--python <path>]` | Serve one or more MLX models in this terminal. Starts one `mlx_lm.server` per model, waits until each has loaded, then listens on `--port`. A request for a model you did not name gets a 404 naming the command to start it. It never downloads. An `mlx:` model must be downloaded first, and a directory works as is. Ctrl-C stops everything. |
+| `agency local serve [model]... [--port 8080] [--max-tokens 16384] [--python <path>] [--verbose]` | Serve one or more MLX models in this terminal. Starts one `mlx_lm.server` per model, waits until each has loaded, then listens on `--port`. With no model, opens a picker over the MLX models you have downloaded (in scripts it lists them and exits 1 instead). A request for a model you did not name gets a 404 naming the command to start it. It never downloads. An `mlx:` model must be downloaded first, and a directory works as is. Every request is logged as one line; `--verbose` (or `--log-prompts`) adds the whole request and reply bodies. Ctrl-C stops everything. |
 | `agency local remove <name> [-f]` | Remove the alias for a model and keep its files, printing where they are. With `-f`, delete the files too: the `.gguf` file, or the whole MLX model directory. Files outside the models directory are never deleted. |
 | `agency local resolve <value>` | Show the backend and what a name/alias maps to, without downloading. |
 | `agency local refresh [url]` | Fetch the remote model catalog and update the `source:"remote"` aliases in `agency.json`. Adds/updates models from the catalog, removes ones it dropped, and skips any name you've aliased yourself (printing what it would have set). |

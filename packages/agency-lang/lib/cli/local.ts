@@ -284,6 +284,18 @@ export function runRemove(name: string, opts: { force: boolean }): void {
     console.error("That model is not in the models directory; remove it yourself.");
     process.exit(1);
   }
+  if (files.layout === "hub") {
+    // A Hugging Face cache snapshot is all symlinks into a shared `blobs/`
+    // directory. Deleting the snapshot would leave the bytes behind, so this
+    // is the tool's job, not ours.
+    console.error(
+      `${files.path} is a Hugging Face cache, which Agency reads but does not manage. ` +
+        `Its files are symlinks into a shared blobs directory, so deleting it here would ` +
+        `leave the bytes behind. Remove it with the tool that downloaded it, ` +
+        `or delete ${path.dirname(path.dirname(files.path))} yourself.`,
+    );
+    process.exit(1);
+  }
   if (resolved.backend === "mlx") {
     const repo = isMlxUri(resolved.target)
       ? parseMlxUri(resolved.target).repo

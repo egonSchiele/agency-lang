@@ -96,3 +96,79 @@ export function backendOfTarget(target: string): Backend {
     `"${target}" is not a model: expected a .gguf file or a directory containing config.json.`,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Hugging Face cache directories
+// ---------------------------------------------------------------------------
+
+/** What the Hub calls a cached repo's folder: `models--<org>--<repo>`. */
+const HUB_DIR_PREFIX = "models--";
+
+/** The repo id a Hub cache folder name stands for, or null when the name is
+ *  not one. The Hub writes `org/repo` as `org--repo`, so the first `--` after
+ *  the prefix is the separator and any later one belongs to the repo name. */
+export function hubRepoOfDirName(name: string): string | null {
+  if (!name.startsWith(HUB_DIR_PREFIX)) {
+    return null;
+  }
+  const rest = name.slice(HUB_DIR_PREFIX.length);
+  const cut = rest.indexOf("--");
+  if (cut <= 0 || cut + 2 >= rest.length) {
+    return null;
+  }
+  return `${rest.slice(0, cut)}/${rest.slice(cut + 2)}`;
+}
+
+function readRef(dir: string): string | null {
+  try {
+    return fs.readFileSync(path.join(dir, "refs", "main"), "utf8").trim();
+  } catch {
+    // No refs/main: a cache written by something that does not keep refs, or
+    // a directory that is not a Hub cache at all. The snapshot scan decides.
+    return null;
+  }
+}
+
+function snapshotNames(dir: string): string[] {
+  try {
+    return fs
+      .readdirSync(path.join(dir, "snapshots"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+/** The model directory inside a Hugging Face cache folder
+ *  (`models--org--repo/snapshots/<sha>/`), or null when `p` is not one.
+ *  `refs/main` names the snapshot to use; without it, a lone snapshot is
+ *  taken. Several snapshots and no ref is ambiguous, and throws rather than
+ *  guessing which revision you meant. */
+export function hubSnapshotDir(p: string): string | null {
+  const names = snapshotNames(p);
+  if (names.length === 0) {
+    return null;
+  }
+  const snapshot = (name: string) => path.join(p, "snapshots", name);
+  const ref = readRef(p);
+  if (ref !== null && names.includes(ref) && isModelDir(snapshot(ref))) {
+    return snapshot(ref);
+  }
+  const models = names.filter((name) => isModelDir(snapshot(name)));
+  if (models.length === 1) {
+    return snapshot(models[0]);
+  }
+  if (models.length === 0) {
+    return null;
+  }
+  throw new Error(
+    `${p} holds ${models.length} snapshots and no refs/main saying which is current. ` +
+      `Name one of them instead:\n${models.map((m) => `  ${snapshot(m)}`).join("\n")}`,
+  );
+}
+
+/** The revision a Hub snapshot directory came from: the sha in its name. */
+export function hubSnapshotRevision(snapshotDir: string): string {
+  return path.basename(snapshotDir);
+}

@@ -15,8 +15,11 @@ import {
   formatElapsed,
   servingBanner,
   runServe,
+  serveChoices,
+  pickModelsToServe,
   type ServeDeps,
   type Child,
+  type PickDeps,
 } from "./localServe.js";
 
 describe("serveArgs", () => {
@@ -273,6 +276,7 @@ describe("runServe", () => {
       home: "/home/me",
       env: {},
       configuredPython: undefined,
+      useColor: false,
     };
   });
 
@@ -344,6 +348,35 @@ describe("runServe", () => {
     expect(handle.models).toEqual([model]);
     expect(log.some((l) => l.startsWith("Warning"))).toBe(false);
     await handle.close();
+  });
+
+  /** A Hugging Face cache under the models directory, as another tool wrote it. */
+  function hubModel(repo: string, sha: string): string {
+    const folder = path.join(cacheDir, `models--${repo.replace("/", "--")}`);
+    const snapshot = path.join(folder, "snapshots", sha);
+    fs.mkdirSync(snapshot, { recursive: true });
+    fs.writeFileSync(path.join(snapshot, "config.json"), "{}");
+    fs.writeFileSync(path.join(snapshot, "model.safetensors"), "xxxxxxxx");
+    fs.mkdirSync(path.join(folder, "refs"), { recursive: true });
+    fs.writeFileSync(path.join(folder, "refs", "main"), sha);
+    return snapshot;
+  }
+
+  it("serves a model in a Hugging Face cache under its repo id", async () => {
+    const snapshot = hubModel("org/hub", "abc123");
+    const handle = await runServe(["mlx:org/hub"], { port: 0 }, deps);
+    // The process starts on the snapshot, but the model is named by its repo
+    // id, which is what `run --local mlx:org/hub` sends.
+    expect(spawned[0]).toContain(snapshot);
+    expect(handle.models).toEqual(["org/hub"]);
+    await handle.close();
+  });
+
+  it("refuses a pinned revision the cache does not hold", async () => {
+    hubModel("org/hub", "abc123");
+    await expect(runServe(["mlx:org/hub@ffffff"], { port: 0 }, deps)).rejects.toThrow(
+      /holds org\/hub at abc123, and you asked for ffffff/,
+    );
   });
 
   it("refuses a GGUF model", async () => {
@@ -487,5 +520,105 @@ describe("runServe", () => {
     child!.exit(137);
     expect(await handle.failure).toBe("mlx_lm.server for org/a exited with 137.");
     await handle.close();
+  });
+});
+
+describe("serveChoices", () => {
+  const downloaded = [
+    {
+      name: "smollm2.gguf",
+      path: "/m/smollm2.gguf",
+      sizeBytes: 1e9,
+      backend: "llama-cpp" as const,
+      complete: true,
+    },
+    {
+      name: "org/b",
+      path: "/m/mlx/org--b",
+      sizeBytes: 4.2e9,
+      backend: "mlx" as const,
+      complete: true,
+    },
+    {
+      name: "org/a",
+      path: "/m/mlx/org--a",
+      sizeBytes: 12.4e9,
+      backend: "mlx" as const,
+      complete: true,
+    },
+    {
+      name: "org/half",
+      path: "/m/mlx/org--half",
+      sizeBytes: 1e9,
+      backend: "mlx" as const,
+      complete: false,
+    },
+  ];
+
+  it("offers the complete MLX models by repo id, whichever layout holds them", () => {
+    expect(serveChoices(downloaded)).toEqual([
+      { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
+      { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
+    ]);
+  });
+
+  it("leaves out GGUF models and half-downloaded ones", () => {
+    const titles = serveChoices(downloaded).map((c) => c.title);
+    expect(titles.some((t) => t.includes("smollm2"))).toBe(false);
+    expect(titles.some((t) => t.includes("half"))).toBe(false);
+  });
+});
+
+describe("pickModelsToServe", () => {
+  const mlx = (name: string, complete = true) => ({
+    name,
+    path: `/m/mlx/${name.replace("/", "--")}`,
+    sizeBytes: 1e9,
+    backend: "mlx" as const,
+    complete,
+    layout: "agency" as const,
+  });
+
+  function deps(over: Partial<PickDeps> = {}): PickDeps {
+    return {
+      downloaded: () => [mlx("org/a"), mlx("org/b")],
+      tty: true,
+      ask: async () => ["mlx:org/a"],
+      ...over,
+    };
+  }
+
+  it("returns what was picked", async () => {
+    expect(await pickModelsToServe(deps())).toEqual(["mlx:org/a"]);
+  });
+
+  it("passes the choices to the prompt", async () => {
+    let seen: { value: string }[] = [];
+    await pickModelsToServe(
+      deps({
+        ask: async (choices) => {
+          seen = choices;
+          return [];
+        },
+      }),
+    );
+    expect(seen.map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
+  });
+
+  it("returns nothing when the prompt is cancelled or nothing is ticked", async () => {
+    expect(await pickModelsToServe(deps({ ask: async () => null }))).toEqual([]);
+    expect(await pickModelsToServe(deps({ ask: async () => [] }))).toEqual([]);
+  });
+
+  it("says what to run when no MLX model is downloaded", async () => {
+    await expect(
+      pickModelsToServe(deps({ downloaded: () => [mlx("org/half", false)] })),
+    ).rejects.toThrow("No MLX models are downloaded");
+  });
+
+  it("off a terminal, names the models it could have served and fails", async () => {
+    await expect(pickModelsToServe(deps({ tty: false }))).rejects.toThrow(
+      /Pass a model: agency local serve <name>[\s\S]*mlx:org\/a/,
+    );
   });
 });

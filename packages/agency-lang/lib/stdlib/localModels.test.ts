@@ -13,6 +13,9 @@ import {
   _aliasModel,
   _unaliasModel,
   _listDownloadedModels,
+  _findDownloadedMlxModel,
+  hubSnapshotDir,
+  hubRepoOfDirName,
   _removeModel,
   _localModelsSupported,
   resolveAliasConfigPath,
@@ -995,6 +998,7 @@ describe("backend of a target", () => {
       path: snapshot,
       sizeBytes: 1002,
       insideCache: false,
+      layout: "hub",
     });
   });
 
@@ -1213,9 +1217,11 @@ describe("_listDownloadedModels with mlx directories", () => {
         backend: "mlx",
         complete: true,
         revision: "abc",
+        layout: "agency",
       },
     ]);
-    expect(listed[0].sizeBytes).toBeGreaterThan(10);
+    // A complete model is the size its record declares.
+    expect(listed[0].sizeBytes).toBe(10);
   });
 });
 
@@ -1274,5 +1280,104 @@ describe("_downloadModel for mlx", () => {
     fs.writeFileSync(path.join(model, "config.json"), "{}");
     fs.writeFileSync(path.join(model, "model.safetensors"), "");
     await expect(_downloadModel(model, dir)).resolves.toBe(model);
+  });
+});
+
+describe("Hugging Face caches", () => {
+  /** A cache folder in the Hub's own layout: files under snapshots/<sha>. */
+  function hubModel(
+    hubDir: string,
+    repo: string,
+    sha: string,
+    opts: { ref?: string } = {},
+  ): string {
+    const folder = path.join(hubDir, `models--${repo.replace("/", "--")}`);
+    const snapshot = path.join(folder, "snapshots", sha);
+    fs.mkdirSync(snapshot, { recursive: true });
+    fs.writeFileSync(path.join(snapshot, "config.json"), "{}");
+    fs.writeFileSync(path.join(snapshot, "model.safetensors"), "xxxxxxxxxx");
+    const ref = opts.ref ?? sha;
+    if (ref !== "") {
+      fs.mkdirSync(path.join(folder, "refs"), { recursive: true });
+      fs.writeFileSync(path.join(folder, "refs", "main"), ref);
+    }
+    return snapshot;
+  }
+
+  it("hubSnapshotDir follows refs/main", () => {
+    const hub = path.join(dir, "hub1");
+    const snapshot = hubModel(hub, "org/repo", "abc123");
+    hubModel(hub, "org/repo", "old999", { ref: "" });
+    const folder = path.join(hub, "models--org--repo");
+    fs.writeFileSync(path.join(folder, "refs", "main"), "abc123");
+    expect(hubSnapshotDir(folder)).toBe(snapshot);
+  });
+
+  it("hubSnapshotDir takes a lone snapshot when there is no ref", () => {
+    const hub = path.join(dir, "hub2");
+    const snapshot = hubModel(hub, "org/repo", "abc123", { ref: "" });
+    expect(hubSnapshotDir(path.join(hub, "models--org--repo"))).toBe(snapshot);
+  });
+
+  it("hubSnapshotDir refuses to guess between two snapshots", () => {
+    const hub = path.join(dir, "hub3");
+    hubModel(hub, "org/repo", "aaa", { ref: "" });
+    hubModel(hub, "org/repo", "bbb", { ref: "" });
+    expect(() => hubSnapshotDir(path.join(hub, "models--org--repo"))).toThrow(
+      /holds 2 snapshots and no refs\/main/,
+    );
+  });
+
+  it("hubSnapshotDir is null for a directory that is not a cache", () => {
+    expect(hubSnapshotDir(dir)).toBe(null);
+  });
+
+  it("hubRepoOfDirName reads the repo id, keeping a -- inside the repo name", () => {
+    expect(hubRepoOfDirName("models--mlx-community--Qwen3.8-27B-4bit")).toBe(
+      "mlx-community/Qwen3.8-27B-4bit",
+    );
+    expect(hubRepoOfDirName("models--org--we--ird")).toBe("org/we--ird");
+    expect(hubRepoOfDirName("mlx")).toBe(null);
+    expect(hubRepoOfDirName("models--org")).toBe(null);
+  });
+
+  it("_listDownloadedModels reads a cache in the models directory, and under hub/", () => {
+    const cache = path.join(dir, "models-hub");
+    const one = hubModel(cache, "org/one", "abc123");
+    const two = hubModel(path.join(cache, "hub"), "org/two", "def456");
+    const listed = _listDownloadedModels(cache).filter((m) => m.layout === "hub");
+    expect(listed.map((m) => [m.name, m.path, m.revision, m.complete])).toEqual([
+      ["org/one", one, "abc123", true],
+      ["org/two", two, "def456", true],
+    ]);
+    expect(listed[0].sizeBytes).toBeGreaterThan(10);
+  });
+
+  it("_findDownloadedMlxModel finds a repo id in a Hugging Face cache", () => {
+    const cache = path.join(dir, "models-find");
+    const snapshot = hubModel(cache, "org/repo", "abc123");
+    expect(_findDownloadedMlxModel("org/repo", cache)?.path).toBe(snapshot);
+    expect(_findDownloadedMlxModel("org/missing", cache)).toBe(null);
+  });
+
+  it("_resolveModel takes a cache folder and resolves it to its snapshot", () => {
+    const hub = path.join(dir, "hub-resolve");
+    const snapshot = hubModel(hub, "org/repo", "abc123");
+    const folder = path.join(hub, "models--org--repo");
+    expect(_resolveModel(folder)).toEqual({ backend: "mlx", target: snapshot });
+    // The snapshot path itself still works.
+    expect(_resolveModel(snapshot)).toEqual({ backend: "mlx", target: snapshot });
+  });
+
+  it("_resolveModel takes a bare repo id when that model is on disk", () => {
+    const cache = path.join(dir, "models-bare");
+    hubModel(cache, "org/repo", "abc123");
+    process.env.AGENCY_MODELS_DIR = cache;
+    try {
+      expect(_resolveModel("org/repo")).toEqual({ backend: "mlx", target: "mlx:org/repo" });
+      expect(() => _resolveModel("org/absent")).toThrow(/Unknown local model/);
+    } finally {
+      delete process.env.AGENCY_MODELS_DIR;
+    }
   });
 });

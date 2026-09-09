@@ -2,21 +2,30 @@ import * as path from "node:path";
 import * as net from "node:net";
 import * as os from "node:os";
 import { spawn, spawnSync } from "node:child_process";
+import prompts from "prompts";
 import { isMlxUri, parseMlxUri, modelDirEntries } from "../stdlib/modelBackend.js";
 import {
   _resolveModel,
   _mlxServedName,
+  _listDownloadedModels,
+  _findDownloadedMlxModel,
   defaultCacheDir,
   readClientConfig,
   formatGB,
+  type DownloadedModel,
 } from "../stdlib/localModels.js";
-import { mlxModelDir, readMlxModelRecord, isMlxModelComplete } from "../stdlib/mlxModelRecord.js";
 import { startFrontDoor, type FrontDoor, type Route } from "./mlxServer.js";
 import { formatElapsed } from "../eval/run/statusBoard.js";
+import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
 export { formatElapsed };
 
-export type ServeOptions = { port: number; maxTokens: number; python?: string };
+export type ServeOptions = {
+  port: number;
+  maxTokens: number;
+  python?: string;
+  logPrompts?: boolean;
+};
 
 /** The argv for one `mlx_lm.server` process, after the Python path. */
 export function serveArgs(modelDir: string, internalPort: number, maxTokens: number): string[] {
@@ -197,6 +206,68 @@ export function freePort(): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// The picker: what `agency local serve` offers when it is given no model.
+// ---------------------------------------------------------------------------
+
+export type ServeChoice = { title: string; value: string };
+
+/** The models `serve` can start without downloading anything: the MLX ones
+ *  under the models directory whose record says every file is there. A GGUF
+ *  model runs in the Agency process instead, so it is never a choice here. */
+export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
+  return downloaded
+    .filter((m) => m.backend === "mlx" && m.complete)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((m) => ({ title: `${m.name}  (${formatGB(m.sizeBytes)})`, value: `mlx:${m.name}` }));
+}
+
+export type PickDeps = {
+  downloaded: () => DownloadedModel[];
+  /** Both ends of the terminal are a TTY, so a prompt can be drawn and read. */
+  tty: boolean;
+  /** Asks which models to serve. Null when the prompt was cancelled. */
+  ask: (choices: ServeChoice[]) => Promise<string[] | null>;
+};
+
+/** The models to serve when the command line named none. An empty array
+ *  means the user cancelled or ticked nothing, and the caller should exit
+ *  without serving. Throws when there is nothing to offer, or when there is
+ *  no terminal to ask on. */
+export async function pickModelsToServe(deps: PickDeps): Promise<string[]> {
+  const choices = serveChoices(deps.downloaded());
+  if (choices.length === 0) {
+    throw new Error("No MLX models are downloaded. Run:\n  agency local download mlx:<org>/<repo>");
+  }
+  if (!deps.tty) {
+    // A script asked for a server and named no model. Say what it could
+    // have named rather than waiting on a prompt nobody can answer.
+    const names = choices.map((c) => `  ${c.value}`).join("\n");
+    throw new Error(`Pass a model: agency local serve <name>\nDownloaded MLX models:\n${names}`);
+  }
+  const picked = await deps.ask(choices);
+  return picked ?? [];
+}
+
+function realPickDeps(cacheDir: string): PickDeps {
+  return {
+    downloaded: () => _listDownloadedModels(cacheDir),
+    tty: process.stdin.isTTY === true && process.stdout.isTTY === true,
+    ask: async (choices) => {
+      const answer = await prompts({
+        type: "multiselect",
+        name: "models",
+        message: "Which models do you want to serve?",
+        hint: "space to select, enter to confirm",
+        instructions: false,
+        choices,
+      });
+      // Cancellation can surface as a missing key or as null.
+      return (answer.models as string[] | undefined) ?? null;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // runServe: resolve, check, start one process per model, open the door.
 // ---------------------------------------------------------------------------
 
@@ -216,6 +287,8 @@ export type ServeDeps = {
   home: string;
   env: Record<string, string | undefined>;
   configuredPython: string | undefined;
+  /** Whether the request log is colored. Off when stdout is not a terminal. */
+  useColor: boolean;
 };
 
 export type ServeHandle = {
@@ -226,7 +299,15 @@ export type ServeHandle = {
   close: () => Promise<void>;
 };
 
-export type ServeFlags = { port?: number; maxTokens?: number; python?: string };
+export type ServeFlags = {
+  port?: number;
+  maxTokens?: number;
+  python?: string;
+  /** Print each request's prompt and reply under its summary line. The CLI
+   *  spells this `--log-prompts`, since `--verbose` is already the whole
+   *  CLI's own flag. */
+  logPrompts?: boolean;
+};
 
 function realSpawn(python: string, args: string[]): Child {
   return spawn(python, args, {
@@ -247,6 +328,7 @@ function realDeps(): ServeDeps {
     home: os.homedir(),
     env: process.env,
     configuredPython: readClientConfig().mlx?.python,
+    useColor: autoUseColor(),
   };
 }
 
@@ -265,21 +347,22 @@ function planModel(value: string, cacheDir: string): Planned {
   const name = _mlxServedName(resolved);
   if (isMlxUri(resolved.target)) {
     const { repo, revision } = parseMlxUri(resolved.target);
-    const dir = mlxModelDir(cacheDir, repo);
-    const record = readMlxModelRecord(dir);
-    if (record === null || !isMlxModelComplete(record)) {
+    // Whichever layout holds it: our own directory with a record, or a
+    // Hugging Face cache someone else downloaded into.
+    const found = _findDownloadedMlxModel(repo, cacheDir);
+    if (found === null) {
       throw new Error(
         `${repo} is not downloaded. Run:\n  agency local download ${resolved.target}`,
       );
     }
-    if (revision !== undefined && !record.revision.startsWith(revision)) {
+    const at = found.revision ?? "";
+    if (revision !== undefined && !at.startsWith(revision)) {
       throw new Error(
-        `${dir} holds ${repo} at ${record.revision.slice(0, 7)}, and you asked for ${revision}. Run:\n` +
+        `${found.path} holds ${repo} at ${at.slice(0, 7)}, and you asked for ${revision}. Run:\n` +
           `  agency local download ${resolved.target}`,
       );
     }
-    const sizeBytes = Object.values(record.files).reduce((sum, f) => sum + f.size, 0);
-    return { name, dir, sizeBytes };
+    return { name, dir: found.path, sizeBytes: found.sizeBytes };
   }
   const dir = path.resolve(resolved.target);
   const sizeBytes = modelDirEntries(dir).reduce((sum, f) => sum + f.size, 0);
@@ -377,7 +460,11 @@ export async function runServe(
 
   let door: FrontDoor;
   try {
-    door = await startFrontDoor(port, routes);
+    door = await startFrontDoor(port, routes, {
+      log: deps.log,
+      verbose: flags.logPrompts === true,
+      color: deps.useColor ? color : plainColor,
+    });
   } catch (err) {
     killAll();
     throw err;
@@ -403,11 +490,18 @@ export async function runServe(
   };
 }
 
-/** The CLI entry: serve until Ctrl-C, or until a process dies. */
+/** The CLI entry: serve until Ctrl-C, or until a process dies. With no
+ *  model named, ask which of the downloaded ones to serve. */
 export async function localServe(values: string[], flags: ServeFlags): Promise<void> {
   let handle: ServeHandle;
   try {
-    handle = await runServe(values, flags);
+    const models =
+      values.length > 0 ? values : await pickModelsToServe(realPickDeps(defaultCacheDir()));
+    if (models.length === 0) {
+      // Cancelled, or nothing ticked: nothing to serve, and nothing wrong.
+      return;
+    }
+    handle = await runServe(models, flags);
   } catch (err) {
     console.error((err as Error).message);
     process.exit(1);

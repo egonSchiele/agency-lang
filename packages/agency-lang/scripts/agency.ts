@@ -1777,7 +1777,21 @@ export function createProgram(deps: CliDependencies = {}): Command {
       },
     );
 
-  const localCmd = program.command("local").description("Manage and run local models");
+  const localCmd = program
+    .command("local")
+    .description("Manage and run local models")
+    .option(
+      "--model-dir <path>",
+      "Use this directory as the models directory for this command (also reads a Hugging Face cache)",
+    )
+    // Every local subcommand reads the models directory through
+    // AGENCY_MODELS_DIR first, so setting it here reaches all of them.
+    .hook("preSubcommand", (cmd) => {
+      const dir = cmd.opts().modelDir;
+      if (typeof dir === "string" && dir !== "") {
+        process.env.AGENCY_MODELS_DIR = dir;
+      }
+    });
   localCmd
     .command("list")
     .description("List local models: the full catalog, with downloaded models marked")
@@ -1791,12 +1805,22 @@ export function createProgram(deps: CliDependencies = {}): Command {
   localCmd
     .command("serve")
     .description("Serve MLX models in this terminal: one mlx_lm.server per model, behind one port")
-    .argument("<models...>", "mlx: URIs, aliases, or model directories")
+    .argument("[models...]", "mlx: URIs, aliases, or model directories; none opens a picker")
     .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
     .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
     .option("--python <path>", "Python with mlx-lm installed")
-    .action((models: string[], opts: { port: number; maxTokens: number; python?: string }) =>
-      localServe(models, opts),
+    .option("--log-prompts", "Log each request's full body and reply, not just a summary line")
+    .action(
+      (
+        models: string[],
+        opts: { port: number; maxTokens: number; python?: string; logPrompts?: boolean },
+      ) =>
+        // `--verbose` is the whole CLI's own flag, so serve cannot declare it
+        // again; it means the same thing here, so honor it either way.
+        localServe(models, {
+          ...opts,
+          logPrompts: opts.logPrompts === true || program.opts().verbose === true,
+        }),
     );
   localCmd
     .command("remove")

@@ -36,6 +36,9 @@ import {
   isModelDir,
   modelDirEntries,
   backendOfTarget,
+  hubRepoOfDirName,
+  hubSnapshotDir,
+  hubSnapshotRevision,
 } from "./modelBackend.js";
 export {
   type Backend,
@@ -44,6 +47,8 @@ export {
   isModelDir,
   modelDirEntries,
   backendOfTarget,
+  hubRepoOfDirName,
+  hubSnapshotDir,
 } from "./modelBackend.js";
 import {
   MLX_SUBDIR,
@@ -231,19 +236,42 @@ export type ModelNameEntry = {
  *  or a model directory for mlx. */
 export type ResolvedModel = { backend: Backend; target: string };
 
-export function _resolveModel(value: string, file: string = ""): ResolvedModel {
+/** A Hugging Face cache folder stands for the snapshot it points at, so
+ *  `…/models--org--repo` and `…/models--org--repo/snapshots/<sha>` name the
+ *  same model. Anything else is returned unchanged. */
+function asModelDir(value: string): string {
   if (isGgufPath(value) || isModelUri(value) || isModelDir(value)) {
-    return { backend: backendOfTarget(value), target: value };
+    return value;
+  }
+  return hubSnapshotDir(value) ?? value;
+}
+
+/** A bare Hugging Face repo id, `org/repo`. Accepted only when a model with
+ *  that id is on disk, so it can never be confused with a relative path. */
+function isRepoId(value: string): boolean {
+  return /^[\w.-]+\/[\w.-]+$/.test(value);
+}
+
+export function _resolveModel(value: string, file: string = ""): ResolvedModel {
+  const target = asModelDir(value);
+  if (isGgufPath(target) || isModelUri(target) || isModelDir(target)) {
+    return { backend: backendOfTarget(target), target };
   }
   const aliases = readModelAliases(file);
   const aliasVal = aliases[value];
   if (aliasVal !== undefined) {
-    const target = aliasUri(aliasVal);
-    return { backend: backendOfTarget(target), target };
+    const aliasTarget = asModelDir(aliasUri(aliasVal));
+    return { backend: backendOfTarget(aliasTarget), target: aliasTarget };
   }
   const curated = CURATED_LOCAL_MODELS[value];
   if (curated !== undefined) {
     return { backend: curated.backend, target: curated.uri };
+  }
+  // A repo id you already have needs no `mlx:` prefix. The prefix stays the
+  // spelling that always works, including for a model you have not
+  // downloaded, which is why messages print it.
+  if (isRepoId(value) && _findDownloadedMlxModel(value) !== null) {
+    return { backend: "mlx", target: `mlx:${value}` };
   }
   const names = [...Object.keys(CURATED_LOCAL_MODELS), ...Object.keys(aliases)].join(", ");
   throw new Error(
@@ -355,6 +383,10 @@ export type DownloadedModel = {
   complete: boolean;
   /** The commit an MLX model was downloaded from. Absent for GGUF. */
   revision?: string;
+  /** Which directory shape holds the files. `agency` is our own
+   *  `<modelsDir>/mlx/<org>--<repo>` with a record; `hub` is a Hugging Face
+   *  cache written by another tool, which we read but never write. */
+  layout: "gguf" | "agency" | "hub";
 };
 
 export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
@@ -365,8 +397,68 @@ export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] 
     sizeBytes: entry.size,
     backend: "llama-cpp",
     complete: true,
+    layout: "gguf",
   }));
-  return [...gguf, ...mlxEntries(dir)];
+  return [...gguf, ...mlxEntries(dir), ...hubEntries(dir)];
+}
+
+/** The Hugging Face cache directories under `dir`, and under `dir/hub` —
+ *  the shape `HF_HOME` has. These are models another tool downloaded; we
+ *  read them where they lie and never write to them. */
+function hubEntries(dir: string): DownloadedModel[] {
+  return [...hubEntriesIn(dir), ...hubEntriesIn(path.join(dir, "hub"))];
+}
+
+function hubEntriesIn(dir: string): DownloadedModel[] {
+  const parent = root(dir);
+  if (stat(parent, ".") === null) {
+    return [];
+  }
+  const out: DownloadedModel[] = [];
+  for (const entry of list(parent, ".")) {
+    const repo = entry.type === "dir" ? hubRepoOfDirName(entry.name) : null;
+    if (repo === null) {
+      continue;
+    }
+    const modelDir = hubSnapshot(path.join(dir, entry.name));
+    if (modelDir === null) {
+      continue;
+    }
+    out.push({
+      name: repo,
+      path: modelDir,
+      sizeBytes: modelDirEntries(modelDir).reduce((sum, f) => sum + f.size, 0),
+      backend: "mlx",
+      complete: true,
+      revision: hubSnapshotRevision(modelDir),
+      layout: "hub",
+    });
+  }
+  return out;
+}
+
+/** `hubSnapshotDir`, with the ambiguous-snapshots error turned into "not a
+ *  model here". A scan over a whole cache must not fail because one repo in
+ *  it has two revisions; naming that repo directly still reports it. */
+function hubSnapshot(dir: string): string | null {
+  try {
+    return hubSnapshotDir(dir);
+  } catch {
+    return null;
+  }
+}
+
+/** The downloaded MLX model with this repo id, in whichever layout holds it.
+ *  This is what makes `mlx:org/repo` mean the model rather than one place it
+ *  might live. */
+export function _findDownloadedMlxModel(
+  repo: string,
+  cacheDir: string = "",
+): DownloadedModel | null {
+  const found = _listDownloadedModels(resolveCacheDir(cacheDir)).find(
+    (m) => m.backend === "mlx" && m.name === repo && m.complete,
+  );
+  return found ?? null;
 }
 
 /** The MLX model directories under `<dir>/mlx` that carry a record. */
@@ -386,14 +478,21 @@ function mlxEntries(dir: string): DownloadedModel[] {
     if (record === null) {
       continue;
     }
-    const sizeBytes = treeSizeBytes(root(modelDir), ".");
+    // A finished model is the size its record says, which is the size the
+    // repo has; a half-downloaded one is what is on disk so far, so `list`
+    // can show how far it got.
+    const complete = isMlxModelComplete(record);
+    const sizeBytes = complete
+      ? Object.values(record.files).reduce((sum, f) => sum + f.size, 0)
+      : treeSizeBytes(root(modelDir), ".");
     out.push({
       name: record.repo,
       path: modelDir,
       sizeBytes,
       backend: "mlx",
-      complete: isMlxModelComplete(record),
+      complete,
       revision: record.revision,
+      layout: "agency",
     });
   }
   return out;
@@ -456,12 +555,19 @@ export function _removeMlxModel(repo: string, cacheDir: string = ""): boolean {
 export function _modelFilesOnDisk(
   resolved: ResolvedModel,
   cacheDir: string = "",
-): { path: string; sizeBytes: number; insideCache: boolean } | null {
+): {
+  path: string;
+  sizeBytes: number;
+  insideCache: boolean;
+  layout: DownloadedModel["layout"];
+} | null {
   const dir = resolveCacheDir(cacheDir);
   const onDisk = _listDownloadedModels(dir);
   const found = (match: (f: DownloadedModel) => boolean) => {
     const f = onDisk.find(match);
-    return f === undefined ? null : { path: f.path, sizeBytes: f.sizeBytes, insideCache: true };
+    return f === undefined
+      ? null
+      : { path: f.path, sizeBytes: f.sizeBytes, insideCache: true, layout: f.layout };
   };
   if (resolved.backend === "llama-cpp") {
     if (isGgufPath(resolved.target)) {
@@ -471,12 +577,18 @@ export function _modelFilesOnDisk(
     return fileName === undefined ? null : found((f) => f.name === fileName);
   }
   if (isMlxUri(resolved.target)) {
-    const modelDir = mlxModelDir(dir, parseMlxUri(resolved.target).repo);
-    return found((f) => f.path === modelDir);
+    const { repo } = parseMlxUri(resolved.target);
+    return found((f) => f.backend === "mlx" && f.name === repo);
   }
   const target = path.resolve(resolved.target);
   const sizeBytes = modelDirEntries(target).reduce((sum, f) => sum + f.size, 0);
-  return { path: target, sizeBytes, insideCache: onDisk.some((f) => f.path === target) };
+  const known = onDisk.find((f) => f.path === target);
+  return {
+    path: target,
+    sizeBytes,
+    insideCache: known !== undefined,
+    layout: known?.layout ?? "hub",
+  };
 }
 
 // =============================================================================

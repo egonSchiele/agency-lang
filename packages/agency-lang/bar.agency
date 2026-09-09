@@ -6,19 +6,13 @@ node main() {
   )
   const response = llm(
     "What's your name?",
-    model: "gpt-5.6-luna",
-    provider: "openai-responses",
     messages: [{
       role: "user",
       content: "You are a helpful assistant."
     }],
   )
   subthread {
-    llm(
-      "What's your favorite color?",
-      model: "gpt-5.6-luna",
-      provider: "openai-responses",
-    )
+    llm("What's your favorite color?")
   }
   print(response)
 }

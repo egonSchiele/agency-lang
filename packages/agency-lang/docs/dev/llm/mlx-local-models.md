@@ -80,6 +80,50 @@ come from a user's file or a remote catalog.
 A string-form alias, `"my7b": "hf:…"`, has nowhere to put the field. Its
 prefix is its backend.
 
+## Hugging Face caches, and what `mlx:` names
+
+Agency reads three shapes of downloaded model, all through
+`_listDownloadedModels`, and each entry says which by its `layout`:
+
+| layout | where | written by |
+|---|---|---|
+| `gguf` | `<modelsDir>/*.gguf` | `agency local download` |
+| `agency` | `<modelsDir>/mlx/<org>--<repo>/` with `.agency-model.json` | `agency local download` |
+| `hub` | `<modelsDir>/models--<org>--<repo>/snapshots/<sha>/`, and the same under `<modelsDir>/hub/` | anything that uses the Hub cache |
+
+`hubSnapshotDir` in `lib/stdlib/modelBackend.ts` turns a cache folder into the
+snapshot to load: `refs/main` if it names one, else a lone snapshot, else an
+error listing them, because guessing a revision is worse than asking. A
+`refs/main` that names a snapshot which is missing or incomplete is an error
+too, for the same reason. The ref is read through `contained.ts`, not the raw
+`fs` this file is allowed to use for names and sizes, so a ref that is a
+symlink is refused instead of pointing Agency at a file outside the cache.
+`_resolveModel` runs every value and every alias target through it, so a repo
+folder and the snapshot inside it are the same model to every caller.
+
+`mlx:<org>/<repo>` names a model by its repo id, not by a place. Callers that
+need its files ask `_findDownloadedMlxModel`, which searches every layout, so
+the same URI serves a model we downloaded and one already in a Hub cache. Pass
+it the revision from an `mlx:` pin and only a copy at that commit counts. A
+cache keeps every revision it has fetched and lists only the one `refs/main`
+names, so the pinned lookup checks the other snapshots in the folder as well.
+`serve` starts the process on whichever directory holds it but keeps naming it
+by the repo id, which is also what `run --local mlx:<repo>` sends — the front
+door's `Route` has held those two strings apart since it was written.
+
+Because the lookup is by repo id, a bare `org/repo` resolves too, whenever a
+model with that id is on disk. `_resolveModel` tries it last, after aliases and
+the catalog, and only for a value shaped like a repo id, so it can never
+shadow a name or swallow a mistyped path. Messages still print the `mlx:`
+form, since that is the spelling that also works for a model you have not
+downloaded.
+
+`agency local --model-dir <path>` sets `AGENCY_MODELS_DIR` for the process from
+a `preSubcommand` hook, which is precedence #1 in `defaultCacheDir()`, so every
+subcommand and the pickers follow it without threading a parameter through.
+`remove -f` refuses a `hub` model: its files are symlinks into a shared
+`blobs/`, so deleting the snapshot would leave the bytes behind.
+
 ## Running against the server
 
 `agency run --local <name>` and `agency agent --local <name>` branch on the
@@ -124,8 +168,22 @@ directories together, each tagged with its backend.
 ## The serve command
 
 ```
-agency local serve <model>... [--port 8080] [--max-tokens 16384] [--python <path>]
+agency local serve [model]... [--port 8080] [--max-tokens 16384] [--python <path>] [--log-prompts]
 ```
+
+**With no model named**, `localServe` asks. `serveChoices` in
+`lib/cli/localServe.ts` keeps the `mlx` entries of `_listDownloadedModels`
+that are complete, and offers them as `mlx:<repo>` in a multiselect, the way
+`agency local download` offers the catalog. What "complete" means depends on
+the layout: an `agency` model has a record saying every file arrived, while a
+`hub` model is complete because the snapshot it points at is a model
+directory. The same repo can sit in both layouts, so the choices are keyed by
+repo id and only the first is offered; two rows with the same value would let
+you pick one model twice, which `runServe` refuses. A GGUF model is never a choice, since it runs in the Agency process
+instead. Cancelling, or ticking nothing, exits 0 without serving. Off a
+terminal — either end not a TTY — it lists the same models and exits 1, so a
+script gets an answer rather than a prompt nobody can see. Only models under the models directory are offered. An alias pointing
+somewhere else still has to be named.
 
 `runServe` in `lib/cli/localServe.ts` does, in order: resolve each name
 (a GGUF model is an error), find the directory (an `mlx:` model needs a
@@ -155,6 +213,33 @@ This server is serving X and Y. It is not serving Z. Start it with: agency local
 `mlxServerRunning` in `std::agency/local` read it. Replies are piped
 through, so streaming works. A client that disconnects mid-reply destroys
 the upstream request, so the server stops generating.
+
+**The request log.** The door takes a `DoorLogging` — where to print, whether
+to include prompts, and a color function — and writes one entry per request as
+it ends:
+
+```
+POST /v1/chat/completions  mlx-community/Qwen3.5-4B-MLX-4bit  200  2.6s  16→129 tok
+```
+
+`lib/cli/serveLog.ts` holds the formatting, so it is all pure functions over a
+`LogEntry`. Verbose adds the whole request body (`→`) and the whole reply
+(`←`) under that line — indented JSON, or a stream left frame for frame,
+since the framing is often what you are debugging. The vendored commander
+refuses a subcommand option that shadows the CLI's own `--verbose`, so serve
+declares `--log-prompts` and the action reads the global flag as well; both
+spellings mean the same thing, and `--verbose` is the one to reach for. Color
+comes from `lib/utils/termcolors.ts` and is chosen once by `autoUseColor()`,
+which honors `NO_COLOR` and `FORCE_COLOR`.
+
+Reading the reply means the door can no longer only `pipe` it. `createCapture`
+keeps a copy of up to 1 MiB as the bytes go past; the client's stream is
+untouched, and a longer reply is logged with `… (truncated)`. `describeReply`
+then keeps that body whole and reads the token counts out of it: from `usage`
+in a JSON reply, or from whichever frame of a stream carries `usage`, which is
+the last one. An entry is written once,
+whether the reply ended, the client went away, or the door itself answered 400,
+404 or 502.
 
 **Readiness.** The server prints nothing when a model has loaded. After
 each start, `waitUntilLoaded` posts a one-token completion to the internal

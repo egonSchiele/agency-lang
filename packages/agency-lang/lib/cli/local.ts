@@ -235,6 +235,18 @@ function formatDuration(seconds: number): string {
 /** Without `-f`: drop the alias, keep the files, and say where they are.
  *  With `-f`: delete the files too. Models are large, so deleting is the
  *  step that needs the flag. */
+/** Why `remove` will not delete a model in a Hugging Face cache. Its files are
+ *  symlinks into a shared `blobs/` directory, so deleting the snapshot would
+ *  leave the bytes behind. */
+export function hubRemoveMessage(snapshot: string): string {
+  const folder = path.dirname(path.dirname(snapshot));
+  return (
+    `${snapshot} is in a Hugging Face cache, which Agency reads but does not manage. ` +
+    `Its files are symlinks into a shared blobs directory, so deleting it here would leave ` +
+    `the bytes behind. Remove it with the tool that downloaded it, or delete ${folder} yourself.`
+  );
+}
+
 export function runRemove(name: string, opts: { force: boolean }): void {
   const aliases = readModelAliases();
   const isAlias = Object.hasOwn(aliases, name);
@@ -262,7 +274,16 @@ export function runRemove(name: string, opts: { force: boolean }): void {
     console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
   }
 
+  const inHubCache = files !== null && files.layout === "hub";
+
   if (!opts.force) {
+    // Nothing is deleted on this path, so removing the alias succeeded. Say
+    // where the files are, and why "run again with -f" is not the advice.
+    if (inHubCache) {
+      console.log(`The model files are still at ${where}.`);
+      console.log(hubRemoveMessage(files.path));
+      return;
+    }
     if (files !== null && !files.insideCache) {
       console.log(
         `The model files are still at ${where}. They are outside the models directory, so delete them yourself if you want them gone.`,
@@ -279,6 +300,10 @@ export function runRemove(name: string, opts: { force: boolean }): void {
   if (files === null || resolved === null) {
     console.log(`Not found: ${name}`);
     return;
+  }
+  if (inHubCache) {
+    console.error(hubRemoveMessage(files.path));
+    process.exit(1);
   }
   if (!files.insideCache) {
     console.error("That model is not in the models directory; remove it yourself.");

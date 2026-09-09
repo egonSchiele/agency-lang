@@ -297,6 +297,35 @@ describe("runRemove", () => {
     expect(output.some((l) => l.includes("-f"))).toBe(false);
   });
 
+  it("never deletes a model in a Hugging Face cache", () => {
+    const folder = path.join(models, "models--org--repo");
+    const snapshot = path.join(folder, "snapshots", "abc");
+    fs.mkdirSync(snapshot, { recursive: true });
+    fs.writeFileSync(path.join(snapshot, "config.json"), "{}");
+    fs.writeFileSync(path.join(snapshot, "model.safetensors"), "xx");
+    fs.mkdirSync(path.join(folder, "refs"), { recursive: true });
+    fs.writeFileSync(path.join(folder, "refs", "main"), "abc");
+
+    // Without -f nothing was going to be deleted, so this is not a failure.
+    // It says where the files are and why -f will not help.
+    runRemove("mlx:org/repo", { force: false });
+    expect(output.join("\n")).toContain("is in a Hugging Face cache");
+    expect(output.join("\n")).not.toContain("Run again with -f");
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit called");
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(() => runRemove("mlx:org/repo", { force: true })).toThrow("exit called");
+      expect(err.mock.calls[0][0]).toContain("is in a Hugging Face cache");
+      expect(fs.existsSync(snapshot)).toBe(true);
+    } finally {
+      exitSpy.mockRestore();
+      err.mockRestore();
+    }
+  });
+
   it("refuses to delete a model directory outside the cache", () => {
     const outside = path.join(dir, "elsewhere");
     fs.mkdirSync(outside);

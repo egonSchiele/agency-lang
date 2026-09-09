@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { wholePath, stat } from "./contained.js";
+import { wholePath, stat, root, readText } from "./contained.js";
 
 /** Which engine runs a model. GGUF files run in-process through llama.cpp.
  *  MLX models run in mlx_lm.server, which the user starts. */
@@ -95,4 +95,119 @@ export function backendOfTarget(target: string): Backend {
   throw new Error(
     `"${target}" is not a model: expected a .gguf file or a directory containing config.json.`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Hugging Face cache directories
+// ---------------------------------------------------------------------------
+
+/** What the Hub calls a cached repo's folder: `models--<org>--<repo>`. */
+const HUB_DIR_PREFIX = "models--";
+
+/** The repo id a Hub cache folder name stands for, or null when the name is
+ *  not one. The Hub writes `org/repo` as `org--repo`, so the first `--` after
+ *  the prefix is the separator and any later one belongs to the repo name. */
+export function hubRepoOfDirName(name: string): string | null {
+  if (!name.startsWith(HUB_DIR_PREFIX)) {
+    return null;
+  }
+  const rest = name.slice(HUB_DIR_PREFIX.length);
+  const cut = rest.indexOf("--");
+  if (cut <= 0 || cut + 2 >= rest.length) {
+    return null;
+  }
+  return `${rest.slice(0, cut)}/${rest.slice(cut + 2)}`;
+}
+
+/** The longest a revision can be. A sha is 40 characters; anything longer in
+ *  `refs/main` is not one, and only this much of it reaches an error message. */
+const REF_MAX = 64;
+
+/** The revision `refs/main` names, or null when the cache keeps no ref.
+ *  Read through `contained.ts`, which opens without following a final link,
+ *  so a ref that is a symlink cannot make Agency read a file elsewhere. */
+function readRef(dir: string): string | null {
+  try {
+    return readText(root(dir), path.join("refs", "main")).trim().slice(0, REF_MAX);
+  } catch (err) {
+    const message = (err as Error).message;
+    if (/ENOENT|no such file|not a directory/i.test(message)) {
+      // No refs/main: a cache written by something that does not keep refs,
+      // or a directory that is not a Hub cache at all. The snapshot scan
+      // decides which.
+      return null;
+    }
+    throw new Error(`${path.join(dir, "refs", "main")} is not a file Agency will read: ${message}`);
+  }
+}
+
+function snapshotNames(dir: string): string[] {
+  try {
+    return fs
+      .readdirSync(path.join(dir, "snapshots"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+/** The model directory inside a Hugging Face cache folder
+ *  (`models--org--repo/snapshots/<sha>/`), or null when `p` is not one.
+ *  `refs/main` names the snapshot to use; without it, a lone snapshot is
+ *  taken. Several snapshots and no ref is ambiguous, and throws rather than
+ *  guessing which revision you meant. */
+export function hubSnapshotDir(p: string): string | null {
+  const names = snapshotNames(p);
+  if (names.length === 0) {
+    return null;
+  }
+  const snapshot = (name: string) => path.join(p, "snapshots", name);
+  const models = names.filter((name) => isModelDir(snapshot(name)));
+  const ref = readRef(p);
+  if (ref !== null) {
+    if (models.includes(ref)) {
+      return snapshot(ref);
+    }
+    // The ref decides which revision this cache is on, so falling back to
+    // another one would serve a model the user did not ask for.
+    throw new Error(
+      `${p} is on revision ${ref}, and ${snapshot(ref)} is missing or incomplete. ` +
+        (models.length === 0
+          ? "Download it again."
+          : `Name a snapshot instead:\n${models.map((m) => `  ${snapshot(m)}`).join("\n")}`),
+    );
+  }
+  if (models.length === 1) {
+    return snapshot(models[0]);
+  }
+  if (models.length === 0) {
+    return null;
+  }
+  throw new Error(
+    `${p} holds ${models.length} snapshots and no refs/main saying which is current. ` +
+      `Name one of them instead:\n${models.map((m) => `  ${snapshot(m)}`).join("\n")}`,
+  );
+}
+
+/** The cache folder name for a repo id: `org/repo` becomes
+ *  `models--org--repo`. */
+export function hubDirNameOfRepo(repo: string): string {
+  return `${HUB_DIR_PREFIX}${repo.replace("/", "--")}`;
+}
+
+/** Whether a path looks like a snapshot inside a Hugging Face cache:
+ *  `<something>/models--org--repo/snapshots/<sha>`. Used to classify a
+ *  directory Agency did not scan, such as the target of an alias. */
+export function isHubSnapshotPath(p: string): boolean {
+  const parent = path.dirname(p);
+  if (path.basename(parent) !== "snapshots") {
+    return false;
+  }
+  return hubRepoOfDirName(path.basename(path.dirname(parent))) !== null;
+}
+
+/** The revision a Hub snapshot directory came from: the sha in its name. */
+export function hubSnapshotRevision(snapshotDir: string): string {
+  return path.basename(snapshotDir);
 }

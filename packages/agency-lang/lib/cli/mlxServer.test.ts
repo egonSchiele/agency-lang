@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import { startFrontDoor, type FrontDoor } from "./mlxServer.js";
+import { plainColor } from "../utils/termcolors.js";
 
 type Hit = { url: string; model: unknown; headers: http.IncomingHttpHeaders; clientGone: boolean };
 type Fake = { server: http.Server; port: number; hits: Hit[] };
@@ -211,5 +212,117 @@ describe("front door", () => {
     expect(res.status).toBe(502);
     expect((await res.json()).error.message).toMatch(/^mlx_lm.server for org\/d: /);
     await other.close();
+  });
+});
+
+describe("front door logging", () => {
+  async function withLog(
+    verbose: boolean,
+    body: Record<string, unknown>,
+    headers: Record<string, string> = {},
+  ): Promise<string[]> {
+    const lines: string[] = [];
+    const logged = await startFrontDoor(
+      0,
+      [{ model: "org/a", upstreamModel: "/a", port: a.port }],
+      {
+        log: (line) => lines.push(line),
+        verbose,
+        color: plainColor,
+      },
+    );
+    const res = await fetch(`http://127.0.0.1:${logged.port}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+    });
+    await res.text();
+    // The summary is written when the reply ends, which is after the client
+    // has its last byte.
+    await new Promise((r) => setTimeout(r, 50));
+    await logged.close();
+    return lines;
+  }
+
+  it("writes one summary line per request", async () => {
+    const lines = await withLog(false, { model: "org/a", messages: [] });
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toMatch(/^POST \/v1\/chat\/completions {2}org\/a {2}200 {2}\d/);
+  });
+
+  it("shows the whole request and reply bodies when verbose", async () => {
+    const lines = await withLog(true, {
+      model: "org/a",
+      messages: [{ role: "user", content: "hello" }],
+    });
+    const body = lines.join("\n");
+    // The request as it arrived, indented under the summary line.
+    expect(body).toContain('"content": "hello"');
+    // The reply the fake sent back, as JSON.
+    expect(body).toContain('"content": "ok"');
+    expect(lines[1]).toBe("  → {");
+  });
+
+  it("joins the deltas of a streamed reply", async () => {
+    const lines = await withLog(
+      true,
+      { model: "org/a", messages: [{ role: "user", content: "hi" }] },
+      { "x-stream": "1" },
+    );
+    // The fake streams two frames whose payloads are not JSON, so the text is
+    // empty; what matters is that the entry is written once the stream ends.
+    expect(lines[0]).toMatch(/^POST \/v1\/chat\/completions {2}org\/a {2}200/);
+    expect(lines.length).toBeGreaterThan(1);
+  });
+
+  it("logs a model it does not serve as a 404, with the reason", async () => {
+    const lines = await withLog(true, { model: "org/z", messages: [] });
+    expect(lines[0]).toMatch(/^POST \/v1\/chat\/completions {2}org\/z {2}404/);
+    expect(lines.join("\n")).toContain("It is not serving org/z.");
+  });
+
+  it("logs the error body it sent for a body that is not JSON", async () => {
+    const lines: string[] = [];
+    const logged = await startFrontDoor(
+      0,
+      [{ model: "org/a", upstreamModel: "/a", port: a.port }],
+      {
+        log: (line) => lines.push(line),
+        verbose: true,
+        color: plainColor,
+      },
+    );
+    const res = await fetch(`http://127.0.0.1:${logged.port}/v1/chat/completions`, {
+      method: "POST",
+      body: "not json",
+    });
+    expect(res.status).toBe(400);
+    await res.text();
+    await logged.close();
+    expect(lines[0]).toMatch(/^POST \/v1\/chat\/completions {2}400/);
+    expect(lines.join("\n")).toContain("Invalid JSON body.");
+  });
+
+  it("logs GET /v1/models", async () => {
+    const lines: string[] = [];
+    const logged = await startFrontDoor(
+      0,
+      [{ model: "org/a", upstreamModel: "/a", port: a.port }],
+      {
+        log: (line) => lines.push(line),
+        verbose: false,
+        color: plainColor,
+      },
+    );
+    await (await fetch(`http://127.0.0.1:${logged.port}/v1/models`)).text();
+    await logged.close();
+    expect(lines[0]).toMatch(/^GET \/v1\/models {2}200/);
+  });
+
+  it("says nothing when it was given no logger", async () => {
+    // The default front door in this file has no logger; a request through it
+    // must not throw.
+    const res = await post("org/a");
+    expect(res.status).toBe(200);
   });
 });

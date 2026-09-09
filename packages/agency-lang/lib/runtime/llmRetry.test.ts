@@ -93,6 +93,20 @@ const policy = {
 };
 
 describe("decideRetry", () => {
+  it("retries a typed overloaded error even when its status is 400", () => {
+    // Anthropic's bare "Invalid request data" 400 arrives typed as overloaded
+    // (status kept). The typed kind is checked before the status, so this is
+    // a retry, not the terminal path every other 400 takes.
+    const normalized: NormalizedLLMError = { message: "400", kind: "overloaded", status: 400 };
+    expect(decideRetry(new Error("400"), normalized, 0, policy)).toMatchObject({
+      kind: "retry",
+      reason: "overloaded",
+    });
+    expect(decideRetry(new Error("400"), { message: "400", status: 400 }, 0, policy).kind).toBe(
+      "terminal",
+    );
+  });
+
   it("propagates user aborts", () => {
     const err = new AgencyAbort("c", makeAbortCause({ kind: "userInterrupt" }));
     expect(decideRetry(err, { message: "c" }, 0, policy).kind).toBe("propagate");

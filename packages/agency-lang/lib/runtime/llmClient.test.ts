@@ -41,6 +41,17 @@ describe("SmoltalkClient.normalizeError", () => {
     expect(client.normalizeError(new SmolOverloadedError("server busy")).kind).toBe("overloaded");
   });
 
+  it("keeps the typed kind for smoltalk 0.13.1's transient 400", () => {
+    // Anthropic sometimes answers a valid request with a bare 400 "Invalid
+    // request data" mid-generation. smoltalk maps it to SmolOverloadedError
+    // with the 400 left on it; the typed kind must win over the status so
+    // the retry policy treats it as transient rather than terminal.
+    const err = new SmolOverloadedError("400 Invalid request data", { status: 400 });
+    const n = client.normalizeError(err);
+    expect(n.kind).toBe("overloaded");
+    expect(n.status).toBe(400);
+  });
+
   it("returns just the message for a non-smoltalk error", () => {
     const n = client.normalizeError(new Error("ECONNRESET"));
     expect(n).toEqual({ message: "ECONNRESET" });

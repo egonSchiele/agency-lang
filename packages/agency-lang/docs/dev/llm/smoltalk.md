@@ -89,6 +89,22 @@ spends the same token budget thinking before it writes anything visible:
 set `maxTokens` too low and the visible output is the empty string, which
 otherwise surfaces as a baffling "expected object, received string".
 
+### A 400 that is really a server hiccup
+
+Anthropic sometimes answers a valid request with a 400 whose whole message
+is `Invalid request data`, several seconds into generation. The same
+request succeeds unchanged on the next try. It showed up on
+`claude-opus-4-8` when a call combined structured output with tools: the
+reviewer in `std::agents/review` hit it on four of eleven calls one day.
+
+Since smoltalk 0.13.1 the Anthropic client maps that exact shape to
+`SmolOverloadedError` and leaves the 400 on `status`. Agency's
+`normalizeError` turns the class into `kind: "overloaded"`, and the retry
+classifier checks the kind before the status, so the call is retried under
+the normal policy (two retries with backoff) instead of failing at once. A
+400 that names the field it rejected, such as `messages.1.content: ...`, is
+still terminal.
+
 ## Where smoltalk is used
 
 - **`lib/runtime/llmClient.ts`** — the only place `smoltalk.text()` is called

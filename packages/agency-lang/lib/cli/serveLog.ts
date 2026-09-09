@@ -216,9 +216,12 @@ export function serveLogLines(entry: LogEntry, options: LogOptions): string[] {
   if (entry.reply === null) {
     return lines;
   }
-  const suffix = entry.reply.truncated ? "\n… (truncated)" : "";
-  if (entry.reply.body !== "") {
-    lines.push(...block("←", entry.reply.body + suffix, paint));
+  // A reply that was cut off still gets a block, even when no bytes of it
+  // were captured, or nothing would say that it ended early.
+  const marker = entry.reply.truncated ? "… (truncated)" : "";
+  const answer = [entry.reply.body, marker].filter((part) => part !== "").join("\n");
+  if (answer !== "") {
+    lines.push(...block("←", answer, paint));
   }
   const counts = tokenCounts(entry.reply);
   if (counts !== null) {

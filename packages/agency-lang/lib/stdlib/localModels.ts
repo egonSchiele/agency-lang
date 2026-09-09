@@ -1220,16 +1220,14 @@ export function formatLocalList(args: {
       return file !== undefined && file.complete ? file : undefined;
     }
     // A pinned revision must match what was downloaded. The pin may be a
-    // short prefix of the full commit hash.
+    // short prefix of the full commit hash. A repo can sit in more than one
+    // layout, so every copy of it is a candidate, not just the last one.
     const { repo, revision } = parseMlxUri(e.target);
-    const file = byName[repo];
-    if (file === undefined || !file.complete) {
-      return undefined;
+    const copies = args.files.filter((f) => f.backend === "mlx" && f.name === repo && f.complete);
+    if (revision === undefined) {
+      return copies[0];
     }
-    if (revision !== undefined && !(file.revision ?? "").startsWith(revision)) {
-      return undefined;
-    }
-    return file;
+    return copies.find((f) => (f.revision ?? "").startsWith(revision));
   };
   const rows = args.entries.map((e) => {
     const file = fileFor(e);

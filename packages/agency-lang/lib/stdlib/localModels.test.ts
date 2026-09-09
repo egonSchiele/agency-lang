@@ -16,6 +16,7 @@ import {
   _findDownloadedMlxModel,
   hubSnapshotDir,
   hubRepoOfDirName,
+  type DownloadedModel,
   _removeModel,
   _localModelsSupported,
   resolveAliasConfigPath,
@@ -388,6 +389,37 @@ describe("formatLocalList", () => {
       description: "A middling model.",
     },
   ];
+
+  it("marks a pinned MLX row downloaded when any copy is at that revision", () => {
+    const pinned: ModelNameEntry[] = [
+      {
+        name: "pinned-mlx",
+        backend: "mlx",
+        target: "mlx:org/repo@aaa111",
+        source: "curated",
+        sizeBytes: 10,
+        license: "apache-2.0",
+      },
+    ];
+    const copy = (revision: string, layout: "agency" | "hub"): DownloadedModel => ({
+      name: "org/repo",
+      path: `/x/${layout}/${revision}`,
+      sizeBytes: 10,
+      backend: "mlx",
+      complete: true,
+      revision,
+      layout,
+    });
+    // The Hub copy is at another revision, and comes last in the list. The
+    // Agency copy is the one the pin names.
+    const out = formatLocalList({
+      dir: "/models",
+      entries: pinned,
+      manifest: {},
+      files: [copy("aaa111", "agency"), copy("bbb222", "hub")],
+    });
+    expect(out).toContain("✓  pinned-mlx");
+  });
 
   it("marks manifest-and-file-backed entries as downloaded; first line names the dir", () => {
     const out = formatLocalList({

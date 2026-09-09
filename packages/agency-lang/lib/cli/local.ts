@@ -274,14 +274,16 @@ export function runRemove(name: string, opts: { force: boolean }): void {
     console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
   }
 
-  // A Hugging Face cache is not ours to delete, with or without -f, so say so
-  // before the message that tells you to run again with -f.
-  if (files !== null && files.layout === "hub") {
-    console.error(hubRemoveMessage(files.path));
-    process.exit(1);
-  }
+  const inHubCache = files !== null && files.layout === "hub";
 
   if (!opts.force) {
+    // Nothing is deleted on this path, so removing the alias succeeded. Say
+    // where the files are, and why "run again with -f" is not the advice.
+    if (inHubCache) {
+      console.log(`The model files are still at ${where}.`);
+      console.log(hubRemoveMessage(files.path));
+      return;
+    }
     if (files !== null && !files.insideCache) {
       console.log(
         `The model files are still at ${where}. They are outside the models directory, so delete them yourself if you want them gone.`,
@@ -298,6 +300,10 @@ export function runRemove(name: string, opts: { force: boolean }): void {
   if (files === null || resolved === null) {
     console.log(`Not found: ${name}`);
     return;
+  }
+  if (inHubCache) {
+    console.error(hubRemoveMessage(files.path));
+    process.exit(1);
   }
   if (!files.insideCache) {
     console.error("That model is not in the models directory; remove it yourself.");

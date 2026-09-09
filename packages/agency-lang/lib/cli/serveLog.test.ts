@@ -165,6 +165,14 @@ describe("serveLogLines", () => {
     expect(lines.slice(1)).toEqual(["  ← data: one", "    … (truncated)"]);
   });
 
+  it("says the reply was cut off even when no bytes of it were kept", () => {
+    const lines = serveLogLines(entry({ reply: { body: "", streamed: true, truncated: true } }), {
+      verbose: true,
+      color: plainColor,
+    });
+    expect(lines.slice(1)).toEqual(["  ← … (truncated)"]);
+  });
+
   it("colors the status by its class and leaves the text alone", () => {
     const ok = serveLogLines(entry(), { verbose: false, color })[0];
     const missing = serveLogLines(entry({ status: 404 }), { verbose: false, color })[0];

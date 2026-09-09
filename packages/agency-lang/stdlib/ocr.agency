@@ -133,8 +133,7 @@ export def readTextWithModel(
   if (isFailure(real)) {
     return real
   }
-  // Agency has no accessor for the resolved default model, so the payload
-  // says "default" and the message says where the image goes.
+  // An empty model means the run's default; the payload says so by name.
   const configuredModel = if model == "" then "default" else model
   return interrupt std::ocrCloud("Send this image to a model provider (${configuredModel} model) to read its text?", {
     requestedProvider: provider,
@@ -150,8 +149,6 @@ export def readTextWithModel(
     return approved
   }
   const instruction = if prompt == "" then OCR_INSTRUCTION else "${OCR_INSTRUCTION}\n\n${prompt}"
-  // Assigned inside the thread block: the documented way to get a value
-  // out of one (see mainAgent in coordinator.agency).
   let text = ""
   thread(label: "ocr") {
     const recognized: string = llm([instruction, image(approved.value)], model: model, provider: provider)

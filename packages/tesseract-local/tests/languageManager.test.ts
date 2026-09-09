@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { createServer } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { createHash } from "node:crypto";
 import {
   ensureLanguage,
@@ -53,50 +57,120 @@ describe("ensureLanguage", () => {
 describe("downloadLanguage", () => {
   let tmp: string;
   let server: ReturnType<typeof createServer>;
-  let url: string;
+  let base: string;
   const body = Buffer.from("language data");
-  beforeEach(async () => {
-    tmp = await makeTmp("tess-dl-");
-    server = createServer((_req, res) => {
+  const sha256 = createHash("sha256").update(body).digest("hex");
+  const entry = (
+    overrides: Partial<{ url: string; sha256: string; sizeBytes: number }> = {},
+  ) => ({
+    url: `${base}/eng.traineddata`,
+    sha256,
+    sizeBytes: body.length,
+    ...overrides,
+  });
+
+  // One server, several routes: the plain file, a redirect to it, a
+  // redirect off to plaintext, and an oversized body.
+  function handle(req: IncomingMessage, res: ServerResponse): void {
+    if (req.url === "/eng.traineddata") {
       res.writeHead(200);
       res.end(body);
-    });
+    } else if (req.url === "/redirect-same-host") {
+      res.writeHead(302, { location: "/eng.traineddata" });
+      res.end();
+    } else if (req.url === "/redirect-to-plaintext") {
+      res.writeHead(302, { location: "http://example.com/eng.traineddata" });
+      res.end();
+    } else if (req.url === "/oversized") {
+      res.writeHead(200);
+      res.end(Buffer.concat([body, body, body]));
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  }
+
+  beforeEach(async () => {
+    tmp = await makeTmp("tess-dl-");
+    server = createServer(handle);
     await new Promise<void>((resolve) =>
       server.listen(0, "127.0.0.1", resolve),
     );
     const address = server.address() as { port: number };
-    url = `http://127.0.0.1:${address.port}/eng.traineddata`;
+    base = `http://127.0.0.1:${address.port}`;
   });
   afterEach(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await fs.rm(tmp, { recursive: true, force: true });
   });
 
-  it("writes the file when the hash matches", async () => {
-    const sha256 = createHash("sha256").update(body).digest("hex");
+  async function leftovers(): Promise<string[]> {
+    return (await fs.readdir(tmp)).filter((name) => name.includes(".partial"));
+  }
+
+  it("writes the file when the size and hash match", async () => {
     const dest = path.join(tmp, "eng.traineddata");
-    await downloadLanguage({ url, sha256, sizeBytes: body.length }, dest);
+    await downloadLanguage(entry(), dest);
     expect((await fs.readFile(dest)).equals(body)).toBe(true);
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it("follows a redirect that stays on an allowed scheme", async () => {
+    const dest = path.join(tmp, "eng.traineddata");
+    await downloadLanguage(entry({ url: `${base}/redirect-same-host` }), dest);
+    expect((await fs.readFile(dest)).equals(body)).toBe(true);
+  });
+
+  it("refuses a redirect to plaintext before requesting it", async () => {
+    const dest = path.join(tmp, "eng.traineddata");
+    await expect(
+      downloadLanguage(entry({ url: `${base}/redirect-to-plaintext` }), dest),
+    ).rejects.toThrow(/non-HTTPS/);
+    await expect(fs.stat(dest)).rejects.toThrow();
   });
 
   it("rejects a mismatched hash and deletes the partial", async () => {
     const dest = path.join(tmp, "eng.traineddata");
     await expect(
-      downloadLanguage(
-        { url, sha256: "0".repeat(64), sizeBytes: body.length },
-        dest,
-      ),
+      downloadLanguage(entry({ sha256: "0".repeat(64) }), dest),
     ).rejects.toThrow(/SHA-256 mismatch/);
     await expect(fs.stat(dest)).rejects.toThrow();
-    await expect(fs.stat(`${dest}.partial`)).rejects.toThrow();
+    expect(await leftovers()).toEqual([]);
   });
 
-  it("refuses a plain http URL that is not localhost", async () => {
+  it("stops a body that grows past the pinned size and deletes the partial", async () => {
+    const dest = path.join(tmp, "eng.traineddata");
+    await expect(
+      downloadLanguage(entry({ url: `${base}/oversized` }), dest),
+    ).rejects.toThrow(/exceeded the pinned size/);
+    await expect(fs.stat(dest)).rejects.toThrow();
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it("rejects a body shorter than the pinned size", async () => {
+    const dest = path.join(tmp, "eng.traineddata");
+    await expect(
+      downloadLanguage(entry({ sizeBytes: body.length + 1 }), dest),
+    ).rejects.toThrow(/lockfile pins/);
+    expect(await leftovers()).toEqual([]);
+  });
+
+  it("refuses a plain http URL that is not localhost without fetching", async () => {
     await expect(
       downloadLanguage(
         { url: "http://example.com/x", sha256: "0".repeat(64), sizeBytes: 1 },
         path.join(tmp, "x"),
       ),
     ).rejects.toThrow(/non-HTTPS/);
+  });
+
+  it("lets two concurrent downloads of one language both succeed", async () => {
+    const dest = path.join(tmp, "eng.traineddata");
+    await Promise.all([
+      downloadLanguage(entry(), dest),
+      downloadLanguage(entry(), dest),
+    ]);
+    expect((await fs.readFile(dest)).equals(body)).toBe(true);
+    expect(await leftovers()).toEqual([]);
   });
 });

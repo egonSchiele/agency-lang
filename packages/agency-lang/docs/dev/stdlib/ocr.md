@@ -50,20 +50,15 @@ What happens to the bytes then depends on who reads them:
 
 ## The osascript bridge
 
-`lib/stdlib/ocr.ts` holds a JavaScript for Automation script as a string
-constant and runs it with `osascript -l JavaScript -e <script> <tempCopy>
-<language> <fast>`. Three decisions:
+The JavaScript for Automation program is `lib/stdlib/visionOcr.jxa`. The
+makefile copies it into `dist/lib/stdlib/` beside `ocr.js`, which locates
+it relative to its own URL and runs
+`osascript -l JavaScript visionOcr.jxa <tempCopy> <language> <fast>`.
+The image path is model-supplied text, so it arrives as `argv[0]` and is
+never spliced into the script.
 
-- **`-e`, not stdin.** `appleNotes.ts` and `builtins.ts` record that a bare
-  `-` is passed through as argv item 1 and shifts every real argument.
-- **Argv, not interpolation.** The path is model-supplied text. It arrives
-  as `argv[0]` and is never spliced into the script.
-- **A string constant, not a shipped file.** There is nothing on disk for
-  another process to rewrite between install and use.
-
-The helper takes the process runner as a parameter so `ocr.test.ts` can
-cover the non-darwin refusal, a non-zero exit, bad JSON, and the temp-copy
-contract without spawning anything. The real script is only exercised by
+The helper takes the process runner as a parameter, so `ocr.test.ts` runs
+without spawning anything. The real script is exercised only by
 `tests/agency/ocr.agency`, which carries `skipUnlessPlatform: "darwin"`.
 
 ## The y flip
@@ -92,7 +87,7 @@ because `attachToReply` silently drops there.
 
 ## Files
 
-- `stdlib/ocr.agency`, `lib/stdlib/ocr.ts`, `lib/stdlib/ocr.test.ts`
+- `stdlib/ocr.agency`, `lib/stdlib/ocr.ts`, `lib/stdlib/visionOcr.jxa`, `lib/stdlib/ocr.test.ts`
 - `lib/stdlib/approvedPath.ts`, the post-approval validation shared by `viewFile` and `readTextWithModel`
 - `stdlib/thread.agency` (`viewFile`), `lib/stdlib/thread.ts` (`_viewFilePrecheck`, `_insideToolCall`)
 - `lib/agents/agency-agent/lib/images.agency` (`viewImageFile`, the agent-cwd wrapper)

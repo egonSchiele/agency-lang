@@ -81,6 +81,7 @@ build:
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
 	rm -rf dist/lib/stdlib/providers
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
+	cp lib/stdlib/visionOcr.jxa dist/lib/stdlib/visionOcr.jxa
 
 # Full reset: compiled TS, incremental scratch state, and the gitignored
 # stdlib .js siblings. Both dist/ AND stdlib/**/*.js ship in the npm

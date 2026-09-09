@@ -64,7 +64,7 @@ describe("_recognizeTextLocalWith", () => {
     );
   });
 
-  it("hands osascript a temp copy on -e argv, never the approved path, and removes it after", async () => {
+  it("runs the shipped script by path over a temp copy, never the approved path, and removes it after", async () => {
     let seen: string[] = [];
     let tempSeen = "";
     let tempBytes = "";
@@ -75,18 +75,16 @@ describe("_recognizeTextLocalWith", () => {
       return ONE_BLOCK;
     };
     await _recognizeTextLocalWith(runner, "darwin", image, "en-US", true);
-    // The safety properties from the spec: the script rides on -e, the
-    // values ride on argv, no bare "-" shifts them, and the subprocess
-    // only ever sees a file this call wrote from validated bytes.
-    expect(seen).toContain("-e");
-    expect(seen).not.toContain("-");
+    // The script is a file beside ocr.ts, the values ride on argv, and the
+    // subprocess only ever sees a file this call wrote from validated bytes.
+    const script = seen[seen.length - 4];
+    expect(path.basename(script)).toBe("visionOcr.jxa");
+    expect(fs.existsSync(script)).toBe(true);
     expect(seen.slice(-2)).toEqual(["en-US", "true"]);
     expect(tempSeen).not.toBe(image);
     expect(path.extname(tempSeen)).toBe(".png");
     expect(tempBytes).toBe("pretend png bytes");
     expect(fs.existsSync(tempSeen)).toBe(false);
-    const script = seen[seen.indexOf("-e") + 1];
-    expect(script).not.toContain(image);
   });
 
   it("removes the temp copy when the runner fails", async () => {

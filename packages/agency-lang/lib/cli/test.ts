@@ -845,7 +845,7 @@ async function runExpectedCompileError(
 
 /** True when a `skipUnlessPlatform` value is set and does not match the
  *  running OS. */
-function skippedForPlatform(wanted: string | undefined): boolean {
+export function skippedForPlatform(wanted: string | undefined): boolean {
   return wanted !== undefined && wanted !== process.platform;
 }
 

@@ -1,0 +1,45 @@
+// JavaScript for Automation. Run by lib/stdlib/ocr.ts as
+//   osascript -l JavaScript visionOcr.jxa <imagePath> <language> <fast>
+// The arguments arrive as argv; nothing is spliced into this source.
+// Vision's boundingBox has its origin at the bottom left; the y flip makes
+// the output top-left like every drawing API.
+ObjC.import("Foundation");
+ObjC.import("Vision");
+
+function run(argv) {
+  const imagePath = argv[0];
+  const language = argv[1];
+  const fast = argv[2] === "true";
+  const url = $.NSURL.fileURLWithPath(imagePath);
+  const request = $.VNRecognizeTextRequest.alloc.init;
+  request.recognitionLevel = fast
+    ? $.VNRequestTextRecognitionLevelFast
+    : $.VNRequestTextRecognitionLevelAccurate;
+  if (language !== "") {
+    request.recognitionLanguages = $([language]);
+  }
+  const handler = $.VNImageRequestHandler.alloc.initWithURLOptions(url, $({}));
+  const error = Ref();
+  const ok = handler.performRequestsError($([request]), error);
+  if (!ok) {
+    throw new Error("Vision failed: " + ObjC.unwrap(error[0].localizedDescription));
+  }
+  const results = request.results;
+  const out = [];
+  for (let i = 0; i < results.count; i++) {
+    const observation = results.objectAtIndex(i);
+    const candidate = observation.topCandidates(1).objectAtIndex(0);
+    const box = observation.boundingBox;
+    out.push({
+      text: ObjC.unwrap(candidate.string),
+      confidence: candidate.confidence,
+      box: {
+        x: box.origin.x,
+        y: 1 - (box.origin.y + box.size.height),
+        width: box.size.width,
+        height: box.size.height,
+      },
+    });
+  }
+  return JSON.stringify(out);
+}

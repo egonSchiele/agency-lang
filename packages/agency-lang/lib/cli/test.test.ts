@@ -7,6 +7,7 @@ import {
   partitionByShard,
   loadTests,
   resolveTestSourcePath,
+  skippedForPlatform,
   type Shard,
 } from "./test.js";
 import { createSuiteContext, printSuiteAbortSummary } from "./test.js";
@@ -22,6 +23,22 @@ function unionAllShards(items: string[], total: number): string[] {
   }
   return seen;
 }
+
+describe("skippedForPlatform", () => {
+  const other = process.platform === "darwin" ? "linux" : "darwin";
+
+  it("does not skip when the field is absent", () => {
+    expect(skippedForPlatform(undefined)).toBe(false);
+  });
+
+  it("does not skip when the field names the running platform", () => {
+    expect(skippedForPlatform(process.platform)).toBe(false);
+  });
+
+  it("skips when the field names another platform", () => {
+    expect(skippedForPlatform(other)).toBe(true);
+  });
+});
 
 describe("partitionByShard", () => {
   it("covers every item exactly once across all shards (13 items / 4 shards)", () => {

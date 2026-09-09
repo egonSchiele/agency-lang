@@ -27,9 +27,8 @@ account and a live token.
 
 ## OCR (`std::ocr`, `readText` and `readTextBlocks`)
 
-The Vision script runs only on macOS and CI runs on Ubuntu, so
-`tests/agency/ocr.agency` is skipped there through `skipUnlessPlatform`.
-It runs on every Mac that runs the suite.
+Vision exists only on macOS, so `tests/agency/ocr.agency` carries
+`skipUnlessPlatform: "darwin"` and CI never runs it.
 
 - a language Vision does not support returns a clear error
 - `fast: true` returns the same lines as accurate on the fixture

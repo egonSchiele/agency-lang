@@ -168,19 +168,16 @@ Version one handles images. PDFs are follow-up work.
 
 `readText` and `readTextBlocks` run macOS's Vision framework. Neither one uses the network.
 
-The implementation calls `osascript -l JavaScript -e <script> <path> <language> <fast>` through
-`execFile`. The script is a JavaScript for Automation program held as a string constant in
-`lib/stdlib/ocr.ts`. It imports `Foundation` and `Vision` through the ObjC bridge, runs a
-`VNRecognizeTextRequest` on the image at `argv[0]`, and prints one JSON array of blocks to stdout.
+The implementation calls `osascript -l JavaScript visionOcr.jxa <path> <language> <fast>` through
+`execFile`. The script is a JavaScript for Automation program in `lib/stdlib/visionOcr.jxa`,
+copied into `dist/lib/stdlib/` by the makefile and located by `ocr.ts` relative to its own URL. It
+imports `Foundation` and `Vision` through the ObjC bridge, runs a `VNRecognizeTextRequest` on the
+image at `argv[0]`, and prints one JSON array of blocks to stdout.
 
-Two rules from the existing `osascript` callers (`lib/stdlib/appleNotes.ts:56` and
-`lib/stdlib/builtins.ts:287`) apply here:
-
-- The script goes through `-e`, and the arguments follow it. No bare `-`. Both callers record
-  that a `-` is passed through as argv item 1 and shifts every real argument by one.
-- The path and every other argument arrive as argv. Nothing is spliced into the script source.
-  The path is model-supplied text, and escaping only holds for as long as the escape function
-  keeps up with every metacharacter.
+The path and every other argument arrive as argv. Nothing is spliced into the script source. The
+path is model-supplied text, and escaping only holds for as long as the escape function keeps up
+with every metacharacter. This is the rule the existing `osascript` callers
+(`lib/stdlib/appleNotes.ts` and `lib/stdlib/builtins.ts`) follow.
 
 The helper refuses to start on any platform other than darwin before it touches `execFile`,
 the way `runNotesScript` does.
@@ -192,9 +189,6 @@ directory, passes that temp path to the script, and removes the temp file afterw
 included on failure. The subprocess only ever sees a file this call wrote from validated bytes,
 so there is no window between validation and its read. This is how `say` in `lib/stdlib/speech.ts`
 receives its text. The cost is one copy of an image.
-
-The script is a string constant rather than a shipped file so there is nothing on disk for
-another process to rewrite between install and use.
 
 A prototype confirmed the path. On a 700x160 test image it returned both lines of text with
 confidence 1.0 and correct bounding boxes, in 0.55 seconds.

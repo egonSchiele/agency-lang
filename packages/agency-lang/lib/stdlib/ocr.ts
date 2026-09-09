@@ -2,6 +2,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { fixedPath, readBytes, root, writeBytes, remove } from "./contained.js";
@@ -12,9 +13,13 @@ const execFileAsync = promisify(execFile);
  *  megabyte; the cap only guards against a runaway script. */
 const OSASCRIPT_MAX_STDOUT_BYTES = 64 * 1024 * 1024;
 
-/** Normalized to 0..1 with the origin at the TOP left, so `y` grows
- *  downward. Vision reports the bottom-left origin; the script flips it
- *  before printing. */
+/** The JavaScript for Automation program that drives Vision. It ships
+ *  beside this file (the makefile copies it into dist) and osascript
+ *  runs it by path; the image path, language, and fast flag are argv. */
+const VISION_SCRIPT_PATH = fileURLToPath(new URL("./visionOcr.jxa", import.meta.url));
+
+/** Normalized to 0..1 with the origin at the top left, so `y` grows
+ *  downward. */
 const boundingBoxSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
@@ -37,59 +42,12 @@ const blocksSchema = z.array(textBlockSchema);
  *  so the tests never spawn a process. */
 export type OsascriptRunner = (args: string[]) => Promise<string>;
 
-// JavaScript for Automation. The image path, language, and fast flag
-// arrive as argv, never spliced into this source: the path is
-// model-supplied text. Vision's boundingBox has its origin at the bottom
-// left; the y flip makes the output top-left like every drawing API.
-const VISION_SCRIPT = `
-ObjC.import("Foundation");
-ObjC.import("Vision");
-function run(argv) {
-  const imagePath = argv[0];
-  const language = argv[1];
-  const fast = argv[2] === "true";
-  const url = $.NSURL.fileURLWithPath(imagePath);
-  const request = $.VNRecognizeTextRequest.alloc.init;
-  request.recognitionLevel = fast
-    ? $.VNRequestTextRecognitionLevelFast
-    : $.VNRequestTextRecognitionLevelAccurate;
-  if (language !== "") {
-    request.recognitionLanguages = $([language]);
-  }
-  const handler = $.VNImageRequestHandler.alloc.initWithURLOptions(url, $({}));
-  const error = Ref();
-  const ok = handler.performRequestsError($([request]), error);
-  if (!ok) {
-    throw new Error("Vision failed: " + ObjC.unwrap(error[0].localizedDescription));
-  }
-  const results = request.results;
-  const out = [];
-  for (let i = 0; i < results.count; i++) {
-    const observation = results.objectAtIndex(i);
-    const candidate = observation.topCandidates(1).objectAtIndex(0);
-    const box = observation.boundingBox;
-    out.push({
-      text: ObjC.unwrap(candidate.string),
-      confidence: candidate.confidence,
-      box: {
-        x: box.origin.x,
-        y: 1 - (box.origin.y + box.size.height),
-        width: box.size.width,
-        height: box.size.height,
-      },
-    });
-  }
-  return JSON.stringify(out);
-}
-`;
-
 export const NOT_MACOS_MESSAGE =
   "Vision OCR requires macOS. Use readTextWithModel to send the image to a " +
   "model provider, or install @agency-lang/tesseract-local for offline OCR on any platform.";
 
-/** Parse the script's stdout into blocks. The schema says what a block
- *  is; a partial or garbled print fails the parse and never reaches
- *  Agency as data. */
+/** Parse the script's stdout into blocks. A partial or garbled print
+ *  fails the parse and never reaches Agency as data. */
 export function parseBlocks(stdout: string): TextBlock[] {
   let parsed: unknown;
   try {
@@ -122,9 +80,8 @@ function readApprovedImage(approvedPath: string): Buffer {
 
 /** Run the Vision script over a temp copy of `bytes`. osascript opens a
  *  pathname itself, so it never gets the original path: it gets a file
- *  this call created from bytes that were already validated, the way
- *  `say` gets a temp text file in speech.ts. Only a file this call
- *  created is removed afterwards. */
+ *  this call created from bytes that were already validated. Only a file
+ *  this call created is removed afterwards. */
 async function runVisionOnCopy(
   runner: OsascriptRunner,
   bytes: Buffer,
@@ -139,9 +96,7 @@ async function runVisionOnCopy(
   try {
     writeBytes(tmpDir, tmpName, bytes, { mode: "create-only" });
     owned = true;
-    // No "-" before the arguments: osascript would pass it through as argv
-    // item 1 and shift every real argument by one (see appleNotes.ts).
-    const args = ["-l", "JavaScript", "-e", VISION_SCRIPT, tmpFile, language, String(fast)];
+    const args = ["-l", "JavaScript", VISION_SCRIPT_PATH, tmpFile, language, String(fast)];
     return await runner(args);
   } finally {
     if (owned) {

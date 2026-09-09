@@ -157,6 +157,17 @@ export function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** One line's worth of text from a request: control characters escaped, so a
+ *  model name carrying a newline or an ANSI sequence cannot forge log lines or
+ *  drive the terminal. */
+export function oneLine(text: string): string {
+  // eslint-disable-next-line no-control-regex
+  return text.replace(
+    /[\x00-\x1f\x7f]/g,
+    (c) => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+  );
+}
+
 function statusColor(status: number, paint: ColorFunction): string {
   const text = String(status);
   if (status >= 500) {
@@ -189,8 +200,8 @@ function block(marker: string, text: string, paint: ColorFunction): string[] {
 export function serveLogLines(entry: LogEntry, options: LogOptions): string[] {
   const paint = options.color;
   const parts = [
-    paint.dim(`${entry.method} ${entry.path}`),
-    entry.model === null ? null : paint.cyan(entry.model),
+    paint.dim(oneLine(`${entry.method} ${entry.path}`)),
+    entry.model === null ? null : paint.cyan(oneLine(entry.model)),
     statusColor(entry.status, paint),
     paint.dim(formatDuration(entry.durationMs)),
     options.verbose ? null : tokenCounts(entry.reply),

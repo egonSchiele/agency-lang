@@ -297,6 +297,31 @@ describe("runRemove", () => {
     expect(output.some((l) => l.includes("-f"))).toBe(false);
   });
 
+  it("refuses a model in a Hugging Face cache, with or without -f", () => {
+    const snapshot = path.join(models, "models--org--repo", "snapshots", "abc");
+    fs.mkdirSync(snapshot, { recursive: true });
+    fs.writeFileSync(path.join(snapshot, "config.json"), "{}");
+    fs.writeFileSync(path.join(snapshot, "model.safetensors"), "xx");
+    fs.mkdirSync(path.join(models, "models--org--repo", "refs"), { recursive: true });
+    fs.writeFileSync(path.join(models, "models--org--repo", "refs", "main"), "abc");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit called");
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      for (const force of [false, true]) {
+        expect(() => runRemove("mlx:org/repo", { force })).toThrow("exit called");
+        expect(err.mock.calls[err.mock.calls.length - 1][0]).toContain(
+          "is in a Hugging Face cache",
+        );
+      }
+      expect(fs.existsSync(snapshot)).toBe(true);
+    } finally {
+      exitSpy.mockRestore();
+      err.mockRestore();
+    }
+  });
+
   it("refuses to delete a model directory outside the cache", () => {
     const outside = path.join(dir, "elsewhere");
     fs.mkdirSync(outside);

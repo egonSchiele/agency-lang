@@ -109,8 +109,10 @@ POST /v1/chat/completions  mlx-community/Qwen3.5-4B-MLX-4bit  200  2.6s  16→12
 That is the method and path, the model the request named, the status, how long
 it took, and the prompt and completion tokens the server reported. With
 `--verbose` (or `--log-prompts`, the same thing), the whole request body (`→`)
-and the whole reply (`←`) follow underneath: indented JSON for a normal reply,
-and the `data:` frames exactly as they came for a streamed one. Color is on
+and the reply (`←`) follow underneath: indented JSON for a normal reply, and
+the `data:` frames as they came for a streamed one. The server keeps the first
+1 MiB of a reply for the log and marks a longer one `… (truncated)`. What the
+client receives is never changed. Color is on
 when the output is a terminal; `NO_COLOR` turns it off and `FORCE_COLOR` turns
 it on for a log file.
 

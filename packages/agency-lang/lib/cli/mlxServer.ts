@@ -99,21 +99,22 @@ function forward(
   upstream.end(body);
 }
 
-async function readRequest(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-): Promise<Record<string, unknown> | null> {
+type ReadResult =
+  { body: Record<string, unknown> } | { refusal: { status: number; message: string } };
+
+/** The request body, or how to refuse it. Refusing is left to the caller so
+ *  that every reply the door sends, including this one, reaches the log. */
+async function readRequest(req: http.IncomingMessage): Promise<ReadResult> {
   try {
     const parsed = await parseJsonBody(req);
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      error(res, 400, "Request body is not a JSON object.");
-      return null;
+      return { refusal: { status: 400, message: "Request body is not a JSON object." } };
     }
-    return parsed as Record<string, unknown>;
+    return { body: parsed as Record<string, unknown> };
   } catch (err) {
     const message = (err as Error).message;
-    error(res, message === "Request body too large" ? 413 : 400, `${message}.`);
-    return null;
+    const status = message === "Request body too large" ? 413 : 400;
+    return { refusal: { status, message: `${message}.` } };
   }
 }
 
@@ -180,12 +181,12 @@ export function startFrontDoor(
       record.finish(200, JSON.stringify(body), "application/json", false);
       return;
     }
-    const parsed = await readRequest(req, res);
-    if (parsed === null) {
-      // readRequest already answered; the status it chose is on the response.
-      record.finish(res.statusCode, "", "application/json", false);
+    const read = await readRequest(req);
+    if ("refusal" in read) {
+      refuse(read.refusal.status, read.refusal.message);
       return;
     }
+    const parsed = read.body;
     record.describe(parsed);
     if (typeof parsed.model !== "string") {
       refuse(

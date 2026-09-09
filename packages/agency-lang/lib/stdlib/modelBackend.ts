@@ -151,11 +151,21 @@ export function hubSnapshotDir(p: string): string | null {
     return null;
   }
   const snapshot = (name: string) => path.join(p, "snapshots", name);
-  const ref = readRef(p);
-  if (ref !== null && names.includes(ref) && isModelDir(snapshot(ref))) {
-    return snapshot(ref);
-  }
   const models = names.filter((name) => isModelDir(snapshot(name)));
+  const ref = readRef(p);
+  if (ref !== null) {
+    if (models.includes(ref)) {
+      return snapshot(ref);
+    }
+    // The ref decides which revision this cache is on, so falling back to
+    // another one would serve a model the user did not ask for.
+    throw new Error(
+      `${p} is on revision ${ref}, and ${snapshot(ref)} is missing or incomplete. ` +
+        (models.length === 0
+          ? "Download it again."
+          : `Name a snapshot instead:\n${models.map((m) => `  ${snapshot(m)}`).join("\n")}`),
+    );
+  }
   if (models.length === 1) {
     return snapshot(models[0]);
   }
@@ -166,6 +176,17 @@ export function hubSnapshotDir(p: string): string | null {
     `${p} holds ${models.length} snapshots and no refs/main saying which is current. ` +
       `Name one of them instead:\n${models.map((m) => `  ${snapshot(m)}`).join("\n")}`,
   );
+}
+
+/** Whether a path looks like a snapshot inside a Hugging Face cache:
+ *  `<something>/models--org--repo/snapshots/<sha>`. Used to classify a
+ *  directory Agency did not scan, such as the target of an alias. */
+export function isHubSnapshotPath(p: string): boolean {
+  const parent = path.dirname(p);
+  if (path.basename(parent) !== "snapshots") {
+    return false;
+  }
+  return hubRepoOfDirName(path.basename(path.dirname(parent))) !== null;
 }
 
 /** The revision a Hub snapshot directory came from: the sha in its name. */

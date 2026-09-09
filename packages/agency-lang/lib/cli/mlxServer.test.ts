@@ -281,6 +281,28 @@ describe("front door logging", () => {
     expect(lines.join("\n")).toContain("It is not serving org/z.");
   });
 
+  it("logs the error body it sent for a body that is not JSON", async () => {
+    const lines: string[] = [];
+    const logged = await startFrontDoor(
+      0,
+      [{ model: "org/a", upstreamModel: "/a", port: a.port }],
+      {
+        log: (line) => lines.push(line),
+        verbose: true,
+        color: plainColor,
+      },
+    );
+    const res = await fetch(`http://127.0.0.1:${logged.port}/v1/chat/completions`, {
+      method: "POST",
+      body: "not json",
+    });
+    expect(res.status).toBe(400);
+    await res.text();
+    await logged.close();
+    expect(lines[0]).toMatch(/^POST \/v1\/chat\/completions {2}400/);
+    expect(lines.join("\n")).toContain("Invalid JSON body.");
+  });
+
   it("logs GET /v1/models", async () => {
     const lines: string[] = [];
     const logged = await startFrontDoor(

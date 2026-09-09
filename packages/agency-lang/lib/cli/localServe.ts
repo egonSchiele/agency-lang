@@ -215,8 +215,15 @@ export type ServeChoice = { title: string; value: string };
  *  under the models directory whose record says every file is there. A GGUF
  *  model runs in the Agency process instead, so it is never a choice here. */
 export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
-  return downloaded
-    .filter((m) => m.backend === "mlx" && m.complete)
+  // One row per repo id. The same model can sit in both layouts, and two rows
+  // with the same value would let you pick it twice, which `runServe` refuses.
+  const byRepo: Record<string, DownloadedModel> = {};
+  for (const model of downloaded) {
+    if (model.backend === "mlx" && model.complete && byRepo[model.name] === undefined) {
+      byRepo[model.name] = model;
+    }
+  }
+  return Object.values(byRepo)
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((m) => ({ title: `${m.name}  (${formatGB(m.sizeBytes)})`, value: `mlx:${m.name}` }));
 }

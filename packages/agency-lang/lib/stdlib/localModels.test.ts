@@ -998,7 +998,8 @@ describe("backend of a target", () => {
       path: snapshot,
       sizeBytes: 1002,
       insideCache: false,
-      layout: "hub",
+      // Not under a `models--org--repo` folder, so it is just a directory.
+      layout: "directory",
     });
   });
 
@@ -1326,6 +1327,16 @@ describe("Hugging Face caches", () => {
     expect(() => hubSnapshotDir(path.join(hub, "models--org--repo"))).toThrow(
       /holds 2 snapshots and no refs\/main/,
     );
+  });
+
+  it("hubSnapshotDir refuses a refs/main whose snapshot is not there", () => {
+    const hub = path.join(dir, "hub-badref");
+    hubModel(hub, "org/repo", "aaa", { ref: "" });
+    const folder = path.join(hub, "models--org--repo");
+    fs.mkdirSync(path.join(folder, "refs"), { recursive: true });
+    fs.writeFileSync(path.join(folder, "refs", "main"), "bbb");
+    // Serving "aaa" here would be a revision the user did not ask for.
+    expect(() => hubSnapshotDir(folder)).toThrow(/is on revision bbb/);
   });
 
   it("hubSnapshotDir is null for a directory that is not a cache", () => {

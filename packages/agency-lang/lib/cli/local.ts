@@ -235,6 +235,18 @@ function formatDuration(seconds: number): string {
 /** Without `-f`: drop the alias, keep the files, and say where they are.
  *  With `-f`: delete the files too. Models are large, so deleting is the
  *  step that needs the flag. */
+/** Why `remove` will not delete a model in a Hugging Face cache. Its files are
+ *  symlinks into a shared `blobs/` directory, so deleting the snapshot would
+ *  leave the bytes behind. */
+export function hubRemoveMessage(snapshot: string): string {
+  const folder = path.dirname(path.dirname(snapshot));
+  return (
+    `${snapshot} is in a Hugging Face cache, which Agency reads but does not manage. ` +
+    `Its files are symlinks into a shared blobs directory, so deleting it here would leave ` +
+    `the bytes behind. Remove it with the tool that downloaded it, or delete ${folder} yourself.`
+  );
+}
+
 export function runRemove(name: string, opts: { force: boolean }): void {
   const aliases = readModelAliases();
   const isAlias = Object.hasOwn(aliases, name);
@@ -262,6 +274,13 @@ export function runRemove(name: string, opts: { force: boolean }): void {
     console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
   }
 
+  // A Hugging Face cache is not ours to delete, with or without -f, so say so
+  // before the message that tells you to run again with -f.
+  if (files !== null && files.layout === "hub") {
+    console.error(hubRemoveMessage(files.path));
+    process.exit(1);
+  }
+
   if (!opts.force) {
     if (files !== null && !files.insideCache) {
       console.log(
@@ -282,18 +301,6 @@ export function runRemove(name: string, opts: { force: boolean }): void {
   }
   if (!files.insideCache) {
     console.error("That model is not in the models directory; remove it yourself.");
-    process.exit(1);
-  }
-  if (files.layout === "hub") {
-    // A Hugging Face cache snapshot is all symlinks into a shared `blobs/`
-    // directory. Deleting the snapshot would leave the bytes behind, so this
-    // is the tool's job, not ours.
-    console.error(
-      `${files.path} is a Hugging Face cache, which Agency reads but does not manage. ` +
-        `Its files are symlinks into a shared blobs directory, so deleting it here would ` +
-        `leave the bytes behind. Remove it with the tool that downloaded it, ` +
-        `or delete ${path.dirname(path.dirname(files.path))} yourself.`,
-    );
     process.exit(1);
   }
   if (resolved.backend === "mlx") {

@@ -165,15 +165,18 @@ agency local serve [model]... [--port 8080] [--max-tokens 16384] [--python <path
 ```
 
 **With no model named**, `localServe` asks. `serveChoices` in
-`lib/cli/localServe.ts` keeps the entries of `_listDownloadedModels` whose
-backend is `mlx` and whose record says every file is there, and offers them
-as `mlx:<repo>` in a multiselect, the way `agency local download` offers the
-catalog. A GGUF model is never a choice, since it runs in the Agency process
+`lib/cli/localServe.ts` keeps the `mlx` entries of `_listDownloadedModels`
+that are complete, and offers them as `mlx:<repo>` in a multiselect, the way
+`agency local download` offers the catalog. What "complete" means depends on
+the layout: an `agency` model has a record saying every file arrived, while a
+`hub` model is complete because the snapshot it points at is a model
+directory. The same repo can sit in both layouts, so the choices are keyed by
+repo id and only the first is offered; two rows with the same value would let
+you pick one model twice, which `runServe` refuses. A GGUF model is never a choice, since it runs in the Agency process
 instead. Cancelling, or ticking nothing, exits 0 without serving. Off a
 terminal — either end not a TTY — it lists the same models and exits 1, so a
-script gets an answer rather than a prompt nobody can see. Only models under
-the models directory are offered: their record is what proves a download
-finished. An alias pointing somewhere else still has to be named.
+script gets an answer rather than a prompt nobody can see. Only models under the models directory are offered. An alias pointing
+somewhere else still has to be named.
 
 `runServe` in `lib/cli/localServe.ts` does, in order: resolve each name
 (a GGUF model is an error), find the directory (an `mlx:` model needs a

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  oneLine,
   createCapture,
   describeReply,
   describeRequest,
@@ -173,5 +174,21 @@ describe("serveLogLines", () => {
     expect(broken).toContain(color.red("502"));
     // eslint-disable-next-line no-control-regex
     expect(ok.replace(/\x1b\[[0-9;]*m/g, "")).toBe("POST /v1/chat/completions  org/a  200  1.4s");
+  });
+});
+
+describe("oneLine", () => {
+  it("escapes the control characters in a value that came from a request", () => {
+    expect(oneLine("org/a\nPOST /fake 200")).toBe("org/a\\x0aPOST /fake 200");
+    expect(oneLine("org/a\x1b[31mred")).toBe("org/a\\x1b[31mred");
+    expect(oneLine("mlx-community/Qwen3.8-27B-4bit")).toBe("mlx-community/Qwen3.8-27B-4bit");
+  });
+
+  it("keeps a forged line out of the summary", () => {
+    const line = serveLogLines(entry({ model: "org/a\nGET /forged  200" }), {
+      verbose: false,
+      color: plainColor,
+    })[0];
+    expect(line.includes("\n")).toBe(false);
   });
 });

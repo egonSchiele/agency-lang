@@ -531,6 +531,7 @@ describe("serveChoices", () => {
       sizeBytes: 1e9,
       backend: "llama-cpp" as const,
       complete: true,
+      layout: "gguf" as const,
     },
     {
       name: "org/b",
@@ -538,6 +539,7 @@ describe("serveChoices", () => {
       sizeBytes: 4.2e9,
       backend: "mlx" as const,
       complete: true,
+      layout: "agency" as const,
     },
     {
       name: "org/a",
@@ -545,6 +547,7 @@ describe("serveChoices", () => {
       sizeBytes: 12.4e9,
       backend: "mlx" as const,
       complete: true,
+      layout: "hub" as const,
     },
     {
       name: "org/half",
@@ -552,6 +555,7 @@ describe("serveChoices", () => {
       sizeBytes: 1e9,
       backend: "mlx" as const,
       complete: false,
+      layout: "agency" as const,
     },
   ];
 
@@ -560,6 +564,28 @@ describe("serveChoices", () => {
       { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
       { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
     ]);
+  });
+
+  it("offers one row for a repo that both layouts hold", () => {
+    const both = [
+      {
+        name: "org/a",
+        path: "/m/mlx/org--a",
+        sizeBytes: 1e9,
+        backend: "mlx" as const,
+        complete: true,
+        layout: "agency" as const,
+      },
+      {
+        name: "org/a",
+        path: "/m/hub/models--org--a/snapshots/abc",
+        sizeBytes: 1e9,
+        backend: "mlx" as const,
+        complete: true,
+        layout: "hub" as const,
+      },
+    ];
+    expect(serveChoices(both).map((c) => c.value)).toEqual(["mlx:org/a"]);
   });
 
   it("leaves out GGUF models and half-downloaded ones", () => {

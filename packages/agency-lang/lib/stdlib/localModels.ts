@@ -39,6 +39,7 @@ import {
   hubRepoOfDirName,
   hubSnapshotDir,
   hubSnapshotRevision,
+  isHubSnapshotPath,
 } from "./modelBackend.js";
 export {
   type Backend,
@@ -384,9 +385,11 @@ export type DownloadedModel = {
   /** The commit an MLX model was downloaded from. Absent for GGUF. */
   revision?: string;
   /** Which directory shape holds the files. `agency` is our own
-   *  `<modelsDir>/mlx/<org>--<repo>` with a record; `hub` is a Hugging Face
-   *  cache written by another tool, which we read but never write. */
-  layout: "gguf" | "agency" | "hub";
+   *  `<modelsDir>/mlx/<org>--<repo>` with a record. `hub` is a Hugging Face
+   *  cache written by another tool, which we read but never write.
+   *  `directory` is any other model directory, such as the target of an
+   *  alias. */
+  layout: "gguf" | "agency" | "hub" | "directory";
 };
 
 export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
@@ -587,7 +590,7 @@ export function _modelFilesOnDisk(
     path: target,
     sizeBytes,
     insideCache: known !== undefined,
-    layout: known?.layout ?? "hub",
+    layout: known?.layout ?? (isHubSnapshotPath(target) ? "hub" : "directory"),
   };
 }
 

@@ -57,6 +57,8 @@ Here you can give it a path to a policy file, or use one of the built-in policie
 agency agent --policy approve-all
 ```
 
+You can also approve or reject a named capability set for one session. For example, `agency agent --approve GithubRead` lets the agent read pull requests and issues without asking, while every GitHub write still prompts. `agency effects` lists the sets you can name.
+
 ## The agent home directory
 
 The agent keeps the policy, as well as any settings and other data, in its home directory. By default, the directory is at `~/.agency-agent`. You can point it somewhere else with `--agent-home` or the `AGENCY_AGENT_HOME` environment variable:

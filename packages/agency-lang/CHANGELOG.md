@@ -1,3 +1,23 @@
+## Sep 10 2026 — v0.19.0
+
+### Standard Library
+
+- **`std::ocr`** — read text out of an image, either locally through macOS Vision (`readText`, `readTextBlocks`) or by sending it to a model (`readTextWithModel`). The new `@agency-lang/tesseract-local` package adds a local alternative that works outside macOS.
+- **`std::thread.viewFile`** — A new tool that models can use to view an image file/PDF.
+
+### Agents
+
+- **`std::github` is wired into the coding and review agents.** Both agents can now read and act on pull requests and issues directly, instead of shelling out to the `gh` CLI.
+
+### LLM
+
+- **`agency local` can run MLX models on Apple Silicon.** `agency local download` fetches a model from Hugging Face in parallel, resumably, and verifies it. `agency local serve` runs one `mlx_lm.server` per model behind a single front door, with a picker and a request log. The model catalog now lists MLX models alongside the existing ones.
+- smoltalk upgraded to 0.13.1 and then 0.13.2, so a transient 400 error from Anthropic is retried instead of failing, and Gemini handles enums in structured response correctly.
+
+### Language
+
+- Typechecker bug fixes: better narrowing in handlers and dead code, a new diagnostic (AG4012) for a local that shadows a parameter name, a new diagnostic (AG7007) for a type's value argument that the generated validator can't reach, and clearer errors for a broken import.
+
 ## Sep 7 2026 — v0.18.2
 
 ### Language

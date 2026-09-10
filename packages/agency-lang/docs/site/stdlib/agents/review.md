@@ -21,7 +21,8 @@ buildTools(): any[]
 ```
 
 Return the reviewer's lookup tools. It reads and checks; it has no tools
-  that change anything.
+  that change anything. The GitHub tools here are the read bundle only, so
+  it can read a pull request it is asked to review and cannot post to it.
 
 **Returns:** `any[]`
 
@@ -74,4 +75,4 @@ Review a work product against a task and return findings. error=true marks
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L70))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/review.agency#L71))

@@ -48,6 +48,9 @@ import { _ghResolveRepo } from "agency-lang/stdlib-lib/github/repo.js"
   sets for you; under plain `agency run` nothing sets it, so pass both names
   or call `setAgentCwd` first. Approving an effect "always" pins the approval
   to that one repository.
+  The coding agent carries all of these tools and the review agent carries
+  the reads, through the githubTools and githubReadTools bundles in
+  std::agents/lib/toolkits.
 
   The credential comes from GITHUB_TOKEN / GH_TOKEN, then `gh auth token`,
   then the system keyring (setSecret("github-token", ...)). No tool ever

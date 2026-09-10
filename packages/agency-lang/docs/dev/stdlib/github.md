@@ -1,9 +1,10 @@
 # `std::github`
 
 `std::github` gives an agent typed tools for pull requests and issues:
-eleven reads and seven writes, each behind its own interrupt effect. The
-spec is `packages/agency-lang/2026-09-01-std-github-spec.md`. This doc
-records the decisions a reader needs before changing the module.
+eleven reads and seven writes, each behind its own interrupt effect. This
+doc records the decisions a reader needs before changing the module. The
+design spec it was built from was never committed, so this doc is the
+record.
 
 Files: `stdlib/github.agency` is the public surface. Under
 `lib/stdlib/github/`, `credential.ts` finds the token, `repo.ts` resolves
@@ -99,3 +100,25 @@ The base URL is the constant `https://api.github.com`. GitHub Enterprise
 support is issue #1003. When it lands the value must be read once per
 process, never per request, so a mid-run `setEnv` cannot redirect
 authenticated calls.
+
+## How the agents get it
+
+`std::agents/lib/toolkits` has two bundles over this module, shaped like
+the git bundles: `githubReadTools()` holds the eleven reads and
+`githubTools()` adds the seven writes. The coding agent claims
+`githubTools()`, and the agency agent's code subagent builds its list from
+the coding agent, so `agency agent` carries all eighteen. The review agent
+claims `githubReadTools()` only, which keeps its no-writes rule. No other
+agent carries GitHub tools; `tests/agency/agents/toolGaps.agency` pins
+that.
+
+The recommended built-in policy (`lib/runtime/builtinPolicies.ts`) approves
+every read effect and has no rule for any write, so a write prompts the
+way `std::git::commit` does. `agency agent --approve GithubRead` and
+`--reject GithubWrite` name the same sets.
+
+The coding agent's `gh-pr-and-issues` skill tells the model to use these
+tools first and keeps the `gh` CLI for creating and merging pull requests,
+reading CI logs, and `gh api`. `safeBash` has no rule for `gh`, so a `gh`
+command still raises the coarse `std::bash` effect; the typed tools are the
+fine-grained path.

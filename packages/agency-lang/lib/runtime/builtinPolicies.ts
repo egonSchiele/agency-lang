@@ -109,6 +109,20 @@ export const recommendedAutoApprovePolicy: Policy = {
   "std::git::remoteList": approve,
   "std::git::blame": approve,
   "std::git::stashList": approve,
+  // GitHub reads through the user's own token: the same class of action as
+  // the git reads above and the web lookups. Every std::github write is left
+  // out, so it prompts the way std::git::commit and std::write do.
+  "std::github::prGet": approve,
+  "std::github::prList": approve,
+  "std::github::prDiff": approve,
+  "std::github::prFiles": approve,
+  "std::github::prReviewList": approve,
+  "std::github::prReviewCommentList": approve,
+  "std::github::prChecks": approve,
+  "std::github::issueGet": approve,
+  "std::github::issueList": approve,
+  "std::github::issueCommentList": approve,
+  "std::github::issueSearch": approve,
 };
 
 // Glob matching a directory and everything under it — same convention

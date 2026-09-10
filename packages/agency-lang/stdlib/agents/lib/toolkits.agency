@@ -33,6 +33,26 @@ import {
   gitStashPop,
   gitRestore,
  } from "std::git"
+import {
+  ghPrGet,
+  ghPrList,
+  ghPrDiff,
+  ghPrFiles,
+  ghPrReviews,
+  ghPrReviewComments,
+  ghPrChecks,
+  ghIssueGet,
+  ghIssueList,
+  ghIssueComments,
+  ghIssueSearch,
+  ghPrReviewComment,
+  ghPrReview,
+  ghPrApprove,
+  ghIssueCreate,
+  ghIssueComment,
+  ghIssueClose,
+  ghIssueLabel,
+ } from "std::github"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
 import { remember, recall } from "std::memory"
 import { safeBash } from "std::safeBash"
@@ -150,6 +170,50 @@ export def gitTools(): any[] {
     gitStashPush,
     gitStashPop,
     gitRestore,
+  ]
+}
+
+export def githubReadTools(): any[] {
+  """
+  Return the read-only GitHub tools: pull requests, their diffs, files,
+  reviews, and checks; issues, their comments, and search. Nothing here
+  posts anything, so read-only agents (reviewers) can carry them. Each
+  tool resolves the repository from the origin remote of the agent working
+  directory, so an agent with these tools needs a working directory set.
+  """
+  return [
+    ghPrGet,
+    ghPrList,
+    ghPrDiff,
+    ghPrFiles,
+    ghPrReviews,
+    ghPrReviewComments,
+    ghPrChecks,
+    ghIssueGet,
+    ghIssueList,
+    ghIssueComments,
+    ghIssueSearch,
+  ]
+}
+
+export def githubTools(): any[] {
+  """
+  Return the GitHub tools. The read-only ones are in githubReadTools; the
+  rest post comments and reviews, and create, comment on, close, and label
+  issues. Every write prompts for approval unless a policy approves it.
+  ghPrApprove raises its own effect (std::github::prApprove), so a policy
+  can forbid approving a pull request while allowing every other review
+  action.
+  """
+  return [
+    ...githubReadTools(),
+    ghPrReviewComment,
+    ghPrReview,
+    ghPrApprove,
+    ghIssueCreate,
+    ghIssueComment,
+    ghIssueClose,
+    ghIssueLabel,
   ]
 }
 

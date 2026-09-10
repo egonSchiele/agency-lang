@@ -47,6 +47,41 @@ describe("builtinPolicy", () => {
     expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::recordUse"]).toBeUndefined();
   });
 
+  it("approves GitHub reads under 'recommended' and leaves every GitHub write to the prompt", () => {
+    const reads = [
+      "std::github::prGet",
+      "std::github::prList",
+      "std::github::prDiff",
+      "std::github::prFiles",
+      "std::github::prReviewList",
+      "std::github::prReviewCommentList",
+      "std::github::prChecks",
+      "std::github::issueGet",
+      "std::github::issueList",
+      "std::github::issueCommentList",
+      "std::github::issueSearch",
+    ];
+    const writes = [
+      "std::github::prReviewComment",
+      "std::github::prReview",
+      "std::github::prApprove",
+      "std::github::issueCreate",
+      "std::github::issueComment",
+      "std::github::issueUpdate",
+      "std::github::issueLabel",
+    ];
+    const recommended = builtinPolicy("recommended", "/tmp/base")!;
+    const minimal = builtinPolicy("minimal", "/tmp/base")!;
+    for (const effect of reads) {
+      expect(recommended[effect]).toEqual([{ action: "approve" }]);
+      expect(minimal[effect]).toBeUndefined();
+    }
+    for (const effect of writes) {
+      expect(recommended[effect]).toBeUndefined();
+      expect(minimal[effect]).toBeUndefined();
+    }
+  });
+
   it("leaves the save, review, and provider-load gates undecided under every built-in but approve-all", () => {
     for (const name of ["recommended", "minimal", "with-writes"]) {
       const p = builtinPolicy(name, "/tmp/base")!;

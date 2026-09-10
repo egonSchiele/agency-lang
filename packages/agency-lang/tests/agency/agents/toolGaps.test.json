@@ -98,6 +98,39 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "codingHasGithubReadsAndWrites",
+      "description": "the coding agent can read and act on pull requests and issues",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "reviewerReadsGithubButCannotPost",
+      "description": "the reviewer reads pull requests and still posts nothing",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "explorerHasNoGithub",
+      "description": "the explorer does not carry GitHub tools",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

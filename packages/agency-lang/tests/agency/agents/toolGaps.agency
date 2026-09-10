@@ -4,6 +4,7 @@ import { buildTools as reviewTools } from "std::agents/review"
 import { buildTools as agencyVerifierTools } from "std::agents/agency/verifier"
 import { buildTools as agencyCodingTools } from "std::agents/agency/coding"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
+import { buildTools as explorerTools } from "std::agents/explorer"
 import { gitTools, readOnlyGitTools } from "std::agents/lib/toolkits"
 import { githubTools, githubReadTools } from "std::agents/lib/toolkits"
 
@@ -106,4 +107,30 @@ node githubBundlesSplitReadsFromWrites(): boolean {
   const readsPostNothing = !hasTool(reads, "ghPrReview") && !hasTool(reads, "ghIssueComment")
   const allPosts = hasTool(all, "ghPrReview") && hasTool(all, "ghPrApprove") && hasTool(all, "ghIssueCreate")
   return readsLookRight && readsPostNothing && allPosts && readNames.length == 11 && writeNames.length == 7
+}
+
+// The coding agent can read and act on pull requests and issues. The agency
+// agent's code subagent builds its list from this one, so this is also what
+// `agency agent` gets.
+node codingHasGithubReadsAndWrites(): boolean {
+  const tools = codingTools()
+  return hasTool(tools, "ghPrGet") && hasTool(tools, "ghPrChecks") && hasTool(tools, "ghPrReview") && hasTool(tools, "ghIssueCreate")
+}
+
+// The reviewer can read a pull request but still posts nothing: the write
+// set is derived from the bundles so a write tool added later is asserted
+// absent here without editing this test.
+node reviewerReadsGithubButCannotPost(): boolean {
+  const tools = reviewTools()
+  const readNames = map(githubReadTools(), \tool -> tool.name)
+  const writeNames = filter(map(githubTools(), \tool -> tool.name), \name -> !readNames.includes(name))
+  const canRead = hasTool(tools, "ghPrDiff") && hasTool(tools, "ghPrReviewComments")
+  const cannotPost = every(writeNames, \name -> !hasTool(tools, name))
+  return canRead && cannotPost && writeNames.length > 0
+}
+
+// Only the coding and review agents carry GitHub tools. Handing them to
+// every agent is a deliberate change to this test, not a side effect.
+node explorerHasNoGithub(): boolean {
+  return !hasTool(explorerTools(), "ghPrGet") && !hasTool(explorerTools(), "ghIssueGet")
 }

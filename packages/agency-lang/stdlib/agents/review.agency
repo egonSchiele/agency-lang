@@ -11,7 +11,7 @@
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { webTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { webTools, githubReadTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
@@ -30,9 +30,10 @@ static const skills = agentSkill("review")
 export def buildTools(): any[] {
   """
   Return the reviewer's lookup tools. It reads and checks; it has no tools
-  that change anything.
+  that change anything. The GitHub tools here are the read bundle only, so
+  it can read a pull request it is asked to review and cannot post to it.
   """
-  return [...webTools(), ...searchTools(), skills, ...communicationTools()]
+  return [...webTools(), ...githubReadTools(), ...searchTools(), skills, ...communicationTools()]
 }
 
 def judgeWork(

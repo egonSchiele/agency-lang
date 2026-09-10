@@ -1,11 +1,10 @@
 # `std::github`
 
 `std::github` gives an agent typed tools for pull requests and issues:
-eleven reads and seven writes, each behind its own interrupt effect. The
-module's original spec was never committed; the spec for wiring it into the
-agents is `docs/superpowers/specs/2026-09-09-std-github-agent-hookup-design.md`
-at the repo root. This doc records the decisions a reader needs before
-changing the module.
+eleven reads and seven writes, each behind its own interrupt effect. This
+doc records the decisions a reader needs before changing the module. The
+design spec it was built from was never committed, so this doc is the
+record.
 
 Files: `stdlib/github.agency` is the public surface. Under
 `lib/stdlib/github/`, `credential.ts` finds the token, `repo.ts` resolves

@@ -76,10 +76,17 @@ gh auth status
 ```
 
 If this prints an account and "Logged in", you are ready. If it reports you
-are not logged in, read the `gh: authentication setup` skill. The typed
-tools use the same credentials as `gh` (`GITHUB_TOKEN`, `GH_TOKEN`, or
-`gh auth token`), so a machine set up for one is set up for both. If no
-credentials are available at all, say so to the caller and stop.
+are not logged in, read the `gh: authentication setup` skill.
+
+The typed tools look for a token in three places, in this order: the
+`GITHUB_TOKEN` or `GH_TOKEN` environment variable, then `gh auth token`, then
+the Agency keyring entry saved with `setSecret("github-token", "<token>")`.
+So a machine set up for `gh` is set up for the typed tools too. The reverse
+is not always true: `gh auth status` can report no login while the typed
+tools still work from an environment variable or the keyring. If a typed
+tool succeeds, you are authenticated, whatever `gh` says. Say so to the
+caller and stop only when a typed tool fails with "No GitHub credential" and
+`gh auth status` also reports no login.
 
 ### Multi-line text: always use a file or heredoc
 

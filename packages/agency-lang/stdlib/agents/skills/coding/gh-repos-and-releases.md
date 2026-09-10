@@ -6,8 +6,8 @@ description: Use the gh (GitHub CLI) to manage repositories and releases, beyond
 # Repositories, releases, and workflows via `gh`
 
 This skill covers the GitHub operations you reach for less often than PRs and
-issues. For pull requests, issues, and CI, read the `gh: pull requests, issues
-& CI` skill instead. If `gh auth status` says you are not logged in, read the
+issues. For pull requests, issues, and CI, read the `GitHub: pull requests,
+issues & CI` skill instead. If `gh auth status` says you are not logged in, read the
 `gh: authentication setup` skill first.
 
 As with all `gh` work, write any multi-line body (release notes, descriptions)

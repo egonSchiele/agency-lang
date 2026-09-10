@@ -87,6 +87,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "githubBundlesSplitReadsFromWrites",
+      "description": "the GitHub read bundle posts nothing and the full bundle adds the seven writes",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -5,6 +5,7 @@ import { buildTools as agencyVerifierTools } from "std::agents/agency/verifier"
 import { buildTools as agencyCodingTools } from "std::agents/agency/coding"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
 import { gitTools, readOnlyGitTools } from "std::agents/lib/toolkits"
+import { githubTools, githubReadTools } from "std::agents/lib/toolkits"
 
 def hasTool(tools: any[], name: string): boolean {
   return some(tools, \tool -> tool.name == name)
@@ -89,4 +90,20 @@ node noAgentHasDuplicateToolNames(): boolean {
     }
   }
   return true
+}
+
+// The GitHub bundles split reads from writes the way the git bundles do, so
+// a read-only agent can carry githubReadTools and post nothing. The write
+// set is derived (githubTools minus githubReadTools) rather than hand-listed,
+// so a write tool added later is automatically asserted absent from the
+// read bundle.
+node githubBundlesSplitReadsFromWrites(): boolean {
+  const reads = githubReadTools()
+  const all = githubTools()
+  const readNames = map(reads, \tool -> tool.name)
+  const writeNames = filter(map(all, \tool -> tool.name), \name -> !readNames.includes(name))
+  const readsLookRight = hasTool(reads, "ghPrGet") && hasTool(reads, "ghPrDiff") && hasTool(reads, "ghIssueSearch")
+  const readsPostNothing = !hasTool(reads, "ghPrReview") && !hasTool(reads, "ghIssueComment")
+  const allPosts = hasTool(all, "ghPrReview") && hasTool(all, "ghPrApprove") && hasTool(all, "ghIssueCreate")
+  return readsLookRight && readsPostNothing && allPosts && readNames.length == 11 && writeNames.length == 7
 }

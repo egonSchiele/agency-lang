@@ -23,4 +23,25 @@ describe("withRootCarriers", () => {
       AGENCY_MAX_COST: "5",
     });
   });
+
+  test("clears stale resume carriers and sets both only for resume", () => {
+    const inherited = {
+      AGENCY_RESUME_FILE: "/stale/checkpoint.json",
+      AGENCY_RESUME_OVERRIDES: '{"locals":{"stale":true}}',
+      AGENCY_RESUME_FORCE: "1",
+      PATH: "/bin",
+    };
+
+    expect(withRootCarriers(inherited, {})).toEqual({ PATH: "/bin" });
+    expect(
+      withRootCarriers(inherited, {
+        resume: { checkpointFile: "/new/checkpoint.json", overridesJson: "{}", force: true },
+      }),
+    ).toEqual({
+      PATH: "/bin",
+      AGENCY_RESUME_FILE: "/new/checkpoint.json",
+      AGENCY_RESUME_OVERRIDES: "{}",
+      AGENCY_RESUME_FORCE: "1",
+    });
+  });
 });

@@ -19,6 +19,21 @@ describe("debugStep()", () => {
     expect(result).toBeUndefined();
   });
 
+  it("skips only the first trace checkpoint after rewind", async () => {
+    const ctx = makeMockCtx();
+    let writes = 0;
+    ctx._skipNextCheckpoint = true;
+    ctx.writeCheckpointToTraceWriter = async () => {
+      writes++;
+    };
+
+    await debugStep(ctx, baseInfo);
+    await debugStep(ctx, { ...baseInfo, stepPath: "2" });
+
+    expect(writes).toBe(1);
+    expect(ctx._skipNextCheckpoint).toBe(false);
+  });
+
   it("returns interrupt when stepping with stepNext at current depth", async () => {
     const dbg = new DebuggerState(10);
     dbg.stepNext(); // stepping mode, targetDepth === callDepth (both 0)

@@ -19,12 +19,16 @@ export type CompileSandboxedArgs = {
   /** Enforce the reviewed JS-globals allowlist. Only `--agency-only` sets this;
    *  the trusted runtime fork path leaves it off. See compileValidatedClosure. */
   enforceJsGlobals?: boolean;
+  fingerprintModuleIds?: boolean;
 };
 
 export function compileSandboxed(args: CompileSandboxedArgs): CompileResult {
   try {
     const closure = validateClosure({ entry: args.entry, dir: args.dir });
-    return compileValidatedClosure(closure, { enforceJsGlobals: args.enforceJsGlobals });
+    return compileValidatedClosure(closure, {
+      enforceJsGlobals: args.enforceJsGlobals,
+      fingerprintModuleIds: args.fingerprintModuleIds,
+    });
   } catch (e) {
     if (e instanceof ClosureValidationError) {
       return { success: false, errors: e.violations };
@@ -45,6 +49,7 @@ export function compileAgencyOnly(sourceFile: string): AgencyOnlyCompile {
     entry: { file: path.basename(absolute) },
     dir,
     enforceJsGlobals: true,
+    fingerprintModuleIds: true,
   });
   if (!result.success) return { ok: false, errors: result.errors };
   for (const [relPath, code] of Object.entries(result.modules ?? {})) {

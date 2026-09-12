@@ -25,6 +25,7 @@ export type CompileValidatedClosureOptions = {
    *  (`std::agency.run`) shares this compile but is trusted-context code that
    *  may name JS globals, so it leaves this off. */
   enforceJsGlobals?: boolean;
+  fingerprintModuleIds?: boolean;
 };
 
 export function compileValidatedClosure(
@@ -38,7 +39,8 @@ export function compileValidatedClosure(
     let entrySource = "";
     let entryMirrorPath = "";
     let entryRelPath = "";
-    const mirrored: { relPath: string; source: string; mirrorPath: string }[] = [];
+    const mirrored: { moduleId: string; relPath: string; source: string; mirrorPath: string }[] =
+      [];
     for (const [moduleId, mod] of Object.entries(data.modules)) {
       const target = path.join(mirrorRoot, ...mod.relPath.split(path.posix.sep));
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -48,7 +50,7 @@ export function compileValidatedClosure(
         entryMirrorPath = target;
         entryRelPath = mod.relPath;
       } else {
-        mirrored.push({ relPath: mod.relPath, source: mod.source, mirrorPath: target });
+        mirrored.push({ moduleId, relPath: mod.relPath, source: mod.source, mirrorPath: target });
       }
     }
     if (entryMirrorPath === "") {
@@ -78,6 +80,7 @@ export function compileValidatedClosure(
     const entryResult = compileSource(entrySource, {
       ...sandboxOptions,
       sourcePath: entryMirrorPath,
+      fingerprintModuleId: options.fingerprintModuleIds ? data.entryModuleId : undefined,
     });
     if (!entryResult.success) return entryResult;
     // The entry's generated JS imports each local module by relative path
@@ -89,6 +92,7 @@ export function compileValidatedClosure(
       const result = compileSource(mod.source, {
         ...sandboxOptions,
         sourcePath: mod.mirrorPath,
+        fingerprintModuleId: options.fingerprintModuleIds ? mod.moduleId : undefined,
       });
       if (!result.success) {
         return {

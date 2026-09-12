@@ -80,6 +80,12 @@ function defaultClock(): Clock {
   return process.env.AGENCY_FAKE_CLOCK === "1" ? new FakeClock() : realClock;
 }
 
+export type PendingArgOverrides = {
+  moduleId: string | null;
+  scopeName: string | null;
+  values: Record<string, unknown>;
+};
+
 /* bunch of stuff that every node/function in the runtime needs access to,
 that we don't want to pass as individual arguments everywhere */
 export class RuntimeContext<T> {
@@ -109,7 +115,7 @@ export class RuntimeContext<T> {
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
-  _pendingArgOverrides?: Record<string, any>;
+  _pendingArgOverrides?: PendingArgOverrides;
   _restoreCount: number;
 
   /* Here is why this is needed: When you're stepping through the code,

@@ -18,8 +18,11 @@ export async function debugStep(
     return undefined;
   }
 
-  // Trace write path — independent of debugger
-  if (!ctx._skipNextCheckpoint && ctx.stateStack.currentNodeId()) {
+  // A rewind marks the checkpoint at its destination as already recorded.
+  // Consume that marker here so later steps continue writing trace checkpoints.
+  const skipCheckpoint = ctx._skipNextCheckpoint;
+  ctx._skipNextCheckpoint = false;
+  if (!skipCheckpoint && ctx.stateStack.currentNodeId()) {
     const cp = Checkpoint.fromContext(ctx, info);
     await ctx.writeCheckpointToTraceWriter(cp);
   }

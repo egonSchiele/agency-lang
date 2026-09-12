@@ -19,20 +19,25 @@ signature that validates under the configured key, compared in constant time.
 A missing signature returns false, so a caller cannot dodge verification by
 stripping the field.
 
-## Embed, do not enforce
+## Where verification is enforced
 
-The runtime signs but never refuses: editing checkpoints is a supported
-feature (rewind, the debugger, resume overrides), and trace mode writes a
-checkpoint per step. Enforcement is the host's policy — a host that has not
-opted in never calls verify.
+Checkpoint creation signs but does not refuse: editing checkpoints is a
+supported feature, and trace mode writes a checkpoint per step. External hosts
+still choose whether to call `verifyCheckpointChecksum`.
+
+The `agency resume` command verifies any checkpoint that carries a signature.
+It first validates the checkpoint shape, then checks the signature with the
+configured current and retired keys. It refuses a signature it cannot verify;
+`--force` bypasses that refusal. Unsigned checkpoints remain editable and can
+be resumed without a key.
 
 ## Signing
 
 `Checkpoint.fromStateStack` is the single chokepoint every checkpoint is
 created through, and its last statement calls `signCheckpoint`. With no key in
 the environment that call is a no-op; with a key, every checkpoint comes out
-signed. The legitimate edit paths — `applyOverrides` (rewind and resume-time
-overrides), `CheckpointStore.pin`, `Checkpoint.clone` — re-sign, so an edited
+signed. The legitimate edit paths — resume-time overrides,
+`CheckpointStore.pin`, and `Checkpoint.clone` — re-sign, so an edited
 checkpoint stays self-consistent. Both functions also accept the plain parsed
 JSON form of a checkpoint, which is what the external resume path carries.
 
@@ -50,11 +55,10 @@ order hashes identically. The checksum covers the whole checkpoint, so new
 fields are covered automatically. There is no algorithm field; the algorithm
 is fixed in code, and the domain tag changes if it ever does.
 
-Verification recomputes the canonical form from a checkpoint that came
-through `Checkpoint.fromJSON`, i.e. through the zod schemas — so a `toJSON`
-field missing from its schema makes a valid checkpoint verify false. Every
-new field on a checkpoint-tree `toJSON` must land in its schema in the same
-change.
+`Checkpoint.fromJSON` validates the checkpoint with the zod schemas before
+verification recomputes the canonical form. A `toJSON` field missing from its
+schema makes a valid checkpoint verify false. Every new field on a checkpoint
+tree must appear in the schema in the same change.
 
 ## The key
 

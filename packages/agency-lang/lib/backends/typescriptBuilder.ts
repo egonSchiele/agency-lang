@@ -499,7 +499,7 @@ export class TypeScriptBuilder {
 
   // ------- Main entry point -------
 
-  build(program: AgencyProgram): TsNode {
+  build(program: AgencyProgram, moduleFingerprint?: { moduleId: string; hash: string }): TsNode {
     // A template is not a program. Refuse before generating anything, and
     // name every unfilled hole — not just the first one met — so the
     // message tells the user the full fill they owe.
@@ -593,6 +593,7 @@ export class TypeScriptBuilder {
       registryModuleId: this.initPlan?.registryModuleId,
       staticLocalOrder: this.initPlan?.staticLocalOrder,
       globalLocalOrder: this.initPlan?.globalLocalOrder,
+      moduleFingerprint,
     });
   }
 
@@ -4494,7 +4495,18 @@ export class TypeScriptBuilder {
                     data: ts.obj({}),
                   }),
                 ),
-                ts.varDecl("const", "__result", ts.await(ts.call(ts.id("main"), mainCallArgs))),
+                ts.varDecl(
+                  "const",
+                  "__result",
+                  ts.await(
+                    ts.call(ts.id("runCliEntry"), [
+                      ts.obj({
+                        runMain: ts.arrowFn([], ts.call(ts.id("main"), mainCallArgs)),
+                        resume: ts.id("__resumeFromCheckpoint"),
+                      }),
+                    ]),
+                  ),
+                ),
                 // Running `main` directly from the CLI: interrupts that no
                 // handler settled have surfaced to the user. resolveCliInterrupts
                 // is that user endpoint — under a run policy it decides each one

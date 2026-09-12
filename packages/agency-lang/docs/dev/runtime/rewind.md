@@ -67,8 +67,9 @@ The implementation is `rewindFrom` in `lib/runtime/rewind.ts`. It:
 2. applies the overrides;
 3. mints a fresh run id and a fresh execution context, so a replay shows up as
    a distinct run in traces;
-4. registers top-level callbacks inside a bootstrap ALS frame, then calls
-   `restoreState(checkpoint)` and sets `_skipNextCheckpoint`;
+4. calls the shared `restoreForResume` setup, which verifies code identity,
+   reinstalls the root policy and budget, registers callbacks, and restores
+   state, then sets `_skipNextCheckpoint`;
 5. runs the checkpoint's node to completion, looping on `RestoreSignal` so a
    `restore()` inside the replay is honored;
 6. returns `createReturnObject({ result, globals })`, the same
@@ -108,6 +109,8 @@ so this replay is the only thing that puts them back.
 | File | Role |
 |------|------|
 | `lib/runtime/rewind.ts` | `rewindFrom`, `applyOverrides` |
+| `lib/runtime/resumeSetup.ts` | shared setup for rewind, interrupt response, and CLI resume |
+| `lib/runtime/interrupts.ts` | lifecycle-complete CLI resume |
 | `lib/runtime/checkpoint.ts` | `checkpoint()`, `getCheckpoint()`, `restore()` |
 | `lib/runtime/state/checkpointStore.ts` | `Checkpoint`, `CheckpointStore` |
 | `lib/runtime/debugger.ts` | `debugStep` — trace write plus rolling checkpoints |

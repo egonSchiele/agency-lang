@@ -6,11 +6,12 @@ import { compileSource } from "../compiler/compile.js";
 import { sha256Text } from "../utils/hash.js";
 import { generateTypeScript } from "./typescriptGenerator.js";
 import { parseAgency } from "../parser.js";
+import { transformSync } from "esbuild";
 
 const FILE = path.join(os.tmpdir(), "agency-modfp-itest.agency");
 
 const REGISTRATION =
-  /\n__registerModuleFingerprint\("([^"]+)", "([0-9a-f]{64})", import\.meta\.url\);\n$/;
+  /__registerModuleFingerprint\("([^"]+)", "([0-9a-f]{64})", import\.meta\.url\);?/;
 
 function generate(source: string): string {
   const parsed = parseAgency(source, {}, true);
@@ -32,15 +33,18 @@ def double(n: number): number {
 `;
 
 describe("module fingerprint emission", () => {
-  it("appends a registration whose hash covers the printed output before it", () => {
+  it("registers before the CLI entry and hashes the output without the registration", () => {
     const code = generate(BASE);
     const registration = code.match(REGISTRATION);
     if (!registration) {
       throw new Error("no __registerModuleFingerprint emission found");
     }
     expect(registration[1]).toBe("mod.agency");
-    const withoutRegistration = code.slice(0, code.length - registration[0].length);
+    const withoutRegistration = code.replace(`${registration[0]}\n`, "");
     expect(registration[2]).toBe(sha256Text(withoutRegistration));
+    expect(code.indexOf(registration[0])).toBeLessThan(
+      code.indexOf("if (__process.argv[1] === fileURLToPath(import.meta.url))"),
+    );
   });
 
   it("identical input generates identical bytes (incremental emit stays byte-identical)", () => {
@@ -53,12 +57,28 @@ describe("module fingerprint emission", () => {
     expect(changedHash![2]).not.toBe(baseHash![2]);
   });
 
-  it("compileSource programs register no fingerprint (no stable module identity)", () => {
+  it("does not mistake user text for the generated CLI entry", () => {
+    const guardText = "if (__process.argv[1] === fileURLToPath(import.meta.url)) {";
+    const code = generate(`// ${guardText}
+node main() {}`);
+
+    expect(() => transformSync(code, { loader: "ts", format: "esm" })).not.toThrow();
+    const registration = code.match(REGISTRATION);
+    expect(registration).not.toBeNull();
+    expect(code.indexOf(registration![0])).toBeLessThan(
+      code.lastIndexOf("if (__process.argv[1] === fileURLToPath(import.meta.url))"),
+    );
+  });
+
+  it("compileSource registers a fingerprint when given a stable module identity", () => {
     fs.writeFileSync(FILE, BASE, "utf-8");
-    const compiled = compileSource(BASE, { sourcePath: FILE });
+    const compiled = compileSource(BASE, {
+      sourcePath: FILE,
+      fingerprintModuleId: FILE,
+    });
     if (!compiled.success) {
       throw new Error("compile failed: " + JSON.stringify(compiled.errors));
     }
-    expect(compiled.code).not.toContain("__registerModuleFingerprint(");
+    expect(compiled.code).toContain("__registerModuleFingerprint(");
   });
 });

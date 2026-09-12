@@ -84,11 +84,14 @@ export {
   interruptWithHandlers,
   respondToInterrupts,
   respondToInterruptsForServe,
+  resumeCliFromCheckpoint,
 } from "./interrupts.js";
+export type { ResumeCliFromCheckpointArgs } from "./interrupts.js";
 
 export { checkPolicy, checkPolicyExplicit, validatePolicy } from "./policy.js";
 
 export { resolveCliInterrupts } from "./cliInterruptResolution.js";
+export { runCliEntry } from "./cliEntry.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
 
@@ -143,6 +146,8 @@ export { reportBudgetExceededAndExit, formatBudgetExceeded } from "./budgetExit.
 export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";
+export { applyLocalOverrides, applyRestoreOverrides, restoreForResume } from "./resumeSetup.js";
+export type { ResumeOverrides, ResumeMetadata, ResumeRequest } from "./resumeSetup.js";
 
 export { debugStep } from "./debugger.js";
 export { DebuggerState } from "../debugger/debuggerState.js";

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { AGENCY_RESUME_FILE, AGENCY_RESUME_OVERRIDES } from "../constants.js";
+import { AGENCY_RESUME_FILE, AGENCY_RESUME_FORCE, AGENCY_RESUME_OVERRIDES } from "../constants.js";
 import { verifyCheckpointChecksum } from "./checkpointChecksum.js";
 import type { ResumeOverrides } from "./resumeSetup.js";
 import { Checkpoint } from "./state/checkpointStore.js";
@@ -50,14 +50,16 @@ export async function runCliEntry<T>(args: CliEntryArgs<T>): Promise<T> {
     throw new Error(`Could not read checkpoint file "${filename}": ${String(error)}`);
   }
 
-  const key = process.env.AGENCY_CHECKPOINT_KEY;
-  if (key !== undefined && key !== "" && !verifyCheckpointChecksum(raw as any)) {
-    throw new Error(`Checkpoint file "${filename}" failed checksum verification`);
-  }
-
   const checkpoint = Checkpoint.fromJSON(raw);
   if (!checkpoint) {
     throw new Error(`Checkpoint file "${filename}" does not contain a valid Agency checkpoint`);
+  }
+  if (
+    checkpoint.signature !== undefined &&
+    process.env[AGENCY_RESUME_FORCE] !== "1" &&
+    !verifyCheckpointChecksum(checkpoint)
+  ) {
+    throw new Error(`Checkpoint file "${filename}" failed checksum verification`);
   }
   return args.resume(checkpoint, parseOverrides(process.env[AGENCY_RESUME_OVERRIDES]));
 }

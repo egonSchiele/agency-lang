@@ -56,8 +56,10 @@ agency resume checkpoint.json foo.agency \
 
 Each `name=value` value is parsed as JSON when possible. Other values remain
 strings. `--program-arg` is separate because process arguments are not saved in
-a checkpoint. See [Checkpointing](../guide/checkpointing) for creating the JSON
-file and the integrity rules.
+a checkpoint. Signed checkpoints are verified automatically; use `--force` to
+resume one whose signature cannot be verified. See
+[Checkpointing](../guide/checkpointing) for creating the JSON file and the
+integrity rules.
 
 ## Choosing a model
 

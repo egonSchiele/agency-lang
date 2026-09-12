@@ -94,10 +94,10 @@ export const AGENCY_RUN_POLICY_INTERACTIVE_ON = "1";
 export const AGENCY_MAX_COST = "AGENCY_MAX_COST";
 export const AGENCY_MAX_TIME = "AGENCY_MAX_TIME";
 
-/** Absolute checkpoint path and serialized override buckets carried from
- * `agency resume` to the generated child entry. */
+/** Resume request carried from `agency resume` to the generated child entry. */
 export const AGENCY_RESUME_FILE = "AGENCY_RESUME_FILE";
 export const AGENCY_RESUME_OVERRIDES = "AGENCY_RESUME_OVERRIDES";
+export const AGENCY_RESUME_FORCE = "AGENCY_RESUME_FORCE";
 
 /** Process exit code when a top-level cost/time budget is exceeded. Distinct
  *  from 1 (generic failure) and 2 (usage error). */

@@ -25,10 +25,11 @@ Checkpoint creation signs but does not refuse: editing checkpoints is a
 supported feature, and trace mode writes a checkpoint per step. External hosts
 still choose whether to call `verifyCheckpointChecksum`.
 
-The `agency resume` command is an enforcing host. When
-`AGENCY_CHECKPOINT_KEY` is non-empty, its generated child verifies the raw
-parsed checkpoint before restoring it and refuses missing or invalid
-signatures. An unset or empty key disables both signing and this check.
+The `agency resume` command verifies any checkpoint that carries a signature.
+It first validates the checkpoint shape, then checks the signature with the
+configured current and retired keys. It refuses a signature it cannot verify;
+`--force` bypasses that refusal. Unsigned checkpoints remain editable and can
+be resumed without a key.
 
 ## Signing
 
@@ -54,11 +55,10 @@ order hashes identically. The checksum covers the whole checkpoint, so new
 fields are covered automatically. There is no algorithm field; the algorithm
 is fixed in code, and the domain tag changes if it ever does.
 
-Verification recomputes the canonical form from a checkpoint that came
-through `Checkpoint.fromJSON`, i.e. through the zod schemas — so a `toJSON`
-field missing from its schema makes a valid checkpoint verify false. Every
-new field on a checkpoint-tree `toJSON` must land in its schema in the same
-change.
+`Checkpoint.fromJSON` validates the checkpoint with the zod schemas before
+verification recomputes the canonical form. A `toJSON` field missing from its
+schema makes a valid checkpoint verify false. Every new field on a checkpoint
+tree must appear in the schema in the same change.
 
 ## The key
 

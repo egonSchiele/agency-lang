@@ -23,6 +23,8 @@ import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
 import { alwaysScopeFor } from "./alwaysScope.js";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
+import { TRACE_ID_ENV } from "../config.js";
+import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 
 // The response API lives in the cycle-free `interruptResponse.ts` leaf (imported
 // at the top of this file). Re-export so `import { approve, reject,
@@ -746,18 +748,21 @@ async function runResumeLoop(
   }
 }
 
-export type ResumeFromCheckpointArgs = {
+export type ResumeCliFromCheckpointArgs = {
   ctx: RuntimeContext<GraphState>;
   checkpoint: Checkpoint;
   overrides?: ResumeOverrides;
 };
 
-/** Resume a checkpoint as a complete CLI invocation, without fabricating an
- * interrupt response. Unlike debugger rewind, this path owns the run lifecycle
- * and therefore closes a completed trace or pauses one that interrupts again. */
-export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Promise<any> {
-  const runId = (args.ctx as any).runId ?? nanoid();
-  const execCtx = await args.ctx.createExecutionContext({ runId });
+/** Resume a checkpoint as a complete CLI run, including lifecycle events and
+ * trace finalization. */
+export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs): Promise<any> {
+  const resolved = resolveInvocation({
+    kind: "fresh",
+    inheritedRunId: getSubprocessRunInfo().runId,
+    environmentTraceId: process.env[TRACE_ID_ENV],
+  });
+  const execCtx = await args.ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
   try {
@@ -765,7 +770,6 @@ export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Prom
       checkpoint: args.checkpoint,
       overrides: args.overrides,
     });
-    execCtx._skipNextCheckpoint = true;
     agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
     execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     return await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);

@@ -16,8 +16,11 @@ export const template = `// \`__resultCheckpointId\` is referenced by interruptA
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (__ctx._pendingArgOverrides) {
-  const __overrides = __ctx._pendingArgOverrides;
+if (
+  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
+  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
+) {
+  const __overrides = __ctx._pendingArgOverrides.values;
   __ctx._pendingArgOverrides = undefined;
 {{{paramsStr}}}
 }

@@ -84,9 +84,9 @@ export {
   interruptWithHandlers,
   respondToInterrupts,
   respondToInterruptsForServe,
-  resumeFromCheckpoint,
+  resumeCliFromCheckpoint,
 } from "./interrupts.js";
-export type { ResumeFromCheckpointArgs } from "./interrupts.js";
+export type { ResumeCliFromCheckpointArgs } from "./interrupts.js";
 
 export { checkPolicy, checkPolicyExplicit, validatePolicy } from "./policy.js";
 

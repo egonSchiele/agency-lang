@@ -386,6 +386,7 @@ export type AssembleSectionsOpts = {
    */
   staticLocalOrder?: string[];
   globalLocalOrder?: string[];
+  moduleFingerprint?: { moduleId: string; hash: string };
 };
 
 /**
@@ -419,6 +420,16 @@ export function assembleSections(opts: AssembleSectionsOpts): TsNode {
 
   if (opts.generatedBuiltins.trim() !== "") {
     sections.push(ts.raw(opts.generatedBuiltins));
+  }
+
+  if (opts.moduleFingerprint !== undefined) {
+    sections.push(
+      ts.call(ts.id("__registerModuleFingerprint"), [
+        ts.str(opts.moduleFingerprint.moduleId),
+        ts.str(opts.moduleFingerprint.hash),
+        ts.raw("import.meta.url"),
+      ]),
+    );
   }
 
   if (opts.toolRegistrations.length > 0) {

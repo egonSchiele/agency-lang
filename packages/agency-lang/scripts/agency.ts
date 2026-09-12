@@ -151,6 +151,7 @@ type ResumeOptions = RunOptions & {
   globalVar?: string[];
   arg?: string[];
   programArg?: string[];
+  force?: boolean;
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -536,11 +537,16 @@ export function createProgram(deps: CliDependencies = {}): Command {
         "Pass one value to std::args in the resumed program (repeatable)",
         collectRepeats,
         [] as string[],
-      ),
+      )
+      .option("-f, --force", "Resume even when a checkpoint signature cannot be verified"),
   ).action(async (checkpointFile: string, input: string, options: ResumeOptions) => {
     let resume: ResumeCarrier;
     try {
-      resume = resolveResumeCarrier(checkpointFile, parseResumeOverrides(options));
+      resume = resolveResumeCarrier(
+        checkpointFile,
+        parseResumeOverrides(options),
+        options.force ?? false,
+      );
     } catch (error) {
       console.error(`Error: ${(error as Error).message}`);
       process.exit(2);

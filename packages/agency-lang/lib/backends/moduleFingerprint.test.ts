@@ -6,11 +6,12 @@ import { compileSource } from "../compiler/compile.js";
 import { sha256Text } from "../utils/hash.js";
 import { generateTypeScript } from "./typescriptGenerator.js";
 import { parseAgency } from "../parser.js";
+import { transformSync } from "esbuild";
 
 const FILE = path.join(os.tmpdir(), "agency-modfp-itest.agency");
 
 const REGISTRATION =
-  /__registerModuleFingerprint\("([^"]+)", "([0-9a-f]{64})", import\.meta\.url\);/;
+  /__registerModuleFingerprint\("([^"]+)", "([0-9a-f]{64})", import\.meta\.url\);?/;
 
 function generate(source: string): string {
   const parsed = parseAgency(source, {}, true);
@@ -56,12 +57,28 @@ describe("module fingerprint emission", () => {
     expect(changedHash![2]).not.toBe(baseHash![2]);
   });
 
-  it("compileSource programs register no fingerprint (no stable module identity)", () => {
+  it("does not mistake user text for the generated CLI entry", () => {
+    const guardText = "if (__process.argv[1] === fileURLToPath(import.meta.url)) {";
+    const code = generate(`// ${guardText}
+node main() {}`);
+
+    expect(() => transformSync(code, { loader: "ts", format: "esm" })).not.toThrow();
+    const registration = code.match(REGISTRATION);
+    expect(registration).not.toBeNull();
+    expect(code.indexOf(registration![0])).toBeLessThan(
+      code.lastIndexOf("if (__process.argv[1] === fileURLToPath(import.meta.url))"),
+    );
+  });
+
+  it("compileSource registers a fingerprint when given a stable module identity", () => {
     fs.writeFileSync(FILE, BASE, "utf-8");
-    const compiled = compileSource(BASE, { sourcePath: FILE });
+    const compiled = compileSource(BASE, {
+      sourcePath: FILE,
+      fingerprintModuleId: FILE,
+    });
     if (!compiled.success) {
       throw new Error("compile failed: " + JSON.stringify(compiled.errors));
     }
-    expect(compiled.code).not.toContain("__registerModuleFingerprint(");
+    expect(compiled.code).toContain("__registerModuleFingerprint(");
   });
 });

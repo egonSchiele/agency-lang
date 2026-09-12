@@ -4,7 +4,7 @@
  */
 import { AgencyConfig } from "@/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
-import { initPlanForModule } from "@/backends/typescriptGenerator.js";
+import { initPlanForModule, type InitPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
@@ -46,6 +46,33 @@ type CompileFailure = {
 
 export type CompileResult = CompileSuccess | CompileFailure;
 
+function useStableModuleIds(
+  plan: InitPlanForModule,
+  mirrorModuleId: string,
+  stableModuleId: string,
+): InitPlanForModule {
+  const remap = (moduleId: string): string =>
+    path.resolve(
+      path.dirname(stableModuleId),
+      path.relative(path.dirname(mirrorModuleId), moduleId),
+    );
+  const remapAwaitModules = (modules: InitPlanForModule["staticAwaitModules"]) =>
+    modules.map((module) => ({ ...module, sourceModuleId: remap(module.sourceModuleId) }));
+
+  return {
+    ...plan,
+    registryModuleId: stableModuleId,
+    staticAwaitModules: remapAwaitModules(plan.staticAwaitModules),
+    globalAwaitModules: remapAwaitModules(plan.globalAwaitModules),
+    resolveImportedName: (localName) => {
+      const resolved = plan.resolveImportedName(localName);
+      return resolved === null
+        ? null
+        : { ...resolved, sourceModuleId: remap(resolved.sourceModuleId) };
+    },
+  };
+}
+
 // Options accepted by compileSource. Mostly the standard AgencyConfig that
 // the rest of the pipeline takes, plus one compileSource-specific knob:
 // `imports`. We keep `imports` out of the global AgencyConfig because it's
@@ -71,6 +98,9 @@ export type CompileSourceOptions = AgencyConfig & {
    * ignored (pass the file's contents for clarity, but the disk file wins).
    */
   sourcePath?: string;
+  /** Stable module identity for checkpoint fingerprints. Omit for ephemeral
+   * subprocess programs whose generated module id is intentionally random. */
+  fingerprintModuleId?: string;
 };
 
 // Walk every import in the program and reject anything that fails the
@@ -106,6 +136,7 @@ export type { TypeCheckDiagnostic, TypeCheckReport } from "./typecheck.js";
 
 export function compileSource(source: string, config: CompileSourceOptions): CompileResult {
   const moduleId = `agency_${nanoid()}`;
+  const generatedModuleId = config.fingerprintModuleId ?? moduleId;
   // SymbolTable.build() walks the file system from the source's path to resolve
   // imports. With a caller-supplied sourcePath (the file is already on disk
   // beside its siblings), compile at that path so relative `.agency` imports
@@ -223,14 +254,19 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
 
     // 7. Generate TypeScript
     const outputPath = path.join(os.tmpdir(), `${moduleId}.js`);
-    const initPlan = initPlanForModule(closure, syntheticPath);
+    const mirrorInitPlan = initPlanForModule(closure, syntheticPath);
+    const initPlan =
+      config.fingerprintModuleId === undefined
+        ? mirrorInitPlan
+        : useStableModuleIds(mirrorInitPlan, syntheticPath, config.fingerprintModuleId);
     const generatedCode = generateTypeScript(
       liftedProgram,
       config,
       info,
-      moduleId,
+      generatedModuleId,
       outputPath,
       initPlan,
+      config.fingerprintModuleId !== undefined,
     );
 
     // 8. Transpile TS → JS

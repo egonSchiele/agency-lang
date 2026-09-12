@@ -5,11 +5,13 @@ import type { ResumeOverrides } from "../runtime/resumeSetup.js";
 export type ResumeCarrier = {
   checkpointFile: string;
   overridesJson: string;
+  force: boolean;
 };
 
 export function resolveResumeCarrier(
   checkpointFile: string,
   overrides: ResumeOverrides,
+  force: boolean,
   cwd = process.cwd(),
 ): ResumeCarrier {
   const resolved = path.resolve(cwd, checkpointFile);
@@ -25,5 +27,5 @@ export function resolveResumeCarrier(
   if (!stats.isFile()) {
     throw new Error(`Checkpoint path is not a file: ${resolved}`);
   }
-  return { checkpointFile: resolved, overridesJson: JSON.stringify(overrides) };
+  return { checkpointFile: resolved, overridesJson: JSON.stringify(overrides), force };
 }

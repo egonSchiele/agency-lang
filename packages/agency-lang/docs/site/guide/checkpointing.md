@@ -140,4 +140,7 @@ if (!verifyCheckpointChecksum(checkpoint)) {
 }
 ```
 
-This is strictly opt-in: you opt in to add the signature by setting the env var, and you need to manually check whether a checkpoint has been tampered with.
+Signing is opt-in. Hosts using the JavaScript API call
+`verifyCheckpointChecksum` themselves. `agency resume` checks a signature when
+one is present and refuses an invalid or unverifiable signature unless you pass
+`--force`.

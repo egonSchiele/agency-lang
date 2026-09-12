@@ -9,30 +9,32 @@ separate.
 
 The parent CLI validates and resolves the checkpoint path, parses overrides,
 and compiles the input with the same options as `agency run`. It then starts the
-compiled child with two environment carriers:
+compiled child with three environment carriers:
 
 - `AGENCY_RESUME_FILE` is the absolute checkpoint path.
 - `AGENCY_RESUME_OVERRIDES` is JSON with `locals`, `args`, and `globals`
   objects.
+- `AGENCY_RESUME_FORCE` is set when `--force` allows an unverifiable signed
+  checkpoint.
 
-`withRootCarriers` clears both variables for every child launch, including
+`withRootCarriers` clears all three variables for every child launch, including
 fresh runs. This prevents a nested or shell-inherited resume request from
 silently changing a later run.
 
 The generated executable calls `runCliEntry`. With no resume carrier it calls
 `main` as before. With a carrier it reads and validates the checkpoint, then
 calls the generated private `__resumeFromCheckpoint` binding. That binding
-supplies the compiled module's `__globalCtx` to the runtime. The public
-`rewindFrom(checkpoint, flatLocalOverrides, opts?)` export is unchanged.
+supplies the compiled module's `__globalCtx` to `resumeCliFromCheckpoint`. The
+public `rewindFrom(checkpoint, flatLocalOverrides, opts?)` export is unchanged.
 
 ## Shared restore setup
 
 `restoreForResume` in `lib/runtime/resumeSetup.ts` is used by direct CLI resume,
 interrupt response, and debugger rewind. It checks code fingerprints before
-restoring state, reinstalls the root policy handler and host budget, reloads
-providers, registers top-level callbacks, and applies overrides. Handlers are
-not serialized, so installing the root policy on every resumed execution is a
-safety requirement.
+restoring state. It reinstalls the root policy handler and host budget. It also
+reloads providers, registers top-level callbacks, and applies overrides.
+Handlers are not serialized, so every resumed execution installs the root
+policy again.
 
 The direct CLI path uses the same resume loop as interrupt response. A resumed
 run can therefore interrupt again. Completion emits the agent lifecycle end,
@@ -42,11 +44,12 @@ not finished.
 
 ## Integrity and code identity
 
-When `AGENCY_CHECKPOINT_KEY` is non-empty, `runCliEntry` verifies the parsed
-checkpoint before reviving or editing it. A missing or invalid signature is
-fatal. An unset or empty key disables verification, matching checkpoint signing
-semantics. Code fingerprints are always checked after the generated program is
-loaded, so a checkpoint cannot resume against changed source code.
+`runCliEntry` validates the checkpoint before checking its signature. A signed
+checkpoint must verify with a configured current or retired key unless the user
+passes `--force`. Unsigned checkpoints do not require a key. Code fingerprints
+are checked after the generated program is loaded, so a checkpoint cannot
+resume against changed source code. Agency-only compilation uses the original
+source paths as stable module identities and emits code fingerprints too.
 
 ## Overrides and program arguments
 
@@ -73,7 +76,7 @@ runtime sandbox.
 |------|------|
 | `lib/runtime/resumeSetup.ts` | Shared checkpoint restore preparation and overrides |
 | `lib/runtime/cliEntry.ts` | Generated child entry selection and checkpoint verification |
-| `lib/runtime/interrupts.ts` | Lifecycle-complete direct resume and shared resume loop |
+| `lib/runtime/interrupts.ts` | Lifecycle-complete CLI resume and shared resume loop |
 | `lib/cli/resumeOverrides.ts` | `name=value` parsing |
 | `lib/cli/resumeCarrier.ts` | Checkpoint path validation and carrier serialization |
 | `lib/cli/childEnv.ts` | Clears and installs child environment carriers |

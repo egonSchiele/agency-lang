@@ -7,7 +7,7 @@ and interrupt machinery as `agency run`.
 
 **Compatibility:** Keep the existing public compiled-module API
 `rewindFrom(checkpoint, flatLocalOverrides, opts?)`. The CLI uses a new
-module-bound `resumeFromCheckpoint(checkpoint, ResumeOverrides)` entry so the
+module-bound `resumeCliFromCheckpoint(checkpoint, ResumeOverrides)` entry so the
 new override buckets do not silently change existing JavaScript callers.
 
 **Architecture:** Both interrupt responses and direct checkpoint-file resumes
@@ -16,7 +16,7 @@ installs the root policy handler, reloads providers, restores callbacks and
 state, reapplies the host budget, and applies override buckets. The callback
 `afterCheckpointRestored` lets `respondToInterruptsCore` preserve the current
 `checkpointRestored` then `interruptResolved` event ordering before later
-restore work can fail. `resumeFromCheckpoint` lives beside the existing
+restore work can fail. `resumeCliFromCheckpoint` lives beside the existing
 resume loop in `interrupts.ts`; it owns CLI lifecycle events and trace
 pause/close behavior. The generated entry calls `runCliEntry`, which selects
 fresh `main` or the module-bound resume function.
@@ -91,9 +91,12 @@ Modify `lib/runtime/interrupts.ts`, `lib/runtime/node.ts`,
    install response data after restore completes.
 5. Use `applyRestoreOverrides` in every `RestoreSignal` loop that supports
    restore options: `node.ts`, `interrupts.ts`, and `rewind.ts`.
-6. Keep the public `rewindFrom` flat-local signature. It calls
+6. Validate override keys in this shared layer, not only in the CLI parser.
+   Queue argument overrides when the checkpoint is paused inside a function so
+   the generated function preamble updates its live parameters.
+7. Keep the public `rewindFrom` flat-local signature. It calls
    `restoreForResume(..., { overrides: { locals: overrides } })`.
-7. Run the new unit test and the existing interrupt/checkpoint/rewind tests.
+8. Run the new unit test and the existing interrupt/checkpoint/rewind tests.
 
 ## Task 2: Lifecycle-complete direct resume
 
@@ -103,9 +106,9 @@ Modify `lib/runtime/interrupts.ts`, `lib/runtime/node.ts`,
 
 1. Write a failing test proving the existing flat form
    `rewindFrom(cp, { mood: "happy" })` still overrides `mood`.
-2. Add runtime `resumeFromCheckpoint({ ctx, checkpoint, overrides? })` beside
+2. Add runtime `resumeCliFromCheckpoint({ ctx, checkpoint, overrides? })` beside
    `runResumeLoop`. It creates a run id/context, restores with
-   `restoreForResume`, sets `_skipNextCheckpoint`, emits the same agent
+   `restoreForResume`, emits the same agent
    lifecycle/span events as an interrupt resume, runs with `endsRun: true`,
    pauses traces on interrupts, closes them with a footer on completion,
    flushes statelog requests, and cleans up on every path.
@@ -119,15 +122,18 @@ Modify `lib/runtime/interrupts.ts`, `lib/runtime/node.ts`,
 
 **Files:** Modify `lib/constants.ts`, `lib/runtime/index.ts`,
 `lib/templates/backends/typescriptGenerator/imports.mustache`, and
-`lib/backends/typescriptBuilder.ts`. Add `lib/runtime/cliEntry.ts` and its test.
+`lib/backends/typescriptBuilder.ts`, `lib/backends/typescriptGenerator.ts`, and
+the sandboxed compiler. Add `lib/runtime/cliEntry.ts` and its test.
 
-1. Add `AGENCY_RESUME_FILE` and `AGENCY_RESUME_OVERRIDES` constants.
-2. Write failing tests for fresh entry, unsigned resume without a key, valid
-   signed resume, tampered signed refusal, unsigned refusal with a configured
-   key, empty-key behavior, malformed checkpoint JSON, and overrides.
+1. Add `AGENCY_RESUME_FILE`, `AGENCY_RESUME_OVERRIDES`, and
+   `AGENCY_RESUME_FORCE` constants.
+2. Write failing tests for fresh entry, unsigned resume, valid signed resume,
+   tampered signed refusal, forced signed resume, malformed checkpoint JSON
+   with and without a signing key, and overrides.
 3. Implement `runCliEntry({ runMain, resume })`. Read and parse the checkpoint
-   only when `AGENCY_RESUME_FILE` exists. Verify its raw JSON when
-   `AGENCY_CHECKPOINT_KEY` is non-empty, matching `resolveKey()` semantics.
+   only when `AGENCY_RESUME_FILE` exists. Validate the checkpoint shape before
+   checking a present signature, and bypass a failed check only when the force
+   carrier is set.
 4. Change the generated main block to:
 
    ```ts
@@ -141,6 +147,9 @@ Modify `lib/runtime/interrupts.ts`, `lib/runtime/node.ts`,
 5. Run `pnpm run templates`, typecheck, `make fixtures`, the builder test, and
    the CLI-main integration test. Fixture diffs will include runtime imports,
    the private resume binding, and the generated entry.
+6. Emit fingerprint registration through the TypeScript IR before program
+   execution. Agency-only compilation uses each validated source file's
+   original path as its stable fingerprint identity.
 
 ## Task 4: Resume command and carriers
 
@@ -160,7 +169,8 @@ Modify `lib/runtime/interrupts.ts`, `lib/runtime/node.ts`,
    `--agency-only`, and `--capture-workdir` options. Remove the dead `--resume`
    flags from `run` and `trace run`.
 5. Add resume-only repeated `--local-var`, `--global-var`, `--arg`, and
-   `--program-arg` options. Pass `programArg` to `run()` as child argv.
+   `--program-arg` options, plus `-f, --force`. Pass `programArg` to `run()` as
+   child argv.
 6. Add spawn tests for local/default overrides, argument/global overrides,
    `--program-arg`, `--approve`, no-policy interrupt reporting,
    `--agency-only` compile refusal, trace footer creation, and malformed flags.

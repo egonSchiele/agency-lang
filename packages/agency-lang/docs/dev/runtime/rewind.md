@@ -110,7 +110,7 @@ so this replay is the only thing that puts them back.
 |------|------|
 | `lib/runtime/rewind.ts` | `rewindFrom`, `applyOverrides` |
 | `lib/runtime/resumeSetup.ts` | shared setup for rewind, interrupt response, and CLI resume |
-| `lib/runtime/interrupts.ts` | lifecycle-complete direct CLI resume |
+| `lib/runtime/interrupts.ts` | lifecycle-complete CLI resume |
 | `lib/runtime/checkpoint.ts` | `checkpoint()`, `getCheckpoint()`, `restore()` |
 | `lib/runtime/state/checkpointStore.ts` | `Checkpoint`, `CheckpointStore` |
 | `lib/runtime/debugger.ts` | `debugStep` — trace write plus rolling checkpoints |

@@ -499,7 +499,7 @@ export class TypeScriptBuilder {
 
   // ------- Main entry point -------
 
-  build(program: AgencyProgram): TsNode {
+  build(program: AgencyProgram, moduleFingerprint?: { moduleId: string; hash: string }): TsNode {
     // A template is not a program. Refuse before generating anything, and
     // name every unfilled hole — not just the first one met — so the
     // message tells the user the full fill they owe.
@@ -593,6 +593,7 @@ export class TypeScriptBuilder {
       registryModuleId: this.initPlan?.registryModuleId,
       staticLocalOrder: this.initPlan?.staticLocalOrder,
       globalLocalOrder: this.initPlan?.globalLocalOrder,
+      moduleFingerprint,
     });
   }
 

@@ -15,7 +15,7 @@ import {
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
-  resumeFromCheckpoint as _resumeFromCheckpoint,
+  resumeCliFromCheckpoint as _resumeCliFromCheckpoint,
   rewindFrom as _rewindFrom,
   runExportedFunction as _runExportedFunction,
   runExportedFunctionForServe as _runExportedFunctionForServe,
@@ -95,7 +95,7 @@ function pass() { return { type: "pass" as const }; }
 export { interrupt, isInterrupt, hasInterrupts, isDebugger };
 export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
-const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides) => _resumeFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides });
+const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides });
 
 // Invoke an exported function in a node-grade execution frame. Used by
 // `agency serve` to call a function from an HTTP/MCP request — outside any
@@ -226,8 +226,11 @@ let __functionCompleted = false;
 // gracefully omits the embedded checkpoint and retry simply becomes a
 // no-op rather than failing.
 let __resultCheckpointId = -1;
-if (__ctx._pendingArgOverrides) {
-  const __overrides = __ctx._pendingArgOverrides;
+if (
+  __ctx._pendingArgOverrides?.moduleId === __stack.moduleId &&
+  __ctx._pendingArgOverrides?.scopeName === __stack.scopeName
+) {
+  const __overrides = __ctx._pendingArgOverrides.values;
   __ctx._pendingArgOverrides = undefined;
   if ("val" in __overrides) {
     val = __overrides["val"];

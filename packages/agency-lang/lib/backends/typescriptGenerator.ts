@@ -70,27 +70,14 @@ export function generateTypeScript(
   const compilationUnit = info ?? buildCompilationUnit(program);
   const preprocessor = new TypescriptPreprocessor(program, config, compilationUnit);
   const preprocessedProgram = preprocessor.preprocess();
-  const builder = new TypeScriptBuilder(config, compilationUnit, moduleId, outputFile, initPlan);
-  const ir = builder.build(preprocessedProgram);
-  const code = printTs(ir);
+  const build = (moduleFingerprint?: { moduleId: string; hash: string }): string => {
+    const builder = new TypeScriptBuilder(config, compilationUnit, moduleId, outputFile, initPlan);
+    return printTs(builder.build(preprocessedProgram, moduleFingerprint));
+  };
+  const code = build();
   if (!fingerprint) {
     return code;
   }
-  // Fingerprint the PRINTED output: it is what resume replays into, so it
-  // covers splice expansion, templates, and the compiler itself. Hash before
-  // appending the registration (a value cannot cover itself). The emitted
-  // bytes carry no timestamp — the registry derives "compiled at" from the
-  // artifact's mtime — so identical input emits identical bytes and
-  // incremental emit stays byte-identical to a force emit.
   const hash = sha256Text(code);
-  const registration = `__registerModuleFingerprint(${JSON.stringify(moduleId)}, ${JSON.stringify(hash)}, import.meta.url);`;
-  const cliEntry = "if (__process.argv[1] === fileURLToPath(import.meta.url)) {";
-  const cliEntryIndex = code.indexOf(cliEntry);
-  if (cliEntryIndex === -1) {
-    return `${code}\n${registration}\n`;
-  }
-  // The entry module can create checkpoints while its top-level await is
-  // running. Register before that run starts so those checkpoints record this
-  // module's identity instead of silently omitting it.
-  return `${code.slice(0, cliEntryIndex)}${registration}\n${code.slice(cliEntryIndex)}`;
+  return build({ moduleId, hash });
 }

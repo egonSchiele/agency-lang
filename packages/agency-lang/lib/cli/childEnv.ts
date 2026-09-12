@@ -11,6 +11,7 @@ import {
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
   AGENCY_RESUME_FILE,
+  AGENCY_RESUME_FORCE,
   AGENCY_RESUME_OVERRIDES,
 } from "@/constants.js";
 import type { ResumeCarrier } from "./resumeCarrier.js";
@@ -33,6 +34,7 @@ export function withRootCarriers(
   delete out[AGENCY_MAX_TIME];
   delete out[AGENCY_RESUME_FILE];
   delete out[AGENCY_RESUME_OVERRIDES];
+  delete out[AGENCY_RESUME_FORCE];
   if (carriers.policy !== undefined) {
     out[AGENCY_RUN_POLICY] = carriers.policy.policyJson;
     if (carriers.policy.interactive)
@@ -43,6 +45,9 @@ export function withRootCarriers(
   if (carriers.resume !== undefined) {
     out[AGENCY_RESUME_FILE] = carriers.resume.checkpointFile;
     out[AGENCY_RESUME_OVERRIDES] = carriers.resume.overridesJson;
+    if (carriers.resume.force) {
+      out[AGENCY_RESUME_FORCE] = "1";
+    }
   }
   return out;
 }

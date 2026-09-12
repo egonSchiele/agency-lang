@@ -1,27 +1,16 @@
 import type { Checkpoint } from "./state/checkpointStore.js";
-import { signCheckpoint } from "./checkpointChecksum.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
-import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import { RestoreSignal } from "./errors.js";
+import { applyLocalOverrides, applyRestoreOverrides, restoreForResume } from "./resumeSetup.js";
 import { RuntimeContext } from "./state/context.js";
-import { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
-import { createReturnObject, deepClone } from "./utils.js";
-import { color } from "@/utils/termcolors.js";
+import { createReturnObject } from "./utils.js";
 import { nanoid } from "nanoid";
 
 export function applyOverrides(checkpoint: Checkpoint, overrides: Record<string, unknown>): void {
-  const frame = StateStack.lastFrameJSON(checkpoint.stack);
-  for (const [key, value] of Object.entries(overrides)) {
-    frame.locals[key] = value;
-  }
-  // Re-sign after the edit. Also runs on the served resume path with caller
-  // overrides — safe: a host verifies before responding, and the re-signed
-  // object is never returned to the caller.
-  if (checkpoint.signature !== undefined) {
-    signCheckpoint(checkpoint);
-  }
+  const changed = applyLocalOverrides(checkpoint, overrides);
+  Object.assign(checkpoint, changed);
 }
 
 export async function rewindFrom(args: {
@@ -31,10 +20,6 @@ export async function rewindFrom(args: {
   metadata?: Record<string, any>;
 }): Promise<any> {
   const { ctx, overrides, metadata = {} } = args;
-  const checkpoint = deepClone(args.checkpoint);
-
-  applyOverrides(checkpoint, overrides);
-
   // A rewind is conceptually a new execution: it builds a fresh execCtx
   // and replays from the checkpoint. The module-level `__globalCtx` that
   // callers pass in never has runId set (only per-run execCtx do), so we
@@ -42,28 +27,15 @@ export async function rewindFrom(args: {
   // runs in trace files, which matches the actual execution semantics.
   const runId = (ctx as any).runId ?? nanoid();
   const execCtx = await ctx.createExecutionContext({ runId });
-  // Must run before restoreState so the empty stack routes the
-  // registration to `ctx.topLevelCallbacks`. See the matching comment
-  // in `respondToInterrupts`. The bootstrap frame is also mirrored
-  // from there — top-level callback registration runs Agency code
-  // (the `callback(...)` wrapper) that needs an ALS frame for
-  // `__call` post-migration. See `runInBootstrapFrame` in
-  // lib/runtime/asyncContext.ts.
-  await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
-  execCtx.restoreState(checkpoint);
-  execCtx._skipNextCheckpoint = true;
-
-  if (metadata.callbacks) {
-    Object.assign(execCtx.callbacks, metadata.callbacks);
-  }
-
-  if (metadata.debugger) {
-    execCtx.debuggerState = metadata.debugger;
-  }
-
-  let nodeName = checkpoint.nodeId;
-
   try {
+    const checkpoint = await restoreForResume(execCtx, {
+      checkpoint: args.checkpoint,
+      overrides: { locals: overrides },
+      metadata,
+    });
+    execCtx._skipNextCheckpoint = true;
+    let nodeName = checkpoint.nodeId;
+
     while (true) {
       try {
         // See `runResumeLoop` in lib/runtime/interrupts.ts — stdlib
@@ -95,6 +67,7 @@ export async function rewindFrom(args: {
         if (e instanceof RestoreSignal) {
           const cp = e.checkpoint;
           execCtx.restoreState(cp);
+          applyRestoreOverrides(execCtx, cp, e.options);
           nodeName = cp.nodeId;
           execCtx.stateStack.nodesTraversed = [cp.nodeId];
           continue;

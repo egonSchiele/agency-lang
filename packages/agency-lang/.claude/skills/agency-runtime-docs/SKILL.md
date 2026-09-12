@@ -15,6 +15,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/runtime/checkpoint-integrity.md` — The optional HMAC checksum embedded in a checkpoint, and how a host verifies it.
 - `docs/dev/runtime/checkpointing.md` — Snapshotting execution state so a program can restore back to it later.
 - `docs/dev/runtime/rewind.md` — Replaying execution from a checkpoint, optionally with different values for its local variables.
+- `docs/dev/runtime/resume-command.md` — The `agency resume` child carrier, shared restore setup, overrides, integrity check, and lifecycle.
 - `docs/dev/runtime/trace.md` — Execution traces: a checkpoint per step, written to a file the debugger can replay.
 - `docs/dev/runtime/threads.md` — How LLM conversation history accumulates and flows through thread and subthread blocks.
 - `docs/dev/runtime/globalstore.md` — Module-namespaced storage for top-level variables at runtime.

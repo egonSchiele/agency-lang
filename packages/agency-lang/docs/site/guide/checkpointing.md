@@ -56,8 +56,31 @@ You can take this one step further by getting the checkpoint and saving it to a 
 ```ts
 const id = checkpoint()
 const cp = getCheckpoint(id)
-saveToDisk(cp, "checkpoint.json")
+printJSON(cp)
 ```
+
+Copy the printed JSON object into `checkpoint.json`. Do not redirect the whole
+output of `agency run` into that file: the run banner and any other program
+output would make it invalid JSON.
+
+Resume it against the same source file:
+
+```bash
+agency resume checkpoint.json program.agency
+```
+
+You can change values in the current checkpoint frame while resuming:
+
+```bash
+agency resume checkpoint.json program.agency \
+  --local-var mood='"happy"' \
+  --arg input='{"retry":true}' \
+  --global-var attempts=8
+```
+
+Values are parsed as JSON when possible and otherwise treated as strings. Use
+repeated `--program-arg <value>` flags if the resumed program reads
+`std::args`; process arguments are not stored in checkpoints.
 
 This is kind of like saving your progress in a video game and coming back to it later.
 

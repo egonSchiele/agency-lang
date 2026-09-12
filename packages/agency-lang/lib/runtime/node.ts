@@ -7,6 +7,7 @@ import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { AgencyFunction } from "./agencyFunction.js";
 import { AgencyCancelledError, CheckpointError, RestoreSignal } from "./errors.js";
+import { applyRestoreOverrides } from "./resumeSetup.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
@@ -534,15 +535,7 @@ async function runNodeCore({
             },
           });
           execCtx.restoreState(cp);
-          if (e.options?.args) {
-            execCtx._pendingArgOverrides = e.options.args;
-          }
-          if (e.options?.globals) {
-            // eslint-disable-next-line max-depth -- applying restored globals overrides
-            for (const [varName, value] of Object.entries(e.options.globals)) {
-              execCtx.globals.set(cp.moduleId, varName, value);
-            }
-          }
+          applyRestoreOverrides(execCtx, cp, e.options);
           nodeName = cp.nodeId;
           data = {};
           isResume = true;

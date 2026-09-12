@@ -49,6 +49,8 @@ import type { RemoteCommandContext } from "@/cli/remote/commands/util.js";
 import { lintSource } from "@/linter/registry.js";
 import { formatFindings } from "@/cli/lint.js";
 import { resolveBudget } from "@/cli/budget.js";
+import { parseResumeOverrides } from "@/cli/resumeOverrides.js";
+import { resolveResumeCarrier, type ResumeCarrier } from "@/cli/resumeCarrier.js";
 import { fixtures, test, testTs, parseShardSpec, TestRunOptions } from "@/cli/test.js";
 import { caseTimings, failedFiles } from "@/cli/testReport.js";
 import { humanOutput, jsonOutput, type TestOutput } from "@/cli/testOutput.js";
@@ -128,13 +130,11 @@ import { startMcpServer } from "@/mcp/server.js";
 import { pathToFileURL } from "url";
 import { serveMcp, serveHttp } from "@/cli/serve.js";
 
-// Per-run flags for `agency run` / the hidden default command: the shared
-// CliFlags (mapped onto config by applyCliFlags in config.ts) plus --resume,
-// which is a run-only concern, not a config field.
+// Per-run flags for `agency run`, `agency resume`, and the hidden default
+// command. CliFlags are mapped onto config by applyCliFlags in config.ts.
 type RunOptions = Omit<CliFlags, "trace"> & {
   trace?: boolean;
   traceFile?: string;
-  resume?: string;
   policy?: string;
   approve?: string;
   reject?: string;
@@ -144,6 +144,13 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   local?: string;
   captureWorkdir?: string;
   agencyOnly?: boolean;
+};
+
+type ResumeOptions = RunOptions & {
+  localVar?: string[];
+  globalVar?: string[];
+  arg?: string[];
+  programArg?: string[];
 };
 
 // commander option parsers. Match the WHOLE string against digits so
@@ -255,7 +262,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     return { config: getConfig(), configPath };
   }
 
-  async function runWithOptions(input: string, options: RunOptions, nodeArgs: string[] = []) {
+  async function runWithOptions(
+    input: string,
+    options: RunOptions,
+    nodeArgs: string[] = [],
+    resume?: ResumeCarrier,
+  ) {
     if (options.local !== undefined && options.model !== undefined) {
       console.error("Error: Pass either --model (hosted) or --local (local), not both.");
       process.exit(2);
@@ -306,7 +318,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       config,
       input,
       undefined,
-      options.resume,
+      resume,
       runPolicy,
       budget,
       nodeArgs,
@@ -397,7 +409,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
   function addRunOptions(cmd: Command) {
     return (
       cmd
-        .option("--resume <statefile>", "Resume execution from a saved state file")
         // Two flags rather than `--trace [file]`: an optional-valued option
         // swallows the next word, so `agency run --trace greet.agency` reads the
         // filename as the trace path and then reports the input missing. That was
@@ -494,6 +505,47 @@ export function createProgram(deps: CliDependencies = {}): Command {
       command.unknownFallbackOperand(input);
     }
     await runWithOptions(input, options, nodeArgs);
+  });
+
+  addRunOptions(
+    program
+      .command("resume")
+      .description("Resume an Agency program from a checkpoint file")
+      .argument("<checkpoint-file>", "Path to checkpoint JSON")
+      .argument("<input>", "Path to the .agency program that created the checkpoint")
+      .option(
+        "--local-var <name=value>",
+        "Override a local variable in the checkpoint's current frame (repeatable)",
+        collectRepeats,
+        [] as string[],
+      )
+      .option(
+        "--global-var <name=value>",
+        "Override a global variable in the checkpoint's module (repeatable)",
+        collectRepeats,
+        [] as string[],
+      )
+      .option(
+        "--arg <name=value>",
+        "Override a resumed function or node argument (repeatable)",
+        collectRepeats,
+        [] as string[],
+      )
+      .option(
+        "--program-arg <value>",
+        "Pass one value to std::args in the resumed program (repeatable)",
+        collectRepeats,
+        [] as string[],
+      ),
+  ).action(async (checkpointFile: string, input: string, options: ResumeOptions) => {
+    let resume: ResumeCarrier;
+    try {
+      resume = resolveResumeCarrier(checkpointFile, parseResumeOverrides(options));
+    } catch (error) {
+      console.error(`Error: ${(error as Error).message}`);
+      process.exit(2);
+    }
+    await runWithOptions(input, options, options.programArg ?? [], resume);
   });
 
   program
@@ -785,10 +837,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Compile and run .agency file, generating a trace")
     .argument("<input>", "Path to .agency input file")
     .option("-o, --output <file>", "Output trace file path (default: <input>.trace)")
-    .option("--resume <statefile>", "Resume execution from a saved state file")
-    .action(async (input: string, options: { output?: string; resume?: string }) => {
+    .action(async (input: string, options: { output?: string }) => {
       const traceFile = options.output || input.replace(/\.agency$/, ".trace");
-      await runWithOptions(input, { traceFile, resume: options.resume });
+      await runWithOptions(input, { traceFile });
     });
 
   traceCmd

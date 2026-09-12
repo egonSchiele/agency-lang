@@ -83,8 +83,14 @@ export function generateTypeScript(
   // artifact's mtime — so identical input emits identical bytes and
   // incremental emit stays byte-identical to a force emit.
   const hash = sha256Text(code);
-  return (
-    code +
-    `\n__registerModuleFingerprint(${JSON.stringify(moduleId)}, ${JSON.stringify(hash)}, import.meta.url);\n`
-  );
+  const registration = `__registerModuleFingerprint(${JSON.stringify(moduleId)}, ${JSON.stringify(hash)}, import.meta.url);`;
+  const cliEntry = "if (__process.argv[1] === fileURLToPath(import.meta.url)) {";
+  const cliEntryIndex = code.indexOf(cliEntry);
+  if (cliEntryIndex === -1) {
+    return `${code}\n${registration}\n`;
+  }
+  // The entry module can create checkpoints while its top-level await is
+  // running. Register before that run starts so those checkpoints record this
+  // module's identity instead of silently omitting it.
+  return `${code.slice(0, cliEntryIndex)}${registration}\n${code.slice(cliEntryIndex)}`;
 }

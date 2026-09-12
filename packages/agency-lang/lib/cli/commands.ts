@@ -21,6 +21,7 @@ import * as path from "path";
 import { RunStrategy } from "../importStrategy.js";
 import { compileAgencyOnly } from "../compiler/compileSandboxed.js";
 import { withRootCarriers } from "./childEnv.js";
+import type { ResumeCarrier } from "./resumeCarrier.js";
 import {} from "@/constants.js";
 import { parseAgency, replaceBlankLines } from "../parser.js";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -274,7 +275,7 @@ export function run(
   config: AgencyConfig,
   inputFile: string,
   outputFile?: string,
-  resumeFile?: string,
+  resume?: ResumeCarrier,
   runPolicy?: { policyJson: string; interactive: boolean },
   budget?: { maxCost?: string; maxTime?: string },
   /** Forwarded to the compiled program's argv (positions 2+), for the program
@@ -309,7 +310,7 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = withRootCarriers(process.env, { policy: runPolicy, budget });
+  const env = withRootCarriers(process.env, { policy: runPolicy, budget, resume });
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
     runChildOverrides({
@@ -319,8 +320,6 @@ export function run(
     }),
   );
   if (captured !== undefined) env[TRACE_ID_ENV] = captured.traceId;
-  if (resumeFile) env.AGENCY_RESUME_FILE = resumeFile;
-
   // Use process.execPath so the child runs under the same Node as the CLI,
   // and pass our resolver shim so the compiled output's `import "agency-lang"`
   // succeeds even when the CLI is installed globally.

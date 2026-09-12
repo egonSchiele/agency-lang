@@ -1,6 +1,6 @@
 ---
 title: Running Agency code
-description: Documents the `agency run` command for compiling and executing an Agency file in one step, including the `--resume` and `--trace` options.
+description: Documents the `agency run` and `agency resume` commands for starting and continuing Agency programs.
 ---
 
 # Running Agency code
@@ -22,16 +22,42 @@ agency foo.agency
 The shorthand takes the same options and splits its command line the same way,
 so `agency greet.agency --name alice` works exactly like the `run` form below.
 
-Note: This compiles the file to JavaScript and immediately executes it under the same Node binary that's running the CLI. You can also pass `--resume <statefile>` to resume a previously saved execution, or `--trace` to write an execution trace.
+This compiles the file to JavaScript and immediately executes it under the same
+Node binary that is running the CLI. Use the separate `agency resume` command
+to continue from a saved checkpoint.
 
 ## Options
 
-- `--resume <statefile>` — resume execution from a saved state file. This is what you'd use to continue a run that paused at an interrupt, after writing the user's responses into the state file. *work in progress*
 - `--trace` — write an execution trace as the program runs, to `<input>.trace`. See [traces and bundles](./trace-and-bundle.html) for what you can do with a trace file.
 - `--trace-file <path>` — write the execution trace to this path instead.
 - `--max-cost <dollars>` — abort the run if its LLM spend exceeds this many dollars, e.g. `--max-cost 0.50`. `0` means no paid spend at all (local models only). A negative value means no limit. A tripped budget exits with code 3 and prints the overrun.
 - `--max-time <duration>` — abort the run if its working time exceeds this duration, e.g. `--max-time 5m`. The value needs a unit: `500ms`, `30s`, `5m`, `1h`, `2d`, `1w`. Time spent waiting on a human does not count. Zero or negative means no limit. A tripped budget exits with code 3.
 - `--model <name>` — the model this run's `llm()` calls use by default, written as `model` or `provider/model`. See [choosing a model](#choosing-a-model) below.
+
+## Resuming a checkpoint
+
+Use the checkpoint JSON and the same Agency source file:
+
+```bash
+agency resume checkpoint.json foo.agency
+```
+
+`resume` accepts the same model, policy, budget, trace, strictness,
+`--agency-only`, and capture options as `run`. It also accepts repeatable value
+overrides:
+
+```bash
+agency resume checkpoint.json foo.agency \
+  --local-var mood='"happy"' \
+  --arg input='{"retry":true}' \
+  --global-var attempts=8 \
+  --program-arg hello
+```
+
+Each `name=value` value is parsed as JSON when possible. Other values remain
+strings. `--program-arg` is separate because process arguments are not saved in
+a checkpoint. See [Checkpointing](../guide/checkpointing) for creating the JSON
+file and the integrity rules.
 
 ## Choosing a model
 

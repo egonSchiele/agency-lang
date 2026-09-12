@@ -538,7 +538,8 @@ node main(first: string, second: string) {
 }
 `);
 
-    expect(output).toContain("await main(undefined, undefined, initialState)");
+    expect(output).toContain("runMain: () => main(undefined, undefined, initialState)");
+    expect(output).toContain("resume: __resumeFromCheckpoint");
     expect(output).not.toContain("__process.argv[2]");
     expect(output).not.toContain("main() takes");
   });

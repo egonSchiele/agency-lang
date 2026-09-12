@@ -19,20 +19,24 @@ signature that validates under the configured key, compared in constant time.
 A missing signature returns false, so a caller cannot dodge verification by
 stripping the field.
 
-## Embed, do not enforce
+## Where verification is enforced
 
-The runtime signs but never refuses: editing checkpoints is a supported
-feature (rewind, the debugger, resume overrides), and trace mode writes a
-checkpoint per step. Enforcement is the host's policy — a host that has not
-opted in never calls verify.
+Checkpoint creation signs but does not refuse: editing checkpoints is a
+supported feature, and trace mode writes a checkpoint per step. External hosts
+still choose whether to call `verifyCheckpointChecksum`.
+
+The `agency resume` command is an enforcing host. When
+`AGENCY_CHECKPOINT_KEY` is non-empty, its generated child verifies the raw
+parsed checkpoint before restoring it and refuses missing or invalid
+signatures. An unset or empty key disables both signing and this check.
 
 ## Signing
 
 `Checkpoint.fromStateStack` is the single chokepoint every checkpoint is
 created through, and its last statement calls `signCheckpoint`. With no key in
 the environment that call is a no-op; with a key, every checkpoint comes out
-signed. The legitimate edit paths — `applyOverrides` (rewind and resume-time
-overrides), `CheckpointStore.pin`, `Checkpoint.clone` — re-sign, so an edited
+signed. The legitimate edit paths — resume-time overrides,
+`CheckpointStore.pin`, and `Checkpoint.clone` — re-sign, so an edited
 checkpoint stays self-consistent. Both functions also accept the plain parsed
 JSON form of a checkpoint, which is what the external resume path carries.
 

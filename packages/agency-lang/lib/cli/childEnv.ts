@@ -10,12 +10,16 @@ import {
   AGENCY_RUN_POLICY,
   AGENCY_RUN_POLICY_INTERACTIVE,
   AGENCY_RUN_POLICY_INTERACTIVE_ON,
+  AGENCY_RESUME_FILE,
+  AGENCY_RESUME_OVERRIDES,
 } from "@/constants.js";
+import type { ResumeCarrier } from "./resumeCarrier.js";
 
 export type RootCarriers = {
   policy?: { policyJson: string; interactive?: boolean };
   /** `resolveBudget`'s shape: dollars and milliseconds as strings. */
   budget?: { maxCost?: string; maxTime?: string };
+  resume?: ResumeCarrier;
 };
 
 export function withRootCarriers(
@@ -27,6 +31,8 @@ export function withRootCarriers(
   delete out[AGENCY_RUN_POLICY_INTERACTIVE];
   delete out[AGENCY_MAX_COST];
   delete out[AGENCY_MAX_TIME];
+  delete out[AGENCY_RESUME_FILE];
+  delete out[AGENCY_RESUME_OVERRIDES];
   if (carriers.policy !== undefined) {
     out[AGENCY_RUN_POLICY] = carriers.policy.policyJson;
     if (carriers.policy.interactive)
@@ -34,5 +40,9 @@ export function withRootCarriers(
   }
   if (carriers.budget?.maxCost !== undefined) out[AGENCY_MAX_COST] = carriers.budget.maxCost;
   if (carriers.budget?.maxTime !== undefined) out[AGENCY_MAX_TIME] = carriers.budget.maxTime;
+  if (carriers.resume !== undefined) {
+    out[AGENCY_RESUME_FILE] = carriers.resume.checkpointFile;
+    out[AGENCY_RESUME_OVERRIDES] = carriers.resume.overridesJson;
+  }
   return out;
 }

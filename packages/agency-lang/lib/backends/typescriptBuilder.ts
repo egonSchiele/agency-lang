@@ -4494,7 +4494,18 @@ export class TypeScriptBuilder {
                     data: ts.obj({}),
                   }),
                 ),
-                ts.varDecl("const", "__result", ts.await(ts.call(ts.id("main"), mainCallArgs))),
+                ts.varDecl(
+                  "const",
+                  "__result",
+                  ts.await(
+                    ts.call(ts.id("runCliEntry"), [
+                      ts.obj({
+                        runMain: ts.arrowFn([], ts.call(ts.id("main"), mainCallArgs)),
+                        resume: ts.id("__resumeFromCheckpoint"),
+                      }),
+                    ]),
+                  ),
+                ),
                 // Running `main` directly from the CLI: interrupts that no
                 // handler settled have surfaced to the user. resolveCliInterrupts
                 // is that user endpoint — under a run policy it decides each one

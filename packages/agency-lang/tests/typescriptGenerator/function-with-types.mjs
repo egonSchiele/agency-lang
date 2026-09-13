@@ -21,6 +21,7 @@ import {
   runExportedFunctionForServe as _runExportedFunctionForServe,
   runNodeForServe as _runNodeForServe,
   RestoreSignal,
+  RunControlSignal,
   AgencyAbort,
   AbortedResult,
   isAborted,
@@ -298,7 +299,7 @@ return;
       return runner.haltResult;
     }
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
   throw __error;
 }
 // All aborts — cancellations (Esc / abort) AND guard trips — are now a single
@@ -472,7 +473,7 @@ return;
       return runner.haltResult;
     }
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
   throw __error;
 }
 // All aborts — cancellations (Esc / abort) AND guard trips — are now a single
@@ -645,7 +646,7 @@ return;
       return runner.haltResult;
     }
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
   throw __error;
 }
 // All aborts — cancellations (Esc / abort) AND guard trips — are now a single
@@ -819,7 +820,7 @@ return;
       return runner.haltResult;
     }
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
   throw __error;
 }
 // All aborts — cancellations (Esc / abort) AND guard trips — are now a single
@@ -986,7 +987,7 @@ return;
       return runner.haltResult;
     }
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
   throw __error;
 }
 // All aborts — cancellations (Esc / abort) AND guard trips — are now a single
@@ -1128,7 +1129,7 @@ await callHook({
       data: undefined
     };
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
       throw __error
     }
     if (__error instanceof AgencyAbort) {
@@ -1283,7 +1284,7 @@ await callHook({
       data: undefined
     };
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
       throw __error
     }
     if (__error instanceof AgencyAbort) {

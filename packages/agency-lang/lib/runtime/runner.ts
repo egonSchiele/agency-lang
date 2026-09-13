@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { __globals, agencyStore } from "./asyncContext.js";
 import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
-import { RestoreSignal, readCause } from "./errors.js";
+import { RunControlSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
 import { invokeCallbacks } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
@@ -787,7 +787,7 @@ export class Runner {
             // primary exception. `fireWithGuard` inside invokeCallbacks
             // already logs JS errors; this catch is belt-and-braces for
             // unexpected throws from the dispatcher itself.
-            if (e instanceof RestoreSignal) throw e;
+            if (e instanceof RunControlSignal) throw e;
             // Surface the failure as a structured statelog event so it
             // shows up in traces (replaces the prior bare console.error).
             // Optional chaining: older test contexts may construct a

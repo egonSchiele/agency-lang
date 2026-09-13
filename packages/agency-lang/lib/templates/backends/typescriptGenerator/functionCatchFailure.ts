@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `if (__error instanceof RestoreSignal) {
+export const template = `if (__error instanceof RunControlSignal) {
   throw __error;
 }
 // All aborts — cancellations (Esc / abort) AND guard trips — are now a single

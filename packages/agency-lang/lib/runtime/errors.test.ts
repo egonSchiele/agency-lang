@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   CheckpointError,
   describeAbortCause,
+  PauseSignal,
   RestoreSignal,
+  RunControlSignal,
   AgencyAbort,
   AgencyCancelledError,
   isAbortError,
@@ -11,6 +13,7 @@ import {
   type AbortCause,
 } from "./errors.js";
 import { GuardExceededError, isGuardExceededError } from "./guard.js";
+import { makeCheckpoint } from "./checkpointTestHelpers.js";
 
 describe("AgencyAbort (unified abort base)", () => {
   it("carries a cause; isAbortError true; readCause returns it", () => {
@@ -252,5 +255,16 @@ describe("describeAbortCause", () => {
     expect(describeAbortCause(makeAbortCause({ kind: "userKill" }))).toBe(
       "Execution aborted (userKill)",
     );
+  });
+});
+
+describe("run-control signals", () => {
+  it("RestoreSignal and PauseSignal share the RunControlSignal base", () => {
+    const cp = makeCheckpoint();
+    expect(new RestoreSignal(cp)).toBeInstanceOf(RunControlSignal);
+    const pause = new PauseSignal(cp);
+    expect(pause).toBeInstanceOf(RunControlSignal);
+    expect(pause.name).toBe("PauseSignal");
+    expect(pause.checkpoint).toBe(cp);
   });
 });

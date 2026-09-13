@@ -26,6 +26,7 @@ import {
   runExportedFunctionForServe as _runExportedFunctionForServe,
   runNodeForServe as _runNodeForServe,
   RestoreSignal,
+  RunControlSignal,
   AgencyAbort,
   AbortedResult,
   isAborted,

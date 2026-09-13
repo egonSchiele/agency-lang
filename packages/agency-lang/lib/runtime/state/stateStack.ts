@@ -486,15 +486,11 @@ export class StateStack {
     if (this.executingHandlerEntries.length > 0) {
       return true;
     }
-    let found = false;
+    const branchStacks: StateStack[] = [];
     for (const frame of this.stack) {
-      frame.forEachBranchStack((branchStack) => {
-        if (branchStack.hasExecutingHandlers()) {
-          found = true;
-        }
-      });
+      frame.forEachBranchStack((branchStack) => branchStacks.push(branchStack));
     }
-    return found;
+    return branchStacks.some((branchStack) => branchStack.hasExecutingHandlers());
   }
 
   /** Throw if any handler is executing (see hasExecutingHandlers). Called

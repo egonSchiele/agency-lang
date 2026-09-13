@@ -1,0 +1,17 @@
+import { bump, bumpCount } from "./counter.js"
+
+callback("onFunctionStart") {
+  sleep(400ms)
+  bump()
+}
+
+def work(): number {
+  bump()
+  return 1
+}
+
+node main(): number {
+  work()
+  bump()
+  return bumpCount()
+}

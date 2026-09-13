@@ -1,0 +1,7 @@
+{
+  "interrupted": true,
+  "pausedInResponseLeg": true,
+  "bumpsAtPause": 1,
+  "final": 2,
+  "cancelledInResponseLeg": true
+}

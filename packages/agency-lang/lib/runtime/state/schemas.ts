@@ -112,8 +112,7 @@ export const checkpointSchema = z.object({
   signature: z.string().optional(),
 });
 
-/** The value a paused run returns in `data`. Validated the way a Result
- *  value is in result.ts: one schema, one safeParse. */
+/** The value a paused run returns in `data`. */
 export const pausedCheckpointSchema = z.object({
   type: z.literal("paused"),
   checkpoint: checkpointSchema,

@@ -381,7 +381,7 @@ export class Runner {
    *    branches join, after the join saves branch threads and globals. A
    *    thrown pause skips that join, so its checkpoint could not resume.
    *  See pauseAtStep for what a pause does. */
-  private pauseIfRequested(id: number): void {
+  private async pauseIfRequested(id: number): Promise<void> {
     if (!this.ctx.pauseRequested) {
       return;
     }
@@ -393,7 +393,7 @@ export class Runner {
     if (stack.hasExecutingHandlers() || isInsideCallback()) {
       return;
     }
-    pauseAtStep({
+    await pauseAtStep({
       ctx: this.ctx,
       stack,
       location: {
@@ -528,8 +528,8 @@ export class Runner {
     // replay-safe by construction, because on resume the same boundary
     // re-raises and applies the recorded answer before the body runs.
     if (await this.maybeRaiseGuardTrip(id)) return;
-    this.pauseIfRequested(id);
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -578,8 +578,8 @@ export class Runner {
     // loop-body statements and function-start hooks execute through, so
     // a time trip during a tight loop is detected here.
     if (await this.maybeRaiseGuardTrip(id)) return;
-    this.pauseIfRequested(id);
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
@@ -598,6 +598,7 @@ export class Runner {
   async debugger(id: number, label: string): Promise<void> {
     this.beforeStep();
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
     if (await this.maybeDebugHook(id, label, true)) return;
 
@@ -611,6 +612,7 @@ export class Runner {
   async pipe(id: number, input: any, fn: (value: any) => any): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return input;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id)
       return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
 
@@ -657,6 +659,7 @@ export class Runner {
     // need named-args behaviour.
     this.beforeStep();
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -850,6 +853,7 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     // A COMPLETED handle block returns here, before pushHandler — its
     // scope is over and its handler stays gone on replay. This line is
     // also why the guard-set memo below cannot be keyed by counting
@@ -913,6 +917,7 @@ export class Runner {
     // The top skip stays OUTSIDE the try: when we skip here an OUTER construct
     // owns the pending flag, so we must not clear it.
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     try {
       if (this.getCounter() > id) return;
 
@@ -987,6 +992,7 @@ export class Runner {
     callback: (item: any, second: any, runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -1075,6 +1081,7 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -1136,6 +1143,7 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
 
     // Enter if: counter hasn't passed this OR branch data exists (resuming async)
     const hasExistingBranch = this.frame.getBranch(branchKey) !== undefined;
@@ -1193,6 +1201,7 @@ export class Runner {
   ): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return undefined;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) {
       return this.frame.locals[this.forkResultKey(id)];
     }

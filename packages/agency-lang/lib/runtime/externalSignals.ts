@@ -52,8 +52,7 @@ export function attachPauseSignal(target: SignalTarget, signal?: AbortSignal): D
 }
 
 /** Run `body` with the caller's signals wired to `target`, and unwire them
- *  however the body ends. This is the only way an entry point attaches
- *  signals, so no entry can forget the detach. */
+ *  however the body ends. */
 export async function withExternalSignals<T>(
   target: SignalTarget,
   signals: ExternalSignals,

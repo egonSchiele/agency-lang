@@ -47,10 +47,17 @@ type PauseAtStepArgs = {
   location: SourceLocationOpts;
 };
 
-/** Honour an external pause at a step boundary: stamp a checkpoint here,
- *  record it, clear the request, and unwind with PauseSignal. The step
- *  counter has not advanced, so a resume re-enters this same statement. */
-export function pauseAtStep({ ctx, stack, location }: PauseAtStepArgs): never {
+/** Honour an external pause at a step boundary: settle pending async calls,
+ *  stamp a checkpoint here, record it, clear the request, and unwind with
+ *  PauseSignal. The step counter has not advanced, so a resume re-enters
+ *  this same statement.
+ *
+ *  An async call keeps its result in a pending-promise resolver, not in the
+ *  frame, so the checkpoint is stamped only after `awaitAll` has written
+ *  those results into the frame locals. */
+export async function pauseAtStep({ ctx, stack, location }: PauseAtStepArgs): Promise<never> {
+  await ctx.pendingPromises.awaitAll();
+  ctx.throwIfCancelled();
   const checkpointId = ctx.checkpoints.create(stack, ctx, location);
   const checkpoint = ctx.checkpoints.get(checkpointId);
   if (!checkpoint) {

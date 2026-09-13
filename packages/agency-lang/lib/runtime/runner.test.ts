@@ -1378,6 +1378,51 @@ describe("Runner — external pause", () => {
     expect(ctx.pauseRequested).toBe(true);
   });
 
+  it("settles pending async results before stamping the checkpoint", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const frame = ctx.stateStack.stack[0];
+    ctx.pendingPromises.add(Promise.resolve("async value"), (value: unknown) => {
+      frame.locals.asyncResult = value;
+    });
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    const caught = await runner.step(0, async () => {}).catch((e: unknown) => e);
+    expect(caught).toBeInstanceOf(PauseSignal);
+    const checkpoint = (caught as PauseSignal).checkpoint;
+    expect(checkpoint.stack.stack[0].locals.asyncResult).toBe("async value");
+  });
+
+  it("checks for a pause before an if statement evaluates its condition", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let evaluated = false;
+    const branches = [
+      {
+        condition: () => {
+          evaluated = true;
+          return true;
+        },
+        body: async () => {},
+      },
+    ];
+    await expect(runner.ifElse(0, branches)).rejects.toBeInstanceOf(PauseSignal);
+    expect(evaluated).toBe(false);
+  });
+
+  it("checks for a pause before a for loop reads its items", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let read = false;
+    const items = () => {
+      read = true;
+      return [1];
+    };
+    await expect(runner.loop(0, items, async () => {})).rejects.toBeInstanceOf(PauseSignal);
+    expect(read).toBe(false);
+  });
+
   it("cancel wins when the context is aborted and a pause is requested", async () => {
     const ctx = makeMockCtx();
     ctx.abortController.abort(new AgencyCancelledError("stop"));

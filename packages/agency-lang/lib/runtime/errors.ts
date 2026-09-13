@@ -44,8 +44,7 @@ export class CheckpointCodeChangedError extends Error {
 }
 
 /** Base for the signals the runtime throws to unwind a whole run on purpose.
- *  Every catch site that must not swallow a `RestoreSignal` tests this base,
- *  so a new signal is covered by the same sites. */
+ *  A catch site that must let a restore or a pause through tests this base. */
 export class RunControlSignal extends Error {}
 
 export class RestoreSignal extends RunControlSignal {

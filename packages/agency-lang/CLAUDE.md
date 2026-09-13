@@ -246,6 +246,7 @@ Other process docs:
 - `docs/dev/runtime/interrupts.md` — How a program resumes in the middle of a block after an interrupt, using step counters.
 - `docs/dev/runtime/lock.md` — A per-run mutex for serializing access to shared resources such as the terminal prompt.
 - `docs/dev/runtime/rewind.md` — Replaying execution from a checkpoint, optionally with different values for its local variables.
+- `docs/dev/runtime/pause.md` — Pausing a node run from outside with `pauseSignal`: the runner check, the thrown signal, which steps defer a pause, cancel precedence, and `resumeFromCheckpoint`.
 - `docs/dev/runtime/resume-command.md` — The `agency resume` child carrier, shared restore setup, overrides, integrity check, and lifecycle.
 - `docs/dev/runtime/runBatch.md` — The one primitive that owns concurrent-interrupt orchestration for forks, parallel blocks, tool calls, and subprocesses.
 - `docs/dev/runtime/saveDraft.md` — How a scope's best-so-far value survives a guard trip instead of being lost.

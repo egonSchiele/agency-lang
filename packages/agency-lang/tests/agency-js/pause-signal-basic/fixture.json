@@ -1,0 +1,6 @@
+{
+  "pausedFirst": true,
+  "bumpsAtPause": 1,
+  "sameProcess": { "finished": 3, "interrupted": false },
+  "freshProcess": { "finished": 2, "pausedAgain": false }
+}

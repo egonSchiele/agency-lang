@@ -1,3 +1,14 @@
+## Sep 12 2026 — v0.19.1
+
+### Runtime
+
+- **Pause a run from TypeScript.** Pass a `pauseSignal` to a node, `respondToInterrupts`, or `resumeFromCheckpoint`. When you abort the signal, the run stops at its next statement and returns a paused checkpoint.
+- Bug fix: `restore()` inside a `try` block no longer turns into a failed result.
+
+### CLI
+
+- **`agency resume <checkpoint-file> <file.agency>`** to resume a checkpoint.
+
 ## Sep 10 2026 — v0.19.0
 
 ### Standard Library

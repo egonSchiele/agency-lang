@@ -4436,6 +4436,8 @@ export class TypeScriptBuilder {
                     traceId: ts.id("__invocationTraceId"),
                   }),
                   input: ts.id("__invocationInput"),
+                  abortSignal: ts.id("__invocationAbortSignal"),
+                  pauseSignal: ts.id("__invocationPauseSignal"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),
               ])

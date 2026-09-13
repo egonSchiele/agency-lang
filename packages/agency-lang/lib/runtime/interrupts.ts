@@ -5,19 +5,28 @@ import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
-import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
+import {
+  resolveInvocation,
+  type InvocationOptions,
+  type ResolvedInvocation,
+} from "./invocationOptions.js";
 import {
   AgencyCancelledError,
   HandlerRecursionError,
   PauseSignal,
   RestoreSignal,
 } from "./errors.js";
-import { withExternalSignals } from "./externalSignals.js";
-import { pausedReturnObject } from "./pause.js";
+import { withExternalSignals, type ExternalSignals } from "./externalSignals.js";
+import { pausedReturnObject, type PausedCheckpoint } from "./pause.js";
 import { isAborted } from "./abortedResult.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { mergeFor, mergeForIpc } from "./effectMerge.js";
-import { applyRestoreOverrides, restoreForResume, type ResumeOverrides } from "./resumeSetup.js";
+import {
+  applyRestoreOverrides,
+  restoreForResume,
+  type ResumeMetadata,
+  type ResumeOverrides,
+} from "./resumeSetup.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
@@ -845,11 +854,53 @@ async function respondToInterruptsCore(
     options: args.invocation,
     runId: interrupt.runId,
   });
+  return runResumeInvocation({
+    ctx,
+    resolved,
+    checkpoint,
+    overrides: { locals: args.overrides },
+    metadata,
+    signals: { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal },
+    afterCheckpointRestored: (execCtx) => {
+      if (isIpcMode()) {
+        return;
+      }
+      for (let i = 0; i < interrupts.length; i++) {
+        const resolvedOutcome = responses[i].type === "approve" ? "approved" : "rejected";
+        execCtx.statelogClient.interruptResolved({
+          interruptId: interrupts[i].interruptId,
+          outcome: resolvedOutcome,
+          resolvedBy: "user",
+        });
+      }
+    },
+    afterRestore: (execCtx) => execCtx.setInterruptResponses(responseMap),
+  });
+}
+
+type ResumeInvocationArgs = {
+  ctx: RuntimeContext<GraphState>;
+  resolved: ResolvedInvocation;
+  checkpoint: Checkpoint;
+  overrides?: ResumeOverrides;
+  metadata?: ResumeMetadata;
+  signals: ExternalSignals;
+  afterCheckpointRestored?: (execCtx: RuntimeContext<GraphState>) => void;
+  afterRestore?: (execCtx: RuntimeContext<GraphState>) => void;
+};
+
+/** The one resume lifecycle shared by interrupt response and checkpoint
+ *  resume: a fresh execution context, restore, the agentRun span, the loop,
+ *  error logging, and the served outcome. The two callers differ only in
+ *  what they do around the restore, which the two callbacks carry.
+ *
+ *  A single lifecycle boundary covers all resume setup AND execution, so a
+ *  setup failure still yields an outcome-with-usage and still runs cleanup. */
+async function runResumeInvocation(
+  args: ResumeInvocationArgs,
+): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+  const { ctx, resolved, checkpoint, metadata = {}, signals } = args;
   const execCtx = await ctx.createExecutionContext(resolved);
-  // === Invocation started (context exists): a SINGLE lifecycle boundary covers
-  // all resume setup AND execution, so a setup failure still yields an
-  // outcome-with-usage and still runs cleanup. reinstallRootBudget and handler
-  // registration order are preserved. ===
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
   let outcome: RawOutcome<RunNodeResult<any>>;
@@ -857,28 +908,14 @@ async function respondToInterruptsCore(
     await restoreForResume(execCtx, {
       checkpoint,
       policy: resolved.policy,
-      overrides: { locals: args.overrides },
+      overrides: args.overrides,
       metadata,
-      afterCheckpointRestored: () => {
-        if (!isIpcMode()) {
-          for (let i = 0; i < interrupts.length; i++) {
-            const intr = interrupts[i];
-            const resp = responses[i];
-            const resolvedOutcome = resp.type === "approve" ? "approved" : ("rejected" as const);
-            execCtx.statelogClient.interruptResolved({
-              interruptId: intr.interruptId,
-              outcome: resolvedOutcome,
-              resolvedBy: "user",
-            });
-          }
-        }
-      },
+      afterCheckpointRestored: () => args.afterCheckpointRestored?.(execCtx),
     });
-    execCtx.setInterruptResponses(responseMap);
+    args.afterRestore?.(execCtx);
 
     agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
     execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
-    const signals = { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal };
     const value = await withExternalSignals(execCtx, signals, () =>
       runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime),
     );
@@ -900,6 +937,42 @@ async function respondToInterruptsCore(
   // Resume tears down with cleanup() (no memory-save/statelog-flush — that is
   // the fresh-run path's finalizeExecCtx); wrap it to match the cleanup shape.
   return finishServedInvocation(execCtx, outcome, async () => execCtx.cleanup());
+}
+
+export type ResumeFromCheckpointArgs = {
+  ctx: RuntimeContext<GraphState>;
+  paused: PausedCheckpoint;
+  metadata?: ResumeMetadata;
+  abortSignal?: AbortSignal;
+  pauseSignal?: AbortSignal;
+  // Per-invocation config and root policy for this resume leg, with the same
+  // contract as respondToInterrupts: the paused runId is kept, and a host that
+  // started the run with a policy passes the same one here.
+  invocation?: InvocationOptions;
+};
+
+/** Continue a run that an external pause stopped. Keeps the paused run's id,
+ *  checks code fingerprints, reinstalls the root policy and budget, and runs
+ *  the same loop as an interrupt response, so the result can again be a
+ *  value, interrupts, or another paused checkpoint. Takes no overrides; a
+ *  caller who wants to change a local uses rewindFrom. */
+export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Promise<any> {
+  if (!args.paused.runId) {
+    throw new Error("Cannot resume: the paused value has no run id");
+  }
+  const resolved = resolveInvocation({
+    kind: "resume",
+    options: args.invocation,
+    runId: args.paused.runId,
+  });
+  const served = await runResumeInvocation({
+    ctx: args.ctx,
+    resolved,
+    checkpoint: deepClone(args.paused.checkpoint),
+    metadata: args.metadata,
+    signals: { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal },
+  });
+  return unwrapServedInvocationOutcome(served);
 }
 
 /** Public entry point — unchanged contract: returns the resume result or throws

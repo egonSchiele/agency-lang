@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
-import { callHook, invokeCallbacks, registerGlobalHook } from "./hooks.js";
+import { callHook, invokeCallbacks, isInsideCallback, registerGlobalHook } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
 
 function ctxWithStack(
@@ -296,5 +296,19 @@ describe("invokeCallbacks subprocess forwarding", () => {
     await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: stack });
     expect(fired).toEqual([{ nodeName: "x" }]); // local callback still fired
     expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]); // and forwarded
+  });
+});
+
+describe("isInsideCallback", () => {
+  it("is true only while a callback body runs", async () => {
+    expect(isInsideCallback()).toBe(false);
+    let seen = false;
+    const ctx = fakeCtx();
+    ctx.callbacks.onNodeStart = async () => {
+      seen = isInsideCallback();
+    };
+    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    expect(seen).toBe(true);
+    expect(isInsideCallback()).toBe(false);
   });
 });

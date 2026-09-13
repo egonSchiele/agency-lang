@@ -145,6 +145,13 @@ export type AgencyCallbacks = {
 // checkpoint can never capture a "stuck" entry.
 const _activeCallbacksALS = new AsyncLocalStorage<Set<object>>();
 
+/** True while a callback body is executing on this async path. The runner
+ *  defers an external pause here, because a checkpoint taken inside a
+ *  callback dispatch is not a place a resume can re-enter. */
+export function isInsideCallback(): boolean {
+  return _activeCallbacksALS.getStore() !== undefined;
+}
+
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
 // register callbacks that fire alongside user-provided callbacks.
 const _globalHooks: Partial<Record<keyof CallbackMap, Array<(data: any) => any>>> = {};

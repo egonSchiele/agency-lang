@@ -47,3 +47,26 @@ describe("StateStack.executingHandlerEntries", () => {
     expect(() => stack.assertNoExecutingHandlers()).toThrow(/handler function is executing/);
   });
 });
+
+describe("StateStack.hasExecutingHandlers", () => {
+  it("is false on a clean stack with frames", () => {
+    const stack = new StateStack();
+    stack.stack.push(new State());
+    expect(stack.hasExecutingHandlers()).toBe(false);
+  });
+
+  it("is true when the top-level list is non-empty", () => {
+    const stack = new StateStack();
+    stack.executingHandlerEntries.push(entry());
+    expect(stack.hasExecutingHandlers()).toBe(true);
+  });
+
+  it("finds a mark on a nested branch under an unmarked parent", () => {
+    const stack = new StateStack();
+    const frame = new State();
+    stack.stack.push(frame);
+    const branch = frame.newBranch("tool_x");
+    branch.stack.executingHandlerEntries.push(entry());
+    expect(stack.hasExecutingHandlers()).toBe(true);
+  });
+});

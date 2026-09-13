@@ -5,8 +5,9 @@ import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
-import { invokeCallbacks } from "./hooks.js";
+import { invokeCallbacks, isInsideCallback } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
+import { pauseAtStep } from "./pause.js";
 import { __pipeBind } from "./result.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { runBatch } from "./runBatch.js";
@@ -370,6 +371,31 @@ export class Runner {
     });
   }
 
+  /** Cancel wins over a pause; otherwise honour a pending pause request at
+   *  this step. A pause may land only outside handler and callback
+   *  dispatch, because a checkpoint taken inside either cannot be resumed.
+   *  The flag stays set and the next ordinary step takes it. See
+   *  pauseAtStep for what a pause does. */
+  private pauseIfRequested(id: number): void {
+    if (!this.ctx.pauseRequested) {
+      return;
+    }
+    this.ctx.throwIfCancelled();
+    const stack = this.stack;
+    if (!stack || stack.hasExecutingHandlers() || isInsideCallback()) {
+      return;
+    }
+    pauseAtStep({
+      ctx: this.ctx,
+      stack,
+      location: {
+        moduleId: this.moduleId,
+        scopeName: this.scopeName,
+        stepPath: this.stepPath(id),
+      },
+    });
+  }
+
   // ── Debug hook ──
 
   /**
@@ -494,6 +520,7 @@ export class Runner {
     // replay-safe by construction, because on resume the same boundary
     // re-raises and applies the recorded answer before the body runs.
     if (await this.maybeRaiseGuardTrip(id)) return;
+    this.pauseIfRequested(id);
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 
@@ -543,6 +570,7 @@ export class Runner {
     // loop-body statements and function-start hooks execute through, so
     // a time trip during a tight loop is detected here.
     if (await this.maybeRaiseGuardTrip(id)) return;
+    this.pauseIfRequested(id);
     if (this.shouldSkip()) return;
     if (this.getCounter() > id) return;
 

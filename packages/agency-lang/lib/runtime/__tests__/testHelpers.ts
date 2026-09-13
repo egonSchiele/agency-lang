@@ -32,6 +32,13 @@ export function makeMockCtx(
     handlers: [] as any[],
     callbacks: {},
     _skipNextCheckpoint: false,
+    pauseRequested: false,
+    abortController: new AbortController(),
+    throwIfCancelled() {
+      if (this.abortController.signal.aborted) {
+        throw this.abortController.signal.reason;
+      }
+    },
     _toolCallDepth: 0,
     runId: null,
     traceConfig: {},

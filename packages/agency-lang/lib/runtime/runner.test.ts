@@ -1266,7 +1266,7 @@ describe("Runner — external pause", () => {
   it("throws PauseSignal before the step body when a pause is requested", async () => {
     const ctx = makeMockCtx();
     ctx.pauseRequested = true;
-    const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     let ran = false;
     let caught: unknown;
     try {
@@ -1287,7 +1287,7 @@ describe("Runner — external pause", () => {
   it("checks for a pause in hook() too", async () => {
     const ctx = makeMockCtx();
     ctx.pauseRequested = true;
-    const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     let ran = false;
     await expect(
       runner.hook(0, async () => {
@@ -1301,7 +1301,7 @@ describe("Runner — external pause", () => {
     const ctx = makeMockCtx();
     ctx.pauseRequested = true;
     const frame = makeFrame();
-    const runner = new Runner(ctx, frame, { stack: new StateStack() });
+    const runner = new Runner(ctx, frame, { stack: ctx.stateStack });
     await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(PauseSignal);
     expect(frame.step).toBe(0);
   });
@@ -1309,10 +1309,10 @@ describe("Runner — external pause", () => {
   it("lets a pending guard trip raise first", async () => {
     vi.useFakeTimers();
     try {
-      const stack = new StateStack();
+      const ctx = makeMockCtx();
+      const stack = ctx.stateStack;
       stack.pushGuard(new TimeGuard(20));
       vi.advanceTimersByTime(20);
-      const ctx = makeMockCtx();
       ctx.pauseRequested = true;
       const runner = new Runner(ctx, makeFrame(), { stack });
       await runner.step(0, async () => {});
@@ -1327,7 +1327,7 @@ describe("Runner — external pause", () => {
   it("defers the pause while a handler body is executing", async () => {
     const ctx = makeMockCtx();
     ctx.pauseRequested = true;
-    const stack = new StateStack();
+    const stack = ctx.stateStack;
     stack.executingHandlerEntries.push({ fn: async () => undefined, liveGuardIds: [] });
     const runner = new Runner(ctx, makeFrame(), { stack });
     let ran = false;
@@ -1341,7 +1341,7 @@ describe("Runner — external pause", () => {
   it("defers the pause while a callback body is executing", async () => {
     const ctx = makeMockCtx();
     ctx.pauseRequested = true;
-    const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     let ran = false;
     ctx.callbacks.onNodeStart = async () => {
       await runner.step(0, async () => {
@@ -1353,11 +1353,36 @@ describe("Runner — external pause", () => {
     expect(ctx.pauseRequested).toBe(true);
   });
 
+  it("defers the pause on a branch stack, such as a tool call or fork branch", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
+    let ran = false;
+    await runner.step(0, async () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
+    expect(ctx.pauseRequested).toBe(true);
+  });
+
+  it("defers the pause inside a tool call", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    ctx.enterToolCall();
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let ran = false;
+    await runner.step(0, async () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
+    expect(ctx.pauseRequested).toBe(true);
+  });
+
   it("cancel wins when the context is aborted and a pause is requested", async () => {
     const ctx = makeMockCtx();
     ctx.abortController.abort(new AgencyCancelledError("stop"));
     ctx.pauseRequested = true;
-    const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 
@@ -1365,7 +1390,7 @@ describe("Runner — external pause", () => {
     const ctx = makeMockCtx();
     ctx.pauseRequested = true;
     ctx.abortController.abort(new AgencyCancelledError("stop"));
-    const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
     await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 });

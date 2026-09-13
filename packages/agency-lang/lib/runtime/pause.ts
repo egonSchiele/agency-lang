@@ -3,6 +3,8 @@ import type { Checkpoint, SourceLocationOpts } from "./state/checkpointStore.js"
 import type { RuntimeContext } from "./state/context.js";
 import { pausedCheckpointSchema } from "./state/schemas.js";
 import type { StateStack } from "./state/stateStack.js";
+import type { RunNodeResult } from "./types.js";
+import { createReturnObject } from "./utils.js";
 
 /** What a run returns in `data` when a pause request stopped it. The host
  *  stores the whole value and hands it back to `resumeFromCheckpoint`. */
@@ -18,6 +20,25 @@ export function pausedResult(checkpoint: Checkpoint, runId: string): PausedCheck
 
 export function isPaused(data: unknown): data is PausedCheckpoint {
   return pausedCheckpointSchema.safeParse(data).success;
+}
+
+/** Settle a caught pause into the object the caller gets back. The run is
+ *  not over, so the trace writer is paused rather than closed, and the
+ *  entry that catches the signal emits no agentEnd. */
+export async function pausedReturnObject(
+  execCtx: RuntimeContext<any>,
+  signal: PauseSignal,
+): Promise<RunNodeResult<PausedCheckpoint>> {
+  if (!execCtx.runId) {
+    throw new Error("Paused run has no run id");
+  }
+  await execCtx.pendingPromises.awaitAll();
+  const returnObject = createReturnObject({
+    result: { data: pausedResult(signal.checkpoint, execCtx.runId) },
+    globals: execCtx.globals,
+  });
+  await execCtx.pauseTraceWriter();
+  return returnObject;
 }
 
 type PauseAtStepArgs = {

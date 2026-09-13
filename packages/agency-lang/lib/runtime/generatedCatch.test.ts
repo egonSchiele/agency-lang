@@ -4,6 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
+import { isPaused } from "./pause.js";
 
 /**
  * Every generated function and node body wraps its steps in a catch that
@@ -11,11 +12,10 @@ import { safeDeleteDirectoryWithin } from "@/utils.js";
  * must pass through that catch untouched, or a pause inside a `def` would
  * come back as a failed result instead of unwinding the run.
  *
- * The compiled program loads the runtime from `agency-lang/runtime`, a
- * different module instance from the one this test imports, so the
- * assertions compare the error name rather than the class.
+ * The signal is caught where the node run started, which returns it to the
+ * caller as a paused result.
  */
-describe("generated catch blocks re-throw a PauseSignal", () => {
+describe("generated catch blocks let a PauseSignal reach the node entry", () => {
   const fixturesRoot = path.resolve(__dirname, "../../.agency-tmp/generated-catch");
   const mainAgency = path.join(fixturesRoot, "main.agency");
   const mainJs = mainAgency.replace(/\.agency$/, ".js");
@@ -62,11 +62,13 @@ describe("generated catch blocks re-throw a PauseSignal", () => {
 
   it("a PauseSignal thrown inside a def is not converted to a Failure", async () => {
     const mod = await import(pathToFileURL(mainJs).href);
-    await expect(mod.viaFunction()).rejects.toMatchObject({ name: "PauseSignal" });
+    const result = await mod.viaFunction();
+    expect(isPaused(result.data)).toBe(true);
   });
 
   it("a PauseSignal thrown inside a node body is not converted to a Failure", async () => {
     const mod = await import(pathToFileURL(mainJs).href);
-    await expect(mod.viaNode()).rejects.toMatchObject({ name: "PauseSignal" });
+    const result = await mod.viaNode();
+    expect(isPaused(result.data)).toBe(true);
   });
 });

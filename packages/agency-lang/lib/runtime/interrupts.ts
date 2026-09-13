@@ -6,7 +6,14 @@ import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
-import { AgencyCancelledError, HandlerRecursionError, RestoreSignal } from "./errors.js";
+import {
+  AgencyCancelledError,
+  HandlerRecursionError,
+  PauseSignal,
+  RestoreSignal,
+} from "./errors.js";
+import { withExternalSignals } from "./externalSignals.js";
+import { pausedReturnObject } from "./pause.js";
 import { isAborted } from "./abortedResult.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { mergeFor, mergeForIpc } from "./effectMerge.js";
@@ -730,6 +737,9 @@ async function runResumeLoop(
       }
       return returnObject;
     } catch (e) {
+      if (e instanceof PauseSignal) {
+        return await pausedReturnObject(execCtx, e);
+      }
       if (e instanceof RestoreSignal) {
         const cp = e.checkpoint;
         execCtx._restoreCount++;
@@ -804,6 +814,9 @@ type RespondToInterruptsArgs = {
   // original interrupt.runId and ignores any supplied traceId; only the config
   // projection is applied.
   invocation?: InvocationOptions;
+  // The caller's cancel and pause handles for this resume leg.
+  abortSignal?: AbortSignal;
+  pauseSignal?: AbortSignal;
 };
 
 async function respondToInterruptsCore(
@@ -865,7 +878,10 @@ async function respondToInterruptsCore(
 
     agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
     execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
-    const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
+    const signals = { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal };
+    const value = await withExternalSignals(execCtx, signals, () =>
+      runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime),
+    );
     outcome = { status: "returned", value };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

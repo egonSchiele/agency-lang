@@ -6,7 +6,9 @@ import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { AgencyFunction } from "./agencyFunction.js";
-import { AgencyCancelledError, CheckpointError, RestoreSignal } from "./errors.js";
+import { CheckpointError, PauseSignal, RestoreSignal } from "./errors.js";
+import { withExternalSignals } from "./externalSignals.js";
+import { pausedReturnObject } from "./pause.js";
 import { applyRestoreOverrides } from "./resumeSetup.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -346,7 +348,13 @@ type RunNodeArgs = {
   initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
   // An AbortSignal for cancelling the agent mid-execution. When aborted,
   // in-flight LLM requests are torn down and an AgencyCancelledError is thrown.
+  // See pauseSignal for the case where the work should be kept.
   abortSignal?: AbortSignal;
+  // An AbortSignal that asks the run to pause. Firing it stops the program
+  // at its next statement boundary and returns a PausedCheckpoint in `data`.
+  // Work already in flight (an LLM call, a fetch) finishes first. If both
+  // signals fire, cancel wins.
+  pauseSignal?: AbortSignal;
   // Per-invocation config override + optional root trace id for this run.
   invocation?: InvocationOptions;
   // What the entry node was given, when the caller names it (an eval input).
@@ -364,6 +372,7 @@ async function runNodeCore({
   callbacks,
   initializeGlobals,
   abortSignal,
+  pauseSignal,
   invocation,
   input,
 }: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
@@ -407,98 +416,37 @@ async function runNodeCore({
       Object.assign(execCtx.callbacks, callbacks);
     }
 
-    // Wire external abort signal to the execution context
     const cancel = (reason?: string) => execCtx.cancel(reason);
-    if (abortSignal) {
-      if (abortSignal.aborted) {
-        throw new AgencyCancelledError();
-      }
-      abortSignal.addEventListener("abort", () => execCtx.cancel(), {
-        once: true,
-      });
-    }
+    outcome = await withExternalSignals(execCtx, { abortSignal, pauseSignal }, async () => {
+      // onAgentStart fires BEFORE any agent node has executed, so there is
+      // no real per-run ThreadStore yet — use a bootstrap frame so user
+      // callbacks that reach for thread/message builtins get a clear error
+      // instead of writing into a placeholder. `messages` is still
+      // available to the callback via `data.messages`.
+      await runInBootstrapFrame(execCtx, () =>
+        callHook({
+          ctx: execCtx,
+          name: "onAgentStart",
+          data: { nodeName, args: data, messages: messages || [], cancel },
+        }),
+      );
 
-    // onAgentStart fires BEFORE any agent node has executed, so there is
-    // no real per-run ThreadStore yet — use a bootstrap frame so user
-    // callbacks that reach for thread/message builtins get a clear error
-    // instead of writing into a placeholder. `messages` is still
-    // available to the callback via `data.messages`.
-    await runInBootstrapFrame(execCtx, () =>
-      callHook({
-        ctx: execCtx,
-        name: "onAgentStart",
-        data: { nodeName, args: data, messages: messages || [], cancel },
-      }),
-    );
+      agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
+      execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data, input });
 
-    agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-    execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data, input });
-
-    let isResume = false;
-    let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
-    while (true) {
-      try {
-        // Install an initial AsyncLocalStorage frame so stdlib helpers
-        // that read `getRuntimeContext()` (the post-migration replacement
-        // for the `__ctx, __stateStack, __threads` codegen-injected
-        // args) see a sensible context even on code paths that run
-        // outside a Runner-managed step. Generated function and node
-        // bodies re-enter `agencyStore.run` inside each Runner step with
-        // the scope-local stack/threads, so this top-level frame is just
-        // the fallback for early code (callHook, validation, etc.).
-        const result = await agencyStore.run(
-          {
-            ctx: execCtx,
-            stack: execCtx.stateStack,
-            threads: threadStore,
-            globals: execCtx.globals,
-          },
-          () =>
-            execCtx.graph.run(
-              nodeName,
-              {
-                messages: threadStore,
-                data,
-                ctx: execCtx,
-                isResume,
-              },
-              {
-                onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-                statelogClient: execCtx.statelogClient,
-              },
-            ),
-        );
-        await execCtx.pendingPromises.awaitAll();
-
-        await throwIfNodeResultAborted(result, execCtx, { endsRun: true });
-
-        const returnObject = createReturnObject({
-          result,
-          globals: execCtx.globals,
-        });
-
-        if (hasInterrupts(returnObject.data)) {
-          // Interrupt(s): attach runId and pause (no footer)
-          if (execCtx.runId) {
-            // eslint-disable-next-line max-depth -- attaching runId to each interrupt
-            for (const intr of returnObject.data) {
-              intr.runId = execCtx.runId;
-            }
-          }
-          await execCtx.pauseTraceWriter();
-        } else {
-          // Final result: emit footer and close
-          execCtx.statelogClient.agentEnd({
-            entryNode: nodeName,
-            result: returnObject.data,
-            timeTaken: performance.now() - agentStartTime,
-            tokenStats: returnObject.tokens,
-          });
-          // onAgentEnd fires AFTER the run finished, so seed ALS with
-          // the real per-run ThreadStore: user callbacks that inspect
-          // the final conversation through stdlib helpers see the
-          // actual messages, not a sentinel.
-          await agencyStore.run(
+      let isResume = false;
+      let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+      while (true) {
+        try {
+          // Install an initial AsyncLocalStorage frame so stdlib helpers
+          // that read `getRuntimeContext()` (the post-migration replacement
+          // for the `__ctx, __stateStack, __threads` codegen-injected
+          // args) see a sensible context even on code paths that run
+          // outside a Runner-managed step. Generated function and node
+          // bodies re-enter `agencyStore.run` inside each Runner step with
+          // the scope-local stack/threads, so this top-level frame is just
+          // the fallback for early code (callHook, validation, etc.).
+          const result = await agencyStore.run(
             {
               ctx: execCtx,
               stack: execCtx.stateStack,
@@ -506,47 +454,102 @@ async function runNodeCore({
               globals: execCtx.globals,
             },
             () =>
-              callHook({
-                ctx: execCtx,
-                name: "onAgentEnd",
-                data: { nodeName, result: returnObject },
-              }),
+              execCtx.graph.run(
+                nodeName,
+                {
+                  messages: threadStore,
+                  data,
+                  ctx: execCtx,
+                  isResume,
+                },
+                {
+                  onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
+                  statelogClient: execCtx.statelogClient,
+                },
+              ),
           );
-          await execCtx.closeTraceWriter();
-        }
-        outcome = { status: "returned", value: returnObject };
-        break;
-      } catch (e) {
-        if (e instanceof RestoreSignal) {
-          execCtx._restoreCount++;
-          if (execCtx._restoreCount > execCtx.maxRestores) {
-            throw new CheckpointError(
-              `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,
-            );
-          }
-          const cp = e.checkpoint;
-          execCtx.statelogClient.checkpointRestored({
-            checkpointId: cp.id,
-            restoreCount: execCtx._restoreCount,
-            maxRestores: execCtx.maxRestores,
-            overrides: {
-              args: !!e.options?.args,
-              globals: !!e.options?.globals,
-            },
+          await execCtx.pendingPromises.awaitAll();
+
+          await throwIfNodeResultAborted(result, execCtx, { endsRun: true });
+
+          const returnObject = createReturnObject({
+            result,
+            globals: execCtx.globals,
           });
-          execCtx.restoreState(cp);
-          applyRestoreOverrides(execCtx, cp, e.options);
-          nodeName = cp.nodeId;
-          data = {};
-          isResume = true;
-          execCtx.stateStack.nodesTraversed = [cp.nodeId];
-          // Reset ThreadStore for the restored execution
-          threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
-          continue;
+
+          if (hasInterrupts(returnObject.data)) {
+            // Interrupt(s): attach runId and pause (no footer)
+            if (execCtx.runId) {
+              // eslint-disable-next-line max-depth -- attaching runId to each interrupt
+              for (const intr of returnObject.data) {
+                intr.runId = execCtx.runId;
+              }
+            }
+            await execCtx.pauseTraceWriter();
+          } else {
+            // Final result: emit footer and close
+            execCtx.statelogClient.agentEnd({
+              entryNode: nodeName,
+              result: returnObject.data,
+              timeTaken: performance.now() - agentStartTime,
+              tokenStats: returnObject.tokens,
+            });
+            // onAgentEnd fires AFTER the run finished, so seed ALS with
+            // the real per-run ThreadStore: user callbacks that inspect
+            // the final conversation through stdlib helpers see the
+            // actual messages, not a sentinel.
+            await agencyStore.run(
+              {
+                ctx: execCtx,
+                stack: execCtx.stateStack,
+                threads: threadStore,
+                globals: execCtx.globals,
+              },
+              () =>
+                callHook({
+                  ctx: execCtx,
+                  name: "onAgentEnd",
+                  data: { nodeName, result: returnObject },
+                }),
+            );
+            await execCtx.closeTraceWriter();
+          }
+          return { status: "returned" as const, value: returnObject };
+        } catch (e) {
+          if (e instanceof PauseSignal) {
+            return { status: "returned" as const, value: await pausedReturnObject(execCtx, e) };
+          }
+          if (e instanceof RestoreSignal) {
+            execCtx._restoreCount++;
+            if (execCtx._restoreCount > execCtx.maxRestores) {
+              throw new CheckpointError(
+                `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,
+              );
+            }
+            const cp = e.checkpoint;
+            execCtx.statelogClient.checkpointRestored({
+              checkpointId: cp.id,
+              restoreCount: execCtx._restoreCount,
+              maxRestores: execCtx.maxRestores,
+              overrides: {
+                args: !!e.options?.args,
+                globals: !!e.options?.globals,
+              },
+            });
+            execCtx.restoreState(cp);
+            applyRestoreOverrides(execCtx, cp, e.options);
+            nodeName = cp.nodeId;
+            data = {};
+            isResume = true;
+            execCtx.stateStack.nodesTraversed = [cp.nodeId];
+            // Reset ThreadStore for the restored execution
+            threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+            continue;
+          }
+          throw e;
         }
-        throw e;
       }
-    }
+    });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     execCtx.statelogClient.error({

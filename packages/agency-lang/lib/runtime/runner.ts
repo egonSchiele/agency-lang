@@ -372,17 +372,25 @@ export class Runner {
   }
 
   /** Cancel wins over a pause; otherwise honour a pending pause request at
-   *  this step. A pause may land only outside handler and callback
-   *  dispatch, because a checkpoint taken inside either cannot be resumed.
-   *  The flag stays set and the next ordinary step takes it. See
-   *  pauseAtStep for what a pause does. */
+   *  this step. The flag stays set, and the next step that can take it
+   *  does, when this step is:
+   *  - inside a handler or callback body, which has no step address a
+   *    resume can re-enter;
+   *  - on a branch stack (a tool call, fork, or parallel block). Interrupts
+   *    from a branch are re-stamped against the parent stack where the
+   *    branches join, after the join saves branch threads and globals. A
+   *    thrown pause skips that join, so its checkpoint could not resume.
+   *  See pauseAtStep for what a pause does. */
   private pauseIfRequested(id: number): void {
     if (!this.ctx.pauseRequested) {
       return;
     }
     this.ctx.throwIfCancelled();
     const stack = this.stack;
-    if (!stack || stack.hasExecutingHandlers() || isInsideCallback()) {
+    if (!stack || stack !== this.ctx.stateStack || this.ctx.isInsideToolCall()) {
+      return;
+    }
+    if (stack.hasExecutingHandlers() || isInsideCallback()) {
       return;
     }
     pauseAtStep({

@@ -13,7 +13,7 @@ import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
 import { agencyStore, getRuntimeContext } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
-import { AgencyAbort, RestoreSignal } from "./errors.js";
+import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { TraceEvent } from "./trace/types.js";
@@ -145,6 +145,13 @@ export type AgencyCallbacks = {
 // checkpoint can never capture a "stuck" entry.
 const _activeCallbacksALS = new AsyncLocalStorage<Set<object>>();
 
+/** True while a callback body is executing on this async path. The runner
+ *  defers an external pause here, because a checkpoint taken inside a
+ *  callback dispatch is not a place a resume can re-enter. */
+export function isInsideCallback(): boolean {
+  return _activeCallbacksALS.getStore() !== undefined;
+}
+
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
 // register callbacks that fire alongside user-provided callbacks.
 const _globalHooks: Partial<Record<keyof CallbackMap, Array<(data: any) => any>>> = {};
@@ -210,7 +217,7 @@ async function fireWithGuard(
     // AgencyAbort covers BOTH a cancellation and a guard trip — a guard trip
     // raised inside a callback must propagate to its owning guard, not be
     // logged + dropped as a stray JS error (it is not an AgencyCancelledError).
-    if (error instanceof RestoreSignal) throw error;
+    if (error instanceof RunControlSignal) throw error;
     if (error instanceof AgencyAbort) throw error;
     // Real JS errors (e.g. a callback body crashed) are logged and dropped.
     // Callback bodies cannot raise interrupts (typechecker-enforced), so

@@ -6,21 +6,24 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   __codeLiteral,
   interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  isPaused,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
+  resumeFromCheckpoint as _resumeFromCheckpoint,
   resumeCliFromCheckpoint as _resumeCliFromCheckpoint,
   rewindFrom as _rewindFrom,
   runExportedFunction as _runExportedFunction,
   runExportedFunctionForServe as _runExportedFunctionForServe,
   runNodeForServe as _runNodeForServe,
   RestoreSignal,
+  RunControlSignal,
   AgencyAbort,
   AbortedResult,
   isAborted,
@@ -92,8 +95,11 @@ function propagate() { return { type: "propagate" as const }; }
 function pass() { return { type: "pass" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
-export { interrupt, isInterrupt, hasInterrupts, isDebugger };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: { overrides?: Record<string, unknown>; metadata?: Record<string, any> }) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
+export { interrupt, isInterrupt, hasInterrupts, isPaused, isDebugger };
+type __ResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+type __ResumeFromCheckpointOptions = { metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
+export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });
 const __resumeFromCheckpoint = (checkpoint: Checkpoint, overrides?: ResumeOverrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint, overrides });
 
@@ -337,7 +343,7 @@ return;
       return runner.haltResult;
     }
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
   throw __error;
 }
 // All aborts — cancellations (Esc / abort) AND guard trips — are now a single
@@ -502,7 +508,7 @@ await callHook({
       data: undefined
     };
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
       throw __error
     }
     if (__error instanceof AgencyAbort) {
@@ -526,7 +532,7 @@ await callHook({
     };
   }
 })
-export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }: ({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
+export async function main({ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }: ({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions) = {}): Promise<RunNodeResult<any>> {
   return runNode({
     ctx: __globalCtx,
     nodeName: "main",
@@ -538,6 +544,8 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
       traceId: __invocationTraceId
     },
     input: __invocationInput,
+    abortSignal: __invocationAbortSignal,
+    pauseSignal: __invocationPauseSignal,
     initializeGlobals: __initializeGlobals
   });
 }

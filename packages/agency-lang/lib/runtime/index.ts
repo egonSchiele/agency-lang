@@ -85,8 +85,9 @@ export {
   respondToInterrupts,
   respondToInterruptsForServe,
   resumeCliFromCheckpoint,
+  resumeFromCheckpoint,
 } from "./interrupts.js";
-export type { ResumeCliFromCheckpointArgs } from "./interrupts.js";
+export type { ResumeCliFromCheckpointArgs, ResumeFromCheckpointArgs } from "./interrupts.js";
 
 export { checkPolicy, checkPolicyExplicit, validatePolicy } from "./policy.js";
 
@@ -110,11 +111,15 @@ export {
   CheckpointError,
   CheckpointCodeChangedError,
   RestoreSignal,
+  PauseSignal,
+  RunControlSignal,
   AgencyAbort,
   AgencyCancelledError,
   CallDepthExceededError,
   isAbortError,
 } from "./errors.js";
+export { isPaused, pausedResult } from "./pause.js";
+export type { PausedCheckpoint } from "./pause.js";
 export { GuardExceededError, isGuardExceededError } from "./guard.js";
 export { AbortedResult, isAborted, previewForLog } from "./abortedResult.js";
 export type { Guard, GuardJSON } from "./guard.js";

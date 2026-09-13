@@ -1140,7 +1140,7 @@ export class StatelogClient {
     sourceLocation,
   }: {
     checkpointId: number;
-    reason: "interrupt" | "explicit" | "failure" | "fork" | "race";
+    reason: "interrupt" | "explicit" | "failure" | "fork" | "race" | "pause";
     sourceLocation?: { moduleId: string; scopeName: string; stepPath: string };
   }): Promise<void> {
     await this.post({

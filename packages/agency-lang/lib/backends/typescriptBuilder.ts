@@ -3113,7 +3113,10 @@ export class TypeScriptBuilder {
           ),
         ]),
         ts.statements([
-          ts.if(ts.raw("__error instanceof RestoreSignal"), ts.statements([ts.throw("__error")])),
+          ts.if(
+            ts.raw("__error instanceof RunControlSignal"),
+            ts.statements([ts.throw("__error")]),
+          ),
           // All aborts — cancellations (Esc / abort) AND guard trips — are a
           // single AgencyAbort carrying an AbortCause and must propagate
           // untouched rather than be logged + converted to a Failure here.
@@ -4433,6 +4436,8 @@ export class TypeScriptBuilder {
                     traceId: ts.id("__invocationTraceId"),
                   }),
                   input: ts.id("__invocationInput"),
+                  abortSignal: ts.id("__invocationAbortSignal"),
+                  pauseSignal: ts.id("__invocationPauseSignal"),
                   initializeGlobals: ts.id("__initializeGlobals"),
                 }),
               ])

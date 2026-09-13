@@ -7,7 +7,8 @@ import { ThreadStore } from "./state/threadStore.js";
 import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { TimeGuard } from "./guard.js";
-import { readCause } from "./errors.js";
+import { AgencyCancelledError, PauseSignal, readCause } from "./errors.js";
+import { callHook } from "./hooks.js";
 import * as smoltalk from "smoltalk";
 import { ABANDONED_TURN_TEXT } from "./threadRepair.js";
 import type { MessageThread } from "./state/messageThread.js";
@@ -1258,5 +1259,183 @@ describe("custom redaction markers across both statelog paths", () => {
     runtimeContext.globals.markRedacted(secret);
     const output = JSON.stringify({ secret }, makeRedactReplacer(runtimeContext.globals));
     expect(JSON.parse(output as string)).toEqual({ secret: "[REDACTED]" });
+  });
+});
+
+describe("Runner — external pause", () => {
+  it("throws PauseSignal before the step body when a pause is requested", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let ran = false;
+    let caught: unknown;
+    try {
+      await runner.step(0, async () => {
+        ran = true;
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(ran).toBe(false);
+    expect(caught).toBeInstanceOf(PauseSignal);
+    const cp = (caught as PauseSignal).checkpoint;
+    expect(cp.stepPath).toBe("0");
+    expect(ctx.pauseRequested).toBe(false);
+    expect(ctx.checkpoints.get(cp.id)).toBe(cp);
+  });
+
+  it("checks for a pause in hook() too", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let ran = false;
+    await expect(
+      runner.hook(0, async () => {
+        ran = true;
+      }),
+    ).rejects.toBeInstanceOf(PauseSignal);
+    expect(ran).toBe(false);
+  });
+
+  it("does not advance the step counter, so a resume re-enters the same step", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const frame = makeFrame();
+    const runner = new Runner(ctx, frame, { stack: ctx.stateStack });
+    await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(PauseSignal);
+    expect(frame.step).toBe(0);
+  });
+
+  it("lets a pending guard trip raise first", async () => {
+    vi.useFakeTimers();
+    try {
+      const ctx = makeMockCtx();
+      const stack = ctx.stateStack;
+      stack.pushGuard(new TimeGuard(20));
+      vi.advanceTimersByTime(20);
+      ctx.pauseRequested = true;
+      const runner = new Runner(ctx, makeFrame(), { stack });
+      await runner.step(0, async () => {});
+      expect(runner.halted).toBe(true);
+      expect(runner.haltResult[0].effect).toBe("std::guard");
+      expect(ctx.pauseRequested).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("defers the pause while a handler body is executing", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const stack = ctx.stateStack;
+    stack.executingHandlerEntries.push({ fn: async () => undefined, liveGuardIds: [] });
+    const runner = new Runner(ctx, makeFrame(), { stack });
+    let ran = false;
+    await runner.step(0, async () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
+    expect(ctx.pauseRequested).toBe(true);
+  });
+
+  it("defers the pause while a callback body is executing", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let ran = false;
+    ctx.callbacks.onNodeStart = async () => {
+      await runner.step(0, async () => {
+        ran = true;
+      });
+    };
+    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } });
+    expect(ran).toBe(true);
+    expect(ctx.pauseRequested).toBe(true);
+  });
+
+  it("defers the pause on a branch stack, such as a tool call or fork branch", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: new StateStack() });
+    let ran = false;
+    await runner.step(0, async () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
+    expect(ctx.pauseRequested).toBe(true);
+  });
+
+  it("defers the pause inside a tool call", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    ctx.enterToolCall();
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let ran = false;
+    await runner.step(0, async () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
+    expect(ctx.pauseRequested).toBe(true);
+  });
+
+  it("settles pending async results before stamping the checkpoint", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const frame = ctx.stateStack.stack[0];
+    ctx.pendingPromises.add(Promise.resolve("async value"), (value: unknown) => {
+      frame.locals.asyncResult = value;
+    });
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    const caught = await runner.step(0, async () => {}).catch((e: unknown) => e);
+    expect(caught).toBeInstanceOf(PauseSignal);
+    const checkpoint = (caught as PauseSignal).checkpoint;
+    expect(checkpoint.stack.stack[0].locals.asyncResult).toBe("async value");
+  });
+
+  it("checks for a pause before an if statement evaluates its condition", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let evaluated = false;
+    const branches = [
+      {
+        condition: () => {
+          evaluated = true;
+          return true;
+        },
+        body: async () => {},
+      },
+    ];
+    await expect(runner.ifElse(0, branches)).rejects.toBeInstanceOf(PauseSignal);
+    expect(evaluated).toBe(false);
+  });
+
+  it("checks for a pause before a for loop reads its items", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    let read = false;
+    const items = () => {
+      read = true;
+      return [1];
+    };
+    await expect(runner.loop(0, items, async () => {})).rejects.toBeInstanceOf(PauseSignal);
+    expect(read).toBe(false);
+  });
+
+  it("cancel wins when the context is aborted and a pause is requested", async () => {
+    const ctx = makeMockCtx();
+    ctx.abortController.abort(new AgencyCancelledError("stop"));
+    ctx.pauseRequested = true;
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(AgencyCancelledError);
+  });
+
+  it("cancel wins in the other order: pause requested, then aborted", async () => {
+    const ctx = makeMockCtx();
+    ctx.pauseRequested = true;
+    ctx.abortController.abort(new AgencyCancelledError("stop"));
+    const runner = new Runner(ctx, makeFrame(), { stack: ctx.stateStack });
+    await expect(runner.step(0, async () => {})).rejects.toBeInstanceOf(AgencyCancelledError);
   });
 });

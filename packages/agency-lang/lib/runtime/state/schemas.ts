@@ -111,3 +111,10 @@ export const checkpointSchema = z.object({
     .optional(),
   signature: z.string().optional(),
 });
+
+/** The value a paused run returns in `data`. */
+export const pausedCheckpointSchema = z.object({
+  type: z.literal("paused"),
+  checkpoint: checkpointSchema,
+  runId: z.string().min(1),
+});

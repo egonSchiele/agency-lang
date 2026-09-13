@@ -13,7 +13,15 @@ import {
   guardFailureMessage,
   type ResultFailure,
 } from "./result.js";
-import { AgencyAbort, AgencyCancelledError, makeAbortCause, type AbortCause } from "./errors.js";
+import {
+  AgencyAbort,
+  AgencyCancelledError,
+  makeAbortCause,
+  PauseSignal,
+  RestoreSignal,
+  type AbortCause,
+} from "./errors.js";
+import { makeCheckpoint } from "./checkpointTestHelpers.js";
 import { AbortedResult } from "./abortedResult.js";
 import { State } from "./state/stateStack.js";
 
@@ -552,5 +560,25 @@ describe("a Result built by hand in imported TypeScript", () => {
   it("leaves a success alone", async () => {
     const ok = { __type: "resultType", success: true, value: 42 };
     expect(await __tryCall(() => ok)).toBe(ok);
+  });
+});
+
+describe("__tryCall — run-control signals", () => {
+  it("re-throws a RestoreSignal instead of turning it into a failure", async () => {
+    const cp = makeCheckpoint();
+    await expect(
+      __tryCall(async () => {
+        throw new RestoreSignal(cp);
+      }),
+    ).rejects.toBeInstanceOf(RestoreSignal);
+  });
+
+  it("re-throws a PauseSignal instead of turning it into a failure", async () => {
+    const cp = makeCheckpoint();
+    await expect(
+      __tryCall(async () => {
+        throw new PauseSignal(cp);
+      }),
+    ).rejects.toBeInstanceOf(PauseSignal);
   });
 });

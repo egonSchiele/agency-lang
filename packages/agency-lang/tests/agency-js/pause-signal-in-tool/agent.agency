@@ -1,0 +1,13 @@
+import { bump, bumpCount } from "./counter.js"
+
+def slowTool(): string {
+  """Sleeps, then returns pong."""
+  sleep(400ms)
+  bump()
+  return "pong"
+}
+
+node main(): string {
+  const answer = llm("call slowTool", { tools: [slowTool] })
+  return answer
+}

@@ -477,23 +477,32 @@ export class StateStack {
     this.executingHandlerEntries = [...parent.executingHandlerEntries];
   }
 
-  /** Throw if any handler is executing on this stack or any branch
-   *  under it. Called at the interrupt-pause checkpoint sites: handlers
-   *  have no step address, so a pause taken mid-handler could never be
-   *  resumed. Walks branches because a mark can live on a branch stack
-   *  whose parent is unmarked (a tool-call branch created inside a
+  /** True if any handler is executing on this stack or any branch under
+   *  it. Handlers have no step address, so a pause taken mid-handler could
+   *  never be resumed. Walks branches because a mark can live on a branch
+   *  stack whose parent is unmarked (a tool-call branch created inside a
    *  handler). */
-  assertNoExecutingHandlers(): void {
+  hasExecutingHandlers(): boolean {
     if (this.executingHandlerEntries.length > 0) {
+      return true;
+    }
+    const branchStacks: StateStack[] = [];
+    for (const frame of this.stack) {
+      frame.forEachBranchStack((branchStack) => branchStacks.push(branchStack));
+    }
+    return branchStacks.some((branchStack) => branchStack.hasExecutingHandlers());
+  }
+
+  /** Throw if any handler is executing (see hasExecutingHandlers). Called
+   *  at the interrupt-pause checkpoint sites. */
+  assertNoExecutingHandlers(): void {
+    if (this.hasExecutingHandlers()) {
       throw new Error(
         "Cannot pause the run while a handler function is executing: " +
           "handlers have no step address, so this checkpoint could never " +
           "be resumed. This is a runtime bug — an in-handler pause path " +
           "was reached. See issue #616.",
       );
-    }
-    for (const frame of this.stack) {
-      frame.forEachBranchStack((branchStack) => branchStack.assertNoExecutingHandlers());
     }
   }
 

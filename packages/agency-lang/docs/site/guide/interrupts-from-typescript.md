@@ -82,3 +82,43 @@ console.log(result.data); // the final return value
 - `reject()` - reject
 - `approve(value)` - approve with a value
 - `reject(reason)` - reject with a reason
+
+## Pausing a run from outside
+
+You can stop a run that is in progress and keep its state, for example when a
+user presses Pause on a background job. Pass a `pauseSignal` when you start the
+run:
+
+```ts
+import { main, isPaused, resumeFromCheckpoint } from "./agent.js";
+
+const pause = new AbortController();
+const result = await main("import the recipes", { pauseSignal: pause.signal });
+```
+
+Call `pause.abort()` while the run is going. The program stops at its next
+statement. A model call or fetch that is already in flight finishes first, and
+so does a tool call the model made. The result has a paused checkpoint in
+`data`:
+
+```ts
+if (isPaused(result.data)) {
+  save(result.data); // plain JSON, safe to store
+}
+```
+
+Continue later, in the same process or another one:
+
+```ts
+const resumed = await resumeFromCheckpoint(saved, { pauseSignal: nextPause.signal });
+```
+
+`resumeFromCheckpoint` returns the same kind of result as `main()`. Check it
+with `isPaused` and `hasInterrupts` the same way. A resumed run refuses to
+continue if the compiled program has changed since the pause. If you started
+the run with a policy in its options, pass the same `invocation` options when
+you resume.
+
+`respondToInterrupts` accepts `pauseSignal` too, so you can pause a run after
+answering its interrupts. Pausing does not call your handlers. If you pass both
+`pauseSignal` and `abortSignal` and both fire, the run is cancelled.

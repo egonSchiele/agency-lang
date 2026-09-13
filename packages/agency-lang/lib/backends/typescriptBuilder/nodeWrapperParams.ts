@@ -40,10 +40,12 @@ export function nodeWrapperParams(
   // plain one-parameter call and an eval input have the same shape. The key
   // is deliberately not `input`: nodes often have a parameter of that name,
   // and `main(input, { input } = {})` would read as the same value twice.
+  // `abortSignal` and `pauseSignal` are the caller's cancel and pause handles,
+  // passed straight through to `runNode`.
   params.push({
-    name: "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }",
+    name: "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }",
     typeAnnotation:
-      "({ messages?: any; callbacks?: any; invocationInput?: unknown } & InvocationOptions)",
+      "({ messages?: any; callbacks?: any; invocationInput?: unknown; abortSignal?: AbortSignal; pauseSignal?: AbortSignal } & InvocationOptions)",
     defaultValue: ts.obj({}),
   });
   return params;

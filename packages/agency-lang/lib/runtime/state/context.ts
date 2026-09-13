@@ -115,6 +115,9 @@ export class RuntimeContext<T> {
   pendingPromises: PendingPromiseStore;
   graph: SimpleMachine<T>;
   _skipNextCheckpoint: boolean;
+  /** Set by an external pause signal. The runner honours it at the next
+   *  step boundary by stamping a checkpoint and throwing PauseSignal. */
+  pauseRequested: boolean;
   _pendingArgOverrides?: PendingArgOverrides;
   _restoreCount: number;
 
@@ -323,6 +326,7 @@ export class RuntimeContext<T> {
     // checkpoint to the trace (the user already saw the rewound checkpoint).
     // rewindFrom sets this flag so the first debugStep trace-write is skipped.
     this._skipNextCheckpoint = false;
+    this.pauseRequested = false;
     this._restoreCount = 0;
     this._toolCallDepth = 0;
     this.pendingPromises = new PendingPromiseStore();
@@ -460,6 +464,7 @@ export class RuntimeContext<T> {
     execCtx.lockWaiters = {};
     execCtx.lockReleasers = {};
     execCtx._skipNextCheckpoint = false;
+    execCtx.pauseRequested = false;
     execCtx._restoreCount = 0;
     execCtx._toolCallDepth = 0;
     execCtx._interruptResponses = {};
@@ -714,6 +719,14 @@ export class RuntimeContext<T> {
     if (!this.abortController.signal.aborted) {
       const resolvedCause = cause ?? makeAbortCause({ kind: "userKill", reason });
       this.abortController.abort(new AgencyCancelledError(reason, resolvedCause));
+    }
+  }
+
+  /** Throw the cancel reason `cancel()` recorded, if the run is cancelled.
+   *  The runner calls this at a step boundary so cancel wins over a pause. */
+  throwIfCancelled(): void {
+    if (this.abortController.signal.aborted) {
+      throw this.abortController.signal.reason;
     }
   }
 

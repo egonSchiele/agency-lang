@@ -208,3 +208,12 @@ describe("RuntimeContext memory frames", () => {
     expect(execCtx.getActiveMemoryManager()).toBeUndefined();
   });
 });
+
+describe("throwIfCancelled", () => {
+  it("throws the recorded cancel reason and otherwise returns", () => {
+    const ctx = makeMockCtx();
+    expect(() => ctx.throwIfCancelled()).not.toThrow();
+    ctx.cancel("stop");
+    expect(() => ctx.throwIfCancelled()).toThrow(AgencyCancelledError);
+  });
+});

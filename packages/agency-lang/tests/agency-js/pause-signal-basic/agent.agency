@@ -1,0 +1,11 @@
+import { bump, bumpCount } from "./counter.js"
+
+node main(): number {
+  sleep(50ms)
+  bump()
+  sleep(400ms)
+  bump()
+  sleep(50ms)
+  bump()
+  return bumpCount()
+}

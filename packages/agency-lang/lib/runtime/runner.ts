@@ -3,10 +3,11 @@ import { nanoid } from "nanoid";
 import { __globals, agencyStore } from "./asyncContext.js";
 import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
-import { RestoreSignal, readCause } from "./errors.js";
+import { RunControlSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
-import { invokeCallbacks } from "./hooks.js";
+import { invokeCallbacks, isInsideCallback } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
+import { pauseAtStep } from "./pause.js";
 import { __pipeBind } from "./result.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { runBatch } from "./runBatch.js";
@@ -370,6 +371,39 @@ export class Runner {
     });
   }
 
+  /** Cancel wins over a pause; otherwise honour a pending pause request at
+   *  this step. The flag stays set, and the next step that can take it
+   *  does, when this step is:
+   *  - inside a handler or callback body, which has no step address a
+   *    resume can re-enter;
+   *  - on a branch stack (a tool call, fork, or parallel block). Interrupts
+   *    from a branch are re-stamped against the parent stack where the
+   *    branches join, after the join saves branch threads and globals. A
+   *    thrown pause skips that join, so its checkpoint could not resume.
+   *  See pauseAtStep for what a pause does. */
+  private async pauseIfRequested(id: number): Promise<void> {
+    if (!this.ctx.pauseRequested) {
+      return;
+    }
+    this.ctx.throwIfCancelled();
+    const stack = this.stack;
+    if (!stack || stack !== this.ctx.stateStack || this.ctx.isInsideToolCall()) {
+      return;
+    }
+    if (stack.hasExecutingHandlers() || isInsideCallback()) {
+      return;
+    }
+    await pauseAtStep({
+      ctx: this.ctx,
+      stack,
+      location: {
+        moduleId: this.moduleId,
+        scopeName: this.scopeName,
+        stepPath: this.stepPath(id),
+      },
+    });
+  }
+
   // ── Debug hook ──
 
   /**
@@ -495,6 +529,7 @@ export class Runner {
     // re-raises and applies the recorded answer before the body runs.
     if (await this.maybeRaiseGuardTrip(id)) return;
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -544,6 +579,7 @@ export class Runner {
     // a time trip during a tight loop is detected here.
     if (await this.maybeRaiseGuardTrip(id)) return;
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
@@ -562,6 +598,7 @@ export class Runner {
   async debugger(id: number, label: string): Promise<void> {
     this.beforeStep();
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
     if (await this.maybeDebugHook(id, label, true)) return;
 
@@ -575,6 +612,7 @@ export class Runner {
   async pipe(id: number, input: any, fn: (value: any) => any): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return input;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id)
       return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
 
@@ -621,6 +659,7 @@ export class Runner {
     // need named-args behaviour.
     this.beforeStep();
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -787,7 +826,7 @@ export class Runner {
             // primary exception. `fireWithGuard` inside invokeCallbacks
             // already logs JS errors; this catch is belt-and-braces for
             // unexpected throws from the dispatcher itself.
-            if (e instanceof RestoreSignal) throw e;
+            if (e instanceof RunControlSignal) throw e;
             // Surface the failure as a structured statelog event so it
             // shows up in traces (replaces the prior bare console.error).
             // Optional chaining: older test contexts may construct a
@@ -814,6 +853,7 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     // A COMPLETED handle block returns here, before pushHandler — its
     // scope is over and its handler stays gone on replay. This line is
     // also why the guard-set memo below cannot be keyed by counting
@@ -877,6 +917,7 @@ export class Runner {
     // The top skip stays OUTSIDE the try: when we skip here an OUTER construct
     // owns the pending flag, so we must not clear it.
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     try {
       if (this.getCounter() > id) return;
 
@@ -951,6 +992,7 @@ export class Runner {
     callback: (item: any, second: any, runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -1039,6 +1081,7 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) return;
 
     if (await this.maybeDebugHook(id)) return;
@@ -1100,6 +1143,7 @@ export class Runner {
     callback: (runner: Runner) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
+    await this.pauseIfRequested(id);
 
     // Enter if: counter hasn't passed this OR branch data exists (resuming async)
     const hasExistingBranch = this.frame.getBranch(branchKey) !== undefined;
@@ -1157,6 +1201,7 @@ export class Runner {
   ): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return undefined;
+    await this.pauseIfRequested(id);
     if (this.getCounter() > id) {
       return this.frame.locals[this.forkResultKey(id)];
     }

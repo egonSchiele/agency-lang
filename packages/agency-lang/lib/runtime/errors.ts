@@ -43,7 +43,11 @@ export class CheckpointCodeChangedError extends Error {
   }
 }
 
-export class RestoreSignal extends Error {
+/** Base for the signals the runtime throws to unwind a whole run on purpose.
+ *  A catch site that must let a restore or a pause through tests this base. */
+export class RunControlSignal extends Error {}
+
+export class RestoreSignal extends RunControlSignal {
   checkpoint: Checkpoint;
   options?: RestoreOptions;
 
@@ -52,6 +56,19 @@ export class RestoreSignal extends Error {
     this.name = "RestoreSignal";
     this.checkpoint = checkpoint;
     this.options = options;
+  }
+}
+
+/** Thrown by the runner when an external pause request is honoured at a
+ *  step boundary. Carries the checkpoint stamped at that step. Caught by the
+ *  run entry points, which return it to the caller as a `PausedCheckpoint`. */
+export class PauseSignal extends RunControlSignal {
+  checkpoint: Checkpoint;
+
+  constructor(checkpoint: Checkpoint) {
+    super(`Paused at checkpoint ${checkpoint.id}`);
+    this.name = "PauseSignal";
+    this.checkpoint = checkpoint;
   }
 }
 

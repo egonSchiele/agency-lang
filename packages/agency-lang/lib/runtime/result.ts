@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isAbortError, readCause } from "./errors.js";
+import { isAbortError, readCause, RunControlSignal } from "./errors.js";
 import { truncate } from "./truncate.js";
 import { isAborted } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
@@ -318,6 +318,11 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
     if (resultValueSchema.safeParse(value).success) return normalizeForeignResult(value);
     return success(value);
   } catch (error) {
+    // A restore or a pause unwinds the whole run on purpose. It is not a
+    // failure of the tried call, so it must not become a Failure here.
+    if (error instanceof RunControlSignal) {
+      throw error;
+    }
     // Cancellation must always propagate — never get silently
     // converted into a Failure value. A `try fetch(...)` whose
     // underlying request was aborted by Ctrl-C, race-loser cleanup,

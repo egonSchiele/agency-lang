@@ -1,0 +1,21 @@
+effect test::gate { step: number }
+
+def gated(): string {
+  raise test::gate("ok to continue?", { step: 1 })
+  return "continued"
+}
+
+def slow(): number {
+  sleep(400ms)
+  return 1
+}
+
+node main(): string {
+  const r = try slow()
+  let out = ""
+  handle {
+    sleep(400ms)
+    out = gated()
+  } with approve
+  return out
+}

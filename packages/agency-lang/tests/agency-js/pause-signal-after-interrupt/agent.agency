@@ -1,0 +1,11 @@
+import { bump, bumpCount } from "./counter.js"
+
+effect test::gate { step: number }
+
+node main(): number {
+  raise test::gate("ok to continue?", { step: 1 })
+  bump()
+  sleep(400ms)
+  bump()
+  return bumpCount()
+}

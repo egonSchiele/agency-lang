@@ -19,8 +19,17 @@ describe("node wrapper per-invocation options", () => {
 
   it("destructures the options into hidden aliases", () => {
     expect(ts).toContain(
-      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput }",
+      "{ messages: __invocationMessages, callbacks: __invocationCallbacks, config: __invocationConfig, traceId: __invocationTraceId, invocationInput: __invocationInput, abortSignal: __invocationAbortSignal, pauseSignal: __invocationPauseSignal }",
     );
+  });
+
+  it("types the cancel and pause signals on the options object", () => {
+    expect(ts).toContain("abortSignal?: AbortSignal; pauseSignal?: AbortSignal }");
+  });
+
+  it("forwards the cancel and pause signals to runNode", () => {
+    expect(ts).toContain("abortSignal: __invocationAbortSignal,");
+    expect(ts).toContain("pauseSignal: __invocationPauseSignal,");
   });
 
   it("types the options object with InvocationOptions", () => {

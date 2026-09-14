@@ -58,7 +58,13 @@ export async function _embedTexts(
         }
       : undefined,
     baseUrl: baseUrl
-      ? { ollama: baseUrl, deepInfra: baseUrl, liteLlm: baseUrl, openAiCompat: baseUrl }
+      ? {
+          ollama: baseUrl,
+          mlx: baseUrl,
+          deepInfra: baseUrl,
+          liteLlm: baseUrl,
+          openAiCompat: baseUrl,
+        }
       : undefined,
   });
 

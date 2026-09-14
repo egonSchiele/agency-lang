@@ -81,6 +81,7 @@ describe("_embedTexts", () => {
       provider: "ollama",
       baseUrl: {
         ollama: "http://localhost:11434",
+        mlx: "http://localhost:11434",
         deepInfra: "http://localhost:11434",
         liteLlm: "http://localhost:11434",
         openAiCompat: "http://localhost:11434",

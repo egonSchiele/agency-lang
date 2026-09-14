@@ -410,6 +410,7 @@ export default defineConfig({
               ],
             },
             { text: "date", link: "/stdlib/date" },
+            { text: "embedding", link: "/stdlib/embedding" },
             { text: "fs", link: "/stdlib/fs" },
             { text: "github", link: "/stdlib/github" },
             { text: "http", link: "/stdlib/http" },

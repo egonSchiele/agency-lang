@@ -1,3 +1,9 @@
+## Unreleased
+
+### Runtime
+
+- Bug fix: a `handoff def` no longer writes a `[dispatching name: args]` assistant message onto the thread. Models that saw a few of those in their history learned to write the marker as a reply instead of calling the tool, so the dispatch never ran. The tool call is now simply dropped, and the body's system messages are tracked by a per-message scope tag (`messageScopes`, serialized with the thread and kept through compaction) instead of by searching for the marker.
+
 ## Sep 12 2026 — v0.19.1
 
 ### Runtime

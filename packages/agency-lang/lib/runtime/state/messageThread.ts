@@ -11,6 +11,7 @@ const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] => JSON.parse(JSON.stri
 export type MessageThreadJSON = {
   messages: smoltalk.MessageJSON[];
   messageLabels?: (string | null)[];
+  messageScopes?: (string | null)[];
   parentId?: string | null;
   hidden?: boolean;
   label?: string | null;
@@ -89,10 +90,22 @@ export class MessageThread {
    *
    *  Nothing else touches `this.messages`. A desync does not degrade
    *  gracefully — it shifts every later label onto the wrong message — so
-   *  keep it that way. A rewrite via `setMessages` with no labels
-   *  (summarization) drops them; that is intended. (Thread repair
-   *  appends via `push`, so it keeps them.) */
+   *  keep it that way. A rewrite via `setMessages` with no labels drops
+   *  them; summarization passes the labels of the messages it keeps.
+   *  (Thread repair appends via `push`, so it keeps them.) */
   messageLabels: (string | null)[];
+  /** Which handoff dispatch a system message belongs to, aligned with
+   *  `messages` by index like `messageLabels`, null for every other
+   *  message. Stamped by `push` from `handoffScopes` while a dispatch's
+   *  body is running on this thread, so the body's persona can be
+   *  removed when the body returns without leaving a marker in the
+   *  conversation. Serialized with the thread, kept through compaction,
+   *  never sent to the provider. */
+  messageScopes: (string | null)[];
+  /** The dispatches whose bodies are running on this thread right now,
+   *  innermost last. Transient: the prompt loop re-enters a scope when it
+   *  re-runs a dispatch after a resume, so nothing here is serialized. */
+  private handoffScopes: string[] = [];
   /** Messages queued by `queueMessage`, waiting for the thread's next
    *  request-turn. Drained by the turn-boundary machinery in the tool
    *  loop; never sent to the provider directly from here. Serialized
@@ -105,6 +118,7 @@ export class MessageThread {
     // newSubthreadChild) must start aligned, or a later push lands its
     // label on message 0.
     this.messageLabels = messages.map(() => null);
+    this.messageScopes = messages.map(() => null);
     this.id = nanoid();
   }
 
@@ -131,11 +145,19 @@ export class MessageThread {
    *  outright rather than padded or sliced: the lengths disagreeing means
    *  the source is already wrong, and guessing an alignment would put
    *  real labels on the wrong messages. Unlabeled beats mislabeled. */
-  setMessages(messages: smoltalk.Message[], labels?: (string | null)[]): void {
+  setMessages(
+    messages: smoltalk.Message[],
+    labels?: (string | null)[],
+    scopes?: (string | null)[],
+  ): void {
     this.messages = messages;
     this.messageLabels =
       labels !== undefined && labels.length === messages.length
         ? [...labels]
+        : messages.map(() => null);
+    this.messageScopes =
+      scopes !== undefined && scopes.length === messages.length
+        ? [...scopes]
         : messages.map(() => null);
   }
 
@@ -145,6 +167,7 @@ export class MessageThread {
   removeAt(index: number): void {
     this.messages.splice(index, 1);
     this.messageLabels.splice(index, 1);
+    this.messageScopes.splice(index, 1);
   }
 
   /** Swap the message at `index` for `message`, keeping its label. For an
@@ -173,6 +196,7 @@ export class MessageThread {
   adoptFrom(other: MessageThread): void {
     this.messages = [...other.messages];
     this.messageLabels = [...other.messageLabels];
+    this.messageScopes = [...other.messageScopes];
     // The pending queue rides along: prompt.ts restores a resumed call via
     // adoptFrom (its args.messages alias), and a queue that survived
     // toJSON but not adoptFrom would be dropped exactly on resume.
@@ -199,11 +223,44 @@ export class MessageThread {
   push(message: smoltalk.Message, label: string | null = null): void {
     this.messages.push(message);
     this.messageLabels.push(label);
+    this.messageScopes.push(message.role === "system" ? this.currentHandoffScope() : null);
   }
 
   /** The label of the message at `index`, or null when unlabeled. */
   labelAt(index: number): string | null {
     return this.messageLabels[index] ?? null;
+  }
+
+  /** The handoff dispatch the system message at `index` belongs to, or
+   *  null for a message outside any dispatch. */
+  scopeAt(index: number): string | null {
+    return this.messageScopes[index] ?? null;
+  }
+
+  /** Mark the start of a handoff body on this thread: every system message
+   *  pushed until the matching `exitHandoffScope` belongs to `key`. Scopes
+   *  nest, innermost winning, for a handoff dispatched inside a handoff. */
+  enterHandoffScope(key: string): void {
+    this.handoffScopes.push(key);
+  }
+
+  exitHandoffScope(): void {
+    this.handoffScopes.pop();
+  }
+
+  private currentHandoffScope(): string | null {
+    return this.handoffScopes[this.handoffScopes.length - 1] ?? null;
+  }
+
+  /** Remove every message that belongs to the dispatch `key`: the
+   *  persona and any other system message its body pushed. Walks
+   *  backwards so each removal leaves the indexes still to visit intact. */
+  removeHandoffScoped(key: string): void {
+    for (let index = this.messages.length - 1; index >= 0; index--) {
+      if (this.messageScopes[index] === key) {
+        this.removeAt(index);
+      }
+    }
   }
 
   /** Queue a message for delivery at this thread's next request-turn:
@@ -286,6 +343,9 @@ export class MessageThread {
     if (this.messageLabels.some((l) => l !== null)) {
       json.messageLabels = [...this.messageLabels];
     }
+    if (this.messageScopes.some((s) => s !== null)) {
+      json.messageScopes = [...this.messageScopes];
+    }
     // Same emit-only-when-meaningful rule as messageLabels above. Deep
     // clone, not an array spread: a spread copies the array but aliases
     // the entry objects, so a consumer editing the returned JSON could
@@ -308,6 +368,7 @@ export class MessageThread {
 
     let _messages: any[] = [];
     let _messageLabels: (string | null)[] | undefined = undefined;
+    let _messageScopes: (string | null)[] | undefined = undefined;
     let _parentId: string | null = null;
     let _hidden = false;
     let _label: string | null = null;
@@ -319,6 +380,9 @@ export class MessageThread {
       _messages = json.messages;
       if ("messageLabels" in json && json.messageLabels !== undefined) {
         _messageLabels = json.messageLabels;
+      }
+      if ("messageScopes" in json && json.messageScopes !== undefined) {
+        _messageScopes = json.messageScopes;
       }
       if ("parentId" in json && json.parentId !== undefined) {
         _parentId = json.parentId;
@@ -350,7 +414,7 @@ export class MessageThread {
     // Labels ride along with the messages: legacy JSON has none and
     // revives unlabeled, and a labels array that disagrees in length is
     // refused inside setMessages rather than guessed at.
-    thread.setMessages(smoltalkMessages, _messageLabels);
+    thread.setMessages(smoltalkMessages, _messageLabels, _messageScopes);
     thread.parentId = _parentId;
     thread.hidden = _hidden;
     thread.label = _label;

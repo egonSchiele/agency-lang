@@ -1,11 +1,13 @@
 /**
  * Message plumbing for handoff functions (`handoff def`). When a model
  * calls one as a tool, the tool loop keeps the body on the caller's
- * thread and replaces the tool-call bookkeeping with two plain messages:
- * an assistant-role marker where the tool call was, and a user-role
- * resume message when the body returns. These helpers only touch a
- * MessageThread; prompt.ts decides when to call them. See
- * docs/dev/language/handoff-functions.md.
+ * thread: the tool call is dropped from the assistant message that
+ * carried it (providers demand a tool result right after a tool call,
+ * and the body's messages land there instead), the body's system
+ * messages are tagged with the dispatch's scope key while it runs, and a
+ * user-role resume message hands control back when the body returns.
+ * These helpers only touch a MessageThread; prompt.ts decides when to
+ * call them. See docs/dev/language/handoff-functions.md.
  */
 import * as smoltalk from "smoltalk";
 import type { MessageThread } from "./state/messageThread.js";
@@ -18,8 +20,11 @@ export function handoffNotAloneMessage(toolName: string): string {
   );
 }
 
-export function handoffMarkerText(toolName: string, args: Record<string, unknown>): string {
-  return `[dispatching ${toolName}: ${JSON.stringify(args)}]`;
+/** The scope key one dispatch tags its body's system messages with. The
+ *  tool name keeps a handoff nested inside another handoff apart even when
+ *  a client hands out the same call id twice. */
+export function handoffScopeKey(toolName: string, toolCallId: string): string {
+  return `${toolName}:${toolCallId}`;
 }
 
 export function handoffResumeText(toolName: string, body: string): string {
@@ -35,14 +40,14 @@ export function handoffStoppedText(toolName: string, reason: string): string {
 }
 
 /**
- * Rewrite the assistant message that carried the handoff tool call: keep
- * its text, drop the tool call, append the marker.
+ * Drop the tool call from the assistant message that carried the handoff
+ * call. Its text stays; a message that was only the call is removed, so
+ * the thread reads as the user's request followed by the body's work.
+ * Nothing is added in its place: an assistant message that narrated the
+ * dispatch taught models to write that narration instead of calling the
+ * tool.
  */
-export function applyHandoffMarker(
-  thread: MessageThread,
-  toolName: string,
-  args: Record<string, unknown>,
-): void {
+export function dropHandoffToolCall(thread: MessageThread): void {
   const messages = thread.getMessages();
   const index = messages.length - 1;
   const last = messages[index];
@@ -52,51 +57,20 @@ export function applyHandoffMarker(
     );
   }
   const text = typeof last.content === "string" ? last.content.trim() : "";
-  const marker = handoffMarkerText(toolName, args);
-  const content = text === "" ? marker : `${text}\n\n${marker}`;
-  thread.replaceAt(index, smoltalk.assistantMessage(content));
-}
-
-/** The index of this dispatch's marker, searching from the end so the
- *  newest dispatch of a tool wins. -1 when memory compaction has
- *  summarized the marker away. */
-function markerIndex(
-  thread: MessageThread,
-  toolName: string,
-  args: Record<string, unknown>,
-): number {
-  const marker = handoffMarkerText(toolName, args);
-  const messages = thread.getMessages();
-  for (let index = messages.length - 1; index >= 0; index--) {
-    const message = messages[index];
-    if (
-      message.role === "assistant" &&
-      typeof message.content === "string" &&
-      message.content.endsWith(marker)
-    ) {
-      return index;
-    }
+  if (text === "") {
+    thread.removeAt(index);
+    return;
   }
-  return -1;
+  thread.replaceAt(index, smoltalk.assistantMessage(text));
 }
 
 /**
- * Remove the system messages the body pushed: every system message after
- * this dispatch's marker. Anchored on the marker rather than on a recorded
- * position because memory compaction rewrites the thread and shifts every
- * index. A marker that compaction summarized away took the body's earlier
- * system messages with it, so there is nothing left to remove.
+ * Remove the system messages the body pushed: every message tagged with
+ * this dispatch's scope key. Tags survive checkpoints and compaction, and
+ * a message compaction summarized away is simply not there to remove.
  */
-export function stripHandoffSystemMessages(
-  thread: MessageThread,
-  toolName: string,
-  args: Record<string, unknown>,
-): void {
-  const index = markerIndex(thread, toolName, args);
-  if (index === -1) {
-    return;
-  }
-  thread.removeMatching(index + 1, (message) => message.role === "system");
+export function stripHandoffSystemMessages(thread: MessageThread, scopeKey: string): void {
+  thread.removeHandoffScoped(scopeKey);
 }
 
 /**
@@ -105,23 +79,23 @@ export function stripHandoffSystemMessages(
  * dispatch), then hand control back with a user-role message that carries
  * the body's result.
  */
-export function finishHandoff(
-  thread: MessageThread,
-  toolName: string,
-  args: Record<string, unknown>,
-  body: string,
-): void {
-  stripHandoffSystemMessages(thread, toolName, args);
-  thread.push(smoltalk.userMessage(handoffResumeText(toolName, body)));
+export function finishHandoff(args: {
+  thread: MessageThread;
+  scopeKey: string;
+  toolName: string;
+  body: string;
+}): void {
+  stripHandoffSystemMessages(args.thread, args.scopeKey);
+  args.thread.push(smoltalk.userMessage(handoffResumeText(args.toolName, args.body)));
 }
 
 /** Close a handoff that failed or was aborted. */
-export function finishStoppedHandoff(
-  thread: MessageThread,
-  toolName: string,
-  args: Record<string, unknown>,
-  reason: string,
-): void {
-  stripHandoffSystemMessages(thread, toolName, args);
-  thread.push(smoltalk.userMessage(handoffStoppedText(toolName, reason)));
+export function finishStoppedHandoff(args: {
+  thread: MessageThread;
+  scopeKey: string;
+  toolName: string;
+  reason: string;
+}): void {
+  stripHandoffSystemMessages(args.thread, args.scopeKey);
+  args.thread.push(smoltalk.userMessage(handoffStoppedText(args.toolName, args.reason)));
 }

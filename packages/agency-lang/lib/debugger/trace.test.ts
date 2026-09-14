@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { tmpdir } from "os";
 import { compile } from "@/compiler/defaultSession.js";
 import { TraceReader } from "../runtime/trace/traceReader.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
@@ -104,5 +105,26 @@ describe("Trace integration with debugger", () => {
     const manifests = lines.filter((l: any) => l.type === "manifest");
     expect(manifests.length).toBeGreaterThan(0);
     expect(chunks.length).toBeLessThan(manifests.length * 2);
+  });
+
+  it("writes concurrent-safe per-run traces after __setTraceDir", async () => {
+    const traceDir = fs.mkdtempSync(path.join(tmpdir(), "agency-trace-dir-"));
+    const fixedTraceFile = path.join(traceDir, "fixed.agencytrace");
+    try {
+      const traceModule = await freshImport(traceTestCompiled);
+      traceModule.__setTraceFile(fixedTraceFile);
+      traceModule.__setTraceDir(traceDir);
+
+      const result = await traceModule.main();
+      expect(result.data).toBe(30);
+
+      const traceFiles = fs
+        .readdirSync(traceDir)
+        .filter((fileName) => fileName.endsWith(".agencytrace"));
+      expect(traceFiles).toHaveLength(1);
+      expect(traceFiles[0]).not.toBe("fixed.agencytrace");
+    } finally {
+      fs.rmSync(traceDir, { recursive: true, force: true });
+    }
   });
 });

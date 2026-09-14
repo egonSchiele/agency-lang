@@ -2,26 +2,27 @@
 
 A single invocation can carry a **config override** and an optional **root trace
 id** that apply to that call only. An invocation here means a node called from
-TypeScript, a served function or node, or a serve resume. This is how a host such
-as statelog runs one hosted agent under a caller-supplied credential and a
+TypeScript, a served function or node, or a resume. This is how a host such as
+statelog runs one hosted agent under a caller-supplied credential and a
 pre-chosen trace id, instead of freezing the import-time config for every call.
 The design spec is `2026-08-07-per-invocation-config-override-spec.md`, at the
 root of `packages/agency-lang`.
 
 ## The one rule: agency is a mechanism, the host owns policy
 
-Agency applies the override with **override-wins** semantics and enforces no
-policy. There is no budget clamping, no bounds-checking, and no trust filtering.
-The config object is **trusted input** that the host constructs. Clamping and
-credential minting live in the host, never here. Treating a requested budget as a
-request bounded by a platform cap is the host's job. See the spec §2.
+Agency applies the override with **override-wins** semantics. There is no budget
+clamping or bounds-checking. Clamping and credential minting live in the host,
+never here. Treating a requested budget as a request bounded by a platform cap
+is the host's job. Serve entry points enforce one security boundary themselves:
+they remove the local-only `traceDir` before invocation resolution, so a remote
+request cannot choose a host filesystem path. See the spec §2.
 
 ## The shape of the flow
 
 ```
 InvocationOptions   (public request: { config?, traceId? })
-   → transport layers forward it unchanged (serve adapter, discovery, codegen)
-      → resolveInvocation(request)            ← the ONE policy owner
+   → direct TypeScript call OR serve entry strips local-only traceDir
+      → resolveInvocation(request)            ← run-id + config projection owner
          → ResolvedInvocation { runId, contextOverride }
             → createExecutionContext(resolved) applies the override
                → finishServedInvocation derives outcome.traceId from execCtx.getRunId()
@@ -33,8 +34,13 @@ InvocationOptions   (public request: { config?, traceId? })
   `ResolvedInvocation`, and `PerInvocationContextOverride` are runtime-internal
   and are **not** exported from the serve package.
 
+- **Serve-only runtime entries** (`runNodeForServe`,
+  `runExportedFunctionForServe`, and `respondToInterruptsForServe`) remove
+  `config.traceDir` through `invocationOptionsForServe()`. The HTTP/MCP
+  adapters and generated modules do not duplicate this rule.
+
 - **`resolveInvocation()`** is the single owner of run-id policy and the config
-  allow-list. Nothing else re-implements either. It:
+  projection. Nothing else re-implements either. It:
   - projects the caller's raw `config` down to the positive v1 allow-list (see
     below), building fresh objects — it never spreads `config.log`, so a future
     dangerous sub-field cannot leak through;
@@ -60,17 +66,20 @@ InvocationOptions   (public request: { config?, traceId? })
 
 ## The v1 config allow-list
 
-Applied per-invocation: `observability`, `budget`, `maxCallDepth`,
+Applied to trusted local invocations: `observability`, `budget`, `maxCallDepth`,
 `failurePropagation`, and five `log` keys: `host`, `apiKey`, `projectId`,
-`requestTimeoutMs`, and `metadata`. `PerInvocationContextOverride` and
+`requestTimeoutMs`, and `metadata`, plus `traceDir`. `traceDir` creates
+`{traceDir}/{runId}.agencytrace`, so concurrent runs do not share a fixed file.
+It is stripped by every serve-only runtime entry before this projection.
+`PerInvocationContextOverride` and
 `PerInvocationLogConfig` in `lib/runtime/invocationOptions.ts` are the types, and
 `selectContextOverride` / `selectLogConfig` are the projection.
 
 Every other `AgencyConfig` field is deliberately **inert** in this channel,
 because the projection never copies it. That includes `log.logFile`,
-`log.debugMode`, `traceFile`, `traceDir`, and every `client.*` field such as
-`defaultModel` and `providerModules`. `traceFile` and `traceDir` resolve before
-the execution context exists and are an arbitrary-write surface.
+`log.debugMode`, `traceFile`, and every `client.*` field such as `defaultModel`
+and `providerModules`. `traceFile` remains a process-wide debugging mechanism;
+use invocation-local `traceDir` when a run needs filesystem tracing.
 `client.providerModules` registers process-globally and persists across calls, so
 it is not invocation-local. Per-call model selection is deferred, since it has to
 ship with `defaultProvider`. See spec §5.
@@ -83,8 +92,8 @@ allow-list, so an all-inert override adds no object at all.
 - **Budget is a request.** A host clamps a caller's budget to its platform cap
   before passing it down; agency applies whatever number it receives.
 - **Trusted construction.** A host builds the `config` object server-side and
-  never forwards untrusted request fields into it (the excluded fields above are
-  inert regardless, but the honored ones still carry credentials/limits).
+  never forwards untrusted request fields into it. Agency strips `traceDir` at
+  the serve boundary, but honored fields still carry credentials and limits.
 - **Trace-id uniqueness.** Agency stamps the supplied id verbatim. statelog
   ingest is append-only and never overwrites. Reusing an id within a project
   commingles events under one trace and corrupts its span tree. Reusing one across
@@ -94,7 +103,7 @@ allow-list, so an all-inert override adds no object at all.
 ## Tests that guard the contract
 
 - `lib/runtime/invocationOptions.test.ts` — the resolver: run-id precedence,
-  empty-id rejection, resume-keeps-id, and the positive projection.
+  empty-id rejection, resume-keeps-id, projection, and serve sanitization.
 - `lib/runtime/state/context.perInvocationOverride.test.ts` — the override is
   applied per child and does not mutate the parent.
 - `lib/runtime/invocationOutcome.test.ts` — outcome `traceId` derives from the

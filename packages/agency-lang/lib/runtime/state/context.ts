@@ -421,6 +421,7 @@ export class RuntimeContext<T> {
         statelogConfig: this.statelogConfig,
         smoltalkDefaults: this.smoltalkDefaults,
         dirname: this.dirname,
+        traceConfig: this.traceConfig,
         budget: this.budget,
         maxCallDepth: this.maxCallDepth,
         failurePropagation: this.failurePropagation,
@@ -469,11 +470,12 @@ export class RuntimeContext<T> {
     execCtx._toolCallDepth = 0;
     execCtx._interruptResponses = {};
     execCtx.debuggerState = this.debuggerState;
+    const traceConfig = effective.traceConfig ?? this.traceConfig;
     execCtx.traceWriter = await TraceWriter.create({
       runId,
-      traceConfig: this.traceConfig,
+      traceConfig,
     });
-    execCtx.traceConfig = this.traceConfig;
+    execCtx.traceConfig = traceConfig;
     execCtx.runId = runId;
     execCtx.subprocessDepth = getSubprocessRunInfo().depth;
     execCtx.verbose = this.verbose;

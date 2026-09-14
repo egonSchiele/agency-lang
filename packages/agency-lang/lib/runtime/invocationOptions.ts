@@ -6,11 +6,12 @@ import type { Policy } from "./policy.js";
 /**
  * Per-invocation overrides a caller may attach to a single node, served
  * function, or serve-resume invocation. This is the ONE public, declarative
- * request shape; a host (e.g. statelog) constructs it as trusted input.
+ * request shape. Direct TypeScript callers are trusted; serve entry points
+ * sanitize local-only fields before resolving remotely supplied options.
  *
  * `config` is applied override-wins for that call only — agency performs no
- * clamping, bounds-checking, or trust filtering (that is host policy; see the
- * spec §2). `traceId` becomes the run's root trace id on a fresh invocation.
+ * clamping or bounds-checking (that is host policy; see the spec §2).
+ * `traceId` becomes the run's root trace id on a fresh invocation.
  */
 export type InvocationOptions = {
   config?: Partial<AgencyConfig>;
@@ -59,9 +60,11 @@ export type PerInvocationLogConfig = {
 
 /**
  * The positively allow-listed context override the runtime will apply. Every
- * field here is safe to override per-call. Fields absent from this type — all
- * `client.*`, `traceFile`/`traceDir`, `log.logFile`, and everything else — are
- * inert in this channel by construction: they are simply never copied across.
+ * field here is safe to override for a trusted local call. Fields absent from
+ * this type — all `client.*`, `traceFile`, `log.logFile`, and everything else
+ * — are inert in this channel by construction: they are never copied across.
+ * Serve entry points remove `traceDir` before resolving an invocation, because
+ * a remote request must not choose a host filesystem path.
  */
 export type PerInvocationContextOverride = {
   observability?: boolean;
@@ -69,6 +72,7 @@ export type PerInvocationContextOverride = {
   budget?: AgencyConfig["budget"];
   maxCallDepth?: number;
   failurePropagation?: AgencyConfig["failurePropagation"];
+  traceDir?: string;
 };
 
 /**
@@ -115,6 +119,10 @@ function selectContextOverride(
     override.failurePropagation = config.failurePropagation;
     hasField = true;
   }
+  if (config.traceDir !== undefined) {
+    override.traceDir = config.traceDir;
+    hasField = true;
+  }
 
   const log = selectLogConfig(config.log);
   if (log !== undefined) {
@@ -123,6 +131,22 @@ function selectContextOverride(
   }
 
   return hasField ? override : undefined;
+}
+
+/**
+ * Remove local-filesystem invocation settings at the shared serve boundary.
+ * Returning the original object when there is nothing to remove preserves the
+ * transparent fast path used by ordinary served invocations.
+ */
+export function invocationOptionsForServe(
+  options: InvocationOptions | undefined,
+): InvocationOptions | undefined {
+  if (options?.config?.traceDir === undefined) {
+    return options;
+  }
+
+  const { traceDir: _traceDir, ...config } = options.config;
+  return { ...options, config };
 }
 
 /**

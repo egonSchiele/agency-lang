@@ -107,22 +107,17 @@ describe("Trace integration with debugger", () => {
     expect(chunks.length).toBeLessThan(manifests.length * 2);
   });
 
-  it("writes concurrent-safe per-run traces after __setTraceDir", async () => {
+  it("writes a per-run trace from local invocation options", async () => {
     const traceDir = fs.mkdtempSync(path.join(tmpdir(), "agency-trace-dir-"));
-    const fixedTraceFile = path.join(traceDir, "fixed.agencytrace");
     try {
       const traceModule = await freshImport(traceTestCompiled);
-      traceModule.__setTraceFile(fixedTraceFile);
-      traceModule.__setTraceDir(traceDir);
-
-      const result = await traceModule.main();
+      const result = await traceModule.main({
+        traceId: "local-run",
+        config: { traceDir },
+      });
       expect(result.data).toBe(30);
 
-      const traceFiles = fs
-        .readdirSync(traceDir)
-        .filter((fileName) => fileName.endsWith(".agencytrace"));
-      expect(traceFiles).toHaveLength(1);
-      expect(traceFiles[0]).not.toBe("fixed.agencytrace");
+      expect(fs.readdirSync(traceDir)).toEqual(["local-run.agencytrace"]);
     } finally {
       fs.rmSync(traceDir, { recursive: true, force: true });
     }

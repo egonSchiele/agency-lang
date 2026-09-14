@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveInvocation } from "./invocationOptions.js";
+import { invocationOptionsForServe, resolveInvocation } from "./invocationOptions.js";
 
 describe("resolveInvocation — run id policy", () => {
   it("prefers an inherited subprocess run id over a supplied trace id", () => {
@@ -86,7 +86,7 @@ describe("resolveInvocation — config projection", () => {
           maxCallDepth: 12,
           failurePropagation: "off",
           traceFile: "/tmp/evil.trace",
-          traceDir: "/tmp/evil",
+          traceDir: "/tmp/local-traces",
           client: {
             defaultModel: "gpt-x",
             providerModules: ["/tmp/evil.js"],
@@ -108,6 +108,7 @@ describe("resolveInvocation — config projection", () => {
       budget: { maxCost: 1, maxTime: "30s" },
       maxCallDepth: 12,
       failurePropagation: "off",
+      traceDir: "/tmp/local-traces",
     });
   });
 
@@ -125,6 +126,28 @@ describe("resolveInvocation — config projection", () => {
   it("returns no context override when there is no config at all", () => {
     const resolved = resolveInvocation({ kind: "fresh", options: { traceId: "run" } });
     expect(resolved.contextOverride).toBeUndefined();
+  });
+});
+
+describe("invocationOptionsForServe", () => {
+  it("removes a local trace directory while preserving other invocation options", () => {
+    const policy = { "std::env": [{ action: "reject" as const }] };
+    const sanitized = invocationOptionsForServe({
+      traceId: "run",
+      policy,
+      config: { traceDir: "/tmp/private", budget: { maxCost: 2 } },
+    });
+
+    expect(sanitized).toEqual({
+      traceId: "run",
+      policy,
+      config: { budget: { maxCost: 2 } },
+    });
+  });
+
+  it("preserves object identity when no local trace directory was supplied", () => {
+    const options = { traceId: "run", config: { budget: { maxCost: 2 } } };
+    expect(invocationOptionsForServe(options)).toBe(options);
   });
 });
 

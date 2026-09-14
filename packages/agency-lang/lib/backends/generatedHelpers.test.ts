@@ -9,9 +9,8 @@ const generatedHelpersPath = fileURLToPath(
 describe("generated TypeScript helpers", () => {
   const generatedHelpers = readFileSync(generatedHelpersPath, "utf8");
 
-  it("configures a trace directory and clears a fixed trace file", () => {
-    expect(generatedHelpers).toContain("export const __setTraceDir = (dir: string)");
-    expect(generatedHelpers).toContain("__globalCtx.traceConfig.traceFile = undefined");
+  it("does not add a mutable trace-directory setter", () => {
+    expect(generatedHelpers).not.toContain("__setTraceDir");
   });
 
   it("forwards invocation config and external signals on interrupt resume", () => {

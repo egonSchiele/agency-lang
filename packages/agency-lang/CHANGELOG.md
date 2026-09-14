@@ -2,7 +2,7 @@
 
 ### Runtime
 
-- Generated modules expose `__setTraceDir(dir)` for concurrent per-run trace files.
+- Trusted TypeScript callers can set `config.traceDir` per invocation; serve entry points strip it before execution so remote requests cannot select host filesystem paths.
 - Generated `respondToInterrupts` forwards invocation configuration together with pause and abort signals.
 
 ## Sep 12 2026 — v0.19.1

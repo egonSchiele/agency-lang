@@ -6,6 +6,7 @@ import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import {
+  invocationOptionsForServe,
   resolveInvocation,
   type InvocationOptions,
   type ResolvedInvocation,
@@ -986,5 +987,8 @@ export async function respondToInterrupts(args: RespondToInterruptsArgs): Promis
 export async function respondToInterruptsForServe(
   args: RespondToInterruptsArgs,
 ): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
-  return respondToInterruptsCore(args);
+  return respondToInterruptsCore({
+    ...args,
+    invocation: invocationOptionsForServe(args.invocation),
+  });
 }

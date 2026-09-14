@@ -90,12 +90,6 @@ export const __setDebugger = (dbg: any) => { __globalCtx.debuggerState = dbg; };
 export const __setTraceFile = (filePath: string) => {
   __globalCtx.traceConfig.traceFile = filePath;
 };
-// Configure per-run trace files under {traceDir}/{runId}.agencytrace. Clear a
-// previously configured fixed file so concurrent invocations cannot share it.
-export const __setTraceDir = (dir: string) => {
-  __globalCtx.traceConfig.traceDir = dir;
-  __globalCtx.traceConfig.traceFile = undefined;
-};
 export const __setLLMClient = (client: LLMClient) => { __globalCtx.setLLMClient(client); };
 export const __getCheckpoints = () => __globalCtx.checkpoints;
 

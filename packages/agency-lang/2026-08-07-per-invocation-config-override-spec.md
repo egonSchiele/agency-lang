@@ -1,7 +1,7 @@
 # Spec: per-invocation config overrides (and injectable trace id)
 
 **Date:** 2026-08-07
-**Status:** revised after review round 1 (see the sibling `-review.md`)
+**Status:** revised after review round 2 (see the sibling `-review.md`)
 **Repo:** `/Users/adityabhargava/agency-lang/packages/agency-lang` (statelog consumes it)
 
 ### Revision notes (round 1)
@@ -13,10 +13,10 @@ Changes made in response to the review, all verified against the code:
 - **`RouteResult.traceId` is optional, present only on post-execution results**
   (mirrors `usage`), and **`/resume` inherits its run id and ignores a supplied
   trace id.** §4.3, §4.4.3–4. (Review 2.)
-- **`traceFile`/`traceDir` and `client.providerModules` excluded from the
-  per-invocation channel** — the first resolves too early to override in
-  `createExecutionContext`, the second is process-global and persistent, not
-  invocation-local. §5, §6. (Review 3, 4.)
+- **`traceDir` is supported for trusted local TypeScript invocations and
+  stripped by serve-only runtime entries.** `traceFile` remains excluded;
+  `client.providerModules` remains process-global and persistent, not
+  invocation-local. §5, §6. (Review 3, 4; round 2 refinement.)
 - **`client.defaultModel` deferred** to a follow-up (must ship with
   `defaultProvider`). §5, §10. (Review 6.)
 - **Node interface extends the wrapper's existing `{ messages, callbacks }`
@@ -172,16 +172,19 @@ the safety logic in the one layer that has the context to get it right.
   ignored ("the runtime has its own pathways"). The honored set today is:
   `log.*` + `observability`, `traceFile` / `traceDir`, `client.providerModules`,
   `maxCallDepth`, `failurePropagation`, and `budget`. Note (from review): not all
-  of these are safe to override *per-invocation* even though the import-time merge
-  honors them — `traceFile`/`traceDir` and `client.providerModules` are excluded
-  from the per-call channel for concrete reasons (§5).
+  of these are safe to override from an untrusted served request even though the
+  import-time merge honors them. `traceDir` is accepted from trusted local
+  TypeScript and stripped at the shared serve boundary; `traceFile` and
+  `client.providerModules` remain excluded (§5).
 
 - **`runId` is chosen before the execution context and drives more than the trace
   id.** In `runNodeCore` (`lib/runtime/node.ts`) the run id is picked first
-  (`getSubprocessRunInfo().runId ?? nanoid()`, `node.ts:355`), then used to
-  resolve and truncate the trace-file path (`resolveTraceFilePath(ctx.traceConfig,
-  runId)`, `node.ts:362`) **before** `createExecutionContext(runId)` is called
-  (`node.ts:368`). The same run id also flows to the `TraceWriter`, the
+  (`getSubprocessRunInfo().runId ?? nanoid()`). A configured parent `traceFile`
+  is truncated for the fresh run; `createExecutionContext` then merges the
+  invocation-local `traceDir` and the child `TraceWriter` resolves
+  `{traceDir}/{runId}.agencytrace`. A trace directory does not need the fixed-file
+  truncation step because each unique run id names a separate file. The same run
+  id also flows to the `TraceWriter`, the
   checkpoints, and each interrupt (`intr.runId = execCtx.runId`, `node.ts:461`),
   and subprocesses/resumes inherit it. So an injected trace id must become the one
   effective **run id**, chosen early — not merely the telemetry client's trace id.
@@ -332,17 +335,16 @@ because two of the import-time-honored fields are not actually invocation-local
   override-wins; any clamping is the host's job (§2, §7).
 - `maxCallDepth` — the runaway-recursion ceiling.
 - `failurePropagation` — failure-propagation mode.
+- `traceDir` — for trusted local TypeScript callers only. Each run writes
+  `{traceDir}/{runId}.agencytrace`; serve-only runtime entries strip this field
+  before invocation resolution.
 
 **Excluded from the per-invocation channel (even though the import-time merge
 honors them) — resolves review points 3 and 4:**
 
-- `traceFile` / `traceDir` — **excluded.** The trace-file path is resolved and
-  truncated from the frozen parent context *before* `createExecutionContext`
-  runs (`resolveTraceFilePath(ctx.traceConfig, runId)` at `node.ts:362`, ahead of
-  `createExecutionContext` at `node.ts:368`). A `createExecutionContext`-time
-  override would arrive too late, and plumbing the override earlier is not worth
-  it: these are also an arbitrary-filesystem-write surface (§6), and hosted runs
-  ingest telemetry remotely rather than writing local trace files. Left out.
+- `traceFile` — **excluded.** It is a fixed, process-wide debugging sink and is
+  unsafe for concurrent invocation-local tracing. Trusted local callers use
+  `traceDir`; served requests cannot choose either filesystem destination.
 - `client.providerModules` — **excluded.** Provider registration is
   **process-global and persistent**: a module loaded for one invocation stays
   registered for every later invocation. That directly contradicts the
@@ -374,17 +376,15 @@ simply `Partial<AgencyConfig>` without a bespoke sub-type.
 
 ## 6. Security note: agency trusts its caller; the host must curate
 
-Because agency applies the override without filtering, the config object is
-**trusted input**. The safety of the whole feature rests on each host building
-that object deliberately and never forwarding untrusted request fields into it.
-For statelog this is correct by construction: its backend constructs the config
-object server-side and never splices a raw HTTP body into it.
+Agency applies ordinary overrides without bounds-checking, so hosts must still
+build config deliberately rather than splice in an untrusted HTTP body. The
+serve runtime does enforce the filesystem boundary: it removes `traceDir`
+before resolving the invocation.
 
-Note that the two most dangerous fields — `client.providerModules` (arbitrary
-code execution) and `traceFile`/`traceDir` (arbitrary filesystem write) — are
-**excluded from the per-invocation channel entirely** (§5), so they cannot ride
-in through it at all. The remaining supported fields are still trusted input a
-host must curate:
+The other dangerous fields — `client.providerModules` (arbitrary code execution)
+and `traceFile` (a fixed arbitrary filesystem sink) — remain excluded from the
+per-invocation channel entirely (§5). The remaining supported fields are still
+trusted input a host must curate:
 
 - **`observability.{host, apiKey}` — telemetry redirection.** Telemetry can
   include prompt/tool-argument previews; pointing it at an attacker-controlled
@@ -479,10 +479,13 @@ The mechanism is shared across both surfaces because both reach
    `createExecutionContext`, read the store and run its `config` through
    `applyRuntimeConfigOverridesToContextArgs` **on top of** the frozen config (so
    per-call wins over the import binding), applying it to the fields the context
-   copies (`statelogConfig`, `budget`, `maxCallDepth`, `failurePropagation`). Build
+   copies (`statelogConfig`, `traceConfig`, `budget`, `maxCallDepth`,
+   `failurePropagation`). Build
    the per-run `StatelogClient` with `traceId: runId` (the effective id from step
-   2). Do **not** route `traceFile`/`traceDir` or `client.providerModules` through
-   this path — they are excluded (§5).
+   2). Route `traceDir` through this path for trusted local calls; strip it in
+   `runNodeForServe`, `runExportedFunctionForServe`, and
+   `respondToInterruptsForServe`. Do not route `traceFile` or
+   `client.providerModules` through this path (§5).
 
 4. **Grow the public signatures.** Extend the node wrapper's existing trailing
    options object from `{ messages, callbacks }` to `{ messages, callbacks, config,
@@ -531,6 +534,9 @@ clamp anywhere in agency; a caller that wants clamping does it before it calls.
   `config.client.providerModules`; assert neither takes effect for that
   invocation (no file written to the supplied path; no new provider registered) —
   locking in the §5 exclusions (review points 3, 4).
+- **Local trace directories work and served ones do not.** A direct TypeScript
+  invocation with `config.traceDir` writes `{traceDir}/{runId}.agencytrace`;
+  each serve-only entry removes the same field before it reaches the resolver.
 - **Omission is unchanged.** A call with no options behaves exactly as before
   (import-bound config; generated trace id).
 - **Compile-time field ignored.** Supply a compile-time field (e.g. `outDir`);
@@ -544,8 +550,8 @@ clamp anywhere in agency; a caller that wants clamping does it before it calls.
   part of this change (§2, §7).
 - **Per-invocation model selection** (`client.defaultModel` + `defaultProvider`).
   Deferred to a follow-up; must ship as a pair (§5).
-- **`traceFile`/`traceDir` and `client.providerModules` per-invocation.** Excluded
-  by design (§5); a host still binds these at import via the existing global path.
+- **`traceFile` and `client.providerModules` per-invocation.** Excluded by design
+  (§5); a host still binds these at import via the existing global path.
 - **Bring-your-own provider API keys** (`client.apiKey.*` per call). A real
   feature, but a separate one with its own credential-handling review.
 - **`agency call` / remote-CLI ergonomics.** Unaffected.

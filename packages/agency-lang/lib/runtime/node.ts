@@ -18,7 +18,11 @@ import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 import { TRACE_ID_ENV } from "../config.js";
-import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
+import {
+  invocationOptionsForServe,
+  resolveInvocation,
+  type InvocationOptions,
+} from "./invocationOptions.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Policy } from "./policy.js";
 import { installRootBudget } from "./rootBudget.js";
@@ -331,7 +335,10 @@ export async function runExportedFunction(args: RunExportedFunctionArgs): Promis
 export async function runExportedFunctionForServe(
   args: RunExportedFunctionArgs,
 ): Promise<ServedInvocationOutcome<unknown>> {
-  return runExportedFunctionCore(args);
+  return runExportedFunctionCore({
+    ...args,
+    invocation: invocationOptionsForServe(args.invocation),
+  });
 }
 
 type RunNodeArgs = {
@@ -392,7 +399,13 @@ async function runNodeCore({
   // target file so this run starts with a clean slate. FileSink opens in
   // append mode, so subsequent per-execCtx writers within this same run
   // accumulate into the same file naturally.
-  const tracePath = resolveTraceFilePath(ctx.traceConfig, resolved.runId);
+  // An invocation-local traceDir overrides the parent's trace sink and derives
+  // a unique file from runId, so there is no parent file to truncate. Reusing a
+  // traceId is already invalid because it commingles one logical trace.
+  const tracePath =
+    resolved.contextOverride?.traceDir === undefined
+      ? resolveTraceFilePath(ctx.traceConfig, resolved.runId)
+      : null;
   if (tracePath) {
     fs.mkdirSync(path.dirname(tracePath), { recursive: true });
     fs.writeFileSync(tracePath, "");
@@ -588,5 +601,8 @@ export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
 export async function runNodeForServe(
   args: RunNodeArgs,
 ): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
-  return runNodeCore(args);
+  return runNodeCore({
+    ...args,
+    invocation: invocationOptionsForServe(args.invocation),
+  });
 }

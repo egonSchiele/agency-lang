@@ -1,0 +1,26 @@
+{
+  "sourceFile": "cosineSimilarity.agency",
+  "tests": [
+    {
+      "nodeName": "identical",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Parallel vectors score 1"
+    },
+    {
+      "nodeName": "orthogonal",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Orthogonal vectors score 0"
+    },
+    {
+      "nodeName": "mismatched",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "Different lengths fail"
+    }
+  ]
+}

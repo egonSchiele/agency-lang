@@ -1,44 +1,41 @@
 ---
 name: "embedding"
-description: "Turn text into embedding vectors with a hosted or local model, for similarity search and clustering."
+description: "Turn text into embedding vectors, and compare them, for similarity search and clustering."
 ---
 
 # embedding
 
 Turn text into embedding vectors. An embedding is a list of numbers
-that places a piece of text in a space where texts with similar meaning
-sit close together. Compare two vectors to find related documents, group
-similar notes, or pick the best matches for a query.
-
-`embed` takes one string and returns one vector. `embedMany` takes a
-list and returns one vector per entry, in the same order, in a single
-provider call. Both charge the branch's cost and token totals the same
-way `llm()` does, so cost guards apply. `cosineSimilarity` compares two
-vectors and returns a number from -1 to 1, where 1 means the texts are
-closest in meaning.
+that stands for the meaning of a piece of text. Two texts with similar
+meaning get vectors that are close together. You can use embeddings to
+find related documents, group similar notes, or rank matches for a
+query.
 
   ```ts
   import { embed, embedMany, cosineSimilarity } from "std::embedding"
 
   node main() {
-    const r = embed("a red bicycle in the rain")
-    if (isFailure(r)) { print("failed: ${r.error}"); return }
-    print(r.value.vector.length)
-
-    const many = embedMany(["apples", "oranges", "a bicycle"])
-    if (isSuccess(many)) {
-      const score = cosineSimilarity(r.value.vector, many.value.vectors[2])
-      print(score)
-    }
+    const query = embed("a red bicycle in the rain")
+    const docs = embedMany(["apples", "oranges", "a bicycle"])
+    if (isFailure(query) || isFailure(docs)) { return }
+    const score = cosineSimilarity(query.value.vector, docs.value.vectors[2])
+    print(score)
   }
   ```
 
+`embed` turns one string into one vector. `embedMany` turns a list of
+strings into one vector each, in the same order, with one provider call.
+`cosineSimilarity` compares two vectors and returns a number from -1 to
+1. A score of 1 means the two texts are closest in meaning.
+
+Each call to `embed` or `embedMany` costs money and counts toward the
+branch's cost and token totals, the same way `llm()` does. Cost guards
+apply.
+
 The default model is OpenAI's `text-embedding-3-small`. Pass `model` to
-pick another; the provider is derived from the model name the same way
-`llm()` derives it, or set `provider` explicitly. Local models work
-through Ollama today (`provider: "ollama"`). Every vector in one result
-comes from the same model, and vectors from different models cannot be
-compared with each other.
+pick another one. The provider is derived from the model name, or you
+can set `provider` yourself. Ollama works as a local provider. Only
+compare vectors that came from the same model.
 
 ## Types
 
@@ -54,7 +51,7 @@ export type Embedding = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L39))
 
 ### Embeddings
 
@@ -68,7 +65,7 @@ export type Embeddings = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L45))
 
 ## Functions
 
@@ -92,7 +89,7 @@ Turn one piece of text into an embedding vector.
   @param provider - Override the provider (normally derived from the model name)
   @param dimensions - Shorten the vector to this length, for models that support it (0 means the model's full length)
   @param apiKey - Override the API key
-  @param baseUrl - Base URL for ollama / openai-compat / litellm providers
+  @param baseUrl - Base URL for the ollama, deepinfra, litellm, openai-compat, or mlx provider
 
 **Parameters:**
 
@@ -107,7 +104,7 @@ Turn one piece of text into an embedding vector.
 
 **Returns:** `Result<Embedding>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L50))
 
 ### embedMany
 
@@ -129,7 +126,7 @@ Turn a list of texts into embedding vectors in one call, one vector per text in 
   @param provider - Override the provider (normally derived from the model name)
   @param dimensions - Shorten each vector to this length, for models that support it (0 means the model's full length)
   @param apiKey - Override the API key
-  @param baseUrl - Base URL for ollama / openai-compat / litellm providers
+  @param baseUrl - Base URL for the ollama, deepinfra, litellm, openai-compat, or mlx provider
 
 **Parameters:**
 
@@ -144,7 +141,7 @@ Turn a list of texts into embedding vectors in one call, one vector per text in 
 
 **Returns:** `Result<Embeddings>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L78))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L75))
 
 ### cosineSimilarity
 
@@ -152,7 +149,7 @@ Turn a list of texts into embedding vectors in one call, one vector per text in 
 cosineSimilarity(a: number[], b: number[]): Result<number>
 ```
 
-Compare two embedding vectors. Returns a number from -1 to 1; 1 means the texts are closest in meaning. Fails if the vectors differ in length.
+Compare two embedding vectors. Returns a number from -1 to 1, where 1 means the texts are closest in meaning. Fails if the vectors differ in length, are empty, or are all zeros.
 
   @param a - The first vector
   @param b - The second vector
@@ -166,4 +163,4 @@ Compare two embedding vectors. Returns a number from -1 to 1; 1 means the texts 
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L96))

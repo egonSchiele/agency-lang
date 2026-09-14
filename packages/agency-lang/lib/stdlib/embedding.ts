@@ -18,13 +18,37 @@ function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
 }
 
 /**
+ * smoltalk reads the API key from a per-provider slot, and it resolves the
+ * provider from the model name only after this call hands the config over.
+ * So the one key the caller gave is copied into every slot smoltalk knows,
+ * and smoltalk picks the slot for the provider it resolves.
+ */
+function keyForEveryProvider(apiKey: string): EmbedConfig["apiKey"] {
+  return {
+    openAi: apiKey,
+    google: apiKey,
+    ollama: apiKey,
+    deepInfra: apiKey,
+    liteLlm: apiKey,
+    openAiCompat: apiKey,
+  };
+}
+
+/** Same reasoning as keyForEveryProvider, for the base URL. */
+function baseUrlForEveryProvider(baseUrl: string): EmbedConfig["baseUrl"] {
+  return {
+    ollama: baseUrl,
+    mlx: baseUrl,
+    deepInfra: baseUrl,
+    liteLlm: baseUrl,
+    openAiCompat: baseUrl,
+  };
+}
+
+/**
  * Backs `std::embedding`'s `embed` and `embedMany`. Calls the active client's
- * embed() method, charges cost/guards + tokens (only on success), emits an
- * `embedCompletion` statelog event, and returns one vector per input.
- *
- * Follows `_generateImage` step for step: metered dispatch, then account
- * usage, trace, and enforce guards, in that order, so a guard trip wins over
- * any of the returns below.
+ * embed() method, records cost and tokens, emits an `embedCompletion`
+ * statelog event, enforces guards, and returns one vector per input.
  */
 export async function _embedTexts(
   texts: string[],
@@ -47,25 +71,8 @@ export async function _embedTexts(
     model,
     provider,
     dimensions,
-    apiKey: apiKey
-      ? {
-          openAi: apiKey,
-          google: apiKey,
-          ollama: apiKey,
-          deepInfra: apiKey,
-          liteLlm: apiKey,
-          openAiCompat: apiKey,
-        }
-      : undefined,
-    baseUrl: baseUrl
-      ? {
-          ollama: baseUrl,
-          mlx: baseUrl,
-          deepInfra: baseUrl,
-          liteLlm: baseUrl,
-          openAiCompat: baseUrl,
-        }
-      : undefined,
+    apiKey: apiKey ? keyForEveryProvider(apiKey) : undefined,
+    baseUrl: baseUrl ? baseUrlForEveryProvider(baseUrl) : undefined,
   });
 
   const start = performance.now();
@@ -80,9 +87,9 @@ export async function _embedTexts(
   const res = result.value;
   const first = res.embeddings[0];
 
-  // The provider charged us whether or not it handed back vectors, so account
-  // usage either way. The trace event needs a vector length, so it fires only
-  // when there is one. Guards go last so a trip wins over both returns below.
+  // Usage is recorded whether or not vectors came back, because the provider
+  // charged for the call either way. Guards run last so a trip wins over the
+  // count-mismatch failure below.
   recordUsage(ctx, stack, {
     type: "provider",
     kind: "embedding",
@@ -91,8 +98,8 @@ export async function _embedTexts(
     cost: res.costEstimate,
     tokens: res.tokenUsage,
   });
-  // The projected total, so a provider that reports input tokens without a
-  // total (smoltalk-llama-cpp does) still counts toward getTokens().
+  // Some providers report input tokens with no total. The projection sums
+  // the parts so those calls still count toward getTokens().
   addTokens(projectProviderTokenUsage(res.tokenUsage, "embedding").usage.totalTokens);
   if (first) {
     ctx.statelogClient.embedCompletion({
@@ -116,11 +123,7 @@ export async function _embedTexts(
   return success({ vectors: res.embeddings, model: res.model });
 }
 
-/**
- * Backs `std::embedding.cosineSimilarity`. Pure arithmetic, no runtime
- * context. Fails on a length mismatch or a zero-length vector, where the
- * value is undefined.
- */
+/** Backs `std::embedding.cosineSimilarity`. Pure arithmetic, no runtime context. */
 export function _cosineSimilarity(a: number[], b: number[]): ResultValue {
   if (a.length !== b.length) {
     return failure(`Vectors have different lengths: ${a.length} and ${b.length}.`);

@@ -1,0 +1,22 @@
+import { cosineSimilarity } from "std::embedding"
+import { round } from "std::math"
+
+node identical(): number {
+  const r = cosineSimilarity([1, 2, 3], [2, 4, 6])
+  if (r is success(score)) {
+    return round(score, 6)
+  }
+  return -2
+}
+
+node orthogonal(): number {
+  const r = cosineSimilarity([1, 0], [0, 1])
+  if (r is success(score)) {
+    return round(score, 6)
+  }
+  return -2
+}
+
+node mismatched(): boolean {
+  return isFailure(cosineSimilarity([1, 2], [1]))
+}

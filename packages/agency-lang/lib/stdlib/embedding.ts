@@ -109,3 +109,29 @@ export async function _embedTexts(
   }
   return success({ vectors: res.embeddings, model: res.model });
 }
+
+/**
+ * Backs `std::embedding.cosineSimilarity`. Pure arithmetic, no runtime
+ * context. Fails on a length mismatch or a zero-length vector, where the
+ * value is undefined.
+ */
+export function _cosineSimilarity(a: number[], b: number[]): ResultValue {
+  if (a.length !== b.length) {
+    return failure(`Vectors have different lengths: ${a.length} and ${b.length}.`);
+  }
+  if (a.length === 0) {
+    return failure("Vectors are empty.");
+  }
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA === 0 || normB === 0) {
+    return failure("Cosine similarity is undefined for an all-zero vector.");
+  }
+  return success(dot / (Math.sqrt(normA) * Math.sqrt(normB)));
+}

@@ -1,13 +1,14 @@
 # `std::embedding`
 
 `embed(text)` and `embedMany(texts)` turn text into vectors through the
-active LLM client. This note records how the module is wired and the
+active LLM client, and `cosineSimilarity(a, b)` compares two of them. This note records how the module is wired and the
 choices that are easy to get wrong when changing it.
 
 ## Files
 
 - `stdlib/embedding.agency` — the two exported functions and their types.
-- `lib/stdlib/embedding.ts` — `_embedTexts`, the one helper both call.
+- `lib/stdlib/embedding.ts` — `_embedTexts`, the one helper both embed functions call, and `_cosineSimilarity`, which is pure arithmetic and needs no runtime context.
+- `tests/agency/cosineSimilarity.agency` — the execution test for the pure half.
 - `lib/stdlib/embedding.test.ts` — the accounting and validation cases.
 
 ## One helper, two wrappers

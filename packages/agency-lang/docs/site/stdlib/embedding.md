@@ -13,10 +13,12 @@ similar notes, or pick the best matches for a query.
 `embed` takes one string and returns one vector. `embedMany` takes a
 list and returns one vector per entry, in the same order, in a single
 provider call. Both charge the branch's cost and token totals the same
-way `llm()` does, so cost guards apply.
+way `llm()` does, so cost guards apply. `cosineSimilarity` compares two
+vectors and returns a number from -1 to 1, where 1 means the texts are
+closest in meaning.
 
   ```ts
-  import { embed, embedMany } from "std::embedding"
+  import { embed, embedMany, cosineSimilarity } from "std::embedding"
 
   node main() {
     const r = embed("a red bicycle in the rain")
@@ -25,7 +27,8 @@ way `llm()` does, so cost guards apply.
 
     const many = embedMany(["apples", "oranges", "a bicycle"])
     if (isSuccess(many)) {
-      print(many.value.vectors.length)
+      const score = cosineSimilarity(r.value.vector, many.value.vectors[2])
+      print(score)
     }
   }
   ```
@@ -51,7 +54,7 @@ export type Embedding = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L42))
 
 ### Embeddings
 
@@ -65,7 +68,7 @@ export type Embeddings = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L45))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L48))
 
 ## Functions
 
@@ -104,7 +107,7 @@ Turn one piece of text into an embedding vector.
 
 **Returns:** `Result<Embedding>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L53))
 
 ### embedMany
 
@@ -141,4 +144,26 @@ Turn a list of texts into embedding vectors in one call, one vector per text in 
 
 **Returns:** `Result<Embeddings>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L78))
+
+### cosineSimilarity
+
+```ts
+cosineSimilarity(a: number[], b: number[]): Result<number>
+```
+
+Compare two embedding vectors. Returns a number from -1 to 1; 1 means the texts are closest in meaning. Fails if the vectors differ in length.
+
+  @param a - The first vector
+  @param b - The second vector
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| a | `number[]` |  |
+| b | `number[]` |  |
+
+**Returns:** `Result<number>`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/embedding.agency#L99))

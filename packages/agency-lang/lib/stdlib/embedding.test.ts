@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { _embedTexts } from "./embedding.js";
+import { _embedTexts, _cosineSimilarity } from "./embedding.js";
 import { agencyStore } from "../runtime/asyncContext.js";
 import { StateStack } from "../runtime/state/stateStack.js";
 import { CostGuard } from "../runtime/guard.js";
@@ -169,5 +169,22 @@ describe("_embedTexts", () => {
     await agencyStore.run(frame(stack, client), async () => {
       await expect(_embedTexts(["x"], "", "", 0, "", "")).rejects.toBeTruthy();
     });
+  });
+});
+
+describe("_cosineSimilarity", () => {
+  it("scores identical, orthogonal, and opposite vectors", () => {
+    const same = _cosineSimilarity([1, 2, 3], [2, 4, 6]);
+    const orthogonal = _cosineSimilarity([1, 0], [0, 1]);
+    const opposite = _cosineSimilarity([1, 0], [-1, 0]);
+    expect(same.success && same.value).toBeCloseTo(1);
+    expect(orthogonal.success && orthogonal.value).toBeCloseTo(0);
+    expect(opposite.success && opposite.value).toBeCloseTo(-1);
+  });
+
+  it("fails on mismatched lengths, empty, and all-zero vectors", () => {
+    expect(_cosineSimilarity([1, 2], [1]).success).toBe(false);
+    expect(_cosineSimilarity([], []).success).toBe(false);
+    expect(_cosineSimilarity([0, 0], [1, 1]).success).toBe(false);
   });
 });

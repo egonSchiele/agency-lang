@@ -1,0 +1,7 @@
+{
+  "first": 1,
+  "bumpsAfterFresh": 1,
+  "everyPayloadPlainJson": true,
+  "resumed": 1,
+  "bumpsAfterResume": 2
+}

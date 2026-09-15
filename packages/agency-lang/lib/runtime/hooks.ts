@@ -66,10 +66,11 @@ export type CallbackMap = {
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
   onTrace: TraceEvent;
-  /** One statement checkpoint, fired from `debugStep` whenever a consumer is
-   *  registered. `checkpoint` is the object `Checkpoint.toJSON()` returned,
-   *  not a copy; `{ type: "paused", checkpoint, runId }` resumes through
-   *  `resumeFromCheckpoint`. Never forwarded from a subprocess. */
+  /** One statement checkpoint on the top-level stack, fired from `debugStep`
+   *  whenever a consumer is registered. `checkpoint` is plain JSON (function
+   *  refs encoded, as in a pause result); `{ type: "paused", checkpoint,
+   *  runId }` resumes through `resumeFromCheckpoint`. Never forwarded from
+   *  a subprocess. */
   onCheckpoint: { runId: string; checkpoint: CheckpointJSON };
   onOAuthRequired: {
     serverName: string;

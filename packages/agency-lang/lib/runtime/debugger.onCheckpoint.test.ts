@@ -41,8 +41,7 @@ describe("onCheckpoint fires once per statement checkpoint", () => {
       callbacks: { onCheckpoint: (event: Seen) => seen.push(event) },
     });
     expect(result.data).toBe(2);
-    // Four statements, so at least four checkpoints. The exact count is the
-    // runner's business, not this test's.
+    // Four statements, so at least four checkpoints.
     expect(seen.length).toBeGreaterThanOrEqual(4);
     const runId = seen[0].runId;
     expect(runId.length).toBeGreaterThan(0);

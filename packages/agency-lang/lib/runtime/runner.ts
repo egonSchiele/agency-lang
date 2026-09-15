@@ -440,14 +440,18 @@ export class Runner {
     // If debugStep doesn't pause, we clear it below.
     this.frame.locals[this.debugFlagKey(id)] = true;
 
-    const dbg = await debugStep(this.ctx, {
-      moduleId: this.moduleId,
-      scopeName: this.scopeName,
-      stepPath: this.stepPath(id),
-      label,
-      nodeContext: this.nodeContext,
-      isUserAdded,
-    });
+    const dbg = await debugStep(
+      this.ctx,
+      {
+        moduleId: this.moduleId,
+        scopeName: this.scopeName,
+        stepPath: this.stepPath(id),
+        label,
+        nodeContext: this.nodeContext,
+        isUserAdded,
+      },
+      this.stack,
+    );
 
     if (dbg) {
       if (this.nodeContext) {
@@ -479,12 +483,14 @@ export class Runner {
   /** Whether this step should build a checkpoint: the debugger wants one, a
    *  trace sink wants one, or a host or Agency callback registered for
    *  `onCheckpoint` wants one. `debugHook` and `clearDebugFlag` must agree,
-   *  so both read this. */
+   *  so both read this. The `onCheckpoint` reason applies only on the
+   *  top-level stack, because a branch checkpoint is not reported. */
   private recordsStepCheckpoints(): boolean {
+    if (this.ctx.hasDebugger() || this.ctx.hasTraceWriter()) return true;
     return (
-      this.ctx.hasDebugger() ||
-      this.ctx.hasTraceWriter() ||
-      hasCallbackConsumer(this.ctx, "onCheckpoint")
+      this.stack !== undefined &&
+      this.stack === this.ctx.stateStack &&
+      hasCallbackConsumer(this.ctx, "onCheckpoint", this.stack)
     );
   }
 

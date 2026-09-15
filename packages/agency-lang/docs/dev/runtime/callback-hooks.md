@@ -112,9 +112,8 @@ purely about scope discovery, not interrupt routing.
 A host that runs long jobs needs a checkpoint between yields, so a run
 that dies mid-way can be resumed from its last statement. Without one,
 the host can only go back to the run's last pause or interrupt.
-`onCheckpoint` gives it that through the ordinary callbacks channel. The payload is `{ runId, checkpoint }`,
-where `checkpoint` is the object `Checkpoint.toJSON()` returned. The
-host stores it and later calls
+`onCheckpoint` gives it that through the ordinary callbacks channel. The
+payload is `{ runId, checkpoint }`. The host stores it and later calls
 `resumeFromCheckpoint({ type: "paused", checkpoint, runId }, { metadata: { callbacks } })`.
 
 Where it fires. `debugStep` (`lib/runtime/debugger.ts`) builds a
@@ -124,12 +123,22 @@ anyone is listening. The runner's gate for "take a checkpoint at this
 step" (`recordsStepCheckpoints` in `lib/runtime/runner.ts`) has three
 reasons: a debugger, a trace writer, or an `onCheckpoint` consumer. A
 run with none of the three builds no statement checkpoints, as before.
-Steps inside a tool call are skipped, as they are for the trace writer,
-because a branch stack cannot be re-entered from outside.
 
-What it does not cover. The checkpoint a pause returns and the
-checkpoint an interrupt carries are not reported here; both already
-reach the host inside the run's result.
+Only the top-level stack is reported. A statement inside a fork, a
+parallel block, or a tool call runs on a branch stack, and a checkpoint
+taken there cannot be re-entered from outside. This is the rule a pause
+follows (`pause.md`). Such statements report nothing; the next
+top-level statement does.
+
+The payload is plain JSON. It is `Checkpoint.toJSON()` passed through
+`nativeTypeReplacer`, the same encoding a pause result gets, so a scoped
+Agency callback in a frame becomes a function ref rather than a live
+function. A host can `JSON.stringify` it, and `resumeFromCheckpoint`
+revives the refs on the way back.
+
+The checkpoint a pause returns and the checkpoint an interrupt carries
+are not reported here; both already reach the host inside the run's
+result.
 
 Not forwarded from a subprocess. A `std::agency` `run()` child inherits
 its parent's run id. A forwarded child checkpoint would carry the job's
@@ -137,26 +146,10 @@ run id and the child program's stack, and a host that stored it as the
 job's latest state would resume the parent into the wrong program. So
 `onCheckpoint` is on `NON_FORWARDABLE_CALLBACKS`.
 
-The payload is not a copy. Cloning a whole stack on every statement
-would be paid by every consumer, so the hook hands out the object
-`toJSON()` built. A host that keeps it past the callback should
-serialize or clone it at once.
-
 Errors. Like every hook, a callback that throws is logged and dropped by
 `fireWithGuard`. The runtime does not know that a host failed to store a
 checkpoint; the host must record that itself.
 
-Agency-side registration. `callback("onCheckpoint")` is accepted because
-the name is in `VALID_CALLBACK_NAMES` like any other. The body runs at
-every statement, and its own statements do not re-fire the hook because
-of the recursion guard above. Nothing in the runtime uses this; it
-exists because refusing it would need a special case.
-
-The dormant `onTrace` hook. `onTrace` has been in the registry with a
-`TraceEvent` payload for a long time and is never dispatched. Its
-payload would be one line of the trace file format (a content-addressed
-chunk or a manifest referencing chunks), which a host would have to
-reassemble to get a checkpoint back. `onCheckpoint` was added instead of
-wiring `onTrace` because the consumer wants a value it can hand straight
-to `resumeFromCheckpoint`. The two are separate mechanisms. If `onTrace`
-is ever wired, it should stay a trace-line stream.
+`onTrace` is a different hook. It is declared with a trace-line payload
+and never dispatched. Wiring it would give a host trace-file lines, not
+a checkpoint.

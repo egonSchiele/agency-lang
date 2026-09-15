@@ -76,6 +76,7 @@ import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
 import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
+import { parseTarget } from "@/agentTarget.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
@@ -268,6 +269,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     options: RunOptions,
     nodeArgs: string[] = [],
     resume?: ResumeCarrier,
+    entryNode?: string,
   ) {
     if (options.local !== undefined && options.model !== undefined) {
       console.error("Error: Pass either --model (hosted) or --local (local), not both.");
@@ -325,6 +327,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       nodeArgs,
       options.captureWorkdir === undefined ? undefined : { runDir: options.captureWorkdir },
       { agencyOnly: options.agencyOnly ?? false },
+      entryNode,
     );
   }
 
@@ -492,7 +495,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // same command object, so both spellings share options, action, help.
       .passThroughOptions()
       .description("Compile and run .agency file(s)")
-      .argument("<input>", "Path to .agency input file")
+      .argument("<input>", "Path to .agency input file, optionally file.agency:nodeName")
       .argument(
         "[nodeArgs...]",
         "Arguments after the filename go to the program; read them with std::args",
@@ -500,12 +503,23 @@ export function createProgram(deps: CliDependencies = {}): Command {
   ).action(async (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
     const warning = warnMisplacedAgencyFlags(command, input);
     if (warning !== undefined) console.warn(warning);
-    if (command.invokedAsFallback() && !input.endsWith(".agency") && !fs.existsSync(input)) {
+    const target = parseTarget(input);
+    if (
+      command.invokedAsFallback() &&
+      !target.filename.endsWith(".agency") &&
+      !fs.existsSync(target.filename)
+    ) {
       // `agency typo` may be a mistyped command, which plain run can never
       // be; the diagnostic suggests near-miss command names.
       command.unknownFallbackOperand(input);
     }
-    await runWithOptions(input, options, nodeArgs);
+    await runWithOptions(
+      target.filename,
+      options,
+      nodeArgs,
+      undefined,
+      target.nodeName || undefined,
+    );
   });
 
   addRunOptions(

@@ -99,6 +99,14 @@ export const AGENCY_RESUME_FILE = "AGENCY_RESUME_FILE";
 export const AGENCY_RESUME_OVERRIDES = "AGENCY_RESUME_OVERRIDES";
 export const AGENCY_RESUME_FORCE = "AGENCY_RESUME_FORCE";
 
+/** The node `agency run file.agency:node` asks the generated child entry to
+ *  start. Unset means `main`. */
+export const AGENCY_ENTRY_NODE = "AGENCY_ENTRY_NODE";
+
+/** Process exit code for a command line the program cannot act on, such as
+ *  `agency run file.agency:node` naming a node the file does not have. */
+export const EXIT_CODE_USAGE_ERROR = 2;
+
 /** Process exit code when a top-level cost/time budget is exceeded. Distinct
  *  from 1 (generic failure) and 2 (usage error). */
 export const EXIT_CODE_BUDGET_EXCEEDED = 3;

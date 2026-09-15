@@ -339,5 +339,30 @@ export async function foo({ messages: __invocationMessages, callbacks: __invocat
   });
 }
 export const __fooNodeParams = [];
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    const __result = await runCliEntry({
+      nodeNames: ["foo"],
+      startNode: (nodeName: string) => runNode({
+        ctx: __globalCtx,
+        nodeName: nodeName,
+        data: initialState.data,
+        messages: initialState.messages,
+        initializeGlobals: __initializeGlobals
+      }),
+      resume: __resumeFromCheckpoint
+    });
+    await resolveCliInterrupts(__result, respondToInterrupts)
+  } catch (__error: any) {
+    reportBudgetExceededAndExit(__error)
+    console.error(`
+Agent crashed: ${__error.message}`)
+    throw __error
+  }
+}
 export default graph
 export const __sourceMap = {"stringConcat.agency:foo":{"1":{"line":1,"col":2},"2":{"line":2,"col":2},"3":{"line":3,"col":2}}};

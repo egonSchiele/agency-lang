@@ -33,6 +33,27 @@ try {
   assertIncludes(basicOutput, "hello world");
   console.log("Test 1 passed");
 
+  // --- Test 1b: Run a named node with file.agency:node ---
+  // list has a defaulted parameter, so this also checks the node body's
+  // default applies when the CLI starts a node with no arguments.
+  console.log("--- Test 1b: Run a named node ---");
+  writeFile(dir, "two-nodes.agency", `node main() {
+  print("ran main")
+}
+
+node list(label: string = "ran list") {
+  print(label)
+}
+`);
+  const namedNodeOutput = run(dir, "npx agency run two-nodes.agency:list");
+  assertIncludes(namedNodeOutput, "ran list");
+  if (namedNodeOutput.includes("ran main")) {
+    throw new Error(`Expected only the list node to run, got:\n${namedNodeOutput}`);
+  }
+  const missingNodeOutput = run(dir, "npx agency run two-nodes.agency:nope", { expectFail: true });
+  assertIncludes(missingNodeOutput, 'no node named "nope"');
+  console.log("Test 1b passed");
+
   // --- Test 2: Stdlib imports ---
   console.log("--- Test 2: Stdlib imports ---");
   writeFile(dir, "stdlib-test.agency", `import { map } from "std::array"

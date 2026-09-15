@@ -1,3 +1,18 @@
+## Sep 15 2026 — v0.19.3
+
+### Compiler
+
+- Bug fix: a `pkg::` import loaded the package's TypeScript entry instead of its `index.agency` wrapper, so the wrapper's defaults and interrupts never ran. The generated import now points at the compiled wrapper, and the compiler refuses a package whose `exports` map does not list it.
+
+### Packages
+
+- **`@agency-lang/kokoro`** — local text-to-speech with the Kokoro model. `speak` writes a wav, mp3, or m4a file (mp3 and m4a need `ffmpeg`) and downloads the model if needed. `download` fetches a model ahead of time, and `voices` lists the voices.
+- Every package now ships and exports its compiled `index.js`, rebuilt by its `build` script. The `@agency-lang/github` wrapper had never compiled and now does.
+
+### LLM
+
+- **Local embedding models.** Memory and `std::embedding` can embed with a local model, either a GGUF model on llama.cpp such as `nomic-embed-text` or an MLX model served with `agency local serve <chat-model> --embedding <embedding-model>`. Set it in `agency.json`, or pass `--model embedding=llama-cpp/<name>` (or `mlx/<name>`) to `agency agent`.
+
 ## Sep 14 2026 — v0.19.2
 
 ### Runtime

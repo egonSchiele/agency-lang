@@ -4465,27 +4465,31 @@ export class TypeScriptBuilder {
       );
     }
 
-    if (this.compilationUnit.graphNodes.some((n) => n.nodeName === "main")) {
-      // The direct-run call reserves one slot per declared parameter and puts
-      // initialState after them, in main's hidden OPTIONS argument.
+    if (this.compilationUnit.graphNodes.length > 0) {
+      // The direct-run block starts a node by name through runNode, the same
+      // call every exported node wrapper makes, so `agency run file.agency:node`
+      // can pick any node in this file. runCliEntry starts `main` unless the
+      // CLI names another. The names are this file's own: the graph also holds
+      // every node merged in from imports, which are not entry points.
       //
-      // The reservation is what matters: initialState used to be the FIRST
-      // argument, which was harmless while mains took no parameters (it landed
-      // in the options slot) and wrong once they did (#739) — the state object
-      // arrived as the first parameter's value. `undefined` in each slot keeps
-      // it where it belongs, and JavaScript treats an explicit `undefined` and
-      // an omitted argument alike, so parameter defaults still apply.
-      //
-      // The slots are filled with `undefined` rather than argv because a
-      // program's command line belongs to the program. `agency run` forwards
-      // trailing arguments to the child process, where `std::args` reads them;
-      // the compiler does not read them on the entry node's behalf.
-      const mainParamCount =
-        this.compilationUnit.graphNodes.find((n) => n.nodeName === "main")?.parameters.length ?? 0;
-      const mainCallArgs = [
-        ...Array.from({ length: mainParamCount }, () => ts.id("undefined")),
-        ts.id("initialState"),
-      ];
+      // The node's parameters get no values: a program's command line belongs
+      // to the program. `agency run` forwards trailing arguments to the child
+      // process, where `std::args` reads them.
+      const nodeNames = ts.arr(
+        this.compilationUnit.graphNodes.map((node) => ts.str(declaredName(node.nodeName))),
+      );
+      const startNode = ts.arrowFn(
+        [{ name: "nodeName", typeAnnotation: "string" }],
+        ts.call(ts.id("runNode"), [
+          ts.obj({
+            ctx: ts.id("__globalCtx"),
+            nodeName: ts.id("nodeName"),
+            data: $(ts.id("initialState")).prop("data").done(),
+            messages: $(ts.id("initialState")).prop("messages").done(),
+            initializeGlobals: ts.id("__initializeGlobals"),
+          }),
+        ]),
+      );
       result.push(
         ts.if(
           ts.binOp(
@@ -4510,13 +4514,14 @@ export class TypeScriptBuilder {
                   ts.await(
                     ts.call(ts.id("runCliEntry"), [
                       ts.obj({
-                        runMain: ts.arrowFn([], ts.call(ts.id("main"), mainCallArgs)),
+                        nodeNames,
+                        startNode,
                         resume: ts.id("__resumeFromCheckpoint"),
                       }),
                     ]),
                   ),
                 ),
-                // Running `main` directly from the CLI: interrupts that no
+                // Running a node directly from the CLI: interrupts that no
                 // handler settled have surfaced to the user. resolveCliInterrupts
                 // is that user endpoint — under a run policy it decides each one
                 // (prompting with --interactive, rejecting otherwise) and resumes

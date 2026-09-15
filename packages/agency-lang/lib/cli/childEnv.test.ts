@@ -44,4 +44,14 @@ describe("withRootCarriers", () => {
       AGENCY_RESUME_FORCE: "1",
     });
   });
+
+  test("clears a stale entry node and sets it only when this run names one", () => {
+    const inherited = { AGENCY_ENTRY_NODE: "stale", PATH: "/bin" };
+
+    expect(withRootCarriers(inherited, {})).toEqual({ PATH: "/bin" });
+    expect(withRootCarriers(inherited, { entryNode: "list" })).toEqual({
+      PATH: "/bin",
+      AGENCY_ENTRY_NODE: "list",
+    });
+  });
 });

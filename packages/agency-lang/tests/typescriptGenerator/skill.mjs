@@ -314,5 +314,30 @@ export async function analyzeData(input: string, { messages: __invocationMessage
   });
 }
 export const __analyzeDataNodeParams = ["input"];
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    const __result = await runCliEntry({
+      nodeNames: ["analyzeData"],
+      startNode: (nodeName: string) => runNode({
+        ctx: __globalCtx,
+        nodeName: nodeName,
+        data: initialState.data,
+        messages: initialState.messages,
+        initializeGlobals: __initializeGlobals
+      }),
+      resume: __resumeFromCheckpoint
+    });
+    await resolveCliInterrupts(__result, respondToInterrupts)
+  } catch (__error: any) {
+    reportBudgetExceededAndExit(__error)
+    console.error(`
+Agent crashed: ${__error.message}`)
+    throw __error
+  }
+}
 export default graph
 export const __sourceMap = {"skill.agency:analyzeData":{"1":{"line":2,"col":2}}};

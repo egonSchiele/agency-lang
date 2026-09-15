@@ -286,6 +286,8 @@ export function run(
    *  snapshot of the working directory as the run directory `<dir>/<traceId>/`. */
   capture?: { runDir: string },
   compileMode: { agencyOnly: boolean } = { agencyOnly: false },
+  /** The node to start, from `agency run file.agency:node`. Unset means `main`. */
+  entryNode?: string,
 ): void {
   let output: string;
   if (compileMode.agencyOnly) {
@@ -310,7 +312,7 @@ export function run(
   console.log(`Running ${output}...`);
   console.log("---");
 
-  const env = withRootCarriers(process.env, { policy: runPolicy, budget, resume });
+  const env = withRootCarriers(process.env, { policy: runPolicy, budget, resume, entryNode });
   const captured = capture === undefined ? undefined : prepareCapture(capture.runDir);
   env[CONFIG_OVERRIDES_ENV] = serializeConfigOverrides(
     runChildOverrides({

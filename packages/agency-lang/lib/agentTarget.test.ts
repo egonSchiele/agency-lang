@@ -27,6 +27,15 @@ describe("agent targets", () => {
     expect(parseTarget("a.agency")).toEqual({ filename: "a.agency", nodeName: "" });
   });
 
+  it("splits only when the part after the colon is a node name", () => {
+    expect(parseTarget("dir/a.agency")).toEqual({ filename: "dir/a.agency", nodeName: "" });
+    expect(parseTarget("C:\\agents\\a.agency")).toEqual({
+      filename: "C:\\agents\\a.agency",
+      nodeName: "",
+    });
+    expect(parseTarget("a.agency:")).toEqual({ filename: "a.agency:", nodeName: "" });
+  });
+
   it("resolves file and directory agent targets", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-target-"));
     dirs.push(tmpDir);

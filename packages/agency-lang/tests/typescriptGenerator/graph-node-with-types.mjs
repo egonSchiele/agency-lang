@@ -332,5 +332,30 @@ export async function greet(name: string, { messages: __invocationMessages, call
   });
 }
 export const __greetNodeParams = ["name"];
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    const __result = await runCliEntry({
+      nodeNames: ["greet"],
+      startNode: (nodeName: string) => runNode({
+        ctx: __globalCtx,
+        nodeName: nodeName,
+        data: initialState.data,
+        messages: initialState.messages,
+        initializeGlobals: __initializeGlobals
+      }),
+      resume: __resumeFromCheckpoint
+    });
+    await resolveCliInterrupts(__result, respondToInterrupts)
+  } catch (__error: any) {
+    reportBudgetExceededAndExit(__error)
+    console.error(`
+Agent crashed: ${__error.message}`)
+    throw __error
+  }
+}
 export default graph
 export const __sourceMap = {"graph-node-with-types.agency:greet":{"1":{"line":3,"col":2},"2":{"line":4,"col":2}}};

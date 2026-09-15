@@ -1,3 +1,18 @@
+## Sep 14 2026 — v0.19.2
+
+### Runtime
+
+- **`onCheckpoint` callback** – enables tracing, builds a checkpoint per statement, and the checkpoint is passed to the callback.
+- Behavior fix: a `handoff def` no longer writes a `[dispatching name: args]` message onto the thread. Models that saw a few of those in their history started replying with the marker instead of calling the tool. The tool call is dropped and the body's system messages are tracked by a scope tag instead.
+
+### Standard Library
+
+- **`std::embedding`** — exposes Smoltalk's embed functionality. Has two new functions, `embed` and `embedMany`, plus `cosineSimilarity` (so I suppose three new functions).
+
+### LLM
+
+- smoltalk upgraded to 0.14.0, so a custom provider such as `smoltalk-llama-cpp` can serve embeddings.
+
 ## Sep 12 2026 — v0.19.1
 
 ### Runtime

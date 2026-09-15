@@ -48,6 +48,9 @@ def capabilitySourceLabel(source: string): string {
   if (source == "user-provider") {
     return "your override for ${getCapabilityProvider()}"
   }
+  if (source == "embedding-override") {
+    return "on: the embedding slot names a model"
+  }
   return "your override for ${getCapabilityModelKey()}"
 }
 
@@ -244,7 +247,7 @@ export def editCapabilities() {
         if (status.state == "no-override" && providerLacksEmbeddings(getCapabilityProvider())) {
           pushMessage(
             color.dim(
-            "Note: ${getCapabilityProvider()} has no embeddings endpoint, so Tier-2 semantic recall stays off. Point the embedding slot at a provider that has one, e.g. /model embedding=openai/text-embedding-3-small.",
+            "Note: ${getCapabilityProvider()} has no embeddings endpoint, so Tier-2 semantic recall stays off. Point the embedding slot at a provider that has one, e.g. /model embedding=openai/text-embedding-3-small, or a served local model, e.g. /model embedding=mlx/qwen3-embedding-4b-mlx.",
           ),
           )
         }

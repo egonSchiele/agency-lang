@@ -68,6 +68,11 @@ static const BASE_URL_PROVIDERS: Record<string, string> = {
   litellm: "LITELLM_BASE_URL"
 }
 
+/** Providers that run on this machine. They need no key and no base URL,
+ *  and they appear in the embedding slot as mlx/<model> or
+ *  llama-cpp/<model>. */
+export static const LOCAL_PROVIDERS: string[] = ["mlx", "llama-cpp"]
+
 /** The first env var the provider requires that the environment leaves
  *  unset or empty, or "" when the provider is fully configured. Checks the
  *  API-key var, then the base-URL var for proxy providers. A truly-custom
@@ -356,7 +361,7 @@ export def priceDefault(
   base-URL proxy providers. Source-of-truth derived (MODELS + BASE_URL_PROVIDERS),
   not a hand-maintained list, so it never drifts. Used by parseModelSpec. */
 export def knownProviders(): string[] {
-  return [...Object.keys(MODELS), ...Object.keys(BASE_URL_PROVIDERS)]
+  return [...Object.keys(MODELS), ...Object.keys(BASE_URL_PROVIDERS), ...LOCAL_PROVIDERS]
 }
 
 /** Split a --model value: `slot=model` becomes per-slot (alias-resolved); a bare

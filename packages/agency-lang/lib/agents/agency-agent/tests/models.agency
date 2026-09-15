@@ -12,6 +12,7 @@ import {
   priceDefault,
   Resolved,
   parseModelFlag,
+  knownProviders,
  } from "../lib/models.agency"
 
 static const KNOWN = ["openai", "anthropic", "google", "openrouter", "litellm"]
@@ -112,3 +113,13 @@ node modelFlagUnifiedNoMissplit(): { slot: string; model: string } {
   return parseModelFlag("anthropic/claude-opus-4-8")
 }
 
+
+// The local providers are known, so an embedding slot can name mlx/<model>.
+node localProvidersAreKnown(): string {
+  const known = knownProviders()
+  return "${known.includes("mlx")}/${known.includes("llama-cpp")}"
+}
+
+node embeddingSpecWithLocalProvider(): ModelSpec {
+  return parseModelSpec("mlx/mlx-community/Qwen3-Embedding-4B-4bit-DWQ", false, knownProviders())
+}

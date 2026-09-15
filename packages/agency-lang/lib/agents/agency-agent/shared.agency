@@ -14,10 +14,18 @@ import { env } from "std::system"
 
 import {
   resolveCapabilities,
+  withMemoryFromEmbeddingOverride,
   Capabilities,
   ResolvedCapabilities,
  } from "./lib/capabilities.agency"
-import { resolveDetected, knownProviders, missingProviderEnvVar, Resolved } from "./lib/models.agency"
+import {
+  resolveDetected,
+  knownProviders,
+  missingProviderEnvVar,
+  parseModelSpec,
+  LOCAL_PROVIDERS,
+  Resolved,
+ } from "./lib/models.agency"
 import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
 import { resolveAgentHome } from "./lib/config.agency"
 import { getCapabilitySettings, getModelSettings, loadSettings } from "./lib/settings.agency"
@@ -213,12 +221,18 @@ export def embeddingKeyStatus(
 }
 
 /** Decide how maybeEnableMemory should enable memory. Pure, so the
-  branching is testable without the environment or the memory runtime. */
+  branching is testable without the environment or the memory runtime.
+  `memorySource` is the capability layer that set `memoryOn`. */
 export def memoryEnablePlan(
   memoryOn: boolean,
+  memorySource: string,
   status: EmbeddingKeyStatus,
 ): ("skip" | "enable-default" | "enable-fallback" | "enable-override") {
-  if (!memoryOn) {
+  // A provider profile turns memory off only because the provider has no
+  // embeddings endpoint. Naming an embedding model removes that reason. A
+  // user's own off switch, at any layer, still wins.
+  const overriddenByProvider = !memoryOn && memorySource == "provider" && status.state == "ready"
+  if (!memoryOn && !overriddenByProvider) {
     return "skip"
   }
   if (status.state == "no-override") {
@@ -291,6 +305,12 @@ export def refreshCapabilities(modelKey: string, provider: string) {
 
 export def getCapabilities(): Capabilities {
   return _capabilities.values
+}
+
+/** Record that memory is on from the embedding override, so the resolved
+  capability agrees with what is running. */
+export def markMemoryEnabledByOverride() {
+  _capabilities = withMemoryFromEmbeddingOverride(_capabilities)
 }
 
 export def getCapabilitiesResolved(): ResolvedCapabilities {
@@ -444,11 +464,62 @@ export def configureModels(
   applyResolved(promoteAll(all.value))
 }
 
+/** Turn an embedding slot value for a local provider into the model name
+ *  smoltalk will send. For mlx, a catalog name, alias, mlx: URI, or model
+ *  directory becomes the served name; a repo id (it has a slash) is taken
+ *  as the served name itself; anything else is a catalog name that did
+ *  not resolve. A hosted provider is a failure: with --local, the
+ *  embedding slot must be local too. */
+export def resolveLocalEmbedding(spec: string): Result<Resolved> {
+  const parsed = parseModelSpec(spec, false, knownProviders())
+  if (!LOCAL_PROVIDERS.includes(parsed.provider)) {
+    return failure(
+      "With --local, the embedding slot must name a local model: embedding=mlx/<model> or embedding=llama-cpp/<model>.",
+    )
+  }
+  if (parsed.provider == "mlx") {
+    const backend = try localModelBackend(parsed.model)
+    if (!isFailure(backend)) {
+      return success({
+        model: mlxServedName(parsed.model),
+        provider: "mlx",
+        via: "local"
+      })
+    }
+    if (!parsed.model.includes("/")) {
+      return failure(backend.error)
+    }
+    return success({
+      model: parsed.model,
+      provider: "mlx",
+      via: "local"
+    })
+  }
+  return failure(
+    "Embeddings on llama-cpp are not wired up yet. Use embedding=mlx/<model> with a served MLX model.",
+  )
+}
+
 /** Apply a local model (from `--local`) as BOTH the fast and slow model,
  *  so a fully-local run needs no hosted-provider key. A GGUF model: register
  *  the llama-cpp provider and download if needed. An MLX model: point every
- *  slot at the mlx_lm.server the user started. */
-export def configureLocalModel(value: string) {
+ *  slot at the mlx_lm.server the user started. `embeddingSpec` is the
+ *  `--model embedding=` value, or "" for none. */
+export def configureLocalModel(value: string, embeddingSpec: string = "") {
+  let embedding: Resolved = {
+    model: "",
+    provider: "mlx",
+    via: "local"
+  }
+  if (embeddingSpec != "") {
+    const resolvedEmbedding = resolveLocalEmbedding(embeddingSpec)
+    if (isFailure(resolvedEmbedding)) {
+      print(resolvedEmbedding.error)
+      process.exit(1)
+      return
+    }
+    embedding = resolvedEmbedding.value
+  }
   // An MLX model runs in a server the user started. Nothing to download or
   // register: point every slot at the name the server knows it by.
   const backendResult = try localModelBackend(value)
@@ -467,11 +538,7 @@ export def configureLocalModel(value: string) {
       {
       main: m,
       reasoning: m,
-      embedding: {
-        model: "",
-        provider: "mlx",
-        via: "local"
-      }
+      embedding: embedding
     },
     )
     refreshCapabilities(value, "mlx")
@@ -494,21 +561,21 @@ export def configureLocalModel(value: string) {
   const modelPath = result.value
   // Local pins every slot to the one llama-cpp model. Route through
   // applyResolved so getResolvedSlots() reflects it (the explain view + the
-  // /local recall diff). Embedding is empty — llama-cpp has no embed endpoint.
+  // /local recall diff). With no embedding spec the slot is empty:
+  // llama-cpp has no embed endpoint of its own.
   const r: Resolved = {
     model: modelPath,
     provider: "llama-cpp",
     via: "local"
   }
+  if (embeddingSpec == "") {
+    embedding.provider = "llama-cpp"
+  }
   applyResolved(
     {
     main: r,
     reasoning: r,
-    embedding: {
-      model: "",
-      provider: "llama-cpp",
-      via: "local"
-    }
+    embedding: embedding
   },
   )
   // applyResolved keyed capabilities by the resolved .gguf path. Re-key

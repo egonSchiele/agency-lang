@@ -7,6 +7,7 @@ import {
   embeddingKeyStatus,
   memoryEnablePlan,
   memoryConfigFor,
+  resolveLocalEmbedding,
   EmbeddingKeyStatus,
  } from "../shared.agency"
 
@@ -122,10 +123,10 @@ node planOutcomes(): string {
     override: null,
     varName: ""
   }
-  const off = memoryEnablePlan(false, ready)
-  const noSlot = memoryEnablePlan(true, none)
-  const keyless = memoryEnablePlan(true, missing)
-  const good = memoryEnablePlan(true, ready)
+  const off = memoryEnablePlan(false, "default", ready)
+  const noSlot = memoryEnablePlan(true, "default", none)
+  const keyless = memoryEnablePlan(true, "default", missing)
+  const good = memoryEnablePlan(true, "default", ready)
   return "${off}/${noSlot}/${keyless}/${good}"
 }
 
@@ -145,4 +146,42 @@ node configCarriesOverride(): string {
   const bareHasNone = bare.embeddings == null
   const dirsMatch = withOverride.dir == bare.dir
   return "${embeddings.model}/${embeddings.provider}/${bareHasNone}/${dirsMatch}"
+}
+
+// A provider-level memory:false yields to a ready embedding override; a
+// user-level memory:false does not, and a provider-level off with no
+// override stays off.
+node planWithOverrideAndProviderOff(): string {
+  const ready: EmbeddingKeyStatus = {
+    state: "ready",
+    override: {
+      model: "mlx-community/Qwen3-Embedding-4B-4bit-DWQ",
+      provider: "mlx"
+    },
+    varName: ""
+  }
+  const none: EmbeddingKeyStatus = {
+    state: "no-override",
+    override: null,
+    varName: ""
+  }
+  const a = memoryEnablePlan(false, "provider", ready)
+  const b = memoryEnablePlan(false, "user-global", ready)
+  const c = memoryEnablePlan(false, "provider", none)
+  const d = memoryEnablePlan(true, "default", ready)
+  return "${a}/${b}/${c}/${d}"
+}
+
+// A catalog name becomes the served repo id, a repo id passes through, a
+// hosted provider and a catalog typo are failures.
+node resolveLocalEmbeddingSpecs(): string {
+  const catalog = resolveLocalEmbedding("mlx/qwen3-embedding-4b-mlx")
+  const raw = resolveLocalEmbedding("mlx/mlx-community/Other-Embedding-4bit")
+  const hosted = resolveLocalEmbedding("openai/text-embedding-3-small")
+  const typo = resolveLocalEmbedding("mlx/qwen3-embeding")
+  const a = if isFailure(catalog) then "ERR" else catalog.value.model
+  const b = if isFailure(raw) then "ERR" else raw.value.model
+  const c = if isFailure(hosted) then "ERR" else "ok"
+  const d = if isFailure(typo) then "ERR" else "ok"
+  return "${a}|${b}|${c}|${d}"
 }

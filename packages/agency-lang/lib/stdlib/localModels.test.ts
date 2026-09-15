@@ -1387,6 +1387,39 @@ describe("_downloadModel for mlx", () => {
   });
 });
 
+describe("companion downloads", () => {
+  const ORPHEUS = "mlx-community/orpheus-3b-0.1-ft-4bit";
+  const SNAC = "mlx-community/snac_24khz";
+  const FILES = [
+    { path: "config.json", bytes: Buffer.from('{"model_type":"llama"}') },
+    { path: "model.safetensors", bytes: Buffer.alloc(1500, 7) },
+  ];
+
+  it("downloads each companion after the model, by catalog name or by URI", async () => {
+    const hub = await startFakeHub([ORPHEUS, SNAC], FILES);
+    try {
+      const opts = { hubUrl: hub.baseUrl, allowHttp: true, chunkBytes: 1000, retryDelayMs: 1 };
+      const out = await _downloadModel("orpheus-3b-mlx", dir, opts);
+      expect(out).toBe(path.join(dir, "mlx", "mlx-community--orpheus-3b-0.1-ft-4bit"));
+      const snac = path.join(dir, "mlx", "mlx-community--snac_24khz");
+      expect(isMlxModelComplete(readMlxModelRecord(snac)!)).toBe(true);
+
+      // Every range was fetched once, so a second run fetches nothing.
+      const before = { ...hub.rangeHits };
+      await _downloadModel("orpheus-3b-mlx", dir, opts);
+      expect(hub.rangeHits).toEqual(before);
+
+      // The URI the catalog entry points at pulls the companion too, or
+      // downloading by URI would leave the model unable to start.
+      fs.rmSync(snac, { recursive: true });
+      await _downloadModel(`mlx:${ORPHEUS}`, dir, opts);
+      expect(isMlxModelComplete(readMlxModelRecord(snac)!)).toBe(true);
+    } finally {
+      await hub.close();
+    }
+  });
+});
+
 describe("Hugging Face caches", () => {
   /** A cache folder in the Hub's own layout: files under snapshots/<sha>. */
   function hubModel(

@@ -69,11 +69,15 @@ function treeEntries(files: FakeFile[]): TreeEntry[] {
   return out;
 }
 
+/** One repo id, or several when a test downloads a model and a companion.
+ *  Every repo serves the same files. */
 export function startFakeHub(
-  repo: string,
+  repo: string | string[],
   files: FakeFile[],
   opts: FakeHubOptions = {},
 ): Promise<FakeHub> {
+  const repos = Array.isArray(repo) ? repo : [repo];
+  const repoPattern = `(?:${repos.map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`;
   const sha = opts.sha ?? "7b9321eabb85ce79625cac3f61ea691e4ea984b5";
   const hub: FakeHub = {
     baseUrl: "",
@@ -104,25 +108,26 @@ export function startFakeHub(
     const auth = req.headers.authorization;
     const p = url.pathname;
 
-    if (p === `/api/models/${repo}`) {
+    const model = p.match(new RegExp(`^/api/models/(${repoPattern})$`));
+    if (model !== null) {
       hub.authSeen.api.push(auth ?? "");
-      json(res, 200, { id: repo, sha, gated: opts.gated === true ? "auto" : false });
+      json(res, 200, { id: model[1], sha, gated: opts.gated === true ? "auto" : false });
       return;
     }
-    const revision = p.match(new RegExp(`^/api/models/${repo}/revision/([^/]+)$`));
+    const revision = p.match(new RegExp(`^/api/models/(${repoPattern})/revision/([^/]+)$`));
     if (revision !== null) {
       hub.authSeen.api.push(auth ?? "");
-      if (sha.startsWith(revision[1])) {
-        json(res, 200, { id: repo, sha, gated: opts.gated === true ? "auto" : false });
+      if (sha.startsWith(revision[2])) {
+        json(res, 200, { id: revision[1], sha, gated: opts.gated === true ? "auto" : false });
       } else {
         json(res, 404, { error: "Revision Not Found" });
       }
       return;
     }
-    const tree = p.match(new RegExp(`^/api/models/${repo}/tree/([^/]+)$`));
+    const tree = p.match(new RegExp(`^/api/models/(${repoPattern})/tree/([^/]+)$`));
     if (tree !== null) {
       hub.authSeen.api.push(auth ?? "");
-      if (!sha.startsWith(tree[1]) && tree[1] !== "main") {
+      if (!sha.startsWith(tree[2]) && tree[2] !== "main") {
         json(res, 404, { error: "Revision Not Found" });
         return;
       }
@@ -138,7 +143,7 @@ export function startFakeHub(
       json(res, 200, page, headers);
       return;
     }
-    const resolve = p.match(new RegExp(`^/${repo}/resolve/([^/]+)/(.+)$`));
+    const resolve = p.match(new RegExp(`^/(${repoPattern})/resolve/([^/]+)/(.+)$`));
     if (resolve !== null) {
       hub.authSeen.resolve.push(auth ?? "");
       if (opts.gated === true && auth === undefined) {
@@ -150,16 +155,16 @@ export function startFakeHub(
         json(res, 403, { error: "forbidden" });
         return;
       }
-      if (byPath[resolve[2]] === undefined) {
+      if (byPath[resolve[3]] === undefined) {
         json(res, 404, { error: "Entry not found" });
         return;
       }
-      if (opts.directBlobs === true && byPath[resolve[2]].length < LFS_THRESHOLD) {
-        serveBytes(hub, req, res, resolve[2], byPath[resolve[2]]);
+      if (opts.directBlobs === true && byPath[resolve[3]].length < LFS_THRESHOLD) {
+        serveBytes(hub, req, res, resolve[3], byPath[resolve[3]]);
         return;
       }
       // Relative hop, as the real Hub does for small files.
-      res.writeHead(302, { location: `/cache/${resolve[2]}` });
+      res.writeHead(302, { location: `/cache/${resolve[3]}` });
       res.end();
       return;
     }

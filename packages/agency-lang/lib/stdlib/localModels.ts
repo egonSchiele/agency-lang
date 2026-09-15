@@ -1122,6 +1122,27 @@ export function configuredDownloadConcurrency(): number {
   return n;
 }
 
+/** Download one mlx: repo into the models directory and return the
+ *  directory. */
+async function downloadMlxRepo(
+  target: string,
+  cacheDir: string,
+  opts: DownloadOptions,
+): Promise<string> {
+  const { repo, revision } = parseMlxUri(target);
+  const snapshot = await fetchHubSnapshot(repo, revision, opts);
+  return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), opts);
+}
+
+/** The curated entry a value names, by its catalog name or by the URI it
+ *  resolved to. Undefined for an alias or a URI the catalog does not know. */
+function catalogEntry(value: string, target: string): ModelInfo | undefined {
+  return (
+    CURATED_LOCAL_MODELS[value] ??
+    Object.values(CURATED_LOCAL_MODELS).find((entry) => entry.uri === target)
+  );
+}
+
 /** Download a model and return where it is: the `.gguf` path, or the MLX
  *  model directory. `hubOptions` lets the CLI watch progress and lets tests
  *  point at a fake hub. */
@@ -1135,14 +1156,18 @@ export async function _downloadModel(
     if (isModelDir(model.target)) {
       return path.resolve(model.target);
     }
-    const { repo, revision } = parseMlxUri(model.target);
     const opts: DownloadOptions = {
       concurrency: configuredDownloadConcurrency(),
       ...hubOptions,
       token: hubOptions.token ?? process.env.HF_TOKEN,
     };
-    const snapshot = await fetchHubSnapshot(repo, revision, opts);
-    return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), opts);
+    const dir = await downloadMlxRepo(model.target, cacheDir, opts);
+    // A model that loads other repos by name at runtime needs them on disk
+    // too, or it cannot start offline. Only a catalog entry lists them.
+    for (const companion of catalogEntry(value, model.target)?.companions ?? []) {
+      await downloadMlxRepo(companion, cacheDir, opts);
+    }
+    return dir;
   }
   requireSupport();
   const target = model.target;
@@ -1181,12 +1206,7 @@ export function _localModelCategory(value: string, file: string = ""): ModelCate
       return entry.category;
     }
   }
-  for (const entry of Object.values(CURATED_LOCAL_MODELS)) {
-    if (entry.uri === value) {
-      return entry.category;
-    }
-  }
-  return undefined;
+  return catalogEntry(value, value)?.category;
 }
 
 /** Convenience: register the provider + ensure the model is downloaded. */

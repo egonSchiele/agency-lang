@@ -1,10 +1,12 @@
 /**
- * The root policy and budget a CLI command carries to the Agency program it
- * spawns, as env vars the runtime reads (`installRunPolicyHandler`,
- * `rootBudget`). Always cleared first: a child's behavior comes from this
- * invocation's flags, never from a parent shell or an outer run.
+ * The root policy, budget, resume request, and entry node a CLI command
+ * carries to the Agency program it spawns, as env vars the runtime reads
+ * (`installRunPolicyHandler`, `rootBudget`, `runCliEntry`). Always cleared
+ * first: a child's behavior comes from this invocation's flags, never from a
+ * parent shell or an outer run.
  */
 import {
+  AGENCY_ENTRY_NODE,
   AGENCY_MAX_COST,
   AGENCY_MAX_TIME,
   AGENCY_RUN_POLICY,
@@ -21,6 +23,8 @@ export type RootCarriers = {
   /** `resolveBudget`'s shape: dollars and milliseconds as strings. */
   budget?: { maxCost?: string; maxTime?: string };
   resume?: ResumeCarrier;
+  /** The node to start, from `agency run file.agency:node`. Unset means `main`. */
+  entryNode?: string;
 };
 
 export function withRootCarriers(
@@ -35,6 +39,10 @@ export function withRootCarriers(
   delete out[AGENCY_RESUME_FILE];
   delete out[AGENCY_RESUME_OVERRIDES];
   delete out[AGENCY_RESUME_FORCE];
+  delete out[AGENCY_ENTRY_NODE];
+  if (carriers.entryNode !== undefined) {
+    out[AGENCY_ENTRY_NODE] = carriers.entryNode;
+  }
   if (carriers.policy !== undefined) {
     out[AGENCY_RUN_POLICY] = carriers.policy.policyJson;
     if (carriers.policy.interactive)

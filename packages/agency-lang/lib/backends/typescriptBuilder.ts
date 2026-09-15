@@ -4465,9 +4465,12 @@ export class TypeScriptBuilder {
       );
     }
 
-    if (this.compilationUnit.graphNodes.some((n) => n.nodeName === "main")) {
-      // The direct-run call reserves one slot per declared parameter and puts
-      // initialState after them, in main's hidden OPTIONS argument.
+    if (this.compilationUnit.graphNodes.length > 0) {
+      // One starter per node, so `agency run file.agency:node` can pick any of
+      // them; runCliEntry starts `main` unless the CLI names another.
+      //
+      // Each starter reserves one slot per declared parameter and puts
+      // initialState after them, in the node's hidden OPTIONS argument.
       //
       // The reservation is what matters: initialState used to be the FIRST
       // argument, which was harmless while mains took no parameters (it landed
@@ -4480,12 +4483,16 @@ export class TypeScriptBuilder {
       // program's command line belongs to the program. `agency run` forwards
       // trailing arguments to the child process, where `std::args` reads them;
       // the compiler does not read them on the entry node's behalf.
-      const mainParamCount =
-        this.compilationUnit.graphNodes.find((n) => n.nodeName === "main")?.parameters.length ?? 0;
-      const mainCallArgs = [
-        ...Array.from({ length: mainParamCount }, () => ts.id("undefined")),
-        ts.id("initialState"),
-      ];
+      const entryNodes = Object.fromEntries(
+        this.compilationUnit.graphNodes.map((node) => {
+          const callArgs = [
+            ...node.parameters.map(() => ts.id("undefined")),
+            ts.id("initialState"),
+          ];
+          const name = declaredName(node.nodeName);
+          return [name, ts.arrowFn([], ts.call(ts.id(name), callArgs))];
+        }),
+      );
       result.push(
         ts.if(
           ts.binOp(
@@ -4510,13 +4517,13 @@ export class TypeScriptBuilder {
                   ts.await(
                     ts.call(ts.id("runCliEntry"), [
                       ts.obj({
-                        runMain: ts.arrowFn([], ts.call(ts.id("main"), mainCallArgs)),
+                        nodes: ts.obj(entryNodes),
                         resume: ts.id("__resumeFromCheckpoint"),
                       }),
                     ]),
                   ),
                 ),
-                // Running `main` directly from the CLI: interrupts that no
+                // Running a node directly from the CLI: interrupts that no
                 // handler settled have surfaced to the user. resolveCliInterrupts
                 // is that user endpoint — under a run policy it decides each one
                 // (prompting with --interactive, rejecting otherwise) and resumes

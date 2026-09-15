@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   assertTargetMatchesInputs,
+  parseRunTarget,
   parseTarget,
   resolveEvalRunTarget,
   resolveEvalTarget,
@@ -25,6 +26,13 @@ describe("agent targets", () => {
   it("splits path from node on the last colon", () => {
     expect(parseTarget("a.agency:main")).toEqual({ filename: "a.agency", nodeName: "main" });
     expect(parseTarget("a.agency")).toEqual({ filename: "a.agency", nodeName: "" });
+  });
+
+  it("splits a run target only when the part after the colon is a node name", () => {
+    expect(parseRunTarget("a.agency:list")).toEqual({ filename: "a.agency", nodeName: "list" });
+    expect(parseRunTarget("dir/a.agency")).toEqual({ filename: "dir/a.agency" });
+    expect(parseRunTarget("C:\\agents\\a.agency")).toEqual({ filename: "C:\\agents\\a.agency" });
+    expect(parseRunTarget("a.agency:")).toEqual({ filename: "a.agency:" });
   });
 
   it("resolves file and directory agent targets", () => {

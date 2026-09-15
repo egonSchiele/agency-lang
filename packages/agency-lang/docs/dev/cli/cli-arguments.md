@@ -85,6 +85,25 @@ The same "invisible command" rule covers every `isDefault` command:
 `agency remote projects --host …` answers with the default `list` child's
 flags, and `trace`/`test` default to their `run` subcommands.
 
+## Picking a node: `file.agency:node`
+
+`agency run two-nodes.agency:list` starts the `list` node instead of `main`.
+The colon belongs to the filename token, so it does not move the program
+boundary.
+
+- `parseRunTarget` (`lib/agentTarget.ts`) splits on the last colon, but only
+  when the text after it is a node name. `C:\agents\a.agency` stays whole.
+- The CLI hands the name to the child as `AGENCY_ENTRY_NODE`, through
+  `withRootCarriers` like the policy and budget, so a stale value from a parent
+  shell never leaks in.
+- Every compiled file that has a node gets a direct-run block with one starter
+  per node. `runCliEntry` (`lib/runtime/cliEntry.ts`) starts the named node, or
+  `main` when none is named. An unknown name throws and lists the file's nodes.
+  A file with nodes but no `main` now reports that, where it used to exit
+  silently.
+- A resume ignores the entry node, because the checkpoint already records which
+  node was running.
+
 ## How this is set up
 
 There is no argv rewriting. The boundary and the ownership rule live inside

@@ -531,16 +531,31 @@ describe("function wrapper JS export", () => {
 });
 
 describe("direct-run entry call", () => {
-  it("reserves every main parameter before the direct-run state argument", () => {
+  it("reserves every node parameter before the direct-run state argument", () => {
     const output = generateWithBuilder(`
 node main(first: string, second: string) {
   return first + second
 }
+
+node list() {
+  return "list"
+}
 `);
 
-    expect(output).toContain("runMain: () => main(undefined, undefined, initialState)");
+    expect(output).toContain("main: () => main(undefined, undefined, initialState)");
+    expect(output).toContain("list: () => list(initialState)");
     expect(output).toContain("resume: __resumeFromCheckpoint");
     expect(output).not.toContain("__process.argv[2]");
     expect(output).not.toContain("main() takes");
+  });
+
+  it("emits the direct-run block for a file with nodes but no main", () => {
+    const output = generateWithBuilder(`
+node list() {
+  return "list"
+}
+`);
+
+    expect(output).toContain("list: () => list(initialState)");
   });
 });

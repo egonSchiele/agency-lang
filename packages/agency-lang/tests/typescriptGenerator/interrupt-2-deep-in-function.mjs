@@ -775,5 +775,25 @@ export async function sayHi(name: any, { messages: __invocationMessages, callbac
   });
 }
 export const __sayHiNodeParams = ["name"];
+if (__process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    const initialState = {
+      messages: new ThreadStore(),
+      data: {}
+    };
+    const __result = await runCliEntry({
+      nodes: {
+        sayHi: () => sayHi(undefined, initialState)
+      },
+      resume: __resumeFromCheckpoint
+    });
+    await resolveCliInterrupts(__result, respondToInterrupts)
+  } catch (__error: any) {
+    reportBudgetExceededAndExit(__error)
+    console.error(`
+Agent crashed: ${__error.message}`)
+    throw __error
+  }
+}
 export default graph
 export const __sourceMap = {"interrupt-2-deep-in-function.agency:greet":{"1":{"line":1,"col":2},"2":{"line":2,"col":2}},"interrupt-2-deep-in-function.agency:foo2":{"2":{"line":8,"col":2},"3":{"line":9,"col":2},"4":{"line":10,"col":2}},"interrupt-2-deep-in-function.agency:sayHi":{"1":{"line":14,"col":2},"2":{"line":15,"col":2},"3":{"line":16,"col":2},"4":{"line":17,"col":2},"5":{"line":18,"col":2},"6":{"line":19,"col":2}}};

@@ -587,7 +587,10 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       data: {}
     };
     const __result = await runCliEntry({
-      runMain: () => main(initialState),
+      nodes: {
+        main: () => main(initialState),
+        llmPatch: () => llmPatch(initialState)
+      },
       resume: __resumeFromCheckpoint
     });
     await resolveCliInterrupts(__result, respondToInterrupts)

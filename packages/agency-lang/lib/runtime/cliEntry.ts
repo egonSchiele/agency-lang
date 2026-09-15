@@ -1,13 +1,30 @@
 import { readFileSync } from "node:fs";
-import { AGENCY_RESUME_FILE, AGENCY_RESUME_FORCE, AGENCY_RESUME_OVERRIDES } from "../constants.js";
+import {
+  AGENCY_ENTRY_NODE,
+  AGENCY_RESUME_FILE,
+  AGENCY_RESUME_FORCE,
+  AGENCY_RESUME_OVERRIDES,
+} from "../constants.js";
 import { verifyCheckpointChecksum } from "./checkpointChecksum.js";
 import type { ResumeOverrides } from "./resumeSetup.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 
+const DEFAULT_ENTRY_NODE = "main";
+
 type CliEntryArgs<T> = {
-  runMain: () => Promise<T>;
+  /** One starter per node in the file, keyed by node name. */
+  nodes: Record<string, () => Promise<T>>;
   resume: (checkpoint: Checkpoint, overrides: ResumeOverrides) => Promise<T>;
 };
+
+function startEntryNode<T>(nodes: Record<string, () => Promise<T>>): Promise<T> {
+  const nodeName = process.env[AGENCY_ENTRY_NODE] || DEFAULT_ENTRY_NODE;
+  if (!Object.hasOwn(nodes, nodeName)) {
+    const available = Object.keys(nodes).join(", ");
+    throw new Error(`This file has no node named "${nodeName}". Its nodes are: ${available}`);
+  }
+  return nodes[nodeName]();
+}
 
 function parseOverrides(raw: string | undefined): ResumeOverrides {
   if (!raw) {
@@ -40,7 +57,7 @@ function parseOverrides(raw: string | undefined): ResumeOverrides {
 export async function runCliEntry<T>(args: CliEntryArgs<T>): Promise<T> {
   const filename = process.env[AGENCY_RESUME_FILE];
   if (!filename) {
-    return args.runMain();
+    return startEntryNode(args.nodes);
   }
 
   let raw: unknown;

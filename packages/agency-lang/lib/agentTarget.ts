@@ -29,6 +29,21 @@ export function parseTarget(target: string): {
   return { filename, nodeName };
 }
 
+const NODE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * `agency run`'s input: `path` or `path:node`. It splits only when the text
+ * after the last colon is a node name, so a path that contains a colon, such
+ * as `C:\agents\a.agency`, stays whole.
+ */
+export function parseRunTarget(input: string): { filename: string; nodeName?: string } {
+  const target = parseTarget(input);
+  if (!NODE_NAME.test(target.nodeName)) {
+    return { filename: input };
+  }
+  return target;
+}
+
 /** Resolve a target into the agent file, node (default "main"), and the
  *  display label run results carry. */
 export function resolveEvalRunTarget(target: string): {

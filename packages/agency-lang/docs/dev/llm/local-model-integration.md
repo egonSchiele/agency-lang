@@ -6,8 +6,11 @@ wiring deterministically. The integration suite in
 `tests/integration/local-model/` additionally exercises a **real download +
 real CPU inference** path. It pulls the SmolLM2-135M GGUF from Hugging Face,
 registers the `smoltalk-llama-cpp` provider, and runs a one-shot completion
-(`smoltest.test.ts`). Two more files sit alongside it: `agent-flag.test.ts`
-runs `agency agent --local-model smollm2-135m --print` end to end, and
+(`smoltest.test.ts`). Three more files sit alongside it: `agent-flag.test.ts`
+runs `agency agent --local-model smollm2-135m --print` end to end,
+`embed.test.ts` downloads `nomic-embed-text` and checks that
+smoltalk-llama-cpp's `embed` returns 768-dimensional vectors that rank a
+paraphrase above an unrelated sentence, and
 `catalog-liveness.test.ts` checks that every curated model's Hugging Face URI still resolves, using manifest fetches only and no weight downloads.
 
 ## When it runs
@@ -49,8 +52,10 @@ update **two** values:
    prints. Setting it back to `null` drops the check to format-only (64 hex
    chars) and logs the observed hash, which is a way to recapture a hash you
    do not have — not a resting state to leave it in.
-2. The cache key in `.github/workflows/local-model.yml` (bump the `v1` suffix
-   or change the model identifier in the key).
+2. The cache key in `.github/workflows/local-model.yml`. It names both
+   models (`smollm2-135m` and `nomic-embed-text`) and the plugin version, so
+   changing any of the three, or bumping the `v2` suffix, starts a fresh
+   cache that holds everything the suite downloads.
 
 ## Sandbox vs. real `$HOME`
 
@@ -63,5 +68,6 @@ on warm runs.
 ## Updating the `smoltalk-llama-cpp` pin
 
 Edit `SMOLTALK_LLAMA_CPP_VERSION` in `.github/workflows/local-model.yml`.
-That's the single source of truth. Verify the suite passes against the new
-version before merging.
+That's the single source of truth, and the cache key includes it. Verify
+the suite passes against the new version before merging, and make sure the
+version is published: the workflow installs it from npm.

@@ -45,8 +45,15 @@ export const CALLBACK_PAYLOAD_LIMIT = 1024 * 1024 * 1024; // 1gb
  * excluded by non-existence rather than listed here. See the plan's
  * "Scope & design tradeoffs" section. Exported so the parent-side handler
  * (ipc.ts) rejects the same names — the guard should match its intent even under
- * parent/child version skew. */
-export const NON_FORWARDABLE_CALLBACKS: readonly CallbackName[] = ["onStream", "onOAuthRequired"];
+ * parent/child version skew. onCheckpoint is JSON-safe but must stay local: a
+ * child run inherits the parent's run id, so a forwarded child checkpoint would
+ * look to the parent's host like the parent's own latest state, and resuming
+ * the parent from it would restore the child program's stack. */
+export const NON_FORWARDABLE_CALLBACKS: readonly CallbackName[] = [
+  "onStream",
+  "onOAuthRequired",
+  "onCheckpoint",
+];
 
 /** Forward one lifecycle event to the parent. No-op unless this process is a
  * forked Agency subprocess with a live IPC channel. `maxBytes` is overridable

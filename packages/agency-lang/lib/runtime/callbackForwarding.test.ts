@@ -92,4 +92,12 @@ describe("sendCallbackToParent", () => {
     sendCallbackToParent("onOAuthRequired", { serverName: "s", authUrl: "u" } as any);
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("does not forward onCheckpoint: a child's checkpoint carries the parent's run id but the child's stack", () => {
+    vi.stubEnv("AGENCY_IPC", "1");
+    const send = vi.fn(() => true);
+    process.send = send as any;
+    sendCallbackToParent("onCheckpoint", { runId: "job-1", checkpoint: {} } as any);
+    expect(send).not.toHaveBeenCalled();
+  });
 });

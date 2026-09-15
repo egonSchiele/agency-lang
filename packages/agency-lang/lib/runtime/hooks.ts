@@ -16,7 +16,7 @@ import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
-import type { TraceEvent } from "./trace/types.js";
+import type { CheckpointJSON, TraceEvent } from "./trace/types.js";
 import type { RunNodeResult } from "./types.js";
 
 export type CallbackMap = {
@@ -66,6 +66,11 @@ export type CallbackMap = {
     | { type: "done"; result: PromptResult }
     | { type: "error"; error: any };
   onTrace: TraceEvent;
+  /** One statement checkpoint, fired from `debugStep` whenever a consumer is
+   *  registered. `checkpoint` is the object `Checkpoint.toJSON()` returned,
+   *  not a copy; `{ type: "paused", checkpoint, runId }` resumes through
+   *  `resumeFromCheckpoint`. Never forwarded from a subprocess. */
+  onCheckpoint: { runId: string; checkpoint: CheckpointJSON };
   onOAuthRequired: {
     serverName: string;
     authUrl: string;

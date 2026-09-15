@@ -242,17 +242,22 @@ whether the reply ended, the client went away, or the door itself answered 400,
 404 or 502.
 
 **Readiness.** The server prints nothing when a model has loaded. After
-each start, `waitUntilLoaded` posts a one-token completion to the internal
-port, naming the model directory, and retries every 500 ms while the port
-is closed. A 2xx reply means the model is loaded. Any other status is a
-server that refuses the model, and the wait fails with the status and
-body. If any process started so far exits during the wait, it fails with
-the exit code and every process is killed.
+each start, `waitUntilLoaded` sends one request to the internal port and
+retries every 500 ms while the port is closed. A 2xx reply means the model
+is loaded. Any other status is a server that refuses the model, and the
+wait fails with the status and body. If any process started so far exits
+during the wait, it fails with the exit code and every process is killed.
+
+Which request it sends depends on the kind of process. A chat process gets
+a one-token completion naming the model directory, an embedding process an
+embeddings request, and a speech process `GET /health`.
 
 **Python.** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`,
-then `~/.agency-agent/mlx-env/bin/python`. `serve` runs
-`<python> -c "import mlx_lm"` and, on failure, prints the venv commands for
-the default environment and exits. Agency does not install Python.
+then `~/.agency-agent/mlx-env/bin/python`. `serve` imports the module each
+planned kind needs: `mlx_lm` for a chat or embedding model, `mlx_audio` for
+a speech model. On failure it prints the venv commands for the default
+environment, installing what those kinds need, and exits. Agency does not
+install Python.
 
 **Stopping.** Ctrl-C reaches the children before `serve`, since they share
 its process group, so a child's exit can arrive before the signal handler
@@ -297,6 +302,18 @@ memory on even though the `mlx` capability profile has it off: in
 override, and a user-level off wins. The resolved capability then reads
 `memory: true` from the source `embedding-override`, which `/settings`
 shows.
+
+## Speech
+
+`--speech` starts a speech model with `lib/cli/mlxSpeechServer.py`, which
+answers `POST /v1/audio/speech`:
+
+    agency local serve --speech qwen3-tts-mlx
+
+The catalog guard and the picker treat the `speech` category the way they
+treat `embedding`. A speech process needs `mlx_audio` rather than `mlx_lm`,
+and it speaks once before opening its port, so readiness only probes
+`GET /health`. See `local-speech.md` for the script and its request rules.
 
 ## `remove` and `-f`
 

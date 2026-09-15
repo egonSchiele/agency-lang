@@ -681,6 +681,7 @@ const CATALOG_CATEGORIES = [
   "science",
   "uncensored",
   "embedding",
+  "speech",
 ] as const;
 
 /** Bound on how long the default fetcher will wait for the remote catalog

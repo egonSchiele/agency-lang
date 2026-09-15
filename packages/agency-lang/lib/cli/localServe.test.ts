@@ -17,6 +17,7 @@ import {
   runServe,
   serveChoices,
   embedServeArgs,
+  speechServeArgs,
   pickModelsToServe,
   type ServeDeps,
   type Child,
@@ -57,6 +58,20 @@ describe("embedServeArgs", () => {
       "8082",
       "--max-length",
       "8192",
+    ]);
+  });
+});
+
+describe("speechServeArgs", () => {
+  it("builds the speech server command line", () => {
+    expect(speechServeArgs("/x/mlxSpeechServer.py", "/m/dir", 9002)).toEqual([
+      "/x/mlxSpeechServer.py",
+      "--model",
+      "/m/dir",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9002",
     ]);
   });
 });
@@ -118,6 +133,20 @@ describe("messages", () => {
     expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/python does not exist.");
     expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
   });
+
+  it("pythonMissingMessage shows the pip line for a Python without mlx-audio", () => {
+    const msg = pythonMissingMessage("/py/bin/python", "/home/me", "no-mlx-audio");
+    expect(msg).toContain("/py/bin/python cannot import mlx_audio.");
+    expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install mlx-audio==0.5.4");
+  });
+
+  it("pythonMissingMessage installs what the planned kinds need", () => {
+    const msg = pythonMissingMessage("/py/bin/python", "/home/me", "missing", [
+      "mlx_lm",
+      "mlx_audio",
+    ]);
+    expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install mlx-lm mlx-audio==0.5.4");
+  });
 });
 
 describe("waitUntilLoaded", () => {
@@ -149,6 +178,16 @@ describe("waitUntilLoaded", () => {
         body: { model: "/m/emb", input: "hi" },
       },
     ]);
+  });
+
+  it("probes a speech process with GET /health, since it speaks once before opening its port", async () => {
+    const seen: { url: string; method: string | undefined }[] = [];
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      seen.push({ url, method: init.method });
+      return new Response('{"status":"ok"}', { status: 200 });
+    }) as unknown as typeof fetch;
+    await waitUntilLoaded(9002, "/m/dir", { fetch: fetchFn, kind: "speech" });
+    expect(seen).toEqual([{ url: "http://127.0.0.1:9002/health", method: "GET" }]);
   });
 
   it("retries while the port is not open yet, then resolves", async () => {
@@ -218,6 +257,17 @@ describe("checkPython", () => {
   it("reports a Python that does not exist", () => {
     expect(checkPython("/no/such/python")).toBe("missing");
   });
+
+  it("checks each module it is asked for, and names the first that fails", () => {
+    const asked: string[] = [];
+    const exec = (_cmd: string, args: string[]) => {
+      asked.push(args[1]);
+      return { status: args[1] === "import mlx_audio" ? 1 : 0 };
+    };
+    expect(checkPython("py", exec, ["mlx_lm", "mlx_audio"])).toBe("no-mlx-audio");
+    expect(asked).toEqual(["import mlx_lm", "import mlx_audio"]);
+    expect(checkPython("py", exec, ["mlx_lm"])).toBe("ok");
+  });
 });
 
 describe("freePort", () => {
@@ -238,7 +288,12 @@ describe("formatElapsed", () => {
 
 describe("servingBanner", () => {
   it("lists the models and shows the run and agent commands", () => {
-    expect(servingBanner(8080, ["org/a", "/m/dir"], [])).toEqual([
+    expect(
+      servingBanner(8080, [
+        { name: "org/a", kind: "chat" },
+        { name: "/m/dir", kind: "chat" },
+      ]),
+    ).toEqual([
       "Serving 2 models on http://127.0.0.1:8080/v1:",
       "  org/a",
       "  /m/dir",
@@ -246,14 +301,28 @@ describe("servingBanner", () => {
       "  agency run --local mlx:org/a your.agency",
       "  agency agent --local mlx:org/a",
     ]);
-    expect(servingBanner(8080, ["/m/dir"], [])[0]).toBe(
+    const dirOnly = servingBanner(8080, [{ name: "/m/dir", kind: "chat" }]);
+    expect(dirOnly[0]).toBe("Serving 1 model on http://127.0.0.1:8080/v1:");
+    expect(dirOnly[3]).toBe("  agency run --local /m/dir your.agency");
+  });
+
+  it("marks speech models and shows a curl for the first", () => {
+    expect(servingBanner(8080, [{ name: "org/tts", kind: "speech" }])).toEqual([
       "Serving 1 model on http://127.0.0.1:8080/v1:",
-    );
-    expect(servingBanner(8080, ["/m/dir"], [])[3]).toBe("  agency run --local /m/dir your.agency");
+      "  org/tts  (speech)",
+      "",
+      "  Try it:",
+      `    curl -s http://127.0.0.1:8080/v1/audio/speech -H 'content-type: application/json' -d '{"model": "org/tts", "input": "Hello there."}' -o hello.wav`,
+    ]);
   });
 
   it("marks embedding models and shows the memory config for the first", () => {
-    expect(servingBanner(8080, ["org/a"], ["org/emb"])).toEqual([
+    expect(
+      servingBanner(8080, [
+        { name: "org/a", kind: "chat" },
+        { name: "org/emb", kind: "embedding" },
+      ]),
+    ).toEqual([
       "Serving 2 models on http://127.0.0.1:8080/v1:",
       "  org/a",
       "  org/emb  (embeddings)",
@@ -264,7 +333,7 @@ describe("servingBanner", () => {
       "  For memory, set in agency.json:",
       '    "memory": { "dir": ".agency-memory", "embeddings": { "model": "org/emb", "provider": "mlx" } }',
     ]);
-    expect(servingBanner(8080, [], ["org/emb"])).toEqual([
+    expect(servingBanner(8080, [{ name: "org/emb", kind: "embedding" }])).toEqual([
       "Serving 1 model on http://127.0.0.1:8080/v1:",
       "  org/emb  (embeddings)",
       "",
@@ -638,6 +707,73 @@ describe("runServe", () => {
     expect(await handle.failure).toBe("mlx_lm.server for org/a exited with 137.");
     await handle.close();
   });
+
+  it("serves a speech model with the speech server, probed on /health", async () => {
+    const tts = recordedModel("org/tts", true);
+    const probes: string[] = [];
+    const imports: string[] = [];
+    deps.fetch = (async (url: string) => {
+      probes.push(url);
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    deps.exec = (_cmd, args) => {
+      imports.push(args[1]);
+      return { status: 0 };
+    };
+    const handle = await runServe([], { port: 0, speech: ["mlx:org/tts"] }, deps);
+    expect(imports).toEqual(["import mlx_audio"]);
+    expect(spawned.length).toBe(1);
+    expect(spawned[0][1].endsWith("/lib/cli/mlxSpeechServer.py")).toBe(true);
+    expect(spawned[0].slice(2)).toEqual(["--model", tts, "--host", "127.0.0.1", "--port", "9000"]);
+    expect(probes).toEqual(["http://127.0.0.1:9000/health"]);
+    expect(handle.models).toEqual(["org/tts"]);
+    expect(log).toContain("  org/tts  (speech)");
+    await handle.close();
+  });
+
+  it("asks for mlx_lm only when a chat or embedding model is planned", async () => {
+    recordedModel("org/a", true);
+    recordedModel("org/tts", true);
+    const imports: string[] = [];
+    deps.exec = (_cmd, args) => {
+      imports.push(args[1]);
+      return { status: 0 };
+    };
+    const handle = await runServe(["mlx:org/a"], { port: 0, speech: ["mlx:org/tts"] }, deps);
+    expect(imports).toEqual(["import mlx_lm", "import mlx_audio"]);
+    await handle.close();
+  });
+
+  it("refuses a catalog speech model passed without --speech, and a chat model passed with it", async () => {
+    await expect(runServe(["qwen3-tts-mlx"], { port: 0 }, deps)).rejects.toThrow(
+      "qwen3-tts-mlx is a speech model. Serve it with: agency local serve --speech qwen3-tts-mlx",
+    );
+    await expect(runServe([], { port: 0, speech: ["qwen3-coder-next-mlx"] }, deps)).rejects.toThrow(
+      "qwen3-coder-next-mlx is a coding model, not a speech model. Pass it without --speech.",
+    );
+    await expect(runServe([], { port: 0, embedding: ["qwen3-tts-mlx"] }, deps)).rejects.toThrow(
+      "qwen3-tts-mlx is a speech model, not an embedding model. Serve it with: agency local serve --speech qwen3-tts-mlx",
+    );
+    expect(spawned).toEqual([]);
+  });
+
+  it("names the speech server when it exits before it is ready", async () => {
+    recordedModel("org/tts", true);
+    const failing: ServeDeps = {
+      ...deps,
+      spawn: () => {
+        const child = fakeChild();
+        setTimeout(() => child.exit(1), 5);
+        return child;
+      },
+      fetch: (async () => {
+        throw new Error("ECONNREFUSED");
+      }) as unknown as typeof fetch,
+    };
+    await expect(runServe([], { port: 0, speech: ["mlx:org/tts"] }, failing)).rejects.toThrow(
+      "the speech server for org/tts exited with 1 before it was ready.",
+    );
+  });
 });
 
 describe("serveChoices", () => {
@@ -697,6 +833,22 @@ describe("serveChoices", () => {
       },
     ];
     expect(serveChoices(withEmb).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
+  });
+
+  it("leaves out a catalog speech model, which needs --speech", () => {
+    const tts = CURATED_LOCAL_MODELS["qwen3-tts-mlx"].uri.slice("mlx:".length);
+    const withTts = [
+      ...downloaded,
+      {
+        name: tts,
+        path: `/m/mlx/${tts.replace("/", "--")}`,
+        sizeBytes: 3.08e9,
+        backend: "mlx" as const,
+        complete: true,
+        layout: "agency" as const,
+      },
+    ];
+    expect(serveChoices(withTts).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
   });
 
   it("offers one row for a repo that both layouts hold", () => {

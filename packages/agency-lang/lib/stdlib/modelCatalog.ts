@@ -13,7 +13,8 @@ export type ModelCategory =
   | "writing" // prose and fiction
   | "science" // research and science questions
   | "uncensored" // refusals removed
-  | "embedding"; // returns vectors, not text
+  | "embedding" // returns vectors, not text
+  | "speech"; // returns audio, not text
 
 export type ModelInfo = {
   /** Which engine runs the model. Required; must agree with `uri`. */
@@ -437,5 +438,28 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "Returns 2560-dim embeddings. mlx_lm.server has no embeddings route, so serve it with another MLX server.",
+  },
+  // ── Speech ──────────────────────────────────────────────────────────────
+  "qwen3-tts-mlx": {
+    backend: "mlx",
+    uri: "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+    params: "1.7B",
+    sizeBytes: 3080000000,
+    category: "speech",
+    contextWindow: 32768,
+    license: "apache-2.0",
+    description:
+      "Speech in 10 languages with nine preset voices. Takes its emotion as a sentence: instructions.",
+  },
+  "qwen3-tts-design-mlx": {
+    backend: "mlx",
+    uri: "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
+    params: "1.7B",
+    sizeBytes: 3080000000,
+    category: "speech",
+    contextWindow: 32768,
+    license: "apache-2.0",
+    description:
+      "Qwen3-TTS with no preset voices. Describe the voice and the emotion in instructions.",
   },
 };

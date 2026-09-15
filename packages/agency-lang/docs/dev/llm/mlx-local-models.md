@@ -298,6 +298,17 @@ override, and a user-level off wins. The resolved capability then reads
 `memory: true` from the source `embedding-override`, which `/settings`
 shows.
 
+## Speech
+
+`--speech` starts a speech model with `lib/cli/mlxSpeechServer.py`, which
+answers `POST /v1/audio/speech`:
+
+    agency local serve --speech qwen3-tts-mlx
+
+The catalog guard and the picker treat the `speech` category the way they
+treat `embedding`. See `local-speech.md` for the script, its request
+rules, and its readiness check.
+
 ## `remove` and `-f`
 
 `agency local remove <name>` removes the alias and keeps the files. It prints

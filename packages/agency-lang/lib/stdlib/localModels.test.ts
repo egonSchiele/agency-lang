@@ -112,6 +112,17 @@ describe("curated catalog shape", () => {
       "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
     );
   });
+  it("orpheus-3b-mlx is a speech model with the SNAC decoder as its companion", () => {
+    expect(_localModelCategory("orpheus-3b-mlx")).toBe("speech");
+    expect(CURATED_LOCAL_MODELS["orpheus-3b-mlx"].companions).toEqual([
+      "mlx:mlx-community/snac_24khz",
+    ]);
+    for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
+      for (const companion of info.companions ?? []) {
+        expect(companion, `${name}.companions`).toMatch(/^mlx:/);
+      }
+    }
+  });
 });
 
 describe("aliases", () => {

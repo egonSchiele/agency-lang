@@ -716,6 +716,12 @@ const CatalogModelSchema = z
       .transform((s) => s.toLowerCase())
       .optional()
       .catch(undefined),
+    // Repos the model loads by name at runtime. Only mlx: URIs, because
+    // that is what the companion download can fetch.
+    companions: z
+      .array(z.string().refine(isMlxUri, "companion must be an mlx: URI"))
+      .optional()
+      .catch(undefined),
   })
   .refine((m) => !isCatalogUri(m.uri) || m.backend === backendOfTarget(m.uri), {
     message: "backend does not match the uri",

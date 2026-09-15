@@ -48,6 +48,10 @@ export type ModelInfo = {
   /** Pinned content SHA-256 (hex) of the resolved single-file GGUF, used to
    *  verify the download. Absent for sharded models (see issue #348). */
   sha256?: string;
+  /** Other repos this model loads by name at runtime, as mlx: URIs.
+   *  `agency local download` fetches them after the model into the same
+   *  layout. The speech server finds them by repo id. */
+  companions?: string[];
 };
 
 /** Curated short-name → ModelInfo catalog. Permissive licenses only
@@ -440,6 +444,18 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
       "Returns 2560-dim embeddings. mlx_lm.server has no embeddings route, so serve it with another MLX server.",
   },
   // ── Speech ──────────────────────────────────────────────────────────────
+  "orpheus-3b-mlx": {
+    backend: "mlx",
+    uri: "mlx:mlx-community/orpheus-3b-0.1-ft-4bit",
+    params: "3B",
+    sizeBytes: 1885400000,
+    category: "speech",
+    contextWindow: 131072,
+    license: "apache-2.0",
+    companions: ["mlx:mlx-community/snac_24khz"],
+    description:
+      "Expressive English speech. Takes <laugh>, <sigh>, <gasp> and other tags in the text.",
+  },
   "qwen3-tts-mlx": {
     backend: "mlx",
     uri: "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",

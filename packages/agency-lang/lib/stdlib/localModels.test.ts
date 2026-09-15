@@ -81,6 +81,7 @@ describe("curated catalog shape", () => {
       "science",
       "uncensored",
       "embedding",
+      "speech",
     ]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
@@ -100,6 +101,16 @@ describe("curated catalog shape", () => {
   it("smollm2-135m is present (integration suite depends on it)", () => {
     expect(CURATED_LOCAL_MODELS["smollm2-135m"]).toBeDefined();
     expect(CURATED_LOCAL_MODELS["smollm2-135m"].category).toBe("general");
+  });
+  it("the Qwen3-TTS entries are speech models, resolving to their mlx: URIs", () => {
+    expect(_localModelCategory("qwen3-tts-mlx")).toBe("speech");
+    expect(_localModelCategory("qwen3-tts-design-mlx")).toBe("speech");
+    expect(_resolveModel("qwen3-tts-mlx").target).toBe(
+      "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+    );
+    expect(_resolveModel("qwen3-tts-design-mlx").target).toBe(
+      "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
+    );
   });
 });
 

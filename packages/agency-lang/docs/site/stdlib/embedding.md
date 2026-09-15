@@ -85,7 +85,7 @@ embed(
 Turn one piece of text into an embedding vector.
 
   @param text - The text to embed
-  @param model - Embedding model (default: text-embedding-3-small)
+  @param model - Embedding model (default: text-embedding-3-small). For a local provider (mlx, llama-cpp) this may be a catalog name, alias, or path
   @param provider - Override the provider (normally derived from the model name)
   @param dimensions - Shorten the vector to this length, for models that support it (0 means the model's full length)
   @param apiKey - Override the API key
@@ -122,7 +122,7 @@ embedMany(
 Turn a list of texts into embedding vectors in one call, one vector per text in the same order.
 
   @param texts - The texts to embed
-  @param model - Embedding model (default: text-embedding-3-small)
+  @param model - Embedding model (default: text-embedding-3-small). For a local provider (mlx, llama-cpp) this may be a catalog name, alias, or path
   @param provider - Override the provider (normally derived from the model name)
   @param dimensions - Shorten each vector to this length, for models that support it (0 means the model's full length)
   @param apiKey - Override the API key

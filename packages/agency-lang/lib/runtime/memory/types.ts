@@ -96,7 +96,9 @@ export type MemoryConfig = {
      *  semantic recall until a model is named here. */
     model?: string;
     /** Explicit embedding provider for `model`. Derived for hosted providers;
-     *  required for a local one, whose model name implies nothing. */
+     *  required for a local one, whose model name implies nothing. For mlx
+     *  and llama-cpp, `model` may be a catalog name, alias, `.gguf` path, or
+     *  served name; it is never derived. */
     provider?: string;
   };
 };

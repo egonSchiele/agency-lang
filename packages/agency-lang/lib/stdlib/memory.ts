@@ -212,9 +212,21 @@ export async function _forget(query: string): Promise<void> {
  * every path-taking stdlib function.
  */
 export async function _enableMemory(config: MemoryConfig): Promise<void> {
-  const { stack } = getRuntimeContext();
+  const { ctx, stack } = getRuntimeContext();
   if (!stack) return;
   stack.pushMemoryFrame(new MemoryFrame(config));
+  startLocalEmbeddingResolution(ctx, config);
+}
+
+/** A local embedding model may need a download. Start it at enable time
+ *  rather than inside the first recall. */
+function startLocalEmbeddingResolution(
+  ctx: ReturnType<typeof getRuntimeContext>["ctx"],
+  config: MemoryConfig,
+): void {
+  const provider = config.embeddings?.provider ?? "";
+  if (provider !== "mlx" && provider !== "llama-cpp") return;
+  void ctx.getActiveMemoryManager()?.resolveEmbeddingTarget();
 }
 
 /** Pop the top memory frame from the current branch's stateStack.
@@ -238,9 +250,13 @@ export function _disableMemory(): void {
  * because Agency callers need the boolean to decide whether to pop.
  */
 export function _pushMemoryFrame(config: MemoryConfig): boolean {
-  const { stack } = getRuntimeContext();
+  const { ctx, stack } = getRuntimeContext();
   if (!stack) return false;
-  return stack.pushMemoryFrame(new MemoryFrame(config));
+  const pushed = stack.pushMemoryFrame(new MemoryFrame(config));
+  if (pushed) {
+    startLocalEmbeddingResolution(ctx, config);
+  }
+  return pushed;
 }
 
 /** Pop the top memory frame. Counterpart to `_pushMemoryFrame`; the

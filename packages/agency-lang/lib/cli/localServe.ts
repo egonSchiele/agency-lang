@@ -74,18 +74,40 @@ export function embedServeArgs(
   ];
 }
 
-/** The argv for one speech server process, after the Python path. */
-export function speechServeArgs(script: string, modelDir: string, internalPort: number): string[] {
-  return [script, "--model", modelDir, "--host", "127.0.0.1", "--port", String(internalPort)];
+/** The argv for one speech server process, after the Python path. The
+ *  models directory is where the script looks for a companion repo the
+ *  model loads by name, such as Orpheus's SNAC decoder. */
+export function speechServeArgs(
+  script: string,
+  modelDir: string,
+  internalPort: number,
+  modelsDir: string,
+): string[] {
+  return [
+    script,
+    "--model",
+    modelDir,
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(internalPort),
+    "--models-dir",
+    modelsDir,
+  ];
 }
 
 /** The argv for one process, by its kind. */
-function argsFor(model: Planned, internalPort: number, maxTokens: number): string[] {
+function argsFor(
+  model: Planned,
+  internalPort: number,
+  maxTokens: number,
+  modelsDir: string,
+): string[] {
   if (model.kind === "embedding") {
     return embedServeArgs(embedServerScript(), model.dir, internalPort, EMBED_MAX_LENGTH);
   }
   if (model.kind === "speech") {
-    return speechServeArgs(speechServerScript(), model.dir, internalPort);
+    return speechServeArgs(speechServerScript(), model.dir, internalPort, modelsDir);
   }
   return serveArgs(model.dir, internalPort, maxTokens);
 }
@@ -692,7 +714,7 @@ export async function runServe(
   const routes: Route[] = [];
   for (const model of planned) {
     const internalPort = await deps.freePort();
-    const args = argsFor(model, internalPort, maxTokens);
+    const args = argsFor(model, internalPort, maxTokens, deps.cacheDir);
     const child = deps.spawn(python, args);
     children.push(child);
     exits.push(exitOf(child, model.name, model.kind));

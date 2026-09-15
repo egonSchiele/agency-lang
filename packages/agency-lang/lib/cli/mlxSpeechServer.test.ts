@@ -69,7 +69,7 @@ except RequestError as err:
       "custom_voice",
       "voice_design",
       "orpheus",
-      'mlxSpeechServer.py serves Qwen3-TTS (CustomVoice or VoiceDesign) models. This model has model_type "chatterbox".',
+      'mlxSpeechServer.py serves Orpheus and Qwen3-TTS (CustomVoice or VoiceDesign) models. This model has model_type "chatterbox".',
     ]);
   });
 
@@ -89,6 +89,42 @@ except RequestError as err:
 
   it("joins two names without a comma", () => {
     expect(rules(`print(join_names(["serena", "ryan"]))`)).toBe("serena and ryan");
+  });
+
+  it("an Orpheus request gets tara by default, and an unknown voice is refused with the list", () => {
+    const ok = check("orpheus", { input: "<gasp> Wait, you are here?" });
+    expect(JSON.parse(ok)).toEqual({
+      text: "<gasp> Wait, you are here?",
+      voice: "tara",
+      instructions: "",
+      format: "wav",
+    });
+    expect(check("orpheus", { input: "Hi.", voice: "alloy" })).toBe(
+      'ERROR 400 "alloy" is not a voice of this model. Its voices are tara, leah, jess, leo, dan, mia, zac, and zoe.',
+    );
+  });
+
+  it("Orpheus refuses instructions and says to use tags instead", () => {
+    expect(check("orpheus", { input: "Hi.", instructions: "Alarmed." })).toBe(
+      "ERROR 400 Orpheus does not take instructions. Put emotion tags in the text instead: <laugh>, <chuckle>, <sigh>, <cough>, <sniffle>, <groan>, <yawn>, or <gasp>.",
+    );
+  });
+
+  it("keeps a tag with its sentence when splitting", () => {
+    const out = rules(`
+import json
+print(json.dumps(split_sentences("<gasp> Stop! Don't touch that. <sigh> Fine.")))
+`);
+    expect(JSON.parse(out)).toEqual(["<gasp> Stop!", "Don't touch that.", "<sigh> Fine."]);
+  });
+
+  it("the Orpheus warm-up asks for no instructions", () => {
+    expect(
+      rules(`
+import json
+print(json.dumps(warm_up_request("orpheus"), sort_keys=True))
+`),
+    ).toBe('{"input": "Ready.", "response_format": "wav"}');
   });
 
   it("a VoiceDesign request needs instructions and takes no voice", () => {

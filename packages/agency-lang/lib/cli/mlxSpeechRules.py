@@ -22,16 +22,37 @@ FORMATS = {
     "pcm": "application/octet-stream",
 }
 
-# What each family takes. One row per family the server can load; Orpheus
-# is recognized by family_of so the refusal can name it, but has no row
-# until it is served.
+# From the Orpheus model card. The model needs a voice; tara is the card's
+# first.
+ORPHEUS_VOICES = ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe"]
+
+# Performed, not read out loud. They go in the text.
+ORPHEUS_TAGS = [
+    "<laugh>",
+    "<chuckle>",
+    "<sigh>",
+    "<cough>",
+    "<sniffle>",
+    "<groan>",
+    "<yawn>",
+    "<gasp>",
+]
+
+# Orpheus generates about 137.5 audio tokens per second of speech
+# (llama.py:394). 8000 is about 58 seconds: more than any one sentence.
+# mlx-audio's default, 1200, cuts a sentence off after 8.7 seconds with no
+# error.
+ORPHEUS_MAX_TOKENS = 8000
+
+# What each family takes. One row per family the server can load.
 #
 #   label         how the family is named in a message
 #   voices        MODEL_VOICES: the loaded model lists them;
 #                 a list: fixed; None: the family has no preset voices
 #   default_voice used when the request names none; the first voice when
 #                 this one is missing
-#   instructions  "optional" or "required"
+#   instructions  "optional", "required", or "refused"
+#   instructions_refused  the message for a refused instructions field
 #   max_tokens    audio tokens per sentence before generation stops
 MODEL_VOICES = "model"
 
@@ -41,6 +62,7 @@ FAMILIES = {
         "voices": MODEL_VOICES,
         "default_voice": "ryan",
         "instructions": "optional",
+        "instructions_refused": "",
         # Qwen3-TTS's default: 4096 at 12 tokens a second, about five
         # minutes. No sentence reaches it.
         "max_tokens": 4096,
@@ -50,13 +72,24 @@ FAMILIES = {
         "voices": None,
         "default_voice": "",
         "instructions": "required",
+        "instructions_refused": "",
         "max_tokens": 4096,
     },
+    "orpheus": {
+        "label": "This Orpheus model",
+        "voices": ORPHEUS_VOICES,
+        "default_voice": "tara",
+        "instructions": "refused",
+        "instructions_refused": (
+            "Orpheus does not take instructions. Put emotion tags in the text instead: "
+            + ", ".join(ORPHEUS_TAGS[:-1])
+            + ", or "
+            + ORPHEUS_TAGS[-1]
+            + "."
+        ),
+        "max_tokens": ORPHEUS_MAX_TOKENS,
+    },
 }
-
-# How a family recognized by family_of but not served yet is named in the
-# refusal.
-UNSERVED_FAMILIES = {"orpheus": "an Orpheus model"}
 
 # What the server says to itself once, before it opens its port, and how a
 # family that needs instructions is told to say it.
@@ -92,7 +125,7 @@ def family_of(config):
     if model_type == "llama":
         return "orpheus"
     raise RequestError(
-        "mlxSpeechServer.py serves Qwen3-TTS (CustomVoice or VoiceDesign) models. "
+        "mlxSpeechServer.py serves Orpheus and Qwen3-TTS (CustomVoice or VoiceDesign) models. "
         f'This model has model_type "{model_type}".'
     )
 
@@ -176,6 +209,8 @@ def _instructions_of(rules, instructions):
             f"{rules['label']} needs instructions describing the voice, "
             'such as "A deep, slow voice."'
         )
+    if rules["instructions"] == "refused" and instructions != "":
+        raise RequestError(rules["instructions_refused"])
     return instructions
 
 

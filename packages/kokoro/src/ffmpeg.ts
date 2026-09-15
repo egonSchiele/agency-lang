@@ -1,9 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { remove, root, stat } from "agency-lang/stdlib-lib/contained.js";
+import { readBytes, remove, root, stat } from "agency-lang/stdlib-lib/contained.js";
 import { throwAbortReason } from "agency-lang/stdlib-lib/speech.js";
 import type { AudioFormat } from "./audioFormat.js";
 
@@ -37,7 +36,7 @@ function installHint(): string {
  *  any interrupt, so nobody approves a file that cannot be written. */
 export function assertFfmpegAvailable(): void {
   const probe = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
-  if (probe.error !== undefined) {
+  if (probe.error !== undefined || probe.status !== 0) {
     throw new FfmpegError(
       `ffmpeg is needed to write mp3 and m4a files, and it is not on PATH. ${installHint()}. ` +
         `Or choose the wav format.`,
@@ -67,7 +66,8 @@ export function buildEncodeArgs(format: EncodedFormat, outputFile: string): stri
 }
 
 /** The bytes of `wav` encoded as `format`. ffmpeg writes a temp file,
- *  because the m4a container needs a seekable output. The temp file is
+ *  because the m4a container needs a seekable output. The file is read
+ *  back through the contained helpers, which refuse a symlink, and it is
  *  removed whether or not encoding succeeds. */
 export async function encodeWithFfmpeg(
   wav: Uint8Array,
@@ -79,7 +79,7 @@ export async function encodeWithFfmpeg(
   const outputFile = path.join(tmp.real, name);
   try {
     await runFfmpeg(buildEncodeArgs(format, outputFile), wav, signal);
-    return new Uint8Array(await fs.readFile(outputFile));
+    return new Uint8Array(readBytes(tmp, name));
   } finally {
     if (stat(tmp, name) !== null) {
       remove(tmp, name);

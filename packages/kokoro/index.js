@@ -95,7 +95,7 @@ const __globalCtx = new RuntimeContext({
   dirname: __dirname,
   logLevel: "info",
   traceConfig: {
-    program: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
+    program: "index.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -157,7 +157,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", "470399f2a22ed8d7b2eb55b68cf9d0bc1300c2a288f1080a9a2b780fa97b28d3", import.meta.url);
+__registerModuleFingerprint("index.agency", "61136e9d6df39d235bc6f06d26be91a6321672ffce3de91a997c08706ea61e35", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -190,15 +190,15 @@ __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
 async function __initializeGlobals(__ctx) {
-  if (__ctx.globals.isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
+  if (__ctx.globals.isInitialized("index.agency")) {
     return;
   }
-  __ctx.globals.markInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
+  __ctx.globals.markInitialized("index.agency");
 }
-__registerGlobalsInit("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __initializeGlobals);
+__registerGlobalsInit("index.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
 }
-__registerCallbacksInit("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __registerTopLevelCallbacks);
+__registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 const Voice = z.object({ "id": z.string(), "name": z.string(), "language": z.string(), "gender": z.string(), "grade": z.string() });
 async function __realOutput_impl(outputFile) {
@@ -209,14 +209,14 @@ async function __realOutput_impl(outputFile) {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "realOutput", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
-  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
+  claimFrameForScope(__stack, "realOutput", "index.agency");
+  if (!__globals().isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
   __stack.args["outputFile"] = outputFile;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "realOutput", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "realOutput", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -241,7 +241,7 @@ async function __realOutput_impl(outputFile) {
             args: {
               outputFile
             },
-            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
+            moduleId: "index.agency"
           }
         });
       });
@@ -353,7 +353,7 @@ async function __realOutput_impl(outputFile) {
 }
 const realOutput = __AgencyFunction.create({
   name: "realOutput",
-  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
+  module: "index.agency",
   fn: __realOutput_impl,
   params: [{
     name: "outputFile",
@@ -378,8 +378,8 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "speak", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
-  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
+  claimFrameForScope(__stack, "speak", "index.agency");
+  if (!__globals().isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -392,7 +392,7 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
   __stack.args["format"] = format === __UNSET ? `` : format;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "speak", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "speak", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -452,7 +452,7 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
               format,
               modelsDir
             },
-            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
+            moduleId: "index.agency"
           }
         });
       });
@@ -504,14 +504,14 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
                   "sizeBytes": __stack.locals.status.sizeBytes,
                   "source": __stack.locals.status.source,
                   "dir": __stack.locals.status.dir
-                }, "./../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __ctx, __stateStack());
+                }, "./index.agency", __ctx, __stateStack());
                 if (isRejected(__handlerResult)) {
                   runner3.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
                   return;
                 }
                 if (!isApproved(__handlerResult)) {
                   __self.__interruptId_3_0 = __handlerResult[0].interruptId;
-                  const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "speak", stepPath: "3.0" });
+                  const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "3.0" });
                   __handlerResult[0].checkpointId = __checkpointId;
                   __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
                   runner3.halt(__handlerResult);
@@ -566,14 +566,14 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
             "voice": __stack.args.voice,
             "outputFile": __stack.locals.out,
             "format": __stack.locals.audioFormat
-          }, "./../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __ctx, __stateStack());
+          }, "./index.agency", __ctx, __stateStack());
           if (isRejected(__handlerResult)) {
             runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_5 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "speak", stepPath: "5" });
+            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "5" });
             __handlerResult[0].checkpointId = __checkpointId;
             __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
@@ -636,7 +636,7 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
 }
 const speak = __AgencyFunction.create({
   name: "speak",
-  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
+  module: "index.agency",
   fn: __speak_impl,
   params: [{
     name: "text",
@@ -719,15 +719,15 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "download", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
-  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
+  claimFrameForScope(__stack, "download", "index.agency");
+  if (!__globals().isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
   __stack.args["model"] = model === __UNSET ? `fp32` : model;
   __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "download", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "download", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -757,7 +757,7 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
               model,
               modelsDir
             },
-            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
+            moduleId: "index.agency"
           }
         });
       });
@@ -802,14 +802,14 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
             "sizeBytes": __stack.locals.status.sizeBytes,
             "source": __stack.locals.status.source,
             "dir": __stack.locals.status.dir
-          }, "./../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __ctx, __stateStack());
+          }, "./index.agency", __ctx, __stateStack());
           if (isRejected(__handlerResult)) {
             runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_3 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "download", stepPath: "3" });
+            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "download", stepPath: "3" });
             __handlerResult[0].checkpointId = __checkpointId;
             __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
@@ -884,7 +884,7 @@ async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
 }
 const download = __AgencyFunction.create({
   name: "download",
-  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
+  module: "index.agency",
   fn: __download_impl,
   params: [{
     name: "model",
@@ -919,13 +919,13 @@ async function __voices_impl() {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "voices", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
-  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
+  claimFrameForScope(__stack, "voices", "index.agency");
+  if (!__globals().isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "voices", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "voices", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -944,7 +944,7 @@ async function __voices_impl() {
           data: {
             functionName: "voices",
             args: {},
-            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
+            moduleId: "index.agency"
           }
         });
       });
@@ -1003,7 +1003,7 @@ async function __voices_impl() {
 }
 const voices = __AgencyFunction.create({
   name: "voices",
-  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
+  module: "index.agency",
   fn: __voices_impl,
   params: [],
   toolDefinition: {
@@ -1015,7 +1015,7 @@ const voices = __AgencyFunction.create({
   exported: true
 }, __toolRegistry);
 var stdin_default = graph;
-const __sourceMap = { "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:realOutput": { "1": { "line": 48, "col": 2 }, "2": { "line": 51, "col": 2 }, "3": { "line": 52, "col": 14 }, "4": { "line": 52, "col": 2 }, "5": { "line": 55, "col": 2 }, "1.0": { "line": 49, "col": 4 }, "4.0": { "line": 52, "col": 2 }, "4.1": { "line": 53, "col": 4 } }, "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:speak": { "1": { "line": 91, "col": 2 }, "2": { "line": 92, "col": 2 }, "3": { "line": 93, "col": 2 }, "4": { "line": 102, "col": 2 }, "5": { "line": 103, "col": 2 }, "6": { "line": 109, "col": 2 }, "3.0": { "line": 94, "col": 4 }, "3.1": { "line": 100, "col": 4 } }, "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:download": { "1": { "line": 124, "col": 2 }, "2": { "line": 125, "col": 2 }, "3": { "line": 128, "col": 2 }, "4": { "line": 134, "col": 2 }, "5": { "line": 135, "col": 2 }, "2.0": { "line": 126, "col": 4 } }, "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:voices": { "1": { "line": 143, "col": 2 } } };
+const __sourceMap = { "index.agency:realOutput": { "1": { "line": 48, "col": 2 }, "2": { "line": 51, "col": 2 }, "3": { "line": 52, "col": 14 }, "4": { "line": 52, "col": 2 }, "5": { "line": 55, "col": 2 }, "1.0": { "line": 49, "col": 4 }, "4.0": { "line": 52, "col": 2 }, "4.1": { "line": 53, "col": 4 } }, "index.agency:speak": { "1": { "line": 91, "col": 2 }, "2": { "line": 92, "col": 2 }, "3": { "line": 93, "col": 2 }, "4": { "line": 102, "col": 2 }, "5": { "line": 103, "col": 2 }, "6": { "line": 109, "col": 2 }, "3.0": { "line": 94, "col": 4 }, "3.1": { "line": 100, "col": 4 } }, "index.agency:download": { "1": { "line": 124, "col": 2 }, "2": { "line": 125, "col": 2 }, "3": { "line": 128, "col": 2 }, "4": { "line": 134, "col": 2 }, "5": { "line": 135, "col": 2 }, "2.0": { "line": 126, "col": 4 } }, "index.agency:voices": { "1": { "line": 143, "col": 2 } } };
 export {
   __getCheckpoints,
   __invokeFunction,

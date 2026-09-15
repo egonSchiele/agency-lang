@@ -27,7 +27,7 @@ The code map, and the things that are easy to break.
 
 `speak` then raises `kokoro::speak`, whose payload names the real output path and the format. `_speak` checks that path again with `outputPath` and `pathExists` from `agency-lang/stdlib-lib/speech.js`. Those two refuse a symlink that appeared while the prompt was open.
 
-`download` raises `kokoro::download` the same way and returns at once when the model is installed. Both interrupts carry `dir`, the model's directory, because `modelsDir` is a tool argument a model can set. A handler that wants downloads kept under one root can check that field.
+`download` raises `kokoro::download` the same way and returns at once when the model is installed. That interrupt carries `dir`, the model's directory, because `modelsDir` is a tool argument a model can set. A handler that wants downloads kept under one root can check that field.
 
 ## Output formats
 
@@ -73,10 +73,12 @@ The package imports `env` from `@huggingface/transformers` directly, because kok
 | `ffmpeg`, and the format cases in `speak` | ffmpeg on the PATH. They are skipped without it |
 | `kokoroModel` | kokoro-js installed. No model |
 | `speak` | A fake `KokoroTTS`. No model |
-| `reject` | `make`, because it runs `tests/agency/reject.agency` with the agency CLI |
+| `reject`, `download` | `make`, because they run the programs in `tests/agency/` with the agency CLI |
 | `integration` | `AGENCY_RUN_SLOW=1` and the `fp32` model, from `agency-kokoro pull fp32` |
 
 Tests delete temp directories only through `tests/tempDir.ts`, which refuses anything not directly under the temp directory.
+
+The `reject` and `download` tests run Agency programs that import `../../index.agency`, and the CLI recompiles that import into `index.js` with module ids relative to the test's temp working directory. After running them, regenerate the committed file from the package directory with `pnpm run build` before committing, or `index.js` carries a path from your machine.
 
 ## Updating kokoro-js
 

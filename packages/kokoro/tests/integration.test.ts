@@ -34,6 +34,8 @@ describe.skipIf(!process.env.AGENCY_RUN_SLOW)("kokoro with the real model", () =
     model: "fp32",
     speed: 1,
     allowedPaths: [],
+    format: "wav",
+    modelsDir: resolveModelsDir(null),
   });
 
   beforeAll(() => {

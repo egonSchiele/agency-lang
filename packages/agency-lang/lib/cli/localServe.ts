@@ -710,7 +710,12 @@ export async function runServe(
       throw err;
     }
     deps.log(`  ready in ${formatElapsed(Date.now() - started)}`);
-    routes.push({ model: model.name, upstreamModel: model.dir, port: internalPort });
+    routes.push({
+      model: model.name,
+      upstreamModel: model.dir,
+      port: internalPort,
+      label: processLabel(model.kind, model.name),
+    });
   }
 
   let door: FrontDoor;

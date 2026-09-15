@@ -8,12 +8,14 @@ import {
   serveLogLines,
   type LogEntry,
   type LogOptions,
+  type Reply,
 } from "./serveLog.js";
 
-/** One mlx_lm.server process: the name requests use for it, the string it
- *  was started with (the request's `model` is rewritten to this, because the
- *  server loads whatever model a request names), and its port. */
-export type Route = { model: string; upstreamModel: string; port: number };
+/** One process behind the door: the name requests use for it, the string it
+ *  was started with (the request's `model` is rewritten to this, because
+ *  mlx_lm.server loads whatever model a request names), its port, and how
+ *  it is named in a message. */
+export type Route = { model: string; upstreamModel: string; port: number; label: string };
 
 export type FrontDoor = { port: number; close: () => Promise<void> };
 
@@ -49,8 +51,19 @@ function forwardHeaders(
 }
 
 /** What the door does with one request once it knows how it ended: the
- *  status, and the reply as it went out. `null` for a reply nobody kept. */
-type Finish = (status: number, body: string, contentType: string | undefined, cut: boolean) => void;
+ *  reply as it went out. */
+type Finish = (reply: Reply) => void;
+
+/** The reply for a JSON body the door wrote itself. */
+function ownReply(status: number, body: string): Reply {
+  return {
+    status,
+    body,
+    contentType: "application/json",
+    truncated: false,
+    totalBytes: Buffer.byteLength(body),
+  };
+}
 
 function forward(
   req: http.IncomingMessage,
@@ -79,15 +92,20 @@ function forward(
         if (!up.complete) {
           res.destroy();
         }
-        const type = up.headers["content-type"];
-        finish(up.statusCode ?? 502, capture.text(), type, capture.truncated || !up.complete);
+        finish({
+          status: up.statusCode ?? 502,
+          body: capture.text(),
+          contentType: up.headers["content-type"],
+          truncated: capture.truncated || !up.complete,
+          totalBytes: capture.total,
+        });
       });
     },
   );
   upstream.on("error", (err) => {
-    const message = `mlx_lm.server for ${route.model}: ${err.message}`;
+    const message = `${route.label}: ${err.message}`;
     error(res, 502, message);
-    finish(502, JSON.stringify({ error: { message } }), "application/json", false);
+    finish(ownReply(502, JSON.stringify({ error: { message } })));
   });
   // The client went away mid-reply: stop the generation instead of letting
   // it run to --max-tokens for nobody.
@@ -144,14 +162,14 @@ function recorder(
       entry.model = typeof body.model === "string" ? body.model : null;
       entry.request = describeRequest(body);
     },
-    finish: (status, replyBody, contentType, cut) => {
+    finish: (reply) => {
       if (written) {
         return;
       }
       written = true;
-      entry.status = status;
+      entry.status = reply.status;
       entry.durationMs = now() - started;
-      entry.reply = describeReply(replyBody, contentType, cut);
+      entry.reply = describeReply(reply);
       for (const line of serveLogLines(entry, logging)) {
         logging.log(line);
       }
@@ -173,12 +191,12 @@ export function startFrontDoor(
     const record = recorder(req, logging);
     const refuse = (status: number, message: string): void => {
       error(res, status, message);
-      record.finish(status, JSON.stringify({ error: { message } }), "application/json", false);
+      record.finish(ownReply(status, JSON.stringify({ error: { message } })));
     };
     if (req.method === "GET" && req.url === "/v1/models") {
       const body = { object: "list", data: served.map((id) => ({ id, object: "model" })) };
       json(res, 200, body);
-      record.finish(200, JSON.stringify(body), "application/json", false);
+      record.finish(ownReply(200, JSON.stringify(body)));
       return;
     }
     const read = await readRequest(req);

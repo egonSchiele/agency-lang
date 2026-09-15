@@ -58,8 +58,18 @@ beforeAll(async () => {
   a = await fakeServer("org/a");
   b = await fakeServer("org/b");
   door = await startFrontDoor(0, [
-    { model: "org/a", upstreamModel: "/models/mlx/org--a", port: a.port },
-    { model: "org/b", upstreamModel: "/models/mlx/org--b", port: b.port },
+    {
+      model: "org/a",
+      upstreamModel: "/models/mlx/org--a",
+      port: a.port,
+      label: "mlx_lm.server for org/a",
+    },
+    {
+      model: "org/b",
+      upstreamModel: "/models/mlx/org--b",
+      port: b.port,
+      label: "mlx_lm.server for org/b",
+    },
   ]);
 });
 
@@ -152,7 +162,7 @@ describe("front door", () => {
   it("close() finishes while a reply is still streaming", async () => {
     const slow = await fakeServer("org/s");
     const other = await startFrontDoor(0, [
-      { model: "org/s", upstreamModel: "/s", port: slow.port },
+      { model: "org/s", upstreamModel: "/s", port: slow.port, label: "mlx_lm.server for org/s" },
     ]);
     const res = await fetch(`http://127.0.0.1:${other.port}/v1/chat/completions`, {
       method: "POST",
@@ -214,7 +224,12 @@ describe("front door", () => {
     const dead = await fakeServer("org/d");
     await new Promise<void>((r) => dead.server.close(() => r()));
     const other = await startFrontDoor(0, [
-      { model: "org/d", upstreamModel: "/d", port: dead.port },
+      {
+        model: "org/d",
+        upstreamModel: "/d",
+        port: dead.port,
+        label: "the speech server for org/d",
+      },
     ]);
     const res = await fetch(`http://127.0.0.1:${other.port}/v1/chat/completions`, {
       method: "POST",
@@ -222,7 +237,7 @@ describe("front door", () => {
       body: JSON.stringify({ model: "org/d" }),
     });
     expect(res.status).toBe(502);
-    expect((await res.json()).error.message).toMatch(/^mlx_lm.server for org\/d: /);
+    expect((await res.json()).error.message).toMatch(/^the speech server for org\/d: /);
     await other.close();
   });
 });
@@ -236,7 +251,7 @@ describe("front door logging", () => {
     const lines: string[] = [];
     const logged = await startFrontDoor(
       0,
-      [{ model: "org/a", upstreamModel: "/a", port: a.port }],
+      [{ model: "org/a", upstreamModel: "/a", port: a.port, label: "mlx_lm.server for org/a" }],
       {
         log: (line) => lines.push(line),
         verbose,
@@ -297,7 +312,7 @@ describe("front door logging", () => {
     const lines: string[] = [];
     const logged = await startFrontDoor(
       0,
-      [{ model: "org/a", upstreamModel: "/a", port: a.port }],
+      [{ model: "org/a", upstreamModel: "/a", port: a.port, label: "mlx_lm.server for org/a" }],
       {
         log: (line) => lines.push(line),
         verbose: true,
@@ -319,7 +334,7 @@ describe("front door logging", () => {
     const lines: string[] = [];
     const logged = await startFrontDoor(
       0,
-      [{ model: "org/a", upstreamModel: "/a", port: a.port }],
+      [{ model: "org/a", upstreamModel: "/a", port: a.port, label: "mlx_lm.server for org/a" }],
       {
         log: (line) => lines.push(line),
         verbose: false,

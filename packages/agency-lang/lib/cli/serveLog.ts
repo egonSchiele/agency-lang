@@ -14,6 +14,9 @@ export type Capture = {
   text: () => string;
   /** True once a chunk arrived that did not fit. */
   truncated: boolean;
+  /** Every byte pushed, whether kept or not. An audio reply is logged by
+   *  this count. */
+  total: number;
 };
 
 /** Collects up to `limit` bytes of a reply as it streams to the client. It
@@ -23,7 +26,9 @@ export function createCapture(limit: number = CAPTURE_LIMIT): Capture {
   let kept = 0;
   const capture: Capture = {
     truncated: false,
+    total: 0,
     push: (chunk) => {
+      capture.total += chunk.length;
       const room = limit - kept;
       if (room <= 0) {
         capture.truncated = true;
@@ -52,6 +57,19 @@ export type ReplySummary = {
   promptTokens?: number;
   completionTokens?: number;
   truncated: boolean;
+  /** Set for an audio reply, whose bytes are never logged: how many there were. */
+  audioBytes?: number;
+};
+
+/** One reply as it went out: the status, the body the capture kept, its
+ *  content type, whether the capture was cut short, and how many bytes
+ *  there were in all. */
+export type Reply = {
+  status: number;
+  body: string;
+  contentType: string | undefined;
+  truncated: boolean;
+  totalBytes: number;
 };
 
 export type LogEntry = {
@@ -127,14 +145,23 @@ function streamedUsage(body: string): Partial<ReplySummary> {
   return usage;
 }
 
+/** Whether a content type is audio, whose bytes do not belong in a terminal.
+ *  The speech server sends raw PCM as application/octet-stream. */
+function isAudio(contentType: string | undefined): boolean {
+  return (
+    contentType !== undefined &&
+    (contentType.startsWith("audio/") || contentType === "application/octet-stream")
+  );
+}
+
 /** One reply, kept whole for the log. A body that is a single JSON object is
  *  indented; a stream of `data:` frames is left exactly as it came, since the
- *  framing is often what you are debugging. */
-export function describeReply(
-  body: string,
-  contentType: string | undefined,
-  truncated: boolean,
-): ReplySummary {
+ *  framing is often what you are debugging. Audio is summarized by its size. */
+export function describeReply(reply: Reply): ReplySummary {
+  const { body, contentType, truncated } = reply;
+  if (isAudio(contentType)) {
+    return { body: "", streamed: false, truncated: false, audioBytes: reply.totalBytes };
+  }
   const streamed = contentType !== undefined && contentType.includes("text/event-stream");
   if (streamed) {
     return { body, streamed, truncated, ...streamedUsage(body) };
@@ -186,6 +213,14 @@ function tokenCounts(reply: ReplySummary | null): string | null {
   return `${reply.promptTokens}→${reply.completionTokens} tok`;
 }
 
+/** The counts after a reply: its audio size, or its token counts. */
+function replyCounts(reply: ReplySummary | null): string | null {
+  if (reply?.audioBytes !== undefined) {
+    return `${reply.audioBytes.toLocaleString("en-US")} bytes of audio`;
+  }
+  return tokenCounts(reply);
+}
+
 /** Every line but the first of a multi-line block gets the same indent, so a
  *  reply with newlines in it still reads as one entry. */
 function block(marker: string, text: string, paint: ColorFunction): string[] {
@@ -204,7 +239,7 @@ export function serveLogLines(entry: LogEntry, options: LogOptions): string[] {
     entry.model === null ? null : paint.cyan(oneLine(entry.model)),
     statusColor(entry.status, paint),
     paint.dim(formatDuration(entry.durationMs)),
-    options.verbose ? null : tokenCounts(entry.reply),
+    options.verbose ? null : replyCounts(entry.reply),
   ];
   const lines = [parts.filter((p) => p !== null).join("  ")];
   if (!options.verbose) {
@@ -223,7 +258,7 @@ export function serveLogLines(entry: LogEntry, options: LogOptions): string[] {
   if (answer !== "") {
     lines.push(...block("←", answer, paint));
   }
-  const counts = tokenCounts(entry.reply);
+  const counts = replyCounts(entry.reply);
   if (counts !== null) {
     lines.push(`  ${paint.dim(counts)}`);
   }

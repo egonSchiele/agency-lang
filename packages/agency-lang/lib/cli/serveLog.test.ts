@@ -6,8 +6,20 @@ import {
   describeRequest,
   serveLogLines,
   type LogEntry,
+  type Reply,
 } from "./serveLog.js";
 import { color, plainColor } from "../utils/termcolors.js";
+
+function reply(over: Partial<Reply> = {}): Reply {
+  return {
+    status: 200,
+    body: "",
+    contentType: "application/json",
+    truncated: false,
+    totalBytes: 0,
+    ...over,
+  };
+}
 
 function entry(over: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -50,7 +62,7 @@ describe("describeReply", () => {
       choices: [{ message: { content: "ok" } }],
       usage: { prompt_tokens: 312, completion_tokens: 180 },
     });
-    const summary = describeReply(body, "application/json", false);
+    const summary = describeReply(reply({ body }));
     expect(summary.promptTokens).toBe(312);
     expect(summary.completionTokens).toBe(180);
     expect(summary.streamed).toBe(false);
@@ -64,7 +76,7 @@ describe("describeReply", () => {
       "data: [DONE]",
       "",
     ].join("\n\n");
-    const summary = describeReply(body, "text/event-stream", false);
+    const summary = describeReply(reply({ body, contentType: "text/event-stream" }));
     expect(summary.body).toBe(body);
     expect(summary.streamed).toBe(true);
     expect(summary.promptTokens).toBe(3);
@@ -72,13 +84,34 @@ describe("describeReply", () => {
   });
 
   it("keeps a body that is not JSON, with no counts", () => {
-    const summary = describeReply("Internal Server Error", "text/plain", false);
+    const summary = describeReply(
+      reply({ body: "Internal Server Error", contentType: "text/plain" }),
+    );
     expect(summary.body).toBe("Internal Server Error");
     expect(summary.promptTokens).toBeUndefined();
   });
 
   it("carries the truncated flag through", () => {
-    expect(describeReply("half a re", "text/plain", true).truncated).toBe(true);
+    expect(
+      describeReply(reply({ body: "half a re", contentType: "text/plain", truncated: true }))
+        .truncated,
+    ).toBe(true);
+  });
+
+  it("summarizes an audio reply by its byte count and keeps its bytes out of the log", () => {
+    const summary = describeReply(
+      reply({ body: "RIFFjunk", contentType: "audio/wav", totalBytes: 318764 }),
+    );
+    expect(summary).toEqual({ body: "", streamed: false, truncated: false, audioBytes: 318764 });
+    const cut = describeReply(
+      reply({
+        body: "x",
+        contentType: "application/octet-stream",
+        truncated: true,
+        totalBytes: 2_000_000,
+      }),
+    );
+    expect(cut.audioBytes).toBe(2_000_000);
   });
 });
 
@@ -97,6 +130,14 @@ describe("createCapture", () => {
     capture.push(Buffer.from("defg"));
     expect(capture.text()).toBe("abcd");
     expect(capture.truncated).toBe(true);
+  });
+
+  it("counts every byte it was given, kept or not", () => {
+    const capture = createCapture(4);
+    capture.push(Buffer.from("abc"));
+    capture.push(Buffer.from("defgh"));
+    expect(capture.total).toBe(8);
+    expect(capture.text()).toBe("abcd");
   });
 });
 
@@ -171,6 +212,22 @@ describe("serveLogLines", () => {
       color: plainColor,
     });
     expect(lines.slice(1)).toEqual(["  ← … (truncated)"]);
+  });
+
+  it("prints the audio size in place of token counts, and no reply block when verbose", () => {
+    const e = entry({
+      path: "/v1/audio/speech",
+      durationMs: 15400,
+      request: '{"input": "hi"}',
+      reply: { body: "", streamed: false, truncated: false, audioBytes: 318764 },
+    });
+    expect(serveLogLines(e, { verbose: false, color: plainColor })).toEqual([
+      "POST /v1/audio/speech  org/a  200  15.4s  318,764 bytes of audio",
+    ]);
+    const verbose = serveLogLines(e, { verbose: true, color: plainColor });
+    expect(verbose[0]).toBe("POST /v1/audio/speech  org/a  200  15.4s");
+    expect(verbose.some((line) => line.includes("←"))).toBe(false);
+    expect(verbose).toContain("  318,764 bytes of audio");
   });
 
   it("colors the status by its class and leaves the text alone", () => {

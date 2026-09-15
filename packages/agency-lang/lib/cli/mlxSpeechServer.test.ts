@@ -152,3 +152,22 @@ print(json.dumps(warm_up_request("voice_design"), sort_keys=True))
     expect(text).toContain(`MLX_AUDIO_VERSION = "${MLX_AUDIO_VERSION}"`);
   });
 });
+
+describe.skipIf(!hasPython3)("mlxSpeechServer.py", () => {
+  it("ships next to localServe", () => {
+    const script = speechServerScript();
+    expect(script.endsWith("/lib/cli/mlxSpeechServer.py")).toBe(true);
+    expect(fs.existsSync(script)).toBe(true);
+  });
+
+  // A syntax check only. Running the server needs MLX, which CI has not.
+  it("is valid Python 3", () => {
+    const run = spawnSync(
+      "python3",
+      ["-c", "import ast, sys; ast.parse(open(sys.argv[1]).read())", speechServerScript()],
+      { stdio: "pipe" },
+    );
+    expect(run.stderr.toString()).toBe("");
+    expect(run.status).toBe(0);
+  });
+});

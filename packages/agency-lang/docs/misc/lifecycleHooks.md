@@ -38,7 +38,9 @@ parent re-fires its own callbacks. Notes:
   so forwarding is heavier than in-process firing.
 - **Not forwarded:** `onStream` (streamed outside the forwarding choke point —
   forwarding it is tracked in #418), `onOAuthRequired` (needs a live bidirectional
-  channel), and `onTrace` (not currently dispatched). All other hooks forward.
+  channel), `onTrace` (not currently dispatched), and `onCheckpoint` (a child's
+  checkpoint carries the parent's run id; see `docs/dev/runtime/callback-hooks.md`).
+  All other hooks forward.
 
 See `docs/dev/runtime/subprocess-ipc.md` (Callback forwarding) for the mechanism.
 

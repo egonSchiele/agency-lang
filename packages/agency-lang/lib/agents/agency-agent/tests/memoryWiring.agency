@@ -217,9 +217,8 @@ node localEmbeddingSlotResolves(): string {
   return "${a}|${b}"
 }
 
-// llama-cpp/<name> parses as a local embedding spec. The download itself
-// is the integration suite's job; here the name exists nowhere, and
-// registerLocalModel's failure is what comes back.
+// llama-cpp/<name> is a local embedding spec; an unknown name is the
+// catalog's failure. The download itself is the integration suite's job.
 node llamaCppEmbeddingSpec(): string {
   const r = resolveLocalEmbedding("llama-cpp/definitely-not-a-model-name")
   if (isFailure(r)) {

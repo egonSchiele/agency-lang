@@ -6,8 +6,7 @@ import * as smoltalk from "smoltalk";
 import { _registerLocalModel } from "../../../lib/stdlib/localModels.js";
 import { safeDeleteDirectoryWithin } from "../../../lib/utils.js";
 
-// The catalog's embedding model, for real: download (verified against the
-// catalog's pinned hash by _registerLocalModel), then vectors from
+// The catalog's embedding model, for real: download, then vectors from
 // smoltalk-llama-cpp's embed. Post-merge only, like smoltest.test.ts.
 const enabled = process.env.AGENCY_LLM_INTEGRATION === "1";
 const EMBED = "nomic-embed-text";

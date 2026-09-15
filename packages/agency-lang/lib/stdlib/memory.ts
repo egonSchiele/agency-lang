@@ -218,9 +218,8 @@ export async function _enableMemory(config: MemoryConfig): Promise<void> {
   startLocalEmbeddingResolution(ctx, config);
 }
 
-/** A local embedding model may need a download. Start it now, so it
- *  happens at startup rather than inside the first recall; the manager
- *  caches the promise and every embed awaits it. */
+/** A local embedding model may need a download. Start it at enable time
+ *  rather than inside the first recall. */
 function startLocalEmbeddingResolution(
   ctx: ReturnType<typeof getRuntimeContext>["ctx"],
   config: MemoryConfig,

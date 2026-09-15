@@ -455,10 +455,8 @@ export class MemoryManager {
     return { model, provider };
   }
 
-  /** The local embedding target, resolved once. Started when memory is
-   *  enabled so a download happens at startup, not inside the first
-   *  recall; every embed awaits the same promise. `null` records a failed
-   *  resolution so it is not retried on every embed. */
+  /** Resolved once; every embed awaits the same promise. `null` is a
+   *  failed resolution, kept so it is not retried on every embed. */
   private _embeddingTarget: Promise<{ model: string; provider?: string } | null> | undefined;
 
   /** resolveEmbedding, with a local model name turned into what smoltalk

@@ -36,6 +36,7 @@ export const VALID_CALLBACK_NAMES = [
   "onToolCallEnd",
   "onStream",
   "onTrace",
+  "onCheckpoint",
   "onOAuthRequired",
   "onEmit",
   "onThreadStart",

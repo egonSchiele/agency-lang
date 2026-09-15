@@ -1,0 +1,7 @@
+{
+  "result": 1,
+  "everyCheckpointOnMain": true,
+  "branchesSawSameCount": true,
+  "afterIsNextStatement": true,
+  "everyCheckpointResumes": true
+}

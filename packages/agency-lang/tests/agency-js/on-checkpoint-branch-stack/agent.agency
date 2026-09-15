@@ -1,0 +1,10 @@
+import { mark } from "./recorder.js"
+
+node main(): number {
+  mark("before")
+  fork([1, 2]) as i {
+    mark("branch")
+  }
+  mark("after")
+  return 1
+}

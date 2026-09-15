@@ -1,0 +1,14 @@
+import { bump, bumpCount } from "./counter.js"
+
+def helper(): number {
+  return 1
+}
+
+node main(): number {
+  callback("onFunctionStart") as data {
+    bump()
+  }
+  let total = 0
+  total = total + helper()
+  return total
+}

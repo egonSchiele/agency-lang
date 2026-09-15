@@ -1,0 +1,11 @@
+{
+  "interrupted": true,
+  "freshReported": true,
+  "everyRunIdMatches": true,
+  "everyCheckpointResumable": true,
+  "resumedInterrupted": true,
+  "bumpsAfterResume": 3,
+  "resumeLegReported": true,
+  "final": 4,
+  "answerLegReported": true
+}

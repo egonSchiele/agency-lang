@@ -106,3 +106,50 @@ loop — `prompt.ts` calls `invokeCallbacks({ ..., stateStack:
 branchStack })` so that scoped callbacks registered inside the
 branch's frame chain are discovered by `gatherCallbacks`. This is
 purely about scope discovery, not interrupt routing.
+
+## `onCheckpoint`: one statement checkpoint per event
+
+A host that runs long jobs needs a checkpoint between yields, so a run
+that dies mid-way can be resumed from its last statement. Without one,
+the host can only go back to the run's last pause or interrupt.
+`onCheckpoint` gives it that through the ordinary callbacks channel. The
+payload is `{ runId, checkpoint }`. The host stores it and later calls
+`resumeFromCheckpoint({ type: "paused", checkpoint, runId }, { metadata: { callbacks } })`.
+
+Where it fires. `debugStep` (`lib/runtime/debugger.ts`) builds a
+`Checkpoint` for every statement the runner reaches, hands it to the
+trace writer, and then fires this hook if `hasCallbackConsumer` says
+anyone is listening. The runner's gate for "take a checkpoint at this
+step" (`recordsStepCheckpoints` in `lib/runtime/runner.ts`) has three
+reasons: a debugger, a trace writer, or an `onCheckpoint` consumer. A
+run with none of the three builds no statement checkpoints, as before.
+
+Only the top-level stack is reported. A statement inside a fork, a
+parallel block, or a tool call runs on a branch stack, and a checkpoint
+taken there cannot be re-entered from outside. This is the rule a pause
+follows (`pause.md`). Such statements report nothing; the next
+top-level statement does.
+
+The payload is plain JSON. It is `Checkpoint.toJSON()` passed through
+`nativeTypeReplacer`, the same encoding a pause result gets, so a scoped
+Agency callback in a frame becomes a function ref rather than a live
+function. A host can `JSON.stringify` it, and `resumeFromCheckpoint`
+revives the refs on the way back.
+
+The checkpoint a pause returns and the checkpoint an interrupt carries
+are not reported here; both already reach the host inside the run's
+result.
+
+Not forwarded from a subprocess. A `std::agency` `run()` child inherits
+its parent's run id. A forwarded child checkpoint would carry the job's
+run id and the child program's stack, and a host that stored it as the
+job's latest state would resume the parent into the wrong program. So
+`onCheckpoint` is on `NON_FORWARDABLE_CALLBACKS`.
+
+Errors. Like every hook, a callback that throws is logged and dropped by
+`fireWithGuard`. The runtime does not know that a host failed to store a
+checkpoint; the host must record that itself.
+
+`onTrace` is a different hook. It is declared with a trace-line payload
+and never dispatched. Wiring it would give a host trace-file lines, not
+a checkpoint.

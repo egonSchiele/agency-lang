@@ -1,8 +1,11 @@
 import type { Interrupt } from "./interrupts.js";
 import { createDebugInterrupt } from "./interrupts.js";
+import { callHook, hasCallbackConsumer } from "./hooks.js";
+import { nativeTypeReplacer } from "./revivers/index.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { SourceLocation } from "./state/sourceLocation.js";
+import type { StateStack } from "./state/stateStack.js";
 
 export async function debugStep(
   ctx: RuntimeContext<any>,
@@ -11,6 +14,7 @@ export async function debugStep(
     nodeContext: boolean;
     isUserAdded: boolean;
   },
+  stack?: StateStack,
 ): Promise<Interrupt[] | undefined> {
   // Global initialization runs outside any graph node, so there's no node
   // context to create checkpoints against. Skip debugging entirely.
@@ -25,6 +29,25 @@ export async function debugStep(
   if (!skipCheckpoint && ctx.stateStack.currentNodeId()) {
     const cp = Checkpoint.fromContext(ctx, info);
     await ctx.writeCheckpointToTraceWriter(cp);
+    // Only a checkpoint on the top-level stack is reported: a branch (fork,
+    // parallel block, tool call) cannot be re-entered from outside, the same
+    // rule a pause follows. The payload goes through nativeTypeReplacer so
+    // a scoped Agency callback becomes a function ref the host can store
+    // and the resume path can revive.
+    if (
+      stack !== undefined &&
+      stack === ctx.stateStack &&
+      hasCallbackConsumer(ctx, "onCheckpoint", stack)
+    ) {
+      await callHook({
+        ctx,
+        name: "onCheckpoint",
+        data: {
+          runId: ctx.getRunId(),
+          checkpoint: JSON.parse(JSON.stringify(cp.toJSON(), nativeTypeReplacer)),
+        },
+      });
+    }
   }
 
   const dbg = ctx.debuggerState;

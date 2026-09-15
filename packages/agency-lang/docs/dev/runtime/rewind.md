@@ -26,12 +26,14 @@ example of exactly this shape.
 
 ## Where checkpoints come from
 
-There is no automatic checkpoint after every LLM call, and no `onCheckpoint`
-callback. A checkpoint reaches you one of three ways:
+There is no automatic checkpoint after every LLM call. A checkpoint reaches
+you one of these ways:
 
 - Agency code calls the `checkpoint()` builtin, which returns a numeric id.
   `getCheckpoint(id)` turns that id back into a `Checkpoint` value the program
   can return. Both live in `lib/runtime/checkpoint.ts`.
+- The `onCheckpoint` callback hands a host every statement checkpoint on
+  the top-level stack as plain JSON. See `callback-hooks.md`.
 - The debugger takes rolling checkpoints. `debugStep`
   (`lib/runtime/debugger.ts`) builds one with `Checkpoint.fromContext` on every
   step, writes it to the trace writer, and hands it to

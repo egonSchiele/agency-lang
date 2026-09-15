@@ -19,7 +19,8 @@ function rules(code: string): string {
       `import sys; sys.path.insert(0, sys.argv[1]); from mlxSpeechRules import *\n${code}`,
       path.dirname(rulesModule),
     ],
-    { stdio: "pipe" },
+    // No __pycache__ next to the source.
+    { stdio: "pipe", env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } },
   );
   expect(run.stderr.toString()).toBe("");
   expect(run.status).toBe(0);

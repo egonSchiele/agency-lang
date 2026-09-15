@@ -220,7 +220,7 @@ export function pythonMissingMessage(
     `  ${pip} install ${modules.map((m) => PIP_FOR_MODULE[m]).join(" ")}`,
     "",
     "Python 3.11 or newer is required. Or point --python at a Python that has",
-    "mlx-lm installed.",
+    `${modules.map((m) => PIP_FOR_MODULE[m]).join(" and ")} installed.`,
   ].join("\n");
 }
 

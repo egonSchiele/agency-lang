@@ -31,12 +31,15 @@ const CUSTOM = { model_type: "qwen3_tts", tts_model_type: "custom_voice" };
 const DESIGN = { model_type: "qwen3_tts", tts_model_type: "voice_design" };
 const SPEAKERS = ["serena", "vivian", "ryan"];
 
-/** Runs check_request and prints either the result or the error message. */
+/** Runs check_request and prints either the result or the error message.
+ *  The body is parsed from JSON in Python, since JSON's true and null are
+ *  not Python's. */
 function check(family: string, body: Record<string, unknown>): string {
   return rules(`
 import json
+body = json.loads(${JSON.stringify(JSON.stringify(body))})
 try:
-    print(json.dumps(check_request(${JSON.stringify(family)}, ${JSON.stringify(SPEAKERS)}, ${JSON.stringify(body)}), sort_keys=True))
+    print(json.dumps(check_request(${JSON.stringify(family)}, ${JSON.stringify(SPEAKERS)}, body), sort_keys=True))
 except RequestError as err:
     print("ERROR", err.status, err)
 `);
@@ -109,7 +112,15 @@ except RequestError as err:
     expect(check("custom_voice", { input: "Hi.", response_format: "mp3" })).toBe(
       'ERROR 400 response_format "mp3" is not supported. Use wav or pcm.',
     );
+    // A list would raise TypeError on the lookup, which the server would
+    // answer as a 500.
+    expect(check("custom_voice", { input: "Hi.", response_format: ["wav"] })).toBe(
+      "ERROR 400 response_format \"['wav']\" is not supported. Use wav or pcm.",
+    );
     expect(check("custom_voice", { input: "Hi.", speed: 1.5 })).toBe(
+      "ERROR 400 Local speech models do not support a speed other than 1.",
+    );
+    expect(check("custom_voice", { input: "Hi.", speed: true })).toBe(
       "ERROR 400 Local speech models do not support a speed other than 1.",
     );
     expect(check("custom_voice", { input: "" })).toBe(

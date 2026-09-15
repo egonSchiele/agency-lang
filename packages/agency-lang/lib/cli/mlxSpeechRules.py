@@ -118,14 +118,23 @@ def _text_of(body):
 
 def _format_of(body):
     fmt = body.get("response_format", "wav")
-    if fmt not in FORMATS:
+    # A list or an object would raise TypeError on the lookup, which the
+    # server would answer as a 500 rather than a refusal.
+    if not isinstance(fmt, str) or fmt not in FORMATS:
         raise RequestError(f'response_format "{fmt}" is not supported. Use wav or pcm.')
     return fmt
 
 
+def _is_one(speed):
+    # Python counts True as 1, and a speed of true is not a speed of 1.
+    if isinstance(speed, bool) or not isinstance(speed, (int, float)):
+        return False
+    return speed == 1
+
+
 def _speed_of(body):
     speed = body.get("speed", 1)
-    if speed not in (1, 1.0, None):
+    if speed is not None and not _is_one(speed):
         raise RequestError("Local speech models do not support a speed other than 1.")
 
 

@@ -9,6 +9,7 @@ import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
 import { runInTestContext } from "../asyncContext.js";
 import { CostGuard, isGuardExceededError } from "../guard.js";
+import { safeDeleteDirectoryWithin } from "../../utils.js";
 import type { GraphState } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -979,7 +980,7 @@ describe("MemoryManager embeddings for local providers", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-local-"));
   });
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    safeDeleteDirectoryWithin(os.tmpdir(), tmpDir);
   });
 
   it("derives nothing for mlx and names the config to set", async () => {

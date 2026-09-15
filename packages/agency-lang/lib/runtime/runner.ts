@@ -5,7 +5,7 @@ import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
 import { HaltSignal } from "./haltSignal.js";
-import { invokeCallbacks, isInsideCallback } from "./hooks.js";
+import { hasCallbackConsumer, invokeCallbacks, isInsideCallback } from "./hooks.js";
 import { hasInterrupts } from "./interrupts.js";
 import { pauseAtStep } from "./pause.js";
 import { __pipeBind } from "./result.js";
@@ -424,7 +424,7 @@ export class Runner {
     label: string | null = null,
     isUserAdded: boolean = false,
   ): Promise<boolean> {
-    if (!this.ctx.hasDebugger() && !this.ctx.hasTraceWriter()) return false;
+    if (!this.recordsStepCheckpoints()) return false;
     if (this.ctx.isInsideToolCall()) return false;
 
     // On resume after a debug pause, skip the hook.
@@ -470,10 +470,22 @@ export class Runner {
 
   /** Clean up the debug flag for a step after it completes without halting. */
   private clearDebugFlag(id: number): void {
-    if (!this.ctx.hasDebugger() && !this.ctx.hasTraceWriter()) {
+    if (!this.recordsStepCheckpoints()) {
       return;
     }
     delete this.frame.locals[this.debugFlagKey(id)];
+  }
+
+  /** Whether this step should build a checkpoint: the debugger wants one, a
+   *  trace sink wants one, or a host or Agency callback registered for
+   *  `onCheckpoint` wants one. `debugHook` and `clearDebugFlag` must agree,
+   *  so both read this. */
+  private recordsStepCheckpoints(): boolean {
+    return (
+      this.ctx.hasDebugger() ||
+      this.ctx.hasTraceWriter() ||
+      hasCallbackConsumer(this.ctx, "onCheckpoint")
+    );
   }
 
   private stepPath(id: number): string {

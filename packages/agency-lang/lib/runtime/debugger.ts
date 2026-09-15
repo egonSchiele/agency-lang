@@ -1,5 +1,6 @@
 import type { Interrupt } from "./interrupts.js";
 import { createDebugInterrupt } from "./interrupts.js";
+import { callHook, hasCallbackConsumer } from "./hooks.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { SourceLocation } from "./state/sourceLocation.js";
@@ -25,6 +26,13 @@ export async function debugStep(
   if (!skipCheckpoint && ctx.stateStack.currentNodeId()) {
     const cp = Checkpoint.fromContext(ctx, info);
     await ctx.writeCheckpointToTraceWriter(cp);
+    if (hasCallbackConsumer(ctx, "onCheckpoint")) {
+      await callHook({
+        ctx,
+        name: "onCheckpoint",
+        data: { runId: ctx.getRunId(), checkpoint: cp.toJSON() },
+      });
+    }
   }
 
   const dbg = ctx.debuggerState;

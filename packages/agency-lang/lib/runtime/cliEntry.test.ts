@@ -26,6 +26,7 @@ afterEach(() => {
   if (originalEntryNode === undefined) delete process.env[AGENCY_ENTRY_NODE];
   else process.env[AGENCY_ENTRY_NODE] = originalEntryNode;
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  vi.restoreAllMocks();
 });
 
 function writeCheckpoint(value: unknown): string {
@@ -37,45 +38,66 @@ function writeCheckpoint(value: unknown): string {
 }
 
 describe("runCliEntry", () => {
-  it("runs main when no resume carrier or entry node exists", async () => {
+  it("starts main when no resume carrier or entry node exists", async () => {
     delete process.env[AGENCY_RESUME_FILE];
     delete process.env[AGENCY_ENTRY_NODE];
-    const main = vi.fn(async () => "fresh");
-    const list = vi.fn(async () => "list");
+    const startNode = vi.fn(async (name: string) => `ran ${name}`);
     const resume = vi.fn();
 
-    await expect(runCliEntry({ nodes: { main, list }, resume })).resolves.toBe("fresh");
-    expect(list).not.toHaveBeenCalled();
+    await expect(runCliEntry({ nodeNames: ["main", "list"], startNode, resume })).resolves.toBe(
+      "ran main",
+    );
     expect(resume).not.toHaveBeenCalled();
   });
 
-  it("runs the node the entry carrier names", async () => {
+  it("starts the node the entry carrier names", async () => {
     delete process.env[AGENCY_RESUME_FILE];
     process.env[AGENCY_ENTRY_NODE] = "list";
-    const main = vi.fn(async () => "main");
-    const list = vi.fn(async () => "list");
+    const startNode = vi.fn(async (name: string) => `ran ${name}`);
 
-    await expect(runCliEntry({ nodes: { main, list }, resume: vi.fn() })).resolves.toBe("list");
-    expect(main).not.toHaveBeenCalled();
+    await expect(
+      runCliEntry({ nodeNames: ["main", "list"], startNode, resume: vi.fn() }),
+    ).resolves.toBe("ran list");
   });
 
-  it("names the file's nodes when the requested node does not exist", async () => {
-    delete process.env[AGENCY_RESUME_FILE];
-    process.env[AGENCY_ENTRY_NODE] = "toString";
-    const nodes = { main: vi.fn(), list: vi.fn() };
+  /** Stand in for process.exit, which would end the test runner. */
+  function trapExit(): { code: number | undefined; stderr: string[] } {
+    const trapped: { code: number | undefined; stderr: string[] } = { code: undefined, stderr: [] };
+    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      trapped.code = code;
+      throw new Error("exit");
+    }) as never);
+    vi.spyOn(console, "error").mockImplementation((line: string) => {
+      trapped.stderr.push(line);
+    });
+    return trapped;
+  }
 
-    await expect(runCliEntry({ nodes, resume: vi.fn() })).rejects.toThrow(
-      'no node named "toString". Its nodes are: main, list',
-    );
+  it("names the file's nodes and exits when the requested node does not exist", async () => {
+    delete process.env[AGENCY_RESUME_FILE];
+    process.env[AGENCY_ENTRY_NODE] = "nope";
+    const startNode = vi.fn();
+    const trapped = trapExit();
+
+    await expect(
+      runCliEntry({ nodeNames: ["main", "list"], startNode, resume: vi.fn() }),
+    ).rejects.toThrow("exit");
+    expect(trapped.code).toBe(2);
+    expect(trapped.stderr).toEqual([
+      'This file has no node named "nope". Its nodes are: main, list',
+    ]);
+    expect(startNode).not.toHaveBeenCalled();
   });
 
   it("refuses to guess when the file has no main and no node was named", async () => {
     delete process.env[AGENCY_RESUME_FILE];
     delete process.env[AGENCY_ENTRY_NODE];
+    const trapped = trapExit();
 
-    await expect(runCliEntry({ nodes: { list: vi.fn() }, resume: vi.fn() })).rejects.toThrow(
-      'no node named "main"',
-    );
+    await expect(
+      runCliEntry({ nodeNames: ["list"], startNode: vi.fn(), resume: vi.fn() }),
+    ).rejects.toThrow("exit");
+    expect(trapped.stderr[0]).toContain('no node named "main"');
   });
 
   it("resumes an unsigned checkpoint when no signing key is configured", async () => {
@@ -83,7 +105,9 @@ describe("runCliEntry", () => {
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(makeCheckpoint().toJSON());
     const resume = vi.fn(async () => "resumed");
 
-    await expect(runCliEntry({ nodes: {}, resume })).resolves.toBe("resumed");
+    await expect(runCliEntry({ nodeNames: [], startNode: vi.fn(), resume })).resolves.toBe(
+      "resumed",
+    );
     expect(resume).toHaveBeenCalledWith(expect.objectContaining({ nodeId: "main" }), {});
   });
 
@@ -93,7 +117,9 @@ describe("runCliEntry", () => {
     signCheckpoint(checkpoint);
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(checkpoint.toJSON());
 
-    await expect(runCliEntry({ nodes: {}, resume: vi.fn(async () => 1) })).resolves.toBe(1);
+    await expect(
+      runCliEntry({ nodeNames: [], startNode: vi.fn(), resume: vi.fn(async () => 1) }),
+    ).resolves.toBe(1);
   });
 
   it("refuses a tampered signed checkpoint", async () => {
@@ -104,7 +130,9 @@ describe("runCliEntry", () => {
     json.nodeId = "tampered";
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(json);
 
-    await expect(runCliEntry({ nodes: {}, resume: vi.fn() })).rejects.toThrow("checksum");
+    await expect(
+      runCliEntry({ nodeNames: [], startNode: vi.fn(), resume: vi.fn() }),
+    ).rejects.toThrow("checksum");
   });
 
   it("allows a tampered signed checkpoint with the force carrier", async () => {
@@ -116,38 +144,44 @@ describe("runCliEntry", () => {
     json.nodeId = "tampered";
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(json);
 
-    await expect(runCliEntry({ nodes: {}, resume: vi.fn(async () => 1) })).resolves.toBe(1);
+    await expect(
+      runCliEntry({ nodeNames: [], startNode: vi.fn(), resume: vi.fn(async () => 1) }),
+    ).resolves.toBe(1);
   });
 
   it("accepts an unsigned checkpoint when a key is configured", async () => {
     process.env.AGENCY_CHECKPOINT_KEY = "a".repeat(32);
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(makeCheckpoint().toJSON());
 
-    await expect(runCliEntry({ nodes: {}, resume: vi.fn(async () => 1) })).resolves.toBe(1);
+    await expect(
+      runCliEntry({ nodeNames: [], startNode: vi.fn(), resume: vi.fn(async () => 1) }),
+    ).resolves.toBe(1);
   });
 
   it("treats an empty signing key as signing disabled", async () => {
     process.env.AGENCY_CHECKPOINT_KEY = "";
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(makeCheckpoint().toJSON());
 
-    await expect(runCliEntry({ nodes: {}, resume: vi.fn(async () => 1) })).resolves.toBe(1);
+    await expect(
+      runCliEntry({ nodeNames: [], startNode: vi.fn(), resume: vi.fn(async () => 1) }),
+    ).resolves.toBe(1);
   });
 
   it("rejects malformed checkpoint JSON", async () => {
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint({ nodeId: "main" });
 
-    await expect(runCliEntry({ nodes: {}, resume: vi.fn() })).rejects.toThrow(
-      "valid Agency checkpoint",
-    );
+    await expect(
+      runCliEntry({ nodeNames: [], startNode: vi.fn(), resume: vi.fn() }),
+    ).rejects.toThrow("valid Agency checkpoint");
   });
 
   it("rejects malformed checkpoint JSON before checking its signature", async () => {
     process.env.AGENCY_CHECKPOINT_KEY = "a".repeat(32);
     process.env[AGENCY_RESUME_FILE] = writeCheckpoint(null);
 
-    await expect(runCliEntry({ nodes: {}, resume: vi.fn() })).rejects.toThrow(
-      "valid Agency checkpoint",
-    );
+    await expect(
+      runCliEntry({ nodeNames: [], startNode: vi.fn(), resume: vi.fn() }),
+    ).rejects.toThrow("valid Agency checkpoint");
   });
 
   it("passes parsed override buckets to resume", async () => {
@@ -159,7 +193,7 @@ describe("runCliEntry", () => {
     });
     const resume = vi.fn(async () => 1);
 
-    await runCliEntry({ nodes: {}, resume });
+    await runCliEntry({ nodeNames: [], startNode: vi.fn(), resume });
 
     expect(resume).toHaveBeenCalledWith(expect.anything(), {
       locals: { mood: "happy" },

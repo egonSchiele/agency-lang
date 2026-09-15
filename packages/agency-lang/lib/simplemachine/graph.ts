@@ -49,6 +49,10 @@ export class SimpleMachine<T> {
     this.nodes[id] = func;
   }
 
+  nodeNames(): string[] {
+    return Object.keys(this.nodes);
+  }
+
   edge(from: string, to: string): void {
     if (!this.edges[from]) {
       this.edges[from] = regularEdge(to);

@@ -531,7 +531,7 @@ describe("function wrapper JS export", () => {
 });
 
 describe("direct-run entry call", () => {
-  it("reserves every node parameter before the direct-run state argument", () => {
+  it("starts the chosen node by name and never reads argv for its parameters", () => {
     const output = generateWithBuilder(`
 node main(first: string, second: string) {
   return first + second
@@ -542,11 +542,10 @@ node list() {
 }
 `);
 
-    expect(output).toContain("main: () => main(undefined, undefined, initialState)");
-    expect(output).toContain("list: () => list(initialState)");
+    expect(output).toContain("nodeNames: graph.nodeNames()");
+    expect(output).toContain("startNode: (nodeName: string) => runNode({");
     expect(output).toContain("resume: __resumeFromCheckpoint");
     expect(output).not.toContain("__process.argv[2]");
-    expect(output).not.toContain("main() takes");
   });
 
   it("emits the direct-run block for a file with nodes but no main", () => {
@@ -556,6 +555,16 @@ node list() {
 }
 `);
 
-    expect(output).toContain("list: () => list(initialState)");
+    expect(output).toContain("nodeNames: graph.nodeNames()");
+  });
+
+  it("emits no direct-run block for a file without nodes", () => {
+    const output = generateWithBuilder(`
+def helper(): string {
+  return "x"
+}
+`);
+
+    expect(output).not.toContain("await runCliEntry(");
   });
 });

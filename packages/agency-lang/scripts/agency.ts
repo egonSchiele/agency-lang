@@ -76,7 +76,7 @@ import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
 import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
-import { parseRunTarget } from "@/agentTarget.js";
+import { parseTarget } from "@/agentTarget.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
@@ -503,7 +503,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
   ).action(async (input: string, nodeArgs: string[], options: RunOptions, command: Command) => {
     const warning = warnMisplacedAgencyFlags(command, input);
     if (warning !== undefined) console.warn(warning);
-    const target = parseRunTarget(input);
+    const target = parseTarget(input);
     if (
       command.invokedAsFallback() &&
       !target.filename.endsWith(".agency") &&
@@ -513,7 +513,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // be; the diagnostic suggests near-miss command names.
       command.unknownFallbackOperand(input);
     }
-    await runWithOptions(target.filename, options, nodeArgs, undefined, target.nodeName);
+    await runWithOptions(
+      target.filename,
+      options,
+      nodeArgs,
+      undefined,
+      target.nodeName || undefined,
+    );
   });
 
   addRunOptions(

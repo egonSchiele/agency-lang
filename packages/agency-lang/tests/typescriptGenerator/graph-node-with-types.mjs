@@ -339,9 +339,14 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       data: {}
     };
     const __result = await runCliEntry({
-      nodes: {
-        greet: () => greet(undefined, initialState)
-      },
+      nodeNames: graph.nodeNames(),
+      startNode: (nodeName: string) => runNode({
+        ctx: __globalCtx,
+        nodeName: nodeName,
+        data: initialState.data,
+        messages: initialState.messages,
+        initializeGlobals: __initializeGlobals
+      }),
       resume: __resumeFromCheckpoint
     });
     await resolveCliInterrupts(__result, respondToInterrupts)

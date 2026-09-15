@@ -4466,32 +4466,25 @@ export class TypeScriptBuilder {
     }
 
     if (this.compilationUnit.graphNodes.length > 0) {
-      // One starter per node, so `agency run file.agency:node` can pick any of
-      // them; runCliEntry starts `main` unless the CLI names another.
+      // The direct-run block starts a node by name through runNode, the same
+      // call every exported node wrapper makes, so `agency run file.agency:node`
+      // can pick any node the graph registered. runCliEntry starts `main`
+      // unless the CLI names another.
       //
-      // Each starter reserves one slot per declared parameter and puts
-      // initialState after them, in the node's hidden OPTIONS argument.
-      //
-      // The reservation is what matters: initialState used to be the FIRST
-      // argument, which was harmless while mains took no parameters (it landed
-      // in the options slot) and wrong once they did (#739) — the state object
-      // arrived as the first parameter's value. `undefined` in each slot keeps
-      // it where it belongs, and JavaScript treats an explicit `undefined` and
-      // an omitted argument alike, so parameter defaults still apply.
-      //
-      // The slots are filled with `undefined` rather than argv because a
-      // program's command line belongs to the program. `agency run` forwards
-      // trailing arguments to the child process, where `std::args` reads them;
-      // the compiler does not read them on the entry node's behalf.
-      const entryNodes = Object.fromEntries(
-        this.compilationUnit.graphNodes.map((node) => {
-          const callArgs = [
-            ...node.parameters.map(() => ts.id("undefined")),
-            ts.id("initialState"),
-          ];
-          const name = declaredName(node.nodeName);
-          return [name, ts.arrowFn([], ts.call(ts.id(name), callArgs))];
-        }),
+      // The node's parameters get no values: a program's command line belongs
+      // to the program. `agency run` forwards trailing arguments to the child
+      // process, where `std::args` reads them.
+      const startNode = ts.arrowFn(
+        [{ name: "nodeName", typeAnnotation: "string" }],
+        ts.call(ts.id("runNode"), [
+          ts.obj({
+            ctx: ts.id("__globalCtx"),
+            nodeName: ts.id("nodeName"),
+            data: $(ts.id("initialState")).prop("data").done(),
+            messages: $(ts.id("initialState")).prop("messages").done(),
+            initializeGlobals: ts.id("__initializeGlobals"),
+          }),
+        ]),
       );
       result.push(
         ts.if(
@@ -4517,7 +4510,8 @@ export class TypeScriptBuilder {
                   ts.await(
                     ts.call(ts.id("runCliEntry"), [
                       ts.obj({
-                        nodes: ts.obj(entryNodes),
+                        nodeNames: ts.call($(ts.id("graph")).prop("nodeNames").done(), []),
+                        startNode,
                         resume: ts.id("__resumeFromCheckpoint"),
                       }),
                     ]),

@@ -16,32 +16,21 @@ import { parseAgency } from "@/parser.js";
  * Consumed by the eval commands, the optimizer, and `agency test`.
  */
 
+const NODE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** Split `path:node` on its last colon, but only when the text after it is a
+ *  node name, so a path with a colon in it (`C:\agents\a.agency`) stays whole.
+ *  `nodeName` is "" when the target names no node. */
 export function parseTarget(target: string): {
   filename: string;
   nodeName: string;
 } {
   const colonIndex = target.lastIndexOf(":");
-  if (colonIndex === -1) {
+  const nodeName = colonIndex === -1 ? "" : target.slice(colonIndex + 1);
+  if (!NODE_NAME.test(nodeName)) {
     return { filename: target, nodeName: "" };
   }
-  const filename = target.slice(0, colonIndex);
-  const nodeName = target.slice(colonIndex + 1);
-  return { filename, nodeName };
-}
-
-const NODE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-/**
- * `agency run`'s input: `path` or `path:node`. It splits only when the text
- * after the last colon is a node name, so a path that contains a colon, such
- * as `C:\agents\a.agency`, stays whole.
- */
-export function parseRunTarget(input: string): { filename: string; nodeName?: string } {
-  const target = parseTarget(input);
-  if (!NODE_NAME.test(target.nodeName)) {
-    return { filename: input };
-  }
-  return target;
+  return { filename: target.slice(0, colonIndex), nodeName };
 }
 
 /** Resolve a target into the agent file, node (default "main"), and the

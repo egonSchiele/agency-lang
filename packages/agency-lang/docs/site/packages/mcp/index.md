@@ -9,7 +9,7 @@ name: "index"
 ### mcp
 
 ```ts
-mcp(serverName: string, onOAuthRequired)
+mcp(serverName: string, onOAuthRequired = null)
 ```
 
 **Parameters:**

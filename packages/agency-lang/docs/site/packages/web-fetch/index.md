@@ -9,7 +9,7 @@ name: "index"
 ### fetchPage
 
 ```ts
-fetchPage(url: string, maxChars: number, timeout: number)
+fetchPage(url: string, maxChars: number = 20000, timeout: number = 15000)
 ```
 
 **Parameters:**

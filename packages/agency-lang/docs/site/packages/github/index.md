@@ -9,7 +9,13 @@ name: "index"
 ### createBranch
 
 ```ts
-createBranch(name: string, from: string, owner: string, repo: string, token: string)
+createBranch(
+  name: string,
+  from: string = "",
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -27,7 +33,12 @@ createBranch(name: string, from: string, owner: string, repo: string, token: str
 ### deleteBranch
 
 ```ts
-deleteBranch(name: string, owner: string, repo: string, token: string)
+deleteBranch(
+  name: string,
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -41,27 +52,17 @@ deleteBranch(name: string, owner: string, repo: string, token: string)
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L25))
 
-### branchExists
-
-```ts
-branchExists(name: string, owner: string, repo: string, token: string)
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| name | `string` |  |
-| owner | `string` | "" |
-| repo | `string` | "" |
-| token | `string` | "" |
-
-([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L30))
-
 ### commitFiles
 
 ```ts
-commitFiles(message: string, files: string[], authorName: string, authorEmail: string, push: boolean, branch: string)
+commitFiles(
+  message: string,
+  files: string[] = [],
+  authorName: string = "",
+  authorEmail: string = "",
+  push: boolean = true,
+  branch: string = "",
+)
 ```
 
 **Parameters:**
@@ -80,7 +81,17 @@ commitFiles(message: string, files: string[], authorName: string, authorEmail: s
 ### openPullRequest
 
 ```ts
-openPullRequest(title: string, body: string, head: string, base: string, draft: boolean, labels: string[], owner: string, repo: string, token: string)
+openPullRequest(
+  title: string,
+  body: string,
+  head: string,
+  base: string = "",
+  draft: boolean = false,
+  labels: string[] = [],
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -99,29 +110,16 @@ openPullRequest(title: string, body: string, head: string, base: string, draft: 
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L47))
 
-### listPullRequests
-
-```ts
-listPullRequests(state: string, base: string, head: string, owner: string, repo: string, token: string)
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| state | `string` | "open" |
-| base | `string` | "" |
-| head | `string` | "" |
-| owner | `string` | "" |
-| repo | `string` | "" |
-| token | `string` | "" |
-
-([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L52))
-
 ### commentOnPullRequest
 
 ```ts
-commentOnPullRequest(number: number, body: string, owner: string, repo: string, token: string)
+commentOnPullRequest(
+  number: number,
+  body: string,
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -139,7 +137,13 @@ commentOnPullRequest(number: number, body: string, owner: string, repo: string, 
 ### addLabel
 
 ```ts
-addLabel(number: number, labels: string[], owner: string, repo: string, token: string)
+addLabel(
+  number: number,
+  labels: string[],
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -157,7 +161,14 @@ addLabel(number: number, labels: string[], owner: string, repo: string, token: s
 ### requestReview
 
 ```ts
-requestReview(number: number, reviewers: string[], teamReviewers: string[], owner: string, repo: string, token: string)
+requestReview(
+  number: number,
+  reviewers: string[] = [],
+  teamReviewers: string[] = [],
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -173,28 +184,16 @@ requestReview(number: number, reviewers: string[], teamReviewers: string[], owne
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L67))
 
-### listIssues
-
-```ts
-listIssues(state: string, labels: string[], owner: string, repo: string, token: string)
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| state | `string` | "open" |
-| labels | `string[]` | [] |
-| owner | `string` | "" |
-| repo | `string` | "" |
-| token | `string` | "" |
-
-([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L72))
-
 ### commentOnIssue
 
 ```ts
-commentOnIssue(number: number, body: string, owner: string, repo: string, token: string)
+commentOnIssue(
+  number: number,
+  body: string,
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -212,7 +211,14 @@ commentOnIssue(number: number, body: string, owner: string, repo: string, token:
 ### createIssue
 
 ```ts
-createIssue(title: string, body: string, labels: string[], owner: string, repo: string, token: string)
+createIssue(
+  title: string,
+  body: string,
+  labels: string[] = [],
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
 ```
 
 **Parameters:**
@@ -227,19 +233,3 @@ createIssue(title: string, body: string, labels: string[], owner: string, repo: 
 | token | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L82))
-
-### defaultBranch
-
-```ts
-defaultBranch(owner: string, repo: string, token: string)
-```
-
-**Parameters:**
-
-| Name | Type | Default |
-|---|---|---|
-| owner | `string` | "" |
-| repo | `string` | "" |
-| token | `string` | "" |
-
-([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L87))

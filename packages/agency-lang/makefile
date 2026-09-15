@@ -145,7 +145,7 @@ diagnostics-docs:
 
 # Documentable packages: each has an index.agency that `agency doc` reads.
 # (brave-search / tui / examples have no library source, so they're skipped.)
-DOC_PACKAGES = web-fetch mcp email github whisper-local
+DOC_PACKAGES = web-fetch mcp email github whisper-local kokoro tesseract-local
 
 packages-doc:
 	@for pkg in $(DOC_PACKAGES); do \

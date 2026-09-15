@@ -9,7 +9,11 @@ name: "index"
 ### transcribe
 
 ```ts
-transcribe(filepath: string, language: string, model: string): string
+transcribe(
+  filepath: string,
+  language: string = "",
+  model: string = "base.en",
+): string
 ```
 
 **Parameters:**

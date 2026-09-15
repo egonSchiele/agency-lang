@@ -36,7 +36,8 @@ export type CapabilitySettings = {
 }
 
 /** Per-field provenance: which layer set each value. One of "default",
-  "provider", "model", "user-global", "user-provider", "user-model".
+  "provider", "model", "user-global", "user-provider", "user-model", and
+  for memory only, "embedding-override" (see withMemoryFromEmbeddingOverride).
   A concrete type (not Record) so the /settings renderer is exhaustive. */
 export type CapabilitySources = {
   prompt: string;
@@ -115,7 +116,9 @@ export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
     memory: false,
     maxTokens: 2000
   },
-  // No embeddings endpoint. The models are large enough for the full prompt.
+  // No embeddings endpoint of its own. Naming an embedding model in the
+  // embedding slot (--model embedding=mlx/<model>) turns memory on; see
+  // memoryEnablePlan. The models are large enough for the full prompt.
   mlx: {
     memory: false
   }
@@ -174,6 +177,15 @@ def applyPatch(
     values: values,
     sources: sources
   }
+}
+
+/** Memory on because the embedding slot names a model, which outranks a
+  provider profile's off (the profile is off only for lack of an embeddings
+  endpoint). Recorded as its own source so /settings can say why. */
+export def withMemoryFromEmbeddingOverride(
+  current: ResolvedCapabilities,
+): ResolvedCapabilities {
+  return applyPatch(current, { memory: true }, "embedding-override")
 }
 
 /** Resolve the capability profile for (modelKey, provider) under the user's

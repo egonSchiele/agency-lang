@@ -262,6 +262,42 @@ makes the command print why, kill the rest, and exit 1. Closing the front
 door closes its open connections too, or a reply still streaming from a
 killed process would keep it from ever closing.
 
+## Embeddings
+
+`mlx_lm.server` has no embeddings route, so `serve` starts a different
+program for an embedding model:
+
+    agency local serve qwen3-coder-next-mlx --embedding qwen3-embedding-4b-mlx
+
+The program is `lib/cli/mlxEmbedServer.py`, shipped next to
+`localServe.js`. It loads the model with `mlx_lm.load` and, for each
+input, runs the inner transformer (`model.model(tokens)`, the final hidden
+states) and takes the last token's vector, L2-normalized: the Qwen3
+Embedding recipe. It answers `POST /v1/embeddings` in the OpenAI shape,
+plus `/v1/models` and `/health`, one request at a time. It binds its port
+only after the model has loaded, because readiness treats a refused
+connection as "still loading" and any reply as "ready". The script uses
+mlx-lm alone; `mlx-embeddings`, the library other MLX servers use, is GPL
+v3, which Agency cannot ship.
+
+`--embedding` is the one way to say a model is an embedding model. The
+catalog category is a guard: a catalog embedding model without the flag,
+or a chat model with it, is refused before anything loads, and the picker
+leaves embedding models out. The front door needs no change, since it
+forwards by the `model` field at whatever path the request used.
+Readiness probes an embedding process with an embeddings request.
+
+Memory never derives an embedding model for a local provider. It needs
+`memory.embeddings` in `agency.json` with the served name and
+`"provider": "mlx"`, or in `agency agent`, `--model embedding=mlx/<name>`
+(on the command line or in `/model`). A catalog name resolves to the
+served name; a repo id passes through. Naming an embedding model turns
+memory on even though the `mlx` capability profile has it off: in
+`memoryEnablePlan`, a provider-level off yields to a ready embedding
+override, and a user-level off wins. The resolved capability then reads
+`memory: true` from the source `embedding-override`, which `/settings`
+shows.
+
 ## `remove` and `-f`
 
 `agency local remove <name>` removes the alias and keeps the files. It prints

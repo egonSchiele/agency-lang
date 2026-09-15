@@ -1,12 +1,14 @@
 import * as path from "node:path";
 import * as net from "node:net";
 import * as os from "node:os";
+import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import prompts from "prompts";
 import { isMlxUri, parseMlxUri, modelDirEntries } from "../stdlib/modelBackend.js";
 import {
   _resolveModel,
   _mlxServedName,
+  _localModelCategory,
   _listDownloadedModels,
   _findDownloadedMlxModel,
   defaultCacheDir,
@@ -19,6 +21,12 @@ import { formatElapsed } from "../eval/run/statusBoard.js";
 import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
 export { formatElapsed };
+
+export type ServeKind = "chat" | "embedding";
+
+/** Inputs an embedding model accepts, in tokens: the Qwen3 Embedding
+ *  card's value. */
+const EMBED_MAX_LENGTH = 8192;
 
 export type ServeOptions = {
   port: number;
@@ -45,8 +53,39 @@ export function serveArgs(modelDir: string, internalPort: number, maxTokens: num
   ];
 }
 
+/** The argv for one embedding server process, after the Python path. */
+export function embedServeArgs(
+  script: string,
+  modelDir: string,
+  internalPort: number,
+  maxLength: number,
+): string[] {
+  return [
+    script,
+    "--model",
+    modelDir,
+    "--host",
+    "127.0.0.1",
+    "--port",
+    String(internalPort),
+    "--max-length",
+    String(maxLength),
+  ];
+}
+
+/** How a process is named in messages: which program, for which model. */
+function processLabel(kind: ServeKind, name: string): string {
+  return kind === "embedding" ? `the embedding server for ${name}` : `mlx_lm.server for ${name}`;
+}
+
 export function defaultMlxEnv(home: string): string {
   return path.join(home, ".agency-agent", "mlx-env");
+}
+
+/** The embedding server shipped next to this file. `make build` copies it
+ *  into dist, so the path holds for a development checkout and an install. */
+export function embedServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxEmbedServer.py");
 }
 
 /** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`, then the
@@ -122,7 +161,26 @@ export type ReadinessOptions = {
   /** Resolves with what happened ("mlx_lm.server for X exited with 1") when
    *  the process exits. Readiness stops waiting and rejects. */
   gone?: Promise<string>;
+  /** An embedding process cannot answer a chat completion, so it is probed
+   *  with an embeddings request instead. Default chat. */
+  kind?: ServeKind;
 };
+
+/** The one-request probe for each kind of process. Both name the model the
+ *  process was started with and ask for as little work as possible. */
+function readinessRequest(kind: ServeKind, upstreamModel: string): { path: string; body: string } {
+  if (kind === "embedding") {
+    return { path: "/v1/embeddings", body: JSON.stringify({ model: upstreamModel, input: "hi" }) };
+  }
+  return {
+    path: "/v1/chat/completions",
+    body: JSON.stringify({
+      model: upstreamModel,
+      messages: [{ role: "user", content: "hi" }],
+      max_tokens: 1,
+    }),
+  };
+}
 
 /** `mlx_lm.server` prints nothing when its model has loaded. The only
  *  readiness signal is a completion request that answers. Send a one-token
@@ -143,18 +201,15 @@ export async function waitUntilLoaded(
       ? new Promise<never>(() => {})
       : options.gone.then((why) => Promise.reject(new Error(`${why} before it was ready.`)));
   goneFails.catch(() => {});
-  const body = JSON.stringify({
-    model: upstreamModel,
-    messages: [{ role: "user", content: "hi" }],
-    max_tokens: 1,
-  });
+  const kind = options.kind ?? "chat";
+  const probe = readinessRequest(kind, upstreamModel);
   const attempt = async (): Promise<"ready" | "retry"> => {
     let res: Response;
     try {
-      res = await fetchFn(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      res = await fetchFn(`http://127.0.0.1:${port}${probe.path}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body,
+        body: probe.body,
       });
     } catch {
       return "retry";
@@ -164,7 +219,7 @@ export async function waitUntilLoaded(
     }
     const text = (await res.text()).slice(0, 500);
     throw new Error(
-      `mlx_lm.server for ${upstreamModel} answered ${res.status} to the readiness request: ${text}`,
+      `${processLabel(kind, upstreamModel)} answered ${res.status} to the readiness request: ${text}`,
     );
   };
   for (;;) {
@@ -213,13 +268,19 @@ export type ServeChoice = { title: string; value: string };
 
 /** The models `serve` can start without downloading anything: the MLX ones
  *  under the models directory whose record says every file is there. A GGUF
- *  model runs in the Agency process instead, so it is never a choice here. */
+ *  model runs in the Agency process instead, so it is never a choice here,
+ *  and an embedding model needs --embedding, which the picker cannot say. */
 export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
   // One row per repo id. The same model can sit in both layouts, and two rows
   // with the same value would let you pick it twice, which `runServe` refuses.
   const byRepo: Record<string, DownloadedModel> = {};
   for (const model of downloaded) {
-    if (model.backend === "mlx" && model.complete && byRepo[model.name] === undefined) {
+    if (
+      model.backend === "mlx" &&
+      model.complete &&
+      byRepo[model.name] === undefined &&
+      _localModelCategory(`mlx:${model.name}`) !== "embedding"
+    ) {
       byRepo[model.name] = model;
     }
   }
@@ -314,6 +375,8 @@ export type ServeFlags = {
    *  spells this `--log-prompts`, since `--verbose` is already the whole
    *  CLI's own flag. */
   logPrompts?: boolean;
+  /** Models to serve with the embedding server rather than mlx_lm.server. */
+  embedding?: string[];
 };
 
 function realSpawn(python: string, args: string[]): Child {
@@ -339,12 +402,32 @@ function realDeps(): ServeDeps {
   };
 }
 
-type Planned = { name: string; dir: string; sizeBytes: number };
+type Planned = { name: string; dir: string; sizeBytes: number; kind: ServeKind };
+
+/** The catalog knows what some models are for. Serving an embedding model
+ *  as a chat model, or the reverse, fails only after a long load, so refuse
+ *  it up front when the catalog can tell, from the name or from what it
+ *  resolves to. */
+function checkKind(value: string, target: string, kind: ServeKind): void {
+  const category = _localModelCategory(value) ?? _localModelCategory(target);
+  if (category === "embedding" && kind === "chat") {
+    throw new Error(
+      `${value} is an embedding model. Serve it with: agency local serve --embedding ${value}`,
+    );
+  }
+  if (category !== undefined && category !== "embedding" && kind === "embedding") {
+    throw new Error(
+      `${value} is a ${category} model, not an embedding model. Pass it without --embedding.`,
+    );
+  }
+}
 
 /** One model to serve: the name requests will use, the directory to start
- *  the process on, and its size for the memory warning. */
-function planModel(value: string, cacheDir: string): Planned {
+ *  the process on, its size for the memory warning, and which program
+ *  serves it. */
+function planModel(value: string, cacheDir: string, kind: ServeKind): Planned {
   const resolved = _resolveModel(value);
+  checkKind(value, resolved.target, kind);
   if (resolved.backend === "llama-cpp") {
     throw new Error(
       `"${value}" is a GGUF model. agency local serve is for MLX models; ` +
@@ -358,7 +441,7 @@ function planModel(value: string, cacheDir: string): Planned {
     // with a record, or a Hugging Face cache someone else downloaded into.
     const found = _findDownloadedMlxModel(repo, cacheDir, revision);
     if (found !== null) {
-      return { name, dir: found.path, sizeBytes: found.sizeBytes };
+      return { name, dir: found.path, sizeBytes: found.sizeBytes, kind };
     }
     const anyRevision = _findDownloadedMlxModel(repo, cacheDir);
     if (anyRevision === null) {
@@ -374,33 +457,44 @@ function planModel(value: string, cacheDir: string): Planned {
   }
   const dir = path.resolve(resolved.target);
   const sizeBytes = modelDirEntries(dir).reduce((sum, f) => sum + f.size, 0);
-  return { name, dir, sizeBytes };
+  return { name, dir, sizeBytes, kind };
 }
 
 /** Resolves with a description once the child exits. */
-function exitOf(child: Child, name: string): Promise<string> {
+function exitOf(child: Child, name: string, kind: ServeKind): Promise<string> {
   return new Promise((resolve) => {
     child.on("exit", (code, signal) => {
       const how = signal !== null ? `was killed by ${signal}` : `exited with ${code}`;
-      resolve(`mlx_lm.server for ${name} ${how}`);
+      resolve(`${processLabel(kind, name)} ${how}`);
     });
   });
 }
 
-export function servingBanner(port: number, models: string[]): string[] {
-  const lines = [
-    `Serving ${models.length} model${models.length === 1 ? "" : "s"} on http://127.0.0.1:${port}/v1:`,
-  ];
-  for (const m of models) {
+export function servingBanner(port: number, chat: string[], embedding: string[]): string[] {
+  const count = chat.length + embedding.length;
+  const lines = [`Serving ${count} model${count === 1 ? "" : "s"} on http://127.0.0.1:${port}/v1:`];
+  for (const m of chat) {
     lines.push(`  ${m}`);
   }
-  const first = models[0];
-  const spelled = path.isAbsolute(first) ? first : `mlx:${first}`;
-  lines.push(
-    "",
-    `  agency run --local ${spelled} your.agency`,
-    `  agency agent --local ${spelled}`,
-  );
+  for (const m of embedding) {
+    lines.push(`  ${m}  (embeddings)`);
+  }
+  if (chat.length > 0) {
+    const first = chat[0];
+    const spelled = path.isAbsolute(first) ? first : `mlx:${first}`;
+    lines.push(
+      "",
+      `  agency run --local ${spelled} your.agency`,
+      `  agency agent --local ${spelled}`,
+    );
+  }
+  if (embedding.length > 0) {
+    lines.push(
+      "",
+      "  For memory, set in agency.json:",
+      `    "memory": { "dir": ".agency-memory", "embeddings": { "model": "${embedding[0]}", "provider": "mlx" } }`,
+    );
+  }
   return lines;
 }
 
@@ -411,7 +505,13 @@ export async function runServe(
 ): Promise<ServeHandle> {
   const port = flags.port ?? 8080;
   const maxTokens = flags.maxTokens ?? 16384;
-  const planned = values.map((v) => planModel(v, deps.cacheDir));
+  const planned = [
+    ...values.map((v) => planModel(v, deps.cacheDir, "chat")),
+    ...(flags.embedding ?? []).map((v) => planModel(v, deps.cacheDir, "embedding")),
+  ];
+  if (planned.length === 0) {
+    throw new Error("Name at least one model to serve.");
+  }
   const names = planned.map((p) => p.name);
   const repeated = names.find((n, i) => names.indexOf(n) !== i);
   if (repeated !== undefined) {
@@ -447,9 +547,13 @@ export async function runServe(
   const routes: Route[] = [];
   for (const model of planned) {
     const internalPort = await deps.freePort();
-    const child = deps.spawn(python, serveArgs(model.dir, internalPort, maxTokens));
+    const args =
+      model.kind === "embedding"
+        ? embedServeArgs(embedServerScript(), model.dir, internalPort, EMBED_MAX_LENGTH)
+        : serveArgs(model.dir, internalPort, maxTokens);
+    const child = deps.spawn(python, args);
     children.push(child);
-    exits.push(exitOf(child, model.name));
+    exits.push(exitOf(child, model.name, model.kind));
     deps.log(`Loading ${model.name} (${formatGB(model.sizeBytes)})…`);
     const started = Date.now();
     try {
@@ -457,6 +561,7 @@ export async function runServe(
       await waitUntilLoaded(internalPort, model.dir, {
         fetch: deps.fetch,
         gone: Promise.race(exits),
+        kind: model.kind,
       });
     } catch (err) {
       killAll();
@@ -477,7 +582,8 @@ export async function runServe(
     killAll();
     throw err;
   }
-  for (const line of servingBanner(door.port, names)) {
+  const namesOf = (kind: ServeKind) => planned.filter((p) => p.kind === kind).map((p) => p.name);
+  for (const line of servingBanner(door.port, namesOf("chat"), namesOf("embedding"))) {
     deps.log(line);
   }
   // A terminal Ctrl-C reaches the children before this process, so a
@@ -503,9 +609,9 @@ export async function runServe(
 export async function localServe(values: string[], flags: ServeFlags): Promise<void> {
   let handle: ServeHandle;
   try {
-    const models =
-      values.length > 0 ? values : await pickModelsToServe(realPickDeps(defaultCacheDir()));
-    if (models.length === 0) {
+    const wantsPicker = values.length === 0 && (flags.embedding ?? []).length === 0;
+    const models = wantsPicker ? await pickModelsToServe(realPickDeps(defaultCacheDir())) : values;
+    if (wantsPicker && models.length === 0) {
       // Cancelled, or nothing ticked: nothing to serve, and nothing wrong.
       return;
     }

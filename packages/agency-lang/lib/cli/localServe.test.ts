@@ -16,11 +16,13 @@ import {
   servingBanner,
   runServe,
   serveChoices,
+  embedServeArgs,
   pickModelsToServe,
   type ServeDeps,
   type Child,
   type PickDeps,
 } from "./localServe.js";
+import { CURATED_LOCAL_MODELS } from "../stdlib/localModels.js";
 
 describe("serveArgs", () => {
   it("builds the mlx_lm.server command line", () => {
@@ -37,6 +39,24 @@ describe("serveArgs", () => {
       "16384",
       "--log-level",
       "INFO",
+    ]);
+  });
+});
+
+describe("embedServeArgs", () => {
+  it("builds the embedding server command line", () => {
+    expect(
+      embedServeArgs("/pkg/lib/cli/mlxEmbedServer.py", "/models/mlx/org--emb", 8082, 8192),
+    ).toEqual([
+      "/pkg/lib/cli/mlxEmbedServer.py",
+      "--model",
+      "/models/mlx/org--emb",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "8082",
+      "--max-length",
+      "8192",
     ]);
   });
 });
@@ -112,6 +132,21 @@ describe("waitUntilLoaded", () => {
       {
         url: "http://127.0.0.1:8081/v1/chat/completions",
         body: { model: "/m/dir", messages: [{ role: "user", content: "hi" }], max_tokens: 1 },
+      },
+    ]);
+  });
+
+  it("probes an embedding process with an embeddings request", async () => {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    const fetchFn = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(init.body as string) });
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await waitUntilLoaded(8082, "/m/emb", { fetch: fetchFn, kind: "embedding" });
+    expect(calls).toEqual([
+      {
+        url: "http://127.0.0.1:8082/v1/embeddings",
+        body: { model: "/m/emb", input: "hi" },
       },
     ]);
   });
@@ -203,7 +238,7 @@ describe("formatElapsed", () => {
 
 describe("servingBanner", () => {
   it("lists the models and shows the run and agent commands", () => {
-    expect(servingBanner(8080, ["org/a", "/m/dir"])).toEqual([
+    expect(servingBanner(8080, ["org/a", "/m/dir"], [])).toEqual([
       "Serving 2 models on http://127.0.0.1:8080/v1:",
       "  org/a",
       "  /m/dir",
@@ -211,8 +246,31 @@ describe("servingBanner", () => {
       "  agency run --local mlx:org/a your.agency",
       "  agency agent --local mlx:org/a",
     ]);
-    expect(servingBanner(8080, ["/m/dir"])[0]).toBe("Serving 1 model on http://127.0.0.1:8080/v1:");
-    expect(servingBanner(8080, ["/m/dir"])[3]).toBe("  agency run --local /m/dir your.agency");
+    expect(servingBanner(8080, ["/m/dir"], [])[0]).toBe(
+      "Serving 1 model on http://127.0.0.1:8080/v1:",
+    );
+    expect(servingBanner(8080, ["/m/dir"], [])[3]).toBe("  agency run --local /m/dir your.agency");
+  });
+
+  it("marks embedding models and shows the memory config for the first", () => {
+    expect(servingBanner(8080, ["org/a"], ["org/emb"])).toEqual([
+      "Serving 2 models on http://127.0.0.1:8080/v1:",
+      "  org/a",
+      "  org/emb  (embeddings)",
+      "",
+      "  agency run --local mlx:org/a your.agency",
+      "  agency agent --local mlx:org/a",
+      "",
+      "  For memory, set in agency.json:",
+      '    "memory": { "dir": ".agency-memory", "embeddings": { "model": "org/emb", "provider": "mlx" } }',
+    ]);
+    expect(servingBanner(8080, [], ["org/emb"])).toEqual([
+      "Serving 1 model on http://127.0.0.1:8080/v1:",
+      "  org/emb  (embeddings)",
+      "",
+      "  For memory, set in agency.json:",
+      '    "memory": { "dir": ".agency-memory", "embeddings": { "model": "org/emb", "provider": "mlx" } }',
+    ]);
   });
 });
 
@@ -331,6 +389,54 @@ describe("runServe", () => {
     expect((await res.json()).data.map((m: { id: string }) => m.id)).toEqual(["org/a", "org/b"]);
     await handle.close();
     expect(killed).toBe(2);
+  });
+
+  it("serves an embedding model with the embedding server, probed on /v1/embeddings", async () => {
+    const a = recordedModel("org/a", true);
+    const emb = recordedModel("org/emb", true);
+    const probes: string[] = [];
+    deps.fetch = (async (url: string) => {
+      probes.push(url);
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const handle = await runServe(["mlx:org/a"], { port: 0, embedding: ["mlx:org/emb"] }, deps);
+    expect(spawned.length).toBe(2);
+    expect(spawned[0].slice(1, 5)).toEqual(["-m", "mlx_lm.server", "--model", a]);
+    expect(spawned[1][1].endsWith("/lib/cli/mlxEmbedServer.py")).toBe(true);
+    expect(spawned[1].slice(2)).toEqual([
+      "--model",
+      emb,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9001",
+      "--max-length",
+      "8192",
+    ]);
+    expect(probes).toEqual([
+      "http://127.0.0.1:9000/v1/chat/completions",
+      "http://127.0.0.1:9001/v1/embeddings",
+    ]);
+    expect(handle.models).toEqual(["org/a", "org/emb"]);
+    expect(log).toContain("  org/emb  (embeddings)");
+    expect(log).toContain(
+      '    "memory": { "dir": ".agency-memory", "embeddings": { "model": "org/emb", "provider": "mlx" } }',
+    );
+    await handle.close();
+  });
+
+  it("refuses a catalog embedding model passed as a chat model, before spawning", async () => {
+    await expect(runServe(["qwen3-embedding-4b-mlx"], { port: 0 }, deps)).rejects.toThrow(
+      "agency local serve --embedding qwen3-embedding-4b-mlx",
+    );
+    await expect(
+      runServe([], { port: 0, embedding: ["qwen3-coder-next-mlx"] }, deps),
+    ).rejects.toThrow("is a coding model, not an embedding model");
+    expect(spawned).toEqual([]);
+  });
+
+  it("refuses an empty plan", async () => {
+    await expect(runServe([], { port: 0 }, deps)).rejects.toThrow("Name at least one model");
   });
 
   it("serves a model directory under the name run --local sends", async () => {
@@ -575,6 +681,22 @@ describe("serveChoices", () => {
       { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
       { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
     ]);
+  });
+
+  it("leaves out a catalog embedding model, which needs --embedding", () => {
+    const emb = CURATED_LOCAL_MODELS["qwen3-embedding-4b-mlx"].uri.slice("mlx:".length);
+    const withEmb = [
+      ...downloaded,
+      {
+        name: emb,
+        path: `/m/mlx/${emb.replace("/", "--")}`,
+        sizeBytes: 2.28e9,
+        backend: "mlx" as const,
+        complete: true,
+        layout: "agency" as const,
+      },
+    ];
+    expect(serveChoices(withEmb).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
   });
 
   it("offers one row for a repo that both layouts hold", () => {

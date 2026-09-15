@@ -70,6 +70,36 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "planWithOverrideAndProviderOff",
+      "input": "",
+      "expectedOutput": "\"enable-override/skip/skip/enable-override\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "resolveLocalEmbeddingSpecs",
+      "input": "",
+      "expectedOutput": "\"mlx-community/Qwen3-Embedding-4B-4bit-DWQ|mlx-community/Other-Embedding-4bit|ERR|ERR\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localEmbeddingSlotResolves",
+      "input": "",
+      "expectedOutput": "\"mlx-community/Qwen3-Embedding-4B-4bit-DWQ:settings|text-embedding-3-small\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

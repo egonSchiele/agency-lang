@@ -91,6 +91,18 @@ describe("front door", () => {
     expect(a.hits).toEqual([]);
   });
 
+  it("forwards /v1/embeddings the same way, so an embedding process needs no route of its own", async () => {
+    const res = await fetch(`http://127.0.0.1:${door.port}/v1/embeddings`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "org/a", input: ["hi"] }),
+    });
+    expect(res.status).toBe(200);
+    const hit = a.hits[a.hits.length - 1];
+    expect(hit.url).toBe("/v1/embeddings");
+    expect(hit.model).toBe("/models/mlx/org--a");
+  });
+
   it("drops the framing and connection headers of the request it already read", async () => {
     // node's http.request sends a body with no content-length as chunked.
     const status = await new Promise<number>((resolve, reject) => {

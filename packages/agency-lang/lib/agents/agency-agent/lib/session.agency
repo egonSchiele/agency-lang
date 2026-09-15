@@ -47,6 +47,9 @@ import {
   configureLocalModel,
   getResolvedSlots,
   getCapabilities,
+  getCapabilitiesResolved,
+  markMemoryEnabledByOverride,
+  resolveLocalEmbeddingSlot,
   embeddingKeyStatus,
   memoryEnablePlan,
   enableAgentMemory,
@@ -72,11 +75,15 @@ export def markMemoryEmbeddingsPinned(pinned: boolean) {
 // Persistent knowledge graph, gated on the capability profile.
 export def maybeEnableMemory() {
   const status = embeddingKeyStatus(getResolvedSlots())
-  const plan = memoryEnablePlan(getCapabilities().memory, status)
+  const capabilities = getCapabilitiesResolved()
+  const plan = memoryEnablePlan(capabilities.values.memory, capabilities.sources.memory, status)
   markMemoryEmbeddingsPinned(plan == "enable-override")
   return match(plan) {
     "skip" => null
     "enable-override" => {
+      if (!capabilities.values.memory) {
+        markMemoryEnabledByOverride()
+      }
       enableAgentMemory(status.override)
       return null
     }
@@ -169,7 +176,16 @@ export def switchModel(
       changes: []
     }
   }
-  const resolved = promoteAll(all.value)
+  const localized = resolveLocalEmbeddingSlot(promoteAll(all.value))
+  if (isFailure(localized)) {
+    pushMessage(color.red("Could not switch model: ${localized.error}"))
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  const resolved = localized.value
   applyResolved(resolved)
   return {
     session: next,
@@ -266,13 +282,20 @@ export def parseModelsFilters(cmd: string): ModelFilters {
 export def pickModelsForAgent(args: Record<string, any>) {
   const localVal = args.flags["local"]
   const modelArg = args.flags.model ?? ""
-  const hasModelFlags = modelArg != "" || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
+  // --model embedding=<local provider>/<model> is the one --model slot that
+  // goes with --local: it is the only way to name an embedding model.
+  const parsedFlag = parseModelFlag(modelArg)
+  const embeddingOnly = modelArg != "" && parsedFlag.slot == "embedding"
+  const hasModelFlags = (modelArg != "" && !embeddingOnly) || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
   if (localVal != null && hasModelFlags) {
     print(
-      color.red("Pass either --model (hosted) or --local (local), not both."),
+      color.red(
+      "Pass either --model (hosted) or --local (local), not both. The one exception is --model embedding=<local provider>/<model>.",
+    ),
     )
     process.exit(1)
   }
+  const localEmbedding = if embeddingOnly then parsedFlag.model else ""
   if (localVal == "") {
     // Bare --local: guided setup.
     // Non-interactive can't prompt, so just print the local catalog and exit.
@@ -303,11 +326,11 @@ export def pickModelsForAgent(args: Record<string, any>) {
     if (choice == "" || choice == null) {
       process.exit(0)
     }
-    configureLocalModel(choice)
+    configureLocalModel(choice, localEmbedding)
     configureSearch(true)
     // fall through into the session on the chosen local model
   } else if (localVal != null) {
-    configureLocalModel(localVal)
+    configureLocalModel(localVal, localEmbedding)
     configureSearch(true)
   } else {
     // Hosted path. --model accepts `slot=model` (per-slot) or a bare model

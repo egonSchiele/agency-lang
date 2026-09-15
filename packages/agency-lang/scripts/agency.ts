@@ -1863,6 +1863,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("serve")
     .description("Serve MLX models in this terminal: one mlx_lm.server per model, behind one port")
     .argument("[models...]", "mlx: URIs, aliases, or model directories; none opens a picker")
+    .option(
+      "--embedding <model>",
+      "Also serve this embedding model on /v1/embeddings (repeatable)",
+      collectRepeats,
+      [],
+    )
     .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
     .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
     .option("--python <path>", "Python with mlx-lm installed")
@@ -1870,7 +1876,13 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(
       (
         models: string[],
-        opts: { port: number; maxTokens: number; python?: string; logPrompts?: boolean },
+        opts: {
+          port: number;
+          maxTokens: number;
+          python?: string;
+          logPrompts?: boolean;
+          embedding: string[];
+        },
       ) =>
         // `--verbose` is the whole CLI's own flag, so serve cannot declare it
         // again; it means the same thing here, so honor it either way.

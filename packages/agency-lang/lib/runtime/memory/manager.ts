@@ -152,8 +152,10 @@ const DEFAULT_EMBEDDING_THRESHOLD = 0.3;
 /** Default embedding model per LLM provider that smoltalk can embed with.
  *  When no embedding model is explicitly configured, Tier-2 recall derives
  *  its model from the active chat provider via this table. A provider not
- *  listed here (anthropic, llama-cpp, custom) has no embedding endpoint, so
- *  Tier-2 is disabled rather than firing a doomed remote call. */
+ *  listed here has no derivation: anthropic and custom providers have no
+ *  embedding endpoint, and the local providers (mlx, llama-cpp) can embed
+ *  only with a model the user names in `embeddings`. Either way Tier-2 is
+ *  disabled rather than firing a doomed remote call. */
 const EMBED_MODEL_BY_PROVIDER: Record<string, string> = {
   openai: "text-embedding-3-small",
   "openai-responses": "text-embedding-3-small",
@@ -341,12 +343,9 @@ export class MemoryManager {
           // Pass the provider explicitly so smoltalk routes to the right embed
           // endpoint even when the model name doesn't imply it (e.g. ollama).
           provider: options?.provider,
-          apiKey: {
-            openAi: (this.smoltalkDefaults as any).apiKey?.openAi,
-            google: (this.smoltalkDefaults as any).apiKey?.google,
-          },
-          baseUrl: { ollama: (this.smoltalkDefaults as any).baseUrl?.ollama },
-        } as any),
+          apiKey: this.smoltalkDefaults.apiKey,
+          baseUrl: this.smoltalkDefaults.baseUrl,
+        }),
       );
       const timeTaken = performance.now() - startTime;
       if (!result.success) {
@@ -471,6 +470,31 @@ export class MemoryManager {
     });
   }
 
+  /** The providers that can embed but only through a model the user names:
+   *  a local server has no catalog to derive from. */
+  private static readonly LOCAL_PROVIDERS = ["mlx", "llama-cpp"];
+
+  private embeddingDisabledMessage(provider: string): string {
+    if (provider === "llama-cpp") {
+      return (
+        `[memory] semantic recall (Tier-2) disabled: embeddings on llama-cpp are not ` +
+        `supported yet. Structured recall still works.`
+      );
+    }
+    if (MemoryManager.LOCAL_PROVIDERS.includes(provider)) {
+      return (
+        `[memory] semantic recall (Tier-2) disabled: provider "${provider}" needs an ` +
+        `embedding model named in config. Serve one with: agency local serve --embedding <model>. ` +
+        `Then set memory.embeddings to { "model": "<name>", "provider": "${provider}" } in agency.json. ` +
+        "Structured recall still works."
+      );
+    }
+    return (
+      `[memory] semantic recall (Tier-2) disabled: provider "${provider}" has no ` +
+      `embedding endpoint. Structured recall still works; set embeddings.model to override.`
+    );
+  }
+
   /** Emit a single notice (logger + statelog) the first time Tier-2 is
    *  disabled, so the user sees semantic recall is off (e.g. a local model
    *  with no embedding endpoint) without per-recall warn spam. */
@@ -478,9 +502,7 @@ export class MemoryManager {
     if (this._embeddingDisabledLogged) return;
     this._embeddingDisabledLogged = true;
     const provider = this.activeEmbeddingProvider() ?? "unknown";
-    const msg =
-      `[memory] semantic recall (Tier-2) disabled: provider "${provider}" has no ` +
-      `embedding endpoint. Structured recall still works; set embeddings.model to override.`;
+    const msg = this.embeddingDisabledMessage(provider);
     this.logger.info(msg);
     try {
       await this.statelogClient?.debug(msg, { provider });

@@ -31,6 +31,7 @@ import {
   pinnedSha256,
   backendOfTarget,
   _resolveModel,
+  _localModelCategory,
   _removeMlxModel,
   isMlxUri,
   parseMlxUri,
@@ -1119,6 +1120,35 @@ describe("backend field", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "missing"'));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping "wrong"'));
     warn.mockRestore();
+  });
+});
+
+describe("_localModelCategory", () => {
+  it("reads the curated entry's category, by name or by URI", () => {
+    expect(_localModelCategory("qwen3-embedding-4b-mlx")).toBe("embedding");
+    expect(_localModelCategory("qwen3-coder-next-mlx")).toBe("coding");
+    expect(_localModelCategory(CURATED_LOCAL_MODELS["qwen3-embedding-4b-mlx"].uri)).toBe(
+      "embedding",
+    );
+  });
+
+  it("reads an object alias's category and is undefined for the rest", () => {
+    const file = path.join(dir, "agency.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            emb: { backend: "mlx", uri: "mlx:org/emb", category: "embedding" },
+            plain: "mlx:org/plain",
+          },
+        },
+      }),
+    );
+    expect(_localModelCategory("emb", file)).toBe("embedding");
+    expect(_localModelCategory("mlx:org/emb", file)).toBe("embedding");
+    expect(_localModelCategory("plain", file)).toBeUndefined();
+    expect(_localModelCategory("mlx:org/anything", file)).toBeUndefined();
   });
 });
 

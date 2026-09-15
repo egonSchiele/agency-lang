@@ -44,6 +44,8 @@
     { "nodeName": "modelFlagPerSlot", "input": "", "expectedOutput": "{\"slot\":\"reasoning\",\"model\":\"claude-opus-4-8\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "modelFlagGlobal", "input": "", "expectedOutput": "{\"slot\":\"\",\"model\":\"gpt-5.5\"}", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "modelFlagAliasFast", "input": "", "expectedOutput": "{\"slot\":\"main\",\"model\":\"gpt-4o\"}", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "modelFlagUnifiedNoMissplit", "input": "", "expectedOutput": "{\"slot\":\"\",\"model\":\"anthropic/claude-opus-4-8\"}", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "modelFlagUnifiedNoMissplit", "input": "", "expectedOutput": "{\"slot\":\"\",\"model\":\"anthropic/claude-opus-4-8\"}", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "localProvidersAreKnown", "input": "", "expectedOutput": "\"true/true\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "embeddingSpecWithLocalProvider", "input": "", "expectedOutput": "{\"model\":\"mlx-community/Qwen3-Embedding-4B-4bit-DWQ\",\"provider\":\"mlx\"}", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

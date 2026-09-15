@@ -9,6 +9,7 @@ import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
 import { runInTestContext } from "../asyncContext.js";
 import { CostGuard, isGuardExceededError } from "../guard.js";
+import { safeDeleteDirectoryWithin } from "../../utils.js";
 import type { GraphState } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -970,5 +971,73 @@ describe("MemoryManager compaction and auto-extraction on agentic threads", () =
     // The new message is extracted; the kept tail is not re-sent.
     expect(promptOfCall(client, lastCall)).toContain("BRAND NEW FACT");
     expect(promptOfCall(client, lastCall)).not.toContain("step two output");
+  });
+});
+
+describe("MemoryManager embeddings for local providers", () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "memory-local-"));
+  });
+  afterEach(() => {
+    safeDeleteDirectoryWithin(os.tmpdir(), tmpDir);
+  });
+
+  it("derives nothing for mlx and names the config to set", async () => {
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir },
+      llmClient: mockLlmClient() as any,
+      smoltalkDefaults: { provider: "mlx", model: "mlx-community/Qwen3-Coder-Next-4bit" },
+    });
+    expect(manager.resolveEmbedding()).toBeNull();
+    const info = vi.spyOn((manager as any).logger, "info");
+    await (manager as any).noteEmbeddingDisabled();
+    await (manager as any).noteEmbeddingDisabled();
+    expect(info).toHaveBeenCalledTimes(1);
+    const msg = String(info.mock.calls[0][0]);
+    expect(msg).toContain('provider "mlx"');
+    expect(msg).toContain("memory.embeddings");
+    expect(msg).toContain("agency local serve --embedding");
+  });
+
+  it("says llama-cpp embeddings are not supported yet", async () => {
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir },
+      llmClient: mockLlmClient() as any,
+      smoltalkDefaults: { provider: "llama-cpp", model: "/m/x.gguf" },
+    });
+    const info = vi.spyOn((manager as any).logger, "info");
+    await (manager as any).noteEmbeddingDisabled();
+    expect(String(info.mock.calls[0][0])).toContain("not supported yet");
+  });
+
+  it("passes the mlx base URL through to embed", async () => {
+    const client = mockLlmClient();
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: {
+        dir: tmpDir,
+        embeddings: { model: "mlx-community/Qwen3-Embedding-4B-4bit-DWQ", provider: "mlx" },
+      },
+      llmClient: client as any,
+      smoltalkDefaults: { baseUrl: { mlx: "http://127.0.0.1:9000/v1" } },
+    });
+    expect(manager.resolveEmbedding()).toEqual({
+      model: "mlx-community/Qwen3-Embedding-4B-4bit-DWQ",
+      provider: "mlx",
+    });
+    const ctx = makeEmbedCtx();
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => {
+      await (manager as any)._embed("hello", { model: "m", provider: "mlx" });
+    });
+    expect(client.embed).toHaveBeenCalledWith(
+      "hello",
+      expect.objectContaining({
+        provider: "mlx",
+        baseUrl: expect.objectContaining({ mlx: "http://127.0.0.1:9000/v1" }),
+      }),
+    );
   });
 });

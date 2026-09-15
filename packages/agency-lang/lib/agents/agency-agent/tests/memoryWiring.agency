@@ -7,8 +7,11 @@ import {
   embeddingKeyStatus,
   memoryEnablePlan,
   memoryConfigFor,
+  resolveLocalEmbedding,
+  resolveLocalEmbeddingSlot,
   EmbeddingKeyStatus,
  } from "../shared.agency"
+import { Resolved } from "../lib/models.agency"
 
 // The override maps the slot value and demotes the provider.
 node overrideFromSlot(): string {
@@ -122,10 +125,10 @@ node planOutcomes(): string {
     override: null,
     varName: ""
   }
-  const off = memoryEnablePlan(false, ready)
-  const noSlot = memoryEnablePlan(true, none)
-  const keyless = memoryEnablePlan(true, missing)
-  const good = memoryEnablePlan(true, ready)
+  const off = memoryEnablePlan(false, "default", ready)
+  const noSlot = memoryEnablePlan(true, "default", none)
+  const keyless = memoryEnablePlan(true, "default", missing)
+  const good = memoryEnablePlan(true, "default", ready)
   return "${off}/${noSlot}/${keyless}/${good}"
 }
 
@@ -145,4 +148,71 @@ node configCarriesOverride(): string {
   const bareHasNone = bare.embeddings == null
   const dirsMatch = withOverride.dir == bare.dir
   return "${embeddings.model}/${embeddings.provider}/${bareHasNone}/${dirsMatch}"
+}
+
+// A provider-level memory:false yields to a ready embedding override; a
+// user-level memory:false does not, and a provider-level off with no
+// override stays off.
+node planWithOverrideAndProviderOff(): string {
+  const ready: EmbeddingKeyStatus = {
+    state: "ready",
+    override: {
+      model: "mlx-community/Qwen3-Embedding-4B-4bit-DWQ",
+      provider: "mlx"
+    },
+    varName: ""
+  }
+  const none: EmbeddingKeyStatus = {
+    state: "no-override",
+    override: null,
+    varName: ""
+  }
+  const a = memoryEnablePlan(false, "provider", ready)
+  const b = memoryEnablePlan(false, "user-global", ready)
+  const c = memoryEnablePlan(false, "provider", none)
+  const d = memoryEnablePlan(true, "default", ready)
+  return "${a}/${b}/${c}/${d}"
+}
+
+// A catalog name becomes the served repo id, a repo id passes through, a
+// hosted provider and a catalog typo are failures.
+node resolveLocalEmbeddingSpecs(): string {
+  const catalog = resolveLocalEmbedding("mlx/qwen3-embedding-4b-mlx")
+  const raw = resolveLocalEmbedding("mlx/mlx-community/Other-Embedding-4bit")
+  const hosted = resolveLocalEmbedding("openai/text-embedding-3-small")
+  const typo = resolveLocalEmbedding("mlx/qwen3-embeding")
+  const a = if isFailure(catalog) then "ERR" else catalog.value.model
+  const b = if isFailure(raw) then "ERR" else raw.value.model
+  const c = if isFailure(hosted) then "ERR" else "ok"
+  const d = if isFailure(typo) then "ERR" else "ok"
+  return "${a}|${b}|${c}|${d}"
+}
+
+// A local provider in the embedding slot resolves to the served name; a
+// hosted one passes through untouched.
+node localEmbeddingSlotResolves(): string {
+  const main: Resolved = {
+    model: "gpt-5.5",
+    provider: "openai",
+    via: "test"
+  }
+  const local = resolveLocalEmbeddingSlot({
+    main: main,
+    embedding: {
+      model: "qwen3-embedding-4b-mlx",
+      provider: "mlx",
+      via: "settings"
+    }
+  })
+  const hosted = resolveLocalEmbeddingSlot({
+    main: main,
+    embedding: {
+      model: "text-embedding-3-small",
+      provider: "openai",
+      via: "settings"
+    }
+  })
+  const a = if isFailure(local) then "ERR" else "${local.value.embedding.model}:${local.value.embedding.via}"
+  const b = if isFailure(hosted) then "ERR" else hosted.value.embedding.model
+  return "${a}|${b}"
 }

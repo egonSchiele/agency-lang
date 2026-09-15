@@ -1156,6 +1156,32 @@ export async function _downloadModel(
   return resolved;
 }
 
+/** What a local model is for, when its catalog or alias entry says. The
+ *  value may be the entry's name or the URI it points at; a plain string
+ *  alias, a directory, or a URI no entry names has no category. */
+export function _localModelCategory(value: string, file: string = ""): ModelCategory | undefined {
+  const aliases = readModelAliases(file);
+  const alias = aliases[value];
+  if (alias !== undefined) {
+    return typeof alias === "string" ? undefined : alias.category;
+  }
+  const curated = CURATED_LOCAL_MODELS[value];
+  if (curated !== undefined) {
+    return curated.category;
+  }
+  for (const entry of Object.values(aliases)) {
+    if (typeof entry !== "string" && entry.uri === value) {
+      return entry.category;
+    }
+  }
+  for (const entry of Object.values(CURATED_LOCAL_MODELS)) {
+    if (entry.uri === value) {
+      return entry.category;
+    }
+  }
+  return undefined;
+}
+
 /** Convenience: register the provider + ensure the model is downloaded. */
 export async function _registerLocalModel(value: string, cacheDir: string = ""): Promise<string> {
   const resolved = _resolveModel(value);

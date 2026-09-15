@@ -1,5 +1,6 @@
-# Real local-model integration tests. Triggered ONLY on pushes to `main`
-# (i.e. after a PR is merged), NOT on pull requests — mirroring
+# Real local-model integration tests. Triggered on pushes to `main` (i.e.
+# after a PR is merged) and by hand (workflow_dispatch, which only someone
+# with write access can start), NOT on pull requests — mirroring
 # test-with-llm.yml's threat model. PRs get the fake-provider unit suites in
 # test.yml; integration runs post-merge so PR authors can't toggle a label,
 # poison the cache, or modify the workflow file in-band.
@@ -40,8 +41,11 @@ jobs:
 
     env:
       # Bump this in lockstep with smoltalk-llama-cpp upstream releases.
-      # node-llama-cpp's version is pinned transitively via smoltalk-llama-cpp's lockfile.
       SMOLTALK_LLAMA_CPP_VERSION: "0.5.0"
+      # smoltalk-llama-cpp asks for node-llama-cpp ^3.19.0, and an
+      # off-lockfile `pnpm add` would take the newest 3.x each run. Pinning
+      # it here keeps the native code, and the cache key below, fixed.
+      NODE_LLAMA_CPP_VERSION: "3.20.0"
 
     steps:
       - name: Checkout repository
@@ -73,7 +77,7 @@ jobs:
       # pin would otherwise be refused by the release-age cooldown for a week.)
       - name: Install smoltalk-llama-cpp (pinned, off-lockfile)
         working-directory: packages/agency-lang
-        run: pnpm add smoltalk-llama-cpp@${{ env.SMOLTALK_LLAMA_CPP_VERSION }}
+        run: pnpm add smoltalk-llama-cpp@${{ env.SMOLTALK_LLAMA_CPP_VERSION }} node-llama-cpp@${{ env.NODE_LLAMA_CPP_VERSION }}
 
       # Cache the downloaded GGUFs + the node-llama-cpp prebuilt binary.
       # Scoped to the model names; no restore-keys — a partial/poisoned cache
@@ -84,7 +88,7 @@ jobs:
           path: |
             ~/.agency-agent/models
             ~/.cache/node-llama-cpp
-          key: lm-v2-${{ runner.os }}-smollm2-135m-nomic-embed-text-nlc-${{ env.SMOLTALK_LLAMA_CPP_VERSION }}
+          key: lm-v2-${{ runner.os }}-smollm2-135m-nomic-embed-text-sllc-${{ env.SMOLTALK_LLAMA_CPP_VERSION }}-nlc-${{ env.NODE_LLAMA_CPP_VERSION }}
 
       - name: Run integration suite
         working-directory: packages/agency-lang

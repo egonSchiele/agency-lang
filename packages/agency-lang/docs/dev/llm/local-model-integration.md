@@ -31,10 +31,13 @@ won't write to your real `~/.agency-agent/models` or `~/agency.json`.
 
 ```bash
 # In packages/agency-lang/. Install the optional provider once. It is not in
-# package.json, so a normal `pnpm install` never pulls it.
-# Keep the version in step with SMOLTALK_LLAMA_CPP_VERSION in
-# .github/workflows/local-model.yml, which is the source of truth.
-pnpm add --save=false smoltalk-llama-cpp@0.5.0
+# package.json, so a normal `pnpm install` never pulls it. Keep both versions
+# in step with SMOLTALK_LLAMA_CPP_VERSION and NODE_LLAMA_CPP_VERSION in
+# .github/workflows/local-model.yml, which is the source of truth. (pnpm 11
+# refuses `--save=false` on `add`, so this edits package.json and the
+# lockfile; the last line puts them back.)
+pnpm add smoltalk-llama-cpp@0.5.0 node-llama-cpp@3.20.0
+git checkout package.json ../../pnpm-lock.yaml
 
 # Run the suite (dedicated config — the default vitest run excludes tests/).
 AGENCY_LLM_INTEGRATION=1 pnpm test:integration
@@ -57,9 +60,9 @@ update **two** values:
    chars) and logs the observed hash, which is a way to recapture a hash you
    do not have — not a resting state to leave it in.
 2. The cache key in `.github/workflows/local-model.yml`. It names both
-   models (`smollm2-135m` and `nomic-embed-text`) and the plugin version, so
-   changing any of the three, or bumping the `v2` suffix, starts a fresh
-   cache that holds everything the suite downloads.
+   models (`smollm2-135m` and `nomic-embed-text`), the plugin version, and
+   the node-llama-cpp version, so changing any of them, or bumping the `v2`
+   suffix, starts a fresh cache that holds everything the suite downloads.
 
 ## Sandbox vs. real `$HOME`
 
@@ -71,7 +74,8 @@ on warm runs.
 
 ## Updating the `smoltalk-llama-cpp` pin
 
-Edit `SMOLTALK_LLAMA_CPP_VERSION` in `.github/workflows/local-model.yml`.
-That's the single source of truth, and the cache key includes it. Verify
-the suite passes against the new version before merging, and make sure the
-version is published: the workflow installs it from npm.
+Edit `SMOLTALK_LLAMA_CPP_VERSION` in `.github/workflows/local-model.yml`,
+and `NODE_LLAMA_CPP_VERSION` next to it when the plugin's node-llama-cpp
+range moves. That file is the single source of truth, and the cache key
+includes both. Verify the suite passes against the new versions before
+merging, and make sure they are published: the workflow installs from npm.

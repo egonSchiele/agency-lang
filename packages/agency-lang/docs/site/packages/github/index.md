@@ -52,6 +52,28 @@ deleteBranch(
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L25))
 
+### branchExists
+
+```ts
+branchExists(
+  name: string,
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| name | `string` |  |
+| owner | `string` | "" |
+| repo | `string` | "" |
+| token | `string` | "" |
+
+([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L30))
+
 ### commitFiles
 
 ```ts
@@ -109,6 +131,32 @@ openPullRequest(
 | token | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L47))
+
+### listPullRequests
+
+```ts
+listPullRequests(
+  state: string = "open",
+  base: string = "",
+  head: string = "",
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `string` | "open" |
+| base | `string` | "" |
+| head | `string` | "" |
+| owner | `string` | "" |
+| repo | `string` | "" |
+| token | `string` | "" |
+
+([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L52))
 
 ### commentOnPullRequest
 
@@ -184,6 +232,30 @@ requestReview(
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L67))
 
+### listIssues
+
+```ts
+listIssues(
+  state: string = "open",
+  labels: string[] = [],
+  owner: string = "",
+  repo: string = "",
+  token: string = "",
+)
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| state | `string` | "open" |
+| labels | `string[]` | [] |
+| owner | `string` | "" |
+| repo | `string` | "" |
+| token | `string` | "" |
+
+([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L72))
+
 ### commentOnIssue
 
 ```ts
@@ -233,3 +305,19 @@ createIssue(
 | token | `string` | "" |
 
 ([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L82))
+
+### defaultBranch
+
+```ts
+defaultBranch(owner: string = "", repo: string = "", token: string = "")
+```
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| owner | `string` | "" |
+| repo | `string` | "" |
+| token | `string` | "" |
+
+([source](https://github.com/egonSchiele/agency-lang/blob/main/packages/github/index.agency#L87))

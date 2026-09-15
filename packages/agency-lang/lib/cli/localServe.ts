@@ -88,6 +88,17 @@ export function embedServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxEmbedServer.py");
 }
 
+/** The mlx-audio release the speech server's rules were written against.
+ *  A test checks it matches MLX_AUDIO_VERSION in lib/cli/mlxSpeechRules.py;
+ *  the server refuses any other version. */
+export const MLX_AUDIO_VERSION = "0.5.4";
+
+/** The speech server shipped next to this file, copied into dist like
+ *  the embedding one. */
+export function speechServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxSpeechServer.py");
+}
+
 /** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`, then the
  *  default environment under the home directory. */
 export function choosePython(

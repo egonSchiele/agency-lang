@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import * as net from "node:net";
 import * as os from "node:os";
+import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import prompts from "prompts";
 import { isMlxUri, parseMlxUri, modelDirEntries } from "../stdlib/modelBackend.js";
@@ -47,6 +48,12 @@ export function serveArgs(modelDir: string, internalPort: number, maxTokens: num
 
 export function defaultMlxEnv(home: string): string {
   return path.join(home, ".agency-agent", "mlx-env");
+}
+
+/** The embedding server shipped next to this file. `make build` copies it
+ *  into dist, so the path holds for a development checkout and an install. */
+export function embedServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxEmbedServer.py");
 }
 
 /** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`, then the

@@ -79,6 +79,7 @@ build:
 	mkdir -p dist/lib/cli/runShim
 	rm -f dist/lib/cli/runShim/*.mjs
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
+	cp lib/cli/mlxEmbedServer.py dist/lib/cli/mlxEmbedServer.py
 	rm -rf dist/lib/stdlib/providers
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
 	cp lib/stdlib/visionOcr.jxa dist/lib/stdlib/visionOcr.jxa

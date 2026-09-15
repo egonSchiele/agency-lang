@@ -8,7 +8,7 @@ Agency packages are npm packages that include `.agency` source files alongside c
 
 Use `packages/web-fetch/` as the canonical reference. It is minimal and well structured.
 
-The other published packages are `email`, `github`, `mcp`, and `whisper-local`. Read one of those when you need a richer example.
+The other published packages are `email`, `github`, `kokoro`, `mcp`, `tesseract-local`, and `whisper-local`. Read one of those when you need a richer example. `tesseract-local` and `kokoro` show a package that downloads a pinned model and imports helpers from `agency-lang/stdlib-lib/*`.
 
 ## Directory Structure
 

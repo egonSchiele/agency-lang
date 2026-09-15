@@ -139,7 +139,9 @@ export async function downloadHubSnapshot(
   };
 
   const downloadChunk = async (chunk: Chunk): Promise<void> => {
-    await withRetries(chunk, options.retryDelayMs ?? 1000, urls, () => fetchChunk(chunk));
+    await withRetries(chunk, options.retryDelayMs ?? 1000, urls, options.signal, () =>
+      fetchChunk(chunk),
+    );
     ledger.chunkDone(chunk);
     progress.landed(chunk.end - chunk.start);
     if (ledger.remaining(chunk.path) === 0) {
@@ -182,20 +184,23 @@ async function runPool<T>(
 
 /** Retries a chunk through transport failures, waiting longer each time.
  *  An expired CDN URL does not count as a failure. The file is resolved
- *  again, once. */
+ *  again, once. Nothing is retried after `signal` aborts. */
 async function withRetries(
   chunk: Chunk,
   delayMs: number,
   urls: FileUrls,
+  signal: AbortSignal | undefined,
   attempt: () => Promise<void>,
 ): Promise<void> {
   let failures = 0;
   let refreshed = false;
   for (;;) {
     try {
+      signal?.throwIfAborted();
       await attempt();
       return;
     } catch (err) {
+      signal?.throwIfAborted();
       if (err instanceof Expired && !refreshed) {
         refreshed = true;
         urls.forget(chunk.path);

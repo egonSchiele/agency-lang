@@ -1,0 +1,48 @@
+{
+  "name": "@agency-lang/kokoro",
+  "version": "0.0.1",
+  "description": "Local text-to-speech for Agency with the Kokoro model. No API key, no native build.",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/speak.js",
+  "bin": {
+    "agency-kokoro": "./dist/src/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/speak.d.ts",
+      "import": "./dist/src/speak.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "index.agency",
+    "models.lock.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "peerDependencies": {
+    "agency-lang": ">=0.19.3"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "3.8.1",
+    "kokoro-js": "1.2.1"
+  },
+  "devDependencies": {
+    "agency-lang": "workspace:*",
+    "@types/node": "^25.0.6",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  },
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
+  "homepage": "https://github.com/egonSchiele/agency-lang"
+}

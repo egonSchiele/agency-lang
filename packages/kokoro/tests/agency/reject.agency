@@ -1,0 +1,10 @@
+import { speak } from "../../index.agency"
+
+node main() {
+  handle {
+    const result = speak("Hello from Agency.", "rejected.wav")
+    print(result)
+  } with (intr) {
+    return reject()
+  }
+}

@@ -380,6 +380,22 @@ describe("downloadHubSnapshot", () => {
     );
   });
 
+  it("stops without retrying when the caller's signal aborts", async () => {
+    const controller = new AbortController();
+    let rangeRequests = 0;
+    const aborting = (async (url: string, init?: RequestInit) => {
+      if (url.includes("/cdn/") && init?.headers !== undefined && "range" in init.headers) {
+        rangeRequests += 1;
+        controller.abort(new Error("cancelled by test"));
+      }
+      return fetch(url, init);
+    }) as unknown as typeof fetch;
+    await expect(
+      download({ fetch: aborting, concurrency: 1, signal: controller.signal }),
+    ).rejects.toThrow("cancelled by test");
+    expect(rangeRequests).toBe(1);
+  });
+
   it("says whether a token was sent when the hub refuses a request", async () => {
     hub.failResolves = RETRIES;
     await expect(download({ concurrency: 1 })).rejects.toThrow(

@@ -1,5 +1,5 @@
 import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd } from "agency-lang/stdlib/index.js";
-import { fetchPage as fetchPageImpl } from "./dist/src/fetchPage.js";
+import { readText as readTextImpl } from "./dist/src/ocr.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync } from "fs";
@@ -150,7 +150,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "3526adda8364b572c625ba4fa678b8aa05324d2cd01051b01349012482bbf4c8", import.meta.url);
+__registerModuleFingerprint("index.agency", "9d36234dc50b8a560492aff0d51362f7dfde160909632532e864fe0523c4d840", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -193,7 +193,7 @@ async function __registerTopLevelCallbacks(__ctx) {
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
+async function __readText_impl(filepath, language = __UNSET) {
   const __setupData = setupFunction();
   const __stack = __setupData.stack;
   const __step = __setupData.step;
@@ -201,31 +201,26 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "fetchPage", "index.agency");
+  claimFrameForScope(__stack, "readText", "index.agency");
   if (!__globals().isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
-  __stack.args["url"] = url;
-  __stack.args["maxChars"] = maxChars === __UNSET ? 2e4 : maxChars;
-  __stack.args["timeout"] = timeout === __UNSET ? 15e3 : timeout;
+  __stack.args["filepath"] = filepath;
+  __stack.args["language"] = language === __UNSET ? `eng` : language;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "fetchPage", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "readText", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
     __ctx._pendingArgOverrides = void 0;
-    if ("url" in __overrides) {
-      url = __overrides["url"];
-      __stack.args["url"] = url;
+    if ("filepath" in __overrides) {
+      filepath = __overrides["filepath"];
+      __stack.args["filepath"] = filepath;
     }
-    if ("maxChars" in __overrides) {
-      maxChars = __overrides["maxChars"];
-      __stack.args["maxChars"] = maxChars;
-    }
-    if ("timeout" in __overrides) {
-      timeout = __overrides["timeout"];
-      __stack.args["timeout"] = timeout;
+    if ("language" in __overrides) {
+      language = __overrides["language"];
+      __stack.args["language"] = language;
     }
   }
   try {
@@ -239,11 +234,10 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
         await callHook({
           name: "onFunctionStart",
           data: {
-            functionName: "fetchPage",
+            functionName: "readText",
             args: {
-              url,
-              maxChars,
-              timeout
+              filepath,
+              language
             },
             moduleId: "index.agency"
           }
@@ -251,12 +245,9 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       });
       await runner.step(1, async (runner2) => {
         __functionCompleted = true;
-        runner2.halt(await __call(fetchPageImpl, {
+        runner2.halt(await __call(readTextImpl, {
           type: "positional",
-          args: [__stack.args.url, {
-            "maxChars": __stack.args.maxChars,
-            "timeout": __stack.args.timeout
-          }]
+          args: [__stack.args.filepath, __stack.args.language]
         }));
         return;
       });
@@ -272,24 +263,24 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "fetchPage");
+      return AbortedResult.fromError(__error, __stack, "readText");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
       const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
       const __log = __createLogger(__ctx.logLevel);
-      __log.error("Function fetchPage threw an exception (converted to Failure): " + __errMsg);
+      __log.error("Function readText threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
       __ctx.statelogClient?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
-        functionName: "fetchPage"
+        functionName: "readText"
       });
     }
     return runtimeFailure(__error, {
       checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
-      functionName: "fetchPage",
+      functionName: "readText",
       args: __stack.args
     });
   } finally {
@@ -298,33 +289,26 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       await callHook({
         name: "onFunctionEnd",
         data: {
-          functionName: "fetchPage",
+          functionName: "readText",
           timeTaken: performance.now() - __funcStartTime
         }
       });
     }
   }
 }
-const fetchPage = __AgencyFunction.create({
-  name: "fetchPage",
+const readText = __AgencyFunction.create({
+  name: "readText",
   module: "index.agency",
-  fn: __fetchPage_impl,
+  fn: __readText_impl,
   params: [{
-    name: "url",
+    name: "filepath",
     hasDefault: false,
     defaultValue: void 0,
     variadic: false,
     isFunctionTyped: false,
     acceptsResult: false
   }, {
-    name: "maxChars",
-    hasDefault: true,
-    defaultValue: void 0,
-    variadic: false,
-    isFunctionTyped: false,
-    acceptsResult: false
-  }, {
-    name: "timeout",
+    name: "language",
     hasDefault: true,
     defaultValue: void 0,
     variadic: false,
@@ -332,14 +316,19 @@ const fetchPage = __AgencyFunction.create({
     acceptsResult: false
   }],
   toolDefinition: {
-    name: "fetchPage",
-    description: "No description provided.",
-    schema: z.object({ "url": z.string(), "maxChars": z.number().nullable().describe("Default: 20000"), "timeout": z.number().nullable().describe("Default: 15000") })
+    name: "readText",
+    description: `Recognize the text in an image locally with Tesseract. Nothing is
+  uploaded. Slower and less accurate than macOS Vision, but runs on any
+  platform.
+
+  @param filepath - Path to a PNG or JPEG image
+  @param language - Tesseract language code; only "eng" ships today`,
+    schema: z.object({ "filepath": z.string(), "language": z.string().nullable().describe("Default: eng") })
   },
   exported: true
 }, __toolRegistry);
 var stdin_default = graph;
-const __sourceMap = { "index.agency:fetchPage": { "1": { "line": 24, "col": 2 } } };
+const __sourceMap = { "index.agency:readText": { "1": { "line": 37, "col": 2 } } };
 export {
   __getCheckpoints,
   __invokeFunction,
@@ -353,12 +342,12 @@ export {
   __toolRegistry,
   approve,
   stdin_default as default,
-  fetchPage,
   hasInterrupts,
   interrupt,
   isDebugger,
   isInterrupt,
   isPaused,
+  readText,
   reject,
   respondToInterrupts,
   resumeFromCheckpoint,

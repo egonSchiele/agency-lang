@@ -42,6 +42,9 @@ jobs:
       - name: Install npm dependencies (no native build runs — no install hook)
         run: pnpm install
 
+      - name: Build agency-lang (build:ts compiles index.agency with its compiler)
+        run: make -C packages/agency-lang
+
       - name: Build TypeScript
         working-directory: packages/whisper-local
         run: pnpm run build:ts

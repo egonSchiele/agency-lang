@@ -776,6 +776,83 @@ node main() {
   assertIncludes(plainAgentHelp, "--max-cost");
   console.log("Test 8e passed");
 
+  // --- Test 9: a pkg:: import runs the Agency wrapper, not the TS entry ---
+  console.log("--- Test 9: pkg:: import runs the Agency wrapper ---");
+  // A package laid out like the published ones: "exports" points "." at the
+  // TypeScript implementation, which exports a function with the same name
+  // as the Agency wrapper. Only the wrapper raises an interrupt. Importing
+  // the bare package name would run the implementation and skip it.
+  const fixturePkg = "node_modules/agency-pkg-fixture";
+  writeFile(dir, `${fixturePkg}/package.json`, JSON.stringify({
+    name: "agency-pkg-fixture",
+    version: "1.0.0",
+    type: "module",
+    agency: "./index.agency",
+    exports: {
+      ".": "./dist/impl.js",
+      "./index.js": "./index.js",
+      "./package.json": "./package.json",
+    },
+  }));
+  writeFile(dir, `${fixturePkg}/dist/impl.js`, `export async function act() {
+  return "implementation ran";
+}
+`);
+  writeFile(dir, `${fixturePkg}/index.agency`, `import { act as actImpl } from "./dist/impl.js"
+
+effect fixture::act { note: string }
+
+export def act(): string {
+  return interrupt fixture::act("Run the action?", { note: "from the wrapper" })
+  return "wrapper ran, then " + actImpl()
+}
+`);
+  run(dir, `./node_modules/.bin/agency compile ${fixturePkg}/index.agency`);
+  writeFile(dir, "pkg-wrapper.agency", `import { act } from "pkg::agency-pkg-fixture"
+
+node main() {
+  handle {
+    print(act())
+  } with (intr) {
+    print("handler saw " + intr.effect)
+    return approve()
+  }
+}
+`);
+  const wrapperOutput = run(dir, "./node_modules/.bin/agency run pkg-wrapper.agency");
+  assertIncludes(wrapperOutput, "handler saw fixture::act");
+  assertIncludes(wrapperOutput, "wrapper ran, then implementation ran");
+
+  // The same package with "./index.js" missing from "exports" is refused at
+  // compile time, with a message that names the missing entry.
+  const hiddenPkg = "node_modules/agency-pkg-hidden";
+  writeFile(dir, `${hiddenPkg}/package.json`, JSON.stringify({
+    name: "agency-pkg-hidden",
+    version: "1.0.0",
+    type: "module",
+    agency: "./index.agency",
+    exports: { ".": "./dist/impl.js", "./package.json": "./package.json" },
+  }));
+  writeFile(dir, `${hiddenPkg}/dist/impl.js`, `export async function act() {
+  return "implementation ran";
+}
+`);
+  writeFile(dir, `${hiddenPkg}/index.agency`, `export def act(): string {
+  return "wrapper ran"
+}
+`);
+  writeFile(dir, "pkg-hidden.agency", `import { act } from "pkg::agency-pkg-hidden"
+
+node main() {
+  print(act())
+}
+`);
+  const hiddenOutput = run(dir, "./node_modules/.bin/agency run pkg-hidden.agency", {
+    expectFail: true,
+  });
+  assertIncludes(stripAnsi(hiddenOutput), 'does not export "./index.js"');
+  console.log("Test 9 passed");
+
   console.log("=== All CLI tests passed ===");
   cleanup(dir);
 } catch (err) {

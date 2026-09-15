@@ -10,11 +10,18 @@
       "types": "./dist/src/ocr.d.ts",
       "import": "./dist/src/ocr.js"
     },
+    "./index.js": "./index.js",
     "./package.json": "./package.json"
   },
-  "files": ["dist/", "index.agency", "models.lock.json", "README.md"],
+  "files": [
+    "dist/",
+    "index.agency",
+    "models.lock.json",
+    "README.md",
+    "index.js"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
     "test": "vitest",
     "test:run": "vitest run"
   },

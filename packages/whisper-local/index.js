@@ -1,5 +1,5 @@
 import { print, printJSON, input, sleep, saveDraft, _guard, _pairsOf, read, write, writeBinary, readBinary, range, callback, map, mapWithIndex, filter, exclude, find, findIndex, reduce, flatMap, every, some, count, sortBy, unique, groupBy, flatten, setAgentCwd, getAgentCwd, applyAgentCwd } from "agency-lang/stdlib/index.js";
-import { fetchPage as fetchPageImpl } from "./dist/src/fetchPage.js";
+import { transcribe as transcribeImpl } from "./dist/src/transcribe.js";
 import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync } from "fs";
@@ -150,7 +150,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "3526adda8364b572c625ba4fa678b8aa05324d2cd01051b01349012482bbf4c8", import.meta.url);
+__registerModuleFingerprint("index.agency", "844e093932d09f8d766356fd0b8d67ce8e0eed9584fafbf4952d77437bfd3032", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -193,7 +193,7 @@ async function __registerTopLevelCallbacks(__ctx) {
 }
 __registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
+async function __transcribe_impl(filepath, language = __UNSET, model = __UNSET) {
   const __setupData = setupFunction();
   const __stack = __setupData.stack;
   const __step = __setupData.step;
@@ -201,31 +201,31 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "fetchPage", "index.agency");
+  claimFrameForScope(__stack, "transcribe", "index.agency");
   if (!__globals().isInitialized("index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
-  __stack.args["url"] = url;
-  __stack.args["maxChars"] = maxChars === __UNSET ? 2e4 : maxChars;
-  __stack.args["timeout"] = timeout === __UNSET ? 15e3 : timeout;
+  __stack.args["filepath"] = filepath;
+  __stack.args["language"] = language === __UNSET ? `` : language;
+  __stack.args["model"] = model === __UNSET ? `base.en` : model;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "fetchPage", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "transcribe", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
     __ctx._pendingArgOverrides = void 0;
-    if ("url" in __overrides) {
-      url = __overrides["url"];
-      __stack.args["url"] = url;
+    if ("filepath" in __overrides) {
+      filepath = __overrides["filepath"];
+      __stack.args["filepath"] = filepath;
     }
-    if ("maxChars" in __overrides) {
-      maxChars = __overrides["maxChars"];
-      __stack.args["maxChars"] = maxChars;
+    if ("language" in __overrides) {
+      language = __overrides["language"];
+      __stack.args["language"] = language;
     }
-    if ("timeout" in __overrides) {
-      timeout = __overrides["timeout"];
-      __stack.args["timeout"] = timeout;
+    if ("model" in __overrides) {
+      model = __overrides["model"];
+      __stack.args["model"] = model;
     }
   }
   try {
@@ -239,11 +239,11 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
         await callHook({
           name: "onFunctionStart",
           data: {
-            functionName: "fetchPage",
+            functionName: "transcribe",
             args: {
-              url,
-              maxChars,
-              timeout
+              filepath,
+              language,
+              model
             },
             moduleId: "index.agency"
           }
@@ -251,12 +251,9 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       });
       await runner.step(1, async (runner2) => {
         __functionCompleted = true;
-        runner2.halt(await __call(fetchPageImpl, {
+        runner2.halt(await __call(transcribeImpl, {
           type: "positional",
-          args: [__stack.args.url, {
-            "maxChars": __stack.args.maxChars,
-            "timeout": __stack.args.timeout
-          }]
+          args: [__stack.args.filepath, __stack.args.language, __stack.args.model]
         }));
         return;
       });
@@ -272,24 +269,24 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "fetchPage");
+      return AbortedResult.fromError(__error, __stack, "transcribe");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
       const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
       const __log = __createLogger(__ctx.logLevel);
-      __log.error("Function fetchPage threw an exception (converted to Failure): " + __errMsg);
+      __log.error("Function transcribe threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
       __ctx.statelogClient?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
-        functionName: "fetchPage"
+        functionName: "transcribe"
       });
     }
     return runtimeFailure(__error, {
       checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
       destructiveRan: __self.__destructiveRan,
-      functionName: "fetchPage",
+      functionName: "transcribe",
       args: __stack.args
     });
   } finally {
@@ -298,33 +295,33 @@ async function __fetchPage_impl(url, maxChars = __UNSET, timeout = __UNSET) {
       await callHook({
         name: "onFunctionEnd",
         data: {
-          functionName: "fetchPage",
+          functionName: "transcribe",
           timeTaken: performance.now() - __funcStartTime
         }
       });
     }
   }
 }
-const fetchPage = __AgencyFunction.create({
-  name: "fetchPage",
+const transcribe = __AgencyFunction.create({
+  name: "transcribe",
   module: "index.agency",
-  fn: __fetchPage_impl,
+  fn: __transcribe_impl,
   params: [{
-    name: "url",
+    name: "filepath",
     hasDefault: false,
     defaultValue: void 0,
     variadic: false,
     isFunctionTyped: false,
     acceptsResult: false
   }, {
-    name: "maxChars",
+    name: "language",
     hasDefault: true,
     defaultValue: void 0,
     variadic: false,
     isFunctionTyped: false,
     acceptsResult: false
   }, {
-    name: "timeout",
+    name: "model",
     hasDefault: true,
     defaultValue: void 0,
     variadic: false,
@@ -332,14 +329,14 @@ const fetchPage = __AgencyFunction.create({
     acceptsResult: false
   }],
   toolDefinition: {
-    name: "fetchPage",
+    name: "transcribe",
     description: "No description provided.",
-    schema: z.object({ "url": z.string(), "maxChars": z.number().nullable().describe("Default: 20000"), "timeout": z.number().nullable().describe("Default: 15000") })
+    schema: z.object({ "filepath": z.string(), "language": z.string().nullable().describe("Default: "), "model": z.string().nullable().describe("Default: base.en") })
   },
   exported: true
 }, __toolRegistry);
 var stdin_default = graph;
-const __sourceMap = { "index.agency:fetchPage": { "1": { "line": 24, "col": 2 } } };
+const __sourceMap = { "index.agency:transcribe": { "1": { "line": 30, "col": 2 } } };
 export {
   __getCheckpoints,
   __invokeFunction,
@@ -353,7 +350,6 @@ export {
   __toolRegistry,
   approve,
   stdin_default as default,
-  fetchPage,
   hasInterrupts,
   interrupt,
   isDebugger,
@@ -362,5 +358,6 @@ export {
   reject,
   respondToInterrupts,
   resumeFromCheckpoint,
-  rewindFrom
+  rewindFrom,
+  transcribe
 };

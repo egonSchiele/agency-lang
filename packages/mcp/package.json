@@ -17,6 +17,7 @@
       "types": "./dist/src/mcp.d.ts",
       "import": "./dist/src/mcp.js"
     },
+    "./index.js": "./index.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -28,7 +29,7 @@
     "index.js"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
     "agency": "agency",
     "test": "vitest",
     "test:run": "vitest run",

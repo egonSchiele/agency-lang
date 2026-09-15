@@ -36,6 +36,18 @@ describe("compileSource", () => {
       }
     });
 
+    it("finds a pkg:: package from sourcePath, not from the temp output path", () => {
+      // The deploy pre-flight compiles a file on disk this way. Package
+      // lookup must start from that file, because the generated code is
+      // written under the OS temp directory, where no node_modules exists.
+      const mainPath = path.resolve(__dirname, "..", "..", "tests", "pkg-imports", "main.agency");
+      const result = compileSource(fs.readFileSync(mainPath, "utf-8"), { sourcePath: mainPath });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.code).toContain('from "test-agency-pkg/index.js"');
+      }
+    });
+
     it("cannot resolve the relative import without sourcePath (single-file compile)", () => {
       const result = compileSource(MAIN, {});
       expect(result.success).toBe(false);

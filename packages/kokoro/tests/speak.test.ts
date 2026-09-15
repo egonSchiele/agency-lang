@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { speakWith, type SpeakRequest } from "../src/speak.js";
+import { hasFfmpeg } from "./ffmpegPresent.js";
 import { recordInstalledModel } from "./installedModel.js";
 import { makeTempDir, removeTempDir } from "./tempDir.js";
 
@@ -21,8 +22,8 @@ describe("speakWith", () => {
 
   beforeEach(() => {
     workDir = makeTempDir("kokoro-speak-");
-    vi.stubEnv("AGENCY_KOKORO_MODELS_DIR", path.join(workDir, "models"));
-    recordInstalledModel("fp32");
+    const modelsDir = path.join(workDir, "models");
+    recordInstalledModel("fp32", modelsDir);
     generate.mockReset();
     generate.mockResolvedValue({ audio: Float32Array.of(0.5, -0.5) });
     fromPretrained.mockClear();
@@ -33,12 +34,41 @@ describe("speakWith", () => {
       model: "fp32",
       speed: 1,
       allowedPaths: [],
+      format: "wav",
+      modelsDir,
     };
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
     removeTempDir(workDir);
+  });
+
+  it("names a temp file after the format when no output file is given", async () => {
+    const written = await speakWith({ ...request, outputFile: "" }, new AbortController().signal);
+
+    expect(path.basename(written)).toMatch(/^agency-kokoro-.*\.wav$/);
+    fs.unlinkSync(written);
+  });
+
+  describe.skipIf(!hasFfmpeg())("with ffmpeg", () => {
+    it("writes an mp3", async () => {
+      const mp3 = { ...request, outputFile: path.join(workDir, "out.mp3"), format: "mp3" as const };
+
+      const written = await speakWith(mp3, new AbortController().signal);
+
+      const bytes = fs.readFileSync(written);
+      expect(bytes.subarray(0, 3).toString("ascii")).toBe("ID3");
+    });
+
+    it("writes an m4a, whatever the output file's extension says", async () => {
+      const m4a = { ...request, format: "m4a" as const };
+
+      const written = await speakWith(m4a, new AbortController().signal);
+
+      expect(written).toBe(request.outputFile);
+      const bytes = fs.readFileSync(written);
+      expect(bytes.subarray(4, 8).toString("ascii")).toBe("ftyp");
+    });
   });
 
   it("writes one WAV file from every sentence and returns its path", async () => {
@@ -65,6 +95,15 @@ describe("speakWith", () => {
     await expect(
       speakWith({ ...request, model: "q8" }, new AbortController().signal),
     ).rejects.toThrow(/q8 model is not installed/);
+    expect(fromPretrained).not.toHaveBeenCalled();
+  });
+
+  it("looks for the model in the request's directory", async () => {
+    const elsewhere = { ...request, modelsDir: path.join(workDir, "empty") };
+
+    await expect(speakWith(elsewhere, new AbortController().signal)).rejects.toThrow(
+      /fp32 model is not installed/,
+    );
     expect(fromPretrained).not.toHaveBeenCalled();
   });
 

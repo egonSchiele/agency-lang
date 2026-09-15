@@ -12,10 +12,14 @@ type RecordChange = {
 /** Writes the downloader's record for `model`, as if every file had
  *  arrived. Each file is written as zeros at its pinned size, which the
  *  file system stores without using the disk space. */
-export function recordInstalledModel(model: ModelName, change: RecordChange = {}): void {
+export function recordInstalledModel(
+  model: ModelName,
+  modelsDir: string,
+  change: RecordChange = {},
+): void {
   const snapshot = snapshotFor(model);
   for (const file of snapshot.files) {
-    const onDisk = path.join(modelRepoDir(model), file.path);
+    const onDisk = path.join(modelRepoDir(model, modelsDir), file.path);
     fs.mkdirSync(path.dirname(onDisk), { recursive: true });
     fs.writeFileSync(onDisk, "");
     fs.truncateSync(onDisk, file.size);
@@ -26,7 +30,7 @@ export function recordInstalledModel(model: ModelName, change: RecordChange = {}
       { size: file.size, sha256: file.sha256, complete: file.path !== change.incompletePath },
     ]),
   );
-  writeMlxModelRecord(modelRepoDir(model), {
+  writeMlxModelRecord(modelRepoDir(model, modelsDir), {
     repo: snapshot.repo,
     revision: change.revision ?? snapshot.revision,
     files,

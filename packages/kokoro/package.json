@@ -1,6 +1,6 @@
 {
   "name": "@agency-lang/kokoro",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Local text-to-speech for Agency with the Kokoro model. No API key, no native build.",
   "type": "module",
   "agency": "./index.agency",

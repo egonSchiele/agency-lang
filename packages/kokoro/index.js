@@ -95,7 +95,7 @@ const __globalCtx = new RuntimeContext({
   dirname: __dirname,
   logLevel: "info",
   traceConfig: {
-    program: "index.agency"
+    program: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -157,7 +157,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "baf98a9fbd13e62cb568ec9ff237eca3770ee14df63b164d49d5cc482c76e8ca", import.meta.url);
+__registerModuleFingerprint("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", "470399f2a22ed8d7b2eb55b68cf9d0bc1300c2a288f1080a9a2b780fa97b28d3", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -190,15 +190,15 @@ __registerTool(setAgentCwd);
 __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
 async function __initializeGlobals(__ctx) {
-  if (__ctx.globals.isInitialized("index.agency")) {
+  if (__ctx.globals.isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
     return;
   }
-  __ctx.globals.markInitialized("index.agency");
+  __ctx.globals.markInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
 }
-__registerGlobalsInit("index.agency", __initializeGlobals);
+__registerGlobalsInit("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
 }
-__registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
+__registerCallbacksInit("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 const Voice = z.object({ "id": z.string(), "name": z.string(), "language": z.string(), "gender": z.string(), "grade": z.string() });
 async function __realOutput_impl(outputFile) {
@@ -209,14 +209,14 @@ async function __realOutput_impl(outputFile) {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "realOutput", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
+  claimFrameForScope(__stack, "realOutput", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
+  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
   __stack.args["outputFile"] = outputFile;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "realOutput", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "realOutput", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -241,7 +241,7 @@ async function __realOutput_impl(outputFile) {
             args: {
               outputFile
             },
-            moduleId: "index.agency"
+            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
           }
         });
       });
@@ -353,7 +353,7 @@ async function __realOutput_impl(outputFile) {
 }
 const realOutput = __AgencyFunction.create({
   name: "realOutput",
-  module: "index.agency",
+  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
   fn: __realOutput_impl,
   params: [{
     name: "outputFile",
@@ -370,7 +370,7 @@ const realOutput = __AgencyFunction.create({
   },
   exported: false
 }, __toolRegistry);
-async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model = __UNSET, speed = __UNSET, allowedPaths = __UNSET) {
+async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model = __UNSET, speed = __UNSET, allowedPaths = __UNSET, format = __UNSET, modelsDir = __UNSET) {
   const __setupData = setupFunction();
   const __stack = __setupData.stack;
   const __step = __setupData.step;
@@ -378,8 +378,8 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "speak", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
+  claimFrameForScope(__stack, "speak", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
+  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -389,8 +389,10 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
   __stack.args["model"] = model === __UNSET ? `fp32` : model;
   __stack.args["speed"] = speed === __UNSET ? 1 : speed;
   __stack.args["allowedPaths"] = allowedPaths === __UNSET ? [] : allowedPaths;
+  __stack.args["format"] = format === __UNSET ? `` : format;
+  __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "speak", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "speak", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -419,6 +421,14 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
       allowedPaths = __overrides["allowedPaths"];
       __stack.args["allowedPaths"] = allowedPaths;
     }
+    if ("format" in __overrides) {
+      format = __overrides["format"];
+      __stack.args["format"] = format;
+    }
+    if ("modelsDir" in __overrides) {
+      modelsDir = __overrides["modelsDir"];
+      __stack.args["modelsDir"] = modelsDir;
+    }
   }
   try {
     await agencyStore.run({
@@ -438,31 +448,33 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
               voice,
               model,
               speed,
-              allowedPaths
+              allowedPaths,
+              format,
+              modelsDir
             },
-            moduleId: "index.agency"
+            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
           }
         });
       });
       await runner.step(1, async (runner2) => {
-        const __funcResult = await __call(_validateSpeakArgs, {
+        __stack.locals.audioFormat = await __call(_validateSpeakArgs, {
           type: "positional",
-          args: [__stack.args.text, __stack.args.outputFile, __stack.args.voice, __stack.args.model, __stack.args.speed]
+          args: [__stack.args.text, __stack.args.outputFile, __stack.args.voice, __stack.args.model, __stack.args.speed, __stack.args.format]
         });
-        if (hasInterrupts(__funcResult)) {
+        if (hasInterrupts(__stack.locals.audioFormat)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll();
-          runner2.halt(__funcResult);
+          runner2.halt(__stack.locals.audioFormat);
           return;
         }
-        if (isAborted(__funcResult)) {
-          runner2.halt(__funcResult.carryThrough(__stack, "speak"));
+        if (isAborted(__stack.locals.audioFormat)) {
+          runner2.halt(__stack.locals.audioFormat.carryThrough(__stack, "speak"));
           return;
         }
       });
       await runner.step(2, async (runner2) => {
         __stack.locals.status = await __call(_modelStatus, {
           type: "positional",
-          args: [__stack.args.model]
+          args: [__stack.args.model, __stack.args.modelsDir]
         });
         if (hasInterrupts(__stack.locals.status)) {
           await getRuntimeContext().ctx.pendingPromises.awaitAll();
@@ -490,15 +502,16 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
                 const __handlerResult = await interruptWithHandlers("kokoro::download", `Download the Kokoro text-to-speech model?`, {
                   "model": __stack.args.model,
                   "sizeBytes": __stack.locals.status.sizeBytes,
-                  "source": __stack.locals.status.source
-                }, "./index.agency", __ctx, __stateStack());
+                  "source": __stack.locals.status.source,
+                  "dir": __stack.locals.status.dir
+                }, "./../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __ctx, __stateStack());
                 if (isRejected(__handlerResult)) {
                   runner3.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
                   return;
                 }
                 if (!isApproved(__handlerResult)) {
                   __self.__interruptId_3_0 = __handlerResult[0].interruptId;
-                  const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "3.0" });
+                  const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "speak", stepPath: "3.0" });
                   __handlerResult[0].checkpointId = __checkpointId;
                   __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
                   runner3.halt(__handlerResult);
@@ -509,7 +522,7 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
             await runner2.step(1, async (runner3) => {
               const __funcResult = await __call(_download, {
                 type: "positional",
-                args: [__stack.args.model]
+                args: [__stack.args.model, __stack.args.modelsDir]
               });
               if (hasInterrupts(__funcResult)) {
                 await getRuntimeContext().ctx.pendingPromises.awaitAll();
@@ -551,15 +564,16 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
           const __handlerResult = await interruptWithHandlers("kokoro::speak", `Allow Kokoro to write an audio file?`, {
             "textLength": __stack.args.text.length,
             "voice": __stack.args.voice,
-            "outputFile": __stack.locals.out
-          }, "./index.agency", __ctx, __stateStack());
+            "outputFile": __stack.locals.out,
+            "format": __stack.locals.audioFormat
+          }, "./../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __ctx, __stateStack());
           if (isRejected(__handlerResult)) {
             runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_5 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "speak", stepPath: "5" });
+            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "speak", stepPath: "5" });
             __handlerResult[0].checkpointId = __checkpointId;
             __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
@@ -571,7 +585,7 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
         __functionCompleted = true;
         runner2.halt(await __call(_speak, {
           type: "positional",
-          args: [__stack.args.text, __stack.locals.out, __stack.args.voice, __stack.args.model, __stack.args.speed, __stack.args.allowedPaths]
+          args: [__stack.args.text, __stack.locals.out, __stack.args.voice, __stack.args.model, __stack.args.speed, __stack.args.allowedPaths, __stack.locals.audioFormat, __stack.args.modelsDir]
         }));
         return;
       });
@@ -622,7 +636,7 @@ async function __speak_impl(text, outputFile = __UNSET, voice = __UNSET, model =
 }
 const speak = __AgencyFunction.create({
   name: "speak",
-  module: "index.agency",
+  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
   fn: __speak_impl,
   params: [{
     name: "text",
@@ -666,18 +680,234 @@ const speak = __AgencyFunction.create({
     variadic: false,
     isFunctionTyped: false,
     acceptsResult: false
+  }, {
+    name: "format",
+    hasDefault: true,
+    defaultValue: void 0,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
+  }, {
+    name: "modelsDir",
+    hasDefault: true,
+    defaultValue: void 0,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
   }],
   toolDefinition: {
     name: "speak",
-    description: `Speak text into a WAV file. Returns the file path.
+    description: `Speak text into an audio file. Returns the file path.
 
   @param text - The text to speak, at most 50,000 characters
-  @param outputFile - Where to write the WAV file. Leave empty for a new temp file. An existing file is never overwritten.
+  @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
   @param voice - A voice id from voices(), such as "af_heart"
   @param model - "fp32" or "q8"
   @param speed - Speaking speed, from 0.5 to 2
-  @param allowedPaths - Directories that outputFile must be inside`,
-    schema: z.object({ "text": z.string(), "outputFile": z.string().nullable().describe("Default: "), "voice": z.string().nullable().describe("Default: af_heart"), "model": z.string().nullable().describe("Default: fp32"), "speed": z.number().nullable().describe("Default: 1"), "allowedPaths": z.array(z.string()).nullable().describe("Default: []") })
+  @param allowedPaths - Directories that outputFile must be inside
+  @param format - "wav", "mp3", or "m4a". Leave empty to use the output file's extension, or wav when it has none.
+  @param modelsDir - Where models are kept. Leave null for the default.`,
+    schema: z.object({ "text": z.string(), "outputFile": z.string().nullable().describe("Default: "), "voice": z.string().nullable().describe("Default: af_heart"), "model": z.string().nullable().describe("Default: fp32"), "speed": z.number().nullable().describe("Default: 1"), "allowedPaths": z.array(z.string()).nullable().describe("Default: []"), "format": z.string().nullable().describe("Default: "), "modelsDir": z.union([z.string(), z.null()]).describe("Default: null") })
+  },
+  exported: true
+}, __toolRegistry);
+async function __download_impl(model = __UNSET, modelsDir = __UNSET) {
+  const __setupData = setupFunction();
+  const __stack = __setupData.stack;
+  const __step = __setupData.step;
+  const __self = __setupData.self;
+  const __ctx = getRuntimeContext().ctx;
+  let __forked;
+  let __functionCompleted = false;
+  claimFrameForScope(__stack, "download", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
+  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
+    await __initializeGlobals(__ctx);
+  }
+  let __funcStartTime = performance.now();
+  __stack.args["model"] = model === __UNSET ? `fp32` : model;
+  __stack.args["modelsDir"] = modelsDir === __UNSET ? null : modelsDir;
+  __self.__destructiveRan = __self.__destructiveRan ?? false;
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "download", threads: __setupData.threads });
+  let __resultCheckpointId = -1;
+  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+    const __overrides = __ctx._pendingArgOverrides.values;
+    __ctx._pendingArgOverrides = void 0;
+    if ("model" in __overrides) {
+      model = __overrides["model"];
+      __stack.args["model"] = model;
+    }
+    if ("modelsDir" in __overrides) {
+      modelsDir = __overrides["modelsDir"];
+      __stack.args["modelsDir"] = modelsDir;
+    }
+  }
+  try {
+    await agencyStore.run({
+      ...getRuntimeContext(),
+      ctx: __ctx,
+      stack: __setupData.stateStack,
+      threads: __setupData.threads
+    }, async () => {
+      await runner.hook(0, async () => {
+        await callHook({
+          name: "onFunctionStart",
+          data: {
+            functionName: "download",
+            args: {
+              model,
+              modelsDir
+            },
+            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
+          }
+        });
+      });
+      await runner.step(1, async (runner2) => {
+        __stack.locals.status = await __call(_modelStatus, {
+          type: "positional",
+          args: [__stack.args.model, __stack.args.modelsDir]
+        });
+        if (hasInterrupts(__stack.locals.status)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          runner2.halt(__stack.locals.status);
+          return;
+        }
+        if (isAborted(__stack.locals.status)) {
+          runner2.halt(__stack.locals.status.carryThrough(__stack, "download"));
+          return;
+        }
+      });
+      await runner.ifElse(2, [
+        {
+          condition: async () => __stack.locals.status.installed,
+          body: async (runner2) => {
+            await runner2.step(0, async (runner3) => {
+              __functionCompleted = true;
+              runner3.halt(__stack.locals.status.dir);
+              return;
+            });
+          }
+        }
+      ]);
+      await runner.step(3, async (runner2) => {
+        const __response = getRuntimeContext().ctx.getInterruptResponse(__self.__interruptId_3);
+        if (__response) {
+          if (__response.type === "approve") {
+          } else if (__response.type === "reject") {
+            runner2.halt(runtimeFailure(__response.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.getResultCheckpoint() }));
+            return;
+          }
+        } else {
+          const __handlerResult = await interruptWithHandlers("kokoro::download", `Download the Kokoro text-to-speech model?`, {
+            "model": __stack.args.model,
+            "sizeBytes": __stack.locals.status.sizeBytes,
+            "source": __stack.locals.status.source,
+            "dir": __stack.locals.status.dir
+          }, "./../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", __ctx, __stateStack());
+          if (isRejected(__handlerResult)) {
+            runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
+            return;
+          }
+          if (!isApproved(__handlerResult)) {
+            __self.__interruptId_3 = __handlerResult[0].interruptId;
+            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "download", stepPath: "3" });
+            __handlerResult[0].checkpointId = __checkpointId;
+            __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
+            runner2.halt(__handlerResult);
+            return;
+          }
+        }
+      });
+      await runner.step(4, async (runner2) => {
+        const __funcResult = await __call(_download, {
+          type: "positional",
+          args: [__stack.args.model, __stack.args.modelsDir]
+        });
+        if (hasInterrupts(__funcResult)) {
+          await getRuntimeContext().ctx.pendingPromises.awaitAll();
+          runner2.halt(__funcResult);
+          return;
+        }
+        if (isAborted(__funcResult)) {
+          runner2.halt(__funcResult.carryThrough(__stack, "download"));
+          return;
+        }
+      });
+      await runner.step(5, async (runner2) => {
+        __functionCompleted = true;
+        runner2.halt(__stack.locals.status.dir);
+        return;
+      });
+    });
+    if (runner.halted) {
+      if (isFailure(runner.haltResult)) {
+        stampFailureBoundary(runner.haltResult, __self.__destructiveRan);
+      }
+      return runner.haltResult;
+    }
+  } catch (__error) {
+    if (__error instanceof RunControlSignal) {
+      throw __error;
+    }
+    if (__error instanceof AgencyAbort) {
+      return AbortedResult.fromError(__error, __stack, "download");
+    }
+    {
+      const __errMsg = __error instanceof Error ? __error.message : String(__error);
+      const __errStack = __error instanceof Error && __error.stack ? __error.stack : "";
+      const __log = __createLogger(__ctx.logLevel);
+      __log.error("Function download threw an exception (converted to Failure): " + __errMsg);
+      if (__errStack) __log.error(__errStack);
+      __ctx.statelogClient?.error?.({
+        errorType: "runtimeError",
+        message: __errMsg,
+        functionName: "download"
+      });
+    }
+    return runtimeFailure(__error, {
+      checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+      destructiveRan: __self.__destructiveRan,
+      functionName: "download",
+      args: __stack.args
+    });
+  } finally {
+    __stateStack()?.pop();
+    if (__functionCompleted) {
+      await callHook({
+        name: "onFunctionEnd",
+        data: {
+          functionName: "download",
+          timeTaken: performance.now() - __funcStartTime
+        }
+      });
+    }
+  }
+}
+const download = __AgencyFunction.create({
+  name: "download",
+  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
+  fn: __download_impl,
+  params: [{
+    name: "model",
+    hasDefault: true,
+    defaultValue: void 0,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
+  }, {
+    name: "modelsDir",
+    hasDefault: true,
+    defaultValue: void 0,
+    variadic: false,
+    isFunctionTyped: false,
+    acceptsResult: false
+  }],
+  toolDefinition: {
+    name: "download",
+    description: `Download a Kokoro text-to-speech model. Returns the directory it is in. Does nothing when it is already there.
+
+  @param model - "fp32" (326 MB) or "q8" (92 MB)
+  @param modelsDir - Where models are kept. Leave null for the default.`,
+    schema: z.object({ "model": z.string().nullable().describe("Default: fp32"), "modelsDir": z.union([z.string(), z.null()]).describe("Default: null") })
   },
   exported: true
 }, __toolRegistry);
@@ -689,13 +919,13 @@ async function __voices_impl() {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "voices", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
+  claimFrameForScope(__stack, "voices", "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency");
+  if (!__globals().isInitialized("../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "voices", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency", scopeName: "voices", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -714,7 +944,7 @@ async function __voices_impl() {
           data: {
             functionName: "voices",
             args: {},
-            moduleId: "index.agency"
+            moduleId: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency"
           }
         });
       });
@@ -773,7 +1003,7 @@ async function __voices_impl() {
 }
 const voices = __AgencyFunction.create({
   name: "voices",
-  module: "index.agency",
+  module: "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency",
   fn: __voices_impl,
   params: [],
   toolDefinition: {
@@ -785,7 +1015,7 @@ const voices = __AgencyFunction.create({
   exported: true
 }, __toolRegistry);
 var stdin_default = graph;
-const __sourceMap = { "index.agency:realOutput": { "1": { "line": 43, "col": 2 }, "2": { "line": 46, "col": 2 }, "3": { "line": 47, "col": 14 }, "4": { "line": 47, "col": 2 }, "5": { "line": 50, "col": 2 }, "1.0": { "line": 44, "col": 4 }, "4.0": { "line": 47, "col": 2 }, "4.1": { "line": 48, "col": 4 } }, "index.agency:speak": { "1": { "line": 76, "col": 2 }, "2": { "line": 77, "col": 2 }, "3": { "line": 78, "col": 2 }, "4": { "line": 86, "col": 2 }, "5": { "line": 87, "col": 2 }, "6": { "line": 92, "col": 2 }, "3.0": { "line": 79, "col": 4 }, "3.1": { "line": 84, "col": 4 } }, "index.agency:voices": { "1": { "line": 100, "col": 2 } } };
+const __sourceMap = { "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:realOutput": { "1": { "line": 48, "col": 2 }, "2": { "line": 51, "col": 2 }, "3": { "line": 52, "col": 14 }, "4": { "line": 52, "col": 2 }, "5": { "line": 55, "col": 2 }, "1.0": { "line": 49, "col": 4 }, "4.0": { "line": 52, "col": 2 }, "4.1": { "line": 53, "col": 4 } }, "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:speak": { "1": { "line": 91, "col": 2 }, "2": { "line": 92, "col": 2 }, "3": { "line": 93, "col": 2 }, "4": { "line": 102, "col": 2 }, "5": { "line": 103, "col": 2 }, "6": { "line": 109, "col": 2 }, "3.0": { "line": 94, "col": 4 }, "3.1": { "line": 100, "col": 4 } }, "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:download": { "1": { "line": 124, "col": 2 }, "2": { "line": 125, "col": 2 }, "3": { "line": 128, "col": 2 }, "4": { "line": 134, "col": 2 }, "5": { "line": 135, "col": 2 }, "2.0": { "line": 126, "col": 4 } }, "../../../../../../../Users/adityabhargava/agency-lang/worktree-kokoro-formats/packages/kokoro/index.agency:voices": { "1": { "line": 143, "col": 2 } } };
 export {
   __getCheckpoints,
   __invokeFunction,
@@ -799,6 +1029,7 @@ export {
   __toolRegistry,
   approve,
   stdin_default as default,
+  download,
   hasInterrupts,
   interrupt,
   isDebugger,

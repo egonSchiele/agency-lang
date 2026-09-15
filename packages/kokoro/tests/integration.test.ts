@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadModel } from "../src/kokoroModel.js";
-import { modelStatus } from "../src/modelStore.js";
+import { modelStatus, resolveModelsDir } from "../src/modelStore.js";
 import { speakWith, type SpeakRequest } from "../src/speak.js";
 import { VOICES } from "../src/voices.js";
 import { makeTempDir, removeTempDir } from "./tempDir.js";
@@ -37,7 +37,7 @@ describe.skipIf(!process.env.AGENCY_RUN_SLOW)("kokoro with the real model", () =
   });
 
   beforeAll(() => {
-    expect(modelStatus("fp32").installed).toBe(true);
+    expect(modelStatus("fp32", resolveModelsDir(null)).installed).toBe(true);
     workDir = makeTempDir("kokoro-integration-");
   });
 
@@ -81,7 +81,7 @@ describe.skipIf(!process.env.AGENCY_RUN_SLOW)("kokoro with the real model", () =
   });
 
   it("lists the same voices as kokoro-js", { timeout: SLOW_TEST_MS }, async () => {
-    const tts = await loadModel("fp32");
+    const tts = await loadModel("fp32", resolveModelsDir(null));
     expect(VOICES.map((voice) => voice.id).sort()).toEqual(Object.keys(tts.voices).sort());
   });
 });

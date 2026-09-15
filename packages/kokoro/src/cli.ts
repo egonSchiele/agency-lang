@@ -2,7 +2,7 @@
 import * as path from "node:path";
 import { fileSha256 } from "agency-lang/stdlib-lib/modelVerify.js";
 import { MODEL_NAMES, isModelName, snapshotFor, type ModelName } from "./lockfile.js";
-import { downloadModel, modelRepoDir } from "./modelStore.js";
+import { downloadModel, modelRepoDir, resolveModelsDir } from "./modelStore.js";
 
 type Command = {
   usage: string;
@@ -15,8 +15,9 @@ const COMMANDS: Record<string, Command> = {
 };
 
 async function pull(model: ModelName): Promise<boolean> {
-  console.log(`Downloading the ${model} model into ${modelRepoDir(model)}`);
-  await downloadModel(model, {
+  const modelsDir = resolveModelsDir(null);
+  console.log(`Downloading the ${model} model into ${modelRepoDir(model, modelsDir)}`);
+  await downloadModel(model, modelsDir, {
     onEvent: (event) => {
       if (event.kind === "verify") {
         console.log(`${event.ok ? "OK" : "BAD"}  ${event.path}`);
@@ -38,7 +39,8 @@ async function verifyFile(
   filePath: string,
   expected: string | undefined,
 ): Promise<boolean> {
-  const actual = await fileSha256(path.join(modelRepoDir(model), filePath)).catch(
+  const repoDir = modelRepoDir(model, resolveModelsDir(null));
+  const actual = await fileSha256(path.join(repoDir, filePath)).catch(
     (err: Error) => `unreadable: ${err.message}`,
   );
   const ok = actual === expected;

@@ -39,6 +39,10 @@ jobs:
       - name: Install npm dependencies (install scripts stay blocked)
         run: pnpm install
 
+      # The mp3 and m4a tests encode real audio.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       # The reject test runs an Agency program, which needs the stdlib that
       # make builds.
       - name: Build agency-lang and the kokoro package

@@ -1,4 +1,4 @@
-import * as path from "node:path";
+import { AUDIO_FORMATS, isAudioFormat, resolveFormat } from "./audioFormat.js";
 import { MODEL_NAMES, isModelName } from "./lockfile.js";
 import { isVoiceId } from "./voices.js";
 
@@ -13,6 +13,7 @@ export type SpeakArguments = {
   voice: string;
   model: string;
   speed: number;
+  format: string;
 };
 
 type ArgumentRule = {
@@ -44,8 +45,10 @@ const RULES: ArgumentRule[] = [
     message: (args) => `speed must be between ${MIN_SPEED} and ${MAX_SPEED}, got ${args.speed}`,
   },
   {
-    holds: (args) => ["", ".wav"].includes(path.extname(args.outputFile).toLowerCase()),
-    message: (args) => `output file "${args.outputFile}" must end in .wav or have no extension`,
+    holds: (args) => isAudioFormat(resolveFormat(args.format, args.outputFile)),
+    message: (args) =>
+      `unknown audio format "${resolveFormat(args.format, args.outputFile)}". ` +
+      `Choices: ${AUDIO_FORMATS.join(", ")}`,
   },
 ];
 

@@ -56,7 +56,7 @@ packages/<package-name>/
   "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
   "homepage": "https://github.com/egonSchiele/agency-lang",
   "scripts": {
-    "build": "tsc && agency compile index.agency",
+    "build": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
     "agency": "agency",
     "test": "vitest",
     "test:run": "vitest run",
@@ -228,7 +228,7 @@ cd packages/<package-name>
 pnpm run build
 ```
 
-The `agency` command comes from the `agency-lang` dev dependency, so `packages/agency-lang` must be built first. The compiled file is large and full of runtime boilerplate, so never edit it by hand. The repo's `.gitignore` ignores every `.js` file, so the first commit needs `git add -f index.js`.
+The build calls the compiler in `packages/agency-lang/dist` by path, because pnpm only links the `agency` bin when that directory has already been built, so build `packages/agency-lang` first. The compiled file is large and full of runtime boilerplate, so never edit it by hand. The repo's `.gitignore` ignores every `.js` file, so the first commit needs `git add -f index.js`.
 
 ## How Users Import the Package
 

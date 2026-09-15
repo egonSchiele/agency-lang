@@ -28,7 +28,7 @@
     "index.js"
   ],
   "scripts": {
-    "build:ts": "tsc && agency compile index.agency",
+    "build:ts": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
     "build:native": "cmake-js compile --runtime=node",
     "build": "pnpm run build:native && pnpm run build:ts",
     "test": "vitest",

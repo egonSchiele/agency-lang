@@ -1722,9 +1722,13 @@ export class TypeScriptBuilder {
   }
 
   private processImportStatement(node: ImportStatement): TsNode {
+    // A pkg:: import is looked up from the source file, the one whose
+    // node_modules the symbol table searched. The output file can sit under
+    // the OS temp directory (compileSource writes it there), where no
+    // package is installed.
     const from = toCompiledImportPath(
       node.modulePath,
-      this.outputFile ?? path.resolve(this.moduleId),
+      this.compilationUnit.fromFile ?? this.outputFile ?? path.resolve(this.moduleId),
     );
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
     // Non-validated value-only-parameterized aliases (e.g. `type

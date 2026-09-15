@@ -21,7 +21,7 @@
     "index.js"
   ],
   "scripts": {
-    "build": "tsc && agency compile index.agency",
+    "build": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
     "test": "vitest",
     "test:run": "vitest run"
   },

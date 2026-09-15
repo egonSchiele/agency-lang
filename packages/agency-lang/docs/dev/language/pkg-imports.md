@@ -58,11 +58,9 @@ import { bar, __barTool, __barToolParams } from "toolbox/strings.js"
 
 Node.js resolves these from `node_modules` at runtime using its standard module resolution. No special runtime support is needed.
 
-#### Why not the bare package name
+#### Why the path and not the bare package name
 
-An earlier version emitted `import { foo } from "toolbox"` and let Node pick the file. Node answers a bare name from the package's `"exports"` map, and the published packages point that map's `"."` entry at their TypeScript implementation, which is what TypeScript users import. So the compiler type-checked the call against `index.agency` while the program ran whatever the TypeScript file exported under the same name. The Agency wrapper never executed, so its default arguments and its interrupts were skipped. `@agency-lang/kokoro` failed to load, because its TypeScript entry has no export named `speak`. `@agency-lang/tesseract-local` loaded and silently ran the TypeScript `readText`.
-
-Emitting the path of the `"agency"` entry ties the runtime import to the file the compiler checked. It works for any package that exports that file, and it leaves the `"."` entry to the TypeScript API. The CLI integration test `tests/integration/cli/test.mjs` (test 9) installs a package laid out this way, with a same-named TypeScript export and an interrupt only in the wrapper, and checks that the interrupt fires.
+Node answers a bare name such as `"toolbox"` from the package's `"exports"` map, and the published packages point that map's `"."` entry at their TypeScript implementation, for TypeScript users. A bare name would therefore load the TypeScript file and skip the Agency wrapper the compiler checked against, together with the wrapper's default arguments and interrupts. Emitting the compiled `"agency"` entry by path ties the runtime import to the checked file and leaves `"."` to the TypeScript API. The lookup starts from the source file, because the output file can sit under the OS temp directory (see `compileSource`), where no package is installed. CLI integration test 9 in `tests/integration/cli/test.mjs` covers the same-named TypeScript export case.
 
 ## Publishing an Agency package
 

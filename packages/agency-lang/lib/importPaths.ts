@@ -586,8 +586,8 @@ export function resolveAgencyImportPath(importPath: string, fromFile: string): s
  * - "./foo.agency"  -> "./foo.js" (relative, just extension swap)
  *
  * @param fromFile - Absolute path of the source file containing the import.
- *   Used to compute relative paths for stdlib imports. If not provided,
- *   falls back to absolute paths.
+ *   A bare pkg:: import looks its package up from here, the way the symbol
+ *   table did, so it must be the source file and not the output file.
  */
 export function toCompiledImportPath(importPath: string, fromFile?: string): string {
   if (isStdlibImport(importPath)) {

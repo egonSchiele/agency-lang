@@ -1883,9 +1883,15 @@ export function createProgram(deps: CliDependencies = {}): Command {
       collectRepeats,
       [],
     )
+    .option(
+      "--speech <model>",
+      "Also serve this speech model on /v1/audio/speech (repeatable)",
+      collectRepeats,
+      [],
+    )
     .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
     .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
-    .option("--python <path>", "Python with mlx-lm installed")
+    .option("--python <path>", "Python with mlx-lm (and mlx-audio, for --speech) installed")
     .option("--log-prompts", "Log each request's full body and reply, not just a summary line")
     .action(
       (
@@ -1896,6 +1902,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           python?: string;
           logPrompts?: boolean;
           embedding: string[];
+          speech: string[];
         },
       ) =>
         // `--verbose` is the whole CLI's own flag, so serve cannot declare it

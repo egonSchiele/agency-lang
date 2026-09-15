@@ -16,13 +16,14 @@ import {
   formatGB,
   type DownloadedModel,
 } from "../stdlib/localModels.js";
+import type { ModelCategory } from "../stdlib/modelCatalog.js";
 import { startFrontDoor, type FrontDoor, type Route } from "./mlxServer.js";
 import { formatElapsed } from "../eval/run/statusBoard.js";
 import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
 export { formatElapsed };
 
-export type ServeKind = "chat" | "embedding";
+export type ServeKind = "chat" | "embedding" | "speech";
 
 /** Inputs an embedding model accepts, in tokens: the Qwen3 Embedding
  *  card's value. */
@@ -73,9 +74,31 @@ export function embedServeArgs(
   ];
 }
 
+/** The argv for one speech server process, after the Python path. */
+export function speechServeArgs(script: string, modelDir: string, internalPort: number): string[] {
+  return [script, "--model", modelDir, "--host", "127.0.0.1", "--port", String(internalPort)];
+}
+
+/** The argv for one process, by its kind. */
+function argsFor(model: Planned, internalPort: number, maxTokens: number): string[] {
+  if (model.kind === "embedding") {
+    return embedServeArgs(embedServerScript(), model.dir, internalPort, EMBED_MAX_LENGTH);
+  }
+  if (model.kind === "speech") {
+    return speechServeArgs(speechServerScript(), model.dir, internalPort);
+  }
+  return serveArgs(model.dir, internalPort, maxTokens);
+}
+
 /** How a process is named in messages: which program, for which model. */
 function processLabel(kind: ServeKind, name: string): string {
-  return kind === "embedding" ? `the embedding server for ${name}` : `mlx_lm.server for ${name}`;
+  if (kind === "embedding") {
+    return `the embedding server for ${name}`;
+  }
+  if (kind === "speech") {
+    return `the speech server for ${name}`;
+  }
+  return `mlx_lm.server for ${name}`;
 }
 
 export function defaultMlxEnv(home: string): string {
@@ -98,6 +121,25 @@ export const MLX_AUDIO_VERSION = "0.5.4";
 export function speechServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxSpeechServer.py");
 }
+
+/** The Python module each kind of process imports. */
+const MODULE_FOR_KIND: Record<ServeKind, string> = {
+  chat: "mlx_lm",
+  embedding: "mlx_lm",
+  speech: "mlx_audio",
+};
+
+/** What a module that will not import means. */
+const PROBLEM_FOR_MODULE: Record<string, PythonProblem> = {
+  mlx_lm: "no-mlx-lm",
+  mlx_audio: "no-mlx-audio",
+};
+
+/** The pip requirement that provides each module. */
+const PIP_FOR_MODULE: Record<string, string> = {
+  mlx_lm: "mlx-lm",
+  mlx_audio: `mlx-audio==${MLX_AUDIO_VERSION}`,
+};
 
 /** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`, then the
  *  default environment under the home directory. */
@@ -144,14 +186,30 @@ export function notServedMessage(served: string[], requested: string): string {
   );
 }
 
-export type PythonProblem = "missing" | "no-mlx-lm";
+export type PythonProblem = "missing" | "no-mlx-lm" | "no-mlx-audio";
 
-/** What to print when the chosen Python is not there, or cannot import
- *  mlx_lm. The venv commands create the default environment; a user who
- *  pointed --python at their own Python is told the flag is the other way
- *  out. */
-export function pythonMissingMessage(python: string, home: string, problem: PythonProblem): string {
+/** What to print when the chosen Python is not there, or cannot import a
+ *  module the planned kinds need. The venv commands create the default
+ *  environment with every module in `modules`; a user who pointed --python
+ *  at their own Python is told the flag is the other way out. */
+export function pythonMissingMessage(
+  python: string,
+  home: string,
+  problem: PythonProblem,
+  modules: string[] = ["mlx_lm"],
+): string {
   const venv = defaultMlxEnv(home);
+  const pip = path.join(venv, "bin", "pip");
+  if (problem === "no-mlx-audio") {
+    return [
+      `${python} cannot import mlx_audio.`,
+      "Agency does not install Python. Install it once:",
+      "",
+      `  ${pip} install mlx-audio==${MLX_AUDIO_VERSION}`,
+      "",
+      "Or point --python at a Python that has mlx-audio installed.",
+    ].join("\n");
+  }
   const what =
     problem === "missing" ? `${python} does not exist.` : `${python} cannot import mlx_lm.`;
   return [
@@ -159,7 +217,7 @@ export function pythonMissingMessage(python: string, home: string, problem: Pyth
     "Agency does not install Python. Create an environment once:",
     "",
     `  python3.12 -m venv ${venv}`,
-    `  ${path.join(venv, "bin", "pip")} install mlx-lm`,
+    `  ${pip} install ${modules.map((m) => PIP_FOR_MODULE[m]).join(" ")}`,
     "",
     "Python 3.11 or newer is required. Or point --python at a Python that has",
     "mlx-lm installed.",
@@ -173,17 +231,31 @@ export type ReadinessOptions = {
    *  the process exits. Readiness stops waiting and rejects. */
   gone?: Promise<string>;
   /** An embedding process cannot answer a chat completion, so it is probed
-   *  with an embeddings request instead. Default chat. */
+   *  with an embeddings request instead, and a speech process with GET
+   *  /health. Default chat. */
   kind?: ServeKind;
 };
 
-/** The one-request probe for each kind of process. Both name the model the
- *  process was started with and ask for as little work as possible. */
-function readinessRequest(kind: ServeKind, upstreamModel: string): { path: string; body: string } {
+type Probe = { method: "GET" | "POST"; path: string; body?: string };
+
+/** The one-request probe for each kind of process. The chat and embedding
+ *  probes name the model the process was started with and ask for as little
+ *  work as possible. The speech script speaks once before it opens its port,
+ *  so an answer on /health already means it can speak; which family needs
+ *  what stays in the Python rules module. */
+function readinessRequest(kind: ServeKind, upstreamModel: string): Probe {
   if (kind === "embedding") {
-    return { path: "/v1/embeddings", body: JSON.stringify({ model: upstreamModel, input: "hi" }) };
+    return {
+      method: "POST",
+      path: "/v1/embeddings",
+      body: JSON.stringify({ model: upstreamModel, input: "hi" }),
+    };
+  }
+  if (kind === "speech") {
+    return { method: "GET", path: "/health" };
   }
   return {
+    method: "POST",
     path: "/v1/chat/completions",
     body: JSON.stringify({
       model: upstreamModel,
@@ -218,7 +290,7 @@ export async function waitUntilLoaded(
     let res: Response;
     try {
       res = await fetchFn(`http://127.0.0.1:${port}${probe.path}`, {
-        method: "POST",
+        method: probe.method,
         headers: { "content-type": "application/json" },
         body: probe.body,
       });
@@ -250,13 +322,23 @@ function execSync(cmd: string, args: string[]): ExecResult {
   return { status: run.status, error: run.error as { code?: string } | undefined };
 }
 
-/** Whether `python` exists and can import mlx_lm. */
-export function checkPython(python: string, exec: Exec = execSync): PythonProblem | "ok" {
-  const run = exec(python, ["-c", "import mlx_lm"]);
-  if (run.error?.code === "ENOENT") {
-    return "missing";
+/** Whether `python` exists and can import each module. The first missing
+ *  module names the problem. */
+export function checkPython(
+  python: string,
+  exec: Exec = execSync,
+  modules: string[] = ["mlx_lm"],
+): PythonProblem | "ok" {
+  for (const module of modules) {
+    const run = exec(python, ["-c", `import ${module}`]);
+    if (run.error?.code === "ENOENT") {
+      return "missing";
+    }
+    if (run.status !== 0) {
+      return PROBLEM_FOR_MODULE[module];
+    }
   }
-  return run.status === 0 ? "ok" : "no-mlx-lm";
+  return "ok";
 }
 
 /** A port nothing is listening on right now, for one mlx_lm.server. */
@@ -280,7 +362,8 @@ export type ServeChoice = { title: string; value: string };
 /** The models `serve` can start without downloading anything: the MLX ones
  *  under the models directory whose record says every file is there. A GGUF
  *  model runs in the Agency process instead, so it is never a choice here,
- *  and an embedding model needs --embedding, which the picker cannot say. */
+ *  and an embedding or speech model needs a flag, which the picker cannot
+ *  say. */
 export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
   // One row per repo id. The same model can sit in both layouts, and two rows
   // with the same value would let you pick it twice, which `runServe` refuses.
@@ -290,7 +373,7 @@ export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
       model.backend === "mlx" &&
       model.complete &&
       byRepo[model.name] === undefined &&
-      _localModelCategory(`mlx:${model.name}`) !== "embedding"
+      !needsFlag(_localModelCategory(`mlx:${model.name}`))
     ) {
       byRepo[model.name] = model;
     }
@@ -388,6 +471,8 @@ export type ServeFlags = {
   logPrompts?: boolean;
   /** Models to serve with the embedding server rather than mlx_lm.server. */
   embedding?: string[];
+  /** Models to serve with the speech server on /v1/audio/speech. */
+  speech?: string[];
 };
 
 function realSpawn(python: string, args: string[]): Child {
@@ -415,20 +500,46 @@ function realDeps(): ServeDeps {
 
 type Planned = { name: string; dir: string; sizeBytes: number; kind: ServeKind };
 
+/** The flag a catalog category has to be served with. Chat models take no
+ *  flag. */
+const FLAG_FOR_CATEGORY: Partial<Record<ModelCategory, string>> = {
+  embedding: "--embedding",
+  speech: "--speech",
+};
+
+/** Whether a catalog category has to be served with a flag. */
+function needsFlag(category: ModelCategory | undefined): boolean {
+  return category !== undefined && FLAG_FOR_CATEGORY[category] !== undefined;
+}
+
+function anArticle(word: string): string {
+  return /^[aeiou]/.test(word) ? `an ${word}` : `a ${word}`;
+}
+
 /** The catalog knows what some models are for. Serving an embedding model
  *  as a chat model, or the reverse, fails only after a long load, so refuse
  *  it up front when the catalog can tell, from the name or from what it
  *  resolves to. */
 function checkKind(value: string, target: string, kind: ServeKind): void {
   const category = _localModelCategory(value) ?? _localModelCategory(target);
-  if (category === "embedding" && kind === "chat") {
+  if (category === undefined) {
+    return;
+  }
+  const wanted = FLAG_FOR_CATEGORY[category];
+  if (kind === "chat" && wanted !== undefined) {
     throw new Error(
-      `${value} is an embedding model. Serve it with: agency local serve --embedding ${value}`,
+      `${value} is ${anArticle(category)} model. Serve it with: agency local serve ${wanted} ${value}`,
     );
   }
-  if (category !== undefined && category !== "embedding" && kind === "embedding") {
+  if (kind !== "chat" && category !== kind) {
+    // Name the flag that works, so the user is not sent through a second
+    // refusal on the way there.
+    const fix =
+      wanted === undefined
+        ? `Pass it without ${FLAG_FOR_CATEGORY[kind]}.`
+        : `Serve it with: agency local serve ${wanted} ${value}`;
     throw new Error(
-      `${value} is a ${category} model, not an embedding model. Pass it without --embedding.`,
+      `${value} is ${anArticle(category)} model, not ${anArticle(kind)} model. ${fix}`,
     );
   }
 }
@@ -481,29 +592,47 @@ function exitOf(child: Child, name: string, kind: ServeKind): Promise<string> {
   });
 }
 
-export function servingBanner(port: number, chat: string[], embedding: string[]): string[] {
-  const count = chat.length + embedding.length;
+export type ServedModel = { name: string; kind: ServeKind };
+
+/** The suffix after a model's name in the banner. Chat models get none. */
+const BANNER_SUFFIX: Record<ServeKind, string> = {
+  chat: "",
+  embedding: "  (embeddings)",
+  speech: "  (speech)",
+};
+
+/** What `serve` prints once every process is ready: the models, in plan
+ *  order, and a sample command for the first model of each kind. */
+export function servingBanner(port: number, models: ServedModel[]): string[] {
+  const count = models.length;
   const lines = [`Serving ${count} model${count === 1 ? "" : "s"} on http://127.0.0.1:${port}/v1:`];
-  for (const m of chat) {
-    lines.push(`  ${m}`);
+  for (const model of models) {
+    lines.push(`  ${model.name}${BANNER_SUFFIX[model.kind]}`);
   }
-  for (const m of embedding) {
-    lines.push(`  ${m}  (embeddings)`);
-  }
-  if (chat.length > 0) {
-    const first = chat[0];
-    const spelled = path.isAbsolute(first) ? first : `mlx:${first}`;
+  const first = (kind: ServeKind) => models.find((model) => model.kind === kind)?.name;
+  const chat = first("chat");
+  if (chat !== undefined) {
+    const spelled = path.isAbsolute(chat) ? chat : `mlx:${chat}`;
     lines.push(
       "",
       `  agency run --local ${spelled} your.agency`,
       `  agency agent --local ${spelled}`,
     );
   }
-  if (embedding.length > 0) {
+  const embedding = first("embedding");
+  if (embedding !== undefined) {
     lines.push(
       "",
       "  For memory, set in agency.json:",
-      `    "memory": { "dir": ".agency-memory", "embeddings": { "model": "${embedding[0]}", "provider": "mlx" } }`,
+      `    "memory": { "dir": ".agency-memory", "embeddings": { "model": "${embedding}", "provider": "mlx" } }`,
+    );
+  }
+  const speech = first("speech");
+  if (speech !== undefined) {
+    lines.push(
+      "",
+      "  Try it:",
+      `    curl -s http://127.0.0.1:${port}/v1/audio/speech -H 'content-type: application/json' -d '{"model": "${speech}", "input": "Hello there."}' -o hello.wav`,
     );
   }
   return lines;
@@ -519,6 +648,7 @@ export async function runServe(
   const planned = [
     ...values.map((v) => planModel(v, deps.cacheDir, "chat")),
     ...(flags.embedding ?? []).map((v) => planModel(v, deps.cacheDir, "embedding")),
+    ...(flags.speech ?? []).map((v) => planModel(v, deps.cacheDir, "speech")),
   ];
   if (planned.length === 0) {
     throw new Error("Name at least one model to serve.");
@@ -541,9 +671,13 @@ export async function runServe(
     deps.env.AGENCY_MLX_PYTHON,
     deps.home,
   );
-  const problem = checkPython(python, deps.exec);
+  // The modules the planned kinds import, each once, in plan order.
+  const modules = planned
+    .map((model) => MODULE_FOR_KIND[model.kind])
+    .filter((module, index, all) => all.indexOf(module) === index);
+  const problem = checkPython(python, deps.exec, modules);
   if (problem !== "ok") {
-    throw new Error(pythonMissingMessage(python, deps.home, problem));
+    throw new Error(pythonMissingMessage(python, deps.home, problem, modules));
   }
 
   const children: Child[] = [];
@@ -558,10 +692,7 @@ export async function runServe(
   const routes: Route[] = [];
   for (const model of planned) {
     const internalPort = await deps.freePort();
-    const args =
-      model.kind === "embedding"
-        ? embedServeArgs(embedServerScript(), model.dir, internalPort, EMBED_MAX_LENGTH)
-        : serveArgs(model.dir, internalPort, maxTokens);
+    const args = argsFor(model, internalPort, maxTokens);
     const child = deps.spawn(python, args);
     children.push(child);
     exits.push(exitOf(child, model.name, model.kind));
@@ -593,8 +724,7 @@ export async function runServe(
     killAll();
     throw err;
   }
-  const namesOf = (kind: ServeKind) => planned.filter((p) => p.kind === kind).map((p) => p.name);
-  for (const line of servingBanner(door.port, namesOf("chat"), namesOf("embedding"))) {
+  for (const line of servingBanner(door.port, planned)) {
     deps.log(line);
   }
   // A terminal Ctrl-C reaches the children before this process, so a
@@ -620,7 +750,10 @@ export async function runServe(
 export async function localServe(values: string[], flags: ServeFlags): Promise<void> {
   let handle: ServeHandle;
   try {
-    const wantsPicker = values.length === 0 && (flags.embedding ?? []).length === 0;
+    const wantsPicker =
+      values.length === 0 &&
+      (flags.embedding ?? []).length === 0 &&
+      (flags.speech ?? []).length === 0;
     const models = wantsPicker ? await pickModelsToServe(realPickDeps(defaultCacheDir())) : values;
     if (wantsPicker && models.length === 0) {
       // Cancelled, or nothing ticked: nothing to serve, and nothing wrong.

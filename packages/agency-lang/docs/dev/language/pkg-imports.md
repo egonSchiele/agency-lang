@@ -40,11 +40,11 @@ When the compiler encounters a `pkg::` import:
 
 4. **Build the symbol table.** The compiler parses the resolved `.agency` file to classify its exports (functions, nodes, types). This is what allows `import { foo } from "pkg::toolbox"` to automatically become an `import tool` if `foo` is a function, or an `import node` if `foo` is a graph node.
 
-5. **Emit a bare specifier.** The compiler does not compile the package's `.agency` files. A package ships its own compiled `.js`, and the generated import points at that. `pkg::` edges are invisible to the compile closure and to the dependency fingerprint, so a module whose subtree touches `pkg::` is never skipped by an incremental build. See `lib/compiler/buildManifest.ts` and `docs/dev/compiler/incremental-builds.md`.
+5. **Emit the path of the compiled entry.** The compiler does not compile the package's `.agency` files. A package ships its own compiled `.js`, and the generated import points at that file by path: `pkg::toolbox` becomes `toolbox/index.js` when the `"agency"` field is `./index.agency`. The compiler also checks that the package's `"exports"` map lists that path, and refuses the import with a message naming the missing entry if it does not. `pkg::` edges are invisible to the compile closure and to the dependency fingerprint, so a module whose subtree touches `pkg::` is never skipped by an incremental build. See `lib/compiler/buildManifest.ts` and `docs/dev/compiler/incremental-builds.md`.
 
 ### At runtime
 
-The generated JavaScript emits bare npm specifiers:
+The generated JavaScript imports the compiled Agency file by path:
 
 ```javascript
 // Agency source
@@ -52,11 +52,17 @@ import { foo } from "pkg::toolbox"
 import { bar } from "pkg::toolbox/strings"
 
 // Generated JS
-import { foo, __fooTool, __fooToolParams } from "toolbox"
+import { foo, __fooTool, __fooToolParams } from "toolbox/index.js"
 import { bar, __barTool, __barToolParams } from "toolbox/strings.js"
 ```
 
 Node.js resolves these from `node_modules` at runtime using its standard module resolution. No special runtime support is needed.
+
+#### Why not the bare package name
+
+An earlier version emitted `import { foo } from "toolbox"` and let Node pick the file. Node answers a bare name from the package's `"exports"` map, and the published packages point that map's `"."` entry at their TypeScript implementation, which is what TypeScript users import. So the compiler type-checked the call against `index.agency` while the program ran whatever the TypeScript file exported under the same name. The Agency wrapper never executed, so its default arguments and its interrupts were skipped. `@agency-lang/kokoro` failed to load, because its TypeScript entry has no export named `speak`. `@agency-lang/tesseract-local` loaded and silently ran the TypeScript `readText`.
+
+Emitting the path of the `"agency"` entry ties the runtime import to the file the compiler checked. It works for any package that exports that file, and it leaves the `"."` entry to the TypeScript API. The CLI integration test `tests/integration/cli/test.mjs` (test 9) installs a package laid out this way, with a same-named TypeScript export and an interrupt only in the wrapper, and checks that the interrupt fires.
 
 ## Publishing an Agency package
 
@@ -73,6 +79,7 @@ An Agency package is a normal npm package that includes `.agency` source files a
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
+    "./index.js": "./index.js",
     "./strings": "./strings.js",
     "./package.json": "./package.json"
   },
@@ -82,7 +89,7 @@ An Agency package is a normal npm package that includes `.agency` source files a
 
 Key fields:
 - **`"agency"`**: Points to the main `.agency` entry file. Required if users will import the package without a subpath (`pkg::my-agency-tools`). Not needed if users always use subpath imports.
-- **`"exports"`**: Standard npm field for Node's module resolution at runtime. Include `"./package.json": "./package.json"` so the Agency compiler can read it during resolution.
+- **`"exports"`**: Standard npm field for Node's module resolution at runtime. It must list the compiled form of the `"agency"` entry, here `"./index.js"`, because that is the file a `pkg::` import loads. Include `"./package.json": "./package.json"` so the Agency compiler can read it during resolution. The `"."` entry is free for whatever TypeScript users should get.
 - **`"files"`**: Include both `.agency` sources and compiled `.js` output.
 
 ### Publish workflow
@@ -109,7 +116,7 @@ npm install my-agency-tools
 
 The implementation touches these files:
 
-- **`lib/importPaths.ts`** — Core resolution logic. `isPkgImport()`, `parsePkgImport()`, `resolvePkgAgencyPath()`. Also `isAgencyImport()` which is a unified check for all Agency import types (`.agency`, `std::`, `pkg::`).
+- **`lib/importPaths.ts`** — Core resolution logic. `isPkgImport()`, `parsePkgImport()`, `resolvePkgAgencyPath()`. `toCompiledImportPath()` turns a bare `pkg::` import into the path of the compiled `"agency"` entry and checks the `"exports"` map lists it. Also `isAgencyImport()` which is a unified check for all Agency import types (`.agency`, `std::`, `pkg::`).
 - **`lib/symbolTable.ts`** — Follows `pkg::` imports when building the symbol table.
 - **`lib/preprocessors/importResolver.ts`** — Resolves `pkg::` imports into specialized AST nodes (import tool, import node, etc.) based on symbol kind.
 - **`lib/analysis/imports.ts`** — `getImports()` includes `pkg::` imports in the dependency list. `lib/cli/util.ts` builds on it with `getImportsRecursively()`.
@@ -137,6 +144,7 @@ The implementation touches these files:
 
 Unit and integration tests are in `lib/importPaths.test.ts`. The integration tests use fixture packages at `tests/pkg-imports/`:
 
-- `tests/pkg-imports/node_modules/test-agency-pkg/` — package with an `"agency"` field
+- `tests/pkg-imports/node_modules/test-agency-pkg/` — package with an `"agency"` field and no `"exports"` map
+- `tests/pkg-imports/node_modules/test-agency-pkg-exports/` — package whose `"exports"` map points `"."` elsewhere and lists `"./index.js"`, like the published packages
 - `tests/pkg-imports/node_modules/test-agency-pkg2/` — package without an `"agency"` field, imported by subpath
 - `tests/pkg-imports/main.agency` — test file that imports from both packages

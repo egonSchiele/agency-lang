@@ -13,16 +13,18 @@
       "types": "./dist/src/speak.d.ts",
       "import": "./dist/src/speak.js"
     },
+    "./index.js": "./index.js",
     "./package.json": "./package.json"
   },
   "files": [
     "dist/",
     "index.agency",
     "models.lock.json",
-    "README.md"
+    "README.md",
+    "index.js"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && agency compile index.agency",
     "test": "vitest",
     "test:run": "vitest run"
   },

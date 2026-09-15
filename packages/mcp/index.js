@@ -20,13 +20,16 @@ import {
   isInterrupt,
   hasInterrupts,
   isDebugger,
+  isPaused,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
+  resumeFromCheckpoint as _resumeFromCheckpoint,
+  resumeCliFromCheckpoint as _resumeCliFromCheckpoint,
   rewindFrom as _rewindFrom,
   runExportedFunction as _runExportedFunction,
   runExportedFunctionForServe as _runExportedFunctionForServe,
   runNodeForServe as _runNodeForServe,
-  RestoreSignal,
+  RunControlSignal,
   AgencyAbort,
   AbortedResult,
   __registerGlobalsInit,
@@ -101,8 +104,10 @@ function propagate() {
 function pass() {
   return { type: "pass" };
 }
-const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata });
+const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+const resumeFromCheckpoint = (paused, opts) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 const rewindFrom = (checkpoint2, overrides, opts) => _rewindFrom({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, metadata: opts?.metadata });
+const __resumeFromCheckpoint = (checkpoint2, overrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint: checkpoint2, overrides });
 const __invokeFunction = (fn, namedArgs) => _runExportedFunction({ ctx: __globalCtx, fn, namedArgs, initializeGlobals: __initializeGlobals });
 const __invokeFunctionForServe = (fn, namedArgs, invocation) => _runExportedFunctionForServe({ ctx: __globalCtx, fn, namedArgs, invocation, initializeGlobals: __initializeGlobals });
 const __invokeNodeForServe = (nodeName, data, invocation) => _runNodeForServe({ ctx: __globalCtx, nodeName, data, invocation, initializeGlobals: __initializeGlobals });
@@ -145,6 +150,7 @@ function registerTools(tools) {
     }
   }
 }
+__registerModuleFingerprint("index.agency", "887556b3b15b52607e7355d81419650799558b239f6cb64f71bc93556f412044", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -205,8 +211,8 @@ async function __mcp_impl(serverName, onOAuthRequired = __UNSET) {
   __self.__destructiveRan = __self.__destructiveRan ?? false;
   const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "mcp", threads: __setupData.threads });
   let __resultCheckpointId = -1;
-  if (__ctx._pendingArgOverrides) {
-    const __overrides = __ctx._pendingArgOverrides;
+  if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
+    const __overrides = __ctx._pendingArgOverrides.values;
     __ctx._pendingArgOverrides = void 0;
     if ("serverName" in __overrides) {
       serverName = __overrides["serverName"];
@@ -253,7 +259,7 @@ async function __mcp_impl(serverName, onOAuthRequired = __UNSET) {
       return runner.haltResult;
     }
   } catch (__error) {
-    if (__error instanceof RestoreSignal) {
+    if (__error instanceof RunControlSignal) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
@@ -318,7 +324,6 @@ const mcp = __AgencyFunction.create({
 }, __toolRegistry);
 var stdin_default = graph;
 const __sourceMap = { "index.agency:mcp": { "1": { "line": 41, "col": 2 } } };
-__registerModuleFingerprint("index.agency", "9fa5de379a8bd48f59469caacda45b9ba532e60feae23f87a4a44f96baaa3438", import.meta.url);
 export {
   __getCheckpoints,
   __invokeFunction,
@@ -336,8 +341,10 @@ export {
   interrupt,
   isDebugger,
   isInterrupt,
+  isPaused,
   mcp,
   reject,
   respondToInterrupts,
+  resumeFromCheckpoint,
   rewindFrom
 };

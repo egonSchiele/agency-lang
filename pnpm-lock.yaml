@@ -127,6 +127,9 @@ importers:
 
   packages/examples:
     dependencies:
+      '@agency-lang/kokoro':
+        specifier: workspace:*
+        version: link:../kokoro
       '@agency-lang/mcp':
         specifier: workspace:*
         version: link:../mcp

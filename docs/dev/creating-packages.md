@@ -43,6 +43,7 @@ packages/<package-name>/
       "types": "./dist/src/<implementation>.d.ts",
       "import": "./dist/src/<implementation>.js"
     },
+    "./index.js": "./index.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -55,7 +56,7 @@ packages/<package-name>/
   "bugs": { "url": "https://github.com/egonSchiele/agency-lang/issues" },
   "homepage": "https://github.com/egonSchiele/agency-lang",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && agency compile index.agency",
     "agency": "agency",
     "test": "vitest",
     "test:run": "vitest run",
@@ -220,14 +221,14 @@ export async function myFunction(
 
 ## Compiling index.agency to index.js
 
-The `index.js` file is the compiled output of `index.agency` and must be committed. To generate it:
+The `index.js` file is the compiled output of `index.agency`. It is what a `pkg::` import of the package loads, so it must be committed and listed in `"exports"` as `"./index.js"`. The `build` script regenerates it after `tsc`:
 
 ```bash
-cd packages/agency-lang
-pnpm run compile ../web-fetch/index.agency
+cd packages/<package-name>
+pnpm run build
 ```
 
-This outputs the compiled JS. Redirect to `index.js` in the package directory. The compiled file is large and full of runtime boilerplate, so never edit it by hand.
+The `agency` command comes from the `agency-lang` dev dependency, so `packages/agency-lang` must be built first. The compiled file is large and full of runtime boilerplate, so never edit it by hand. The repo's `.gitignore` ignores every `.js` file, so the first commit needs `git add -f index.js`.
 
 ## How Users Import the Package
 
@@ -235,6 +236,8 @@ From Agency code:
 ```ts
 import { myFunction } from "pkg::@agency-lang/<package-name>"
 ```
+
+This compiles to `import { myFunction } from "@agency-lang/<package-name>/index.js"`, the Agency wrapper. A bare package name would go through the `"."` entry of `"exports"` and run the TypeScript implementation, skipping the wrapper's defaults and interrupts. The compiler refuses the import if `"exports"` does not list `"./index.js"`.
 
 From TypeScript code (importing the TS implementation directly):
 ```ts
@@ -251,7 +254,7 @@ import { myFunction } from "@agency-lang/<package-name>"
 6. Write `src/<impl>.test.ts`, unit tests with mocked fetch
 7. Write `index.agency`, a thin Agency wrapper with doc comments
 8. Run `pnpm install` from repo root to link workspace deps
-9. Run `pnpm run build` in the package to compile TS
-10. Compile `index.agency` to `index.js` (see command above)
+9. Run `pnpm run build` in the package to compile the TypeScript and the wrapper
+10. Check that `pnpm run build` also produced `index.js`, and add it with `git add -f`
 11. Write `tests/agency/<test>.agency`, an integration test
 12. Nothing to add to `pnpm-workspace.yaml`. It globs `packages/*`, so a new directory there is picked up automatically.

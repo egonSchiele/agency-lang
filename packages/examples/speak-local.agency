@@ -1,0 +1,15 @@
+// Offline text-to-speech with @agency-lang/kokoro. The first run asks to
+// download the model (326 MB for fp32) and verifies it against the package
+// lockfile. Later runs read the local copy with no network access.
+// Delete speak-local.wav before running again, because speak never
+// overwrites a file.
+import { speak } from "pkg::@agency-lang/kokoro"
+
+node main() {
+  handle {
+    const path = speak("The build finished. Three tests failed.", "speak-local.wav", "af_heart", "fp32", 1.5)
+    print(path)
+  } with (intr) {
+    return approve()
+  }
+}

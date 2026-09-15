@@ -10,6 +10,7 @@
       "types": "./dist/src/email.d.ts",
       "import": "./dist/src/email.js"
     },
+    "./index.js": "./index.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -24,7 +25,7 @@
   },
   "homepage": "https://github.com/egonSchiele/agency-lang",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && agency compile index.agency",
     "test": "vitest",
     "test:run": "vitest run",
     "test:agency": "agency tests/agency"

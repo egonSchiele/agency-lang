@@ -453,28 +453,11 @@ function findInstalledPkgDir(
 }
 
 /**
- * Resolve a pkg:: import to an absolute filesystem path to the .agency file.
- * Uses createRequire rooted at the importing file's directory to find the
- * package via Node's module resolution, then reads its package.json "agency"
- * field for the entry point.
+ * Read a package's "agency" field: the .agency file a bare `pkg::` import
+ * means. Returns the path relative to the package root with no leading "./",
+ * such as "index.agency".
  */
-export function resolvePkgAgencyPath(importPath: string, fromFile: string): string {
-  const { packageName, subpath } = parsePkgImport(importPath);
-  const req = createRequire(fromFile);
-  const { pkgJsonPath, pkgDir } = findInstalledPkgDir(packageName, req, importPath, fromFile);
-
-  if (subpath) {
-    const resolved = path.join(pkgDir, subpath + ".agency");
-    // Verify the resolved path is still within the package directory
-    if (!resolved.startsWith(pkgDir + path.sep) && resolved !== pkgDir) {
-      throw new Error(
-        `Import path '${importPath}' resolves to '${resolved}' which is outside the package directory '${pkgDir}'.`,
-      );
-    }
-    return resolved;
-  }
-
-  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+function pkgAgencyEntry(pkgJson: any, pkgDir: string, packageName: string): string {
   const agencyEntry = pkgJson.agency;
   if (!agencyEntry || typeof agencyEntry !== "string") {
     throw new Error(
@@ -497,7 +480,79 @@ export function resolvePkgAgencyPath(importPath: string, fromFile: string): stri
         `the package directory '${pkgDir}'.`,
     );
   }
-  return resolved;
+  return normalizedEntry;
+}
+
+/**
+ * Resolve a pkg:: import to an absolute filesystem path to the .agency file.
+ * Uses createRequire rooted at the importing file's directory to find the
+ * package via Node's module resolution, then reads its package.json "agency"
+ * field for the entry point.
+ */
+export function resolvePkgAgencyPath(importPath: string, fromFile: string): string {
+  const { packageName, subpath } = parsePkgImport(importPath);
+  const req = createRequire(fromFile);
+  const { pkgJsonPath, pkgDir } = findInstalledPkgDir(packageName, req, importPath, fromFile);
+
+  if (subpath) {
+    const resolved = path.join(pkgDir, subpath + ".agency");
+    // Verify the resolved path is still within the package directory
+    if (!resolved.startsWith(pkgDir + path.sep) && resolved !== pkgDir) {
+      throw new Error(
+        `Import path '${importPath}' resolves to '${resolved}' which is outside the package directory '${pkgDir}'.`,
+      );
+    }
+    return resolved;
+  }
+
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+  return path.resolve(pkgDir, pkgAgencyEntry(pkgJson, pkgDir, packageName));
+}
+
+/**
+ * Whether Node will let `import "<package>/<subpath>"` through the package's
+ * "exports" field. No field means Node falls back to plain file paths. A
+ * string, an array, or an object of conditions all describe "." alone. A
+ * pattern key such as "./*" is left for Node to judge.
+ */
+function exportsMapExposes(exportsField: unknown, subpath: string): boolean {
+  if (exportsField === undefined || exportsField === null) {
+    return true;
+  }
+  if (typeof exportsField !== "object" || Array.isArray(exportsField)) {
+    return false;
+  }
+  const keys = Object.keys(exportsField);
+  const isSubpathMap = keys.every((key) => key.startsWith("."));
+  if (!isSubpathMap) {
+    return false;
+  }
+  return keys.includes(subpath) || keys.some((key) => key.includes("*"));
+}
+
+/**
+ * The specifier generated code imports for a bare `pkg::` import: the
+ * compiled form of the package's "agency" entry, such as
+ * "@agency-lang/kokoro/index.js". A bare package name would go through the
+ * package's "exports" map instead, which usually points at the TypeScript
+ * implementation and would skip the Agency wrapper the compiler checked
+ * against, along with any interrupts it raises.
+ */
+function compiledPkgEntry(importPath: string, packageName: string, fromFile: string): string {
+  const req = createRequire(fromFile);
+  const { pkgJsonPath, pkgDir } = findInstalledPkgDir(packageName, req, importPath, fromFile);
+  const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+  const compiled = pkgAgencyEntry(pkgJson, pkgDir, packageName).replace(/\.agency$/, ".js");
+  if (!exportsMapExposes(pkgJson.exports, `./${compiled}`)) {
+    throw new ImportResolutionError(
+      `Package '${packageName}': its "exports" map does not export "./${compiled}", the compiled ` +
+        `form of its "agency" entry. A pkg:: import runs that file, so the package must add ` +
+        `"./${compiled}": "./${compiled}" to "exports".`,
+      undefined,
+      fromFile,
+    );
+  }
+  return `${packageName}/${compiled}`;
 }
 
 /**
@@ -526,6 +581,8 @@ export function resolveAgencyImportPath(importPath: string, fromFile: string): s
  * TypeScript import statements.
  *
  * - "std::foo"      -> relative path to <stdlib-dir>/foo.js from the source file
+ * - "pkg::toolbox"  -> "toolbox/index.js" (the compiled "agency" entry)
+ * - "pkg::toolbox/x" -> "toolbox/x.js"
  * - "./foo.agency"  -> "./foo.js" (relative, just extension swap)
  *
  * @param fromFile - Absolute path of the source file containing the import.
@@ -537,12 +594,17 @@ export function toCompiledImportPath(importPath: string, fromFile?: string): str
     return "agency-lang/stdlib/" + normalizeStdlibPath(importPath) + ".js";
   }
   if (isPkgImport(importPath)) {
-    // Emit bare specifier — Node resolves it at runtime via node_modules
     const { packageName, subpath } = parsePkgImport(importPath);
     if (subpath) {
       return `${packageName}/${subpath}.js`;
     }
-    return packageName;
+    if (fromFile === undefined) {
+      throw new Error(
+        `Cannot compile import "${importPath}" without the importing file: the package's ` +
+          `"agency" field decides which compiled file to import.`,
+      );
+    }
+    return compiledPkgEntry(importPath, packageName, fromFile);
   }
   return importPath.replace(/\.agency$/, ".js");
 }

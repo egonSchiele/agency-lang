@@ -20,6 +20,7 @@ import * as path from "path";
 import { parseAgency } from "./parser.js";
 import { CompileStrategy, RunStrategy } from "./importStrategy.js";
 import { SymbolTable } from "./symbolTable.js";
+import { safeDeleteDirectoryWithin } from "./utils.js";
 
 describe("findPackageRoot", () => {
   it("should find the package root from a nested directory", () => {
@@ -207,23 +208,99 @@ describe("parsePkgImport", () => {
   });
 });
 
+// Integration tests using the fixture package at tests/pkg-imports/
+const PKG_IMPORTS_DIR = path.resolve(__dirname, "..", "tests", "pkg-imports");
+const FIXTURE_MAIN = path.join(PKG_IMPORTS_DIR, "main.agency");
+const FIXTURE_PKG_DIR = path.join(PKG_IMPORTS_DIR, "node_modules", "test-agency-pkg");
+const FIXTURE_PKG2_DIR = path.join(PKG_IMPORTS_DIR, "node_modules", "test-agency-pkg2");
+
 describe("toCompiledImportPath for pkg::", () => {
-  it("should produce bare specifier for top-level package", () => {
-    expect(toCompiledImportPath("pkg::toolbox")).toBe("toolbox");
+  it("emits the compiled Agency entry, not the bare package name", () => {
+    // Node resolves a bare name through the package's exports map, which
+    // usually points at the TypeScript implementation, not the Agency wrapper.
+    expect(toCompiledImportPath("pkg::test-agency-pkg", FIXTURE_MAIN)).toBe(
+      "test-agency-pkg/index.js",
+    );
+  });
+
+  it("accepts a package whose exports map lists the compiled entry", () => {
+    expect(toCompiledImportPath("pkg::test-agency-pkg-exports", FIXTURE_MAIN)).toBe(
+      "test-agency-pkg-exports/index.js",
+    );
   });
 
   it("should produce bare specifier with .js for subpath", () => {
-    expect(toCompiledImportPath("pkg::toolbox/strings")).toBe("toolbox/strings.js");
-  });
-
-  it("should handle scoped packages", () => {
-    expect(toCompiledImportPath("pkg::@myorg/toolbox")).toBe("@myorg/toolbox");
+    expect(toCompiledImportPath("pkg::test-agency-pkg2/foo", FIXTURE_MAIN)).toBe(
+      "test-agency-pkg2/foo.js",
+    );
   });
 
   it("should handle scoped packages with subpath", () => {
-    expect(toCompiledImportPath("pkg::@myorg/toolbox/strings")).toBe("@myorg/toolbox/strings.js");
+    expect(toCompiledImportPath("pkg::@myorg/toolbox/strings", FIXTURE_MAIN)).toBe(
+      "@myorg/toolbox/strings.js",
+    );
+  });
+
+  it("refuses a package whose exports map hides the compiled entry", () => {
+    withTempPackage(
+      "hidden-entry",
+      {
+        agency: "./index.agency",
+        exports: { ".": "./dist/impl.js", "./package.json": "./package.json" },
+      },
+      (fromFile) => {
+        expect(() => toCompiledImportPath("pkg::hidden-entry", fromFile)).toThrow(
+          /"exports" map does not export ".\/index.js"/,
+        );
+      },
+    );
+  });
+
+  it("refuses a package whose exports field is a single string", () => {
+    withTempPackage(
+      "string-exports",
+      { agency: "./index.agency", exports: "./dist/impl.js" },
+      (fromFile) => {
+        expect(() => toCompiledImportPath("pkg::string-exports", fromFile)).toThrow(
+          /"exports" map does not export ".\/index.js"/,
+        );
+      },
+    );
+  });
+
+  it("needs the importing file to find the package", () => {
+    expect(() => toCompiledImportPath("pkg::test-agency-pkg")).toThrow(/importing file/);
   });
 });
+
+/**
+ * Write a package into a temp node_modules and hand the test a file that
+ * imports from there.
+ */
+function withTempPackage(
+  name: string,
+  pkgJson: Record<string, unknown>,
+  fn: (fromFile: string) => void,
+): void {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agency-pkg-test-"));
+  try {
+    const pkgDir = path.join(tmpDir, "node_modules", name);
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(pkgDir, "package.json"),
+      JSON.stringify({ name, version: "1.0.0", ...pkgJson }),
+    );
+    fs.writeFileSync(path.join(pkgDir, "index.agency"), "");
+    // The entry every exports map here points at, so Node can find the package.
+    fs.mkdirSync(path.join(pkgDir, "dist"));
+    fs.writeFileSync(path.join(pkgDir, "dist", "impl.js"), "");
+    const fromFile = path.join(tmpDir, "main.agency");
+    fs.writeFileSync(fromFile, "");
+    fn(fromFile);
+  } finally {
+    safeDeleteDirectoryWithin(os.tmpdir(), tmpDir);
+  }
+}
 
 describe("SymbolTable.build with std:: imports", () => {
   it("should resolve std:: imports and include their symbols", () => {
@@ -250,12 +327,6 @@ describe("SymbolTable.build with std:: imports", () => {
     fs.rmdirSync(tmpDir);
   });
 });
-
-// Integration tests using the fixture package at tests/pkg-imports/
-const PKG_IMPORTS_DIR = path.resolve(__dirname, "..", "tests", "pkg-imports");
-const FIXTURE_MAIN = path.join(PKG_IMPORTS_DIR, "main.agency");
-const FIXTURE_PKG_DIR = path.join(PKG_IMPORTS_DIR, "node_modules", "test-agency-pkg");
-const FIXTURE_PKG2_DIR = path.join(PKG_IMPORTS_DIR, "node_modules", "test-agency-pkg2");
 
 describe("pkg:: resolution with fixture package", () => {
   it("should resolve pkg:: import to the .agency file in node_modules", () => {

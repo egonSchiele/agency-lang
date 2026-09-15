@@ -7,6 +7,7 @@ import { z } from "zod";
 export const messageThreadJSONSchema = z.object({
   messages: z.array(z.any()),
   messageLabels: z.array(z.string().nullable()).optional(),
+  messageScopes: z.array(z.string().nullable()).optional(),
   parentId: z.string().nullable().optional(),
   hidden: z.boolean().optional(),
   label: z.string().nullable().optional(),

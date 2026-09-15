@@ -5,14 +5,13 @@
     "allWellFormed": true,
     "roles": [
       "user",
-      "assistant",
       "user",
       "assistant",
       "tool",
       "assistant",
       "user"
     ],
-    "markerOnAssistant": true,
+    "noDispatchNarration": true,
     "toolTexts": [
       "value-of-k"
     ],
@@ -31,7 +30,6 @@
     "callerKeptPersona": 0,
     "roles": [
       "user",
-      "assistant",
       "user",
       "assistant",
       "user"
@@ -56,7 +54,6 @@
     "bodyRequestLength": 1,
     "roles": [
       "user",
-      "assistant",
       "user"
     ],
     "resume": 1
@@ -65,10 +62,9 @@
     "result": "subthread done",
     "requestCount": 3,
     "allWellFormed": true,
-    "bodySawCaller": 1,
+    "bodySawCaller": true,
     "roles": [
       "user",
-      "assistant",
       "user"
     ],
     "resume": 1
@@ -78,11 +74,10 @@
     "result": "pause done",
     "requestCount": 4,
     "allWellFormed": true,
-    "markers": 1,
+    "markers": 0,
     "resumes": 1,
     "roles": [
       "user",
-      "assistant",
       "user",
       "assistant",
       "tool",
@@ -98,11 +93,10 @@
     "requestCount": 4,
     "allWellFormed": true,
     "rejectionSeenByBody": 1,
-    "markers": 1,
+    "markers": 0,
     "resumes": 1,
     "roles": [
       "user",
-      "assistant",
       "user",
       "assistant",
       "tool",
@@ -116,7 +110,6 @@
     "allWellFormed": true,
     "roles": [
       "user",
-      "assistant",
       "user"
     ],
     "resumeSaysStopped": 1,
@@ -129,10 +122,9 @@
     "allWellFormed": true,
     "roles": [
       "user",
-      "assistant",
       "user"
     ],
-    "markers": 1,
+    "markers": 0,
     "resumeCarriesRejection": 1
   },
   "nested": {
@@ -141,16 +133,14 @@
     "allWellFormed": true,
     "roles": [
       "user",
-      "assistant",
       "user",
-      "assistant",
       "user",
       "assistant",
       "user",
       "assistant",
       "user"
     ],
-    "markers": 2,
+    "markers": 0,
     "resumes": 2,
     "toolMessages": 0
   },
@@ -160,10 +150,9 @@
     "allWellFormed": true,
     "bodySawPersona": 1,
     "callerKeptPersona": 0,
-    "markers": 1,
+    "markers": 0,
     "roles": [
       "user",
-      "assistant",
       "user",
       "assistant",
       "tool",
@@ -178,7 +167,7 @@
     "firstBodySawPersona": 1,
     "secondBodySawPersona": 1,
     "callerKeptPersona": 0,
-    "markers": 2,
+    "markers": 0,
     "resumes": 2
   },
   "twoHandoffs": {
@@ -205,7 +194,6 @@
     "allWellFormed": true,
     "roles": [
       "user",
-      "assistant",
       "user"
     ],
     "resumeCarriesJson": 1
@@ -216,9 +204,7 @@
     "allWellFormed": true,
     "roles": [
       "user",
-      "assistant",
       "user",
-      "assistant",
       "user",
       "assistant",
       "tool",
@@ -227,7 +213,7 @@
       "assistant",
       "user"
     ],
-    "markers": 2,
+    "markers": 0,
     "resumes": 2,
     "toolTexts": [
       "ran p4"
@@ -237,10 +223,9 @@
     "result": "async done / main sees",
     "requestCount": 4,
     "allWellFormed": true,
-    "bodySawCaller": 1,
+    "bodySawCaller": true,
     "asyncFinalRoles": [
       "user",
-      "assistant",
       "user",
       "assistant",
       "user"
@@ -258,7 +243,6 @@
     "explicitFinalRoles": [
       "user",
       "user",
-      "assistant",
       "user",
       "assistant",
       "user"
@@ -266,14 +250,13 @@
     "activeThreadRoles": [
       "user",
       "user",
-      "assistant",
       "user",
       "assistant",
       "user",
       "assistant",
       "user"
     ],
-    "activeThreadSawHandoff": 3
+    "activeThreadSawHandoff": 2
   },
   "callerSystemVisible": {
     "result": "caller done",
@@ -286,7 +269,6 @@
     "roles": [
       "system",
       "user",
-      "assistant",
       "user",
       "assistant",
       "user"
@@ -307,7 +289,7 @@
     "loserThreadFound": true,
     "parkedRequestSawPersona": true,
     "loserKeptPersona": 0,
-    "loserKeptMarker": 1,
-    "loserMarkedCancelled": 1
+    "loserKeptMarker": 0,
+    "loserMarkedCancelled": 0
   }
 }

@@ -83,10 +83,10 @@ const allWellFormed = (state) => state.requests.every(wellFormed);
 
 const results = {};
 
-// The subagent's messages land on the caller's thread: the marker
-// replaces the tool call, the leaf tool's exchange stays paired, and the
-// resume message carries the result. The subagent's first request shows
-// it saw the caller's history.
+// The subagent's messages land on the caller's thread: the tool call is
+// dropped, the leaf tool's exchange stays paired, and the resume message
+// carries the result. The subagent's first request shows it saw the
+// caller's history, and nothing on the thread narrates the dispatch.
 {
   const { state, callbacks } = makeCapture();
   const result = await basic({ callbacks });
@@ -97,17 +97,14 @@ const results = {};
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
     roles: roles(final),
-    markerOnAssistant:
-      final[1].role === "assistant" &&
-      text(final[1]).includes("[dispatching subagent") &&
-      !hasToolCalls(final[1]),
+    noDispatchNarration: count(final, "dispatching") === 0,
     toolTexts: toolTexts(final),
     resumeCarriesResult: text(final[final.length - 1]).includes(
       "[subagent finished. inner answer]",
     ),
     subagentSawCaller:
       text(subagentFirst[0]) === "Answer with the subagent." &&
-      count(subagentFirst, "[dispatching subagent") === 1,
+      count(subagentFirst, "dispatching") === 0,
     toolStarts: state.toolStarts,
   };
 }
@@ -169,7 +166,7 @@ const results = {};
     result: result.data,
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
-    bodySawCaller: count(state.requests[1], "[dispatching subthreadedAgent"),
+    bodySawCaller: count(state.requests[1], text(state.requests[0][0])) >= 1,
     roles: roles(last(state)),
     resume: count(last(state), "[subthreadedAgent finished. subthreaded answer]"),
   };
@@ -391,7 +388,7 @@ const results = {};
     result: result.data,
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
-    bodySawCaller: count(state.requests[1], "[dispatching subagent"),
+    bodySawCaller: count(state.requests[1], text(state.requests[0][0])) >= 1,
     asyncFinalRoles: roles(state.requests[2]),
     mainThreadRoles: roles(final),
     mainThreadSawHandoff: count(final, "[dispatching") + count(final, "async inner"),
@@ -410,7 +407,7 @@ const results = {};
     allWellFormed: allWellFormed(state),
     bodySawExplicit:
       count(state.requests[1], "earlier context") === 1 &&
-      count(state.requests[1], "[dispatching subagent") === 1,
+      count(state.requests[1], "Answer with the subagent.") === 1,
     explicitFinalRoles: roles(state.requests[2]),
     activeThreadRoles: roles(final),
     activeThreadSawHandoff: count(final, "[dispatching") + count(final, "explicit inner"),
@@ -518,8 +515,8 @@ const answeringClient = (rules) => ({
     asyncFinals: finals.length,
     eachFinalHoldsOneBody: finals.every(
       (messages) =>
-        roles(messages).join(",") === "user,assistant,user,assistant,user" &&
-        count(messages, "[dispatching subagent") === 1 &&
+        roles(messages).join(",") === "user,user,assistant,user" &&
+        count(messages, "[dispatching subagent") === 0 &&
         count(messages, "brief: " + text(messages[0])) === 1,
     ),
     mainThreadRoles: roles(main),
@@ -529,8 +526,8 @@ const answeringClient = (rules) => ({
 
 // A race loser inside a handoff body. The winner is held until the
 // loser's body has pushed its persona and sent its request, so the abort
-// lands mid-body. The persona is gone from the loser's thread afterwards
-// and the marker stays as the record of the attempt.
+// lands mid-body. The persona is gone from the loser's thread afterwards;
+// the resume message is the record of the attempt.
 {
   let releaseWinner = () => {};
   const parkedRequestStarted = new Promise((resolve) => {
@@ -552,7 +549,7 @@ const answeringClient = (rules) => ({
   const { state, callbacks } = makeCapture();
   const result = await cancelledHandoff({ callbacks });
   const threads = Array.isArray(result.data) ? result.data : [];
-  const loser = threads.find((messages) => count(messages, "[dispatching parkingAgent") === 1);
+  const loser = threads.find((messages) => count(messages, "[parkingAgent finished.") === 1);
   results.cancelledHandoff = {
     loserThreadFound: loser !== undefined,
     parkedRequestSawPersona: state.requests.some(

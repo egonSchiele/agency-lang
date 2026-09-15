@@ -2,84 +2,95 @@ import { describe, it, expect } from "vitest";
 import * as smoltalk from "smoltalk";
 import { MessageThread } from "./state/messageThread.js";
 import {
-  applyHandoffMarker,
+  dropHandoffToolCall,
   finishHandoff,
-  handoffMarkerText,
+  finishStoppedHandoff,
   handoffNotAloneMessage,
   handoffResumeText,
+  handoffScopeKey,
   stripHandoffSystemMessages,
 } from "./handoff.js";
 
 const toolCall = () => new smoltalk.ToolCall("call-1", "explorer", { question: "why" });
-const args = { question: "why" };
+// The key a top-level dispatch of `explorer` gets: depth 0, no scope open.
+const scopeKey = handoffScopeKey(new MessageThread(), "explorer", "call-1");
 
 const contents = (thread: MessageThread) => thread.getMessages().map((message) => message.content);
 const roles = (thread: MessageThread) => thread.getMessages().map((message) => message.role);
 
-describe("applyHandoffMarker", () => {
-  it("keeps the assistant's text, drops the tool call, appends the marker, keeps the label", () => {
+describe("dropHandoffToolCall", () => {
+  it("keeps the assistant's text, drops the tool call, keeps the label", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("hello"));
     thread.push(
       smoltalk.assistantMessage("I'll ask the explorer.", { toolCalls: [toolCall()] }),
       "main",
     );
-    applyHandoffMarker(thread, "explorer", args);
+    dropHandoffToolCall(thread);
     const last = thread.getMessages()[1];
     expect(last.role).toBe("assistant");
-    expect(last.content).toBe(`I'll ask the explorer.\n\n${handoffMarkerText("explorer", args)}`);
+    expect(last.content).toBe("I'll ask the explorer.");
     const json = last.toJSON() as { toolCalls?: unknown[] };
     expect(json.toolCalls ?? []).toEqual([]);
     expect(thread.labelAt(1)).toBe("main");
   });
 
-  it("uses the marker alone when the assistant wrote no text", () => {
+  it("removes the message when the assistant wrote no text", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("hello"));
     thread.push(smoltalk.assistantMessage(null, { toolCalls: [toolCall()] }));
-    applyHandoffMarker(thread, "explorer", args);
-    expect(thread.getMessages()[1].content).toBe(handoffMarkerText("explorer", args));
+    dropHandoffToolCall(thread);
+    expect(roles(thread)).toEqual(["user"]);
   });
 
   it("refuses a thread that does not end on an assistant message", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("hello"));
-    expect(() => applyHandoffMarker(thread, "explorer", {})).toThrow(/assistant/);
+    expect(() => dropHandoffToolCall(thread)).toThrow(/assistant/);
   });
 });
 
 /** A thread as it stands when a handoff body returns: the caller's own
- *  system prompt, the marker, then the body's persona and work. */
+ *  system prompt and request, then the body's persona and work, pushed
+ *  while the dispatch's scope was open. */
 const threadAfterBody = () => {
   const thread = new MessageThread();
   thread.push(smoltalk.systemMessage("caller persona"));
   thread.push(smoltalk.userMessage("hello"));
-  thread.push(smoltalk.assistantMessage(handoffMarkerText("explorer", args)));
+  thread.enterHandoffScope(scopeKey);
   thread.push(smoltalk.systemMessage("subagent persona"));
   thread.push(smoltalk.userMessage("brief"));
   thread.push(smoltalk.assistantMessage("the answer"));
+  thread.exitHandoffScope();
   return thread;
 };
 
 describe("finishHandoff", () => {
-  it("removes the system messages after the marker and hands control back", () => {
+  it("removes the body's system messages and hands control back", () => {
     const thread = threadAfterBody();
-    finishHandoff(thread, "explorer", args, "the answer");
-    expect(roles(thread)).toEqual(["system", "user", "assistant", "user", "assistant", "user"]);
+    finishHandoff({ thread, scopeKey, toolName: "explorer", body: "the answer" });
+    expect(roles(thread)).toEqual(["system", "user", "user", "assistant", "user"]);
     expect(contents(thread)[0]).toBe("caller persona");
-    expect(contents(thread)[5]).toBe(handoffResumeText("explorer", "the answer"));
+    expect(contents(thread)[4]).toBe(handoffResumeText("explorer", "the answer"));
   });
 
-  it("strips only after the newest marker for this dispatch", () => {
+  it("leaves nothing on the thread that narrates the dispatch", () => {
+    const thread = threadAfterBody();
+    finishHandoff({ thread, scopeKey, toolName: "explorer", body: "the answer" });
+    expect(contents(thread).join("\n")).not.toContain("dispatching");
+  });
+
+  it("removes only this dispatch's system messages", () => {
     const thread = threadAfterBody();
     thread.push(smoltalk.userMessage(handoffResumeText("explorer", "the answer")));
-    thread.push(smoltalk.assistantMessage(handoffMarkerText("explorer", args)));
+    const second = handoffScopeKey(thread, "explorer", "call-2");
+    thread.enterHandoffScope(second);
     thread.push(smoltalk.systemMessage("second persona"));
     thread.push(smoltalk.assistantMessage("second answer"));
+    thread.exitHandoffScope();
     // The first dispatch's persona is still there because nothing stripped
-    // it in this synthetic thread; the second dispatch must not reach back
-    // past its own marker and remove it.
-    finishHandoff(thread, "explorer", args, "second answer");
+    // it in this synthetic thread; the second dispatch must not remove it.
+    finishHandoff({ thread, scopeKey: second, toolName: "explorer", body: "second answer" });
     expect(contents(thread)).toContain("subagent persona");
     expect(contents(thread)).not.toContain("second persona");
   });
@@ -87,33 +98,85 @@ describe("finishHandoff", () => {
   it("survives memory compaction shifting every index", () => {
     const thread = threadAfterBody();
     // Compaction keeps the leading system prefix, replaces a middle run
-    // with one summary, and keeps the tail. Here the marker and the
-    // persona sit in the tail, one position lower than before.
+    // with one summary, and keeps the tail with its scopes.
     const original = thread.getMessages();
     const summary = smoltalk.systemMessage("summary of earlier turns");
-    thread.setMessages([original[0], summary, original[2], original[3], original[4], original[5]]);
-    finishHandoff(thread, "explorer", args, "the answer");
+    const kept = [0, 2, 3, 4];
+    thread.setMessages(
+      [original[0], summary, ...kept.slice(1).map((i) => original[i])],
+      [null, null, null, null, null],
+      [null, null, ...kept.slice(1).map((i) => thread.scopeAt(i))],
+    );
+    finishHandoff({ thread, scopeKey, toolName: "explorer", body: "the answer" });
     expect(contents(thread)).toContain("summary of earlier turns");
     expect(contents(thread)).not.toContain("subagent persona");
-    expect(roles(thread)).toEqual(["system", "system", "assistant", "user", "assistant", "user"]);
+    expect(roles(thread)).toEqual(["system", "system", "user", "assistant", "user"]);
   });
 
   it("leaves a compacted-away dispatch alone and still hands back", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.systemMessage("caller persona"));
-    thread.push(smoltalk.systemMessage("summary that swallowed the marker and the persona"));
+    thread.push(smoltalk.systemMessage("summary that swallowed the persona"));
     thread.push(smoltalk.assistantMessage("the answer"));
-    finishHandoff(thread, "explorer", args, "the answer");
+    finishHandoff({ thread, scopeKey, toolName: "explorer", body: "the answer" });
     expect(roles(thread)).toEqual(["system", "system", "assistant", "user"]);
+  });
+
+  it("nests: the inner dispatch's persona goes with the inner hand-back", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("hello"));
+    const outer = handoffScopeKey(thread, "outerAgent", "call-o");
+    thread.enterHandoffScope(outer);
+    thread.push(smoltalk.systemMessage("outer persona"));
+    const inner = handoffScopeKey(thread, "subagent", "call-i");
+    thread.enterHandoffScope(inner);
+    thread.push(smoltalk.systemMessage("inner persona"));
+    thread.push(smoltalk.assistantMessage("inner answer"));
+    thread.exitHandoffScope();
+    finishHandoff({ thread, scopeKey: inner, toolName: "subagent", body: "inner answer" });
+    expect(contents(thread)).toContain("outer persona");
+    expect(contents(thread)).not.toContain("inner persona");
+    thread.push(smoltalk.assistantMessage("outer answer"));
+    thread.exitHandoffScope();
+    finishHandoff({ thread, scopeKey: outer, toolName: "outerAgent", body: "outer answer" });
+    expect(roles(thread)).toEqual(["user", "assistant", "user", "assistant", "user"]);
+  });
+
+  it("keeps a handoff nested inside itself apart when the provider sends no call ids", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("hello"));
+    const outer = handoffScopeKey(thread, "subagent", "");
+    thread.enterHandoffScope(outer);
+    thread.push(smoltalk.systemMessage("outer persona"));
+    const inner = handoffScopeKey(thread, "subagent", "");
+    expect(inner).not.toBe(outer);
+    thread.enterHandoffScope(inner);
+    thread.push(smoltalk.systemMessage("inner persona"));
+    thread.exitHandoffScope();
+    expect(handoffScopeKey(thread, "subagent", "")).toBe(inner);
+    finishHandoff({ thread, scopeKey: inner, toolName: "subagent", body: "inner answer" });
+    expect(contents(thread)).toContain("outer persona");
+    expect(contents(thread)).not.toContain("inner persona");
+  });
+});
+
+describe("finishStoppedHandoff", () => {
+  it("strips the same way and says the body stopped", () => {
+    const thread = threadAfterBody();
+    finishStoppedHandoff({ thread, scopeKey, toolName: "explorer", reason: "provider timeout" });
+    expect(contents(thread)).not.toContain("subagent persona");
+    expect(contents(thread).at(-1)).toContain(
+      "explorer stopped before finishing: provider timeout",
+    );
   });
 });
 
 describe("stripHandoffSystemMessages", () => {
   it("removes the body's system messages without a resume message, for a cancelled dispatch", () => {
     const thread = threadAfterBody();
-    stripHandoffSystemMessages(thread, "explorer", args);
+    stripHandoffSystemMessages(thread, scopeKey);
     expect(contents(thread)).not.toContain("subagent persona");
-    expect(roles(thread)).toEqual(["system", "user", "assistant", "user", "assistant"]);
+    expect(roles(thread)).toEqual(["system", "user", "user", "assistant"]);
   });
 });
 
@@ -121,7 +184,7 @@ describe("message text", () => {
   it("names the tool in every message", () => {
     expect(handoffNotAloneMessage("explorer")).toContain("explorer");
     expect(handoffNotAloneMessage("explorer")).toContain("only tool call");
-    expect(handoffMarkerText("explorer", { q: 1 })).toBe('[dispatching explorer: {"q":1}]');
+    expect(handoffScopeKey(new MessageThread(), "explorer", "c1")).toBe("explorer:c1:0");
     expect(handoffResumeText("explorer", "x")).toBe(
       "[explorer finished. x]\nContinue with the user's request.",
     );

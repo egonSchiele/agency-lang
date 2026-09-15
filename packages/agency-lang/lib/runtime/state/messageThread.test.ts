@@ -352,3 +352,62 @@ describe("MessageThread.removeMatching", () => {
     expect([0, 1, 2].map((index) => thread.labelAt(index))).toEqual(["s0", "u1", "a1"]);
   });
 });
+
+describe("MessageThread handoff scopes", () => {
+  it("tags system messages pushed inside a scope, and nothing else", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.systemMessage("caller"));
+    t.enterHandoffScope("explorer:c1");
+    t.push(smoltalk.systemMessage("persona"));
+    t.push(smoltalk.userMessage("brief"));
+    t.exitHandoffScope();
+    t.push(smoltalk.systemMessage("after"));
+    expect([0, 1, 2, 3].map((i) => t.scopeAt(i))).toEqual([null, "explorer:c1", null, null]);
+  });
+
+  it("nested scopes tag with the innermost key", () => {
+    const t = new MessageThread();
+    t.enterHandoffScope("outer:1");
+    t.push(smoltalk.systemMessage("outer"));
+    t.enterHandoffScope("inner:2");
+    t.push(smoltalk.systemMessage("inner"));
+    t.exitHandoffScope();
+    t.push(smoltalk.systemMessage("outer again"));
+    t.exitHandoffScope();
+    expect([0, 1, 2].map((i) => t.scopeAt(i))).toEqual(["outer:1", "inner:2", "outer:1"]);
+  });
+
+  it("removeHandoffScoped removes only that key and keeps the arrays aligned", () => {
+    const t = new MessageThread();
+    t.push(smoltalk.userMessage("hello"), "first");
+    t.enterHandoffScope("explorer:c1");
+    t.push(smoltalk.systemMessage("persona"));
+    t.push(smoltalk.assistantMessage("answer"), "last");
+    t.exitHandoffScope();
+    t.removeHandoffScoped("explorer:c1");
+    expect(t.getMessages().map((m) => m.content)).toEqual(["hello", "answer"]);
+    expect([t.labelAt(0), t.labelAt(1)]).toEqual(["first", "last"]);
+    expect([t.scopeAt(0), t.scopeAt(1)]).toEqual([null, null]);
+  });
+
+  it("round-trips scopes through toJSON/fromJSON and omits the key when unused", () => {
+    const plain = new MessageThread();
+    plain.push(smoltalk.userMessage("hello"));
+    expect("messageScopes" in plain.toJSON()).toBe(false);
+    const t = new MessageThread();
+    t.enterHandoffScope("explorer:c1");
+    t.push(smoltalk.systemMessage("persona"));
+    t.exitHandoffScope();
+    const restored = MessageThread.fromJSON(JSON.parse(JSON.stringify(t.toJSON())));
+    expect(restored.scopeAt(0)).toBe("explorer:c1");
+  });
+
+  it("setMessages takes scopes when the caller has them and adoptFrom copies them", () => {
+    const t = new MessageThread();
+    t.setMessages([smoltalk.systemMessage("a"), smoltalk.userMessage("b")], undefined, ["k", null]);
+    expect(t.scopeAt(0)).toBe("k");
+    const other = new MessageThread();
+    other.adoptFrom(t);
+    expect(other.scopeAt(0)).toBe("k");
+  });
+});

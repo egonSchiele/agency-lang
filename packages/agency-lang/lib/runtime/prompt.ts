@@ -52,10 +52,11 @@ import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
 import {
-  applyHandoffMarker,
+  dropHandoffToolCall,
   finishHandoff,
   finishStoppedHandoff,
   handoffNotAloneMessage,
+  handoffScopeKey,
   stripHandoffSystemMessages,
 } from "./handoff.js";
 import { isAborted } from "./abortedResult.js";
@@ -250,13 +251,25 @@ async function invokeOnFreshThreadStore<T>(
  * active stack, so two prompts running at once (two `async llm()` calls,
  * say) cannot interleave pushes and pops on a shared one.
  */
-async function invokeOnThread<T>(thread: MessageThread, invoke: () => Promise<T>): Promise<T> {
-  const parentFrame = agencyStore.getStore();
-  if (!parentFrame) {
-    return invoke();
+async function invokeOnThread<T>(
+  thread: MessageThread,
+  scopeKey: string,
+  invoke: () => Promise<T>,
+): Promise<T> {
+  // The body's system messages are tagged with the dispatch's scope key
+  // while it runs, so the hand-back can remove them without a marker on
+  // the thread. Re-entered when a resume re-runs the dispatch.
+  thread.enterHandoffScope(scopeKey);
+  try {
+    const parentFrame = agencyStore.getStore();
+    if (!parentFrame) {
+      return await invoke();
+    }
+    const view = parentFrame.threads.viewWithActive(thread);
+    return await agencyStore.run({ ...parentFrame, threads: view }, invoke);
+  } finally {
+    thread.exitHandoffScope();
   }
-  const view = parentFrame.threads.viewWithActive(thread);
-  return agencyStore.run({ ...parentFrame, threads: view }, invoke);
 }
 
 /** Classify a tool failure. Most-specific fact wins: a started destructive
@@ -478,10 +491,20 @@ async function runPostTurnMemory(
       // Reassemble the thread from the ORIGINAL smoltalk Message
       // instances so tool_call metadata, ids, and other class-level
       // fields survive untouched.
+      // Labels and handoff scopes ride along with the kept messages; the
+      // summary has neither.
+      const kept = [...plan.systemPrefixIndices, ...plan.tailIndices];
       const head = plan.systemPrefixIndices.map((i) => original[i]);
       const tail = plan.tailIndices.map((i) => original[i]);
       const summary = smoltalk.systemMessage(plan.summaryMessageContent);
-      messages.setMessages([...head, summary, ...tail]);
+      const labels = kept.map((i) => messages.labelAt(i));
+      const scopes = kept.map((i) => messages.scopeAt(i));
+      const splitAt = head.length;
+      messages.setMessages(
+        [...head, summary, ...tail],
+        [...labels.slice(0, splitAt), null, ...labels.slice(splitAt)],
+        [...scopes.slice(0, splitAt), null, ...scopes.slice(splitAt)],
+      );
     }
   } catch (err) {
     if (isGuardExceededError(err)) throw err;
@@ -1144,7 +1167,11 @@ export async function runPrompt(args: {
         // Every other tool gets a fresh store.
         const continuesCallerThread = !!handler.markers?.handoff;
         if (continuesCallerThread) {
-          toolResult = await invokeOnThread(messages, invokeAsTool);
+          toolResult = await invokeOnThread(
+            messages,
+            handoffScopeKey(messages, handler.name, toolCall.id),
+            invokeAsTool,
+          );
         } else {
           toolResult = await invokeOnFreshThreadStore(ctx, invokeAsTool);
         }
@@ -1156,11 +1183,13 @@ export async function runPrompt(args: {
         // "Tool call X crashed" for every tool on the stack and corrupt
         // the thread. Mirrors the function/node catch re-throws. A
         // cancelled handoff never reaches finishHandoff, so its body's
-        // system messages are removed here; the marker stays as the
-        // record of what was attempted.
+        // system messages are removed here.
         if (isAbortError(error)) {
           if (handler.markers?.handoff) {
-            stripHandoffSystemMessages(messages, handler.name, namedArgs);
+            stripHandoffSystemMessages(
+              messages,
+              handoffScopeKey(messages, handler.name, toolCall.id),
+            );
           }
           stack.deleteBranch(branchKey);
           throw error;
@@ -1332,7 +1361,7 @@ export async function runPrompt(args: {
     // Push a plain notice ToolMessage for one call — the refusal gates
     // (unhandled, round cap, removed, markup, repeat, prior rejection,
     // handoff not alone) all answer the model this way. A refusal happens
-    // before the .handoffMarker step, so the assistant message is intact
+    // before the .handoffDropCall step, so the assistant message is intact
     // and the notice pairs with its tool_use even for a handoff.
     const pushToolMessage = (content: any, toolCall: smoltalk.ToolCallJSON): void => {
       messages.push(
@@ -1345,7 +1374,7 @@ export async function runPrompt(args: {
 
     // Answer the model for one invoked call. An ordinary tool gets a
     // tool message paired with its tool_use. A handoff has no tool_use
-    // (the .handoffMarker step rewrote it), so it gets the user-role
+    // (the .handoffDropCall step removed it), so it gets the user-role
     // resume message instead, after the body's system messages are
     // stripped. `content` may be structured; the resume message needs
     // text. `stoppedReason` is set when the call failed or was aborted;
@@ -1358,13 +1387,24 @@ export async function runPrompt(args: {
       namedArgs: Record<string, any>;
       stoppedReason?: string;
     }): void => {
-      const { content, toolCall, handler, namedArgs, stoppedReason } = args;
+      const { content, toolCall, handler, stoppedReason } = args;
       if (handler.markers?.handoff) {
+        const scopeKey = handoffScopeKey(messages, handler.name, toolCall.id);
         if (stoppedReason !== undefined) {
-          finishStoppedHandoff(messages, handler.name, namedArgs, stoppedReason);
+          finishStoppedHandoff({
+            thread: messages,
+            scopeKey,
+            toolName: handler.name,
+            reason: stoppedReason,
+          });
           return;
         }
-        finishHandoff(messages, handler.name, namedArgs, stringifyToolResult(content));
+        finishHandoff({
+          thread: messages,
+          scopeKey,
+          toolName: handler.name,
+          body: stringifyToolResult(content),
+        });
         return;
       }
       pushToolMessage(content, toolCall);
@@ -1657,15 +1697,15 @@ export async function runPrompt(args: {
                 return;
               }
 
-              // A handoff replaces the assistant message that carried
-              // its tool call with a marker. The rewritten thread is in
-              // the checkpoint, so a resumed pass does not rewrite again.
-              // The thread ends on that assistant message here because
-              // the handoff is the round's only call and the round
-              // boundary runs after the tools.
+              // A handoff drops the tool call from the assistant message
+              // that carried it, so the body's messages can follow. The
+              // rewritten thread is in the checkpoint, so a resumed pass
+              // does not rewrite again. The thread ends on that assistant
+              // message here because the handoff is the round's only call
+              // and the round boundary runs after the tools.
               if (handler.markers?.handoff) {
-                await b.step(`${invocationKey}.handoffMarker`, async () => {
-                  applyHandoffMarker(messages, handler.name, namedArgs);
+                await b.step(`${invocationKey}.handoffDropCall`, async () => {
+                  dropHandoffToolCall(messages);
                 });
               }
 

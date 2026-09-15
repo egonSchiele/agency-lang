@@ -20,7 +20,7 @@
     {
       "nodeName": "seedWithHandoff",
       "input": "",
-      "expectedOutput": "\"done|system,user,user,assistant,user,assistant,user,assistant|[dispatching helper: {\\\"question\\\":\\\"hi\\\"}]|[helper finished. helper says hi]\\nContinue with the user's request.\"",
+      "expectedOutput": "\"done|system,user,user,user,assistant,user,assistant|brief: hi|[helper finished. helper says hi]\\nContinue with the user's request.\"",
       "evaluationCriteria": [
         {
           "type": "exact"

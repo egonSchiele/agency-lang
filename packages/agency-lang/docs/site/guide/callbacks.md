@@ -118,7 +118,11 @@ Called when a function (tool) finishes executing.
 - `timeTaken`: how long the function took in milliseconds
 
 ### onEmit
-Called when agency code invokes `emit(...)`. Receives whatever value was passed to `emit`.
+Called when agency code invokes `emit(...)`. Receives whatever value was passed to `emit`. You can use this to emit generic event data. Note you'll need to import `emit` first:
+
+```ts
+import { emit } from "std::statelog"
+```
 
 ### onToolCallStart
 Called when the LLM invokes a tool call.

@@ -175,6 +175,42 @@ and verification **skips** them. Extending coverage (per-part hashes for GGUF-sp
 compute-and-pin for binary-split) is tracked in
 [issue #348](https://github.com/egonSchiele/agency-lang/issues/348).
 
+## Embeddings
+
+`nomic-embed-text` in the catalog is a GGUF embedding model. Since
+smoltalk 0.14.0 and smoltalk-llama-cpp 0.5.0, `smoltalk.embed` with
+`provider: "llama-cpp"` and a `.gguf` path returns vectors computed in
+process; the plugin keeps one embedding context per model file, like its
+chat contexts.
+
+Agency's part is names and loading. Memory never derives an embedding
+model for a local provider. `memory.embeddings` in `agency.json` names
+one, with `"provider": "llama-cpp"`; the model may be the catalog name,
+an alias, or a `.gguf` path. `_resolveLocalEmbeddingModel` in
+`lib/stdlib/localModels.ts` turns a name into the downloaded path through
+`_registerLocalModel`, downloading and verifying against the catalog's
+pinned hash if the file is missing, and gives `mlx` its served name.
+`MemoryManager.resolveEmbeddingTarget` calls it once per manager, starting
+when memory is enabled so the download happens at startup rather than
+inside the first recall. `std::embedding`'s `embed` resolves through the
+same function. Resolving registers the provider through the loader that
+finds a global install, so the plugin is loaded from the right place even
+when the chat model is hosted.
+
+In `agency agent`, `--model embedding=llama-cpp/nomic-embed-text` (with
+`--local <chat model>`, or from `/model`) downloads the model and turns
+memory on despite the `llama-cpp` profile's `memory: false`; see
+`memoryEnablePlan` in `shared.agency`. The profile's other three lines
+still apply.
+
+Known limitation: nomic-embed-text v1.5 wants `search_document: ` and
+`search_query: ` prefixes, and memory sends none, because `EmbedConfig`
+has no field for one. Recall on it is a little weaker than the model can
+do. Adding the field is a smoltalk change.
+
+The post-merge integration suite embeds three sentences with the real
+model (`tests/integration/local-model/embed.test.ts`).
+
 ## Tests
 
 See [`local-model-integration.md`](./local-model-integration.md) for the

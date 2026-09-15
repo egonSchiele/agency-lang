@@ -22,14 +22,14 @@ const first = await main({ callbacks });
 const interrupted = hasInterrupts(first.data);
 const runId = interrupted ? first.data[0].runId : null;
 const freshCount = seen.length;
-const everyRunIdMatches = seen.every((e) => e.runId === runId);
-const everyCheckpointResumable = seen.every((e) =>
-  isPaused({ type: "paused", checkpoint: JSON.parse(e.json), runId: e.runId }),
+const everyRunIdMatches = seen.every((event) => event.runId === runId);
+const everyCheckpointResumable = seen.every((event) =>
+  isPaused({ type: "paused", checkpoint: JSON.parse(event.json), runId: event.runId }),
 );
 
 // 2. The process is gone. The host has the checkpoint it stored before the
 //    second bump. Resuming there runs the second bump again and reaches the gate.
-const stored = [...seen].reverse().find((e) => e.bumpsBefore === 1);
+const stored = [...seen].reverse().find((event) => event.bumpsBefore === 1);
 const resumed = await resumeFromCheckpoint(
   { type: "paused", checkpoint: JSON.parse(stored.json), runId: stored.runId },
   { metadata: { callbacks } },

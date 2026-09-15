@@ -37,7 +37,9 @@ describe("onCheckpoint fires once per statement checkpoint", () => {
   it("reports a resumable checkpoint for every statement of a fresh run", async () => {
     const mod = await import(pathToFileURL(mainJs).href);
     const seen: Seen[] = [];
-    const result = await mod.main({ callbacks: { onCheckpoint: (e: Seen) => seen.push(e) } });
+    const result = await mod.main({
+      callbacks: { onCheckpoint: (event: Seen) => seen.push(event) },
+    });
     expect(result.data).toBe(2);
     // Four statements, so at least four checkpoints. The exact count is the
     // runner's business, not this test's.
@@ -56,7 +58,7 @@ describe("onCheckpoint fires once per statement checkpoint", () => {
   it("resumes from the last checkpoint it reported to the value a plain run returns", async () => {
     const mod = await import(pathToFileURL(mainJs).href);
     const seen: Seen[] = [];
-    await mod.main({ callbacks: { onCheckpoint: (e: Seen) => seen.push(e) } });
+    await mod.main({ callbacks: { onCheckpoint: (event: Seen) => seen.push(event) } });
     const last = seen[seen.length - 1];
     // Store and reload as JSON the way a host would.
     const stored = JSON.parse(JSON.stringify(last.checkpoint));
@@ -76,11 +78,11 @@ describe("onCheckpoint fires once per statement checkpoint", () => {
     expect(isPaused(paused.data)).toBe(true);
     const seen: Seen[] = [];
     const resumed = await mod.resumeFromCheckpoint(paused.data, {
-      metadata: { callbacks: { onCheckpoint: (e: Seen) => seen.push(e) } },
+      metadata: { callbacks: { onCheckpoint: (event: Seen) => seen.push(event) } },
     });
     expect(resumed.data).toBe(2);
     expect(seen.length).toBeGreaterThanOrEqual(4);
-    expect(seen.every((e) => e.runId === paused.data.runId)).toBe(true);
+    expect(seen.every((event) => event.runId === paused.data.runId)).toBe(true);
   });
 
   it("does nothing when nobody listens", async () => {

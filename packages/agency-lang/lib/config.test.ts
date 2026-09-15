@@ -71,6 +71,19 @@ describe("AgencyConfigSchema", () => {
       expect(result.success).toBe(true);
     });
 
+    it("keeps embeddings.provider", () => {
+      const result = AgencyConfigSchema.safeParse({
+        memory: {
+          dir: ".agency/memory",
+          embeddings: { model: "mlx-community/Qwen3-Embedding-4B-4bit-DWQ", provider: "mlx" },
+        },
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.memory?.embeddings?.provider).toBe("mlx");
+      }
+    });
+
     it("rejects a memory block missing the required `dir`", () => {
       const result = AgencyConfigSchema.safeParse({
         memory: { model: "gpt-4o-mini" },

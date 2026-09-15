@@ -374,8 +374,12 @@ export interface AgencyConfig {
       threshold?: number;
     };
     embeddings?: {
-      /** Embedding model name (forwarded to smoltalk.embed). */
+      /** Embedding model name (forwarded to smoltalk.embed). Required for
+       *  the local providers, mlx and llama-cpp, which have no default. */
       model?: string;
+      /** The provider that serves `model`. Set it when the model name does
+       *  not imply one, which is every local model. */
+      provider?: string;
     };
   };
 
@@ -663,7 +667,9 @@ export const AgencyConfigSchema = z
           threshold: z.number().optional(),
         })
         .optional(),
-      embeddings: z.object({ model: z.string().optional() }).optional(),
+      embeddings: z
+        .object({ model: z.string().optional(), provider: z.string().optional() })
+        .optional(),
     }),
   })
   .partial()

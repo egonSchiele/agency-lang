@@ -90,11 +90,13 @@ export type MemoryConfig = {
   embeddings?: {
     /** Explicit embedding model. When set, it (with `provider`) is used as-is
      *  and overrides provider-derivation. When omitted, the embedding model is
-     *  derived from the active LLM provider (openai/google/ollama); providers
-     *  without an embedding endpoint (anthropic, llama-cpp, custom) disable
-     *  Tier-2 semantic recall. */
+     *  derived from the active LLM provider (openai/google/ollama). Providers
+     *  without an embedding endpoint (anthropic, custom) and the local
+     *  providers (mlx, llama-cpp), which never derive, disable Tier-2
+     *  semantic recall until a model is named here. */
     model?: string;
-    /** Explicit embedding provider for `model`. Optional; normally derived. */
+    /** Explicit embedding provider for `model`. Derived for hosted providers;
+     *  required for a local one, whose model name implies nothing. */
     provider?: string;
   };
 };

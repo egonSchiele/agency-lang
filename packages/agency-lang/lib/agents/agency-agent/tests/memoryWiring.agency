@@ -216,3 +216,14 @@ node localEmbeddingSlotResolves(): string {
   const b = if isFailure(hosted) then "ERR" else hosted.value.embedding.model
   return "${a}|${b}"
 }
+
+// llama-cpp/<name> parses as a local embedding spec. The download itself
+// is the integration suite's job; here the name exists nowhere, and
+// registerLocalModel's failure is what comes back.
+node llamaCppEmbeddingSpec(): string {
+  const r = resolveLocalEmbedding("llama-cpp/definitely-not-a-model-name")
+  if (isFailure(r)) {
+    return if r.error.includes("Unknown local model") then "unknown-model" else "other:${r.error}"
+  }
+  return "ok:${r.value.provider}"
+}

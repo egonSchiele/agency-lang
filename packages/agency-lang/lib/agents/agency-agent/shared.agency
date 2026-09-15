@@ -473,7 +473,9 @@ export def configureModels(
 /** Turn an embedding slot value for a local provider into the model name
  *  smoltalk will send. For mlx, a catalog name, alias, mlx: URI, or model
  *  directory becomes the served name, and a repo id (it has a slash) is
- *  the served name itself. A hosted provider is a failure. */
+ *  the served name itself. For llama-cpp, a catalog name, alias, hf: URI,
+ *  or .gguf path becomes the downloaded path. A hosted provider is a
+ *  failure. */
 export def resolveLocalEmbedding(spec: string): Result<Resolved> {
   const parsed = parseModelSpec(spec, false, knownProviders())
   if (!LOCAL_PROVIDERS.includes(parsed.provider)) {
@@ -499,9 +501,15 @@ export def resolveLocalEmbedding(spec: string): Result<Resolved> {
       via: "local"
     })
   }
-  return failure(
-    "Embeddings on llama-cpp are not wired up yet. Use embedding=mlx/<model> with a served MLX model.",
-  )
+  const pathResult = try registerLocalModel(parsed.model)
+  if (isFailure(pathResult)) {
+    return failure(pathResult.error)
+  }
+  return success({
+    model: pathResult.value,
+    provider: "llama-cpp",
+    via: "local"
+  })
 }
 
 /** A local provider in the embedding slot names a catalog entry or a served

@@ -110,6 +110,8 @@ export static const PROVIDER_CAPABILITIES: Record<string, CapabilityPatch> = {
   // lands here. Small models under a JSON grammar can miss their stop
   // token and generate until the context fills, so the summarizer is
   // off and output is capped.
+  // memory: off for lack of embeddings. --model embedding=llama-cpp/nomic-embed-text
+  // turns it on (memoryEnablePlan); the other three lines stay.
   "llama-cpp": {
     prompt: "small",
     summarize: false,

@@ -49,6 +49,7 @@ import {
   getCapabilities,
   getCapabilitiesResolved,
   markMemoryEnabledByOverride,
+  resolveLocalEmbeddingSlot,
   embeddingKeyStatus,
   memoryEnablePlan,
   enableAgentMemory,
@@ -175,7 +176,16 @@ export def switchModel(
       changes: []
     }
   }
-  const resolved = promoteAll(all.value)
+  const localized = resolveLocalEmbeddingSlot(promoteAll(all.value))
+  if (isFailure(localized)) {
+    pushMessage(color.red("Could not switch model: ${localized.error}"))
+    return {
+      session: prior,
+      resolved: before,
+      changes: []
+    }
+  }
+  const resolved = localized.value
   applyResolved(resolved)
   return {
     session: next,

@@ -262,14 +262,14 @@ describe("servingBanner", () => {
       "  agency agent --local mlx:org/a",
       "",
       "  For memory, set in agency.json:",
-      '    "memory": { "embeddings": { "model": "org/emb", "provider": "mlx" } }',
+      '    "memory": { "dir": ".agency-memory", "embeddings": { "model": "org/emb", "provider": "mlx" } }',
     ]);
     expect(servingBanner(8080, [], ["org/emb"])).toEqual([
       "Serving 1 model on http://127.0.0.1:8080/v1:",
       "  org/emb  (embeddings)",
       "",
       "  For memory, set in agency.json:",
-      '    "memory": { "embeddings": { "model": "org/emb", "provider": "mlx" } }',
+      '    "memory": { "dir": ".agency-memory", "embeddings": { "model": "org/emb", "provider": "mlx" } }',
     ]);
   });
 });
@@ -420,7 +420,7 @@ describe("runServe", () => {
     expect(handle.models).toEqual(["org/a", "org/emb"]);
     expect(log).toContain("  org/emb  (embeddings)");
     expect(log).toContain(
-      '    "memory": { "embeddings": { "model": "org/emb", "provider": "mlx" } }',
+      '    "memory": { "dir": ".agency-memory", "embeddings": { "model": "org/emb", "provider": "mlx" } }',
     );
     await handle.close();
   });

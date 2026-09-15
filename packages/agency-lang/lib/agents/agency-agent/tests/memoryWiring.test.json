@@ -90,6 +90,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "localEmbeddingSlotResolves",
+      "input": "",
+      "expectedOutput": "\"mlx-community/Qwen3-Embedding-4B-4bit-DWQ:settings|text-embedding-3-small\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

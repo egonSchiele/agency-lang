@@ -54,6 +54,10 @@ class Embedder:
         hidden = self.model.model(mx.array(tokens)[None])
         vector = hidden[0, -1].astype(mx.float32)
         if dimensions is not None:
+            if dimensions > vector.shape[0]:
+                raise ValueError(
+                    f"dimensions must be at most {vector.shape[0]}, the width of this model's vectors."
+                )
             vector = vector[:dimensions]
         vector = vector / mx.maximum(mx.linalg.norm(vector), 1e-6)
         mx.eval(vector)
@@ -107,6 +111,9 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self.send_error_json(400, "Request body is not JSON.")
             return
+        if not isinstance(body, dict):
+            self.send_error_json(400, "Request body must be a JSON object.")
+            return
         inputs = body.get("input")
         if isinstance(inputs, str):
             inputs = [inputs]
@@ -117,7 +124,11 @@ class Handler(BaseHTTPRequestHandler):
         if dimensions is not None and (not isinstance(dimensions, int) or dimensions <= 0):
             self.send_error_json(400, "dimensions must be a positive integer.")
             return
-        results = self.embedder.embed_all(inputs, dimensions)
+        try:
+            results = self.embedder.embed_all(inputs, dimensions)
+        except ValueError as err:
+            self.send_error_json(400, str(err))
+            return
         total = sum(count for _, count in results)
         self.send_json(
             200,

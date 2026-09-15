@@ -461,15 +461,19 @@ export def configureModels(
     process.exit(1)
     return
   }
-  applyResolved(promoteAll(all.value))
+  const localized = resolveLocalEmbeddingSlot(promoteAll(all.value))
+  if (isFailure(localized)) {
+    print(localized.error)
+    process.exit(1)
+    return
+  }
+  applyResolved(localized.value)
 }
 
 /** Turn an embedding slot value for a local provider into the model name
  *  smoltalk will send. For mlx, a catalog name, alias, mlx: URI, or model
- *  directory becomes the served name; a repo id (it has a slash) is taken
- *  as the served name itself; anything else is a catalog name that did
- *  not resolve. A hosted provider is a failure: with --local, the
- *  embedding slot must be local too. */
+ *  directory becomes the served name, and a repo id (it has a slash) is
+ *  the served name itself. A hosted provider is a failure. */
 export def resolveLocalEmbedding(spec: string): Result<Resolved> {
   const parsed = parseModelSpec(spec, false, knownProviders())
   if (!LOCAL_PROVIDERS.includes(parsed.provider)) {
@@ -498,6 +502,29 @@ export def resolveLocalEmbedding(spec: string): Result<Resolved> {
   return failure(
     "Embeddings on llama-cpp are not wired up yet. Use embedding=mlx/<model> with a served MLX model.",
   )
+}
+
+/** A local provider in the embedding slot names a catalog entry or a served
+ *  repo id. Resolve it to the served name, whichever path set the slot. */
+export def resolveLocalEmbeddingSlot(
+  slots: Record<string, Resolved>,
+): Result<Record<string, Resolved>> {
+  const embedding = slots["embedding"]
+  if (embedding == null || embedding.model == "" || !LOCAL_PROVIDERS.includes(embedding.provider)) {
+    return success(slots)
+  }
+  const local = resolveLocalEmbedding("${embedding.provider}/${embedding.model}")
+  if (isFailure(local)) {
+    return failure(local.error)
+  }
+  return success({
+    ...slots,
+    embedding: {
+      model: local.value.model,
+      provider: local.value.provider,
+      via: embedding.via
+    }
+  })
 }
 
 /** Apply a local model (from `--local`) as BOTH the fast and slow model,

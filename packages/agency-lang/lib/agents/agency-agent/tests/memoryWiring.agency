@@ -8,8 +8,10 @@ import {
   memoryEnablePlan,
   memoryConfigFor,
   resolveLocalEmbedding,
+  resolveLocalEmbeddingSlot,
   EmbeddingKeyStatus,
  } from "../shared.agency"
+import { Resolved } from "../lib/models.agency"
 
 // The override maps the slot value and demotes the provider.
 node overrideFromSlot(): string {
@@ -184,4 +186,33 @@ node resolveLocalEmbeddingSpecs(): string {
   const c = if isFailure(hosted) then "ERR" else "ok"
   const d = if isFailure(typo) then "ERR" else "ok"
   return "${a}|${b}|${c}|${d}"
+}
+
+// A local provider in the embedding slot resolves to the served name; a
+// hosted one passes through untouched.
+node localEmbeddingSlotResolves(): string {
+  const main: Resolved = {
+    model: "gpt-5.5",
+    provider: "openai",
+    via: "test"
+  }
+  const local = resolveLocalEmbeddingSlot({
+    main: main,
+    embedding: {
+      model: "qwen3-embedding-4b-mlx",
+      provider: "mlx",
+      via: "settings"
+    }
+  })
+  const hosted = resolveLocalEmbeddingSlot({
+    main: main,
+    embedding: {
+      model: "text-embedding-3-small",
+      provider: "openai",
+      via: "settings"
+    }
+  })
+  const a = if isFailure(local) then "ERR" else "${local.value.embedding.model}:${local.value.embedding.via}"
+  const b = if isFailure(hosted) then "ERR" else hosted.value.embedding.model
+  return "${a}|${b}"
 }

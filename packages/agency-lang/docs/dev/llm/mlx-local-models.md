@@ -270,39 +270,33 @@ program for an embedding model:
     agency local serve qwen3-coder-next-mlx --embedding qwen3-embedding-4b-mlx
 
 The program is `lib/cli/mlxEmbedServer.py`, shipped next to
-`localServe.js` (the makefile copies it into `dist`). It loads the model
-with `mlx_lm.load`, and for each input runs the inner transformer,
-`model.model(tokens)`, which returns the final hidden states, and takes the
-last token's vector, L2-normalized. That is the Qwen3 Embedding recipe. The
-repo's tokenizer appends the end token itself. It answers `POST
-/v1/embeddings` in the OpenAI shape, plus `/v1/models` and `/health`. One
-request at a time, under a lock. The script loads the model before it
-binds the port: readiness treats a refused connection as "still loading"
-and any reply as "ready". `mlx-embeddings`, the library other MLX servers
-use, was rejected: GPL v3, and it pulls `mlx-vlm` and `transformers` 5.
+`localServe.js`. It loads the model with `mlx_lm.load` and, for each
+input, runs the inner transformer (`model.model(tokens)`, the final hidden
+states) and takes the last token's vector, L2-normalized: the Qwen3
+Embedding recipe. It answers `POST /v1/embeddings` in the OpenAI shape,
+plus `/v1/models` and `/health`, one request at a time. It binds its port
+only after the model has loaded, because readiness treats a refused
+connection as "still loading" and any reply as "ready". The script uses
+mlx-lm alone; `mlx-embeddings`, the library other MLX servers use, is GPL
+v3, which Agency cannot ship.
 
 `--embedding` is the one way to say a model is an embedding model. The
-catalog category is a guard: `serve qwen3-embedding-4b-mlx` without the
-flag is refused with the flag spelled out, `--embedding` on a chat model
-is refused too, and the picker leaves embedding models out since it
-cannot pass the flag. `_localModelCategory` answers for a catalog name,
-an alias, or the URI either one points at. The front door needs no
-change: it forwards by the `model` field at whatever path the request
-used, so `/v1/embeddings` already reaches the right process. Readiness
-probes an embedding process with an embeddings request, because it
-cannot answer a chat completion.
+catalog category is a guard: a catalog embedding model without the flag,
+or a chat model with it, is refused before anything loads, and the picker
+leaves embedding models out. The front door needs no change, since it
+forwards by the `model` field at whatever path the request used.
+Readiness probes an embedding process with an embeddings request.
 
 Memory never derives an embedding model for a local provider. It needs
 `memory.embeddings` in `agency.json` with the served name and
-`"provider": "mlx"`, or in `agency agent`, `--model embedding=mlx/<name>`,
-the one `--model` slot allowed with `--local`. The agent resolves a
-catalog name to the served name (a repo id, one with a slash, passes
-through as given) and turns memory on even though the `mlx` capability
-profile has it off: in `memoryEnablePlan`, a provider-level off yields to
-a ready embedding override, and a user-level off wins. When that happens
-the resolved capability is patched to `memory: true` with the source
-`embedding-override`, so `/settings` shows what is running. The `mlx`
-embed case is smoltalk 0.14.0.
+`"provider": "mlx"`, or in `agency agent`, `--model embedding=mlx/<name>`
+(on the command line or in `/model`). A catalog name resolves to the
+served name; a repo id passes through. Naming an embedding model turns
+memory on even though the `mlx` capability profile has it off: in
+`memoryEnablePlan`, a provider-level off yields to a ready embedding
+override, and a user-level off wins. The resolved capability then reads
+`memory: true` from the source `embedding-override`, which `/settings`
+shows.
 
 ## `remove` and `-f`
 

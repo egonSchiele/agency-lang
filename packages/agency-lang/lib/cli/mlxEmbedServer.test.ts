@@ -11,8 +11,7 @@ describe("mlxEmbedServer.py", () => {
   });
 
   // A syntax check only. Running the server needs MLX, which CI has not.
-  // ast.parse rather than py_compile: py_compile writes __pycache__ next
-  // to the script, and nothing ignores that directory.
+  // ast.parse, since py_compile would write __pycache__ into lib/cli.
   it("is valid Python 3", () => {
     const run = spawnSync(
       "python3",

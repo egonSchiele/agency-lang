@@ -24,8 +24,8 @@ export { formatElapsed };
 
 export type ServeKind = "chat" | "embedding";
 
-/** Inputs an embedding model accepts, in tokens. The Qwen3 Embedding card
- *  uses this value; memory's observations are far shorter. */
+/** Inputs an embedding model accepts, in tokens: the Qwen3 Embedding
+ *  card's value. */
 const EMBED_MAX_LENGTH = 8192;
 
 export type ServeOptions = {
@@ -406,9 +406,10 @@ type Planned = { name: string; dir: string; sizeBytes: number; kind: ServeKind }
 
 /** The catalog knows what some models are for. Serving an embedding model
  *  as a chat model, or the reverse, fails only after a long load, so refuse
- *  it up front when the catalog can tell. */
-function checkKind(value: string, kind: ServeKind): void {
-  const category = _localModelCategory(value);
+ *  it up front when the catalog can tell, from the name or from what it
+ *  resolves to. */
+function checkKind(value: string, target: string, kind: ServeKind): void {
+  const category = _localModelCategory(value) ?? _localModelCategory(target);
   if (category === "embedding" && kind === "chat") {
     throw new Error(
       `${value} is an embedding model. Serve it with: agency local serve --embedding ${value}`,
@@ -425,8 +426,8 @@ function checkKind(value: string, kind: ServeKind): void {
  *  the process on, its size for the memory warning, and which program
  *  serves it. */
 function planModel(value: string, cacheDir: string, kind: ServeKind): Planned {
-  checkKind(value, kind);
   const resolved = _resolveModel(value);
+  checkKind(value, resolved.target, kind);
   if (resolved.backend === "llama-cpp") {
     throw new Error(
       `"${value}" is a GGUF model. agency local serve is for MLX models; ` +
@@ -491,7 +492,7 @@ export function servingBanner(port: number, chat: string[], embedding: string[])
     lines.push(
       "",
       "  For memory, set in agency.json:",
-      `    "memory": { "embeddings": { "model": "${embedding[0]}", "provider": "mlx" } }`,
+      `    "memory": { "dir": ".agency-memory", "embeddings": { "model": "${embedding[0]}", "provider": "mlx" } }`,
     );
   }
   return lines;
@@ -608,7 +609,6 @@ export async function runServe(
 export async function localServe(values: string[], flags: ServeFlags): Promise<void> {
   let handle: ServeHandle;
   try {
-    // A run that names only --embedding models is complete as given.
     const wantsPicker = values.length === 0 && (flags.embedding ?? []).length === 0;
     const models = wantsPicker ? await pickModelsToServe(realPickDeps(defaultCacheDir())) : values;
     if (wantsPicker && models.length === 0) {

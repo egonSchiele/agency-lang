@@ -1,0 +1,22 @@
+import { parseArgs } from "std::args"
+import { download } from "../../index.agency"
+
+// Downloads fp32 into the directory named by --models-dir, printing every
+// interrupt it raises. The handler rejects, so nothing is ever fetched.
+node main() {
+  const args = parseArgs({
+    programName: "download",
+    flags: { "models-dir": { type: "string", default: "" } },
+  })
+  handle {
+    const dir = download("fp32", args.flags["models-dir"])
+    if (dir is failure(why)) {
+      print("rejected: " + why)
+    } else {
+      print("installed in " + dir)
+    }
+  } with (intr) {
+    print("asked " + intr.effect + " for " + intr.data.dir)
+    return reject()
+  }
+}

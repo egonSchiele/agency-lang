@@ -6,7 +6,7 @@ npm install @agency-lang/kokoro
 ```
 
 No compiler and no native build. The model runs on the CPU through ONNX
-Runtime.
+Runtime. Writing mp3 or m4a files needs `ffmpeg` on the PATH; wav does not.
 
 ## Usage
 
@@ -14,21 +14,26 @@ Runtime.
 import { speak } from "pkg::@agency-lang/kokoro"
 
 node main() {
-  const path = speak("The build finished. Three tests failed.", "build-report.wav")
+  const path = speak("The build finished. Three tests failed.", "build-report.mp3")
   print("Wrote ${path}")
 }
 ```
 
 The first call asks to download the model (326 MB for the default `fp32`)
-into `~/.agency/models/kokoro/`, and checks every file against the hashes in
-`models.lock.json`. Later calls read the local files with no network access.
+and checks every file against the hashes in `models.lock.json`. Later calls
+read the local files with no network access. `download` fetches a model
+ahead of time.
+
+Models are kept in the first of these that is set: the `modelsDir`
+argument, the `AGENCY_KOKORO_MODELS_DIR` environment variable, or
+`~/.agency/models/kokoro/`.
 */
 
 import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
 import { _speak, _download, _modelStatus, _validateSpeakArgs, _voices } from "./dist/src/agency.js"
 
-effect kokoro::download { model: string, sizeBytes: number, source: string }
-effect kokoro::speak { textLength: number, voice: string, outputFile: string }
+effect kokoro::download { model: string, sizeBytes: number, source: string, dir: string }
+effect kokoro::speak { textLength: number, voice: string, outputFile: string, format: string }
 
 type Voice = {
   id: string,
@@ -55,6 +60,12 @@ def realOutput(outputFile: string): string {
 Text-to-speech that runs on this machine. After the model is downloaded
 once, no text is sent over the network. `fp32` is faster. `q8` is a smaller
 download: 92 MB instead of 326 MB.
+
+The format comes from `format` when given, otherwise from the output file's
+extension, otherwise it is wav. An explicit `format` wins even when the
+extension says something else. mp3 and m4a are encoded by `ffmpeg` at 96
+kbit/s, and `speak` refuses them before raising any interrupt when `ffmpeg`
+is missing.
 */
 export def speak(
   text: string,
@@ -63,34 +74,66 @@ export def speak(
   model: string = "fp32",
   speed: number = 1,
   allowedPaths: string[] = [],
+  format: string = "",
+  modelsDir: string | null = null,
 ): string raises <kokoro::download, kokoro::speak> {
   """
-  Speak text into a WAV file. Returns the file path.
+  Speak text into an audio file. Returns the file path.
 
   @param text - The text to speak, at most 50,000 characters
-  @param outputFile - Where to write the WAV file. Leave empty for a new temp file. An existing file is never overwritten.
+  @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
   @param voice - A voice id from voices(), such as "af_heart"
   @param model - "fp32" or "q8"
   @param speed - Speaking speed, from 0.5 to 2
   @param allowedPaths - Directories that outputFile must be inside
+  @param format - "wav", "mp3", or "m4a". Leave empty to use the output file's extension, or wav when it has none.
+  @param modelsDir - Where models are kept. Leave null for the default.
   """
-  _validateSpeakArgs(text, outputFile, voice, model, speed)
-  const status = _modelStatus(model)
+  const audioFormat = _validateSpeakArgs(text, outputFile, voice, model, speed, format)
+  const status = _modelStatus(model, modelsDir)
   if (status.installed == false) {
     return interrupt kokoro::download("Download the Kokoro text-to-speech model?", {
       model: model,
       sizeBytes: status.sizeBytes,
       source: status.source,
+      dir: status.dir,
     })
-    _download(model)
+    _download(model, modelsDir)
   }
   const out = realOutput(outputFile)
   return interrupt kokoro::speak("Allow Kokoro to write an audio file?", {
     textLength: text.length,
     voice: voice,
     outputFile: out,
+    format: audioFormat,
   })
-  return _speak(text, out, voice, model, speed, allowedPaths)
+  return _speak(text, out, voice, model, speed, allowedPaths, audioFormat, modelsDir)
+}
+
+/**
+Fetches a model before the first `speak` call needs it. Calling this is
+optional: `speak` downloads a missing model itself. The directory is chosen
+the same way `speak` chooses it.
+*/
+export def download(model: string = "fp32", modelsDir: string | null = null): string raises <kokoro::download> {
+  """
+  Download a Kokoro text-to-speech model. Returns the directory it is in. Does nothing when it is already there.
+
+  @param model - "fp32" (326 MB) or "q8" (92 MB)
+  @param modelsDir - Where models are kept. Leave null for the default.
+  """
+  const status = _modelStatus(model, modelsDir)
+  if (status.installed) {
+    return status.dir
+  }
+  return interrupt kokoro::download("Download the Kokoro text-to-speech model?", {
+    model: model,
+    sizeBytes: status.sizeBytes,
+    source: status.source,
+    dir: status.dir,
+  })
+  _download(model, modelsDir)
+  return status.dir
 }
 
 export def voices(): Voice[] {

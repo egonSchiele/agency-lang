@@ -6,13 +6,15 @@ The code map, and the things that are easy to break.
 
 | File | What it holds |
 |---|---|
-| `index.agency` | `speak` and `voices`, and the two interrupts |
-| `src/agency.ts` | The functions `index.agency` calls. `_download` and `_speak` read the abort signal from the runtime |
+| `index.agency` | `speak`, `download`, and `voices`, and the two interrupts |
+| `src/agency.ts` | The functions `index.agency` calls. `_download` and `_speak` read the abort signal from the runtime. `_validateSpeakArgs` returns the format `speak` will write |
 | `src/speak.ts` | `speakWith`: pick the output file, refuse an existing one, synthesize, encode, publish |
+| `src/audioFormat.ts` | The three formats, and `resolveFormat`, which picks one from the argument or the extension |
+| `src/ffmpeg.ts` | `encodeWithFfmpeg`, which turns WAV bytes into mp3 or m4a through an `ffmpeg` process, and `assertFfmpegAvailable` |
 | `src/kokoroModel.ts` | Loading the model, keeping one loaded, running calls one at a time, synthesizing a sentence at a time |
 | `src/textChunks.ts` | `sentenceWindows` and `splitToFit`, which cut text into pieces that kokoro-js and the model can handle |
 | `src/wav.ts` | `toPcm16` and `encodeWav`, 16-bit PCM |
-| `src/modelStore.ts` | Where models live, whether one is installed, and downloading one |
+| `src/modelStore.ts` | `resolveModelsDir`, whether a model is installed, and downloading one |
 | `src/lockfile.ts` | The pinned lockfile, and the download snapshot for a model |
 | `src/argumentChecks.ts` | The checks that run before any interrupt |
 | `src/voices.ts` | The voice table |
@@ -23,7 +25,21 @@ The code map, and the things that are easy to break.
 
 `speak` raises `kokoro::download` only when the model is missing, and calls `_download` on the next line. Approval resumes on that line, so the download runs only after a yes. Cancelling the run stops the download. `_speak` never downloads. It refuses to run when the model is missing.
 
-`speak` then raises `kokoro::speak`, whose payload names the real output path. `_speak` checks that path again with `outputPath` and `pathExists` from `agency-lang/stdlib-lib/speech.js`. Those two refuse a symlink that appeared while the prompt was open.
+`speak` then raises `kokoro::speak`, whose payload names the real output path and the format. `_speak` checks that path again with `outputPath` and `pathExists` from `agency-lang/stdlib-lib/speech.js`. Those two refuse a symlink that appeared while the prompt was open.
+
+`download` raises `kokoro::download` the same way and returns at once when the model is installed. That interrupt carries `dir`, the model's directory, because `modelsDir` is a tool argument a model can set. A handler that wants downloads kept under one root can check that field.
+
+## Output formats
+
+`resolveFormat` picks the format: the `format` argument, else the output file's extension, else wav. An explicit `format` wins over the extension, so `speak(text, "a.wav", format: "mp3")` writes mp3 bytes into `a.wav`. The wrapper's docs say so.
+
+wav is written by `encodeWav`. mp3 and m4a go through `encodeWithFfmpeg`: the WAV bytes are piped to an `ffmpeg` process on stdin, which writes a temp file under the OS temp directory, and the bytes of that file are published with the same create-only write wav uses. ffmpeg writes a file rather than stdout because the m4a container needs a seekable output. The temp file is removed in a `finally`, through the contained `remove`.
+
+`_validateSpeakArgs` calls `assertFfmpegAvailable` for mp3 and m4a before any interrupt, so a missing encoder is reported before anyone is asked to approve a download or a write.
+
+## Where models live
+
+`resolveModelsDir(override)` decides: the `modelsDir` argument when it is a non-empty string, then `AGENCY_KOKORO_MODELS_DIR`, then `~/.agency/models/kokoro`. Every function below it takes the resolved directory as a parameter, so nothing reads the environment except `resolveModelsDir`. The CLI passes `resolveModelsDir(null)`.
 
 ## Five problems in kokoro-js 1.2.1
 
@@ -53,13 +69,16 @@ The package imports `env` from `@huggingface/transformers` directly, because kok
 
 | File | Needs |
 |---|---|
-| `wav`, `textChunks`, `argumentChecks`, `lockfile`, `modelStore` | Nothing |
+| `wav`, `textChunks`, `argumentChecks`, `audioFormat`, `lockfile`, `modelStore` | Nothing |
+| `ffmpeg`, and the format cases in `speak` | ffmpeg on the PATH. They are skipped without it |
 | `kokoroModel` | kokoro-js installed. No model |
 | `speak` | A fake `KokoroTTS`. No model |
-| `reject` | `make`, because it runs `tests/agency/reject.agency` with the agency CLI |
+| `reject`, `download` | `make`, because they run the programs in `tests/agency/` with the agency CLI |
 | `integration` | `AGENCY_RUN_SLOW=1` and the `fp32` model, from `agency-kokoro pull fp32` |
 
 Tests delete temp directories only through `tests/tempDir.ts`, which refuses anything not directly under the temp directory.
+
+The `reject` and `download` tests run Agency programs that import `../../index.agency`, and the CLI recompiles that import into `index.js` with module ids relative to the test's temp working directory. After running them, regenerate the committed file from the package directory with `pnpm run build` before committing, or `index.js` carries a path from your machine.
 
 ## Updating kokoro-js
 

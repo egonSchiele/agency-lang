@@ -55,7 +55,7 @@ describe("rejecting speak's interrupts", () => {
   });
 
   it("writes nothing when writing the file is rejected", { timeout: RUN_TIMEOUT_MS }, () => {
-    recordInstalledModel("fp32");
+    recordInstalledModel("fp32", modelsDir);
     const output = runProgram();
 
     expect(output).toMatch(/reject/i);

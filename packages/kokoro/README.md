@@ -36,16 +36,50 @@ node main() {
 }
 ```
 
-`speak` writes a WAV file and returns its path. If you leave out the output file, `speak` writes a new file in the temp directory. It never overwrites a file that already exists.
+`speak` writes an audio file and returns its path. If you leave out the output file, `speak` writes a new file in the temp directory. It never overwrites a file that already exists.
+
+## Formats
+
+`speak` writes wav, mp3, or m4a. The format comes from the `format` argument when you pass one, otherwise from the output file's extension, otherwise it is wav:
+
+```ts
+speak(text, "report.mp3")                   // mp3, from the extension
+speak(text, "report.wav", format: "m4a")    // m4a, because format wins
+speak(text)                                 // wav, in a temp file
+```
+
+A four-minute wav is about 11 MB. The same audio is about 3 MB as mp3 or m4a, and both play in a browser's audio element.
+
+mp3 and m4a are encoded by `ffmpeg`, which must be on your PATH. `speak` checks for it before asking any question, and tells you how to install it when it is missing. wav needs nothing.
+
+| Platform | Install ffmpeg |
+|---|---|
+| macOS | `brew install ffmpeg` |
+| Debian/Ubuntu | `sudo apt install ffmpeg` |
+| Fedora | `sudo dnf install ffmpeg` |
+| Windows | [ffmpeg.org/download.html](https://ffmpeg.org/download.html), then add it to PATH |
 
 ## Interrupts
 
 | Effect | When | Payload |
 |---|---|---|
-| `kokoro::download` | The first call on a machine without the model | `model`, `sizeBytes`, `source` |
-| `kokoro::speak` | Every call, before the file is written | `textLength`, `voice`, `outputFile` |
+| `kokoro::download` | A call that needs a model this machine does not have | `model`, `sizeBytes`, `source`, `dir` |
+| `kokoro::speak` | Every `speak` call, before the file is written | `textLength`, `voice`, `outputFile`, `format` |
 
-If your handler rejects `kokoro::download`, download the model ahead of time:
+## Downloading ahead of time
+
+`speak` downloads a missing model on its first call. To fetch it earlier, call `download`, which raises the same `kokoro::download` interrupt and returns the model's directory. It does nothing when the model is already there.
+
+```ts
+import { download, speak } from "pkg::@agency-lang/kokoro"
+
+node main() {
+  const dir = download("fp32") with approve
+  print("Model in ${dir}")
+}
+```
+
+From a shell:
 
 ```sh
 npx -p @agency-lang/kokoro agency-kokoro pull fp32
@@ -60,7 +94,13 @@ npx -p @agency-lang/kokoro agency-kokoro pull fp32
 
 Both models come from the Hugging Face repo `onnx-community/Kokoro-82M-v1.0-ONNX`. `models.lock.json` pins that repo to one commit and lists a SHA-256 hash for every file. The download checks each file against its hash.
 
-Models are saved in `~/.agency/models/kokoro/<model>/`. To save them somewhere else, set `AGENCY_KOKORO_MODELS_DIR`.
+Models are saved under a models directory, one subdirectory per model. `speak` and `download` pick the directory from the first of these that is set:
+
+1. Their `modelsDir` argument, for example `speak(text, "out.mp3", modelsDir: "/data/models")`.
+2. The `AGENCY_KOKORO_MODELS_DIR` environment variable.
+3. `~/.agency/models/kokoro/`.
+
+The `kokoro::download` interrupt names the directory in its `dir` field, so a handler can see where the files will go.
 
 To check the files on disk against their hashes again, run:
 

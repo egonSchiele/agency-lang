@@ -18,6 +18,7 @@ export type SynthesisRequest = {
   voice: string;
   speed: number;
   model: ModelName;
+  modelsDir: string;
 };
 
 type LoadedModel = {
@@ -33,7 +34,7 @@ let previousCall: Promise<unknown> = Promise.resolve();
  *  time. `signal` is checked before each sentence. */
 export function synthesize(request: SynthesisRequest, signal: AbortSignal): Promise<Int16Array[]> {
   return oneAtATime(async () => {
-    const tts = await loadModel(request.model);
+    const tts = await loadModel(request.model, request.modelsDir);
     const chunks: Int16Array[] = [];
     for (const piece of textPieces(request.text)) {
       if (signal.aborted) {
@@ -63,8 +64,8 @@ export function textPieces(text: string): string[] {
 
 /** Keeps one model loaded. A different model or models directory replaces
  *  it, and a failed load is forgotten so the next call tries again. */
-export async function loadModel(model: ModelName): Promise<KokoroTTS> {
-  const dir = modelDir(model);
+export async function loadModel(model: ModelName, modelsDir: string): Promise<KokoroTTS> {
+  const dir = modelDir(model, modelsDir);
   if (loaded === null || loaded.dir !== dir) {
     loaded = { dir, tts: loadFrom(model, dir) };
   }

@@ -7,6 +7,11 @@ import { projectProviderTokenUsage } from "../runtime/invocationUsage.js";
 // One embedding type surface — imported from llmClient.ts, not smoltalk directly.
 import type { EmbedConfig } from "../runtime/llmClient.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
+import { _resolveLocalEmbeddingModel } from "./localModels.js";
+
+/** Providers whose model is a name to resolve on this machine rather
+ *  than a string to send as is. */
+const LOCAL_EMBED_PROVIDERS = ["mlx", "llama-cpp"];
 
 /** Drop keys whose value is "", 0, or undefined; keep everything else. */
 function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -67,8 +72,17 @@ export async function _embedTexts(
     return failure(`Nothing to embed: input ${blank} is empty.`);
   }
 
+  let resolvedModel = model;
+  if (LOCAL_EMBED_PROVIDERS.includes(provider) && model !== "") {
+    try {
+      resolvedModel = await _resolveLocalEmbeddingModel(provider, model);
+    } catch (err) {
+      return failure(`Embedding failed: ${(err as Error).message}`);
+    }
+  }
+
   const config: Partial<EmbedConfig> = omitEmpty({
-    model,
+    model: resolvedModel,
     provider,
     dimensions,
     apiKey: apiKey ? keyForEveryProvider(apiKey) : undefined,

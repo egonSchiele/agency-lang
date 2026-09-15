@@ -229,7 +229,12 @@ describe("support check", () => {
 // The global-install discovery tests moved to lib/runtime/localProvider.test.ts
 // with the probe functions themselves.
 
-import { _registerLocalProvider, _downloadModel, _registerLocalModel } from "./localModels.js";
+import {
+  _registerLocalProvider,
+  _downloadModel,
+  _registerLocalModel,
+  _resolveLocalEmbeddingModel,
+} from "./localModels.js";
 import { readDownloadManifest } from "./localModelManifest.js";
 import * as smoltalkPkg from "smoltalk";
 
@@ -290,6 +295,20 @@ describe("provider register + download (fake plugin module)", () => {
     expect(out).toBe(path.join(dir, "model.gguf"));
     expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe(
       "LlamaCPP",
+    );
+  });
+
+  it("_resolveLocalEmbeddingModel registers the provider for a .gguf path and serves mlx names", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = fakeModule();
+    expect(await _resolveLocalEmbeddingModel("llama-cpp", "/abs/emb.gguf")).toBe("/abs/emb.gguf");
+    expect(smoltalkPkg.getClient({ model: "m", provider: "llama-cpp" }).constructor.name).toBe(
+      "LlamaCPP",
+    );
+    expect(await _resolveLocalEmbeddingModel("mlx", "qwen3-embedding-4b-mlx")).toBe(
+      "mlx-community/Qwen3-Embedding-4B-4bit-DWQ",
+    );
+    expect(await _resolveLocalEmbeddingModel("mlx", "mlx-community/Other-4bit")).toBe(
+      "mlx-community/Other-4bit",
     );
   });
 

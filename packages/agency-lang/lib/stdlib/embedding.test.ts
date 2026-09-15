@@ -6,6 +6,18 @@ import { CostGuard } from "../runtime/guard.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import type { EmbedConfig, EmbedResult } from "../runtime/llmClient.js";
 import type { Result } from "smoltalk";
+import { vi } from "vitest";
+import { _resolveLocalEmbeddingModel } from "./localModels.js";
+
+vi.mock("./localModels.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./localModels.js")>();
+  return {
+    ...actual,
+    _resolveLocalEmbeddingModel: vi.fn(async (_provider: string, value: string) =>
+      value === "nomic-embed-text" ? "/models/nomic.Q4_K_M.gguf" : value,
+    ),
+  };
+});
 
 const FAKE_COST = 0.002;
 
@@ -96,6 +108,32 @@ describe("_embedTexts", () => {
       _embedTexts(["x"], "text-embedding-3-large", "", 256, "", ""),
     );
     expect(calls[0].config).toEqual({ model: "text-embedding-3-large", dimensions: 256 });
+  });
+
+  it("resolves a local provider's model name before dispatch", async () => {
+    vi.mocked(_resolveLocalEmbeddingModel).mockClear();
+    const stack = new StateStack();
+    const { client, calls } = fakeClient();
+    await agencyStore.run(frame(stack, client), () =>
+      _embedTexts(["x"], "nomic-embed-text", "llama-cpp", 0, "", ""),
+    );
+    expect(calls[0].config).toEqual({ model: "/models/nomic.Q4_K_M.gguf", provider: "llama-cpp" });
+    await agencyStore.run(frame(stack, client), () =>
+      _embedTexts(["x"], "text-embedding-3-small", "openai", 0, "", ""),
+    );
+    expect(calls[1].config?.model).toBe("text-embedding-3-small");
+    expect(_resolveLocalEmbeddingModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a local model that cannot be resolved as a failure, without dispatch", async () => {
+    vi.mocked(_resolveLocalEmbeddingModel).mockRejectedValueOnce(new Error("Unknown local model"));
+    const stack = new StateStack();
+    const { client, calls } = fakeClient();
+    const r = await agencyStore.run(frame(stack, client), () =>
+      _embedTexts(["x"], "nope", "llama-cpp", 0, "", ""),
+    );
+    expect(r.success).toBe(false);
+    expect(calls).toEqual([]);
   });
 
   it("refuses an empty list and a blank input before dispatch", async () => {

@@ -1192,6 +1192,29 @@ export async function _registerLocalModel(value: string, cacheDir: string = ""):
   return await _downloadModel(value, cacheDir);
 }
 
+/** What to send smoltalk for a local embedding model. For llama-cpp, a
+ *  .gguf path (the provider registered) or a name the catalog knows
+ *  (downloaded and verified if needed). For mlx, the served name; a name
+ *  the catalog does not know passes through, because it may be a repo id
+ *  the server was started with. */
+export async function _resolveLocalEmbeddingModel(
+  provider: string,
+  model: string,
+): Promise<string> {
+  if (provider === "llama-cpp") {
+    if (isGgufPath(model)) {
+      await _registerLocalProvider();
+      return path.resolve(model);
+    }
+    return await _registerLocalModel(model);
+  }
+  try {
+    return _mlxServedName(_resolveModel(model));
+  } catch {
+    return model;
+  }
+}
+
 // =============================================================================
 // Catalog rendering — shared by `agency local alias list` and the agent's
 // bare `--local-model` discovery output, so both show an identical table.

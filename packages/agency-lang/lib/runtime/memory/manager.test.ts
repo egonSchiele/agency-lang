@@ -10,6 +10,17 @@ import { ThreadStore } from "../state/threadStore.js";
 import { runInTestContext } from "../asyncContext.js";
 import { CostGuard, isGuardExceededError } from "../guard.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
+import { _resolveLocalEmbeddingModel } from "../../stdlib/localModels.js";
+
+vi.mock("../../stdlib/localModels.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../stdlib/localModels.js")>();
+  return {
+    ...actual,
+    _resolveLocalEmbeddingModel: vi.fn(async (provider: string, value: string) =>
+      provider === "llama-cpp" && !value.endsWith(".gguf") ? `/models/${value}.Q4_K_M.gguf` : value,
+    ),
+  };
+});
 import type { GraphState } from "../types.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -1001,7 +1012,7 @@ describe("MemoryManager embeddings for local providers", () => {
     expect(msg).toContain("agency local serve --embedding");
   });
 
-  it("says llama-cpp embeddings are not supported yet", async () => {
+  it("tells a llama-cpp user what to download and what to set", async () => {
     const manager = new MemoryManager({
       store: new FileMemoryStore(tmpDir),
       config: { dir: tmpDir },
@@ -1010,7 +1021,66 @@ describe("MemoryManager embeddings for local providers", () => {
     });
     const info = vi.spyOn((manager as any).logger, "info");
     await (manager as any).noteEmbeddingDisabled();
-    expect(String(info.mock.calls[0][0])).toContain("not supported yet");
+    const msg = String(info.mock.calls[0][0]);
+    expect(msg).toContain("agency local download nomic-embed-text");
+    expect(msg).toContain("memory.embeddings");
+  });
+
+  it("resolves a llama-cpp catalog name to the downloaded path, once", async () => {
+    vi.mocked(_resolveLocalEmbeddingModel).mockClear();
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "nomic-embed-text", provider: "llama-cpp" } },
+      llmClient: mockLlmClient() as any,
+      smoltalkDefaults: {},
+    });
+    const first = await manager.resolveEmbeddingTarget();
+    const second = await manager.resolveEmbeddingTarget();
+    expect(first).toEqual({ model: "/models/nomic-embed-text.Q4_K_M.gguf", provider: "llama-cpp" });
+    expect(second).toEqual(first);
+    expect(_resolveLocalEmbeddingModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands a .gguf path to the resolver and does not resolve a hosted model", async () => {
+    vi.mocked(_resolveLocalEmbeddingModel).mockClear();
+    const local = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "/x/emb.gguf", provider: "llama-cpp" } },
+      llmClient: mockLlmClient() as any,
+      smoltalkDefaults: {},
+    });
+    expect(await local.resolveEmbeddingTarget()).toEqual({
+      model: "/x/emb.gguf",
+      provider: "llama-cpp",
+    });
+    expect(_resolveLocalEmbeddingModel).toHaveBeenCalledWith("llama-cpp", "/x/emb.gguf");
+    vi.mocked(_resolveLocalEmbeddingModel).mockClear();
+    const hosted = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small", provider: "openai" } },
+      llmClient: mockLlmClient() as any,
+      smoltalkDefaults: {},
+    });
+    expect(await hosted.resolveEmbeddingTarget()).toEqual({
+      model: "text-embedding-3-small",
+      provider: "openai",
+    });
+    expect(_resolveLocalEmbeddingModel).not.toHaveBeenCalled();
+  });
+
+  it("turns a failed download into a skipped tier, logged once", async () => {
+    vi.mocked(_resolveLocalEmbeddingModel).mockRejectedValueOnce(new Error("network down"));
+    const manager = new MemoryManager({
+      store: new FileMemoryStore(tmpDir),
+      config: { dir: tmpDir, embeddings: { model: "nomic-embed-text", provider: "llama-cpp" } },
+      llmClient: mockLlmClient() as any,
+      smoltalkDefaults: {},
+    });
+    const warn = vi.spyOn((manager as any).logger, "warn");
+    expect(await manager.resolveEmbeddingTarget()).toBeNull();
+    expect(await manager.resolveEmbeddingTarget()).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("network down");
   });
 
   it("passes the mlx base URL through to embed", async () => {

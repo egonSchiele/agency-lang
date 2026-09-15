@@ -32,6 +32,7 @@ import { recordUsage, meteredDispatch } from "../recordPaidUsage.js";
 import { projectProviderTokenUsage } from "../invocationUsage.js";
 import type { ProviderUsageKind, UsageObservation } from "../invocationUsage.js";
 import { isGuardExceededError } from "../guard.js";
+import { _resolveLocalEmbeddingModel } from "../../stdlib/localModels.js";
 
 /**
  * Record one memory provider outcome (a text completion or an embedding)
@@ -454,11 +455,48 @@ export class MemoryManager {
     return { model, provider };
   }
 
+  /** The local embedding target, resolved once. Started when memory is
+   *  enabled so a download happens at startup, not inside the first
+   *  recall; every embed awaits the same promise. `null` records a failed
+   *  resolution so it is not retried on every embed. */
+  private _embeddingTarget: Promise<{ model: string; provider?: string } | null> | undefined;
+
+  /** resolveEmbedding, with a local model name turned into what smoltalk
+   *  needs: a .gguf path for llama-cpp, the served name for mlx. */
+  resolveEmbeddingTarget(): Promise<{ model: string; provider?: string } | null> {
+    if (this._embeddingTarget === undefined) {
+      this._embeddingTarget = this.resolveEmbeddingTargetOnce();
+    }
+    return this._embeddingTarget;
+  }
+
+  private async resolveEmbeddingTargetOnce(): Promise<{
+    model: string;
+    provider?: string;
+  } | null> {
+    const target = this.resolveEmbedding();
+    if (target === null || !MemoryManager.LOCAL_PROVIDERS.includes(target.provider ?? "")) {
+      return target;
+    }
+    try {
+      return {
+        model: await _resolveLocalEmbeddingModel(target.provider!, target.model),
+        provider: target.provider,
+      };
+    } catch (err) {
+      this.logger.warn(
+        `[memory] semantic recall (Tier-2) disabled: could not resolve embedding model ` +
+          `"${target.model}" for provider "${target.provider}": ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
   /** Embed `text`, or return null (logging once) when Tier-2 is disabled
    *  because the active provider has no embedding endpoint. Callers treat null
    *  as "skip semantic embedding for this item" — no remote call is made. */
   private async embedOrSkip(text: string, phase: string): Promise<number[] | null> {
-    const target = this.resolveEmbedding();
+    const target = await this.resolveEmbeddingTarget();
     if (!target) {
       await this.noteEmbeddingDisabled();
       return null;
@@ -475,17 +513,15 @@ export class MemoryManager {
   private static readonly LOCAL_PROVIDERS = ["mlx", "llama-cpp"];
 
   private embeddingDisabledMessage(provider: string): string {
-    if (provider === "llama-cpp") {
-      return (
-        `[memory] semantic recall (Tier-2) disabled: embeddings on llama-cpp are not ` +
-        `supported yet. Structured recall still works.`
-      );
-    }
     if (MemoryManager.LOCAL_PROVIDERS.includes(provider)) {
+      const get =
+        provider === "mlx"
+          ? "Serve one with: agency local serve --embedding <model>."
+          : "Download one with: agency local download nomic-embed-text.";
       return (
         `[memory] semantic recall (Tier-2) disabled: provider "${provider}" needs an ` +
-        `embedding model named in config. Serve one with: agency local serve --embedding <model>. ` +
-        `Then set memory.embeddings to { "model": "<name>", "provider": "${provider}" } in agency.json. ` +
+        `embedding model named in config. ${get} Then set memory.embeddings to ` +
+        `{ "model": "<name>", "provider": "${provider}" } in agency.json. ` +
         "Structured recall still works."
       );
     }

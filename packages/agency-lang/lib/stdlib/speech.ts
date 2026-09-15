@@ -217,7 +217,10 @@ async function recordImpl(
 /** An output file an external program will write: a whole path the
  *  interrupt named, checked against the program's own allow-list, whose
  *  final name is never followed. */
-async function outputPath(outputFile: string, allowedPaths: string[] | undefined): Promise<string> {
+export async function outputPath(
+  outputFile: string,
+  allowedPaths: string[] | undefined,
+): Promise<string> {
   await assertContained(outputFile, allowedPaths ?? []);
   const located = fixedPath(outputFile);
   return resolveUnder(located.root, located.target);
@@ -249,7 +252,7 @@ export async function _record(
  *  string/object/null reason can matter to cancellation handling). Only
  *  synthesize an error when the reason is genuinely `undefined` (an explicit
  *  `null` is a valid reason and is preserved). */
-function throwAbortReason(signal: AbortSignal): never {
+export function throwAbortReason(signal: AbortSignal): never {
   if (signal.reason !== undefined) {
     throw signal.reason;
   }
@@ -529,7 +532,7 @@ export async function _synthesizeSpeech(
 /** True when `p` exists. A symlink at `p`, dangling or not, throws from
  *  `resolveUnder`, so paid synthesis never proceeds toward a commit that
  *  would be refused. */
-async function pathExists(p: string): Promise<boolean> {
+export async function pathExists(p: string): Promise<boolean> {
   const located = fixedPath(p);
   resolveUnder(located.root, located.target);
   return statUnder(located.root, located.target) !== null;

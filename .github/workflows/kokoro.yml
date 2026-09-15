@@ -1,0 +1,68 @@
+# Security: all third-party actions pinned to SHA. Mirrors the policy in test.yml.
+name: kokoro CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "packages/kokoro/**"
+      - ".github/workflows/kokoro.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "packages/kokoro/**"
+      - ".github/workflows/kokoro.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      AGENCY_KOKORO_MODELS_DIR: ${{ github.workspace }}/.kokoro-models
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install npm dependencies (install scripts stay blocked)
+        run: pnpm install
+
+      # The reject test runs an Agency program, which needs the stdlib that
+      # make builds.
+      - name: Build agency-lang and the kokoro package
+        run: make -C packages/agency-lang && make -C packages/kokoro
+
+      # Keyed on the lockfile, so changing a pin downloads the new files.
+      - name: Restore the Kokoro model
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .kokoro-models
+          key: kokoro-models-${{ hashFiles('packages/kokoro/models.lock.json') }}
+
+      - name: Download the fp32 model
+        working-directory: packages/kokoro
+        run: node dist/src/cli.js pull fp32
+        timeout-minutes: 10
+
+      - name: Unit tests
+        working-directory: packages/kokoro
+        run: pnpm test:run
+
+      - name: Integration tests (real model)
+        working-directory: packages/kokoro
+        env:
+          AGENCY_RUN_SLOW: "1"
+        run: pnpm test:run tests/integration.test.ts
+        timeout-minutes: 15

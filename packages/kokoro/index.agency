@@ -1,0 +1,99 @@
+/**
+## Installation
+
+```
+npm install @agency-lang/kokoro
+```
+
+No compiler and no native build. The model runs on the CPU through ONNX
+Runtime.
+
+## Usage
+
+```ts
+import { speak } from "pkg::@agency-lang/kokoro"
+
+node main() {
+  const path = speak("The build finished. Three tests failed.", "build-report.wav")
+  print("Wrote ${path}")
+}
+```
+
+The first call asks to download the model (326 MB for the default `fp32`)
+into `~/.agency/models/kokoro/`, and checks every file against the hashes in
+`models.lock.json`. Later calls read the local files with no network access.
+*/
+
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _speak, _download, _modelStatus, _validateSpeakArgs, _voices } from "./dist/src/agency.js"
+
+effect kokoro::download { model: string, sizeBytes: number, source: string }
+effect kokoro::speak { textLength: number, voice: string, outputFile: string }
+
+type Voice = {
+  id: string,
+  name: string,
+  language: string,
+  gender: string,
+  grade: string
+}
+
+// The real spelling of an output file, so the interrupt names the file that
+// will be written. An empty outputFile means a new temp file and passes through.
+def realOutput(outputFile: string): string {
+  if (outputFile == "") {
+    return ""
+  }
+  const real = try _realTarget(outputFile)
+  if (real is failure(why)) {
+    throw("${why}")
+  }
+  return real.value
+}
+
+export def speak(
+  text: string,
+  outputFile: string = "",
+  voice: string = "af_heart",
+  model: string = "fp32",
+  speed: number = 1,
+  allowedPaths: string[] = [],
+): string {
+  """
+  Turn text into speech on this machine with the Kokoro model, and write it
+  to a WAV file. Returns the file path. Nothing is sent over the network
+  after the model is downloaded once.
+
+  @param text - The text to speak
+  @param outputFile - Where to write the WAV file. Empty means a new file in the temp directory. An existing file is never overwritten.
+  @param voice - A voice id from voices(), such as "af_heart"
+  @param model - "fp32" (326 MB, faster) or "q8" (92 MB)
+  @param speed - Speaking speed, from 0.5 to 2
+  @param allowedPaths - Only allow writing a non-empty outputFile under these directories
+  """
+  _validateSpeakArgs(text, outputFile, voice, model, speed)
+  const status = _modelStatus(model)
+  if (status.installed == false) {
+    return interrupt kokoro::download("Download the Kokoro text-to-speech model?", {
+      model: model,
+      sizeBytes: status.sizeBytes,
+      source: status.source,
+    })
+    _download(model)
+  }
+  const out = realOutput(outputFile)
+  return interrupt kokoro::speak("Allow Kokoro to write an audio file?", {
+    textLength: text.length,
+    voice: voice,
+    outputFile: out,
+  })
+  return _speak(text, out, voice, model, speed, allowedPaths)
+}
+
+export def voices(): Voice[] {
+  """
+  List the Kokoro voices, with each voice's id, name, language, gender, and
+  quality grade from A to F.
+  """
+  return _voices()
+}

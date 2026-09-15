@@ -27,19 +27,24 @@ minimumReleaseAgeExclude:
 # every subdep resolves from the registry, where the cooldown and integrity
 # hashes apply.
 blockExoticSubdeps: true
-# Lifecycle (install) scripts are default-denied. These five ask to run one;
-# all five are blocked and everything works: esbuild ships platform binaries
+# Lifecycle (install) scripts are default-denied. These seven ask to run one;
+# all seven are blocked and everything works: esbuild ships platform binaries
 # as optionalDependencies (its script is only a validator fallback), the
 # genai/protobufjs postinstalls are not needed at runtime, tesseract.js's
 # postinstall is the OpenCollective donation banner, and node-llama-cpp (a
 # dependency of smoltalk-llama-cpp, which only the local-model CI workflow
 # installs) ships its prebuilt binaries as optionalDependencies too and
-# builds from source on first use only when none of them fits. A package
-# that asks for a script and is not listed here fails the install outright.
-# Flip to true only with a reason.
+# builds from source on first use only when none of them fits. The last two
+# come from @agency-lang/kokoro: onnxruntime-node bundles its CPU binaries
+# in the tarball and its script only fetches the CUDA ones, and sharp gets
+# its binary as an optionalDependency and its script only checks for it. A
+# package that asks for a script and is not listed here fails the install
+# outright. Flip to true only with a reason.
 allowBuilds:
   '@google/genai': false
   esbuild: false
   node-llama-cpp: false
+  onnxruntime-node: false
   protobufjs: false
+  sharp: false
   tesseract.js: false

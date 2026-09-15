@@ -23,7 +23,8 @@ export function _modelStatus(model: string): ModelStatus {
 }
 
 export async function _download(model: string): Promise<void> {
-  await downloadModel(model as ModelName);
+  const { ctx, stack } = getRuntimeContext();
+  await downloadModel(model as ModelName, { signal: ctx.getAbortSignal(stack) });
 }
 
 export async function _speak(

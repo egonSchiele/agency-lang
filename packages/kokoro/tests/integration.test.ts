@@ -45,6 +45,18 @@ describe.skipIf(!process.env.AGENCY_RUN_SLOW)("kokoro with the real model", () =
     removeTempDir(workDir);
   });
 
+  // First, so the model loads from disk while fetch is replaced. Later
+  // tests reuse the loaded model.
+  it("never touches the network once the model is on disk", { timeout: SLOW_TEST_MS }, async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.reject(new Error("network used"));
+    try {
+      await speakWith(request("offline.wav", "No network needed."), signal);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   it("speaks one sentence", { timeout: SLOW_TEST_MS }, async () => {
     const info = readWav(
       await speakWith(request("short.wav", "Hello from Agency, running locally."), signal),
@@ -66,16 +78,6 @@ describe.skipIf(!process.env.AGENCY_RUN_SLOW)("kokoro with the real model", () =
 
     // One generate() call on this text returns 28.6 seconds of audio.
     expect(info.seconds).toBeGreaterThan(200);
-  });
-
-  it("never touches the network once the model is on disk", { timeout: SLOW_TEST_MS }, async () => {
-    const realFetch = globalThis.fetch;
-    globalThis.fetch = () => Promise.reject(new Error("network used"));
-    try {
-      await speakWith(request("offline.wav", "No network needed."), signal);
-    } finally {
-      globalThis.fetch = realFetch;
-    }
   });
 
   it("lists the same voices as kokoro-js", { timeout: SLOW_TEST_MS }, async () => {

@@ -4,6 +4,8 @@ import { isVoiceId } from "./voices.js";
 
 export const MIN_SPEED = 0.5;
 export const MAX_SPEED = 2;
+/** The whole audio file is held in memory until it is written. */
+export const MAX_TEXT_CHARS = 50_000;
 
 export type SpeakArguments = {
   text: string;
@@ -22,6 +24,12 @@ const RULES: ArgumentRule[] = [
   {
     holds: (args) => args.text.trim() !== "",
     message: () => "text cannot be empty",
+  },
+  {
+    holds: (args) => args.text.length <= MAX_TEXT_CHARS,
+    message: (args) =>
+      `text is ${args.text.length} characters, over the limit of ${MAX_TEXT_CHARS}. ` +
+      "Split it across several calls.",
   },
   {
     holds: (args) => isVoiceId(args.voice),

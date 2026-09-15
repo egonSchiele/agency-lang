@@ -9,7 +9,12 @@ export type Voice = {
 export const DEFAULT_VOICE = "af_heart";
 
 /** Copied from kokoro-js 1.2.1, which only exposes its table on a loaded
- *  model. The integration test checks the two still match. */
+ *  model. The integration test checks the two still match.
+ *
+ *  `grade` is the voice's overall grade from the Kokoro model card, at
+ *  https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md. It rates
+ *  how clean the voice's training audio was and how much of it the model
+ *  heard. An A voice sounds the most natural. An F voice sounds the least. */
 export const VOICES: Voice[] = [
   { id: "af_heart", name: "Heart", language: "en-us", gender: "Female", grade: "A" },
   { id: "af_alloy", name: "Alloy", language: "en-us", gender: "Female", grade: "C" },

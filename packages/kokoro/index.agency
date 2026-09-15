@@ -51,6 +51,11 @@ def realOutput(outputFile: string): string {
   return real.value
 }
 
+/**
+Text-to-speech that runs on this machine. After the model is downloaded
+once, no text is sent over the network. `fp32` is faster. `q8` is a smaller
+download: 92 MB instead of 326 MB.
+*/
 export def speak(
   text: string,
   outputFile: string = "",
@@ -58,18 +63,16 @@ export def speak(
   model: string = "fp32",
   speed: number = 1,
   allowedPaths: string[] = [],
-): string {
+): string raises <kokoro::download, kokoro::speak> {
   """
-  Turn text into speech on this machine with the Kokoro model, and write it
-  to a WAV file. Returns the file path. Nothing is sent over the network
-  after the model is downloaded once.
+  Speak text into a WAV file. Returns the file path.
 
-  @param text - The text to speak
-  @param outputFile - Where to write the WAV file. Empty means a new file in the temp directory. An existing file is never overwritten.
+  @param text - The text to speak, at most 50,000 characters
+  @param outputFile - Where to write the WAV file. Leave empty for a new temp file. An existing file is never overwritten.
   @param voice - A voice id from voices(), such as "af_heart"
-  @param model - "fp32" (326 MB, faster) or "q8" (92 MB)
+  @param model - "fp32" or "q8"
   @param speed - Speaking speed, from 0.5 to 2
-  @param allowedPaths - Only allow writing a non-empty outputFile under these directories
+  @param allowedPaths - Directories that outputFile must be inside
   """
   _validateSpeakArgs(text, outputFile, voice, model, speed)
   const status = _modelStatus(model)
@@ -92,8 +95,8 @@ export def speak(
 
 export def voices(): Voice[] {
   """
-  List the Kokoro voices, with each voice's id, name, language, gender, and
-  quality grade from A to F.
+  List the Kokoro voices. Each voice has an id, name, language, gender, and a
+  quality grade from A (best) to F.
   """
   return _voices()
 }

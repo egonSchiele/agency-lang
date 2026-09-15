@@ -8,7 +8,8 @@ import * as path from "node:path";
 import { throwAbortReason } from "agency-lang/stdlib-lib/speech.js";
 import { LOCKFILE, type ModelName } from "./lockfile.js";
 import { modelDir } from "./modelStore.js";
-import { splitToFit } from "./textChunks.js";
+import { sentenceWindows, splitToFit } from "./textChunks.js";
+import { toPcm16 } from "./wav.js";
 
 export const SAMPLE_RATE = 24000;
 
@@ -27,16 +28,13 @@ type LoadedModel = {
 let loaded: LoadedModel | null = null;
 let previousCall: Promise<unknown> = Promise.resolve();
 
-/** Audio for `request.text`, one sentence at a time, so no piece reaches
- *  the length at which the model truncates. Calls run one at a time.
- *  `signal` is checked before each sentence. */
-export function synthesize(
-  request: SynthesisRequest,
-  signal: AbortSignal,
-): Promise<Float32Array[]> {
+/** 16-bit audio for `request.text`, one sentence at a time, so no piece
+ *  reaches the length at which the model truncates. Calls run one at a
+ *  time. `signal` is checked before each sentence. */
+export function synthesize(request: SynthesisRequest, signal: AbortSignal): Promise<Int16Array[]> {
   return oneAtATime(async () => {
     const tts = await loadModel(request.model);
-    const chunks: Float32Array[] = [];
+    const chunks: Int16Array[] = [];
     for (const piece of textPieces(request.text)) {
       if (signal.aborted) {
         throwAbortReason(signal);
@@ -45,7 +43,7 @@ export function synthesize(
         voice: request.voice as never,
         speed: request.speed,
       });
-      chunks.push(audio.audio);
+      chunks.push(toPcm16(audio.audio));
     }
     return chunks;
   });
@@ -54,9 +52,13 @@ export function synthesize(
 /** Sentences from kokoro-js's own splitter, with any sentence too long
  *  for the model split further. */
 export function textPieces(text: string): string[] {
-  const splitter = new TextSplitterStream();
-  splitter.push(text);
-  return [...splitter].flatMap((sentence) => splitToFit(sentence));
+  return sentenceWindows(text)
+    .flatMap((window) => {
+      const splitter = new TextSplitterStream();
+      splitter.push(window);
+      return [...splitter];
+    })
+    .flatMap((sentence) => splitToFit(sentence));
 }
 
 /** Keeps one model loaded. A different model or models directory replaces

@@ -13,16 +13,26 @@ type HeaderField =
   | { kind: "uint16"; value: number }
   | { kind: "uint32"; value: number };
 
-/** Mono 16-bit PCM WAV bytes for float samples in the range -1 to 1. */
-export function encodeWav(chunks: Float32Array[], sampleRate: number): Uint8Array {
-  const samples = concatSamples(chunks);
-  const dataBytes = samples.length * BYTES_PER_SAMPLE;
-  const view = new DataView(new ArrayBuffer(HEADER_BYTES + dataBytes));
+/** 16-bit samples for float samples in the range -1 to 1. Holding audio
+ *  this way takes half the memory of the model's float output. */
+export function toPcm16(samples: Float32Array): Int16Array {
+  return Int16Array.from(samples, toInt16);
+}
+
+/** Mono 16-bit PCM WAV bytes for chunks of samples, in order. */
+export function encodeWav(chunks: Int16Array[], sampleRate: number): Uint8Array {
+  const dataBytes = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const bytes = new Uint8Array(HEADER_BYTES + dataBytes);
+  const view = new DataView(bytes.buffer);
   writeFields(view, headerFields(sampleRate, dataBytes));
-  samples.forEach((sample, index) => {
-    view.setInt16(HEADER_BYTES + index * BYTES_PER_SAMPLE, toInt16(sample), true);
-  });
-  return new Uint8Array(view.buffer);
+  let offset = HEADER_BYTES;
+  for (const chunk of chunks) {
+    chunk.forEach((sample, index) => {
+      view.setInt16(offset + index * BYTES_PER_SAMPLE, sample, true);
+    });
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 function headerFields(sampleRate: number, dataBytes: number): HeaderField[] {
@@ -58,16 +68,6 @@ function writeFields(view: DataView, fields: HeaderField[]): void {
       offset += 4;
     }
   }
-}
-
-function concatSamples(chunks: Float32Array[]): Float32Array {
-  const samples = new Float32Array(chunks.reduce((total, chunk) => total + chunk.length, 0));
-  let offset = 0;
-  for (const chunk of chunks) {
-    samples.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return samples;
 }
 
 function toInt16(sample: number): number {

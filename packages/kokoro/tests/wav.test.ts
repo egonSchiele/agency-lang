@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeWav } from "../src/wav.js";
+import { encodeWav, toPcm16 } from "../src/wav.js";
 
 const SAMPLE_RATE = 24000;
 
@@ -11,9 +11,15 @@ function sampleAt(bytes: Uint8Array, index: number): number {
   return new DataView(bytes.buffer).getInt16(44 + index * 2, true);
 }
 
+describe("toPcm16", () => {
+  it("clamps samples outside -1 to 1 and scales the rest", () => {
+    expect([...toPcm16(Float32Array.of(2, -2, 0.5))]).toEqual([32767, -32768, 16384]);
+  });
+});
+
 describe("encodeWav", () => {
   it("writes a mono 16-bit PCM header", () => {
-    const bytes = encodeWav([new Float32Array(SAMPLE_RATE)], SAMPLE_RATE);
+    const bytes = encodeWav([new Int16Array(SAMPLE_RATE)], SAMPLE_RATE);
     const view = new DataView(bytes.buffer);
     const dataBytes = SAMPLE_RATE * 2;
 
@@ -32,13 +38,8 @@ describe("encodeWav", () => {
     expect(view.getUint32(40, true)).toBe(dataBytes);
   });
 
-  it("clamps samples outside -1 to 1 and scales the rest", () => {
-    const bytes = encodeWav([Float32Array.of(2, -2, 0.5)], SAMPLE_RATE);
-    expect([0, 1, 2].map((index) => sampleAt(bytes, index))).toEqual([32767, -32768, 16384]);
-  });
-
   it("joins chunks in order", () => {
-    const bytes = encodeWav([Float32Array.of(0.25), Float32Array.of(-0.25)], SAMPLE_RATE);
-    expect([0, 1].map((index) => sampleAt(bytes, index))).toEqual([8192, -8192]);
+    const bytes = encodeWav([Int16Array.of(8192, 1), Int16Array.of(-8192)], SAMPLE_RATE);
+    expect([0, 1, 2].map((index) => sampleAt(bytes, index))).toEqual([8192, 1, -8192]);
   });
 });

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { remove, root } from "agency-lang/stdlib-lib/contained.js";
 import { downloadHubSnapshot } from "agency-lang/stdlib-lib/hubDownload.js";
 import { snapshotFor } from "../src/lockfile.js";
 import { downloadModel, modelRepoDir, modelStatus } from "../src/modelStore.js";
@@ -43,6 +44,12 @@ describe("modelStore", () => {
     expect(modelStatus("fp32").installed).toBe(false);
   });
 
+  it("does not trust a record whose file is gone from disk", () => {
+    recordInstalledModel("fp32");
+    remove(root(modelRepoDir("fp32")), "onnx/model.onnx");
+    expect(modelStatus("fp32").installed).toBe(false);
+  });
+
   it("keeps each model separate", () => {
     recordInstalledModel("fp32");
     expect(modelStatus("q8").installed).toBe(false);
@@ -50,9 +57,7 @@ describe("modelStore", () => {
 
   it("downloads the pinned snapshot into the model's own directory", async () => {
     await downloadModel("q8");
-    expect(downloadHubSnapshot).toHaveBeenCalledWith(snapshotFor("q8"), modelRepoDir("q8"), {
-      onEvent: undefined,
-    });
+    expect(downloadHubSnapshot).toHaveBeenCalledWith(snapshotFor("q8"), modelRepoDir("q8"), {});
     expect(modelRepoDir("q8").startsWith(modelsDir)).toBe(true);
   });
 });

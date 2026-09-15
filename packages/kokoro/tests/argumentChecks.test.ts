@@ -16,6 +16,7 @@ describe("validateSpeakArguments", () => {
 
   it.each([
     [{ text: "  " }, /text cannot be empty/],
+    [{ text: "a".repeat(50_001) }, /over the limit of 50000/],
     [{ voice: "af_nobody" }, /unknown voice "af_nobody"/],
     [{ model: "q4" }, /unknown model "q4"/],
     [{ speed: 3 }, /speed must be between 0.5 and 2/],

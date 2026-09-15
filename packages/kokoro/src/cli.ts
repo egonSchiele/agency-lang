@@ -16,10 +16,12 @@ const COMMANDS: Record<string, Command> = {
 
 async function pull(model: ModelName): Promise<boolean> {
   console.log(`Downloading the ${model} model into ${modelRepoDir(model)}`);
-  await downloadModel(model, (event) => {
-    if (event.kind === "verify") {
-      console.log(`${event.ok ? "OK" : "BAD"}  ${event.path}`);
-    }
+  await downloadModel(model, {
+    onEvent: (event) => {
+      if (event.kind === "verify") {
+        console.log(`${event.ok ? "OK" : "BAD"}  ${event.path}`);
+      }
+    },
   });
   return true;
 }

@@ -24,6 +24,8 @@ export type HubOptions = {
   /** A range request that delivers no bytes for this long is abandoned
    *  and retried. Default one minute. */
   stallTimeoutMs?: number;
+  /** Cancels every request. A download stops without retrying. */
+  signal?: AbortSignal;
 };
 
 export type Chunk = { path: string; index: number; start: number; end: number };
@@ -181,7 +183,15 @@ export class HubClient {
     if (onHub && this.hasToken()) {
       headers.authorization = `Bearer ${this.options.token}`;
     }
-    const res = await fetchFn(url, { ...init, headers, redirect: "manual" });
+    const signals = [init.signal, this.options.signal].filter(
+      (signal): signal is AbortSignal => signal instanceof AbortSignal,
+    );
+    const res = await fetchFn(url, {
+      ...init,
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.any(signals),
+    });
     if (onHub && (res.status === 401 || res.status === 403)) {
       throw new Error(deniedMessage(url, res.status, this.hasToken()));
     }

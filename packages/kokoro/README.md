@@ -1,6 +1,6 @@
 # @agency-lang/kokoro
 
-Local text-to-speech for Agency with the Kokoro model. No API key, and no text leaves your machine.
+Turn text into speech on your own machine with the Kokoro model. You don't need an API key, and your text never leaves your machine.
 
 ## Installation
 
@@ -8,12 +8,12 @@ Local text-to-speech for Agency with the Kokoro model. No API key, and no text l
 npm install @agency-lang/kokoro
 ```
 
-There is no compiler and no native build. The model runs on the CPU through ONNX Runtime, which ships prebuilt binaries for macOS, Linux, and Windows.
+The model runs on your CPU through ONNX Runtime. ONNX Runtime ships prebuilt binaries for macOS, Linux, and Windows, so nothing needs to compile.
 
-Two dependencies ask to run an install script: `onnxruntime-node` and `sharp`. Both can stay blocked, and pnpm 10 or later blocks them by default:
+Two dependencies ask to run an install script. You can leave both scripts blocked, and pnpm 10 and later blocks them by default.
 
-1. `onnxruntime-node` already bundles its CPU binaries. Its script only downloads the CUDA GPU binaries, which this package does not use.
-2. `sharp` gets its binary as an optional dependency. Its script only checks that the binary is there.
+1. `onnxruntime-node` already bundles its CPU binaries. Its script downloads GPU binaries, which this package does not use.
+2. `sharp` installs its binary as an optional dependency. Its script only checks that the binary is there.
 
 ## Usage
 
@@ -36,7 +36,7 @@ node main() {
 }
 ```
 
-`speak` writes a WAV file and returns its path. An empty `outputFile` writes a new file in the temp directory. It never overwrites an existing file.
+`speak` writes a WAV file and returns its path. If you leave out the output file, `speak` writes a new file in the temp directory. It never overwrites a file that already exists.
 
 ## Interrupts
 
@@ -45,7 +45,7 @@ node main() {
 | `kokoro::download` | The first call on a machine without the model | `model`, `sizeBytes`, `source` |
 | `kokoro::speak` | Every call, before the file is written | `textLength`, `voice`, `outputFile` |
 
-A handler that approves only `kokoro::speak` rejects the download. Such a program works once the model is downloaded ahead of time:
+If your handler rejects `kokoro::download`, download the model ahead of time:
 
 ```sh
 npx -p @agency-lang/kokoro agency-kokoro pull fp32
@@ -58,19 +58,35 @@ npx -p @agency-lang/kokoro agency-kokoro pull fp32
 | `fp32` (default) | 326 MB | 4 minutes of audio in about 60 seconds |
 | `q8` | 92 MB | 4 minutes of audio in about 100 seconds |
 
-Files come from the Hugging Face repo `onnx-community/Kokoro-82M-v1.0-ONNX`, pinned to one commit in `models.lock.json`. Every file is checked against its SHA-256. Models live in `~/.agency/models/kokoro/<model>/`. Set `AGENCY_KOKORO_MODELS_DIR` to use another directory.
+Both models come from the Hugging Face repo `onnx-community/Kokoro-82M-v1.0-ONNX`. `models.lock.json` pins that repo to one commit and lists a SHA-256 hash for every file. The download checks each file against its hash.
 
-`agency-kokoro verify <model>` hashes the files on disk against the lockfile.
+Models are saved in `~/.agency/models/kokoro/<model>/`. To save them somewhere else, set `AGENCY_KOKORO_MODELS_DIR`.
+
+To check the files on disk against their hashes again, run:
+
+```sh
+npx -p @agency-lang/kokoro agency-kokoro verify fp32
+```
 
 ## Voices
 
-`voices()` lists all 28 voices, American and British English, with a quality grade from A to F. The best are `af_heart` (A), `af_bella` (A-), `af_nicole` (B-), and `bf_emma` (B-).
+`voices()` lists all 28 voices. Each voice speaks American or British English and has a grade from A to F. The grade comes from the [Kokoro model card](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md). It rates the quality of the audio the voice was trained on, and how much of that audio there was.
 
-## Things to know
+These four voices have the best grades:
 
-- **The package sets transformers.js's global `env`.** It turns off remote model loading and points the local model path at the Kokoro directory. Other code in the same process that uses transformers.js sees these settings.
-- **Output is 16-bit mono WAV at 24,000 Hz.** Convert it yourself if you need another format.
-- **Speed ranges from 0.5 to 2.**
+| Voice | Grade |
+|---|---|
+| `af_heart` | A |
+| `af_bella` | A- |
+| `af_nicole` | B- |
+| `bf_emma` | B- |
+
+## Limits
+
+- `text` can be at most 50,000 characters. For longer text, call `speak` several times.
+- Speed ranges from 0.5 to 2.
+- Output is 16-bit mono WAV at 24,000 Hz.
+- This package changes two transformers.js settings for the whole process. It turns off downloading models from the network, and it sets the directory that local models load from. Other code in the same process that uses transformers.js gets these settings too.
 
 ## License
 

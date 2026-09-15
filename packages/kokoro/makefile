@@ -1,5 +1,7 @@
+.PHONY: all publish
+
 all:
 	pnpm run build
 
-publish:
+publish: all
 	pnpm publish --access public --no-git-checks

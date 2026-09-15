@@ -98,9 +98,11 @@ boundary.
   `withRootCarriers` like the policy and budget, so a stale value from a parent
   shell never leaks in.
 - Every compiled file that has a node gets a direct-run block. It passes
-  `runCliEntry` (`lib/runtime/cliEntry.ts`) the graph's node names and one
-  function that starts any node by name through `runNode`, the same call each
-  exported node wrapper makes. `runCliEntry` starts the named node, or `main`
+  `runCliEntry` (`lib/runtime/cliEntry.ts`) the file's own node names (not the
+  imported ones the graph also holds) and one function that starts any node by
+  name through `runNode`, the same call each exported node wrapper makes. A
+  parameter default still applies, because the node body falls back to it when
+  the value is missing. `runCliEntry` starts the named node, or `main`
   when none is named. A name the file does not have is a usage error: the child
   prints the file's nodes and exits 2, with no crash banner. A file with nodes
   but no `main` now reports that, where it used to exit silently.

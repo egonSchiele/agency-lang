@@ -34,13 +34,15 @@ try {
   console.log("Test 1 passed");
 
   // --- Test 1b: Run a named node with file.agency:node ---
+  // list has a defaulted parameter, so this also checks the node body's
+  // default applies when the CLI starts a node with no arguments.
   console.log("--- Test 1b: Run a named node ---");
   writeFile(dir, "two-nodes.agency", `node main() {
   print("ran main")
 }
 
-node list() {
-  print("ran list")
+node list(label: string = "ran list") {
+  print(label)
 }
 `);
   const namedNodeOutput = run(dir, "npx agency run two-nodes.agency:list");

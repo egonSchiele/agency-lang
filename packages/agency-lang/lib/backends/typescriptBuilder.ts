@@ -4468,12 +4468,16 @@ export class TypeScriptBuilder {
     if (this.compilationUnit.graphNodes.length > 0) {
       // The direct-run block starts a node by name through runNode, the same
       // call every exported node wrapper makes, so `agency run file.agency:node`
-      // can pick any node the graph registered. runCliEntry starts `main`
-      // unless the CLI names another.
+      // can pick any node in this file. runCliEntry starts `main` unless the
+      // CLI names another. The names are this file's own: the graph also holds
+      // every node merged in from imports, which are not entry points.
       //
       // The node's parameters get no values: a program's command line belongs
       // to the program. `agency run` forwards trailing arguments to the child
       // process, where `std::args` reads them.
+      const nodeNames = ts.arr(
+        this.compilationUnit.graphNodes.map((node) => ts.str(declaredName(node.nodeName))),
+      );
       const startNode = ts.arrowFn(
         [{ name: "nodeName", typeAnnotation: "string" }],
         ts.call(ts.id("runNode"), [
@@ -4510,7 +4514,7 @@ export class TypeScriptBuilder {
                   ts.await(
                     ts.call(ts.id("runCliEntry"), [
                       ts.obj({
-                        nodeNames: ts.call($(ts.id("graph")).prop("nodeNames").done(), []),
+                        nodeNames,
                         startNode,
                         resume: ts.id("__resumeFromCheckpoint"),
                       }),

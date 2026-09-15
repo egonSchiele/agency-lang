@@ -401,7 +401,7 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
       data: {}
     };
     const __result = await runCliEntry({
-      nodeNames: graph.nodeNames(),
+      nodeNames: ["main"],
       startNode: (nodeName: string) => runNode({
         ctx: __globalCtx,
         nodeName: nodeName,

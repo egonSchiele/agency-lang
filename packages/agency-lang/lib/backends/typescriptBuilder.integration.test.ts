@@ -542,7 +542,7 @@ node list() {
 }
 `);
 
-    expect(output).toContain("nodeNames: graph.nodeNames()");
+    expect(output).toContain('nodeNames: ["main", "list"]');
     expect(output).toContain("startNode: (nodeName: string) => runNode({");
     expect(output).toContain("resume: __resumeFromCheckpoint");
     expect(output).not.toContain("__process.argv[2]");
@@ -555,7 +555,7 @@ node list() {
 }
 `);
 
-    expect(output).toContain("nodeNames: graph.nodeNames()");
+    expect(output).toContain('nodeNames: ["list"]');
   });
 
   it("emits no direct-run block for a file without nodes", () => {

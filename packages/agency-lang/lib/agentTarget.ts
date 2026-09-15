@@ -9,14 +9,13 @@ import {
   tokenizeCommand,
 } from "@/eval/run/commandLine.js";
 import { parseAgency } from "@/parser.js";
+import { LEGAL_IDENTIFIER } from "@/parsers/parsers.js";
 
 /**
  * How an agent target string is parsed and resolved. A target names an agent
  * entry point: `path`, `path:node`, or a directory (meaning its main.agency).
  * Consumed by the eval commands, the optimizer, and `agency test`.
  */
-
-const NODE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Split `path:node` on its last colon, but only when the text after it is a
  *  node name, so a path with a colon in it (`C:\agents\a.agency`) stays whole.
@@ -27,7 +26,7 @@ export function parseTarget(target: string): {
 } {
   const colonIndex = target.lastIndexOf(":");
   const nodeName = colonIndex === -1 ? "" : target.slice(colonIndex + 1);
-  if (!NODE_NAME.test(nodeName)) {
+  if (!LEGAL_IDENTIFIER.test(nodeName)) {
     return { filename: target, nodeName: "" };
   }
   return { filename: target.slice(0, colonIndex), nodeName };

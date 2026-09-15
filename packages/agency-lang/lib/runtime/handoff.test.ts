@@ -12,7 +12,8 @@ import {
 } from "./handoff.js";
 
 const toolCall = () => new smoltalk.ToolCall("call-1", "explorer", { question: "why" });
-const scopeKey = handoffScopeKey("explorer", "call-1");
+// The key a top-level dispatch of `explorer` gets: depth 0, no scope open.
+const scopeKey = handoffScopeKey(new MessageThread(), "explorer", "call-1");
 
 const contents = (thread: MessageThread) => thread.getMessages().map((message) => message.content);
 const roles = (thread: MessageThread) => thread.getMessages().map((message) => message.role);
@@ -82,7 +83,7 @@ describe("finishHandoff", () => {
   it("removes only this dispatch's system messages", () => {
     const thread = threadAfterBody();
     thread.push(smoltalk.userMessage(handoffResumeText("explorer", "the answer")));
-    const second = handoffScopeKey("explorer", "call-2");
+    const second = handoffScopeKey(thread, "explorer", "call-2");
     thread.enterHandoffScope(second);
     thread.push(smoltalk.systemMessage("second persona"));
     thread.push(smoltalk.assistantMessage("second answer"));
@@ -122,12 +123,12 @@ describe("finishHandoff", () => {
   });
 
   it("nests: the inner dispatch's persona goes with the inner hand-back", () => {
-    const outer = handoffScopeKey("outerAgent", "call-o");
-    const inner = handoffScopeKey("subagent", "call-i");
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("hello"));
+    const outer = handoffScopeKey(thread, "outerAgent", "call-o");
     thread.enterHandoffScope(outer);
     thread.push(smoltalk.systemMessage("outer persona"));
+    const inner = handoffScopeKey(thread, "subagent", "call-i");
     thread.enterHandoffScope(inner);
     thread.push(smoltalk.systemMessage("inner persona"));
     thread.push(smoltalk.assistantMessage("inner answer"));
@@ -139,6 +140,23 @@ describe("finishHandoff", () => {
     thread.exitHandoffScope();
     finishHandoff({ thread, scopeKey: outer, toolName: "outerAgent", body: "outer answer" });
     expect(roles(thread)).toEqual(["user", "assistant", "user", "assistant", "user"]);
+  });
+
+  it("keeps a handoff nested inside itself apart when the provider sends no call ids", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("hello"));
+    const outer = handoffScopeKey(thread, "subagent", "");
+    thread.enterHandoffScope(outer);
+    thread.push(smoltalk.systemMessage("outer persona"));
+    const inner = handoffScopeKey(thread, "subagent", "");
+    expect(inner).not.toBe(outer);
+    thread.enterHandoffScope(inner);
+    thread.push(smoltalk.systemMessage("inner persona"));
+    thread.exitHandoffScope();
+    expect(handoffScopeKey(thread, "subagent", "")).toBe(inner);
+    finishHandoff({ thread, scopeKey: inner, toolName: "subagent", body: "inner answer" });
+    expect(contents(thread)).toContain("outer persona");
+    expect(contents(thread)).not.toContain("inner persona");
   });
 });
 
@@ -166,7 +184,7 @@ describe("message text", () => {
   it("names the tool in every message", () => {
     expect(handoffNotAloneMessage("explorer")).toContain("explorer");
     expect(handoffNotAloneMessage("explorer")).toContain("only tool call");
-    expect(handoffScopeKey("explorer", "c1")).toBe("explorer:c1");
+    expect(handoffScopeKey(new MessageThread(), "explorer", "c1")).toBe("explorer:c1:0");
     expect(handoffResumeText("explorer", "x")).toBe(
       "[explorer finished. x]\nContinue with the user's request.",
     );

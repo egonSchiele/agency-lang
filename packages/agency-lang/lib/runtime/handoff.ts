@@ -21,10 +21,16 @@ export function handoffNotAloneMessage(toolName: string): string {
 }
 
 /** The scope key one dispatch tags its body's system messages with. The
- *  tool name keeps a handoff nested inside another handoff apart even when
- *  a client hands out the same call id twice. */
-export function handoffScopeKey(toolName: string, toolCallId: string): string {
-  return `${toolName}:${toolCallId}`;
+ *  nesting depth is part of it because a provider that sends no call ids
+ *  (Gemini) leaves a handoff nested inside itself with the same name and
+ *  the same empty id. Compute it before entering the scope and again after
+ *  leaving it; the depth is the same at both points. */
+export function handoffScopeKey(
+  thread: MessageThread,
+  toolName: string,
+  toolCallId: string,
+): string {
+  return `${toolName}:${toolCallId}:${thread.handoffDepth()}`;
 }
 
 export function handoffResumeText(toolName: string, body: string): string {
@@ -43,9 +49,8 @@ export function handoffStoppedText(toolName: string, reason: string): string {
  * Drop the tool call from the assistant message that carried the handoff
  * call. Its text stays; a message that was only the call is removed, so
  * the thread reads as the user's request followed by the body's work.
- * Nothing is added in its place: an assistant message that narrated the
- * dispatch taught models to write that narration instead of calling the
- * tool.
+ * Nothing is added in its place: a model that sees dispatch narration in
+ * its history learns to write it instead of calling the tool.
  */
 export function dropHandoffToolCall(thread: MessageThread): void {
   const messages = thread.getMessages();

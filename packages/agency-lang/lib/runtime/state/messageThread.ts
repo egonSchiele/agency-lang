@@ -248,6 +248,11 @@ export class MessageThread {
     this.handoffScopes.pop();
   }
 
+  /** How many handoff bodies are running on this thread right now. */
+  handoffDepth(): number {
+    return this.handoffScopes.length;
+  }
+
   private currentHandoffScope(): string | null {
     return this.handoffScopes[this.handoffScopes.length - 1] ?? null;
   }

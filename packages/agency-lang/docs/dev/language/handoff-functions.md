@@ -26,10 +26,9 @@ the body's messages can land on the caller's thread as valid history.
    the assistant message carrying the tool call: its text is kept and
    the tool call is dropped. A message that was only the call is
    removed, so the thread reads as the user's request followed by the
-   body's work. Nothing is written in its place. An earlier version
-   appended `[dispatching name: args]` here; a model that saw a few of
-   those in its history started writing that text as its reply instead
-   of calling the tool, and then nothing ran.
+   body's work. Nothing is written in its place: a model that sees
+   dispatch narration in its history learns to write it instead of
+   calling the tool.
 3. `runInvokeStep` runs the body in a frame whose thread store is a
    view of the caller's store with the prompt's own thread active
    (`ThreadStore.viewWithActive`). That is the active thread for an
@@ -39,7 +38,10 @@ the body's messages can land on the caller's thread as valid history.
    disturb each other. For the duration of the body the thread holds
    the dispatch's scope key (`MessageThread.enterHandoffScope`), and
    every system message pushed meanwhile is tagged with it in
-   `messageScopes`, whichever code pushes it.
+   `messageScopes`, whichever code pushes it. The key is the tool name,
+   the call id, and the nesting depth; the depth matters because a
+   provider that sends no call ids leaves a handoff nested inside
+   itself with the same name and the same empty id.
 4. When the body returns, `finishHandoff` removes every message tagged
    with this dispatch's scope key and pushes a user-role
    `[name finished. <result>]\nContinue with the user's request.`
@@ -70,8 +72,8 @@ The return value still reaches the code that awaited the call, through
 ## Threads inside the body
 
 `thread {}` still isolates. `subthread {}` inherits the caller's history
-plus the marker and does not flow back. System messages the body pushes
-are scoped to the dispatch.
+and does not flow back. System messages the body pushes are scoped to
+the dispatch.
 
 The caller's own system messages are live during the body. The body's
 request sends the whole thread, so a subagent sees the caller's system
@@ -84,11 +86,10 @@ belongs in an ordinary tool.
 A handoff function called from code, not by a model, is an ordinary
 function call. Functions are transparent to threads, so the body's
 `llm()` calls append to the caller's active thread, and nothing is
-stripped or handed back afterwards. The stdlib oracle and explorer used
-to isolate themselves with a `thread(...)` wrapper; that wrapper would
-opt them out of the handoff, so it is gone, and a from-code call
-leaves the persona, the reads, and the answer on the caller's thread.
-A caller who wants isolation writes `thread { oracleAgent(...) }`. The
+stripped or handed back afterwards. A from-code call to the stdlib
+oracle or explorer leaves the persona, the reads, and the answer on the
+caller's thread. A caller who wants isolation writes
+`thread { oracleAgent(...) }`. The
 agents push their persona through `ensureSystemMessage` from
 `std::thread`, which skips the push when the active thread already holds
 it.

@@ -1169,7 +1169,7 @@ export async function runPrompt(args: {
         if (continuesCallerThread) {
           toolResult = await invokeOnThread(
             messages,
-            handoffScopeKey(handler.name, toolCall.id),
+            handoffScopeKey(messages, handler.name, toolCall.id),
             invokeAsTool,
           );
         } else {
@@ -1186,7 +1186,10 @@ export async function runPrompt(args: {
         // system messages are removed here.
         if (isAbortError(error)) {
           if (handler.markers?.handoff) {
-            stripHandoffSystemMessages(messages, handoffScopeKey(handler.name, toolCall.id));
+            stripHandoffSystemMessages(
+              messages,
+              handoffScopeKey(messages, handler.name, toolCall.id),
+            );
           }
           stack.deleteBranch(branchKey);
           throw error;
@@ -1386,7 +1389,7 @@ export async function runPrompt(args: {
     }): void => {
       const { content, toolCall, handler, stoppedReason } = args;
       if (handler.markers?.handoff) {
-        const scopeKey = handoffScopeKey(handler.name, toolCall.id);
+        const scopeKey = handoffScopeKey(messages, handler.name, toolCall.id);
         if (stoppedReason !== undefined) {
           finishStoppedHandoff({
             thread: messages,

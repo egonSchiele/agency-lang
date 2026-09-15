@@ -40,12 +40,15 @@ form (`name@x.y.z`, pnpm ≥ 10.19) over lowering the global window.
   (no git/tarball URLs), so the cooldown and integrity hashes cannot be
   bypassed one level down. The current lockfile has zero exotic sources.
 - `allowBuilds` — lifecycle (install) scripts are default-denied since
-  pnpm 10; the three packages that request one (`esbuild`, `@google/genai`,
-  `protobufjs`) are explicitly denied because everything has worked with them
-  blocked all along (esbuild's platform binaries arrive as
-  optionalDependencies; its script is only a fallback). A new dependency
-  requesting a build script will fail loudly — approve it in this table only
-  with a reason.
+  pnpm 10; the packages that request one (`esbuild`, `@google/genai`,
+  `protobufjs`, `tesseract.js`, and `node-llama-cpp`, which only the
+  local-model CI workflow installs) are explicitly denied because everything
+  works with them blocked (esbuild's and node-llama-cpp's platform binaries
+  arrive as optionalDependencies; their scripts are only fallbacks). A
+  dependency requesting a build script that is not in the table fails the
+  install outright, in CI and locally — approve it in this table only with a
+  reason. The local-model workflow ran into exactly that for a month: every
+  post-merge run died at `pnpm add smoltalk-llama-cpp` before a test ran.
 
 ## Why the pnpm version is pinned in package.json
 

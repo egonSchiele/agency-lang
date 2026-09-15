@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -45,9 +47,14 @@ afterAll(() => {
 });
 
 async function checkLlamaCpp(info: ModelInfo): Promise<void> {
+  // node-llama-cpp is a dependency of smoltalk-llama-cpp, not of this
+  // package, so pnpm's strict layout hides it from a bare import here.
+  // Resolve it from where the plugin sees it.
+  const pluginEntry = createRequire(import.meta.url).resolve("smoltalk-llama-cpp");
+  const nodeLlamaCppPath = createRequire(pluginEntry).resolve("node-llama-cpp");
   // eslint-disable-next-line no-restricted-syntax -- node-llama-cpp is an
   // optional, separately-installed dependency (see localModels.ts).
-  const { createModelDownloader } = await import("node-llama-cpp");
+  const { createModelDownloader } = await import(pathToFileURL(nodeLlamaCppPath).href);
   const downloader = await createModelDownloader({
     modelUri: info.uri,
     dirPath: dir,

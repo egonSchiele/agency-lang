@@ -27,14 +27,19 @@ minimumReleaseAgeExclude:
 # every subdep resolves from the registry, where the cooldown and integrity
 # hashes apply.
 blockExoticSubdeps: true
-# Lifecycle (install) scripts are default-denied. These four ask to run one;
-# all four are blocked and everything works: esbuild ships platform binaries
+# Lifecycle (install) scripts are default-denied. These five ask to run one;
+# all five are blocked and everything works: esbuild ships platform binaries
 # as optionalDependencies (its script is only a validator fallback), the
-# genai/protobufjs postinstalls are not needed at runtime, and tesseract.js's
-# postinstall is the OpenCollective donation banner. Flip to true only with a
-# reason.
+# genai/protobufjs postinstalls are not needed at runtime, tesseract.js's
+# postinstall is the OpenCollective donation banner, and node-llama-cpp (a
+# dependency of smoltalk-llama-cpp, which only the local-model CI workflow
+# installs) ships its prebuilt binaries as optionalDependencies too and
+# builds from source on first use only when none of them fits. A package
+# that asks for a script and is not listed here fails the install outright.
+# Flip to true only with a reason.
 allowBuilds:
   '@google/genai': false
   esbuild: false
+  node-llama-cpp: false
   protobufjs: false
   tesseract.js: false

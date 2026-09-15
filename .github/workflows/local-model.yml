@@ -16,6 +16,9 @@
 name: local-model integration (post-merge)
 
 on:
+  # Manual runs let a change to this workflow, or to the suite, be tried
+  # on a branch before it merges; the push trigger below is the routine one.
+  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:

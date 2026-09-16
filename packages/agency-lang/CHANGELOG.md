@@ -1,3 +1,20 @@
+## Sep 16 2026 — v0.20.0
+
+### CLI
+
+- **`agency run file.agency:node`** — start a named node instead of `main`
+- **`agency local serve --speech <model>`** — serve a speech model on `/v1/audio/speech`. Needs `mlx-audio` for Python.
+
+### Standard Library
+
+- **`speakLocal`** in `std::speech` — speak text into a wav or pcm file with a model being served by `agency local serve --speech`.
+
+### LLM
+
+- **Local speech models** in the catalog: `qwen3-tts-mlx` and `qwen3-tts-design-mlx`, for which you can provide emotion info as a sentence of `instructions`, and `orpheus-3b-mlx`, which uses `<laugh>`, `<sigh>` and other tags written in the text.
+- A catalog entry can now name `companions`... other repos a model loads by name at runtime. Needed because `agency local download orpheus-3b-mlx` fetches its SNAC decoder as well.
+- smoltalk upgraded to 0.14.1, for the `mlx` speech provider and the `instructions` field.
+
 ## Sep 15 2026 — v0.19.3
 
 ### Compiler

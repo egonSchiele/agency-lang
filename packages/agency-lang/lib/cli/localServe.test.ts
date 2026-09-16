@@ -314,6 +314,7 @@ describe("servingBanner", () => {
       "  org/tts  (speech)",
       "",
       "  In Agency code:",
+      `    import { speakLocal } from "std::speech"`,
       `    speakLocal("Hello there.", "org/tts")`,
     ]);
   });

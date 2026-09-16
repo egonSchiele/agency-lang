@@ -674,6 +674,12 @@ describe("_speakLocal", () => {
     expect(() => _validateSpeakLocalArgs("", "qwen3-tts-mlx", "wav")).toThrow(
       "speakLocal text cannot be empty",
     );
+    // Whitespace alone would otherwise prompt, then publish an empty file.
+    expect(() => _validateSpeakLocalArgs("   \n ", "qwen3-tts-mlx", "wav")).toThrow(
+      "speakLocal text cannot be empty",
+    );
+    // A GGUF model is refused before the interrupt, not after approval.
+    expect(() => _validateSpeakLocalArgs("Hi.", "smollm2-135m", "wav")).toThrow(/is a GGUF model/);
     expect(() => _validateSpeakLocalArgs("Hi.", "", "wav")).toThrow(
       "speakLocal model cannot be empty",
     );

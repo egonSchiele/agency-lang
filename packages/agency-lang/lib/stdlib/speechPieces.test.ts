@@ -20,6 +20,22 @@ describe("splitToFit", () => {
     expect(splitToFit(sentence, 170)).toEqual([`${clause}, ${clause},`, `${clause}, ${clause}.`]);
   });
 
+  it("cuts a long word between characters, never inside one", () => {
+    // An emoji is two string indexes. Cutting between them would send the
+    // server half a character.
+    const word = "a".repeat(9) + "😀" + "b".repeat(9);
+    const pieces = splitToFit(word, 10);
+    expect(pieces.join("")).toBe(word);
+    expect(pieces.some((piece) => piece.includes("😀"))).toBe(true);
+    // Iterating by code point yields a lone surrogate only when a pair was
+    // cut in half.
+    const halved = (piece: string) =>
+      [...piece].some(
+        (ch) => ch.length === 1 && ch.charCodeAt(0) >= 0xd800 && ch.charCodeAt(0) <= 0xdfff,
+      );
+    expect(pieces.some(halved)).toBe(false);
+  });
+
   it("cuts a word longer than the limit", () => {
     expect(splitToFit(`${"a".repeat(25)} end.`, 10)).toEqual([
       "a".repeat(10),
@@ -51,8 +67,7 @@ describe("sentencePieces", () => {
 
   // Intl.Segmenter ends a sentence only when a capital letter follows, so a
   // tag such as <sigh> keeps the segment open and travels with the words it
-  // belongs to. That is what matters here: a tag must never be spoken on its
-  // own, away from its sentence.
+  // belongs to, rather than being spoken on its own.
   it("keeps an Orpheus tag with the words it belongs to", () => {
     expect(sentencePieces("<gasp> Stop! Then, calmly. <sigh> Fine.", 20)).toEqual([
       "<gasp> Stop! Then,",
@@ -60,9 +75,8 @@ describe("sentencePieces", () => {
     ]);
   });
 
-  // Pieces are joined with a space, so a merged pair of sentences gains one.
-  // A space between two sentences is harmless to a speech model; losing a
-  // character would not be.
+  // Pieces are joined with a space, so a merged pair of sentences gains one,
+  // which is why the Japanese assertion compares without whitespace.
   it("splits Chinese and Japanese text between sentences", () => {
     const zh = sentencePieces("你好。今天怎么样？我很好。", 8);
     expect(zh).toEqual(["你好。", "今天怎么样？", "我很好。"]);

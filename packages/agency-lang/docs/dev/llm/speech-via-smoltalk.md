@@ -127,7 +127,7 @@ Type split (`stdlib/thread.agency`):
 
 ## Cancellation
 
-Agency pins `smoltalk ^0.12.0`. `abortSignal` on the audio operations arrived in
+Agency pins `smoltalk ^0.14.1`. `abortSignal` on the audio operations arrived in
 0.10.1. The branch abort signal (`ctx.getAbortSignal(stack)`) is the SOLE
 cancellation channel: it is a method argument on `LLMClient.transcribe`/`speak`,
 deliberately NOT a config field (the derived `TranscribeConfig`/`SpeakConfig`

@@ -26,9 +26,12 @@ export function splitToFit(sentence: string, maxChars: number): string[] {
 }
 
 function cutWord(word: string, maxChars: number): string[] {
-  const count = Math.ceil(word.length / maxChars);
+  // By code point, not by string index: slicing an emoji in half would
+  // send the server half a character.
+  const points = [...word];
+  const count = Math.ceil(points.length / maxChars);
   return Array.from({ length: count }, (_, index) =>
-    word.slice(index * maxChars, (index + 1) * maxChars),
+    points.slice(index * maxChars, (index + 1) * maxChars).join(""),
   );
 }
 

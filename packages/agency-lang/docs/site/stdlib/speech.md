@@ -268,22 +268,24 @@ speakLocal(
   outputFile: string = "",
   format: string = "wav",
   allowedPaths: string[] = [],
-): string
+): string raises <std::localSpeech>
 ```
 
-Speak text into an audio file with a local speech model served by `agency local serve --speech`. The text goes to the server on this machine and no further. Returns the file path.
+Speak text into an audio file with a local speech model, and return the path of that file.
 
-  @param text - The text to speak. Orpheus models take emotion tags in the text, such as <laugh>, <sigh>, and <gasp>.
+  @param text - The text to speak. Orpheus models perform emotion tags written in the text, such as `<laugh>`, `<sigh>`, or `<gasp>`.
   @param model - The speech model: a catalog name such as "qwen3-tts-mlx" or "orpheus-3b-mlx", an mlx: URI, or a repo id the server is serving.
-  @param voice - A voice of that model. Leave empty for the model's default. Qwen3-TTS VoiceDesign models take no voice.
-  @param instructions - How the speech should sound, such as "Alarmed and urgent". Qwen3-TTS models only; Orpheus uses tags in the text instead.
+  @param voice - A voice of that model. Leave empty for the model's default. VoiceDesign models take no voice.
+  @param instructions - How the speech should sound, such as "Alarmed and urgent". Qwen3-TTS models only; Orpheus takes tags in the text instead.
   @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
   @param format - "wav" (default) or "pcm"
   @param allowedPaths - Directories that outputFile must be inside
 
-A local synthesis stops on Ctrl-C, a race loss, or a time-guard abort
-within one piece of text; a cancelled call never writes its output file.
-The usage record has zero cost, and statelog gets one event per call.
+Use this for speech that must not leave the machine, and for the
+emotion a local model can perform that a cloud voice cannot. Long text is
+sent to the server in pieces, so Ctrl-C stops within one piece and writes
+no file. The usage record costs nothing, and statelog gets one event per
+call however many pieces the text becomes.
 
 **Parameters:**
 
@@ -301,4 +303,4 @@ The usage record has zero cost, and statelog gets one event per call.
 
 **Throws:** `std::localSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L252))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L254))

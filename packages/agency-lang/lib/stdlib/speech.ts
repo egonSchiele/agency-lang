@@ -589,13 +589,20 @@ const DEFAULT_SAMPLE_RATE = 24000;
 /** Pre-interrupt validation hook for `std::speech.speakLocal` — see
  *  speech.agency. An unknown model or format never prompts. */
 export function _validateSpeakLocalArgs(text: string, model: string, format: string): void {
-  if (text === "") {
+  // Whitespace alone would pass the server's own check and publish an
+  // empty file, so it is refused here, before anything prompts.
+  if (text.trim() === "") {
     throw new Error("speakLocal text cannot be empty");
   }
   if (model === "") {
     throw new Error("speakLocal model cannot be empty");
   }
-  _resolveModel(model); // throws "Unknown local model" with the known names
+  const resolved = _resolveModel(model); // throws "Unknown local model" with the known names
+  if (resolved.backend !== "mlx") {
+    throw new Error(
+      `speakLocal: "${model}" is a GGUF model. Local speech models are MLX models served by agency local serve --speech.`,
+    );
+  }
   normalizeFormat(format, LOCAL_SPEECH_FORMATS, "speakLocal");
 }
 
@@ -665,13 +672,11 @@ export async function _speakLocal(
   format: string,
   allowedPaths: string[],
 ): Promise<string> {
+  // Again at the runtime boundary, for a direct or deterministic caller
+  // that bypassed speech.agency's pre-interrupt check.
+  _validateSpeakLocalArgs(text, model, format);
   const localFormat = normalizeFormat(format, LOCAL_SPEECH_FORMATS, "speakLocal");
   const resolved = _resolveModel(model);
-  if (resolved.backend !== "mlx") {
-    throw new Error(
-      `speakLocal: "${model}" is a GGUF model. Local speech models are MLX models served by agency local serve --speech.`,
-    );
-  }
   const client = speakClient();
   const baseUrl = mlxBaseUrl();
   const config: SpeakConfig = {

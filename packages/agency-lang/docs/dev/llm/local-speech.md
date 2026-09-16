@@ -131,6 +131,77 @@ A wrong tokenizer does not raise. It produces speech that sounds garbled,
 and only listening catches it. That is why the mlx-audio version is a
 refusal rather than a warning.
 
+## speakLocal
+
+Agency code reaches a served model through `std::speech`:
+
+    import { speakLocal } from "std::speech"
+
+    node main() {
+      print(speakLocal("Hello there.", "qwen3-tts-mlx", "ryan", "Calm."))
+    }
+
+It returns the path of the file it wrote, and raises `std::localSpeech`
+before writing anything. That effect is separate from the cloud
+`std::synthesizeSpeech`, so approving one never approves the other.
+
+`speakLocal` is its own function rather than a provider on `speak` because
+the arguments do not match: a local call takes `instructions` and no
+`speed` or `apiKey`, and its effect would otherwise depend on an argument,
+which a handler cannot match on.
+
+### What it shares with speak
+
+`synthesizeToFile` in `lib/stdlib/speech.ts` owns everything both paths do
+the same way: resolve and authorize the output path, refuse to overwrite an
+existing file, run the work inside `meteredDispatch`, record usage, send the
+statelog event, enforce guards, check the MIME type, and publish the bytes.
+Each caller supplies only a `produce` function. Every failure message starts
+with the caller's name, so the local one reads `speakLocal failed: …`.
+
+### Pieces
+
+`_speakLocal` splits the text with `sentencePieces` into pieces of at most
+500 characters and sends each one to the server as a separate request,
+asking for raw PCM. It joins the samples and writes one WAV header in Node
+(`lib/stdlib/wavFile.ts`), so no ffmpeg is needed. Both modules are copied
+from the Kokoro package, which splits text for the same reason.
+
+The 500-character limit exists so that a cancelled call holds the server's
+generation lock for one piece rather than for the whole text. Retries are
+not a reason: smoltalk's `mlx` speech client sets `maxRetries: 0`, because
+the server runs one generation at a time and a retry would queue behind the
+request that just timed out.
+
+All the pieces run inside one `meteredDispatch`, so a call produces one
+usage record and one statelog event however many requests it makes. The
+cost is zero, which smoltalk's client also reports for this provider.
+
+A cancelled call throws out of `produce`, so `meteredDispatch` records an
+unresolved attempt and the invocation's usage is marked incomplete, even
+though a local call costs nothing. Cloud `speak` behaves the same way
+today, so this is consistent rather than a special case.
+
+The WAV header's sample rate comes from smoltalk, which reports 24000 for
+every PCM reply rather than reading what the server sent. Both served
+families are 24 kHz. A model at another rate would need smoltalk to pass
+the server's own rate through.
+
+### The address and the model name
+
+`mlxBaseUrl()` (`lib/stdlib/mlxServerModels.ts`) resolves `client.baseUrl.mlx`,
+then `MLX_BASE_URL`, then `http://127.0.0.1:8080/v1`. One call feeds both the
+request's `baseUrl.mlx` and the "no server" message, so `speakLocal` always
+reaches the same server `agency run --local` does, and the message names the
+address it actually tried:
+
+    speakLocal failed: no MLX server answered at http://127.0.0.1:8080/v1. Start one with:
+      agency local serve --speech qwen3-tts-mlx
+
+`_resolveModel` and `_mlxServedName` turn a catalog name, an `mlx:` URI or a
+repo id into the string the front door routes on, so all three spellings
+reach the same process.
+
 ## Refusing instead of ignoring
 
 A request the model cannot honour gets a 400 that names what it takes:

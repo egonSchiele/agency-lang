@@ -8,7 +8,7 @@ description: Documents the `agency local` command, which downloads, lists, alias
 Use this to manage and run local models. There are two kinds:
 
 - **GGUF models** run inside the Agency process through llama.cpp. Install `smoltalk-llama-cpp` once with `npm i -g smoltalk-llama-cpp` before downloading or running one.
-- **MLX models** run in a server on a Mac with Apple Silicon. You start the server yourself with `mlx_lm.server` from the Python `mlx-lm` package. Agency sends it requests. Nothing extra to install on the Agency side.
+- **MLX models** run in a server on a Mac with Apple Silicon. `agency local serve` starts that server for you and puts one port in front of it. You need a Python 3.11 or newer with `mlx-lm` installed, and `mlx-audio` as well for speech models. Agency does not install Python.
 
 Every model has a **backend**, `llama-cpp` or `mlx`. The name you type says which it is:
 
@@ -39,27 +39,34 @@ The agent and `agency run` have shortcuts for the common case:
 ```bash
 agency agent --local qwen3.5-2b           # download (if needed) + run the agent locally
 agency run --local qwen3.5-2b my.agency   # download (if needed) + run a program locally
-agency run --local coder my.agency        # an MLX model: needs a running mlx_lm.server
+agency run --local coder my.agency        # an MLX model: needs `agency local serve coder` running
 ```
 
 The agent's `--local` runs the local model as both the fast and slow model, so the deep subagents stay local too; it ignores `--model`/`--fastmodel`/`--slowmodel`. On `agency run`, `--local` and `--model` are mutually exclusive. See the [local models guide](/guide/using-local-models) for a walkthrough.
 
 ### Running an MLX model
 
-An MLX model is a Hugging Face repo of `.safetensors` files, such as `mlx-community/Qwen3-Coder-Next-4bit`. Agency does not run it itself. Start the server on the model directory, then run against it:
+An MLX model is a Hugging Face repo of `.safetensors` files, such as `mlx-community/Qwen3-Coder-Next-4bit`. Agency runs it in a separate process, which `agency local serve` starts:
 
 ```bash
-# Terminal 1. Python 3.11 or newer with mlx-lm installed.
-python3 -m mlx_lm.server --model /models/mlx-community--Qwen3-Coder-Next-4bit --port 8080 --max-tokens 16384
+# Terminal 1.
+agency local download mlx:mlx-community/Qwen3-Coder-Next-4bit
+agency local serve mlx:mlx-community/Qwen3-Coder-Next-4bit
 
 # Terminal 2.
-agency local alias add coder /models/mlx-community--Qwen3-Coder-Next-4bit
-agency run --local coder my.agency
+agency run --local mlx:mlx-community/Qwen3-Coder-Next-4bit my.agency
 ```
 
-Agency sends the server the same string you gave `--model`: the directory path for a directory alias, or the repo id for an `mlx:` URI. The server serves whatever model a request names and loads it if it is not loaded, so start the server with the string `agency local resolve` prints.
+Serving needs a Python with `mlx-lm` installed. Agency looks for it at `--python`, then `client.mlx.python` in `agency.json`, then `AGENCY_MLX_PYTHON`, then `~/.agency-agent/mlx-env/bin/python`. When it cannot find one, it prints the commands to create that environment:
 
-The server listens on `http://127.0.0.1:8080/v1` by default. For another port, set `MLX_BASE_URL` or `client.baseUrl.mlx` in `agency.json`.
+```bash
+python3.12 -m venv ~/.agency-agent/mlx-env
+~/.agency-agent/mlx-env/bin/pip install mlx-lm
+```
+
+Serve and run must name the model the same way, which is the string `agency local resolve` prints: the repo id for an `mlx:` URI, or the directory path for a directory alias. A request naming a model the server was not started with gets a 404 that says how to start it.
+
+The server listens on `http://127.0.0.1:8080/v1` by default. For another port, pass `--port` and set `MLX_BASE_URL` or `client.baseUrl.mlx` in `agency.json` to match.
 
 A Hugging Face cache directory works as is, and you can name either the repo folder or one snapshot inside it:
 
@@ -100,6 +107,30 @@ agency local serve mlx:mlx-community/Qwen3-Coder-Next-4bit coder
 agency local serve --port 8080 --verbose coder         # ...and log every request and reply in full
 ```
 
+Models that are not chat models need a flag, because they answer a different route and run a different program:
+
+```bash
+agency local serve coder --embedding qwen3-embedding-4b-mlx   # /v1/embeddings
+agency local serve --speech qwen3-tts-mlx                     # /v1/audio/speech
+agency local serve --speech orpheus-3b-mlx --speech qwen3-tts-mlx
+```
+
+Both flags are repeatable, and either can be combined with chat models in the same command. A speech model needs `mlx-audio` in the same Python:
+
+```bash
+~/.agency-agent/mlx-env/bin/pip install mlx-audio==0.5.4
+```
+
+Speech answers `POST /v1/audio/speech` in the OpenAI shape, returning WAV or raw PCM:
+
+```bash
+curl -s http://127.0.0.1:8080/v1/audio/speech -H 'content-type: application/json' \
+  -d '{"model": "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit", "input": "Hello there.", "instructions": "Calm."}' \
+  -o hello.wav
+```
+
+The catalog knows which models are which, so `agency local serve qwen3-tts-mlx` without `--speech` is refused before anything loads, and says which flag to use. Some models load a second repo by name: `agency local download orpheus-3b-mlx` fetches its audio decoder as well, which is what lets it start with no network.
+
 It prints a line for every request that reaches it:
 
 ```
@@ -125,7 +156,7 @@ A gated repo needs `HF_TOKEN` set to a token that has accepted its terms. The to
 | `agency local --model-dir <path> <subcommand>` | Use `<path>` as the models directory for this run, ahead of `AGENCY_MODELS_DIR` and `client.modelsDir`. A Hugging Face cache under it is read too, so pointing at `hf/hub` lists and serves what another tool downloaded. |
 | `agency local list` | Show the full catalog with each model's backend, and a checkmark and on-disk size for downloaded models. The first line names the models directory. Files that match no catalog entry appear under `OTHER FILES`. Add `-l` / `--long` to print each model's description on its own line below its row. Works without `smoltalk-llama-cpp` installed. |
 | `agency local download [value]` | Download a model if not already cached; prints the source it resolved to and the local path. `<value>` may be a curated short name, an alias, an `hf:` URI, or an existing `.gguf` path. With no value, opens an interactive picker (in scripts it prints the catalog and exits 1 instead). An `mlx:` URI downloads the whole repo into `<modelsDir>/mlx/<org>--<repo>`, resuming if interrupted; a model directory is returned as is. |
-| `agency local serve [model]... [--port 8080] [--max-tokens 16384] [--python <path>] [--verbose]` | Serve one or more MLX models in this terminal. Starts one `mlx_lm.server` per model, waits until each has loaded, then listens on `--port`. With no model, opens a picker over the MLX models you have downloaded (in scripts it lists them and exits 1 instead). A request for a model you did not name gets a 404 naming the command to start it. It never downloads. An `mlx:` model must be downloaded first, and a directory works as is. Every request is logged as one line; `--verbose` (or `--log-prompts`) adds the whole request and reply bodies. Ctrl-C stops everything. |
+| `agency local serve [model]... [--embedding <model>] [--speech <model>] [--port 8080] [--max-tokens 16384] [--python <path>] [--verbose]` | Serve one or more MLX models in this terminal. Starts one process per model, waits until each has loaded, then listens on `--port`. Chat models are named on their own; `--embedding` and `--speech` are repeatable and serve `/v1/embeddings` and `/v1/audio/speech`. A catalog model passed without the flag it needs, or with the wrong one, is refused before anything loads. With no model, opens a picker over the chat models you have downloaded (in scripts it lists them and exits 1 instead). A request for a model you did not name gets a 404 naming the command to start it. It never downloads. An `mlx:` model must be downloaded first, and a directory works as is. Every request is logged as one line, with audio replies logged by size; `--verbose` (or `--log-prompts`) adds the whole request and reply bodies. Ctrl-C stops everything. |
 | `agency local remove <name> [-f]` | Remove the alias for a model and keep its files, printing where they are. With `-f`, delete the files too: the `.gguf` file, or the whole MLX model directory. Files outside the models directory are never deleted. |
 | `agency local resolve <value>` | Show the backend and what a name/alias maps to, without downloading. |
 | `agency local refresh [url]` | Fetch the remote model catalog and update the `source:"remote"` aliases in `agency.json`. Adds/updates models from the catalog, removes ones it dropped, and skips any name you've aliased yourself (printing what it would have set). |

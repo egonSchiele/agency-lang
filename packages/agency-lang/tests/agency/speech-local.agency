@@ -1,0 +1,64 @@
+import { speakLocal } from "std::speech"
+
+// speakLocal returns a string, so a rejection is caught with `try` rather
+// than with isFailure, which narrows a Result.
+
+// The interrupt carries what a handler needs to decide: the model, the
+// voice, how much text, and the real output path. The handler rejects, so
+// nothing is sent, and the rejection text proves what the payload held.
+node interruptCarriesPayload(): boolean {
+  handle {
+    const r = try speakLocal("Hello there.", "qwen3-tts-mlx", "ryan")
+    if (r is failure(why)) {
+      const msg = "${why}"
+      return msg.includes("std::localSpeech|qwen3-tts-mlx|ryan|12|")
+    }
+    return false
+  } with (intr) {
+    return reject("${intr.effect}|${intr.data.model}|${intr.data.voice}|${intr.data.textLength}|${intr.data.outputFile}")
+  }
+}
+
+// Approving the cloud effect never approves local speech. The handler
+// approves std::synthesizeSpeech only, so speakLocal is rejected.
+node cloudApprovalDoesNotCoverLocal(): boolean {
+  handle {
+    const r = try speakLocal("Hello there.", "qwen3-tts-mlx", "ryan")
+    if (r is failure(why)) {
+      const msg = "${why}"
+      return msg.includes("cloud only")
+    }
+    return false
+  } with (intr) {
+    if (intr.effect == "std::synthesizeSpeech") {
+      return approve()
+    }
+    return reject("cloud only")
+  }
+}
+
+// A bad argument is refused before the interrupt: the handler sees no
+// effect at all, so the first field is empty.
+node badArgumentsNeverPrompt(): string {
+  let effects = ""
+  handle {
+    const a = try speakLocal("Hello there.", "", "ryan")
+    const b = try speakLocal("Hello there.", "qwen3-tts-mlx", "ryan", "", "", "mp3")
+    // Each binder needs its own `if` condition: a compound condition has
+    // nowhere to bind them.
+    if (a is failure(e1)) {
+      if (b is failure(e2)) {
+        const m1 = "${e1}"
+        const m2 = "${e2}"
+        const emptyModel = m1.includes("speakLocal model cannot be empty")
+        const badFormat = m2.includes("unsupported format")
+        return "${effects}|${emptyModel}|${badFormat}"
+      }
+    }
+    return "one of them did not fail"
+  } with (intr) {
+    effects = "${effects}${intr.effect} "
+    return approve()
+  }
+  return "unreachable"
+}

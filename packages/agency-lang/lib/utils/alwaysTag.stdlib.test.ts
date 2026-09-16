@@ -122,6 +122,7 @@ const EXPECTED: Record<string, string[]> = {
   "std::notify": [],
   "std::say": [],
   "std::synthesizeSpeech": [],
+  "std::localSpeech": [],
   "std::transcribe": [],
   "std::ocr": ["dir/**"],
   "std::ocrCloud": [],

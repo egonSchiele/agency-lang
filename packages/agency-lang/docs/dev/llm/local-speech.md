@@ -48,13 +48,79 @@ The server reads the model's `config.json` to find its family:
 | `qwen3_tts` | `custom_voice` | CustomVoice | one of the model's nine speakers; `ryan` by default | optional |
 | `qwen3_tts` | `voice_design` | VoiceDesign | none | required: they describe the voice |
 | `qwen3_tts` | `base` | refused | | |
-| `llama` | | Orpheus, refused for now | | |
+| `llama` | | Orpheus | one of eight named voices; `tara` by default | refused: emotion goes in the text as tags |
 
 A Base model needs a reference recording, which this server does not take.
-Orpheus gets a row in a later change.
 
 Each family is one row in the `FAMILIES` table in the rules module.
 `check_request` reads the row, so adding a family means adding a row.
+
+## Orpheus
+
+Orpheus is an English model that performs emotion from tags in the text:
+
+    agency local download orpheus-3b-mlx
+    agency local serve --speech orpheus-3b-mlx
+
+Its tags are `<laugh>`, `<chuckle>`, `<sigh>`, `<cough>`, `<sniffle>`,
+`<groan>`, `<yawn>`, and `<gasp>`. It takes no `instructions`, so a request
+that sends them is refused with the tag list instead. Its
+`max_tokens` is 8000, about 58 seconds of speech: mlx-audio's default of
+1200 cuts a sentence off after 8.7 seconds and reports nothing.
+
+Orpheus needs two things Qwen3-TTS does not. It loads the SNAC audio
+decoder from `mlx-community/snac_24khz` by repo id, and it loads its
+tokenizer from the full-size `bf16` repo by repo id. Both happen through
+huggingface_hub, which cannot run offline against an empty cache.
+
+### Companions
+
+The catalog entry lists what a model loads by name:
+
+    companions: ["mlx:mlx-community/snac_24khz"],
+
+`agency local download` fetches each companion after the model, into the
+same layout. The field is a download hint and nothing else: `serve` never
+reads it, and `agency local remove -f` leaves companions alone, because
+another model may share one. The lookup happens in the script, always by
+repo id.
+
+A companion that sits in the models directory in Hugging Face cache layout
+(`models--<org>--<repo>/snapshots/<sha>/`) is not found by that lookup. The
+fallback, mlx-audio's own loader, finds it only when `HF_HOME` points at
+that directory.
+
+### The three patches
+
+`patch_mlx_audio_for_orpheus` in `mlxSpeechServer.py` changes three things
+in mlx-audio 0.5.4 before the Orpheus module is imported. They are not
+reported upstream. Remove each one when a release carries the fix and the
+version pin moves.
+
+1. **`fetch_from_hub`** (`codec/models/snac/snac.py:205`) looks in
+   `<models-dir>/mlx/<org>--<repo>` first, and falls back to the original,
+   so a Hugging Face cache that already holds SNAC still works. When
+   neither has it, the refusal names the download command.
+2. **`_eos_ids`** (`lm/generate.py:99`) does `set(tokenizer.eos_token_ids)`,
+   and the Orpheus tokenizer's value is a single int, which raises
+   `TypeError`. The patch accepts an int.
+3. **`ModelConfig.from_dict`** (`tts/models/llama/llama.py:21`) puts the
+   model directory in as `tokenizer_name`, so the tokenizer comes from the
+   4-bit repo's own files rather than the 6.6 GB `bf16` repo.
+
+The order matters. Patch 3 imports the Orpheus module, and importing it
+runs `SNAC.from_pretrained` at module level (`llama.py:32`), so patch 1 has
+to be in place first.
+
+Patch 3 wraps `from_dict` rather than setting `ModelConfig.tokenizer_name`,
+because `base_load_model` builds the config with
+`ModelConfig.from_dict(config)` (`mlx_audio/utils.py:389`), and the
+dataclass default was fixed when the class was created. Setting the
+attribute afterwards changes nothing.
+
+A wrong tokenizer does not raise. It produces speech that sounds garbled,
+and only listening catches it. That is why the mlx-audio version is a
+refusal rather than a warning.
 
 ## Refusing instead of ignoring
 

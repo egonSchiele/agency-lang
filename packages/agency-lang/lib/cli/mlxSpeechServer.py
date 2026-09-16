@@ -102,16 +102,16 @@ def to_pcm16(samples):
 
 def patch_mlx_audio_for_orpheus(model_dir, models_dir):
     """Three fixes to mlx-audio 0.5.4, applied before the Orpheus module is
-    imported, because importing it loads the SNAC decoder. Each one names
-    the upstream report. Remove each when a release carries the fix and the
-    version pin moves."""
+    imported, because importing it loads the SNAC decoder. Remove each one
+    when a release carries the fix and the version pin moves."""
     import mlx_audio.codec.models.snac.snac as snac_module
     import mlx_audio.lm.generate as lm_generate
 
     # 1. SNAC is loaded by repo id at import time (llama.py:32) through
     #    huggingface_hub, which cannot run offline on an empty cache. Look
     #    in Agency's models directory first; fall back to the original for a
-    #    cache that already holds it. Upstream: UPSTREAM_ISSUE.
+    #    cache that already holds it. Not reported upstream yet; see
+    #    docs/dev/llm/local-speech.md.
     original_fetch = snac_module.fetch_from_hub
 
     def fetch_from_models_dir(hf_repo):
@@ -130,7 +130,8 @@ def patch_mlx_audio_for_orpheus(model_dir, models_dir):
     snac_module.fetch_from_hub = fetch_from_models_dir
 
     # 2. eos_token_ids is one int for the Orpheus tokenizer, and set(int)
-    #    raises. Upstream: UPSTREAM_ISSUE.
+    #    raises. Not reported upstream yet; see
+    #    docs/dev/llm/local-speech.md.
     original_eos_ids = lm_generate._eos_ids
 
     def eos_ids(tokenizer):
@@ -145,7 +146,8 @@ def patch_mlx_audio_for_orpheus(model_dir, models_dir):
     #    (llama.py:21). The 4-bit repo has its own tokenizer files, so load
     #    it from the model directory. The loader builds ModelConfig with
     #    from_dict, so the name has to go into the dict; the dataclass
-    #    default is fixed at class creation. Upstream: UPSTREAM_ISSUE.
+    #    default is fixed at class creation. Not reported upstream yet; see
+    #    docs/dev/llm/local-speech.md.
     #    This import loads SNAC, so patch 1 above has to come first.
     import mlx_audio.tts.models.llama.llama as llama_module
 

@@ -308,13 +308,14 @@ describe("servingBanner", () => {
     expect(dirOnly[3]).toBe("  agency run --local /m/dir your.agency");
   });
 
-  it("marks speech models and shows a curl for the first", () => {
+  it("marks speech models and shows the speakLocal call for the first", () => {
     expect(servingBanner(8080, [{ name: "org/tts", kind: "speech" }])).toEqual([
       "Serving 1 model on http://127.0.0.1:8080/v1:",
       "  org/tts  (speech)",
       "",
-      "  Try it:",
-      `    curl -s http://127.0.0.1:8080/v1/audio/speech -H 'content-type: application/json' -d '{"model": "org/tts", "input": "Hello there."}' -o hello.wav`,
+      "  In Agency code:",
+      `    import { speakLocal } from "std::speech"`,
+      `    speakLocal("Hello there.", "org/tts")`,
     ]);
   });
 

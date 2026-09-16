@@ -13,7 +13,9 @@ import {
   _record,
   _transcribe,
   _synthesizeSpeech,
+  _speakLocal,
   _validateSpeakArgs,
+  _validateSpeakLocalArgs,
   _validateTranscribeArgs,
 } from "agency-lang/stdlib-lib/speech.js"
 import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
@@ -29,6 +31,7 @@ cloud, and record from the microphone.
     const text = transcribe(audio)
     say("You said: ${text}")             // local playback
     const mp3 = speak("Cloud voice: ${text}")  // cloud TTS -> file path
+    const wav = speakLocal("Local voice: ${text}", "qwen3-tts-mlx")  // local TTS -> file path
   }
   ```
 */
@@ -51,6 +54,15 @@ effect std::synthesizeSpeech {
   requestedProvider: string,
   configuredModel: string,
   textLength: number,
+}
+// Local text-to-speech with an MLX model on this machine. A DISTINCT effect
+// from cloud `std::synthesizeSpeech`: approving one never approves the other.
+// `outputFile` is the real path that will be written, or "" for a temp file.
+effect std::localSpeech {
+  model: string,
+  voice: string,
+  textLength: number,
+  outputFile: string,
 }
 
 /** Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
@@ -232,4 +244,41 @@ export def speak(
     allowedPaths,
     apiKey,
   )
+}
+
+/** Use this for speech that must not leave the machine, and for the
+emotion a local model can perform that a cloud voice cannot. Long text is
+sent to the server in pieces, so Ctrl-C stops within one piece and writes
+no file. The usage record costs nothing, and statelog gets one event per
+call however many pieces the text becomes. */
+export def speakLocal(
+  text: string,
+  model: string,
+  voice: string = "",
+  instructions: string = "",
+  outputFile: string = "",
+  format: string = "wav",
+  allowedPaths: string[] = [],
+): string raises <std::localSpeech> {
+  """
+  Speak text into an audio file with a local speech model, and return the path of that file.
+
+  @param text - The text to speak. Orpheus models perform emotion tags written in the text, such as `<laugh>`, `<sigh>`, or `<gasp>`.
+  @param model - The speech model: a catalog name such as "qwen3-tts-mlx" or "orpheus-3b-mlx", an mlx: URI, or a repo id the server is serving.
+  @param voice - A voice of that model. Leave empty for the model's default. VoiceDesign models take no voice.
+  @param instructions - How the speech should sound, such as "Alarmed and urgent". Qwen3-TTS models only; Orpheus takes tags in the text instead.
+  @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
+  @param format - "wav" (default) or "pcm"
+  @param allowedPaths - Directories that outputFile must be inside
+  """
+  _validateSpeakLocalArgs(text, model, format)
+  const out = realOutput(outputFile)
+  return interrupt std::localSpeech("Write speech audio with a local model?", {
+    model: model,
+    voice: voice,
+    textLength: text.length,
+    outputFile: out,
+  })
+
+  return _speakLocal(text, out, model, voice, instructions, format, allowedPaths)
 }

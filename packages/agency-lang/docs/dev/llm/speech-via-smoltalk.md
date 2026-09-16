@@ -16,7 +16,8 @@ package). Read it for the full rationale; this note is the code map.
 | `say(text, …)` | LOCAL macOS playback (`say`) | `std::say` | `_say` (shares `speakImpl`) |
 | `record(…)` | LOCAL mic capture (SoX) | `std::record` | `_record` |
 | `transcribe(filepath, …)` | CLOUD speech-to-text | `std::transcribe` | `_transcribe` |
-| `speak(text, …)` | CLOUD text-to-speech → file path | `std::synthesizeSpeech` | `_synthesizeSpeech` |
+| `speak(text, …)` | CLOUD text-to-speech → file path | `std::synthesizeSpeech` | `_synthesizeSpeech` (shares `synthesizeToFile`) |
+| `speakLocal(text, model, …)` | LOCAL text-to-speech via `agency local serve --speech` → file path | `std::localSpeech` | `_speakLocal` (shares `synthesizeToFile`) |
 
 Breaking rename (Agency has no users): the old local-playback `speak` is now
 `say`, and `speak` is the new CLOUD TTS. Because there are no users, there is no
@@ -35,6 +36,12 @@ the effect note below.
   + `configuredModel` (STT also `filepath`). They state the REQUESTED provider
   (may be `""` = automatic); a custom `LLMClient` still owns actual routing, so
   the prompt says "the active cloud speech provider", not a resolved destination.
+- `std::localSpeech` is DISTINCT from `std::synthesizeSpeech` for the same
+  reason `std::say` is. One sends text to a server on this machine; the other
+  sends it to a company. A policy that approves local speech must never begin
+  authorizing the cloud, and the reverse would be worse. Its payload states
+  the model and voice the caller asked for, plus the text length and the real
+  output path — not where a custom `LLMClient` might route the request.
 
 ## Runtime helpers (`lib/stdlib/speech.ts`)
 
@@ -120,7 +127,7 @@ Type split (`stdlib/thread.agency`):
 
 ## Cancellation
 
-Agency pins `smoltalk ^0.12.0`. `abortSignal` on the audio operations arrived in
+Agency pins `smoltalk ^0.14.1`. `abortSignal` on the audio operations arrived in
 0.10.1. The branch abort signal (`ctx.getAbortSignal(stack)`) is the SOLE
 cancellation channel: it is a method argument on `LLMClient.transcribe`/`speak`,
 deliberately NOT a config field (the derived `TranscribeConfig`/`SpeakConfig`

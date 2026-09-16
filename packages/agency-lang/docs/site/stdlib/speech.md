@@ -16,6 +16,7 @@ cloud, and record from the microphone.
     const text = transcribe(audio)
     say("You said: ${text}")             // local playback
     const mp3 = speak("Cloud voice: ${text}")  // cloud TTS -> file path
+    const wav = speakLocal("Local voice: ${text}", "qwen3-tts-mlx")  // local TTS -> file path
   }
   ```
 
@@ -29,7 +30,7 @@ effect std::say {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L40))
 
 ### std::record
 
@@ -37,7 +38,7 @@ effect std::say {
 effect std::record {}
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L38))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L41))
 
 ### std::transcribe
 
@@ -49,7 +50,7 @@ effect std::transcribe {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L46))
 
 ### std::synthesizeSpeech
 
@@ -61,7 +62,20 @@ effect std::synthesizeSpeech {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L50))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L53))
+
+### std::localSpeech
+
+```ts
+effect std::localSpeech {
+  model: string;
+  voice: string;
+  textLength: number;
+  outputFile: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L61))
 
 ## Functions
 
@@ -99,7 +113,7 @@ Speak text aloud locally using the operating system's text-to-speech
 
 **Throws:** `std::say`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L74))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L86))
 
 ### record
 
@@ -138,7 +152,7 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L123))
 
 ### transcribe
 
@@ -187,7 +201,7 @@ time-guard abort. Cost, spend guards, and statelog apply.
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L129))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L141))
 
 ### speak
 
@@ -241,4 +255,52 @@ and statelog apply.
 
 **Throws:** `std::synthesizeSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L182))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L194))
+
+### speakLocal
+
+```ts
+speakLocal(
+  text: string,
+  model: string,
+  voice: string = "",
+  instructions: string = "",
+  outputFile: string = "",
+  format: string = "wav",
+  allowedPaths: string[] = [],
+): string raises <std::localSpeech>
+```
+
+Speak text into an audio file with a local speech model, and return the path of that file.
+
+  @param text - The text to speak. Orpheus models perform emotion tags written in the text, such as `<laugh>`, `<sigh>`, or `<gasp>`.
+  @param model - The speech model: a catalog name such as "qwen3-tts-mlx" or "orpheus-3b-mlx", an mlx: URI, or a repo id the server is serving.
+  @param voice - A voice of that model. Leave empty for the model's default. VoiceDesign models take no voice.
+  @param instructions - How the speech should sound, such as "Alarmed and urgent". Qwen3-TTS models only; Orpheus takes tags in the text instead.
+  @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
+  @param format - "wav" (default) or "pcm"
+  @param allowedPaths - Directories that outputFile must be inside
+
+Use this for speech that must not leave the machine, and for the
+emotion a local model can perform that a cloud voice cannot. Long text is
+sent to the server in pieces, so Ctrl-C stops within one piece and writes
+no file. The usage record costs nothing, and statelog gets one event per
+call however many pieces the text becomes.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| text | `string` |  |
+| model | `string` |  |
+| voice | `string` | "" |
+| instructions | `string` | "" |
+| outputFile | `string` | "" |
+| format | `string` | "wav" |
+| allowedPaths | `string[]` | [] |
+
+**Returns:** `string`
+
+**Throws:** `std::localSpeech`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L254))

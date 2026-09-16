@@ -653,8 +653,9 @@ export function servingBanner(port: number, models: ServedModel[]): string[] {
   if (speech !== undefined) {
     lines.push(
       "",
-      "  Try it:",
-      `    curl -s http://127.0.0.1:${port}/v1/audio/speech -H 'content-type: application/json' -d '{"model": "${speech}", "input": "Hello there."}' -o hello.wav`,
+      "  In Agency code:",
+      `    import { speakLocal } from "std::speech"`,
+      `    speakLocal("Hello there.", "${speech}")`,
     );
   }
   return lines;

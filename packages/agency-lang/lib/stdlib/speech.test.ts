@@ -6,7 +6,14 @@ import { realpathSync } from "fs";
 import { agencyStore } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
-import { _transcribe, _synthesizeSpeech, publishSpeechOutput } from "./speech.js";
+import {
+  _transcribe,
+  _synthesizeSpeech,
+  _speakLocal,
+  _validateSpeakLocalArgs,
+  LOCAL_PIECE_CHARS,
+  publishSpeechOutput,
+} from "./speech.js";
 
 // Each test gets a unique disposable root; nothing touches $HOME, the repo, or a
 // shared /tmp path (see plan §12j).
@@ -84,6 +91,16 @@ const speakOk = (overrides: any = {}) => ({
     mimeType: "audio/mpeg", // matches format "mp3"
     cost: { totalCost: 0.015, currency: "USD" },
     ...overrides,
+  },
+});
+
+const pcmOk = (bytes: number[]) => ({
+  success: true,
+  value: {
+    audio: new Uint8Array(bytes),
+    mimeType: "application/octet-stream",
+    pcm: { sampleRateHz: 24000, sampleFormat: "s16le", channels: 1 },
+    cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
   },
 });
 
@@ -463,5 +480,215 @@ describe("publishSpeechOutput", () => {
       publishSpeechOutput(path.join(dir, "x.mp3"), new Uint8Array([1, 2, 3]), signal),
     ).rejects.toThrow();
     await chmod(dir, 0o700); // restore so afterEach can remove it
+  });
+});
+
+describe("_speakLocal", () => {
+  it("sends provider mlx, the served name, the voice, and instructions, and writes a wav", async () => {
+    const out = path.join(root, "out.wav");
+    const calls: { text: string; config: any }[] = [];
+    const speak: SpeakImpl = async (text, config) => {
+      calls.push({ text, config });
+      return pcmOk([1, 0, 2, 0]);
+    };
+    await withClient({ speak }, async ({ stack, speechSynthesis, meter }) => {
+      const returned = await _speakLocal(
+        "Hello there.",
+        out,
+        "qwen3-tts-mlx",
+        "ryan",
+        "Calm.",
+        "wav",
+        [root],
+      );
+      expect(returned).toBe(path.join(realpathSync(root), "out.wav"));
+      expect(calls).toHaveLength(1);
+      expect(calls[0].config).toEqual({
+        model: "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+        voice: "ryan",
+        format: "pcm",
+        provider: "mlx",
+        instructions: "Calm.",
+        baseUrl: { mlx: "http://127.0.0.1:8080/v1" },
+      });
+      const bytes = new Uint8Array(await readFile(out));
+      expect(bytes.length).toBe(44 + 4);
+      expect(String.fromCharCode(...bytes.slice(0, 4))).toBe("RIFF");
+      expect([...bytes.slice(44)]).toEqual([1, 0, 2, 0]);
+      expect(stack.localCost).toBe(0);
+      expect(speechSynthesis).toHaveBeenCalledTimes(1);
+      expect(meter.snapshot().usage.entries).toHaveLength(1);
+      expect(stack.enforceGuards).toHaveBeenCalled();
+    });
+  });
+
+  it("resolves a catalog name and an mlx: URI to the served name; leaves instructions out when empty", async () => {
+    const configs: any[] = [];
+    const speak: SpeakImpl = async (_t, config) => {
+      configs.push(config);
+      return pcmOk([0, 0]);
+    };
+    await withClient({ speak }, async () => {
+      await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "pcm", []);
+      await _speakLocal(
+        "Hi.",
+        "",
+        "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+        "",
+        "",
+        "pcm",
+        [],
+      );
+    });
+    expect(configs.map((c) => c.model)).toEqual([
+      "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+      "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
+    ]);
+    expect(configs[0]).not.toHaveProperty("instructions");
+    expect(configs[0].voice).toBe("");
+  });
+
+  it("writes raw pcm for format pcm, joined from the pieces", async () => {
+    const out = path.join(root, "out.pcm");
+    let n = 0;
+    const speak: SpeakImpl = async () => pcmOk([++n]);
+    const text = Array.from(
+      { length: 30 },
+      (_, i) => `Sentence number ${i} says something short.`,
+    ).join(" ");
+    await withClient({ speak }, async () => {
+      await _speakLocal(text, out, "qwen3-tts-mlx", "", "", "pcm", [root]);
+    });
+    const bytes = [...new Uint8Array(await readFile(out))];
+    expect(bytes.length).toBeGreaterThan(1);
+    expect(bytes).toEqual(bytes.map((_, i) => i + 1)); // one byte per piece, in order
+  });
+
+  it("sends a long text as pieces of at most 500, each with the same voice and instructions", async () => {
+    const calls: { text: string; config: any }[] = [];
+    const speak: SpeakImpl = async (text, config) => {
+      calls.push({ text, config });
+      return pcmOk([0]);
+    };
+    const text = Array.from(
+      { length: 40 },
+      (_, i) => `Sentence number ${i} says something short.`,
+    ).join(" ");
+    await withClient({ speak }, async ({ speechSynthesis, meter }) => {
+      await _speakLocal(text, "", "qwen3-tts-mlx", "ryan", "Calm.", "wav", []);
+      expect(calls.length).toBeGreaterThan(3);
+      expect(calls.every((c) => c.text.length <= LOCAL_PIECE_CHARS)).toBe(true);
+      expect(
+        calls.every(
+          (c) =>
+            c.config.voice === "ryan" &&
+            c.config.instructions === "Calm." &&
+            c.config.format === "pcm",
+        ),
+      ).toBe(true);
+      expect(
+        calls
+          .map((c) => c.text)
+          .join("")
+          .replace(/\s+/g, ""),
+      ).toBe(text.replace(/\s+/g, ""));
+      expect(speechSynthesis).toHaveBeenCalledTimes(1);
+      expect(meter.snapshot().usage.entries).toHaveLength(1);
+    });
+  });
+
+  it("stops before the second piece when aborted after the first", async () => {
+    let calls = 0;
+    let abort = () => {};
+    const speak: SpeakImpl = async () => {
+      calls += 1;
+      abort();
+      return pcmOk([0]);
+    };
+    await withClient({ speak }, async ({ controller }) => {
+      abort = () => controller.abort(new AgencyCancelledError("stop"));
+      const text = Array.from(
+        { length: 40 },
+        (_, i) => `Sentence number ${i} says something short.`,
+      ).join(" ");
+      await expect(
+        _speakLocal(text, "", "qwen3-tts-mlx", "", "", "wav", []),
+      ).rejects.toBeInstanceOf(AgencyCancelledError);
+      expect(calls).toBe(1);
+    });
+  });
+
+  it("sends the configured MLX address with the request and names it when nothing answers", async () => {
+    const original = process.env.MLX_BASE_URL;
+    process.env.MLX_BASE_URL = "http://127.0.0.1:9100/v1";
+    try {
+      const configs: any[] = [];
+      const speak: SpeakImpl = async (_t, config) => {
+        configs.push(config);
+        return { success: false, error: "Connection error." };
+      };
+      await withClient({ speak }, async () => {
+        await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [])).rejects.toThrow(
+          "speakLocal failed: no MLX server answered at http://127.0.0.1:9100/v1. Start one with:\n  agency local serve --speech qwen3-tts-mlx",
+        );
+      });
+      expect(configs[0].baseUrl).toEqual({ mlx: "http://127.0.0.1:9100/v1" });
+    } finally {
+      if (original === undefined) {
+        delete process.env.MLX_BASE_URL;
+      } else {
+        process.env.MLX_BASE_URL = original;
+      }
+    }
+  });
+
+  it("refuses an existing output file before any request", async () => {
+    const out = path.join(root, "exists.wav");
+    await writeFile(out, Buffer.from([0]));
+    const speak = vi.fn();
+    await withClient({ speak: speak as any }, async () => {
+      await expect(_speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root])).rejects.toThrow(
+        /already exists/,
+      );
+      expect(speak).not.toHaveBeenCalled();
+    });
+  });
+
+  it("passes any other failure through, and refuses a piece that is not pcm", async () => {
+    await withClient(
+      { speak: async () => ({ success: false, error: '"alloy" is not a voice of this model.' }) },
+      async () => {
+        await expect(
+          _speakLocal("Hi.", "", "qwen3-tts-mlx", "alloy", "", "wav", []),
+        ).rejects.toThrow(/not a voice of this model/);
+      },
+    );
+    await withClient({ speak: async () => speakOk({ mimeType: "audio/wav" }) }, async () => {
+      await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [])).rejects.toThrow(
+        /returned "audio\/wav"/,
+      );
+    });
+  });
+
+  it("_validateSpeakLocalArgs refuses empty text, an empty or unknown model, and a format other than wav or pcm", () => {
+    expect(() => _validateSpeakLocalArgs("", "qwen3-tts-mlx", "wav")).toThrow(
+      "speakLocal text cannot be empty",
+    );
+    // Whitespace alone would otherwise prompt, then publish an empty file.
+    expect(() => _validateSpeakLocalArgs("   \n ", "qwen3-tts-mlx", "wav")).toThrow(
+      "speakLocal text cannot be empty",
+    );
+    // A GGUF model is refused before the interrupt, not after approval.
+    expect(() => _validateSpeakLocalArgs("Hi.", "smollm2-135m", "wav")).toThrow(/is a GGUF model/);
+    expect(() => _validateSpeakLocalArgs("Hi.", "", "wav")).toThrow(
+      "speakLocal model cannot be empty",
+    );
+    expect(() => _validateSpeakLocalArgs("Hi.", "no-such-model", "wav")).toThrow(
+      /Unknown local model/,
+    );
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "mp3")).toThrow(
+      'speakLocal: unsupported format "mp3" (supported: wav, pcm).',
+    );
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "WAV")).not.toThrow();
   });
 });

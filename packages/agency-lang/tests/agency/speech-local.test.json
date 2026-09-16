@@ -1,0 +1,26 @@
+{
+  "sourceFile": "speech-local.agency",
+  "tests": [
+    {
+      "nodeName": "interruptCarriesPayload",
+      "description": "The std::localSpeech interrupt carries the model, voice, text length, and real output path",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "cloudApprovalDoesNotCoverLocal",
+      "description": "Approving std::synthesizeSpeech never approves local speech",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "badArgumentsNeverPrompt",
+      "description": "An empty model and an unsupported format fail before any interrupt is raised",
+      "input": "",
+      "expectedOutput": "\"|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

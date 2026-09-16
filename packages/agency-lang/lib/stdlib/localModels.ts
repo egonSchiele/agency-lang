@@ -181,6 +181,8 @@ export type AliasObject = {
   license?: string;
   description?: string;
   sha256?: string;
+  /** Repos this model loads by name at runtime, as mlx: URIs. */
+  companions?: string[];
 };
 
 export type AliasValue = string | AliasObject;
@@ -662,6 +664,10 @@ export type CatalogModel = {
   license?: string;
   description?: string;
   sha256?: string;
+  /** Repos this model loads by name at runtime, as mlx: URIs. Carried into
+   *  the alias `agency local refresh` writes, so a refreshed model can
+   *  download them too. */
+  companions?: string[];
 };
 
 /** Resolve the catalog URL: explicit arg → env → config → built-in default. */
@@ -790,6 +796,7 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
           license: d.license,
           description: d.description,
           sha256: d.sha256,
+          companions: d.companions,
         }),
       };
       return [name, model];
@@ -1134,13 +1141,35 @@ async function downloadMlxRepo(
   return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), opts);
 }
 
-/** The curated entry a value names, by its catalog name or by the URI it
- *  resolved to. Undefined for an alias or a URI the catalog does not know. */
+/** The repo an mlx: URI names, without its pinned revision. Null for
+ *  anything else, which is compared whole. */
+function mlxRepoOf(target: string): string | null {
+  return isMlxUri(target) ? parseMlxUri(target).repo : null;
+}
+
+/** The curated entry a value names, by its catalog name or by the repo it
+ *  resolved to. A pinned revision does not change which entry it is.
+ *  Undefined for a URI the catalog does not know. */
 function catalogEntry(value: string, target: string): ModelInfo | undefined {
-  return (
-    CURATED_LOCAL_MODELS[value] ??
-    Object.values(CURATED_LOCAL_MODELS).find((entry) => entry.uri === target)
-  );
+  const byName = CURATED_LOCAL_MODELS[value];
+  if (byName !== undefined) {
+    return byName;
+  }
+  const repo = mlxRepoOf(target);
+  const matches = (entry: ModelInfo): boolean =>
+    repo === null ? entry.uri === target : mlxRepoOf(entry.uri) === repo;
+  return Object.values(CURATED_LOCAL_MODELS).find(matches);
+}
+
+/** The repos a model loads by name at runtime. An alias answers for itself,
+ *  even when it shadows a catalog name, because it may point somewhere with
+ *  no companion at all. Otherwise the curated entry answers. */
+function companionsFor(value: string, target: string, file: string = ""): string[] {
+  const alias = readModelAliases(file)[value];
+  if (alias !== undefined) {
+    return typeof alias === "string" ? [] : (alias.companions ?? []);
+  }
+  return catalogEntry(value, target)?.companions ?? [];
 }
 
 /** Download a model and return where it is: the `.gguf` path, or the MLX
@@ -1164,7 +1193,7 @@ export async function _downloadModel(
     const dir = await downloadMlxRepo(model.target, cacheDir, opts);
     // A model that loads other repos by name at runtime needs them on disk
     // too, or it cannot start offline. Only a catalog entry lists them.
-    for (const companion of catalogEntry(value, model.target)?.companions ?? []) {
+    for (const companion of companionsFor(value, model.target)) {
       await downloadMlxRepo(companion, cacheDir, opts);
     }
     return dir;

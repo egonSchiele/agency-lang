@@ -123,6 +123,10 @@ def family_of(config):
             f'This is a Qwen3-TTS "{kind}" model, which needs a reference recording.'
         )
     if model_type == "llama":
+        # mlx-audio maps every TTS config with this model_type to its own
+        # llama module, which is Orpheus. There is no field in the config
+        # that says "Orpheus" and nothing else, so this server follows the
+        # library rather than refusing models the library can load.
         return "orpheus"
     raise RequestError(
         "mlxSpeechServer.py serves Orpheus and Qwen3-TTS (CustomVoice or VoiceDesign) models. "

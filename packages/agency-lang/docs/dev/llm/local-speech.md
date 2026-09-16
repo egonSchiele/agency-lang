@@ -85,6 +85,15 @@ reads it, and `agency local remove -f` leaves companions alone, because
 another model may share one. The lookup happens in the script, always by
 repo id.
 
+Which entry a value names is decided by `companionsFor` in
+`lib/stdlib/localModels.ts`. An alias answers for itself, even one that
+shadows a catalog name, since it may point at a model with no companion.
+Otherwise the curated entry answers, found by catalog name or by the repo
+the value resolved to, so `mlx:mlx-community/orpheus-3b-0.1-ft-4bit` and
+that URI with a pinned revision both fetch SNAC. A remote catalog can
+declare `companions` too: the field survives `agency local refresh` into
+the alias it writes.
+
 A companion that sits in the models directory in Hugging Face cache layout
 (`models--<org>--<repo>/snapshots/<sha>/`) is not found by that lookup. The
 fallback, mlx-audio's own loader, finds it only when `HF_HOME` points at

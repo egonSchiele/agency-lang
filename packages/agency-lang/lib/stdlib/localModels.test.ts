@@ -708,6 +708,27 @@ describe("parseCatalog", () => {
     expect(out["m1"].uri).toBe("hf:org/m1:Q4_K_M");
     expect(out["m1"].params).toBe("2B");
   });
+  it("keeps companions, so a refreshed model can still fetch what it loads by name", () => {
+    const withCompanions = JSON.stringify({
+      version: 1,
+      models: {
+        m2: {
+          backend: "mlx",
+          uri: "mlx:org/m2",
+          companions: ["mlx:org/decoder"],
+        },
+        m3: {
+          backend: "mlx",
+          uri: "mlx:org/m3",
+          // Not an mlx: URI, so the field is dropped and the entry kept.
+          companions: ["hf:org/decoder:Q4_K_M"],
+        },
+      },
+    });
+    const out = parseCatalog(withCompanions);
+    expect(out["m2"].companions).toEqual(["mlx:org/decoder"]);
+    expect(out["m3"].companions).toBeUndefined();
+  });
   it("throws on invalid JSON", () => {
     expect(() => parseCatalog("{not json")).toThrow(/valid JSON/);
   });
@@ -1413,6 +1434,12 @@ describe("companion downloads", () => {
       // downloading by URI would leave the model unable to start.
       fs.rmSync(snac, { recursive: true });
       await _downloadModel(`mlx:${ORPHEUS}`, dir, opts);
+      expect(isMlxModelComplete(readMlxModelRecord(snac)!)).toBe(true);
+
+      // A pinned revision names the same model, so it needs the same
+      // companion.
+      fs.rmSync(snac, { recursive: true });
+      await _downloadModel(`mlx:${ORPHEUS}@7b9321e`, dir, opts);
       expect(isMlxModelComplete(readMlxModelRecord(snac)!)).toBe(true);
     } finally {
       await hub.close();

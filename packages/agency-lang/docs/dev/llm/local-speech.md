@@ -28,6 +28,56 @@ for two reasons:
 With its own script, Agency defines the request fields in one place. The
 script refuses anything a model cannot use, and says why.
 
+## Never run mlx_audio.server
+
+There is a third reason, found later: `mlx_audio.server` lets any web page
+you visit run code on your machine, for as long as that server is running.
+
+The endpoints that change state take their parameters in the query string
+and require no authentication, so an ordinary HTML form on any site can
+post to `http://127.0.0.1:8000/v1/models?model_name=attacker/evil-model`.
+A form post is a CORS simple request, so the browser sends it without a
+preflight and the server's origin allowlist is never consulted. The attack
+never reads the reply; downloading and loading the named model is the
+payload. Several loaders then call `AutoTokenizer.from_pretrained` with
+`trust_remote_code=True`, so the attacker's repository executes Python as
+you, with your environment: `HF_TOKEN`, SSH keys, everything.
+
+Tightening `MLX_AUDIO_ALLOWED_ORIGINS` does not help. CORS decides who may
+read a reply, not whose request reaches the handler.
+
+Agency is clear of this, and these are the properties that keep it clear.
+Check them before changing anything in this area.
+
+1. **Nothing in Agency starts `mlx_audio.server`, or the web UI behind
+   it.** Agency runs `lib/cli/mlxSpeechServer.py` instead.
+2. **No endpoint chooses a model.** Each process is started on one model
+   directory with `--model`, and that is the only model it will ever load.
+   A request names a model only so the front door can route it, and the
+   door rewrites that field to the directory the process was started with,
+   answering 404 for any other name. Adding an endpoint that loads a model
+   named in a request would reintroduce exactly this bug.
+3. **`trust_remote_code` is never passed.** In mlx-audio 0.5.4 it appears
+   once, at `tts/utils.py:224`, in the `convert()` CLI helper, which
+   nothing here calls. `load_model` does not take it, and both model
+   classes load their tokenizer with the default, which is `False`. Do not
+   call `convert()`, and do not pass the flag.
+4. **Everything binds `127.0.0.1`**: the speech script, the embedding
+   script and the front door.
+5. **Requests carry a JSON body, never query-string parameters**, and the
+   body is parsed strictly. A browser form cannot produce a body that
+   `json.loads` accepts, so it cannot reach the generation path.
+
+If a state-changing endpoint is ever needed, it has to reject cross-origin
+requests server-side: check `Origin` against an allowlist, or require a
+header that forces a preflight. A JSON content type alone is not enough,
+because `fetch` can send `text/plain`.
+
+The finding is against mlx-audio 0.5.4, the version this server pins, and
+was not reported upstream at the time of writing. The version pin is the
+thing that keeps this file's claims true: if it moves, read
+`mlx_audio/server.py` and `tts/utils.py` again.
+
 ## The two files
 
 `lib/cli/mlxSpeechRules.py` holds the request rules: which model families

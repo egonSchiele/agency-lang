@@ -651,11 +651,7 @@ export function servingBanner(port: number, models: ServedModel[]): string[] {
   }
   const speech = first("speech");
   if (speech !== undefined) {
-    lines.push(
-      "",
-      "  In Agency code:",
-      `    speakLocal("Hello there.", "${speech}")`,
-    );
+    lines.push("", "  In Agency code:", `    speakLocal("Hello there.", "${speech}")`);
   }
   return lines;
 }

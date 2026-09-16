@@ -24,6 +24,7 @@ import select
 import socket
 import sys
 import threading
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -32,7 +33,6 @@ from mlxSpeechRules import (  # noqa: E402
     FORMATS,
     MLX_AUDIO_VERSION,
     MODEL_VOICES,
-    UNSERVED_FAMILIES,
     RequestError,
     check_request,
     family_of,
@@ -46,6 +46,11 @@ def parse_args():
     parser.add_argument("--model", required=True, help="model directory")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument(
+        "--models-dir",
+        default="",
+        help="Agency's models directory; companion repos are looked up under <dir>/mlx",
+    )
     return parser.parse_args()
 
 
@@ -95,20 +100,79 @@ def to_pcm16(samples):
     return (clipped * 32767).astype("<i2")
 
 
+def patch_mlx_audio_for_orpheus(model_dir, models_dir):
+    """Three fixes to mlx-audio 0.5.4, applied before the Orpheus module is
+    imported, because importing it loads the SNAC decoder. Remove each one
+    when a release carries the fix and the version pin moves."""
+    import mlx_audio.codec.models.snac.snac as snac_module
+    import mlx_audio.lm.generate as lm_generate
+
+    # 1. SNAC is loaded by repo id at import time (llama.py:32) through
+    #    huggingface_hub, which cannot run offline on an empty cache. Look
+    #    in Agency's models directory first; fall back to the original for a
+    #    cache that already holds it. Not reported upstream yet; see
+    #    docs/dev/llm/local-speech.md.
+    original_fetch = snac_module.fetch_from_hub
+
+    def fetch_from_models_dir(hf_repo):
+        candidate = os.path.join(models_dir, "mlx", hf_repo.replace("/", "--"))
+        if models_dir and os.path.isfile(os.path.join(candidate, "config.json")):
+            return Path(candidate)
+        try:
+            return original_fetch(hf_repo)
+        except Exception as err:  # huggingface_hub raises several types offline
+            raise RequestError(
+                f"This Orpheus model needs {hf_repo}, which is not downloaded. Run:\n"
+                f"  agency local download mlx:{hf_repo}\n"
+                f"and serve it again. ({err})"
+            ) from err
+
+    snac_module.fetch_from_hub = fetch_from_models_dir
+
+    # 2. eos_token_ids is one int for the Orpheus tokenizer, and set(int)
+    #    raises. Not reported upstream yet; see
+    #    docs/dev/llm/local-speech.md.
+    original_eos_ids = lm_generate._eos_ids
+
+    def eos_ids(tokenizer):
+        ids = getattr(tokenizer, "eos_token_ids", None)
+        if isinstance(ids, int):
+            return {ids}
+        return original_eos_ids(tokenizer)
+
+    lm_generate._eos_ids = eos_ids
+
+    # 3. The tokenizer is loaded by repo id from the full-size bf16 repo
+    #    (llama.py:21). The 4-bit repo has its own tokenizer files, so load
+    #    it from the model directory. The loader builds ModelConfig with
+    #    from_dict, so the name has to go into the dict; the dataclass
+    #    default is fixed at class creation. Not reported upstream yet; see
+    #    docs/dev/llm/local-speech.md.
+    #    This import loads SNAC, so patch 1 above has to come first.
+    import mlx_audio.tts.models.llama.llama as llama_module
+
+    original_from_dict = llama_module.ModelConfig.from_dict
+
+    def from_dict_with_local_tokenizer(params):
+        return original_from_dict({**params, "tokenizer_name": model_dir})
+
+    llama_module.ModelConfig.from_dict = staticmethod(from_dict_with_local_tokenizer)
+
+
 class Speaker:
     """The loaded model, its family, its speakers, and a lock, because MLX
     runs one computation at a time."""
 
-    def __init__(self, model_dir):
-        from mlx_audio.tts.utils import load_model
-
+    def __init__(self, model_dir, models_dir=""):
         config = read_config(model_dir)
         self.family = family_of(config)
-        self.rules = FAMILIES.get(self.family)
-        if self.rules is None:
-            raise RequestError(
-                f"{model_dir} holds {UNSERVED_FAMILIES[self.family]}, which this version does not serve yet."
-            )
+        self.rules = FAMILIES[self.family]
+        if self.family == "orpheus":
+            patch_mlx_audio_for_orpheus(model_dir, models_dir)
+        # Imported here, after the patches: load_model imports the model's
+        # own module, and the Orpheus one loads SNAC as it is imported.
+        from mlx_audio.tts.utils import load_model
+
         self.model = load_model(model_dir)
         self.speakers = (
             [name.lower() for name in self.model.get_supported_speakers()]
@@ -251,7 +315,7 @@ def main():
         # Load and speak once before binding the port. `agency local serve`
         # treats a refused connection as "still loading" and any answer as
         # "ready", so the port must stay closed until the model can answer.
-        Handler.speaker = Speaker(args.model)
+        Handler.speaker = Speaker(args.model, args.models_dir)
         Handler.speaker.warm_up()
     except RequestError as err:
         fail(str(err))

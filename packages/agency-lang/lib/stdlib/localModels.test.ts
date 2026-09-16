@@ -112,6 +112,17 @@ describe("curated catalog shape", () => {
       "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
     );
   });
+  it("orpheus-3b-mlx is a speech model with the SNAC decoder as its companion", () => {
+    expect(_localModelCategory("orpheus-3b-mlx")).toBe("speech");
+    expect(CURATED_LOCAL_MODELS["orpheus-3b-mlx"].companions).toEqual([
+      "mlx:mlx-community/snac_24khz",
+    ]);
+    for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
+      for (const companion of info.companions ?? []) {
+        expect(companion, `${name}.companions`).toMatch(/^mlx:/);
+      }
+    }
+  });
 });
 
 describe("aliases", () => {
@@ -696,6 +707,27 @@ describe("parseCatalog", () => {
     const out = parseCatalog(good);
     expect(out["m1"].uri).toBe("hf:org/m1:Q4_K_M");
     expect(out["m1"].params).toBe("2B");
+  });
+  it("keeps companions, so a refreshed model can still fetch what it loads by name", () => {
+    const withCompanions = JSON.stringify({
+      version: 1,
+      models: {
+        m2: {
+          backend: "mlx",
+          uri: "mlx:org/m2",
+          companions: ["mlx:org/decoder"],
+        },
+        m3: {
+          backend: "mlx",
+          uri: "mlx:org/m3",
+          // Not an mlx: URI, so the field is dropped and the entry kept.
+          companions: ["hf:org/decoder:Q4_K_M"],
+        },
+      },
+    });
+    const out = parseCatalog(withCompanions);
+    expect(out["m2"].companions).toEqual(["mlx:org/decoder"]);
+    expect(out["m3"].companions).toBeUndefined();
   });
   it("throws on invalid JSON", () => {
     expect(() => parseCatalog("{not json")).toThrow(/valid JSON/);
@@ -1373,6 +1405,45 @@ describe("_downloadModel for mlx", () => {
     fs.writeFileSync(path.join(model, "config.json"), "{}");
     fs.writeFileSync(path.join(model, "model.safetensors"), "");
     await expect(_downloadModel(model, dir)).resolves.toBe(model);
+  });
+});
+
+describe("companion downloads", () => {
+  const ORPHEUS = "mlx-community/orpheus-3b-0.1-ft-4bit";
+  const SNAC = "mlx-community/snac_24khz";
+  const FILES = [
+    { path: "config.json", bytes: Buffer.from('{"model_type":"llama"}') },
+    { path: "model.safetensors", bytes: Buffer.alloc(1500, 7) },
+  ];
+
+  it("downloads each companion after the model, by catalog name or by URI", async () => {
+    const hub = await startFakeHub([ORPHEUS, SNAC], FILES);
+    try {
+      const opts = { hubUrl: hub.baseUrl, allowHttp: true, chunkBytes: 1000, retryDelayMs: 1 };
+      const out = await _downloadModel("orpheus-3b-mlx", dir, opts);
+      expect(out).toBe(path.join(dir, "mlx", "mlx-community--orpheus-3b-0.1-ft-4bit"));
+      const snac = path.join(dir, "mlx", "mlx-community--snac_24khz");
+      expect(isMlxModelComplete(readMlxModelRecord(snac)!)).toBe(true);
+
+      // Every range was fetched once, so a second run fetches nothing.
+      const before = { ...hub.rangeHits };
+      await _downloadModel("orpheus-3b-mlx", dir, opts);
+      expect(hub.rangeHits).toEqual(before);
+
+      // The URI the catalog entry points at pulls the companion too, or
+      // downloading by URI would leave the model unable to start.
+      fs.rmSync(snac, { recursive: true });
+      await _downloadModel(`mlx:${ORPHEUS}`, dir, opts);
+      expect(isMlxModelComplete(readMlxModelRecord(snac)!)).toBe(true);
+
+      // A pinned revision names the same model, so it needs the same
+      // companion.
+      fs.rmSync(snac, { recursive: true });
+      await _downloadModel(`mlx:${ORPHEUS}@7b9321e`, dir, opts);
+      expect(isMlxModelComplete(readMlxModelRecord(snac)!)).toBe(true);
+    } finally {
+      await hub.close();
+    }
   });
 });
 

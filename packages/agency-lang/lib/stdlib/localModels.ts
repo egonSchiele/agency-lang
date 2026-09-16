@@ -181,6 +181,8 @@ export type AliasObject = {
   license?: string;
   description?: string;
   sha256?: string;
+  /** Repos this model loads by name at runtime, as mlx: URIs. */
+  companions?: string[];
 };
 
 export type AliasValue = string | AliasObject;
@@ -662,6 +664,10 @@ export type CatalogModel = {
   license?: string;
   description?: string;
   sha256?: string;
+  /** Repos this model loads by name at runtime, as mlx: URIs. Carried into
+   *  the alias `agency local refresh` writes, so a refreshed model can
+   *  download them too. */
+  companions?: string[];
 };
 
 /** Resolve the catalog URL: explicit arg → env → config → built-in default. */
@@ -714,6 +720,12 @@ const CatalogModelSchema = z
       .string()
       .regex(/^[0-9a-fA-F]{64}$/)
       .transform((s) => s.toLowerCase())
+      .optional()
+      .catch(undefined),
+    // Repos the model loads by name at runtime. Only mlx: URIs, because
+    // that is what the companion download can fetch.
+    companions: z
+      .array(z.string().refine(isMlxUri, "companion must be an mlx: URI"))
       .optional()
       .catch(undefined),
   })
@@ -784,6 +796,7 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
           license: d.license,
           description: d.description,
           sha256: d.sha256,
+          companions: d.companions,
         }),
       };
       return [name, model];
@@ -1116,6 +1129,49 @@ export function configuredDownloadConcurrency(): number {
   return n;
 }
 
+/** Download one mlx: repo into the models directory and return the
+ *  directory. */
+async function downloadMlxRepo(
+  target: string,
+  cacheDir: string,
+  opts: DownloadOptions,
+): Promise<string> {
+  const { repo, revision } = parseMlxUri(target);
+  const snapshot = await fetchHubSnapshot(repo, revision, opts);
+  return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), opts);
+}
+
+/** The repo an mlx: URI names, without its pinned revision. Null for
+ *  anything else, which is compared whole. */
+function mlxRepoOf(target: string): string | null {
+  return isMlxUri(target) ? parseMlxUri(target).repo : null;
+}
+
+/** The curated entry a value names, by its catalog name or by the repo it
+ *  resolved to. A pinned revision does not change which entry it is.
+ *  Undefined for a URI the catalog does not know. */
+function catalogEntry(value: string, target: string): ModelInfo | undefined {
+  const byName = CURATED_LOCAL_MODELS[value];
+  if (byName !== undefined) {
+    return byName;
+  }
+  const repo = mlxRepoOf(target);
+  const matches = (entry: ModelInfo): boolean =>
+    repo === null ? entry.uri === target : mlxRepoOf(entry.uri) === repo;
+  return Object.values(CURATED_LOCAL_MODELS).find(matches);
+}
+
+/** The repos a model loads by name at runtime. An alias answers for itself,
+ *  even when it shadows a catalog name, because it may point somewhere with
+ *  no companion at all. Otherwise the curated entry answers. */
+function companionsFor(value: string, target: string, file: string = ""): string[] {
+  const alias = readModelAliases(file)[value];
+  if (alias !== undefined) {
+    return typeof alias === "string" ? [] : (alias.companions ?? []);
+  }
+  return catalogEntry(value, target)?.companions ?? [];
+}
+
 /** Download a model and return where it is: the `.gguf` path, or the MLX
  *  model directory. `hubOptions` lets the CLI watch progress and lets tests
  *  point at a fake hub. */
@@ -1129,14 +1185,18 @@ export async function _downloadModel(
     if (isModelDir(model.target)) {
       return path.resolve(model.target);
     }
-    const { repo, revision } = parseMlxUri(model.target);
     const opts: DownloadOptions = {
       concurrency: configuredDownloadConcurrency(),
       ...hubOptions,
       token: hubOptions.token ?? process.env.HF_TOKEN,
     };
-    const snapshot = await fetchHubSnapshot(repo, revision, opts);
-    return await downloadHubSnapshot(snapshot, mlxModelDir(resolveCacheDir(cacheDir), repo), opts);
+    const dir = await downloadMlxRepo(model.target, cacheDir, opts);
+    // A model that loads other repos by name at runtime needs them on disk
+    // too, or it cannot start offline. Only a catalog entry lists them.
+    for (const companion of companionsFor(value, model.target)) {
+      await downloadMlxRepo(companion, cacheDir, opts);
+    }
+    return dir;
   }
   requireSupport();
   const target = model.target;
@@ -1175,12 +1235,7 @@ export function _localModelCategory(value: string, file: string = ""): ModelCate
       return entry.category;
     }
   }
-  for (const entry of Object.values(CURATED_LOCAL_MODELS)) {
-    if (entry.uri === value) {
-      return entry.category;
-    }
-  }
-  return undefined;
+  return catalogEntry(value, value)?.category;
 }
 
 /** Convenience: register the provider + ensure the model is downloaded. */

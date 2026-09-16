@@ -375,6 +375,17 @@
       "license": "apache-2.0",
       "description": "Returns 2560-dim embeddings. mlx_lm.server has no embeddings route, so serve it with another MLX server."
     },
+    "orpheus-3b-mlx": {
+      "backend": "mlx",
+      "uri": "mlx:mlx-community/orpheus-3b-0.1-ft-4bit",
+      "params": "3B",
+      "sizeBytes": 1885400000,
+      "category": "speech",
+      "contextWindow": 131072,
+      "license": "apache-2.0",
+      "companions": ["mlx:mlx-community/snac_24khz"],
+      "description": "Expressive English speech. Takes <laugh>, <sigh>, <gasp> and other tags in the text."
+    },
     "qwen3-tts-mlx": {
       "backend": "mlx",
       "uri": "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",

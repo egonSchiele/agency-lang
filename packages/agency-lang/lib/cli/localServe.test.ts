@@ -64,7 +64,7 @@ describe("embedServeArgs", () => {
 
 describe("speechServeArgs", () => {
   it("builds the speech server command line", () => {
-    expect(speechServeArgs("/x/mlxSpeechServer.py", "/m/dir", 9002)).toEqual([
+    expect(speechServeArgs("/x/mlxSpeechServer.py", "/m/dir", 9002, "/home/me/models")).toEqual([
       "/x/mlxSpeechServer.py",
       "--model",
       "/m/dir",
@@ -72,6 +72,8 @@ describe("speechServeArgs", () => {
       "127.0.0.1",
       "--port",
       "9002",
+      "--models-dir",
+      "/home/me/models",
     ]);
   });
 });
@@ -724,7 +726,16 @@ describe("runServe", () => {
     expect(imports).toEqual(["import mlx_audio"]);
     expect(spawned.length).toBe(1);
     expect(spawned[0][1].endsWith("/lib/cli/mlxSpeechServer.py")).toBe(true);
-    expect(spawned[0].slice(2)).toEqual(["--model", tts, "--host", "127.0.0.1", "--port", "9000"]);
+    expect(spawned[0].slice(2)).toEqual([
+      "--model",
+      tts,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9000",
+      "--models-dir",
+      cacheDir,
+    ]);
     expect(probes).toEqual(["http://127.0.0.1:9000/health"]);
     expect(handle.models).toEqual(["org/tts"]);
     expect(log).toContain("  org/tts  (speech)");

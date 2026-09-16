@@ -27,14 +27,20 @@ import {
 } from "../runtime/recordPaidUsage.js";
 import { addTokens } from "../runtime/cost.js";
 import { projectProviderTokenUsage } from "../runtime/invocationUsage.js";
-import {
-  SPEAK_FORMATS,
-  SPEECH_FORMAT_TO_MIME,
-  isSpeakFormat,
-  type SpeakFormat,
-} from "../runtime/audioFormats.js";
+import { SPEAK_FORMATS, SPEECH_FORMAT_TO_MIME, type SpeakFormat } from "../runtime/audioFormats.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
-import type { AudioInput, SpeakConfig, TranscribeConfig } from "../runtime/llmClient.js";
+import { _resolveModel, _mlxServedName } from "./localModels.js";
+import { mlxBaseUrl } from "./mlxServerModels.js";
+import { sentencePieces } from "./speechPieces.js";
+import { wavFile, concatBytes } from "./wavFile.js";
+import type { Result } from "smoltalk";
+import type {
+  AudioInput,
+  LLMClient,
+  SpeakConfig,
+  SpeechResult,
+  TranscribeConfig,
+} from "../runtime/llmClient.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 
@@ -269,14 +275,16 @@ function projectStatelogCost(cost: { totalCost?: number } | undefined) {
  *  form, or throw if it is not a supported format. Used by the runtime helpers so
  *  a direct/deterministic caller cannot slip an unsupported format past the
  *  extension / MIME checks. */
-function normalizeSpeakFormat(format: string): SpeakFormat {
+function normalizeFormat<T extends string>(format: string, allowed: readonly T[], name: string): T {
   const normalized = format.toLowerCase().replace(/^\./, "");
-  if (!isSpeakFormat(normalized)) {
-    throw new Error(
-      `speak: unsupported format "${format}" (supported: ${SPEAK_FORMATS.join(", ")}).`,
-    );
+  if (!(allowed as readonly string[]).includes(normalized)) {
+    throw new Error(`${name}: unsupported format "${format}" (supported: ${allowed.join(", ")}).`);
   }
-  return normalized;
+  return normalized as T;
+}
+
+function normalizeSpeakFormat(format: string): SpeakFormat {
+  return normalizeFormat(format, SPEAK_FORMATS, "speak");
 }
 
 /** Validate speak's format + speed. Runs BEFORE the interrupt (via
@@ -445,38 +453,7 @@ export async function _synthesizeSpeech(
   const canonicalFormat = normalizeSpeakFormat(format);
   validateSpeakArgs(canonicalFormat, speed);
 
-  const { ctx, stack } = getRuntimeContext();
-  const client = ctx.llmClient;
-  if (!client.speak) {
-    throw new Error(
-      "The active LLM client does not support text-to-speech. Use the default client or register one with speak() support.",
-    );
-  }
-
-  const signal = ctx.getAbortSignal(stack);
-  if (signal.aborted) throwAbortReason(signal); // preflight: no dispatch
-
-  // Resolve + authorize the destination. An empty outputFile auto-generates a
-  // runtime-owned temp path (exempt from allowedPaths, like record()).
-  let finalPath: string;
-  if (outputFile) {
-    finalPath = await outputPath(outputFile, allowedPaths);
-    const explicitExt = path.extname(finalPath).replace(/^\./, "").toLowerCase();
-    if (explicitExt && explicitExt !== canonicalFormat) {
-      throw new Error(
-        `speak: output file extension ".${explicitExt}" does not match format "${canonicalFormat}".`,
-      );
-    }
-  } else {
-    // The real spelling of the temp dir, so the no-follow check below sees
-    // no link in it (/var is a link on macOS).
-    finalPath = path.join(root(os.tmpdir()).real, `agency-tts-${nanoid()}.${canonicalFormat}`);
-  }
-  // No-clobber preflight: new speech output never overwrites an existing file.
-  if (await pathExists(finalPath)) {
-    throw new Error(`speak: output file already exists: ${finalPath}`);
-  }
-
+  const client = speakClient();
   const config: SpeakConfig = {
     model,
     voice,
@@ -486,15 +463,81 @@ export async function _synthesizeSpeech(
   if (provider) config.provider = provider;
   if (apiKey) config.apiKey = { openAi: apiKey };
 
+  return synthesizeToFile({
+    name: "speak",
+    text,
+    outputFile,
+    format: canonicalFormat,
+    allowedPaths,
+    model,
+    voice,
+    produce: (signal) => client.speak!(text, config, signal),
+  });
+}
+
+/** The active client's speak, or a clear error when it has none. */
+function speakClient(): LLMClient {
+  const client = getRuntimeContext().ctx.llmClient;
+  if (!client.speak) {
+    throw new Error(
+      "The active LLM client does not support text-to-speech. Use the default client or register one with speak() support.",
+    );
+  }
+  return client;
+}
+
+/** What one synthesis needs from its caller: the words for the trace, where
+ *  the file goes, and how to produce the audio. `produce` runs inside the
+ *  metered dispatch, so however many requests it makes count as one. */
+type Synthesis = {
+  /** For messages: "speak" or "speakLocal". */
+  name: string;
+  text: string;
+  outputFile: string;
+  format: SpeakFormat;
+  allowedPaths: string[];
+  /** What the usage record and the trace name. */
+  model: string;
+  voice: string;
+  produce: (signal: AbortSignal) => Promise<Result<SpeechResult>>;
+};
+
+/** The file, accounting and publish steps both speak paths share. Resolves +
+ *  authorizes the output path and refuses to overwrite an existing file
+ *  BEFORE any dispatch, then accounts the work and publishes atomically. */
+async function synthesizeToFile(s: Synthesis): Promise<string> {
+  const { ctx, stack } = getRuntimeContext();
+  const signal = ctx.getAbortSignal(stack);
+  if (signal.aborted) throwAbortReason(signal); // preflight: no dispatch
+
+  // Resolve + authorize the destination. An empty outputFile auto-generates a
+  // runtime-owned temp path (exempt from allowedPaths, like record()).
+  let finalPath: string;
+  if (s.outputFile) {
+    finalPath = await outputPath(s.outputFile, s.allowedPaths);
+    const explicitExt = path.extname(finalPath).replace(/^\./, "").toLowerCase();
+    if (explicitExt && explicitExt !== s.format) {
+      throw new Error(
+        `${s.name}: output file extension ".${explicitExt}" does not match format "${s.format}".`,
+      );
+    }
+  } else {
+    // The real spelling of the temp dir, so the no-follow check below sees
+    // no link in it (/var is a link on macOS).
+    finalPath = path.join(root(os.tmpdir()).real, `agency-tts-${nanoid()}.${s.format}`);
+  }
+  // No-clobber preflight: new speech output never overwrites an existing file.
+  if (await pathExists(finalPath)) {
+    throw new Error(`${s.name}: output file already exists: ${finalPath}`);
+  }
+
   const start = performance.now();
-  const result = await meteredDispatch(ctx, stack, "speech", () =>
-    client.speak!(text, config, signal),
-  );
+  const result = await meteredDispatch(ctx, stack, "speech", () => s.produce(signal));
   const timeTaken = performance.now() - start;
 
   if (!result.success) {
     recordUnresolvedAttempt(ctx, stack, "speech");
-    throw new Error(`speak failed: ${result.error}`);
+    throw new Error(`${s.name} failed: ${result.error}`);
   }
   const speech = result.value;
 
@@ -503,30 +546,171 @@ export async function _synthesizeSpeech(
   recordUsage(ctx, stack, {
     type: "provider",
     kind: "speech",
-    configuredModel: model,
+    configuredModel: s.model,
     cost: speech.cost,
     tokens: undefined, // TTS is per-character; no token usage
   });
   ctx.statelogClient.speechSynthesis({
-    textPreview: text.slice(0, PROMPT_PREVIEW_MAX),
-    model,
-    voice,
-    format: canonicalFormat,
+    textPreview: s.text.slice(0, PROMPT_PREVIEW_MAX),
+    model: s.model,
+    voice: s.voice,
+    format: s.format,
     timeTaken,
     cost: projectStatelogCost(speech.cost),
   });
   stack.enforceGuards(); // LAST accounting gate — a trip means no file is written
 
-  const expectedMime = SPEECH_FORMAT_TO_MIME[canonicalFormat];
+  const expectedMime = SPEECH_FORMAT_TO_MIME[s.format];
   if (speech.mimeType !== expectedMime) {
     // Usage is already accounted; we simply do not publish a mismatched artifact.
     throw new Error(
-      `speak: provider returned "${speech.mimeType}" but format "${canonicalFormat}" expects "${expectedMime}".`,
+      `${s.name}: provider returned "${speech.mimeType}" but format "${s.format}" expects "${expectedMime}".`,
     );
   }
 
   await publishSpeechOutput(finalPath, speech.audio, signal);
   return finalPath;
+}
+
+/** Formats a local model can write. WAV is the server's PCM with a header
+ *  added here; anything else would need ffmpeg, which core does not have. */
+const LOCAL_SPEECH_FORMATS = ["wav", "pcm"] as const;
+type LocalSpeechFormat = (typeof LOCAL_SPEECH_FORMATS)[number];
+
+/** The most text one request to the local server carries. A cancelled call
+ *  holds the server for at most one piece. */
+export const LOCAL_PIECE_CHARS = 500;
+
+/** The sample rate to write in the header. smoltalk reports 24000 for every
+ *  pcm reply rather than reading the server's own rate, and both served
+ *  families are 24 kHz. */
+const DEFAULT_SAMPLE_RATE = 24000;
+
+/** Pre-interrupt validation hook for `std::speech.speakLocal` — see
+ *  speech.agency. An unknown model or format never prompts. */
+export function _validateSpeakLocalArgs(text: string, model: string, format: string): void {
+  if (text === "") {
+    throw new Error("speakLocal text cannot be empty");
+  }
+  if (model === "") {
+    throw new Error("speakLocal model cannot be empty");
+  }
+  _resolveModel(model); // throws "Unknown local model" with the known names
+  normalizeFormat(format, LOCAL_SPEECH_FORMATS, "speakLocal");
+}
+
+/** True for the failure smoltalk returns when nothing listens at the base
+ *  URL. */
+function isNoServer(error: string): boolean {
+  return /connection error|ECONNREFUSED|fetch failed/i.test(error);
+}
+
+/** The PCM of every piece, in order, and the sample rate for the header.
+ *  Stops at the first failure or when the signal fires between pieces; a
+ *  piece in flight is stopped by the signal itself. */
+async function speakPieces(
+  client: LLMClient,
+  pieces: string[],
+  config: SpeakConfig,
+  signal: AbortSignal,
+): Promise<Result<{ chunks: Uint8Array[]; sampleRate: number }>> {
+  const chunks: Uint8Array[] = [];
+  let sampleRate = DEFAULT_SAMPLE_RATE;
+  for (const piece of pieces) {
+    if (signal.aborted) {
+      throwAbortReason(signal);
+    }
+    const result = await client.speak!(piece, config, signal);
+    if (!result.success) {
+      return result;
+    }
+    if (result.value.mimeType !== SPEECH_FORMAT_TO_MIME.pcm) {
+      return {
+        success: false,
+        error: `provider returned "${result.value.mimeType}" for a pcm request.`,
+      };
+    }
+    chunks.push(result.value.audio);
+    sampleRate = result.value.pcm?.sampleRateHz ?? sampleRate;
+  }
+  return { success: true, value: { chunks, sampleRate } };
+}
+
+/** One SpeechResult from the pieces: a WAV with one header, or the raw PCM
+ *  joined. The cost is zero; the server is on this machine. */
+function assemble(
+  chunks: Uint8Array[],
+  sampleRate: number,
+  format: LocalSpeechFormat,
+): SpeechResult {
+  const audio = format === "wav" ? wavFile(chunks, sampleRate) : concatBytes(chunks);
+  return {
+    audio,
+    mimeType: SPEECH_FORMAT_TO_MIME[format],
+    cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
+  };
+}
+
+/**
+ * Backs `std::speech.speakLocal`. Sends the text to the mlx provider in
+ * pieces, asking for raw PCM for each, joins the samples, and writes the
+ * file through the same accounting and publish path as `speak`.
+ */
+export async function _speakLocal(
+  text: string,
+  outputFile: string,
+  model: string,
+  voice: string,
+  instructions: string,
+  format: string,
+  allowedPaths: string[],
+): Promise<string> {
+  const localFormat = normalizeFormat(format, LOCAL_SPEECH_FORMATS, "speakLocal");
+  const resolved = _resolveModel(model);
+  if (resolved.backend !== "mlx") {
+    throw new Error(
+      `speakLocal: "${model}" is a GGUF model. Local speech models are MLX models served by agency local serve --speech.`,
+    );
+  }
+  const client = speakClient();
+  const baseUrl = mlxBaseUrl();
+  const config: SpeakConfig = {
+    model: _mlxServedName(resolved),
+    voice,
+    format: "pcm",
+    provider: "mlx",
+    baseUrl: { mlx: baseUrl },
+  };
+  if (instructions !== "") {
+    config.instructions = instructions;
+  }
+  const pieces = sentencePieces(text, LOCAL_PIECE_CHARS);
+
+  return synthesizeToFile({
+    name: "speakLocal",
+    text,
+    outputFile,
+    format: localFormat,
+    allowedPaths,
+    model,
+    voice,
+    produce: async (signal) => {
+      const spoken = await speakPieces(client, pieces, config, signal);
+      if (!spoken.success) {
+        if (isNoServer(spoken.error)) {
+          return {
+            success: false,
+            error: `no MLX server answered at ${baseUrl}. Start one with:\n  agency local serve --speech ${model}`,
+          };
+        }
+        return spoken;
+      }
+      return {
+        success: true,
+        value: assemble(spoken.value.chunks, spoken.value.sampleRate, localFormat),
+      };
+    },
+  });
 }
 
 /** True when `p` exists. A symlink at `p`, dangling or not, throws from

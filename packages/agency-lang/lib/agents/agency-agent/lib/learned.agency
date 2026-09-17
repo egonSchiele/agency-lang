@@ -61,8 +61,11 @@ def learnedSkillsTool(): any | null {
   return skillsDir(dir, "flat", LEARNED_SKILLS_TOOL) catch null
 }
 
+// `runTool` takes the request as `Json`, so the schema says only "any".
+// The type goes in the description instead, with the shape to send:
+// without it a model tends to pass the whole request as JSON text.
 def learnedToolFromEntry(entry: ToolEntry): any {
-  const description = "${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}"
+  const description = "${entry.meta.purpose}\n\nPass `request` as a value of this type, not as text: ${entry.meta.request}"
   return runTool.partial(name: entry.name, dir: learnedToolsDir()).describe(description).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
 }
 

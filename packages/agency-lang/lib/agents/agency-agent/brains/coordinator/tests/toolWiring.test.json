@@ -124,6 +124,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "coordinatorTurnOffersLearnedTools",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

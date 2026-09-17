@@ -13,9 +13,10 @@ import { Attachment, systemMessage } from "std::thread"
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { learnSkill, writeToolFor } from "./learn.agency"
+import { missingBundledSkill } from "./lib/bundledSkills.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
-import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
+import { codeAgent, setCodeOneShot, superpowersSkill } from "./subagents/code.agency"
 import { explorerAgent } from "./subagents/explorer.agency"
 import { oracleAgent } from "./subagents/oracle.agency"
 import { researchAgent } from "./subagents/research.agency"
@@ -57,6 +58,13 @@ export static const mainAgentTools = [
   edit.partial(useAgentCwd: true),
 ]
 
+def exitIfBroken(problem: string) {
+  if (problem != "") {
+    print(color.red("Agent setup failed: ${problem}"))
+    process.exit(1)
+  }
+}
+
 def coordinatorInit(context: BrainContext) {
   if (isFailure(MAIN_PROMPT_LARGE)) {
     print(
@@ -70,6 +78,7 @@ def coordinatorInit(context: BrainContext) {
     )
     process.exit(1)
   }
+  exitIfBroken(missingBundledSkill(superpowersSkill, "brainstorming"))
   _context = context.grounding
   first = true
   // One-shot autonomy: tell the code subagent there is no human to answer

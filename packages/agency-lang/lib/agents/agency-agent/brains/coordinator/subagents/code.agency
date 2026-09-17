@@ -47,7 +47,13 @@ import {
  } from "./supervisor.agency"
 
 
-static const superpowersSkill = skillsDir(__dirname + "/skills/superpowers", "flat") with approve
+// The superpowers skills live at the agent root, three levels up from
+// this subfolder. The name matches what prompts/code.md tells the model.
+export static const superpowersSkill = skillsDir(
+  __dirname + "/../../../skills/superpowers",
+  "flat",
+  name: "superpowersSkill",
+) with approve
 
 
 export def agencyCli(args: string[]): any {

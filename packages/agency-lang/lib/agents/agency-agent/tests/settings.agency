@@ -278,3 +278,14 @@ node rejectedWriteIsAFailure(): boolean {
   }
   return isFailure(result) && !exists(SETTINGS_FILE, POLICY_DIR)
 }
+
+// A file saved before price and allowedProviders were removed still loads.
+node oldModelKeysStillLoad(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
+  write(SETTINGS_FILE, """{"model":{"price":"cheap","allowedProviders":["openai"],"pin":"gpt-5.5"}}""", POLICY_DIR) with approve
+  const loaded = loadSettings() with approve
+  const model = getModelSettings(loaded)
+  return model.pin ?? ""
+}

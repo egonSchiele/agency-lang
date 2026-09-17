@@ -54,34 +54,51 @@ const dateImpl = modelImpl
 const aliasImpl = dateImpl
   .replace('import { today } from "std::date"', 'import { now as clock } from "std::date"')
   .replace('return "${request.n} on ${today()}"', 'return "${request.n} at ${clock()}"');
-const cases = {
-  cases: [
-    { args: { request: { n: 41 } }, expectedOutput: 42 },
-    { args: { request: { n: 0 } }, expectedOutput: 1 },
-  ],
-};
+const cases = [
+  { request: { n: 41 }, expectedJson: "42" },
+  { request: { n: 0 }, expectedJson: "1" },
+];
 const codeMock = (source) => ({ return: { code: source } });
 const reviewOk = { return: [] };
 const casesMock = { return: cases };
-const testCase = (nodeName, llmMocks) => ({
+const testCase = (nodeName, rounds) => ({
   nodeName,
   input: "",
   expectedOutput: "true",
   evaluationCriteria: [{ type: "exact" }],
   useTestLLMProvider: true,
-  llmMocks,
+  llmMocks: scopedMocks(rounds),
 });
 // Per round: coding agent, review agent, then (pure tools only) test cases.
 // The review runs before the tool is assembled, so a draft with the wrong
 // export still draws the review mock.
-const pureRound = [codeMock(good), reviewOk, casesMock];
-const modelRound = [codeMock(modelImpl), reviewOk];
-const readRound = [codeMock(readImpl), reviewOk];
-const wrongRound = [codeMock(wrongExport), reviewOk];
-const wrongRequestRound = [codeMock(wrongRequest), reviewOk];
-const nodeImportRound = [codeMock(nodeImportImpl), reviewOk];
-const dateRound = [codeMock(dateImpl), reviewOk];
-const aliasRound = [codeMock(aliasImpl), reviewOk];
+//
+// The mocks are scoped by module. The test cases come from a generated
+// program that runs in its own process under a random module id, so it
+// reads the "*" queue, from the start, every time. That is why the other
+// two calls need their own queues.
+const draftRound = (source, tested) => ({ source, tested });
+const pureRound = [draftRound(good, true)];
+const modelRound = [draftRound(modelImpl, false)];
+const readRound = [draftRound(readImpl, false)];
+const wrongRound = [draftRound(wrongExport, false)];
+const wrongRequestRound = [draftRound(wrongRequest, false)];
+const nodeImportRound = [draftRound(nodeImportImpl, false)];
+const dateRound = [draftRound(dateImpl, false)];
+const aliasRound = [draftRound(aliasImpl, false)];
+const scopedMocks = (rounds) => {
+  if (rounds.length === 0) {
+    return [];
+  }
+  const mocks = {
+    coding: rounds.map((round) => codeMock(round.source)),
+    review: rounds.map(() => reviewOk),
+  };
+  if (rounds.some((round) => round.tested)) {
+    mocks["*"] = [casesMock];
+  }
+  return mocks;
+};
 const tests = [
   testCase("acceptSavesTheTool", pureRound),
   testCase("acceptRaisesTheSaveGate", pureRound),

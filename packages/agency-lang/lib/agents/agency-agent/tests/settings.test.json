@@ -180,6 +180,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "oldModelKeysStillLoad",
+      "input": "",
+      "expectedOutput": "\"gpt-5.5\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

@@ -13,6 +13,7 @@ import {
   run,
 } from "@/cli/commands.js";
 import { classifyInstall, installDirFromUrl } from "@/cli/installLocation.js";
+import { compileOutputsWarning } from "@/cli/moduleTypeWarning.js";
 import { pack } from "@/cli/pack.js";
 import { resolveModelFlag } from "@/cli/modelFlag.js";
 import { resolveLocalRunFlag } from "@/cli/localFlag.js";
@@ -391,6 +392,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
           maxToolCallRounds: opts.maxToolCallRounds,
           maxToolResultChars: opts.maxToolResultChars,
         });
+        // Node refuses to run our ES module output under a package.json
+        // that says "type": "commonjs". `--ts` output isn't run with node.
+        if (!opts.ts) {
+          const warning = compileOutputsWarning(config, inputs);
+          if (warning) console.error(warning);
+        }
         if (opts.watch) {
           const close = await watchAndCompile(config, inputs, { ts: opts.ts });
           process.once("SIGINT", async () => {

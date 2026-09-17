@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import * as fs from "fs";
+import * as path from "path";
+import { findPackageRoot } from "./importPaths.js";
 import { CONFIG_MERGE_RULES, mergeConfig } from "./configMerge.js";
 
 describe("mergeConfig", () => {
@@ -96,5 +99,20 @@ describe("CONFIG_MERGE_RULES", () => {
   it("gives a reason for every rule", () => {
     const missing = CONFIG_MERGE_RULES.filter((rule) => rule.why.length === 0);
     expect(missing).toEqual([]);
+  });
+});
+
+describe("CONFIG_MERGE_RULES in the user docs", () => {
+  const guidePath = path.join(
+    findPackageRoot(__dirname),
+    "docs",
+    "site",
+    "guide",
+    "agency-config-file.md",
+  );
+  const guide = fs.readFileSync(guidePath, "utf-8");
+
+  it.each(CONFIG_MERGE_RULES.map((rule) => rule.path))("the config guide lists %s", (rulePath) => {
+    expect(guide).toContain(`| \`${rulePath}\` |`);
   });
 });

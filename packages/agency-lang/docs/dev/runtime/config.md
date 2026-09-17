@@ -2,7 +2,7 @@
 
 ## Overview
 
-`AgencyConfig` (`lib/config.ts`) defines all compiler and runtime configuration options for Agency. It is typically loaded from an `agency.json` file in the project root, but can also be passed programmatically. The CLI accepts a `-c` / `--config` flag to specify a custom config file path.
+`AgencyConfig` (`lib/config.ts`) defines all compiler and runtime configuration options for Agency. It is typically loaded from an `agency.json` file, with an optional `agency.local.json` merged over it, but can also be passed programmatically. The CLI accepts a `-c` / `--config` flag to load one specific file instead.
 
 For basic usage examples, see [`docs/misc/config.md`](../../misc/config.md).
 
@@ -12,7 +12,8 @@ The effective config for a program is assembled from three sources, defined and
 documented in one place — the "Config resolution" section at the bottom of
 `lib/config.ts`. In increasing precedence:
 
-1. **`agency.json`** — the file, walked up from cwd (`loadConfigSafe`). The base.
+1. **Config files** — a `ConfigTarget` (`lib/configTarget.ts`): the `-c` file
+   alone, or `agency.json` with `agency.local.json` merged over it. The base.
 2. **CLI flags** — `--trace` / `--log-file` / `--strict`, mapped onto config by
    `applyCliFlags()`. This is the only definition of what each flag means.
 3. **`AGENCY_CONFIG_OVERRIDES`** — a JSON `Partial<AgencyConfig>` in the
@@ -25,6 +26,80 @@ documented in one place — the "Config resolution" section at the bottom of
 Where applied: sources 1⊕2 at the CLI (baked into the generated program);
 source 3 at runtime, in the `RuntimeContext` constructor. Inspect the resolved
 result with `agency config show` (secrets masked; `--show-secrets` to reveal).
+
+## Config files
+
+### Config paths
+
+`lib/configPaths.ts` matches dotted config paths, where `*` matches any one key:
+
+```ts
+matchesConfigPath("mcpServers.*.env.*", ["mcpServers", "fs", "env", "TOKEN"]); // true
+matchesConfigPath("mcpServers.*", ["mcpServers", "fs", "env"]); // false
+```
+
+Two tables are lists of these paths. `CONFIG_MERGE_RULES` (`lib/configMerge.ts`) lists the fields a local file replaces whole. `SECRET_CONFIG_PATHS` (`lib/config.ts`) lists the fields `agency config show` masks. A test in `lib/config.test.ts` checks that every path in both tables exists in `AgencyConfigSchema`.
+
+### The merge
+
+`mergeConfig(base, override)` returns a new object. Here is the default behavior:
+
+```json
+// agency.json
+{ "log": { "host": "https://h", "projectId": "team" }, "coverage": { "exclude": ["a/**"] } }
+
+// agency.local.json
+{ "log": { "projectId": "me" }, "coverage": { "exclude": ["b/**"] } }
+
+// result
+{ "log": { "host": "https://h", "projectId": "me" }, "coverage": { "exclude": ["b/**"] } }
+```
+
+1. Objects merge key by key, at every depth.
+2. An array in the override replaces the base array.
+3. Any other value in the override replaces the base value.
+4. A `"__proto__"` key is dropped from both sides. Every other key name is copied.
+
+A value at a `CONFIG_MERGE_RULES` path replaces the base value whole. With the rule `mcpServers.*`, a local server named `search` replaces the base `search` entry, and a base server the local file does not name is kept. Without the rule, a local stdio server would keep the base entry's `"type": "http"`.
+
+To add a rule, add a row to `CONFIG_MERGE_RULES` and a row to the table in `docs/site/guide/agency-config-file.md`. A test in `lib/configMerge.test.ts` checks that the guide lists every rule.
+
+### Config targets
+
+A `ConfigTarget` (`lib/configTarget.ts`) says where config comes from:
+
+```ts
+type ConfigTarget =
+  | { kind: "file"; path: string } // -c foo.json, or ~/agency.json
+  | { kind: "project"; dir: string }; // dir/agency.json with dir/agency.local.json over it
+```
+
+| Function | What it gives back |
+| --- | --- |
+| `readConfig(target)` | The config to use. For a project, the merge of both files. |
+| `configFiles(target)` | The files `readConfig` reads that exist. |
+| `writeTarget(target)` | The one file a writer reads and writes: the named file, or `dir/agency.json`. |
+| `configTarget(cliConfig, fallback)` | A file target when `-c` was given, and `fallback` otherwise. |
+
+Each command builds its target once. Most commands fall back to `projectTarget(process.cwd())` through `getConfigTarget()` in `scripts/agency.ts`. The `agency local` commands fall back to `defaultAliasTarget()`, which is the nearest project above the current directory, or `~/agency.json` alone. The language server and `@agency-lang/mcp` find the project with `findProjectRoot`, which counts a directory with either file.
+
+`readConfig` validates each file, merges them, and validates the result again. The second pass checks rules that span both files. It also puts keys back in schema order. `deriveConfigKey` (`lib/compiler/buildManifest.ts`) is `JSON.stringify(config)`, so two equal configs must print the same way. A test in `lib/cli/precompile.test.ts` splits one config across the two files to guard this.
+
+### Writers
+
+A command that edits config gets its file from `writeTarget` and reads only that file. If a writer read the merged config and wrote it back, it would copy local values into `agency.json`. No command writes to `agency.local.json`.
+
+### Test fixtures
+
+`mergeFixtureConfig` (`lib/cli/commands.ts`) merges a fixture directory's config files over the CLI config. It applies `--refuse-splices` again after the merge, so a fixture cannot cancel it. `agency test`, `agency test js`, and the precompile step all use it.
+
+### MCP servers
+
+The server schema lives in `lib/mcpServers.ts`. `@agency-lang/mcp` imports it, and `readConfig`, from the `agency-lang/config` export (`lib/configPublic.ts`). The stdlib MCP module (`lib/stdlib/mcp.ts`) handles unvalidated server maps, such as the agent's `settings.json`, with its own `RawMcpServers` type.
+
+### Secrets
+
+Config is compiled into the generated program, so values from `agency.local.json` can end up in build output. The local file is not a place for secrets.
 
 ### Every command translates its flags in the same place
 

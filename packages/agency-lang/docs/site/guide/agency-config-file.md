@@ -5,9 +5,44 @@ description: A tour of the options you can set in an agency.json file to configu
 
 # Agency config file
 
-To set options, add an `agency.json` file to your project root. The compiler searches upward from the file you're running until it finds this file.
+To set options, add an `agency.json` file to the directory you run Agency from.
 
 I would suggest referring to this page as needed, instead of reading it all the way through.
+
+## Local overrides
+
+Put settings you don't want to commit in `agency.local.json`, next to `agency.json`. Agency merges the two files, and the local file wins. Add `agency.local.json` to your `.gitignore`.
+
+```json
+// agency.json
+{ "log": { "host": "https://statelog.example.com", "projectId": "team" } }
+
+// agency.local.json
+{ "log": { "projectId": "my-project" } }
+```
+
+With these files, Agency logs to `https://statelog.example.com` under the project `my-project`. `agency deploy` reads the same settings, so it deploys to `my-project`.
+
+Agency merges the files with these rules:
+
+1. Objects merge key by key.
+2. An array in the local file replaces the array in `agency.json`.
+3. Any other value in the local file replaces the value in `agency.json`.
+
+The fields in this table are exceptions. A value at one of these paths replaces the matching value in `agency.json` whole. `*` stands for any name.
+
+| Path | Why |
+| --- | --- |
+| `mcpServers.*` | A server's fields depend on each other. Mixing two servers can change how Agency connects to it. |
+| `client.modelAliases.*` | An alias's hash and companion models belong to its own model. |
+
+For example, if both files define an MCP server named `search`, Agency uses the one in `agency.local.json`. Servers that only `agency.json` defines are still used.
+
+To see the config Agency will use, run [`agency config show`](../cli/config.md).
+
+If you pass `-c <file>`, Agency loads only that file and skips `agency.local.json`.
+
+Don't put secrets in either file. Agency compiles config into the generated code, so these values can end up in build output. Keep secrets in `.env`.
 
 ## The basics
 

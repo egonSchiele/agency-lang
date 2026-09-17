@@ -1,0 +1,243 @@
+/** @module
+  @summary One record, ModelRequest, says what a run asked for: the
+  startup model flags, the active preset, and the /model choices.
+  Startup, /model, and /preset each build one; these pure functions
+  answer every question the resolver asks about it.
+*/
+import { filterEntries } from "std::object"
+
+import { embeddingSpecHasProvider, parseModelFlag } from "./models.agency"
+import { Preset, PresetSlots } from "./presetRules.agency"
+import { RawLayer } from "./resolution.agency"
+import { ModelSettings } from "./settings.agency"
+import { SLOTS } from "./slots.agency"
+
+/** The startup model flags. `pin` is a bare --model; `slots` holds
+  --model slot=, --fastmodel, and --slowmodel; `local` is null when
+  --local was not given. */
+export type ModelFlags = {
+  pin: string;
+  slots: Record<string, string>;
+  provider: string;
+  local: string | null
+}
+
+/** The /model choices of this session. */
+export type ModelChoices = {
+  pin: string;
+  slots: Record<string, string>
+}
+
+export type ModelRequest = {
+  flags: ModelFlags;
+  preset: Preset | null;
+  choices: ModelChoices
+}
+
+export type LocalModel = {
+  model: string;
+  embedding: string
+}
+
+/** The models provider detection should know about. */
+export type DetectionInputs = {
+  pin: string;
+  main: string;
+  reasoning: string
+}
+
+export def noModelFlags(): ModelFlags {
+  return {
+    pin: "",
+    slots: {},
+    provider: "",
+    local: null
+  }
+}
+
+export def noModelChoices(): ModelChoices {
+  return {
+    pin: "",
+    slots: {}
+  }
+}
+
+/** What parseModelFlag returns: a slot ("" for a bare model) and a model. */
+type ParsedModelFlag = {
+  slot: string;
+  model: string
+}
+
+def modelFlagSlot(parsed: ParsedModelFlag): Record<string, string> {
+  if (parsed.slot == "") {
+    return {}
+  }
+  return Object.fromEntries([[parsed.slot, parsed.model]])
+}
+
+// Later entries win, so an explicit --fastmodel/--slowmodel beats
+// --model main=/reasoning=.
+def flagSlots(parsed: ParsedModelFlag, fast: string, slow: string): Record<string, string> {
+  const explicit = filterEntries({ main: fast, reasoning: slow }, \(model, slot) -> model != "")
+  return {
+    ...modelFlagSlot(parsed),
+    ...explicit
+  }
+}
+
+def modelFlagProblem(parsed: ParsedModelFlag, hasChatModel: boolean, local: string | null): string {
+  if (parsed.slot != "" && !SLOTS.includes(parsed.slot)) {
+    return "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}."
+  }
+  if (parsed.slot == "embedding" && !embeddingSpecHasProvider(parsed.model)) {
+    return "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small."
+  }
+  if (local != null && hasChatModel) {
+    return "Pass either --model (hosted) or --local (local), not both. The one exception is --model embedding=<local provider>/<model>."
+  }
+  return ""
+}
+
+export def modelFlagsFromArgs(args: Record<string, any>): Result<ModelFlags> {
+  """
+  Read the model flags from parsed agent args. Fails on an unknown
+  --model slot, an embedding model without a provider, or --local with a
+  chat model flag.
+
+  @param args - The result of parseAgentArgs
+  """
+  const modelArg = args.flags.model ?? ""
+  const fast = args.flags.fastmodel ?? ""
+  const slow = args.flags.slowmodel ?? ""
+  const local = args.flags["local"] ?? null
+  const parsed = parseModelFlag(modelArg)
+  const modelNamesAChatSlot = modelArg != "" && parsed.slot != "embedding"
+  const hasChatModel = modelNamesAChatSlot || fast != "" || slow != ""
+  const problem = modelFlagProblem(parsed, hasChatModel, local)
+  if (problem != "") {
+    return failure(problem)
+  }
+  const pin = if parsed.slot == "" then parsed.model else ""
+  return success({
+    pin: pin,
+    slots: flagSlots(parsed, fast, slow),
+    provider: args.flags.provider ?? "",
+    local: local
+  })
+}
+
+export def hasModelFlags(flags: ModelFlags): boolean {
+  const namesAModel = flags.pin != "" || Object.keys(flags.slots).length > 0
+  return namesAModel || flags.provider != "" || flags.local != null
+}
+
+/** Whether the request runs a local model. */
+export def requestIsLocal(request: ModelRequest): boolean {
+  return localModelOf(request) != null
+}
+
+// The preset's named slots as the slot-name record the resolver reads.
+def slotMap(slots: PresetSlots): Record<string, string> {
+  return filterEntries(slots, \(model, slot) -> model != null)
+}
+
+export def presetModelSettings(request: ModelRequest): ModelSettings {
+  """
+  The preset's model fields in settings.model form. Empty when there is
+  no preset, when any model flag was given, or when the preset is local.
+
+  @param request - The model request
+  """
+  const preset = request.preset
+  if (preset == null || preset.local != null || hasModelFlags(request.flags)) {
+    return {}
+  }
+  return {
+    provider: preset.provider ?? "",
+    pin: preset.pin ?? "",
+    slots: slotMap(preset.slots ?? {})
+  }
+}
+
+export def localModelOf(request: ModelRequest): LocalModel | null {
+  """
+  The local model this request runs, or null for a hosted run. --local
+  wins; a local preset counts only when no model flag was given.
+
+  @param request - The model request
+  """
+  const flags = request.flags
+  if (flags.local != null) {
+    return {
+      model: flags.local,
+      embedding: flags.slots["embedding"] ?? ""
+    }
+  }
+  const preset = request.preset
+  if (preset == null || preset.local == null || hasModelFlags(flags)) {
+    return null
+  }
+  const presetSlots = preset.slots ?? {}
+  return {
+    model: preset.local,
+    embedding: presetSlots.embedding ?? ""
+  }
+}
+
+def firstSet(values: string[]): string {
+  return find(values, \value -> value != "") ?? ""
+}
+
+export def requestProvider(request: ModelRequest, settings: ModelSettings): string {
+  """
+  The provider the request fixes: --provider, then the preset, then
+  settings.model. "" means detect one from API keys.
+  """
+  const preset = presetModelSettings(request)
+  return firstSet([request.flags.provider, preset.provider ?? "", settings.provider ?? ""])
+}
+
+export def detectionInputs(request: ModelRequest): DetectionInputs {
+  """
+  For each of pin, main, and reasoning, the first model the flags or the
+  preset give. Provider detection only accepts a provider with no
+  built-in defaults when the models come with it.
+  """
+  const preset = presetModelSettings(request)
+  const presetSlots = preset.slots ?? {}
+  const flagSlots = request.flags.slots
+  return {
+    pin: firstSet([request.flags.pin, preset.pin ?? ""]),
+    main: firstSet([flagSlots["main"] ?? "", presetSlots["main"] ?? ""]),
+    reasoning: firstSet([flagSlots["reasoning"] ?? "", presetSlots["reasoning"] ?? ""])
+  }
+}
+
+def rawLayer(name: string, settings: ModelSettings): RawLayer {
+  return {
+    name: name,
+    pin: settings.pin ?? "",
+    slots: settings.slots ?? {}
+  }
+}
+
+export def requestLayers(request: ModelRequest, settings: ModelSettings): RawLayer[] {
+  """
+  The resolution layers for a request, most immediate first: the /model
+  choices, the flags, the preset, then settings.model.
+  """
+  return [
+    {
+      name: "in-session",
+      pin: request.choices.pin,
+      slots: request.choices.slots
+    },
+    {
+      name: "cli",
+      pin: request.flags.pin,
+      slots: request.flags.slots
+    },
+    rawLayer("preset", presetModelSettings(request)),
+    rawLayer("settings", settings),
+  ]
+}

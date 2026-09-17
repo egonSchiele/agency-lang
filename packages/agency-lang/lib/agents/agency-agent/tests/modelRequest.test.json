@@ -1,0 +1,135 @@
+{
+  "sourceFile": "modelRequest.agency",
+  "tests": [
+    {
+      "nodeName": "presetSlotBeatsSettings",
+      "input": "",
+      "expectedOutput": "\"preset-reasoning (preset:per-slot)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flagBeatsPreset",
+      "input": "",
+      "expectedOutput": "\"flag-reasoning (cli:per-slot)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "sessionChoiceBeatsAll",
+      "input": "",
+      "expectedOutput": "\"session-reasoning (in-session:per-slot)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "anyModelFlagDropsThePresetModels",
+      "input": "",
+      "expectedOutput": "\"settings-reasoning (settings:per-slot)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "providerOnlyCountsAsAModelFlag",
+      "input": "",
+      "expectedOutput": "{}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "providerOrder",
+      "input": "",
+      "expectedOutput": "\"openai anthropic google\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "detectionSeesThePresetModels",
+      "input": "",
+      "expectedOutput": "\"|preset-main|preset-reasoning\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localPresetRunsLocal",
+      "input": "",
+      "expectedOutput": "\"qwen3.5-2b|mlx/nomic-embed\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelFlagOverridesALocalPreset",
+      "input": "",
+      "expectedOutput": "\"hosted\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flagsFromArgs",
+      "input": "",
+      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"reasoning\":\"opus\",\"main\":\"sonnet\"},\"provider\":\"anthropic\",\"local\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "fastmodelBeatsModelMainFlag",
+      "input": "",
+      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"main\":\"sonnet\"},\"provider\":\"\",\"local\":null}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localWithChatFlagIsAnError",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localWithEmbeddingFlagIsFine",
+      "input": "",
+      "expectedOutput": "{\"pin\":\"\",\"slots\":{\"embedding\":\"mlx/nomic-embed\"},\"provider\":\"\",\"local\":\"qwen3.5-2b\"}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

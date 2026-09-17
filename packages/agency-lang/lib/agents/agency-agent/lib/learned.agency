@@ -1,0 +1,224 @@
+/** @module
+  @summary Everything about what the agent has learned: the skills a
+  user taught it under `<agent-home>/skills`, the tools it wrote under
+  `<agent-home>/tools`, the catalog scanned from both, the LLM tools
+  built from the catalog, and the two save operations. The catalog is
+  built on first use and kept for the session. A save drops it, so the
+  next use rescans; the disk is the only source of truth. A catalog
+  restored from a saved session was built by another process and is
+  rebuilt too.
+*/
+import { filter, map } from "std::array"
+import { now } from "std::date"
+import { exists } from "std::shell"
+import {
+  MAX_TOOL_NAME_LEN,
+  SkillEntry,
+  SkillGroup,
+  designSkill,
+  listSkills,
+  skillsToolFromEntries,
+ } from "std::skills"
+import { ToolEntry, designTool, listTools, runTool } from "std::toolbox"
+
+import { AGENCY_AGENT_DIR } from "../shared.agency"
+
+// A fresh value in every process. Statics are not part of a checkpoint,
+// so a catalog restored from a saved session carries another process's
+// token and is rebuilt.
+static const PROCESS_TOKEN = "${now()}-${Math.random()}"
+
+export type LearnedCatalog = {
+  builtBy: string;
+  skills: SkillGroup;
+  tools: ToolEntry[]
+}
+
+// Every learned tool is offered under this prefix. No built-in tool is
+// named with it, so a learned tool can never shadow one.
+export static const LEARNED_TOOL_PREFIX = "learned_"
+
+export static const LEARNED_SKILLS_TOOL = "learned_skills"
+
+let _catalog: LearnedCatalog | null = null
+
+// Repoints both roots at another directory; tests use it to keep the real
+// agent home out of reach.
+let _rootOverride: string | null = null
+
+def _setLearnedRoot(root: string) {
+  _rootOverride = root
+  _catalog = null
+}
+
+def learnedRoot(): string {
+  const override = _rootOverride
+  if (override != null) {
+    return override
+  }
+  return AGENCY_AGENT_DIR
+}
+
+def learnedSkillsRoot(): string {
+  return "${learnedRoot()}/skills"
+}
+
+def learnedToolsRoot(): string {
+  return "${learnedRoot()}/tools"
+}
+
+// ---- scanning ----
+//
+// A root that does not exist has nothing to scan, so no prompt is spent
+// on it. A scan that fails, a rejected interrupt included, is an empty
+// catalog, cached like any other: a user who said no is not asked again
+// this session. The two scans differ only in their entry type.
+
+def scanSkills(): SkillGroup {
+  const dir = learnedSkillsRoot()
+  if (!exists(dir)) {
+    return { dir: dir, entries: [] }
+  }
+  const listed = listSkills(dir, "flat")
+  if (listed is failure) {
+    return { dir: dir, entries: [] }
+  }
+  return listed.value
+}
+
+def scanTools(): ToolEntry[] {
+  const dir = learnedToolsRoot()
+  if (!exists(dir)) {
+    return []
+  }
+  const listed = listTools(dir)
+  if (listed is failure) {
+    return []
+  }
+  return listed.value
+}
+
+def catalogIsCurrent(catalog: LearnedCatalog | null, token: string): boolean {
+  if (catalog == null) {
+    return false
+  }
+  return catalog.builtBy == token
+}
+
+export def learnedCatalog(): LearnedCatalog {
+  """
+  What the agent has learned, scanned on first use and kept for the
+  session. Rescans after a save and after a session restore.
+  """
+  const cached = _catalog
+  if (cached != null && catalogIsCurrent(cached, PROCESS_TOKEN)) {
+    return cached
+  }
+  const built: LearnedCatalog = {
+    builtBy: PROCESS_TOKEN,
+    skills: scanSkills(),
+    tools: scanTools()
+  }
+  _catalog = built
+  return built
+}
+
+def invalidateLearned() {
+  _catalog = null
+}
+
+// ---- saving ----
+
+export def maxLearnedToolName(): number {
+  """
+  The longest name a learned tool can have: the provider cap on a tool
+  name, less the prefix it is offered under.
+  """
+  return MAX_TOOL_NAME_LEN - LEARNED_TOOL_PREFIX.length
+}
+
+export def designLearnedSkill(
+  name: string,
+  description: string,
+  body: string,
+): Result<SkillEntry> {
+  """
+  Review a drafted skill with the user and save it among the learned
+  skills. Runs designSkill in the learned skills directory; a saved skill
+  is in the catalog from the next use.
+  """
+  const saved = designSkill(learnedSkillsRoot(), name, description, body)
+  if (saved is success) {
+    invalidateLearned()
+  }
+  return saved
+}
+
+export def designLearnedTool(
+  name: string,
+  purpose: string,
+  request: string,
+): Result<ToolEntry> {
+  """
+  Have a tool designed with the user and saved among the learned tools.
+  Refuses a name too long to offer behind the learned_ prefix before any
+  prompt. Runs designTool in the learned tools directory; a saved tool is
+  in the catalog from the next use.
+  """
+  const cap = maxLearnedToolName()
+  if (name.length > cap) {
+    return failure("the name must be at most ${cap} characters, because the tool is offered as ${LEARNED_TOOL_PREFIX}${name} and providers cap a tool name at ${MAX_TOOL_NAME_LEN}")
+  }
+  const saved = designTool(name, purpose, request, dir: learnedToolsRoot())
+  if (saved is success) {
+    invalidateLearned()
+  }
+  return saved
+}
+
+// ---- the LLM tools ----
+//
+// Built fresh on every call from the cached entries. The tool objects
+// themselves are never held in a global: entries are plain data a
+// checkpoint can carry, partially applied tools are not.
+
+export def learnedSkillsTool(): any | null {
+  """
+  The skills tool over the learned skills, or null when there are none.
+  """
+  const group = learnedCatalog().skills
+  if (group.entries.length == 0) {
+    return null
+  }
+  return skillsToolFromEntries(group.dir, group.entries, LEARNED_SKILLS_TOOL)
+}
+
+def learnedToolFromEntry(entry: ToolEntry): any {
+  const description = "${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}"
+  return runTool.partial(name: entry.name, dir: learnedToolsRoot()).describe(description).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
+}
+
+def offerable(entry: ToolEntry): boolean {
+  return entry.broken == null && entry.name.length <= maxLearnedToolName()
+}
+
+export def learnedTools(): any[] {
+  """
+  The learned tools as LLM-callable tools, each named learned_<name>. A
+  broken entry, or one whose prefixed name would exceed the provider cap,
+  stays in the catalog but is not offered: one bad name would fail every
+  LLM call that lists it.
+  """
+  const usable = filter(learnedCatalog().tools, offerable)
+  return map(usable, learnedToolFromEntry)
+}
+
+export def learnedExtras(): any[] {
+  """
+  The learned additions to a subagent's tool list: the skills tool when
+  there are skills, then the learned tools.
+  """
+  const skillsTool = learnedSkillsTool()
+  const skillsTools = if skillsTool == null then [] else [skillsTool]
+  return [...skillsTools, ...learnedTools()]
+}

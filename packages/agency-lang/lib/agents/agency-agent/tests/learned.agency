@@ -1,0 +1,167 @@
+/*
+ * The learned catalog: one scan of each root on first use, a cache that
+ * survives the session but not a restore into another process, and the
+ * LLM tools built from it. Every node repoints the roots at a fixture
+ * or a sandbox first and checks the repoint took, so a failing test can
+ * never touch the real agent home.
+ */
+import { map } from "std::array"
+
+import test {
+  _setLearnedRoot,
+  catalogIsCurrent,
+  invalidateLearned,
+  learnedSkillsRoot,
+ } from "../lib/learned.agency"
+import {
+  LEARNED_SKILLS_TOOL,
+  LEARNED_TOOL_PREFIX,
+  LearnedCatalog,
+  learnedCatalog,
+  learnedExtras,
+  learnedSkillsTool,
+  learnedTools,
+  maxLearnedToolName,
+ } from "../lib/learned.agency"
+
+def fixtureRoot(): string {
+  return "${__dirname}/learned-fixture"
+}
+
+def sandboxed(root: string): boolean {
+  _setLearnedRoot(root)
+  return learnedSkillsRoot() == "${root}/skills"
+}
+
+node firstUseScansEachRootOnce(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let skillScans = 0
+  let toolScans = 0
+  let first: any = null
+  let second: any = null
+  handle {
+    first = learnedCatalog()
+    second = learnedCatalog()
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      skillScans = skillScans + 1
+    }
+    if (intr.effect == "std::toolbox::scan") {
+      toolScans = toolScans + 1
+    }
+    return approve()
+  }
+  return skillScans == 1 && toolScans == 1 && first.skills.entries.length == 1 && second.tools.length == 2
+}
+
+node invalidateForcesARescan(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let skillScans = 0
+  handle {
+    learnedCatalog()
+    invalidateLearned()
+    learnedCatalog()
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      skillScans = skillScans + 1
+    }
+    return approve()
+  }
+  return skillScans == 2
+}
+
+node aCatalogFromAnotherProcessIsStale(): boolean {
+  const none = { dir: "", entries: [] }
+  const mine: LearnedCatalog = { builtBy: "this-process", skills: none, tools: [] }
+  return catalogIsCurrent(mine, "this-process") && !catalogIsCurrent(mine, "another-process") && !catalogIsCurrent(null, "this-process")
+}
+
+node missingRootsNeedNoPrompt(): boolean {
+  if (!sandboxed("${__dirname}/learned-fixture/nowhere")) {
+    return false
+  }
+  let raised = 0
+  let catalog: any = null
+  handle {
+    catalog = learnedCatalog()
+  } with (intr) {
+    raised = raised + 1
+    return approve()
+  }
+  return raised == 0 && catalog.skills.entries.length == 0 && catalog.tools.length == 0
+}
+
+node rejectedScanIsCachedAsEmpty(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let raised = 0
+  let catalog: any = null
+  handle {
+    learnedCatalog()
+    catalog = learnedCatalog()
+  } with (intr) {
+    raised = raised + 1
+    return reject()
+  }
+  return raised == 2 && catalog.skills.entries.length == 0 && catalog.tools.length == 0
+}
+
+node skillsToolListsTheFixtureSkill(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let tool: any = null
+  handle {
+    tool = learnedSkillsTool()
+  } with approve
+  if (tool == null) {
+    return false
+  }
+  const description: string = tool.description
+  return tool.name == LEARNED_SKILLS_TOOL && description.includes("<name>repo-orientation</name>")
+}
+
+node noSkillsMeansNoSkillsTool(): boolean {
+  if (!sandboxed("${__dirname}/learned-fixture/nowhere")) {
+    return false
+  }
+  let tool: any = "unset"
+  handle {
+    tool = learnedSkillsTool()
+  } with approve
+  return tool == null
+}
+
+// A healthy tool is offered as learned_<name>. The tool whose 57-character
+// directory name would overflow the provider cap behind the prefix stays in
+// the catalog but is never offered: one bad name fails every LLM call.
+node toolsArePrefixedAndOverlongNamesAreNotOffered(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let names: string[] = []
+  handle {
+    names = map(learnedTools(), \tool -> "${tool.name}")
+  } with approve
+  return names.length == 1 && names[0] == "${LEARNED_TOOL_PREFIX}hnTop"
+}
+
+node capLeavesRoomForThePrefix(): boolean {
+  return maxLearnedToolName() == 56
+}
+
+node extrasAreSkillsToolThenTools(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let names: string[] = []
+  handle {
+    names = map(learnedExtras(), \tool -> "${tool.name}")
+  } with approve
+  return names.length == 2 && names[0] == LEARNED_SKILLS_TOOL && names[1] == "learned_hnTop"
+}

@@ -1,124 +1,31 @@
 /** @module
-  @summary The coordinator's two learning tools, learnSkill and
-  writeToolFor. Each drafts what the caller left out with one model
-  call, hands the draft to the learned catalog's save operation, and
-  phrases the reply. See docs/dev/agents/learned-catalog.md.
+  @summary The coordinator's two learning tools: `designSkill` and
+  `designTool` from the stdlib, pointed at the agent home. Each runs the
+  stdlib review loop and save gate; nothing here adds a handler or a
+  policy rule.
 */
-import { MAX_TOOL_NAME_LEN } from "std::skills"
+import { MAX_TOOL_NAME_LEN, designSkill } from "std::skills"
+import { designTool } from "std::toolbox"
 
 import {
   LEARNED_TOOL_PREFIX,
-  designLearnedSkill,
-  designLearnedTool,
+  learnedSkillsDir,
+  learnedToolsDir,
   maxLearnedToolName,
  } from "../../lib/learned.agency"
 
-export static const NO_REVIEWER = "Not saved: this is a one-shot run, and a skill or tool is only saved after the user reviews it at the terminal. Run the agent interactively to teach it."
-
-let _oneShot = false
-
-export def setLearnOneShot(oneShot: boolean) {
-  _oneShot = oneShot
-}
-
-type SkillProposal = {
-  name: string;
-  description: string;
-  body: string
-}
-
-type ToolProposal = {
-  name: string;
-  request: string
-}
-
-// What the caller gave wins over what the model drafted.
-def givenOr(given: string, drafted: string): string {
-  return if given == "" then drafted else given
-}
-
-def draftSkill(goal: string): SkillProposal! {
-  return llm("""Draft a skill file for an AI agent. A skill is reference prose the agent reads on demand when the description says it applies.
-
-Goal for the skill:
-<goal>
-${goal}
-</goal>
-
-Return `name`: a short kebab-case name (lowercase letters and digits separated by single hyphens, at most ${MAX_TOOL_NAME_LEN} characters). Return `description`: one line telling the agent when to use the skill. Return `body`: the skill itself in Markdown, written for the agent as the reader, concrete and short.""")
-}
-
-def draftTool(purpose: string): ToolProposal! {
-  return llm("""Name and type a reusable tool for an AI agent.
-
-What the tool should do:
-<purpose>
-${purpose}
-</purpose>
-
-Return `name`: a camelCase identifier (a lowercase letter, then letters and digits, at most ${maxLearnedToolName()} characters). Return `request`: the tool's input type as Agency type text, such as `{ topics: string[]; maxItems: number }`.""")
-}
-
-def proposeSkill(goal: string, name: string, description: string): Result<SkillProposal> {
-  let drafted: Result<SkillProposal> = failure("no draft")
-  thread(label: "learn") {
-    drafted = draftSkill(goal)
-  }
-  if (drafted is failure(shapeErr)) {
-    return failure("the draft had the wrong shape: ${shapeErr}")
-  }
-  return success({
-    name: givenOr(name, drafted.value.name),
-    description: givenOr(description, drafted.value.description),
-    body: drafted.value.body
-  })
-}
-
-def proposeTool(purpose: string, name: string, request: string): Result<ToolProposal> {
-  if (name != "" && request != "") {
-    return success({ name: name, request: request })
-  }
-  let drafted: Result<ToolProposal> = failure("no draft")
-  thread(label: "learn") {
-    drafted = draftTool(purpose)
-  }
-  if (drafted is failure(shapeErr)) {
-    return failure("the draft had the wrong shape: ${shapeErr}")
-  }
-  return success({
-    name: givenOr(name, drafted.value.name),
-    request: givenOr(request, drafted.value.request)
-  })
-}
-
-/**
-Drafts a skill from the goal, then runs the stdlib review loop through
-the catalog: designSkill shows the user the whole file, redrafts on
-feedback, and saves through its own gate. In a one-shot run the policy
-handler would reject the review, so the tool refuses before drafting.
-*/
-export def learnSkill(
-  goal: string,
-  name: string = "",
-  description: string = "",
-): string {
+export def learnSkill(name: string, description: string, body: string): string {
   """
-  Teach the agent a skill it keeps across sessions: reference notes saved
-  to its skills catalog. The user reviews the draft and can send feedback
-  before anything is saved. Nothing is saved in a one-shot run.
+  Teach the agent a skill it keeps across sessions. The user sees the
+  whole file, can send feedback for another draft, and nothing is saved
+  until they accept. In a one-shot run the review is rejected, so nothing
+  is saved.
 
-  @param goal - What the skill should teach, and when a subagent should reach for it
-  @param name - Optional kebab-case name, also the filename; drafted from the goal when empty
-  @param description - Optional one line saying when to use the skill; drafted when empty
+  @param name - Kebab-case name, also the filename: lowercase letters, digits, and hyphens
+  @param description - One line telling the reading agent when to use the skill
+  @param body - The skill in Markdown, written for the agent as the reader, concrete and short
   """
-  if (_oneShot) {
-    return NO_REVIEWER
-  }
-  const draft = proposeSkill(goal, name, description)
-  if (draft is failure(why)) {
-    return "Not saved: ${why}"
-  }
-  const saved = designLearnedSkill(draft.value.name, draft.value.description, draft.value.body)
+  const saved = designSkill(learnedSkillsDir(), name, description, body)
   if (saved is failure(reason)) {
     return "Not saved: ${reason}"
   }
@@ -126,35 +33,25 @@ export def learnSkill(
 }
 
 /**
-Drafts a name and request type when the caller left them out, then runs
-designTool through the catalog: a coding agent writes the implementation,
-it is typechecked and tested, and the user reviews it before the save
-gate. In a one-shot run the policy handler would reject the review, so
-the tool refuses before drafting.
+A learned tool is offered as learned_<name>, so its name is capped below
+the provider limit designTool checks against.
 */
-export def writeToolFor(
-  purpose: string,
-  name: string = "",
-  request: string = "",
-): string {
+export def writeToolFor(name: string, purpose: string, request: string): string {
   """
-  Have a reusable tool written and saved to the agent's tool catalog. A
-  coding agent drafts it against the request type, and the user reviews
-  it before anything is saved. Takes several model calls. Nothing is
-  saved in a one-shot run.
+  Have a reusable tool written and kept across sessions. A coding agent
+  drafts it against the request type; the draft is typechecked, tested,
+  and shown to the user, who accepts it or sends feedback. Takes several
+  model calls. In a one-shot run nothing is saved.
 
+  @param name - camelCase name: a lowercase letter, then letters and digits
   @param purpose - What the tool should do, in plain language
-  @param name - Optional camelCase name; drafted from the purpose when empty
-  @param request - Optional input type as Agency type text, such as { topics: string[]; maxItems: number }; drafted when empty
+  @param request - The tool's input type as Agency type text, such as { topics: string[]; maxItems: number }
   """
-  if (_oneShot) {
-    return NO_REVIEWER
+  const cap = maxLearnedToolName()
+  if (name.length > cap) {
+    return "Not saved: the name must be at most ${cap} characters, because the tool is offered as ${LEARNED_TOOL_PREFIX}${name} and providers cap a tool name at ${MAX_TOOL_NAME_LEN}"
   }
-  const spec = proposeTool(purpose, name, request)
-  if (spec is failure(why)) {
-    return "Not saved: ${why}"
-  }
-  const saved = designLearnedTool(spec.value.name, purpose, spec.value.request)
+  const saved = designTool(name, purpose, request, dir: learnedToolsDir())
   if (saved is failure(reason)) {
     return "Not saved: ${reason}"
   }

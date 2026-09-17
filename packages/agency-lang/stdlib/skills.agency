@@ -281,48 +281,6 @@ def buildSkillsTool(
   return skillsToolFromEntries(dir, scanEntries(dir, ".", layout, recursive, MAX_SKILL_FILES), name)
 }
 
-/** One subdirectory's scan result: the directory that was scanned (the
-  `dir` to build a skills tool over) and the entries found in it. */
-export type SkillGroup = {
-  dir: string;
-  entries: SkillEntry[]
-}
-
-/**
-The scan behind `skillsDir`, returned as data instead of a tool: the
-real directory scanned and the entries found. A caller that keeps a
-catalog of a directory (the agent's learned skills, say) scans with this
-and builds the tool later with `skillsToolFromEntries`.
-*/
-export def listSkills(
-  dir: string,
-  layout: "flat" | "standard" = "flat",
-): Result<SkillGroup> raises <std::skills::skillsDir> {
-  """
-  List the skills in a directory. A directory that does not exist yet
-  has no entries.
-
-  @param dir - The skills directory to scan
-  @param layout - "flat" for loose Markdown files, "standard" for a SKILL.md per subdirectory
-  """
-  if (dir.trim() == "") {
-    return failure("dir must not be empty")
-  }
-  const real = try _realDir(dir)
-  if (real is failure) {
-    return real
-  }
-  return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
-    dir: real.value,
-    layout: layout
-  })
-
-  return success({
-    dir: real.value,
-    entries: scanEntries(real.value, ".", layout, false, MAX_SKILL_FILES)
-  })
-}
-
 export def skillsDir(
   dir: string,
   layout: "flat" | "standard" = "standard",
@@ -335,11 +293,23 @@ export def skillsDir(
   @param layout - "standard" (default) for subdirectory-per-skill with SKILL.md, "flat" for a directory of loose Markdown files.
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters. Defaults to a name derived from `dir`; set this to override it — e.g. for a stable, readable name, or to disambiguate two tools whose derived names would collide.
   """
-  const listed = listSkills(dir, layout)
-  if (listed is failure) {
-    return listed
+  const real = try _realDir(dir)
+  if (real is failure) {
+    return real
   }
-  return skillsToolFromEntries(listed.value.dir, listed.value.entries, name)
+  return interrupt std::skills::skillsDir("Are you sure you want to scan this directory for skill files?", {
+    dir: real.value,
+    layout: layout
+  })
+
+  return buildSkillsTool(real.value, layout, name)
+}
+
+/** One subdirectory's scan result: the directory that was scanned (the
+  `dir` to build a skills tool over) and the entries found in it. */
+export type SkillGroup = {
+  dir: string;
+  entries: SkillEntry[]
 }
 
 /**

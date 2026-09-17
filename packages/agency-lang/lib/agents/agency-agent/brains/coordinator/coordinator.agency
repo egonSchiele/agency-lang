@@ -12,7 +12,7 @@ import { Attachment, systemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
-import { learnSkill, setLearnOneShot, writeToolFor } from "./learn.agency"
+import { learnSkill, writeToolFor } from "./learn.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
 import { codeAgent, setCodeOneShot } from "./subagents/code.agency"
@@ -75,9 +75,6 @@ def coordinatorInit(context: BrainContext) {
   // One-shot autonomy: tell the code subagent there is no human to answer
   // questions and no next turn, so it must drive to a finished artifact.
   setCodeOneShot(!context.interactive)
-  // No one can review a draft in a one-shot run, so the learning tools
-  // refuse before drafting.
-  setLearnOneShot(!context.interactive)
 }
 
 def mainAgent(prompt: string | (string | Attachment)[]): string {

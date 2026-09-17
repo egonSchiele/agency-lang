@@ -1,44 +1,45 @@
 {
   "sourceFile": "learn.agency",
   "tests": [
-    { "nodeName": "oneShotRunIsRefusedBeforeAnyPrompt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     {
-      "nodeName": "acceptedSkillIsSavedAndCatalogued",
+      "nodeName": "acceptedSkillIsSaved",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [
-        { "return": { "name": "repo-orientation", "description": "Orient in an unfamiliar repo", "body": "Read the README and the top-level layout first." } }
-      ]
-    },
-    {
-      "nodeName": "givenNameAndDescriptionWin",
-      "input": "",
-      "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [
-        { "return": { "name": "repo-orientation", "description": "Orient in an unfamiliar repo", "body": "Read the README and the top-level layout first." } }
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
       ]
     },
     {
       "nodeName": "rejectedReviewSavesNothing",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [
-        { "return": { "name": "repo-orientation", "description": "Orient in an unfamiliar repo", "body": "Read the README and the top-level layout first." } }
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
       ]
     },
-    { "nodeName": "rejectedToolStagingSavesNothing", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
     {
-      "nodeName": "malformedDraftIsNotSaved",
+      "nodeName": "rejectedToolStagingSavesNothing",
       "input": "",
       "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [
-        { "return": { "title": "no name field here" } }
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
       ]
     },
-    { "nodeName": "overlongToolNameIsRefusedBeforeAnyPrompt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    {
+      "nodeName": "overlongToolNameIsRefusedBeforeAnyPrompt",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
   ]
 }

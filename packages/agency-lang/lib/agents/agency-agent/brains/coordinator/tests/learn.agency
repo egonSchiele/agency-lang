@@ -1,15 +1,15 @@
 /*
  * learnSkill and writeToolFor. Roots are repointed at a sandbox under
  * test-output first, so a failing test can never touch the real agent
- * home. Run with AGENCY_USE_TEST_LLM_PROVIDER=1, or the drafts go to a
- * real model.
+ * home. No node makes a model call: an accepted first draft needs none,
+ * and the failure paths are reached by rejecting an interrupt.
  */
 import { remove } from "std::fs"
 import { exists } from "std::shell"
 
-import test { _setLearnedRoot, learnedSkillsRoot } from "../../../lib/learned.agency"
-import { learnedCatalog } from "../../../lib/learned.agency"
-import { NO_REVIEWER, learnSkill, setLearnOneShot, writeToolFor } from "../learn.agency"
+import test { _setLearnedRoot } from "../../../lib/learned.agency"
+import { learnedSkillsDir, learnedToolsDir } from "../../../lib/learned.agency"
+import { learnSkill, writeToolFor } from "../learn.agency"
 
 def sandboxRoot(node: string): string {
   return "${__dirname}/test-output/learn/${node}"
@@ -20,58 +20,19 @@ def sandboxed(node: string): boolean {
   const root = sandboxRoot(node)
   remove(root, allowedPaths: ["${__dirname}/test-output"]) with approve
   _setLearnedRoot(root)
-  setLearnOneShot(false)
-  return learnedSkillsRoot() == "${root}/skills"
+  return learnedSkillsDir() == "${root}/skills"
 }
 
-node oneShotRunIsRefusedBeforeAnyPrompt(): boolean {
-  if (!sandboxed("one-shot")) {
-    return false
-  }
-  setLearnOneShot(true)
-  let raised = 0
-  let skillReply = ""
-  let toolReply = ""
-  handle {
-    skillReply = learnSkill("How to orient in an unfamiliar repo")
-    toolReply = writeToolFor("Fetch the top stories", "hnTop", "{ maxItems: number }")
-  } with (intr) {
-    raised = raised + 1
-    return approve()
-  }
-  return raised == 0 && skillReply == NO_REVIEWER && toolReply == NO_REVIEWER
-}
-
-node acceptedSkillIsSavedAndCatalogued(): boolean {
+node acceptedSkillIsSaved(): boolean {
   if (!sandboxed("accepted")) {
     return false
   }
   let reply = ""
-  let catalogued = 0
   handle {
-    reply = learnSkill("How to orient in an unfamiliar repo")
-    catalogued = learnedCatalog().skills.entries.length
+    reply = learnSkill("repo-orientation", "Orient in an unfamiliar repo", "Read the README first.")
   } with approve
-  const saved = exists("${learnedSkillsRoot()}/repo-orientation.md")
-  return reply.includes("Saved the 'repo-orientation' skill") && saved && catalogued == 1
-}
-
-// The mock draft carries its own name and description; the caller's win.
-node givenNameAndDescriptionWin(): boolean {
-  if (!sandboxed("given")) {
-    return false
-  }
-  let reply = ""
-  let description = ""
-  handle {
-    reply = learnSkill("How to orient in an unfamiliar repo", "my-name", "My description")
-    const entries = learnedCatalog().skills.entries
-    if (entries.length == 1) {
-      description = entries[0].description
-    }
-  } with approve
-  const saved = exists("${learnedSkillsRoot()}/my-name.md")
-  return reply.includes("Saved the 'my-name' skill") && saved && description == "My description"
+  const saved = exists("${learnedSkillsDir()}/repo-orientation.md")
+  return reply.includes("Saved the 'repo-orientation' skill") && saved
 }
 
 node rejectedReviewSavesNothing(): boolean {
@@ -79,18 +40,16 @@ node rejectedReviewSavesNothing(): boolean {
     return false
   }
   let reply = ""
-  let catalogued = 0
   handle {
-    reply = learnSkill("How to orient in an unfamiliar repo")
-    catalogued = learnedCatalog().skills.entries.length
+    reply = learnSkill("repo-orientation", "Orient in an unfamiliar repo", "Read the README first.")
   } with (intr) {
     if (intr.effect == "std::skills::review") {
       return reject("not now")
     }
     return approve()
   }
-  const saved = exists("${learnedSkillsRoot()}/repo-orientation.md")
-  return reply.startsWith("Not saved:") && !saved && catalogued == 0
+  const saved = exists("${learnedSkillsDir()}/repo-orientation.md")
+  return reply.startsWith("Not saved:") && !saved
 }
 
 // designTool makes a staging directory before it drafts anything, so
@@ -100,32 +59,15 @@ node rejectedToolStagingSavesNothing(): boolean {
     return false
   }
   let reply = ""
-  let catalogued = 0
   handle {
-    reply = writeToolFor("Fetch the top stories", "hnTop", "{ maxItems: number }")
-    catalogued = learnedCatalog().tools.length
+    reply = writeToolFor("hnTop", "Fetch the top stories", "{ maxItems: number }")
   } with (intr) {
     if (intr.effect == "std::mkdir") {
       return reject("no staging")
     }
     return approve()
   }
-  return reply.startsWith("Not saved:") && catalogued == 0
-}
-
-node malformedDraftIsNotSaved(): boolean {
-  if (!sandboxed("malformed")) {
-    return false
-  }
-  let raised = 0
-  let reply = ""
-  handle {
-    reply = learnSkill("How to orient in an unfamiliar repo")
-  } with (intr) {
-    raised = raised + 1
-    return approve()
-  }
-  return raised == 0 && reply.startsWith("Not saved: the draft had the wrong shape")
+  return reply.startsWith("Not saved:") && !exists("${learnedToolsDir()}/hnTop")
 }
 
 node overlongToolNameIsRefusedBeforeAnyPrompt(): boolean {
@@ -136,7 +78,7 @@ node overlongToolNameIsRefusedBeforeAnyPrompt(): boolean {
   let reply = ""
   const name = "aToolNameFarTooLongToAdvertiseBehindTheLearnedPrefixXxYzq"
   handle {
-    reply = writeToolFor("Fetch the top stories", name, "{ maxItems: number }")
+    reply = writeToolFor(name, "Fetch the top stories", "{ maxItems: number }")
   } with (intr) {
     raised = raised + 1
     return approve()

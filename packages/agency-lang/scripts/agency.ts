@@ -81,6 +81,7 @@ import {
   writeTarget,
   type ConfigTarget,
 } from "@/configTarget.js";
+import { defaultAliasTarget } from "@/stdlib/localModels.js";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
 import { parseTarget } from "@/agentTarget.js";
@@ -260,6 +261,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
   // The -c file, or the project in the current directory.
   function getConfigTarget(): ConfigTarget {
     return configTarget(program.opts().config, projectTarget(process.cwd()));
+  }
+
+  // The -c file, or the model-alias default: the nearest project, or ~/agency.json.
+  function getAliasTarget(): ConfigTarget {
+    return configTarget(program.opts().config, defaultAliasTarget());
   }
 
   function getConfig(): AgencyConfig {
@@ -1930,34 +1936,34 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<name>")
     .option("-f, --force", "Delete the model files")
     .action((name: string, opts: { force?: boolean }) =>
-      localRemove(name, { force: opts.force === true }),
+      localRemove(name, { force: opts.force === true }, getAliasTarget()),
     );
   localCmd
     .command("resolve")
     .description("Show what a name/alias resolves to")
     .argument("<value>")
-    .action(localResolve);
+    .action((value: string) => localResolve(value, getAliasTarget()));
   localCmd
     .command("refresh")
     .description("Refresh the model catalog from the remote source")
     .argument("[url]", "Override the catalog URL (else env/config/default)")
-    .action(localRefresh);
+    .action((url?: string) => localRefresh(url, getAliasTarget()));
   const aliasCmd = localCmd.command("alias").description("Manage model name aliases");
   aliasCmd
     .command("list")
     .description("List usable short names (curated + aliases)")
-    .action(localAliasList);
+    .action(() => localAliasList(getAliasTarget()));
   aliasCmd
     .command("add")
     .description("Add a short-name alias")
     .argument("<name>")
     .argument("<uri>")
-    .action(localAliasAdd);
+    .action((name: string, uri: string) => localAliasAdd(name, uri, getAliasTarget()));
   aliasCmd
     .command("remove")
     .description("Remove a short-name alias")
     .argument("<name>")
-    .action(localAliasRemove);
+    .action((name: string) => localAliasRemove(name, getAliasTarget()));
 
   const modelsCmd = program.command("models").description("Browse the hosted model catalog");
   modelsCmd

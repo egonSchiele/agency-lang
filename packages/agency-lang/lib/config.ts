@@ -211,6 +211,9 @@ export interface AgencyConfig {
      *  `AGENCY_MODELS_DIR` env var; defaults to `~/.agency-agent/models`. Read
      *  at runtime by `std::agency/local` and the `agency local` CLI. */
     modelsDir: string;
+    /** Where `agency local refresh` fetches the model catalog. Overridden by
+     *  the `AGENCY_MODEL_CATALOG_URL` env var. Read at runtime. */
+    modelCatalogUrl: string;
     /** Settings for MLX models, which run in a server. */
     mlx?: Partial<{
       /** Python with mlx-lm installed, used by `agency local serve`. Overridden
@@ -586,6 +589,7 @@ export const AgencyConfigSchema = z
         providerModules: z.array(z.string()),
         modelAliases: z.record(z.string(), ModelAliasSchema),
         modelsDir: z.string(),
+        modelCatalogUrl: z.string(),
         mlx: z
           .object({
             python: z.string(),

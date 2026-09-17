@@ -10,11 +10,15 @@ import {
   runList,
   runResolve,
   runRemove,
+  runAliasAdd,
+  runAliasList,
+  runAliasRemove,
   runDownload,
   printDownloadEvent,
   downloadChoices,
   CUSTOM_CHOICE,
 } from "./local.js";
+import { fileTarget } from "../configTarget.js";
 
 let dir: string;
 let aliasFile: string;
@@ -31,17 +35,17 @@ describe("agency local CLI helpers", () => {
   it("alias add/list/remove round-trips through agency.json and prints the file", () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
-      aliasAdd("my7b", "hf:org/repo:Q4_K_M", aliasFile);
+      aliasAdd("my7b", "hf:org/repo:Q4_K_M", fileTarget(aliasFile));
       expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases.my7b).toBe(
         "hf:org/repo:Q4_K_M",
       );
       expect(log.mock.calls.flat().some((s) => String(s).includes(aliasFile))).toBe(true);
 
-      expect(aliasList(aliasFile).some((m) => m.name === "my7b" && m.source === "alias")).toBe(
+      expect(aliasList(fileTarget(aliasFile)).some((m) => m.name === "my7b" && m.source === "alias")).toBe(
         true,
       );
 
-      aliasRemove("my7b", aliasFile);
+      aliasRemove("my7b", fileTarget(aliasFile));
       expect(
         JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases.my7b,
       ).toBeUndefined();
@@ -196,6 +200,45 @@ describe("runResolve", () => {
   });
 });
 
+describe("agency local with a file target", () => {
+  it("alias add and remove use the target's file", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const teamFile = path.join(dir, "team.json");
+      fs.writeFileSync(teamFile, "{}");
+
+      runAliasAdd("my7b", "hf:org/repo:Q4_K_M", fileTarget(teamFile));
+      const afterAdd = JSON.parse(fs.readFileSync(teamFile, "utf-8"));
+      expect(afterAdd.client.modelAliases.my7b).toBe("hf:org/repo:Q4_K_M");
+      expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8"))).toEqual({});
+
+      runAliasRemove("my7b", fileTarget(teamFile));
+      const afterRemove = JSON.parse(fs.readFileSync(teamFile, "utf-8"));
+      expect(afterRemove.client.modelAliases.my7b).toBeUndefined();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it("alias list and resolve read the target's file", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const teamFile = path.join(dir, "team.json");
+      const aliases = { client: { modelAliases: { my7b: "hf:org/repo:Q4_K_M" } } };
+      fs.writeFileSync(teamFile, JSON.stringify(aliases));
+
+      runAliasList(fileTarget(teamFile));
+      runResolve("my7b", fileTarget(teamFile));
+
+      const out = log.mock.calls.flat().map(String).join("\n");
+      expect(out).toContain("my7b");
+      expect(out).toContain("hf:org/repo:Q4_K_M");
+    } finally {
+      log.mockRestore();
+    }
+  });
+});
+
 describe("runRemove", () => {
   let cwd: string;
   let models: string;
@@ -238,6 +281,37 @@ describe("runRemove", () => {
     expect(output[2]).toBe("Run again with -f to delete them.");
     expect(fs.existsSync(gguf)).toBe(true);
     expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases).toEqual({});
+  });
+
+  it("removes the alias from a file target", () => {
+    const teamFile = path.join(dir, "team.json");
+    fs.writeFileSync(
+      teamFile,
+      JSON.stringify({ client: { modelAliases: { coder: "hf:org/coder:Q4_K_M" } } }),
+    );
+
+    runRemove("coder", { force: false }, fileTarget(teamFile));
+
+    const after = JSON.parse(fs.readFileSync(teamFile, "utf-8"));
+    expect(after.client.modelAliases.coder).toBeUndefined();
+    expect(output[0]).toBe(`Removed alias "coder" from ${teamFile}.`);
+  });
+
+  it("says where an alias lives when it is only in agency.local.json", () => {
+    const localFile = path.join(dir, "agency.local.json");
+    fs.writeFileSync(aliasFile, "{}");
+    fs.writeFileSync(
+      localFile,
+      JSON.stringify({ client: { modelAliases: { coder: "hf:org/coder:Q4_K_M" } } }),
+    );
+
+    runRemove("coder", { force: false });
+
+    expect(output[0]).toBe(
+      `Alias "coder" is set in ${localFile}. Remove it there; agency does not edit that file.`,
+    );
+    const stillThere = JSON.parse(fs.readFileSync(localFile, "utf-8"));
+    expect(stillThere.client.modelAliases.coder).toBe("hf:org/coder:Q4_K_M");
   });
 
   it("with -f deletes the files", () => {

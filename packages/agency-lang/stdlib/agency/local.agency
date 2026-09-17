@@ -239,7 +239,7 @@ export def refreshCatalog(url: string = ""): RefreshResult {
 
   @param url - catalog URL override; empty string uses the
     `AGENCY_MODEL_CATALOG_URL` env var, then `client.modelCatalogUrl` in
-    `agency.json`, then the built-in default.
+    `agency.json` or `agency.local.json`, then the built-in default.
   """
   return _refreshCatalog({
     url: url

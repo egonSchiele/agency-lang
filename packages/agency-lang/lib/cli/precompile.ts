@@ -17,8 +17,9 @@
  */
 import fs from "fs";
 import path from "path";
-import { AgencyConfig, applyCliFlags } from "../config.js";
-import { loadConfig } from "./commands.js";
+import { AgencyConfig } from "../config.js";
+import { hasProjectConfig } from "../configTarget.js";
+import { mergeFixtureConfig } from "./commands.js";
 import { createBuildSession, type CompileGroup } from "../compiler/buildSession.js";
 import { parseTestFileFull, resolveSourceFile, type FullTestFile } from "../testFormat/schema.js";
 
@@ -94,25 +95,11 @@ export function groupTestSources(
     if (isExcludedFromPrecompile(testJsonFile, tests)) continue;
 
     // Config is anchored at the .test.json, not the declared source: the
-    // runner merges the agency.json beside the test file (runTestFile in
+    // runner merges the config files beside the test file (runTestFile in
     // lib/cli/test.ts), and the compiled JS must come from that same config.
     const dir = path.dirname(path.resolve(testJsonFile));
-    const localConfigPath = path.join(dir, "agency.json");
-    let label = BASE_GROUP_LABEL;
-    let config = baseConfig;
-    if (fs.existsSync(localConfigPath)) {
-      label = dir;
-      // Re-apply the CLI intent AFTER the merge. A fixture-local agency.json
-      // is allowed to opt into features, but not to opt out of a refusal the
-      // user asked for on the command line: `--refuse-splices` beside a
-      // fixture carrying `"refuseSplices": false` must still refuse. Every
-      // other path gets this ordering for free because applyCliFlags runs
-      // last; this is the one place a local config merges over it.
-      config = applyCliFlags(
-        { ...baseConfig, ...loadConfig(localConfigPath) },
-        { refuseSplices: baseConfig.refuseSplices },
-      );
-    }
+    const label = hasProjectConfig(dir) ? dir : BASE_GROUP_LABEL;
+    const config = mergeFixtureConfig(baseConfig, dir);
 
     const group = (groups[label] ??= {
       label,

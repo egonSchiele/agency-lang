@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { forEachSource, loadConfig, resolveInputSources } from "./commands.js";
+import { forEachSource, loadConfig, mergeFixtureConfig, resolveInputSources } from "./commands.js";
+import { fileTarget, projectTarget } from "../configTarget.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "agency-resolve-"));
@@ -22,13 +24,94 @@ describe("loadConfig diagnostics", () => {
     const out = vi.spyOn(console, "log").mockImplementation(() => {});
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    loadConfig(configPath, true);
+    loadConfig(fileTarget(configPath), true);
 
     expect(out).not.toHaveBeenCalled();
-    const stderr = err.mock.calls.map((c) => c.join(" ")).join("\n");
+    const lines = err.mock.calls.map((call) => call.join(" "));
+    const stderr = lines.join("\n");
     expect(stderr).toContain("Looking for config at"); // the --verbose flag source
-    expect(stderr).toContain("Loaded config from"); // the config.verbose source
-    fs.rmSync(dir, { recursive: true, force: true });
+    const loadedLines = lines.filter((line) => line.startsWith("Loaded config from"));
+    expect(loadedLines).toEqual([`Loaded config from ${configPath}`]); // config.verbose, once
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+
+  it("merges agency.local.json for a project target", () => {
+    const dir = makeTempDir();
+    fs.writeFileSync(
+      path.join(dir, "agency.json"),
+      JSON.stringify({ outDir: "base", verbose: false }),
+    );
+    fs.writeFileSync(path.join(dir, "agency.local.json"), JSON.stringify({ outDir: "local" }));
+
+    expect(loadConfig(projectTarget(dir))).toEqual({ verbose: false, outDir: "local" });
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+
+  it("uses the current directory when no target is given", () => {
+    const dir = fs.realpathSync(makeTempDir());
+    fs.writeFileSync(path.join(dir, "agency.local.json"), JSON.stringify({ outDir: "local" }));
+    const previousCwd = process.cwd();
+    process.chdir(dir);
+    try {
+      expect(loadConfig().outDir).toBe("local");
+    } finally {
+      process.chdir(previousCwd);
+    }
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+
+  it("prints each loaded file once when config.verbose is set", () => {
+    const dir = makeTempDir();
+    fs.writeFileSync(path.join(dir, "agency.json"), JSON.stringify({}));
+    fs.writeFileSync(path.join(dir, "agency.local.json"), JSON.stringify({ verbose: true }));
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    loadConfig(projectTarget(dir));
+
+    const loadedLines = err.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.startsWith("Loaded config from"));
+    expect(loadedLines).toEqual([
+      `Loaded config from ${path.join(dir, "agency.json")}`,
+      `Loaded config from ${path.join(dir, "agency.local.json")}`,
+    ]);
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+
+  it("exits when the local file is invalid", () => {
+    const dir = makeTempDir();
+    fs.writeFileSync(path.join(dir, "agency.local.json"), "{ not json");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit");
+    }) as never);
+
+    expect(() => loadConfig(projectTarget(dir))).toThrow("exit");
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+});
+
+describe("mergeFixtureConfig", () => {
+  it("merges a fixture's config over the base", () => {
+    const dir = makeTempDir();
+    fs.writeFileSync(path.join(dir, "agency.local.json"), JSON.stringify({ verbose: true }));
+    expect(mergeFixtureConfig({ outDir: "base" }, dir)).toEqual({ outDir: "base", verbose: true });
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+
+  it("returns the base unchanged when the fixture has no config", () => {
+    const dir = makeTempDir();
+    const base = { outDir: "base", refuseSplices: true };
+    expect(mergeFixtureConfig(base, dir)).toEqual(base);
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+
+  it("keeps a refusal from the command line", () => {
+    const dir = makeTempDir();
+    fs.writeFileSync(path.join(dir, "agency.json"), JSON.stringify({ refuseSplices: false }));
+    expect(mergeFixtureConfig({ refuseSplices: true }, dir).refuseSplices).toBe(true);
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
   });
 });
 

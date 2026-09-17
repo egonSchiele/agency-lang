@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { moduleTypeWarning, nearestPackageJson } from "./moduleTypeWarning.js";
+import {
+  compileOutputsWarning,
+  moduleTypeWarning,
+  nearestPackageJson,
+} from "./moduleTypeWarning.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
 const tempDirs: string[] = [];
@@ -57,5 +61,36 @@ describe("nearestPackageJson", () => {
   it("walks up from the file's directory", () => {
     const { root, output } = makeProject("{}");
     expect(nearestPackageJson(output)).toBe(path.join(root, "package.json"));
+  });
+});
+
+describe("compileOutputsWarning", () => {
+  const commonjs = JSON.stringify({ type: "commonjs" });
+  const esm = JSON.stringify({ type: "module" });
+
+  it("says nothing for a directory with no .agency files, even under commonjs", () => {
+    const { root } = makeProject(commonjs);
+    expect(compileOutputsWarning({}, [path.join(root, "out")])).toBeNull();
+  });
+
+  it("finds a commonjs package.json nested inside a compiled directory", () => {
+    const { root } = makeProject(esm);
+    const nested = path.join(root, "out", "legacy");
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(nested, "package.json"), commonjs);
+    fs.writeFileSync(path.join(nested, "helper.agency"), "");
+    const warning = compileOutputsWarning({}, [root]);
+    expect(warning).toContain(path.join(nested, "package.json"));
+  });
+
+  // The output lands in outDir, so the source's own package.json is not
+  // the one Node reads.
+  it("checks the outDir location, not the source location", () => {
+    const { root } = makeProject(commonjs);
+    const source = path.join(root, "main.agency");
+    fs.writeFileSync(source, "");
+    fs.writeFileSync(path.join(root, "out", "package.json"), esm);
+    expect(compileOutputsWarning({}, [source])).not.toBeNull();
+    expect(compileOutputsWarning({ outDir: path.join(root, "out") }, [source])).toBeNull();
   });
 });

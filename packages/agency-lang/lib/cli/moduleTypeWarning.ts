@@ -1,5 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
+import type { AgencyConfig } from "@/config/config.js";
+import { outputPathFor } from "@/compiler/buildSession.js";
+import { findRecursively } from "@/utils/findRecursively.js";
 
 /** The package.json Node consults for `file`: the nearest one in `file`'s
  *  directory or any directory above it. Null when there is none. */
@@ -30,10 +33,7 @@ function declaresCommonJs(packageJsonPath: string): boolean {
  *  and null otherwise.
  *
  *  A package.json with no `"type"` field is fine: Node 22.7+ detects the
- *  module syntax and prints its own warning naming the fix.
- *
- *  `outputFile` is a compiled `.js` file, or a file path inside the output
- *  directory. */
+ *  module syntax and prints its own warning naming the fix. */
 export function moduleTypeWarning(outputFile: string): string | null {
   const packageJson = nearestPackageJson(outputFile);
   if (packageJson === null || !declaresCommonJs(packageJson)) return null;
@@ -48,4 +48,21 @@ export function moduleTypeWarning(outputFile: string): string | null {
     '    with {"type": "module"}.',
     "",
   ].join("\n");
+}
+
+/** `moduleTypeWarning` for `agency compile <inputs>`: checks where each
+ *  `.agency` file's output lands, expanding directories the way `compile`
+ *  does. Returns the first warning, so a project gets one note. */
+export function compileOutputsWarning(config: AgencyConfig, inputs: string[]): string | null {
+  for (const input of inputs) {
+    const sources =
+      fs.existsSync(input) && fs.statSync(input).isDirectory()
+        ? [...findRecursively(input)].map((found) => found.path)
+        : [input];
+    for (const source of sources) {
+      const warning = moduleTypeWarning(outputPathFor(config, source, ".js"));
+      if (warning) return warning;
+    }
+  }
+  return null;
 }

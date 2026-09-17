@@ -409,20 +409,9 @@ export class BuildSession {
     const compileStartTime = performance.now();
     const absoluteInputFile = path.resolve(inputFile);
 
-    const ext = options?.ts ? ".ts" : ".js";
-    // Anchor the replacement to the extension so that an absolute path
-    // containing ".agency" as a substring in a parent directory (e.g.
-    // "/Users/me/dev/worksy.agency-init/src/agent.agency") does not get
-    // the first match clobbered. See issue #48.
-    let outputFile = _outputFile || inputFile.replace(/\.agency$/, ext);
+    const outputFile = _outputFile || outputPathFor(config, inputFile, options?.ts ? ".ts" : ".js");
     if (config.outDir && !_outputFile) {
-      const outputDir = path.resolve(config.outDir);
-
-      if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-      }
-
-      outputFile = path.join(outputDir, outputFile);
+      fs.mkdirSync(path.resolve(config.outDir), { recursive: true });
     }
     if (this.compiledFiles.has(absoluteInputFile)) {
       return outputFile;
@@ -714,6 +703,18 @@ function subtreeHasPkgImport(
 /** Expand request entries to absolute FILE paths: directories via the same
  *  walker the compile path uses, files as-is. Fast-path support only —
  *  the compile dispatch itself keeps its dir handling untouched. */
+/** Where `compile` writes the output for `inputFile` when no explicit
+ *  output path is given. `inputFile` is used as passed, not resolved:
+ *  under `outDir`, a relative input keeps its relative layout. */
+export function outputPathFor(config: AgencyConfig, inputFile: string, ext: ".js" | ".ts"): string {
+  // Anchor the replacement to the extension so that an absolute path
+  // containing ".agency" as a substring in a parent directory (e.g.
+  // "/Users/me/dev/worksy.agency-init/src/agent.agency") does not get
+  // the first match clobbered. See issue #48.
+  const outputFile = inputFile.replace(/\.agency$/, ext);
+  return config.outDir ? path.join(path.resolve(config.outDir), outputFile) : outputFile;
+}
+
 function expandEntries(entries: string[]): { files: string[]; hasDirectory: boolean } {
   const files: string[] = [];
   let hasDirectory = false;

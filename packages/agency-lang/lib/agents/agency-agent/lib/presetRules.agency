@@ -1,0 +1,193 @@
+/** @module
+  @summary What makes a saved preset valid. Each field has a kind, and
+  each kind has one check, so a new field is one line in
+  PRESET_FIELD_KINDS. The startup code and the coordinator's preset tools
+  both check presets here.
+*/
+import { filterEntries } from "std::object"
+
+import { embeddingSpecHasProvider } from "./models.agency"
+import { canonicalSlot, isKnownSlot, slotKind } from "./slots.agency"
+
+export type PresetSlots = {
+  main?: string;
+  reasoning?: string;
+  embedding?: string
+}
+
+/** What savePreset accepts. It has no `default`: setDefaultPreset owns that. */
+export type PresetInput = {
+  provider?: string;
+  pin?: string;
+  slots?: PresetSlots;
+  local?: string;
+  maxToolCallRounds?: number;
+  maxToolResultChars?: number
+}
+
+/** One preset as settings.json stores it. */
+export type Preset = {
+  default?: boolean;
+  provider?: string;
+  pin?: string;
+  slots?: PresetSlots;
+  local?: string;
+  maxToolCallRounds?: number;
+  maxToolResultChars?: number
+}
+
+type FieldKind = "flag" | "text" | "slots" | "positiveWholeNumber" | "wholeNumber"
+
+static const PRESET_FIELD_KINDS: Record<string, FieldKind> = {
+  default: "flag",
+  provider: "text",
+  pin: "text",
+  local: "text",
+  slots: "slots",
+  maxToolCallRounds: "positiveWholeNumber",
+  maxToolResultChars: "wholeNumber"
+}
+
+static const KIND_RULES: Record<string, string> = {
+  flag: "must be true or false",
+  text: "must be a non-empty string",
+  slots: "must be an object of slot names to models",
+  positiveWholeNumber: "must be a whole number above zero",
+  wholeNumber: "must be a whole number, zero or more"
+}
+
+// `local` sets the provider and every chat slot itself.
+static const REPLACED_BY_LOCAL = ["provider", "pin"]
+
+/** True for a JSON object: not null, not an array, not a primitive. */
+export def isPlainObject(value: any): boolean {
+  return value != null && typeof value == "object" && !Array.isArray(value)
+}
+
+def kindHolds(kind: FieldKind, value: any): boolean {
+  return match(kind) {
+    "flag" => typeof value == "boolean"
+    "text" => typeof value == "string" && value != ""
+    "slots" => isPlainObject(value)
+    "positiveWholeNumber" => Number.isInteger(value) && value > 0
+    "wholeNumber" => Number.isInteger(value) && value >= 0
+    _ => false
+  }
+}
+
+// A field set to null counts as left out: a tool call sends null for an
+// optional field the model did not fill.
+def setKeys(value: any): string[] {
+  return [key for key in Object.keys(value) if value[key] != null]
+}
+
+def slotsOf(value: any): Record<string, any> {
+  if (isPlainObject(value.slots)) {
+    return value.slots
+  }
+  return {}
+}
+
+def allowedFields(allowDefault: boolean): string[] {
+  const all = Object.keys(PRESET_FIELD_KINDS)
+  if (allowDefault) {
+    return all
+  }
+  return [field for field in all if field != "default"]
+}
+
+def nameProblems(name: string): string[] {
+  if (name =~ re/^[a-z][a-z0-9-]*$/) {
+    return []
+  }
+  return ["its name must use lowercase letters, digits, and hyphens, and start with a letter"]
+}
+
+def fieldProblems(value: any, allowed: string[]): string[] {
+  const fields = setKeys(value)
+  const unknown = ["has an unknown field '${field}'" for field in fields if !allowed.includes(field)]
+  const known = [field for field in fields if allowed.includes(field)]
+  const wrongKind = [
+    "${field} ${KIND_RULES[PRESET_FIELD_KINDS[field]]}"
+    for field in known
+    if !kindHolds(PRESET_FIELD_KINDS[field], value[field])
+  ]
+  return [...unknown, ...wrongKind]
+}
+
+def slotProblems(slots: Record<string, any>): string[] {
+  const names = setKeys(slots)
+  const unknown = ["has an unknown slot '${slot}'" for slot in names if !isKnownSlot(slot)]
+  const known = [slot for slot in names if isKnownSlot(slot)]
+  const notText = ["slots.${slot} must be a non-empty string" for slot in known if !kindHolds("text", slots[slot])]
+  const embeddings = [
+    slot
+    for slot in known
+    if canonicalSlot(slot) == "embedding" && kindHolds("text", slots[slot])
+  ]
+  const noProvider = [
+    "slots.embedding needs the provider/model form, e.g. openai/text-embedding-3-small"
+    for slot in embeddings
+    if !embeddingSpecHasProvider(slots[slot])
+  ]
+  return [...unknown, ...notText, ...noProvider]
+}
+
+def localProblems(value: any): string[] {
+  if (value.local == null) {
+    return []
+  }
+  const fields = ["local cannot be combined with ${field}" for field in REPLACED_BY_LOCAL if value[field] != null]
+  const slots = slotsOf(value)
+  const chatSlots = [
+    "local cannot be combined with slots.${slot}"
+    for slot in setKeys(slots)
+    if isKnownSlot(slot) && slotKind(slot) != "derived"
+  ]
+  return [...fields, ...chatSlots]
+}
+
+/** Every rule the preset breaks, as sentences. Empty when it is valid. */
+export def presetProblems(name: string, value: any, allowDefault: boolean): string[] {
+  if (!isPlainObject(value)) {
+    return [...nameProblems(name), "must be an object"]
+  }
+  return [
+    ...nameProblems(name),
+    ...fieldProblems(value, allowedFields(allowDefault)),
+    ...slotProblems(slotsOf(value)),
+    ...localProblems(value),
+  ]
+}
+
+def cleanSlots(slots: Record<string, any>): PresetSlots {
+  return Object.fromEntries([[canonicalSlot(slot), slots[slot]] for slot in setKeys(slots)])
+}
+
+// Null fields dropped, slot aliases renamed.
+def cleanPreset(value: any): Preset {
+  const kept: Preset = filterEntries(value, \(fieldValue, field) -> fieldValue != null)
+  if (kept.slots == null) {
+    return kept
+  }
+  return {
+    ...kept,
+    slots: cleanSlots(kept.slots)
+  }
+}
+
+export def checkPreset(name: string, value: any, allowDefault: boolean): Result<Preset> {
+  """
+  Check one preset against the rules. Returns the cleaned preset, or a
+  failure that names the preset and every rule it breaks.
+
+  @param name - The preset's name
+  @param value - The preset, as read from settings.json or passed to a tool
+  @param allowDefault - Whether the `default` field is allowed
+  """
+  const problems = presetProblems(name, value, allowDefault)
+  if (problems.length > 0) {
+    return failure("preset '${name}': ${problems.join("; ")}")
+  }
+  return success(cleanPreset(value))
+}

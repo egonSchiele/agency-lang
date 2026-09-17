@@ -1,7 +1,7 @@
 /** @module
   @summary One record, ModelRequest, says what a run asked for: the
   startup model flags, the active preset, and the /model choices.
-  Startup, /model, and /preset each build one; these pure functions
+  Startup, /model, and /preset each build one. These pure functions
   answer every question the resolver asks about it.
 */
 import { filterEntries } from "std::object"
@@ -12,8 +12,8 @@ import { RawLayer } from "./resolution.agency"
 import { ModelSettings } from "./settings.agency"
 import { SLOTS } from "./slots.agency"
 
-/** The startup model flags. `pin` is a bare --model; `slots` holds
-  --model slot=, --fastmodel, and --slowmodel; `local` is null when
+/** The startup model flags. `pin` is a bare --model. `slots` holds
+  --model slot=, --fastmodel, and --slowmodel. `local` is null when
   --local was not given. */
 export type ModelFlags = {
   pin: string;
@@ -162,7 +162,7 @@ export def presetModelSettings(request: ModelRequest): ModelSettings {
 export def localModelOf(request: ModelRequest): LocalModel | null {
   """
   The local model this request runs, or null for a hosted run. --local
-  wins; a local preset counts only when no model flag was given.
+  wins. A local preset counts only when no model flag was given.
 
   @param request - The model request
   """

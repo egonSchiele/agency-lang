@@ -3,7 +3,7 @@
   change as a PresetEdit and hands it to editPresets, the one place that
   reads settings.json, applies the change, writes the file, and refreshes
   the in-memory presets. The policy handler decides the read and the
-  write; nothing here approves them.
+  write. Nothing here approves them.
 */
 import { PresetInput, checkPreset } from "../../lib/presetRules.agency"
 import {
@@ -59,7 +59,7 @@ export def savePreset(name: string, preset: PresetInput): string {
   """
   Create or replace a saved agent preset: a provider, models, and tool
   limits the user can start the agent with. The user approves reading and
-  writing settings.json; in a one-shot run nothing is saved. This does not
+  writing settings.json. In a one-shot run nothing is saved. This does not
   switch the current session. Replacing the default preset keeps it the
   default.
 
@@ -84,7 +84,7 @@ export def savePreset(name: string, preset: PresetInput): string {
 export def deletePreset(name: string): string {
   """
   Delete a saved agent preset. The user approves reading and writing
-  settings.json; in a one-shot run nothing is deleted.
+  settings.json. In a one-shot run nothing is deleted.
 
   @param name - The preset's name, as listPresets shows it
   """

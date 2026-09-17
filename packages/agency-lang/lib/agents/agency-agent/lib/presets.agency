@@ -8,7 +8,7 @@ import { filterEntries, mapValues } from "std::object"
 
 import { SETTINGS_PATH } from "./config.agency"
 // PresetSlots is imported only because the generated schema for Preset
-// refers to it; without the import, presets.js fails to load.
+// refers to it. Without the import, presets.js fails to load.
 import { Preset, PresetSlots, checkPreset, isPlainObject } from "./presetRules.agency"
 import { Settings } from "./settings.agency"
 

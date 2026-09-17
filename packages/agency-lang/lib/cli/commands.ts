@@ -36,6 +36,7 @@ import { classifyInstall, installDirFromUrl, type InstallKind } from "./installL
 import { findRecursively } from "@/utils/findRecursively.js";
 import { readFile } from "../compiler/buildSession.js";
 import { compile } from "../compiler/defaultSession.js";
+import { moduleTypeWarning } from "./moduleTypeWarning.js";
 
 // Returns the file:// URL of the ESM loader-register shim shipped with the
 // agency-lang package. Passing this to `node --import=<url>` causes Node to
@@ -326,6 +327,9 @@ export function run(
     }
     output = compiledOutput;
   }
+
+  const moduleWarning = moduleTypeWarning(output);
+  if (moduleWarning) console.error(moduleWarning);
 
   console.log(`Running ${output}...`);
   console.log("---");

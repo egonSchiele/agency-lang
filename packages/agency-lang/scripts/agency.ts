@@ -13,6 +13,7 @@ import {
   run,
 } from "@/cli/commands.js";
 import { classifyInstall, installDirFromUrl } from "@/cli/installLocation.js";
+import { moduleTypeWarning } from "@/cli/moduleTypeWarning.js";
 import { pack } from "@/cli/pack.js";
 import { resolveModelFlag } from "@/cli/modelFlag.js";
 import { resolveLocalRunFlag } from "@/cli/localFlag.js";
@@ -403,12 +404,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
           // child it spawns for `expectedCompileError` files; nothing else
           // sets it, so the default stays deny.
           const allowTestImports = process.env.AGENCY_ALLOW_TEST_IMPORTS === "1";
+          const outputs: string[] = [];
           for (const input of inputs) {
-            compile(config, input, undefined, {
+            const output = compile(config, input, undefined, {
               ts: opts.ts,
               freshness: opts.force ? "force" : undefined,
               allowTestImports,
             });
+            // A directory input returns null; a stand-in file inside the
+            // folder its output lands in finds the same package.json.
+            const outputDir = config.outDir ? path.resolve(config.outDir) : path.resolve(input);
+            outputs.push(output ?? path.join(outputDir, "index.js"));
+          }
+          // Node refuses to run our ES module output under a package.json
+          // that says "type": "commonjs". Warn once, for the first output
+          // that hits it.
+          if (!opts.ts) {
+            const warning = outputs.map(moduleTypeWarning).find((w) => w !== null);
+            if (warning) console.error(warning);
           }
           // If installed globally, the user will hit ERR_MODULE_NOT_FOUND
           // if they try to `node` the output directly. Steer them toward

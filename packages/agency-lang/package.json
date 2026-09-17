@@ -74,6 +74,11 @@
       "import": "./dist/lib/compiler/compile.js",
       "require": "./dist/lib/compiler/compile.js"
     },
+    "./config": {
+      "types": "./dist/lib/configPublic.d.ts",
+      "import": "./dist/lib/configPublic.js",
+      "require": "./dist/lib/configPublic.js"
+    },
     "./eval": {
       "types": "./dist/lib/eval/public.d.ts",
       "import": "./dist/lib/eval/public.js",

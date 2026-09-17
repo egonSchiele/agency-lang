@@ -63,6 +63,12 @@ let _active: string = ""
 
 export def setPresetTable(table: PresetTable) {
   _table = table
+  // A deleted preset must not stay the session's active one, or a preset
+  // saved under that name later would be reported as active without
+  // having been applied.
+  if (!hasSavedEntry(table.presets, _active)) {
+    _active = ""
+  }
 }
 
 export def presetTable(): PresetTable {
@@ -82,11 +88,17 @@ export def activePreset(): Preset | null {
   return savedEntry(_table.presets, _active)
 }
 
-// A lookup that only sees keys the record really has. A preset may be
+// Lookups that only see keys the record really has. A preset may be
 // named `constructor`, and a plain `record[name]` would answer with
 // Object.prototype's value for a name nobody saved.
+def hasSavedEntry(record: Record<string, any>, name: string): boolean {
+  return Object.keys(record).includes(name)
+}
+
+// An entry saved as null is present but unusable: hasSavedEntry says it
+// is there, and this returns null for it, like a name nobody saved.
 def savedEntry(record: Record<string, any>, name: string): any {
-  if (!Object.keys(record).includes(name)) {
+  if (!hasSavedEntry(record, name)) {
     return null
   }
   return record[name]
@@ -229,10 +241,12 @@ export def startPreset(flag: string, settings: Settings) {
 }
 
 export def presetListing(table: PresetTable, active: string): PresetListing {
+  // Two defaults mean startup uses none, so report none here too.
   const defaults = defaultNames(table)
+  const theDefault = if defaults.length == 1 then defaults[0] else ""
   return {
     presets: table.presets,
-    default: defaults[0] ?? "",
+    default: theDefault,
     active: active,
     invalid: table.problems
   }
@@ -267,9 +281,10 @@ def savedPresets(settings: Settings): Record<string, any> {
 }
 
 export def editOutcome(settings: Settings, name: string): PresetEditOutcome {
-  const previous = savedEntry(savedPresets(settings), name)
+  const presets = savedPresets(settings)
+  const previous = savedEntry(presets, name)
   return {
-    existed: previous != null,
+    existed: hasSavedEntry(presets, name),
     wasDefault: previous != null && previous.default == true
   }
 }
@@ -293,6 +308,11 @@ def keepDefaultFlag(previous: any, preset: Preset): Preset {
 }
 
 def withDefaultFlag(preset: any, isDefault: boolean): any {
+  // A hand-edited file can hold a null or non-object entry. Leave it as
+  // it is: filterEntries would throw on it.
+  if (!isPlainObject(preset)) {
+    return preset
+  }
   const rest = filterEntries(preset, \(fieldValue, field) -> field != "default")
   if (isDefault) {
     return {
@@ -318,7 +338,7 @@ def editProblem(presets: Record<string, any>, edit: PresetEdit): string {
   if (edit.kind == "save" && edit.preset == null) {
     return "no preset was given to save"
   }
-  if (edit.kind != "save" && savedEntry(presets, edit.name) == null) {
+  if (edit.kind != "save" && !hasSavedEntry(presets, edit.name)) {
     return "no preset named ${edit.name} is saved"
   }
   if (edit.kind != "setDefault") {
@@ -339,6 +359,11 @@ export def applyPresetEdit(settings: Settings, edit: PresetEdit): Result<Setting
   @param settings - settings.json as read from disk
   @param edit - The change
   """
+  if (settings.presets != null && !isPlainObject(settings.presets)) {
+    return failure(
+      "the presets in ${SETTINGS_PATH} are not an object; fix the file by hand, then try again",
+    )
+  }
   const presets = savedPresets(settings)
   const problem = editProblem(presets, edit)
   if (problem != "") {

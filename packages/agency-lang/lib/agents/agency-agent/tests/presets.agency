@@ -2,7 +2,10 @@ import {
   PresetTable,
   applyPresetEdit,
   choosePreset,
+  activePresetName,
   findPreset,
+  presetListing,
+  setActivePreset,
   setPresetTable,
   presetListLines,
   readPresetTable,
@@ -148,4 +151,47 @@ node prototypeNamesAreNotSavedPresets(): string {
 node deletingAPrototypeNameFails(): boolean {
   const settings = { presets: { opus: { provider: "anthropic" } } }
   return isFailure(applyPresetEdit(settings, { kind: "delete", name: "constructor", preset: null }))
+}
+
+// Deleting the active preset must not leave its name behind.
+node activeNameClearsWithThePreset(): string {
+  setPresetTable(table())
+  setActivePreset("cheap")
+  setPresetTable(readPresetTable({ opus: { provider: "anthropic" } }))
+  return "[${activePresetName()}]"
+}
+
+// Startup uses no preset when two are marked default, so the listing
+// reports none either.
+node listingHasNoDefaultWhenTwoAreMarked(): string {
+  const both = readPresetTable({
+    opus: { default: true, provider: "anthropic" },
+    cheap: { default: true, provider: "openrouter" }
+  })
+  return "[${presetListing(both, "").default}]"
+}
+
+// A hand-edited file can hold a null entry. It keeps its place.
+node setDefaultKeepsANullEntry(): string {
+  const settings = { presets: { broken: null, cheap: { provider: "openrouter" } } }
+  const edited = applyPresetEdit(settings, { kind: "setDefault", name: "cheap", preset: null })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value.presets)
+}
+
+node deleteRemovesANullEntry(): string {
+  const settings = { presets: { broken: null, cheap: { provider: "openrouter" } } }
+  const edited = applyPresetEdit(settings, { kind: "delete", name: "broken", preset: null })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value.presets)
+}
+
+// A presets value that is not an object is left alone, not spread.
+node saveRefusesAMalformedPresetsValue(): boolean {
+  const edited = applyPresetEdit({ presets: "nope" }, { kind: "save", name: "cheap", preset: { provider: "openai" } })
+  return isFailure(edited)
 }

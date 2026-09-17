@@ -170,6 +170,56 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "activeNameClearsWithThePreset",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listingHasNoDefaultWhenTwoAreMarked",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "setDefaultKeepsANullEntry",
+      "input": "",
+      "expectedOutput": "\"{\\\"broken\\\":null,\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\",\\\"default\\\":true}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deleteRemovesANullEntry",
+      "input": "",
+      "expectedOutput": "\"{\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\"}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveRefusesAMalformedPresetsValue",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

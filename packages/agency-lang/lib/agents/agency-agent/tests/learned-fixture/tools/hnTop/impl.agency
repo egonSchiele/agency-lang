@@ -1,0 +1,7 @@
+import { Json } from "std::validation"
+
+export type Request = { maxItems: number }
+
+export def run(request: Request): Json {
+  return request.maxItems
+}

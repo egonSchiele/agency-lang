@@ -41,6 +41,19 @@
       "expectedOutput": "\"ok\"",
       "evaluationCriteria": [{ "type": "exact" }],
       "llmMocks": [{ "return": "pong" }]
+    },
+    {
+      "nodeName": "noBuiltinToolUsesTheLearnedPrefix",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "coordinatorToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [{ "return": "pong" }]
     }
   ]
 }

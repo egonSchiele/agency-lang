@@ -1,0 +1,87 @@
+/*
+ * learnSkill and writeToolFor. Roots are repointed at a sandbox under
+ * test-output first, so a failing test can never touch the real agent
+ * home. No node makes a model call: an accepted first draft needs none,
+ * and the failure paths are reached by rejecting an interrupt.
+ */
+import { remove } from "std::fs"
+import { exists } from "std::shell"
+
+import test { _setLearnedRoot } from "../../../lib/learned.agency"
+import { learnedSkillsDir, learnedToolsDir } from "../../../lib/learned.agency"
+import { learnSkill, writeToolFor } from "../learn.agency"
+
+def sandboxRoot(node: string): string {
+  return "${__dirname}/test-output/learn/${node}"
+}
+
+// A fresh sandbox for one node; false if the repoint did not take.
+def sandboxed(node: string): boolean {
+  const root = sandboxRoot(node)
+  remove(root, allowedPaths: ["${__dirname}/test-output"]) with approve
+  _setLearnedRoot(root)
+  return learnedSkillsDir() == "${root}/skills"
+}
+
+node acceptedSkillIsSaved(): boolean {
+  if (!sandboxed("accepted")) {
+    return false
+  }
+  let reply = ""
+  handle {
+    reply = learnSkill("repo-orientation", "Orient in an unfamiliar repo", "Read the README first.")
+  } with approve
+  const saved = exists("${learnedSkillsDir()}/repo-orientation.md")
+  return reply.includes("Saved the 'repo-orientation' skill") && saved
+}
+
+node rejectedReviewSavesNothing(): boolean {
+  if (!sandboxed("rejected")) {
+    return false
+  }
+  let reply = ""
+  handle {
+    reply = learnSkill("repo-orientation", "Orient in an unfamiliar repo", "Read the README first.")
+  } with (intr) {
+    if (intr.effect == "std::skills::review") {
+      return reject("not now")
+    }
+    return approve()
+  }
+  const saved = exists("${learnedSkillsDir()}/repo-orientation.md")
+  return reply.startsWith("Not saved:") && !saved
+}
+
+// designTool makes a staging directory before it drafts anything, so
+// rejecting that mkdir reaches its failure path without a model call.
+node rejectedToolStagingSavesNothing(): boolean {
+  if (!sandboxed("staging-rejected")) {
+    return false
+  }
+  let reply = ""
+  handle {
+    reply = writeToolFor("hnTop", "Fetch the top stories", "{ maxItems: number }")
+  } with (intr) {
+    if (intr.effect == "std::mkdir") {
+      return reject("no staging")
+    }
+    return approve()
+  }
+  return reply.startsWith("Not saved:") && !exists("${learnedToolsDir()}/hnTop")
+}
+
+node overlongToolNameIsRefusedBeforeAnyPrompt(): boolean {
+  if (!sandboxed("overlong")) {
+    return false
+  }
+  let raised = 0
+  let reply = ""
+  const name = "aToolNameFarTooLongToAdvertiseBehindTheLearnedPrefixXxYzq"
+  handle {
+    reply = writeToolFor(name, "Fetch the top stories", "{ maxItems: number }")
+  } with (intr) {
+    raised = raised + 1
+    return approve()
+  }
+  return raised == 0 && reply.startsWith("Not saved:") && reply.includes("56")
+}

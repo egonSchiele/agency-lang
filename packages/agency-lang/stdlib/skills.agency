@@ -101,7 +101,7 @@ def flatEntry(filename: string, parsedFrontmatter: any): SkillEntry {
 
 // Providers cap tool-name length: OpenAI at 64 characters, Anthropic at 128.
 // Cap to the stricter 64 so a name is accepted everywhere.
-const MAX_TOOL_NAME_LEN = 64
+export static const MAX_TOOL_NAME_LEN = 64
 
 // Cap on how many files one skills/commands scan will read.
 const MAX_SKILL_FILES = 500

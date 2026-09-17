@@ -1,0 +1,92 @@
+/** @module
+  @summary Where the agent keeps what a user taught it, and the LLM tools
+  built over it: the skills under `<agent-home>/skills`, written by
+  `std::skills`, and the tools under `<agent-home>/tools`, written by
+  `std::toolbox`. See docs/dev/agents/learned-catalog.md.
+*/
+import { filter, map } from "std::array"
+import { exists } from "std::shell"
+import { MAX_TOOL_NAME_LEN, skillsDir } from "std::skills"
+import { ToolEntry, listTools, runTool } from "std::toolbox"
+
+import { AGENCY_AGENT_DIR } from "../shared.agency"
+
+// No built-in tool uses this prefix, so a learned tool cannot shadow one.
+export static const LEARNED_TOOL_PREFIX = "learned_"
+
+export static const LEARNED_SKILLS_TOOL = "learned_skills"
+
+// Tests repoint both directories here to keep the real agent home out of reach.
+let _rootOverride: string | null = null
+
+def _setLearnedRoot(root: string) {
+  _rootOverride = root
+}
+
+def learnedRoot(): string {
+  const override = _rootOverride
+  if (override != null) {
+    return override
+  }
+  return AGENCY_AGENT_DIR
+}
+
+export def learnedSkillsDir(): string {
+  return "${learnedRoot()}/skills"
+}
+
+export def learnedToolsDir(): string {
+  return "${learnedRoot()}/tools"
+}
+
+/**
+Providers cap a tool name at MAX_TOOL_NAME_LEN, and a learned tool is
+offered with the prefix in front of its name.
+*/
+export def maxLearnedToolName(): number {
+  """
+  The longest name a learned tool can have.
+  """
+  return MAX_TOOL_NAME_LEN - LEARNED_TOOL_PREFIX.length
+}
+
+// A directory that does not exist is skipped without a prompt. A scan the
+// user rejected offers nothing.
+
+def learnedSkillsTool(): any | null {
+  const dir = learnedSkillsDir()
+  if (!exists(dir)) {
+    return null
+  }
+  return skillsDir(dir, "flat", LEARNED_SKILLS_TOOL) catch null
+}
+
+def learnedToolFromEntry(entry: ToolEntry): any {
+  const description = "${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}"
+  return runTool.partial(name: entry.name, dir: learnedToolsDir()).describe(description).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
+}
+
+// A broken entry, or one whose prefixed name would exceed the provider cap,
+// is not offered: one bad name would fail every LLM call that lists it.
+def offerable(entry: ToolEntry): boolean {
+  return entry.broken == null && entry.name.length <= maxLearnedToolName()
+}
+
+def learnedTools(): any[] {
+  const dir = learnedToolsDir()
+  if (!exists(dir)) {
+    return []
+  }
+  const entries: ToolEntry[] = listTools(dir) catch []
+  return map(filter(entries, offerable), learnedToolFromEntry)
+}
+
+export def learnedExtras(): any[] {
+  """
+  The learned additions to a tool list: the skills tool when there are
+  skills, then one learned_<name> tool per saved tool.
+  """
+  const skillsTool = learnedSkillsTool()
+  const skillsTools = if skillsTool == null then [] else [skillsTool]
+  return [...skillsTools, ...learnedTools()]
+}

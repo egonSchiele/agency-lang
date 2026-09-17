@@ -1,0 +1,93 @@
+/*
+ * learnedExtras over a fixture: the skills tool then one prefixed tool per
+ * saved tool; an overlong or broken tool is not offered; a missing root or
+ * a rejected scan offers nothing. Every node repoints the roots first, so
+ * a failing test can never touch the real agent home.
+ */
+import { map } from "std::array"
+
+import test { _setLearnedRoot } from "../lib/learned.agency"
+import {
+  LEARNED_SKILLS_TOOL,
+  LEARNED_TOOL_PREFIX,
+  learnedExtras,
+  learnedSkillsDir,
+  maxLearnedToolName,
+ } from "../lib/learned.agency"
+
+def fixtureRoot(): string {
+  return "${__dirname}/learned-fixture"
+}
+
+def sandboxed(root: string): boolean {
+  _setLearnedRoot(root)
+  return learnedSkillsDir() == "${root}/skills"
+}
+
+def extraNames(): string[] {
+  let names: string[] = []
+  handle {
+    names = map(learnedExtras(), \tool -> "${tool.name}")
+  } with approve
+  return names
+}
+
+// The fixture holds one skill, one healthy tool, and a tool whose
+// 57-character name would overflow the provider cap behind the prefix.
+node extrasAreSkillsToolThenPrefixedTools(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  const names = extraNames()
+  return names.length == 2 && names[0] == LEARNED_SKILLS_TOOL && names[1] == "${LEARNED_TOOL_PREFIX}hnTop"
+}
+
+node eachRootIsScannedOnce(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let skillScans = 0
+  let toolScans = 0
+  handle {
+    learnedExtras()
+  } with (intr) {
+    if (intr.effect == "std::skills::skillsDir") {
+      skillScans = skillScans + 1
+    }
+    if (intr.effect == "std::toolbox::scan") {
+      toolScans = toolScans + 1
+    }
+    return approve()
+  }
+  return skillScans == 1 && toolScans == 1
+}
+
+node missingRootsOfferNothingWithoutAPrompt(): boolean {
+  if (!sandboxed("${__dirname}/no-such-root")) {
+    return false
+  }
+  let raised = 0
+  let count = -1
+  handle {
+    count = learnedExtras().length
+  } with (intr) {
+    raised = raised + 1
+    return approve()
+  }
+  return raised == 0 && count == 0
+}
+
+node rejectedScansOfferNothing(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let count = -1
+  handle {
+    count = learnedExtras().length
+  } with reject
+  return count == 0
+}
+
+node capLeavesRoomForThePrefix(): boolean {
+  return maxLearnedToolName() == 56
+}

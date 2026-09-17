@@ -18,6 +18,7 @@ import { llmOptions } from "std::agents/lib/shared"
 import { now, format } from "std::date"
 import { mkdir, remove, move } from "std::fs"
 import { ls, exists } from "std::shell"
+import { MAX_TOOL_NAME_LEN } from "std::skills"
 import { Json } from "std::validation"
 
 import { _read, _write } from "agency-lang/stdlib-lib/builtins.js"
@@ -85,10 +86,6 @@ import { _realDir } from "agency-lang/stdlib-lib/contained.js"
 // Upper bound on tools one scan reads; the same cap std::skills uses for a
 // skills directory.
 const MAX_TOOLS = 500
-
-// Providers cap tool names at 64 characters; std::skills truncates to the
-// same cap, this module refuses so a user-chosen name is never changed.
-const MAX_TOOL_NAME_LEN = 64
 
 // Added to a tool's own time limit for the subprocess that runs it, so
 // the guard trips before the process is killed. runFile clamps wallClock
@@ -279,6 +276,9 @@ def presentFields(file: MetaFile): Record<string, Json> {
   return present
 }
 
+// An entry is broken when runTool would refuse it: a name that is not a
+// tool name, no tool.agency to run, or an impl.agency or meta.json that
+// cannot be read.
 def entryFor(root: string, name: string): ToolEntry {
   const toolDir = "${root}/${name}"
   const module = moduleFacts(root, name)
@@ -286,6 +286,13 @@ def entryFor(root: string, name: string): ToolEntry {
   const moduleFields: ModuleFacts = module catch EMPTY_MODULE
   const metaFields: ToolMeta = meta catch DEFAULT_META
   const problems: string[] = []
+  const syntax = checkNameSyntax(name)
+  if (syntax is failure(nameErr)) {
+    problems.push("${nameErr}")
+  }
+  if (!exists("${name}/${TOOL_FILE}", root)) {
+    problems.push("no ${TOOL_FILE}")
+  }
   if (module is failure(moduleErr)) {
     problems.push("${moduleErr}")
   }
@@ -341,7 +348,8 @@ export idempotent def listTools(
   interrupt before reading anything, then `std::ls` for the listing. Each entry has: the tool's name and
   directory; what `describe` says about its `run` function (signature,
   docstring, effects); and its meta.json record (purpose, request type,
-  creation time, time limit, version, run count, last-run time).
+  creation time, time limit, version, run count, last-run time). An
+  entry `runTool` would refuse carries the reason in `broken`.
 
   @param dir - The toolbox directory to scan
   """

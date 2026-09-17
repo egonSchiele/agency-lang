@@ -129,6 +129,16 @@ effect std::skills::review {
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L491))
 
+## Constants
+
+### MAX_TOOL_NAME_LEN
+
+```ts
+export static const MAX_TOOL_NAME_LEN = 64
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L104))
+
 ## Functions
 
 ### skillsToolFromEntries

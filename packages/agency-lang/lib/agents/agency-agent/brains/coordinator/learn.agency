@@ -1,0 +1,59 @@
+/** @module
+  @summary The coordinator's two learning tools: `designSkill` and
+  `designTool` from the stdlib, pointed at the agent home. Each runs the
+  stdlib review loop and save gate; nothing here adds a handler or a
+  policy rule.
+*/
+import { MAX_TOOL_NAME_LEN, designSkill } from "std::skills"
+import { designTool } from "std::toolbox"
+
+import {
+  LEARNED_TOOL_PREFIX,
+  learnedSkillsDir,
+  learnedToolsDir,
+  maxLearnedToolName,
+ } from "../../lib/learned.agency"
+
+export def learnSkill(name: string, description: string, body: string): string {
+  """
+  Teach the agent a skill it keeps across sessions. The user sees the
+  whole file, can send feedback for another draft, and nothing is saved
+  until they accept. In a one-shot run the review is rejected, so nothing
+  is saved.
+
+  @param name - Kebab-case name, also the filename: lowercase letters, digits, and hyphens
+  @param description - One line telling the reading agent when to use the skill
+  @param body - The skill in Markdown, written for the agent as the reader, concrete and short
+  """
+  const saved = designSkill(learnedSkillsDir(), name, description, body)
+  if (saved is failure(reason)) {
+    return "Not saved: ${reason}"
+  }
+  return "Saved the '${saved.value.name}' skill to the learned catalog."
+}
+
+/**
+A learned tool is offered as learned_<name>, so its name is capped below
+the provider limit designTool checks against.
+*/
+export def writeToolFor(name: string, purpose: string, request: string): string {
+  """
+  Have a reusable tool written and kept across sessions. A coding agent
+  drafts it against the request type; the draft is typechecked, tested,
+  and shown to the user, who accepts it or sends feedback. Takes several
+  model calls. In a one-shot run nothing is saved.
+
+  @param name - camelCase name: a lowercase letter, then letters and digits
+  @param purpose - What the tool should do, in plain language
+  @param request - The tool's input type as Agency type text, such as { topics: string[]; maxItems: number }
+  """
+  const cap = maxLearnedToolName()
+  if (name.length > cap) {
+    return "Not saved: the name must be at most ${cap} characters, because the tool is offered as ${LEARNED_TOOL_PREFIX}${name} and providers cap a tool name at ${MAX_TOOL_NAME_LEN}"
+  }
+  const saved = designTool(name, purpose, request, dir: learnedToolsDir())
+  if (saved is failure(reason)) {
+    return "Not saved: ${reason}"
+  }
+  return "Saved the '${saved.value.name}' tool to the learned catalog as ${LEARNED_TOOL_PREFIX}${saved.value.name}."
+}

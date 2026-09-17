@@ -150,6 +150,26 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "prototypeNamesAreNotSavedPresets",
+      "input": "",
+      "expectedOutput": "\"No preset named constructor. Saved presets: opus, cheap.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deletingAPrototypeNameFails",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

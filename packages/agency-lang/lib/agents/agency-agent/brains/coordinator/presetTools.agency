@@ -50,7 +50,7 @@ export def listPresets(): string {
   """
   List the saved agent presets as JSON: each preset's settings, the
   default preset, the preset this session uses, and any saved preset that
-  is not valid, with the reason. Asks the user for nothing.
+  is not valid, with the reason.
   """
   return JSON.stringify(presetListing(presetTable(), activePresetName()), null, 2)
 }

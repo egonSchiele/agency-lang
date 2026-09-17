@@ -79,7 +79,17 @@ export def activePresetName(): string {
 
 /** The active preset, or null when there is none or it was deleted. */
 export def activePreset(): Preset | null {
-  return _table.presets[_active] ?? null
+  return savedEntry(_table.presets, _active)
+}
+
+// A lookup that only sees keys the record really has. A preset may be
+// named `constructor`, and a plain `record[name]` would answer with
+// Object.prototype's value for a name nobody saved.
+def savedEntry(record: Record<string, any>, name: string): any {
+  if (!Object.keys(record).includes(name)) {
+    return null
+  }
+  return record[name]
 }
 
 export def readPresetTable(raw: any): PresetTable {
@@ -126,11 +136,11 @@ export def findPreset(name: string): Result<Preset> {
 
   @param name - The preset's name
   """
-  const problem = _table.problems[name]
+  const problem = savedEntry(_table.problems, name)
   if (problem != null) {
     return failure(problem)
   }
-  const preset = _table.presets[name]
+  const preset = savedEntry(_table.presets, name)
   if (preset == null) {
     return failure("No preset named ${name}. ${savedNamesSentence(_table)}")
   }
@@ -157,11 +167,11 @@ def sayNames(names: string[]): string {
 }
 
 def namedChoice(name: string, table: PresetTable, warnings: string[]): Result<PresetChoice> {
-  const problem = table.problems[name]
+  const problem = savedEntry(table.problems, name)
   if (problem != null) {
     return failure("--preset ${name}: ${problem}")
   }
-  if (table.presets[name] == null) {
+  if (savedEntry(table.presets, name) == null) {
     return failure("Unknown --preset value: ${name}. ${savedNamesSentence(table)}")
   }
   return success({
@@ -257,7 +267,7 @@ def savedPresets(settings: Settings): Record<string, any> {
 }
 
 export def editOutcome(settings: Settings, name: string): PresetEditOutcome {
-  const previous = savedPresets(settings)[name]
+  const previous = savedEntry(savedPresets(settings), name)
   return {
     existed: previous != null,
     wasDefault: previous != null && previous.default == true
@@ -295,7 +305,7 @@ def withDefaultFlag(preset: any, isDefault: boolean): any {
 
 def editedPresets(presets: Record<string, any>, edit: PresetEdit): Record<string, any> {
   return match(edit.kind) {
-    "save" => withPreset(presets, edit.name, keepDefaultFlag(presets[edit.name], edit.preset ?? {}))
+    "save" => withPreset(presets, edit.name, keepDefaultFlag(savedEntry(presets, edit.name), edit.preset ?? {}))
     "delete" => filterEntries(presets, \(preset, name) -> name != edit.name)
     "setDefault" => mapValues(presets, \(preset, name) -> withDefaultFlag(preset, name == edit.name))
     _ => presets
@@ -308,13 +318,13 @@ def editProblem(presets: Record<string, any>, edit: PresetEdit): string {
   if (edit.kind == "save" && edit.preset == null) {
     return "no preset was given to save"
   }
-  if (edit.kind != "save" && presets[edit.name] == null) {
+  if (edit.kind != "save" && savedEntry(presets, edit.name) == null) {
     return "no preset named ${edit.name} is saved"
   }
   if (edit.kind != "setDefault") {
     return ""
   }
-  const valid = checkPreset(edit.name, presets[edit.name], true)
+  const valid = checkPreset(edit.name, savedEntry(presets, edit.name), true)
   if (valid is failure(reason)) {
     return "it cannot be the default: ${reason}"
   }

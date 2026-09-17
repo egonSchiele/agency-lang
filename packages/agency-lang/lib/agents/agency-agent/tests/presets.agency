@@ -2,6 +2,8 @@ import {
   PresetTable,
   applyPresetEdit,
   choosePreset,
+  findPreset,
+  setPresetTable,
   presetListLines,
   readPresetTable,
  } from "../lib/presets.agency"
@@ -130,4 +132,20 @@ node deleteOfAnUnknownNameFails(): boolean {
 
 node listLinesMarkActiveAndDefault(): string[] {
   return presetListLines(table(), "cheap")
+}
+
+// `constructor` passes the name rule, and a plain record lookup would
+// answer with Object.prototype's value for it.
+node prototypeNamesAreNotSavedPresets(): string {
+  setPresetTable(table())
+  const found = findPreset("constructor")
+  if (found is failure(reason)) {
+    return reason
+  }
+  return "unexpected success"
+}
+
+node deletingAPrototypeNameFails(): boolean {
+  const settings = { presets: { opus: { provider: "anthropic" } } }
+  return isFailure(applyPresetEdit(settings, { kind: "delete", name: "constructor", preset: null }))
 }

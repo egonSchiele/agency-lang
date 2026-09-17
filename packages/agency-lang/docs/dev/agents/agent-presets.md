@@ -56,32 +56,34 @@ inside a turn.
 ## Why the presets are read once
 
 The preset table is read at startup, before the policy handler exists,
-and kept in a `let` global. `/preset` and `listPresets` read that copy.
-Reading `settings.json` inside a turn asks the user to approve the read,
-and in a one-shot run the policy handler rejects it, which would make
-`listPresets` report that no presets exist.
+and kept in a `let` global that `/preset` and `listPresets` read. Reading
+`settings.json` inside a turn asks the user to approve the read, and a
+one-shot run rejects it.
 
-The write tools update the copy after each successful write. A resumed
-session restores the copy from the checkpoint, so hand edits made between
-the saved run and the resume are not seen until a fresh session.
+A resumed session restores that copy from the checkpoint, so a hand edit
+made between the saved run and the resume is not seen until a fresh
+session.
 
 ## How the tools write
 
 `editPresets` reads the file with `readSettingsFile`, applies one
 `PresetEdit`, writes with `writeSettingsFile`, and refreshes the copy.
 
-- `readSettingsFile` fails on a file that does not parse. `loadSettings`
-  would return `{}`, and writing that back would erase every other
-  setting.
-- `readSettingsFile` returns the file as saved. `loadSettings` renames
-  slot aliases and drops unknown slots, and writing that back would
-  change keys the tools promise to leave alone.
-- `writeSettingsFile` returns a `Result`. `saveSettings` only prints a
-  warning, so a tool using it could not tell a rejected write from a
-  saved one.
-- Neither call uses `with approve`. The policy handler decides the read
-  and the write. In a one-shot run it rejects them, and the tool replies
-  "Not saved".
+The tools use `readSettingsFile` and `writeSettingsFile` rather than
+`loadSettings` and `saveSettings`:
+
+- `loadSettings` returns `{}` for a file that does not parse, and writing
+  that back would erase every other setting.
+- `loadSettings` renames slot aliases and drops unknown slots, and writing
+  that back would change keys the tools leave alone.
+- `saveSettings` returns nothing, so a tool could not tell a rejected
+  write from a saved one.
+
+Neither call uses `with approve`. The policy handler decides the read and
+the write. A one-shot run rejects them, and the tool replies "Not saved".
+
+A preset may be named `constructor`, so every lookup by name goes through
+`savedEntry`, which reads a key only when the record has it.
 
 `savePreset` takes `PresetInput`, which has no `default` field, and whose
 `slots` is an object with three named fields. A `Record` in a tool
@@ -94,8 +96,8 @@ Replacing the default preset keeps its `default` flag.
 through the `coordinator_skills` tool. `skillsDir` does not fail when a
 folder is missing. It builds a tool that lists nothing. So
 `coordinatorInit` checks each bundled skills tool with
-`missingBundledSkill(tool, skillName)` and exits if the tool does not list
-a skill it should. The `code` subagent's `superpowersSkill` is checked the
+`checkBundledSkill(tool, skillName)` and exits if the tool does not list a
+skill it should. The `code` subagent's `superpowersSkill` is checked the
 same way.
 
 ## Known limits
@@ -103,7 +105,3 @@ same way.
 - A `pin` with no `provider` resolves to `openai`, as `--model` does.
 - `--max-cost` and `--max-time` cannot be in a preset: the launcher reads
   them before the agent process starts and does not read `settings.json`.
-- `presets.agency` imports `PresetSlots` without using it by name. The
-  compiled schema for `Preset` in that module refers to `PresetSlots`,
-  and without the import `presets.js` fails to load with a
-  `ReferenceError`.

@@ -1,33 +1,65 @@
 import * as path from "path";
 import { isFailure } from "@/runtime/index.js";
 import { agentHomeDir } from "@/runtime/agentHome.js";
-import { _addMcpServer, _removeMcpServer, _readMcpServersFromFile } from "@/stdlib/mcp.js";
+import { projectTarget, readConfig, writeTarget, type ConfigTarget } from "@/configTarget.js";
+import type { McpServers } from "@/mcpServers.js";
+import {
+  _addMcpServer,
+  _removeMcpServer,
+  _readMcpServersFromFile,
+  type RawMcpServers,
+} from "@/stdlib/mcp.js";
 
 // The "what" for `agency mcp …`. Commander does the parsing; these thin actions
-// call the config core ("how") in std/mcp and print. Scope defaults to the
-// project agency.json; --global targets the agent-home settings.json.
+// call the config core ("how") in std/mcp and print. The project scope is a
+// ConfigTarget; --global is the agent-home settings.json.
 
-type ScopeOpts = { global?: boolean };
+export type McpScope = { global?: boolean };
 
-const projectFile = (): string => path.resolve(process.cwd(), "agency.json");
 const globalFile = (): string => path.join(agentHomeDir(), "settings.json");
+const currentProject = (): ConfigTarget => projectTarget(process.cwd());
 
-const scopeFile = (o: ScopeOpts): string => (o.global ? globalFile() : projectFile());
-const scopeName = (o: ScopeOpts): string => (o.global ? "global" : "project");
+const scopeFile = (scope: McpScope, target: ConfigTarget): string =>
+  scope.global ? globalFile() : writeTarget(target);
+const scopeName = (scope: McpScope): string => (scope.global ? "global" : "project");
+
+/** An error message when --global and -c both name a file. */
+function scopeConflict(scope: McpScope, target: ConfigTarget): string | null {
+  const bothNamed = scope.global === true && target.kind === "file";
+  return bothNamed ? "--global and -c name different config files. Pass only one of them." : null;
+}
+
+/** The project's servers, as Agency will load them. */
+function projectServers(target: ConfigTarget): McpServers {
+  const { config, error } = readConfig(target);
+  if (error !== undefined) {
+    console.error(error);
+  }
+  return config.mcpServers ?? {};
+}
 
 function transportSummary(config: unknown): string {
   const c = config as { type?: string; url?: string; command?: string };
   return c?.type === "http" ? `http ${c.url}` : `stdio ${c?.command}`;
 }
 
-export type McpAddOptions = ScopeOpts & {
+export type McpAddOptions = McpScope & {
   command?: string;
   args?: string;
   url?: string;
   oauth?: boolean;
 };
 
-export async function mcpAdd(name: string, opts: McpAddOptions): Promise<number> {
+export async function mcpAdd(
+  name: string,
+  opts: McpAddOptions,
+  target: ConfigTarget = currentProject(),
+): Promise<number> {
+  const conflict = scopeConflict(opts, target);
+  if (conflict !== null) {
+    console.error(conflict);
+    return 1;
+  }
   let config: Record<string, unknown>;
   if (opts.url) {
     config = { type: "http", url: opts.url, ...(opts.oauth ? { auth: "oauth" } : {}) };
@@ -37,7 +69,7 @@ export async function mcpAdd(name: string, opts: McpAddOptions): Promise<number>
     console.error(`mcp add "${name}": provide --command (stdio) or --url (http).`);
     return 1;
   }
-  const result = await _addMcpServer(name, config, scopeFile(opts));
+  const result = await _addMcpServer(name, config, scopeFile(opts, target));
   if (isFailure(result)) {
     console.error(`Could not add "${name}": ${result.error}`);
     return 1;
@@ -46,8 +78,17 @@ export async function mcpAdd(name: string, opts: McpAddOptions): Promise<number>
   return 0;
 }
 
-export async function mcpRemove(name: string, opts: ScopeOpts): Promise<number> {
-  const result = await _removeMcpServer(name, scopeFile(opts));
+export async function mcpRemove(
+  name: string,
+  opts: McpScope,
+  target: ConfigTarget = currentProject(),
+): Promise<number> {
+  const conflict = scopeConflict(opts, target);
+  if (conflict !== null) {
+    console.error(conflict);
+    return 1;
+  }
+  const result = await _removeMcpServer(name, scopeFile(opts, target));
   if (isFailure(result)) {
     console.error(result.error);
     return 1;
@@ -60,8 +101,8 @@ export async function mcpRemove(name: string, opts: ScopeOpts): Promise<number> 
   return 1;
 }
 
-export function mcpList(): number {
-  const project = _readMcpServersFromFile(projectFile());
+export function mcpList(target: ConfigTarget = currentProject()): number {
+  const project: RawMcpServers = projectServers(target);
   const global = _readMcpServersFromFile(globalFile());
   const names = Array.from(new Set([...Object.keys(global), ...Object.keys(project)])).sort();
   if (names.length === 0) {

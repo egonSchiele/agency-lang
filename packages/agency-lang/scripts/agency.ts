@@ -97,7 +97,7 @@ import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
 import process from "process";
 import { agent } from "@/cli/agent.js";
-import { mcpAdd, mcpRemove, mcpList, type McpAddOptions } from "@/cli/mcp.js";
+import { mcpAdd, mcpRemove, mcpList, type McpAddOptions, type McpScope } from "@/cli/mcp.js";
 import {
   runList as localList,
   runDownload as localDownload,
@@ -2418,7 +2418,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("list")
     .description("List the Agency agent's configured MCP servers")
     .action(() => {
-      process.exitCode = mcpList();
+      process.exitCode = mcpList(getConfigTarget());
     });
   mcpCmd
     .command("add <name>")
@@ -2427,18 +2427,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--args <list>", "comma-separated stdio args")
     .option("--url <url>", "HTTP server URL")
     .option("--oauth", "authenticate the HTTP server with OAuth")
-    .option("--project", "write the project agency.json (default)")
+    .option("--project", "write the project agency.json, or the -c file (default)")
     .option("--global", "write the agent-home settings.json instead")
     .action(async (name: string, opts: McpAddOptions) => {
-      process.exitCode = await mcpAdd(name, opts);
+      process.exitCode = await mcpAdd(name, opts, getConfigTarget());
     });
   mcpCmd
     .command("remove <name>")
     .description("Remove an MCP server the Agency agent connects to")
-    .option("--project", "remove from the project agency.json (default)")
+    .option("--project", "remove from the project agency.json, or the -c file (default)")
     .option("--global", "remove from the agent-home settings.json instead")
-    .action(async (name: string, opts: { global?: boolean }) => {
-      process.exitCode = await mcpRemove(name, opts);
+    .action(async (name: string, opts: McpScope) => {
+      process.exitCode = await mcpRemove(name, opts, getConfigTarget());
     });
 
   const mcpSetupCmd = mcpCmd

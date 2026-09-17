@@ -97,6 +97,16 @@ describe("seeding", () => {
     expect(fs.existsSync(path.join(workdirPath, ".env"))).toBe(true);
   });
 
+  it("seeds agency.local.json from baseDir when present", () => {
+    const { baseDir, seed } = makeProject();
+    fs.writeFileSync(path.join(baseDir, "agency.local.json"), "{}");
+    const workdirPath = path.join(tmp(), "workdir");
+
+    copyFiles(workdirPath, filesToCopy(seed));
+
+    expect(fs.existsSync(path.join(workdirPath, "agency.local.json"))).toBe(true);
+  });
+
   it("copies test files to the workdir root alongside the closure", () => {
     const { seed } = makeProject();
     const filesDir = tmp();

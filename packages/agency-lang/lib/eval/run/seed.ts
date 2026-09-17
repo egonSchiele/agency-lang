@@ -3,6 +3,7 @@ import * as path from "path";
 
 import { agentClosure } from "@/analysis/closure.js";
 import type { AgencyConfig } from "@/config.js";
+import { CONFIG_FILE, LOCAL_CONFIG_FILE } from "@/configTarget.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "@/importStrategy.js";
 
@@ -20,7 +21,7 @@ export type AgentSeed = {
 };
 
 /** Project files read from cwd at run time; seeded when the project has them. */
-const PROJECT_CONFIG_FILES = ["agency.json", ".env"];
+const PROJECT_CONFIG_FILES = [CONFIG_FILE, LOCAL_CONFIG_FILE, ".env"];
 
 /** One planned copy: where the file comes from, and which ingredient provided
  *  it (collision messages name the ingredient). */

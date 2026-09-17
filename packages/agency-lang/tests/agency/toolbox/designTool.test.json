@@ -10,38 +10,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "acceptRaisesTheSaveGate",
@@ -53,38 +53,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "rejectAtSaveWritesNothing",
@@ -96,38 +96,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "rejectWritesNothing",
@@ -139,38 +139,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "reviseRunsASecondRound",
@@ -182,68 +182,46 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
+          },
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          },
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        },
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
-          }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
-              {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
-                },
-                "expectedOutput": 42
-              },
-              {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
-                },
-                "expectedOutput": 1
-              }
-            ]
-          }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "wrongExportGoesBackToTheCodingAgent",
@@ -255,46 +233,46 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def compute(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def compute(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
+          },
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+        ],
+        "review": [
+          {
+            "return": []
+          },
+          {
+            "return": []
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "wrongRequestGoesBackToTheCodingAgent",
@@ -306,46 +284,46 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  text: string\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.text.length + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  text: string\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.text.length + 1\n}\n"
+            }
+          },
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+        ],
+        "review": [
+          {
+            "return": []
+          },
+          {
+            "return": []
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "refusesAnExistingName",
@@ -417,38 +395,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "modelToolSkipsTests",
@@ -460,16 +438,20 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        }
-      ]
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
     },
     {
       "nodeName": "effectfulToolSkipsTests",
@@ -481,16 +463,20 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Read the file named after the number.\n\n  @param request - The number naming the file\n  \"\"\"\n  return read(\"${request.n}.txt\")\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Read the file named after the number.\n\n  @param request - The number naming the file\n  \"\"\"\n  return read(\"${request.n}.txt\")\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        }
-      ]
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
     },
     {
       "nodeName": "objectAnswerFails",
@@ -502,38 +488,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "whitespaceFeedbackFails",
@@ -545,38 +531,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "leftoverStagingDoesNotBlock",
@@ -588,38 +574,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "nodeImportGoesBackToTheCodingAgent",
@@ -631,46 +617,46 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\nimport { _which } from \"agency-lang/stdlib-lib/shell.js\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Find a command on PATH.\n\n  @param request - The command to find\n  \"\"\"\n  return _which(\"${request.n}\")\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\nimport { _which } from \"agency-lang/stdlib-lib/shell.js\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Find a command on PATH.\n\n  @param request - The command to find\n  \"\"\"\n  return _which(\"${request.n}\")\n}\n"
+            }
+          },
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+        ],
+        "review": [
+          {
+            "return": []
+          },
+          {
+            "return": []
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "dateToolSkipsTests",
@@ -682,16 +668,20 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\nimport { today } from \"std::date\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Stamp the number with the date.\n\n  @param request - The number to stamp\n  \"\"\"\n  return \"${request.n} on ${today()}\"\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\nimport { today } from \"std::date\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Stamp the number with the date.\n\n  @param request - The number to stamp\n  \"\"\"\n  return \"${request.n} on ${today()}\"\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        }
-      ]
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
     },
     {
       "nodeName": "staleTestFileDoesNotShip",
@@ -703,46 +693,46 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
+          },
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          },
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        },
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
-          }
-        },
-        {
-          "return": []
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "runToolRunsAndRecords",
@@ -754,38 +744,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "declinedRecordUseKeepsTheResult",
@@ -797,38 +787,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "symlinkedToolIsRefused",
@@ -852,38 +842,38 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        },
-        {
-          "return": {
-            "cases": [
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
               {
-                "args": {
-                  "request": {
-                    "n": 41
-                  }
+                "request": {
+                  "n": 41
                 },
-                "expectedOutput": 42
+                "expectedJson": "42"
               },
               {
-                "args": {
-                  "request": {
-                    "n": 0
-                  }
+                "request": {
+                  "n": 0
                 },
-                "expectedOutput": 1
+                "expectedJson": "1"
               }
             ]
           }
-        }
-      ]
+        ]
+      }
     },
     {
       "nodeName": "aliasedDateCallSkipsTests",
@@ -895,16 +885,20 @@
         }
       ],
       "useTestLLMProvider": true,
-      "llmMocks": [
-        {
-          "return": {
-            "code": "import { Json } from \"std::validation\"\nimport { now as clock } from \"std::date\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Stamp the number with the date.\n\n  @param request - The number to stamp\n  \"\"\"\n  return \"${request.n} at ${clock()}\"\n}\n"
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\nimport { now as clock } from \"std::date\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Stamp the number with the date.\n\n  @param request - The number to stamp\n  \"\"\"\n  return \"${request.n} at ${clock()}\"\n}\n"
+            }
           }
-        },
-        {
-          "return": []
-        }
-      ]
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
     },
     {
       "nodeName": "refusesATimeLimitOverAnHour",

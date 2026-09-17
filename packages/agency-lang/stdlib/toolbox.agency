@@ -6,6 +6,7 @@ import {
   typecheckFile,
   compile,
   testFile,
+  run,
   runFile,
   getNodesOfType,
   ModuleInfo,
@@ -416,14 +417,33 @@ type Draft = {
   tested: boolean
 }
 
+// What the case generator returns. The generator's own copy of this type
+// uses the tool's `Request`; here `request` is `Json`, because this file
+// cannot name that type.
 type GeneratedCase = {
-  args: Record<string, Json>;
-  expectedOutput: Json
+  request: Json;
+  expectedJson: string
 }
 
-type GeneratedCases = {
-  cases: GeneratedCase[]
-}
+// Asks the model for test cases. It runs from the staging directory so
+// it can import the draft's `Request`. That puts the tool's real field
+// names and types in the structured-output schema. `Json` is open, so
+// the expected value comes back as JSON text instead.
+static const casesProgram = [|
+  import { llmOptions } from "std::agents/lib/shared"
+
+  import { Request } from "./impl.agency"
+
+  type GeneratedCase = {
+    request: Request;
+    expectedJson: string
+  }
+
+  export node main(brief: string, model: string, provider: string): Result {
+    const cases: GeneratedCase[]! = llm(brief, llmOptions(model: model, provider: provider))
+    return cases
+  }
+|]
 
 def brief(settings: DraftSettings, feedback: string): string {
   let feedbackBlock = ""
@@ -450,10 +470,9 @@ ${feedbackBlock}
 """
 }
 
-def casesBrief(source: string, request: string): string {
+def casesBrief(source: string): string {
   return """
-Write two test cases for this Agency module as JSON. Reply with
-{ "cases": [ ... ] }. Each case: { "args": { "request": <a ${request} value> }, "expectedOutput": <the exact value run returns> }.
+Write two test cases for this Agency module. Each case has a `request` to pass to `run`, and `expectedJson`: the exact value `run` returns for that request, written as JSON text: `"hi"` for the string hi, `42` for the number 42.
 The first case is the happy path; the second is an edge case (an empty list, zero items). The module is pure computation, so every expected value is exact.
 
 ```agency
@@ -463,26 +482,38 @@ ${source}
 }
 
 // main returns the guard's Result, so the expected value is wrapped in the
-// runtime's own Result envelope. The model supplies plain values.
-def expectedResult(value: Json): string {
-  return JSON.stringify(success(value))
+// runtime's own Result envelope. The model writes the plain value as
+// JSON text.
+def expectedResult(expectedJson: string): Result<string> {
+  const parsed = try JSON.parse(expectedJson)
+  if (parsed is failure(parseErr)) {
+    return failure("expectedJson is not valid JSON: ${parseErr}")
+  }
+  return success(JSON.stringify(success(parsed.value)))
 }
 
-def testFileJson(cases: GeneratedCase[]): string {
-  const tests = map(cases) as testCase {
-    return {
+def testFileJson(cases: GeneratedCase[]): Result<string> {
+  const tests = []
+  for (testCase in cases) {
+    const expected = expectedResult(testCase.expectedJson)
+    if (expected is failure) {
+      return expected
+    }
+    tests.push({
       nodeName: "main",
-      args: testCase.args,
-      expectedOutput: expectedResult(testCase.expectedOutput),
+      args: {
+        request: testCase.request
+      },
+      expectedOutput: expected.value,
       evaluationCriteria: [{
         type: "exact"
       }]
-    }
+    })
   }
-  return JSON.stringify({
+  return success(JSON.stringify({
     sourceFile: TOOL_FILE,
     tests: tests
-  }, null, 2)
+  }, null, 2))
 }
 
 // Calls whose result changes from run to run without raising an
@@ -654,14 +685,32 @@ def failedCases(report: TestReport): string[] {
 }
 
 def runGeneratedTests(source: string, settings: DraftSettings): Result {
-  const generated: GeneratedCases! = llm(
-    casesBrief(source, settings.request),
-    llmOptions(model: settings.model, provider: settings.provider),
+  const generator = compile(toSource(casesProgram), settings.stagingDir)
+  if (generator is failure(compileErr)) {
+    return failure("the test case generator did not compile: ${compileErr}")
+  }
+  const generated = run(
+    compiled: generator.value,
+    node: "main",
+    args: {
+      brief: casesBrief(source),
+      model: settings.model,
+      provider: settings.provider
+    },
   )
-  if (generated is failure(caseErr)) {
+  if (generated is failure(runErr)) {
+    return failure("the test case generator did not run: ${runErr}")
+  }
+  // `data` is the generator node's own Result.
+  const cases: Result<GeneratedCase[]> = generated.value.data
+  if (cases is failure(caseErr)) {
     return failure("the test cases had the wrong shape: ${caseErr}")
   }
-  const wroteCases = write(TEST_FILE, testFileJson(generated.value.cases), settings.stagingDir)
+  const casesJson = testFileJson(cases.value)
+  if (casesJson is failure) {
+    return casesJson
+  }
+  const wroteCases = write(TEST_FILE, casesJson.value, settings.stagingDir)
   if (wroteCases is failure) {
     return wroteCases
   }

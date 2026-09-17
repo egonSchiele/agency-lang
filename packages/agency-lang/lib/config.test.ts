@@ -10,8 +10,11 @@ import {
   loadConfigSafe,
   readConfigOverrides,
   redactConfigSecrets,
+  SECRET_CONFIG_PATHS,
   serializeConfigOverrides,
 } from "./config.js";
+import { CONFIG_MERGE_RULES } from "./configMerge.js";
+import { schemaAtConfigPath } from "./configPaths.js";
 
 describe("AgencyConfigSchema", () => {
   it("should accept an empty config", () => {
@@ -397,5 +400,49 @@ describe("redactConfigSecrets", () => {
     const input = { log: { apiKey: "sk-secret-1234" } };
     redactConfigSecrets(input);
     expect(input.log.apiKey).toBe("sk-secret-1234");
+  });
+});
+
+describe("mcpServers in AgencyConfigSchema", () => {
+  it("accepts valid servers and rejects invalid ones", () => {
+    const valid = { mcpServers: { fs: { command: "npx" } } };
+    const invalid = { mcpServers: { fs: { url: "x" } } };
+    expect(AgencyConfigSchema.safeParse(valid).success).toBe(true);
+    expect(AgencyConfigSchema.safeParse(invalid).success).toBe(false);
+  });
+});
+
+describe("redactConfigSecrets and MCP servers", () => {
+  it("masks clientSecret, header values, and env values", () => {
+    const config: AgencyConfig = {
+      mcpServers: {
+        web: {
+          type: "http",
+          url: "https://x/mcp",
+          auth: "oauth",
+          clientId: "public-id",
+          clientSecret: "secret-5678",
+        },
+        api: { type: "http", url: "https://y/mcp", headers: { Authorization: "Bearer tok-9999" } },
+        fs: { command: "npx", args: ["--flag"], env: { API_KEY: "env-4321" } },
+      },
+    };
+    const shown = JSON.stringify(redactConfigSecrets(config));
+    expect(shown).not.toContain("secret-5678");
+    expect(shown).not.toContain("tok-9999");
+    expect(shown).not.toContain("env-4321");
+    expect(shown).toContain("•••5678");
+    expect(shown).toContain("public-id");
+    expect(shown).toContain("https://x/mcp");
+    expect(shown).toContain("--flag");
+    expect(JSON.stringify(config)).toContain("secret-5678");
+  });
+});
+
+describe("config path tables", () => {
+  const paths = [...CONFIG_MERGE_RULES.map((rule) => rule.path), ...SECRET_CONFIG_PATHS];
+
+  it.each(paths)("%s exists in AgencyConfigSchema", (configPath) => {
+    expect(schemaAtConfigPath(AgencyConfigSchema, configPath)).toBeDefined();
   });
 });

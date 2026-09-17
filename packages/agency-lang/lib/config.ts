@@ -1,6 +1,8 @@
 import { AgencyNode } from "./types.js";
 import type { LogLevel } from "./logger.js";
 import { z } from "zod";
+import { McpServersSchema, type McpServers } from "./mcpServers.js";
+import { mapConfigValues } from "./configPaths.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -36,6 +38,9 @@ export const MAX_REPLY_ATTACHMENT_BYTES = 20 * 1024 * 1024;
  */
 export interface AgencyConfig {
   verbose?: boolean;
+
+  /** MCP servers the program and the agent can connect to. */
+  mcpServers?: McpServers;
 
   /**
    * Let a compile-time splice run a generator that imports JavaScript.
@@ -484,6 +489,7 @@ export type ModelAlias = z.infer<typeof ModelAliasSchema>;
 export const AgencyConfigSchema = z
   .object({
     verbose: z.boolean(),
+    mcpServers: McpServersSchema,
     allowNonAgencyGenerators: z.boolean(),
     refuseSplices: z.boolean(),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
@@ -969,25 +975,30 @@ export function mergeConfigOverrides(
   return merged;
 }
 
-/** Return a deep copy of `config` with secret-bearing fields masked, for
- *  human-facing output (`agency config show`). Masks every `apiKey` — the
- *  top-level `log.apiKey` string and each key under `client.apiKey` /
- *  `client.statelog.apiKey` — to `•••<last4>`. */
+/** Config paths that hold secrets. `agency config show` masks these. */
+export const SECRET_CONFIG_PATHS = [
+  "log.apiKey",
+  "client.apiKey.*",
+  "client.statelog.apiKey",
+  "mcpServers.*.clientSecret",
+  "mcpServers.*.headers.*",
+  "mcpServers.*.env.*",
+];
+
+const VISIBLE_SECRET_CHARS = 4;
+
+function maskSecret(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+  if (value.length <= VISIBLE_SECRET_CHARS) {
+    return "•••";
+  }
+  return `•••${value.slice(-VISIBLE_SECRET_CHARS)}`;
+}
+
+/** A copy of `config` with every SECRET_CONFIG_PATHS value masked to its last
+ *  four characters. For human-facing output such as `agency config show`. */
 export function redactConfigSecrets(config: AgencyConfig): AgencyConfig {
-  const mask = (value: string): string => (value.length <= 4 ? "•••" : `•••${value.slice(-4)}`);
-  const clone = JSON.parse(JSON.stringify(config)) as AgencyConfig;
-  const redactKeyMap = (obj: Record<string, unknown> | undefined): void => {
-    if (!obj) return;
-    for (const key of Object.keys(obj)) {
-      if (typeof obj[key] === "string") obj[key] = mask(obj[key] as string);
-    }
-  };
-  if (clone.log && typeof clone.log.apiKey === "string") {
-    clone.log.apiKey = mask(clone.log.apiKey);
-  }
-  redactKeyMap(clone.client?.apiKey as Record<string, unknown> | undefined);
-  if (clone.client?.statelog && typeof clone.client.statelog.apiKey === "string") {
-    clone.client.statelog.apiKey = mask(clone.client.statelog.apiKey);
-  }
-  return clone;
+  return mapConfigValues(config, SECRET_CONFIG_PATHS, maskSecret) as AgencyConfig;
 }

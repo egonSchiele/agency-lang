@@ -1,0 +1,11 @@
+/** @module
+  @summary Where the agent's own files live on disk: the directory this
+  source tree sits in, or its staged copy under `dist`. Bundled files
+  such as skills and prompts are read from here.
+
+  This is not the agent home. That is `AGENCY_AGENT_DIR` in
+  `shared.agency`, which holds settings, policy, history, and memory.
+*/
+
+// `lib/` sits one level below the agent root.
+export static const AGENT_SOURCE_DIR = path.join(__dirname, "..")

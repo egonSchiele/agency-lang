@@ -22,6 +22,8 @@ import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/fee
 import { plannerAgent } from "std::agents/planner"
 import { setAgentCwd, getAgentCwd } from "std::index"
 import { skillsDir } from "std::skills"
+
+import { AGENT_SOURCE_DIR } from "../../../lib/agentSource.agency"
 import { setMemoryId } from "std::memory"
 import { exec } from "std::shell"
 import { supervise } from "std::supervise"
@@ -47,10 +49,9 @@ import {
  } from "./supervisor.agency"
 
 
-// The superpowers skills live at the agent root, three levels up from
-// this subfolder. The name matches what prompts/code.md tells the model.
+// The name matches what prompts/code.md tells the model.
 export static const superpowersSkill = skillsDir(
-  __dirname + "/../../../skills/superpowers",
+  path.join(AGENT_SOURCE_DIR, "skills/superpowers"),
   "flat",
   name: "superpowersSkill",
 ) with approve
@@ -98,7 +99,7 @@ export def agencyCli(args: string[]): any {
   prompt), which is why tests/agency/agency-agent-code-prompt.agency
   asserts both prompts load. Exported for that test. */
 export def promptFile(filename: string): string {
-  const contents = read(filename, __dirname + "/../prompts") with approve
+  const contents = read(filename, path.join(AGENT_SOURCE_DIR, "brains/coordinator/prompts")) with approve
   if (isFailure(contents)) {
     return ""
   }

@@ -32,7 +32,7 @@ import { buildTools as writingReviewTools } from "std::agents/writing/review"
 
 import { LEARNED_TOOL_PREFIX } from "../../../lib/learned.agency"
 import { mainAgentTools } from "../coordinator.agency"
-import { missingBundledSkill } from "../lib/bundledSkills.agency"
+import { checkBundledSkill } from "../lib/bundledSkills.agency"
 
 def pingWith(tools: any[]): string {
   // Reject any interrupt a tool might raise. Under the deterministic
@@ -122,5 +122,8 @@ node coordinatorSkillsListPresets(): string {
   if (tool == null) {
     return "mainAgentTools has no tool named coordinator_skills"
   }
-  return missingBundledSkill(tool, "presets")
+  return match(checkBundledSkill(tool, "presets")) {
+    failure(reason) => reason
+    _ => ""
+  }
 }

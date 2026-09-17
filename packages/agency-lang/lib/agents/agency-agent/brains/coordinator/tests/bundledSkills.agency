@@ -7,7 +7,7 @@
 import { find } from "std::array"
 import { skillsDir } from "std::skills"
 
-import { missingBundledSkill } from "../lib/bundledSkills.agency"
+import { checkBundledSkill } from "../lib/bundledSkills.agency"
 import { codeTools } from "../subagents/code.agency"
 
 node superpowersToolListsItsSkills(): string {
@@ -15,10 +15,13 @@ node superpowersToolListsItsSkills(): string {
   if (tool == null) {
     return "codeTools has no tool named superpowersSkill"
   }
-  return missingBundledSkill(tool, "brainstorming")
+  return match(checkBundledSkill(tool, "brainstorming")) {
+    failure(reason) => reason
+    _ => ""
+  }
 }
 
 node checkReportsAMissingFolder(): boolean {
   const tool = skillsDir("${__dirname}/no-such-skills-folder", "flat", name: "missingFolder") with approve
-  return missingBundledSkill(tool, "brainstorming") != ""
+  return isFailure(checkBundledSkill(tool, "brainstorming"))
 }

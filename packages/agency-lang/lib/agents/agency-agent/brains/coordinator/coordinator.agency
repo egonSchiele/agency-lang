@@ -8,12 +8,14 @@ import { readOnlyFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { edit } from "std::fs"
 import { setMemoryId } from "std::memory"
+import { skillsDir } from "std::skills"
 import { Attachment, systemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { learnSkill, writeToolFor } from "./learn.agency"
 import { missingBundledSkill } from "./lib/bundledSkills.agency"
+import { deletePreset, listPresets, savePreset, setDefaultPreset } from "./presetTools.agency"
 import { getCapabilities, getSlowModel, getSlowProvider } from "../../shared.agency"
 import { AgentBrain, BrainContext } from "../brain.agency"
 import { codeAgent, setCodeOneShot, superpowersSkill } from "./subagents/code.agency"
@@ -33,6 +35,15 @@ let first = true
 // coordinatorInit only checks the reads succeeded.
 static const MAIN_PROMPT_LARGE = read("./prompts/main-large.md", __dirname) with approve
 static const MAIN_PROMPT_SMALL = read("./prompts/main-small.md", __dirname) with approve
+
+// Skills about the agent itself. The folder ships with the agent, so the
+// scan is approved here, as the prompt reads above are. An outer handler
+// that rejects the scan still wins.
+static const coordinatorSkills = skillsDir(
+  __dirname + "/skills",
+  "flat",
+  name: "coordinator_skills",
+) with approve
 
 // The read-only file tools let the coordinator answer a question that
 // hinges on a few files from its own context, instead of paying for a
@@ -54,6 +65,11 @@ export static const mainAgentTools = [
   viewImageFile,
   learnSkill,
   writeToolFor,
+  coordinatorSkills,
+  listPresets,
+  savePreset,
+  deletePreset,
+  setDefaultPreset,
   ...readOnlyFileTools(),
   edit.partial(useAgentCwd: true),
 ]
@@ -79,6 +95,7 @@ def coordinatorInit(context: BrainContext) {
     process.exit(1)
   }
   exitIfBroken(missingBundledSkill(superpowersSkill, "brainstorming"))
+  exitIfBroken(missingBundledSkill(coordinatorSkills, "presets"))
   _context = context.grounding
   first = true
   // One-shot autonomy: tell the code subagent there is no human to answer

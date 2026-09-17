@@ -116,6 +116,12 @@ name, the purpose, and the request type. The user reviews the complete
 draft before anything is saved and can send feedback for another draft.
 Never claim a skill or tool was saved unless the reply said so.
 
+## Your own settings
+
+`coordinator_skills` holds skills about you, the agent. Read the matching
+skill before you handle a request about your own settings, such as saving
+a preset or changing the default one.
+
 ## What you are
 
 Your identity, brain, and the models this session runs on are in the

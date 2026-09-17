@@ -125,6 +125,7 @@ const tests = [
   testCase("savedMetaRecordsTheRequestSchema", pureRound),
   testCase("declinedRecordUseKeepsTheResult", pureRound),
   testCase("symlinkedToolIsRefused", []),
+  testCase("draftRaisesOnlyToolboxEffects", pureRound),
   testCase("refusedWriteStopsTheRounds", pureRound),
   testCase("aliasedDateCallSkipsTests", aliasRound),
   testCase("refusesATimeLimitOverAnHour", []),

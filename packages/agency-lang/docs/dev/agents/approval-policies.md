@@ -75,6 +75,23 @@ override: an entry replaces the declared scope for that effect, and an
 empty list turns the option off. Interrupts that expect a value (a
 question, a review) get no "always" answers at all.
 
+## Effects that carry their own bookkeeping
+
+Some stdlib work is a file operation only incidentally: the toolbox
+counting a use in `meta.json`, or building a draft in its staging
+directory. Those raise an effect of their own and then do the file work
+with the non-interrupt primitives, so a policy can allow them without a
+`std::write` rule on the agent home, and a rejection of writes elsewhere
+still holds. `std::toolbox::recordUse`, `std::toolbox::scan`,
+`std::toolbox::stage`, and `std::toolbox::writeFile` are the current set;
+`recommended` approves the first three under the agent home and prompts
+for the fourth, which carries the tool's code.
+
+An effect like this must scope its `@always` field to something durable.
+`std::toolbox::writeFile` pins `root`, the toolbox, not `dir`, the
+staging directory: a staging name ends in a random number, so a rule
+pinned to it would match nothing ever again.
+
 ## What `recommended` lets the agent read
 
 The read-only file effects (`std::read`, `std::readBinary`, `std::ls`,

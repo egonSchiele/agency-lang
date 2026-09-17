@@ -214,3 +214,11 @@ node invalidPersistedBrainFallsBack(): string {
   const loaded = loadSettings() with approve
   return resolveBrainName(null, loaded)
 }
+
+// A file saved before price and allowedProviders were removed still loads.
+node oldModelKeysStillLoad(): string {
+  write(SETTINGS_FILE, """{"model":{"price":"cheap","allowedProviders":["openai"],"pin":"gpt-5.5"}}""", POLICY_DIR) with approve
+  const loaded = loadSettings() with approve
+  const model = getModelSettings(loaded)
+  return model.pin ?? ""
+}

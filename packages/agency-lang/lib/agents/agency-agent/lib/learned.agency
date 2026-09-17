@@ -71,8 +71,8 @@ def learnedToolsRoot(): string {
 //
 // A root that does not exist has nothing to scan, so no prompt is spent
 // on it. A scan that fails, a rejected interrupt included, is an empty
-// catalog, cached like any other: a user who said no is not asked again
-// this session. The two scans differ only in their entry type.
+// catalog, cached like any other, so a user who said no is not asked
+// again this session. The two scans differ only in their entry type.
 
 def scanSkills(): SkillGroup {
   const dir = learnedSkillsRoot()
@@ -179,8 +179,8 @@ export def designLearnedTool(
 // ---- the LLM tools ----
 //
 // Built fresh on every call from the cached entries. The tool objects
-// themselves are never held in a global: entries are plain data a
-// checkpoint can carry, partially applied tools are not.
+// are never held in a global. Entries are plain data a checkpoint can
+// carry. Partially applied tools are not.
 
 export def learnedSkillsTool(): any | null {
   """

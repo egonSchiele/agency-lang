@@ -9,6 +9,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 
 - `docs/dev/agents/writing-rewrite-agent.md` — The rewrite agent over the writing reviewer: the passes loop, why a reviewer failure is not a clean pass, and how its eval suite shares the reviewer suite's files.
 - `docs/dev/agents/agent-sessions.md` — Save and resume for `agency agent`: a checkpoint between turns, why it is taken from TypeScript after the turn's frames return, where the restore runs, and what a restore does not bring back.
+- `docs/dev/agents/learned-catalog.md` — The skills a user taught the agent and the tools it wrote: the one module that owns where they live, the catalog scanned from them, why it is rebuilt after a save and after a restore, the `learned_` prefix, and the two coordinator tools that draft and save through it.
 - `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
 - `docs/dev/agents/harness-and-model.md` — How to divide credit between harness and model, the six tiers a fix can land in, and what a harness genuinely cannot do.
 - `docs/dev/agents/harness-guidelines.md` — The prescriptive companion: must-dos and must-nots for building and changing the agent harness.

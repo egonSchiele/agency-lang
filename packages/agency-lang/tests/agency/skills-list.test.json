@@ -1,0 +1,11 @@
+{
+  "sourceFile": "skills-list.agency",
+  "tests": [
+    { "nodeName": "listsTheFixtureEntries", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "raisesOneInterruptNamingTheDirectory", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "missingDirectoryIsEmpty", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "emptyDirFailsBeforeAnyPrompt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "rejectionIsAFailure", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "capIsExported", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

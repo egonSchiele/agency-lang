@@ -76,7 +76,7 @@ export type ModuleFacts = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L144))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L141))
 
 ### ToolMeta
 
@@ -95,7 +95,7 @@ export type ToolMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L151))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L148))
 
 ### ToolEntry
 
@@ -114,7 +114,7 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L163))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L160))
 
 ## Effects
 
@@ -127,7 +127,7 @@ effect std::toolbox::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L112))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L109))
 
 ### std::toolbox::recordUse
 
@@ -139,7 +139,7 @@ effect std::toolbox::recordUse {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L120))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L117))
 
 ### std::toolbox::review
 
@@ -153,7 +153,7 @@ effect std::toolbox::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L122))
 
 ### std::toolbox::save
 
@@ -167,7 +167,7 @@ effect std::toolbox::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L136))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L133))
 
 ## Functions
 
@@ -195,7 +195,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L336))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L333))
 
 ### designTool
 
@@ -253,7 +253,7 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 
 **Throws:** `std::remove`, `std::mkdir`, `std::toolbox::review`, `std::toolbox::save`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L990))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L987))
 
 ### writeTool
 
@@ -305,7 +305,7 @@ in `designTool` ends by publishing through this same gate.
 
 **Throws:** `std::remove`, `std::mkdir`, `std::toolbox::save`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1046))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1043))
 
 ### runTool
 
@@ -338,4 +338,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::toolbox::recordUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1093))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1090))

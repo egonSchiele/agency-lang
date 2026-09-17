@@ -268,7 +268,12 @@ function checkDoc() {
 
 function checkConfig() {
   const result = runInstalledAgency(dir, ["-c", "config-probe.json", "config", "show"]);
-  assertBlank(result.stderr, "[config show] stderr");
+  // stderr lists the files that were read, so stdout stays pure JSON.
+  const stderr = stripAnsi(result.stderr).trim();
+  assert(
+    stderr === "Loaded: config-probe.json",
+    `[config show] stderr should name the -c file, got:\n${result.stderr}`,
+  );
   const config = JSON.parse(result.stdout);
   assert(config.outDir === "plan-probe-dist", `[config show] outDir was ${config.outDir}`);
   assert(config.log?.projectId === "plan-probe", `[config show] projectId was ${config.log?.projectId}`);

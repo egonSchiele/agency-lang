@@ -44,6 +44,24 @@ line (`⏺ Policy rejected std::read (dir: /private/tmp, filename: …)`).
 Without it a rejection is invisible: the only sign is the agent quietly
 taking another route.
 
+## Reading what you are approving
+
+The prompt is a pinned footer at the bottom of the terminal, so it shows
+at most six physical rows of the interrupt's body
+(`INTERRUPT_BODY_MAX_LINES` in `lib/stdlib/cli.ts`) and then an ellipsis.
+Six rows is nothing next to a file being written or a tool draft being
+reviewed, and those are the prompts where the body is the whole point.
+
+When the body is cut off, the widget adds one option of its own, `v`.
+Typing it prints the entire body into the scrollback above the prompt,
+which stays up waiting for the real answer. The write goes through the
+patched stdout the bottom region installs, which is what puts it above
+the footer rather than over it. No caller offers the option and no effect
+can claim the key: `renderInterruptFooter` appends it and
+`submitInterrupt` checks it before the option keys and before free text,
+both gated on the same `bodyIsTruncated`. When nothing is cut off, `v` is
+an ordinary free-text reason.
+
 ## What "approve always here" pins
 
 The prompt's "approve always here" answer saves a rule scoped to some of

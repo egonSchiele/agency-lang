@@ -434,9 +434,20 @@ function classifyInterruptKey(sequence: unknown, key: KeyMeta | undefined): Inte
 type InterruptState = { buffer: string; notice: string };
 
 type InterruptOutcome =
-  { kind: "pending" } | { kind: "resolve"; value: string } | { kind: "cancel" } | { kind: "exit" };
+  | { kind: "pending" }
+  | { kind: "resolve"; value: string }
+  | { kind: "cancel" }
+  | { kind: "exit" }
+  | { kind: "reveal" };
 
-type InterruptConfig = { validKeys: string[]; allowFreeText: boolean; allowCancel: boolean };
+type InterruptConfig = {
+  validKeys: string[];
+  allowFreeText: boolean;
+  allowCancel: boolean;
+  /** True when the footer is showing a cut-off body, so VIEW_KEY prints
+   *  the whole of it instead of answering the prompt. */
+  canReveal: boolean;
+};
 
 type InterruptStep = { state: InterruptState; outcome: InterruptOutcome };
 
@@ -449,6 +460,12 @@ const INVALID_NOTICE = "not a valid option";
  *  notice. */
 function submitInterrupt(state: InterruptState, config: InterruptConfig): InterruptStep {
   const answer = state.buffer.trim();
+  // Checked before the option keys and before free text: a prompt whose
+  // body is cut off reserves this key, and a one-letter reason is no
+  // loss next to being able to read what you are approving.
+  if (config.canReveal && answer === VIEW_KEY) {
+    return { state: INITIAL_INTERRUPT_STATE, outcome: { kind: "reveal" } };
+  }
   if (config.validKeys.includes(answer)) {
     return { state, outcome: { kind: "resolve", value: answer } };
   }
@@ -519,6 +536,10 @@ function packOptions(items: { key: string; label: string }[], width: number): st
 }
 
 const INTERRUPT_BODY_MAX_LINES = 6;
+// Typed like any other option. The widget owns it, so no caller has to
+// offer it and no effect can take it for something else.
+const VIEW_KEY = "v";
+const VIEW_LABEL = "view it all";
 const INTERRUPT_CARET = "▏";
 
 type InterruptFooterInput = {
@@ -536,18 +557,26 @@ type InterruptFooterInput = {
  *  `width`, but each line is already within it, so that is a no-op. Capping
  *  raw `\n` lines instead would let one very long line re-expand past the
  *  cap and blow out the pinned region. */
-function bodyLines(body: string, width: number): string[] {
+function bodyLines(body: string, width: number): { lines: string[]; truncated: boolean } {
   if (body === "") {
-    return [];
+    return { lines: [], truncated: false };
   }
   const wrapped = wrapText(body, Math.max(1, width - 1));
-  const shown = wrapped
+  const lines = wrapped
     .slice(0, INTERRUPT_BODY_MAX_LINES)
     .map((line) => ` ${DIM}${line}${COLOR_RESET}`);
-  if (wrapped.length > INTERRUPT_BODY_MAX_LINES) {
-    shown.push(` ${DIM}…${COLOR_RESET}`);
+  const truncated = wrapped.length > INTERRUPT_BODY_MAX_LINES;
+  if (truncated) {
+    lines.push(` ${DIM}…${COLOR_RESET}`);
   }
-  return shown;
+  return { lines, truncated };
+}
+
+/** True when this prompt's body does not fit the footer, so the widget
+ *  offers VIEW_KEY. The shell and the renderer must agree on it. */
+function bodyIsTruncated(body: string, columns: number): boolean {
+  const width = Math.max(MIN_FOOTER_WIDTH, columns - 1);
+  return bodyLines(body, width).truncated;
 }
 
 /** Render the sticky approval prompt as footer lines. Pure. The real
@@ -559,8 +588,12 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
   if (input.title !== "") {
     lines.push(` ${input.title}`);
   }
-  bodyLines(input.body, width).forEach((line) => lines.push(line));
-  packOptions(input.items, width - 1).forEach((row) => lines.push(` ${row}`));
+  const body = bodyLines(input.body, width);
+  body.lines.forEach((line) => lines.push(line));
+  const items = body.truncated
+    ? [...input.items, { key: VIEW_KEY, label: VIEW_LABEL }]
+    : input.items;
+  packOptions(items, width - 1).forEach((row) => lines.push(` ${row}`));
   if (input.allowFreeText) {
     lines.push(` ${DIM}or type a reason · Enter to submit${COLOR_RESET}`);
   }
@@ -622,6 +655,7 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
     validKeys: opts.items.map((item) => item.key),
     allowFreeText: opts.allowFreeText,
     allowCancel: opts.allowCancel,
+    canReveal: bodyIsTruncated(opts.body, process.stdout.columns || 80),
   };
   let state = INITIAL_INTERRUPT_STATE;
 
@@ -665,6 +699,13 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
       }
       if (outcome.kind === "resolve") {
         settle(() => resolve(outcome.value));
+        return;
+      }
+      if (outcome.kind === "reveal") {
+        // Written through the patched stdout, so it lands in the
+        // scrollback above the prompt, which stays up. The terminal's
+        // own scrollback is what makes a long body readable.
+        process.stdout.write(`\n${opts.body}\n`);
         return;
       }
       region.refresh();

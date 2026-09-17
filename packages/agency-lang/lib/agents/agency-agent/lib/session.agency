@@ -19,21 +19,31 @@ import {
   ModelFilters,
  } from "./modelFilters.agency"
 import {
+  ModelChoices,
+  ModelFlags,
+  ModelRequest,
+  localModelOf,
+  modelFlagsFromArgs,
+  noModelChoices,
+  noModelFlags,
+  requestIsLocal,
+  requestProvider,
+ } from "./modelRequest.agency"
+import {
   parseModelFlag,
   embeddingSpecHasProvider,
-  knownProviders,
   missingProviderEnvVar,
   Resolved,
  } from "./models.agency"
+import { activePreset } from "./presets.agency"
 import { configureSearch } from "./search.agency"
 import {
-  buildLayers,
-  resolveAll,
   diffResolved,
   Ctx,
   SlotChange,
  } from "./resolution.agency"
 import {
+  ModelSettings,
   getModelSettings,
   loadSettings,
  } from "./settings.agency"
@@ -41,25 +51,21 @@ import { SLOTS } from "./slots.agency"
 import {
   demoteProvider,
   applyResolved,
-  promoteAll,
   overrideFromResolved,
-  configureModels,
   configureLocalModel,
   getResolvedSlots,
   getCapabilities,
   getCapabilitiesResolved,
   markMemoryEnabledByOverride,
-  resolveLocalEmbeddingSlot,
   embeddingKeyStatus,
   memoryEnablePlan,
   enableAgentMemory,
+  resolveHostedModels,
+  resolveRequestAgainst,
  } from "../shared.agency"
 
-// In-session model selection state.
-export type Session = {
-  pin: string;
-  slots: Record<string, string>
-}
+// In-session model selection state: the /model choices.
+export type Session = ModelChoices
 
 // Whether startup enabled memory WITH the embedding override. The pause
 // guard in reactToSlotChange consults this instead of re-deriving from the
@@ -70,6 +76,49 @@ let _memoryEmbeddingsPinned = false
 
 export def markMemoryEmbeddingsPinned(pinned: boolean) {
   _memoryEmbeddingsPinned = pinned
+}
+
+// The startup model flags and settings.model, kept for the session so
+// /model and /preset resolve with the same inputs startup did, without
+// reading settings.json inside a turn.
+let _startupFlags: ModelFlags = noModelFlags()
+let _startupModelSettings: ModelSettings = {}
+
+export def setStartupModelFlags(flags: ModelFlags, settings: ModelSettings) {
+  _startupFlags = flags
+  _startupModelSettings = settings
+}
+
+/** The request for this session's startup flags, active preset, and these /model choices. */
+export def currentModelRequest(choices: ModelChoices): ModelRequest {
+  return {
+    flags: _startupFlags,
+    preset: activePreset(),
+    choices: choices
+  }
+}
+
+export def applyModelRequest(request: ModelRequest, settings: ModelSettings): Result<boolean> {
+  """
+  Resolve and apply a request's models, local or hosted. A hosted
+  failure changes nothing and returns the message. A local model that
+  fails to load still ends the process (configureLocalModel). The
+  web-search setup is the caller's job.
+
+  @param request - What the run asked for
+  @param settings - settings.model
+  """
+  const local = localModelOf(request)
+  if (local != null) {
+    configureLocalModel(local.model, local.embedding)
+    return success(true)
+  }
+  const resolved = resolveHostedModels(request, settings)
+  if (resolved is failure(reason)) {
+    return failure(reason)
+  }
+  applyResolved(resolved.value)
+  return success(true)
 }
 
 // Persistent knowledge graph, gated on the capability profile.
@@ -154,38 +203,19 @@ export def switchModel(
     next.slots[parsed.slot] = parsed.model
   }
 
-  // A saved provider (settings.model.provider) means a provider is established,
-  // so a unified provider/model spec should not be split during resolution.
-  const settings = getModelSettings(loadSettings())
-  const providerEstablished = settings.provider != null && settings.provider != ""
-  const layers = buildLayers(
-    next.pin,
-    next.slots,
-    "",
-    {},
-    settings,
-    knownProviders(),
-    providerEstablished,
-  )
-  const all = resolveAll(layers, ctx2)
-  if (isFailure(all)) {
-    pushMessage(color.red("Could not switch model: ${all.error}"))
+  const request = currentModelRequest(next)
+  const settings = _startupModelSettings
+  const established = requestProvider(request, settings) != ""
+  const all = resolveRequestAgainst(request, settings, ctx2, established)
+  if (all is failure(reason)) {
+    pushMessage(color.red("Could not switch model: ${reason}"))
     return {
       session: prior,
       resolved: before,
       changes: []
     }
   }
-  const localized = resolveLocalEmbeddingSlot(promoteAll(all.value))
-  if (isFailure(localized)) {
-    pushMessage(color.red("Could not switch model: ${localized.error}"))
-    return {
-      session: prior,
-      resolved: before,
-      changes: []
-    }
-  }
-  const resolved = localized.value
+  const resolved = all.value
   applyResolved(resolved)
   return {
     session: next,
@@ -273,114 +303,59 @@ export def parseModelsFilters(cmd: string): ModelFilters {
   }
 }
 
-/** Resolve and apply the agent's models from parsed CLI args at startup.
-  `--local` (guided or with a value) pins the llama-cpp model; otherwise the
-  hosted path applies `--model` / `--fastmodel` / `--slowmodel` / `--provider`.
-  Side-effecting (configureModels/configureLocalModel/configureSearch, and
-  process.exit on unresolvable input), so it lives here above shared, not in
-  the pure models.agency. */
-export def pickModelsForAgent(args: Record<string, any>) {
-  const localVal = args.flags["local"]
-  const modelArg = args.flags.model ?? ""
-  // --model embedding=<local provider>/<model> is the one --model slot that
-  // goes with --local: it is the only way to name an embedding model.
-  const parsedFlag = parseModelFlag(modelArg)
-  const embeddingOnly = modelArg != "" && parsedFlag.slot == "embedding"
-  const hasModelFlags = (modelArg != "" && !embeddingOnly) || (args.flags.fastmodel ?? "") != "" || (args.flags.slowmodel ?? "") != ""
-  if (localVal != null && hasModelFlags) {
-    print(
-      color.red(
-      "Pass either --model (hosted) or --local (local), not both. The one exception is --model embedding=<local provider>/<model>.",
-    ),
-    )
+// Bare --local: prompt for a model, or print the catalog and exit when
+// there is no terminal to prompt on.
+def pickGuidedLocalModel(): string {
+  if (!isTTY()) {
+    printLocalCatalog()
+    process.exit(0)
+  }
+  if (!localModelsSupported()) {
+    print(color.yellow("Local models need the smoltalk-llama-cpp package."))
+    print("Install it, then re-run:  ! npm i -g smoltalk-llama-cpp")
     process.exit(1)
   }
-  const localEmbedding = if embeddingOnly then parsedFlag.model else ""
-  if (localVal == "") {
-    // Bare --local: guided setup.
-    // Non-interactive can't prompt, so just print the local catalog and exit.
-    // Interactive = prompt the user to pick a model.
-    if (!isTTY()) {
-      printLocalCatalog()
-      process.exit(0)
-    }
-    if (!localModelsSupported()) {
-      print(color.yellow("Local models need the smoltalk-llama-cpp package."))
-      print("Install it, then re-run:  ! npm i -g smoltalk-llama-cpp")
-      process.exit(1)
-    }
-    let items: ChoiceItem[] = []
-    for (modelName in listModelNames()) {
-      items.push({
-        key: modelName.name,
-        label: modelName.name
-      })
-    }
-    const choice = chooseOption(
-      "Local model",
-      "Pick a model, or type an hf: URI / .gguf path (downloads on first use):",
-      items,
-      allowFreeText: true,
-      allowCancel: true,
-    )
-    if (choice == "" || choice == null) {
-      process.exit(0)
-    }
-    configureLocalModel(choice, localEmbedding)
-    configureSearch(true)
-    // fall through into the session on the chosen local model
-  } else if (localVal != null) {
-    configureLocalModel(localVal, localEmbedding)
-    configureSearch(true)
-  } else {
-    // Hosted path. --model accepts `slot=model` (per-slot) or a bare model
-    // (global pin); explicit --fastmodel/--slowmodel win over a --model slot=.
-    const parsed = parseModelFlag(modelArg)
-    let modelGlobal = ""
-    let fastFlag = ""
-    let slowFlag = ""
-    let embeddingFlag = ""
-    if (modelArg != "") {
-      if (parsed.slot == "") {
-        modelGlobal = parsed.model
-      } else if (parsed.slot == "main") {
-        fastFlag = parsed.model
-      } else if (parsed.slot == "reasoning") {
-        slowFlag = parsed.model
-      } else if (parsed.slot == "embedding") {
-        if (!embeddingSpecHasProvider(parsed.model)) {
-          print(
-            color.red(
-            "Embedding models need the provider/model form, e.g. --model embedding=openai/text-embedding-3-small.",
-          ),
-          )
-          process.exit(1)
-        }
-        embeddingFlag = parsed.model
-      } else {
-        print(
-          color.red(
-          "Unknown model slot '${parsed.slot}' in --model. Valid slots: ${SLOTS.join(", ")}.",
-        ),
-        )
-        process.exit(1)
-      }
-    }
-    const fm = args.flags.fastmodel ?? ""
-    const sm = args.flags.slowmodel ?? ""
-    if (fm != "") {
-      fastFlag = fm
-    }
-    if (sm != "") {
-      slowFlag = sm
-    }
-    configureModels(
-      modelGlobal,
-      fastFlag,
-      slowFlag,
-      embeddingFlag,
-      args.flags.provider ?? "",
-    )
-    configureSearch(false)
+  const items = map(listModelNames(), \modelName -> { key: modelName.name, label: modelName.name })
+  const choice = chooseOption(
+    "Local model",
+    "Pick a model, or type an hf: URI / .gguf path (downloads on first use):",
+    items,
+    allowFreeText: true,
+    allowCancel: true,
+  )
+  if (choice == "" || choice == null) {
+    process.exit(0)
   }
+  return choice
+}
+
+def withGuidedLocal(flags: ModelFlags): ModelFlags {
+  if (flags.local != "") {
+    return flags
+  }
+  return {
+    ...flags,
+    local: pickGuidedLocalModel()
+  }
+}
+
+/** Resolve and apply the agent's models at startup from the CLI flags,
+  the active preset, and settings.model. Exits with a message on bad
+  flags or an unresolvable request. */
+export def pickModelsForAgent(args: Record<string, any>) {
+  const parsed = modelFlagsFromArgs(args)
+  if (parsed is failure(reason)) {
+    print(color.red(reason))
+    process.exit(1)
+    return
+  }
+  setStartupModelFlags(withGuidedLocal(parsed.value), getModelSettings(loadSettings()))
+  const request = currentModelRequest(noModelChoices())
+  const applied = applyModelRequest(request, _startupModelSettings)
+  if (applied is failure(reason)) {
+    print(reason)
+    process.exit(1)
+    return
+  }
+  configureSearch(requestIsLocal(request))
 }

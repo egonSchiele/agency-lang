@@ -1,0 +1,15 @@
+{
+  "sourceFile": "presetSession.agency",
+  "tests": [
+    {
+      "nodeName": "modelKeepsTheStartupFlag",
+      "input": "",
+      "expectedOutput": "\"claude-sonnet-4-6 (cli:global-pin)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

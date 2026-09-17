@@ -6,6 +6,7 @@ import { figs } from "../images/images.agency"
 import { demoteProvider, getResolvedSlots } from "../shared.agency"
 import { parseAgentArgs } from "./args.agency"
 import { Resolved } from "./models.agency"
+import { activePresetName } from "./presets.agency"
 
 def sample(arr: any[]): any {
   return arr[Math.floor(Math.random() * arr.length)]
@@ -97,6 +98,7 @@ def extendedInfo(left, brainName: string) {
  */
   const mainModel = slotModelLabel(slots["main"])
   const reasoningModel = slotModelLabel(slots["reasoning"])
+  const presetName = activePresetName()
 
   const argsTable = table(
     borderStyle: "none",
@@ -107,6 +109,9 @@ def extendedInfo(left, brainName: string) {
       minWidth: 13
     }, {}],
   ) as t {
+    if (presetName != "") {
+      t.row(color.cyan("Preset"), presetName)
+    }
     if (mainModel != "") {
       t.row(color.cyan("Main Model"), mainModel)
     }

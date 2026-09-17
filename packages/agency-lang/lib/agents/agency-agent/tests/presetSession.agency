@@ -1,0 +1,20 @@
+import { setEnv } from "std::system"
+
+import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
+import { Resolved } from "../lib/models.agency"
+import { Ctx } from "../lib/resolution.agency"
+import { setStartupModelFlags, switchModel } from "../lib/session.agency"
+
+static const CTX: Ctx = {
+  provider: "anthropic",
+  price: "standard"
+}
+
+// /model reasoning=... after a startup --model keeps the flag in main.
+node modelKeepsTheStartupFlag(): string {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setStartupModelFlags({ ...noModelFlags(), pin: "claude-sonnet-4-6" }, {})
+  const out = switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
+  const main: Resolved = out.resolved["main"]
+  return "${main.model} (${main.via})"
+}

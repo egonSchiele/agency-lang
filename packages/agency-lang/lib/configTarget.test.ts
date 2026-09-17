@@ -41,10 +41,7 @@ describe("targets", () => {
 
   it("targetPaths lists every candidate, and configFiles the ones that exist", () => {
     write(LOCAL_CONFIG_FILE, {});
-    expect(targetPaths(projectTarget(dir))).toEqual([
-      inDir(CONFIG_FILE),
-      inDir(LOCAL_CONFIG_FILE),
-    ]);
+    expect(targetPaths(projectTarget(dir))).toEqual([inDir(CONFIG_FILE), inDir(LOCAL_CONFIG_FILE)]);
     expect(configFiles(projectTarget(dir))).toEqual([inDir(LOCAL_CONFIG_FILE)]);
     expect(configFiles(fileTarget(inDir("missing.json")))).toEqual([]);
     expect(hasProjectConfig(dir)).toBe(true);

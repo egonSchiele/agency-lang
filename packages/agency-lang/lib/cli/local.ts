@@ -286,7 +286,9 @@ export function runRemove(
       console.log(`Removed alias "${name}" from ${file}.`);
     } else {
       const elsewhere = readOnlyFiles(target).join(" or ");
-      console.log(`Alias "${name}" is set in ${elsewhere}. Remove it there; agency does not edit that file.`);
+      console.log(
+        `Alias "${name}" is set in ${elsewhere}. Remove it there; agency does not edit that file.`,
+      );
     }
   } else if (isCurated && !opts.force) {
     console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);

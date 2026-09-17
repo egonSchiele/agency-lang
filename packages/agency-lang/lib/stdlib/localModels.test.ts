@@ -62,7 +62,9 @@ describe("name resolution", () => {
     expect(_resolveModelName(k, fileTarget(aliasFile))).toBe(CURATED_LOCAL_MODELS[k].uri);
   });
   it("throws listing known names for an unknown one", () => {
-    expect(() => _resolveModelName("nope", fileTarget(aliasFile))).toThrow(/Unknown local model "nope"/);
+    expect(() => _resolveModelName("nope", fileTarget(aliasFile))).toThrow(
+      /Unknown local model "nope"/,
+    );
   });
   it("user alias overrides a curated short name with the same key", () => {
     fs.writeFileSync(aliasFile, "{}");
@@ -161,9 +163,15 @@ describe("aliases", () => {
   it("unaliasModel returns { removed: true } when the alias was actually written out", () => {
     fs.writeFileSync(aliasFile, "{}");
     _aliasModel("toRemove", "hf:x/y:Q4", fileTarget(aliasFile));
-    expect(_unaliasModel("toRemove", fileTarget(aliasFile))).toEqual({ file: aliasFile, removed: true });
+    expect(_unaliasModel("toRemove", fileTarget(aliasFile))).toEqual({
+      file: aliasFile,
+      removed: true,
+    });
     // Idempotent: a second remove is a no-op and reports removed=false.
-    expect(_unaliasModel("toRemove", fileTarget(aliasFile))).toEqual({ file: aliasFile, removed: false });
+    expect(_unaliasModel("toRemove", fileTarget(aliasFile))).toEqual({
+      file: aliasFile,
+      removed: false,
+    });
   });
 });
 
@@ -1230,7 +1238,10 @@ describe("_resolveModel", () => {
     fs.writeFileSync(path.join(model, "model.safetensors"), "");
     fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { local: model } } }));
     expect(_resolveModel("mlx:org/repo")).toEqual({ backend: "mlx", target: "mlx:org/repo" });
-    expect(_resolveModel("local", fileTarget(aliasFile))).toEqual({ backend: "mlx", target: model });
+    expect(_resolveModel("local", fileTarget(aliasFile))).toEqual({
+      backend: "mlx",
+      target: model,
+    });
     expect(_resolveModel(model)).toEqual({ backend: "mlx", target: model });
   });
 

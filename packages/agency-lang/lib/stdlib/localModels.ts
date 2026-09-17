@@ -226,10 +226,7 @@ export function readModelAliases(
 
 /** The aliases in `config`, after checking each object alias's backend.
  *  `source` names where the config came from, for error messages. */
-function checkedAliases(
-  config: Record<string, any>,
-  source: string,
-): Record<string, AliasValue> {
+function checkedAliases(config: Record<string, any>, source: string): Record<string, AliasValue> {
   const aliases = (config.client?.modelAliases ?? {}) as Record<string, AliasValue>;
   for (const [name, value] of Object.entries(aliases)) {
     if (typeof value === "string") {

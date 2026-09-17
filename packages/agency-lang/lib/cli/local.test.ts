@@ -41,9 +41,9 @@ describe("agency local CLI helpers", () => {
       );
       expect(log.mock.calls.flat().some((s) => String(s).includes(aliasFile))).toBe(true);
 
-      expect(aliasList(fileTarget(aliasFile)).some((m) => m.name === "my7b" && m.source === "alias")).toBe(
-        true,
-      );
+      expect(
+        aliasList(fileTarget(aliasFile)).some((m) => m.name === "my7b" && m.source === "alias"),
+      ).toBe(true);
 
       aliasRemove("my7b", fileTarget(aliasFile));
       expect(

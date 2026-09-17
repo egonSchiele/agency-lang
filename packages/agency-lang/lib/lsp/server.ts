@@ -16,7 +16,8 @@ import * as path from "path";
 import { SymbolTable } from "../symbolTable.js";
 import { evictParseCache } from "../parseCache.js";
 import { uriToPath } from "./uri.js";
-import { getWorkspaceForFile, invalidateWorkspace } from "./workspace.js";
+import { configFileDir, getWorkspaceForFile, invalidateWorkspace } from "./workspace.js";
+import { CONFIG_FILE, LOCAL_CONFIG_FILE } from "../configTarget.js";
 import { runDiagnostics } from "./diagnostics.js";
 import { handleDefinition } from "./definition.js";
 import { getDocumentSymbols } from "./documentSymbol.js";
@@ -93,13 +94,16 @@ export function startServer(): void {
 
   connection.onInitialized(() => {
     if (!supportsWatchedFilesRegistration) return;
-    // Watch both Agency source and config files. `agency.json` changes were
-    // already handled by `onDidChangeWatchedFiles`; registering the watcher
-    // here makes that (and the new `.agency` handling) work even for clients
-    // that do not watch these globs on their own.
+    // Watch Agency source and both config files (agency.json and
+    // agency.local.json). Registering the watchers here makes
+    // `onDidChangeWatchedFiles` work even for clients that do not watch these
+    // globs on their own.
     connection.client
       .register(DidChangeWatchedFilesNotification.type, {
-        watchers: [{ globPattern: "**/*.agency" }, { globPattern: "**/agency.json" }],
+        watchers: [
+          { globPattern: "**/*.agency" },
+          ...[CONFIG_FILE, LOCAL_CONFIG_FILE].map((name) => ({ globPattern: `**/${name}` })),
+        ],
       })
       .catch(() => {
         // Registration is best-effort; some clients reject it. Open-document
@@ -181,8 +185,8 @@ export function startServer(): void {
   connection.onDidChangeWatchedFiles((params) => {
     let anyAgencyChanged = false;
     for (const change of params.changes) {
-      if (change.uri.endsWith("agency.json")) {
-        const root = uriToPath(change.uri).replace(/\/agency\.json$/, "");
+      const root = configFileDir(uriToPath(change.uri));
+      if (root !== null) {
         invalidateWorkspace(root);
         // Re-run diagnostics for all open documents in this workspace
         for (const doc of documents.all()) {
@@ -209,7 +213,7 @@ export function startServer(): void {
       }
     }
     // Types can change without the user touching the buffer — an import
-    // saved elsewhere, an agency.json edit. Nothing prompts the client to
+    // saved elsewhere, a config file edit. Nothing prompts the client to
     // re-pull tokens in that case, so ask it to.
     //
     // The typings say this returns void; it actually returns the

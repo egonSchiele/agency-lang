@@ -80,7 +80,8 @@ import { WhileLoop } from "../types/whileLoop.js";
 import { NewExpression } from "../types/newExpression.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { moduleIdToOrigin } from "../runtime/origin.js";
-import { escape, mergeDeep } from "../utils.js";
+import { escape } from "../utils.js";
+import { mergeConfig } from "../configMerge.js";
 import { generateBuiltinHelpers, mapFunctionName } from "./typescriptGenerator/builtins.js";
 import {
   DEFAULT_SCHEMA,
@@ -356,7 +357,7 @@ export class TypeScriptBuilder {
     outputFile?: string,
     initPlan?: TypeScriptBuilder["initPlan"],
   ) {
-    this.agencyConfig = mergeDeep(this.configDefaults(), config || {});
+    this.agencyConfig = mergeConfig(this.configDefaults(), config || {});
     this.compilationUnit = info;
     this.scopes = new ScopeManager(info);
     this.names = new NameClassifier(info);

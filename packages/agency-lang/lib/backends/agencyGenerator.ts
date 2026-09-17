@@ -74,7 +74,7 @@ import { ForLoop } from "../types/forLoop.js";
 import { WhileLoop } from "../types/whileLoop.js";
 import { variableTypeToString, effectSetToSource } from "./typescriptGenerator/typeToString.js";
 import { AgencyConfig, BUILTIN_VARIABLES } from "@/config.js";
-import { mergeDeep } from "@/utils.js";
+import { mergeConfig } from "@/configMerge.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
 import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE, PREFIX_OPS } from "@/types/binop.js";
@@ -200,7 +200,7 @@ export class AgencyGenerator {
   protected preserveOrder: boolean = false;
 
   constructor(args: { config?: AgencyConfig; preserveOrder?: boolean; debug?: boolean } = {}) {
-    this.agencyConfig = mergeDeep(this.configDefaults(), args.config || {});
+    this.agencyConfig = mergeConfig(this.configDefaults(), args.config || {});
     this.preserveOrder = args.preserveOrder ?? false;
     // Explicit override for callers whose output must not vary with the
     // environment (agency doc); default keeps the AGENCY_DEBUG behavior.

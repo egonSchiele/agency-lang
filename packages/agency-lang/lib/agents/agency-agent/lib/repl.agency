@@ -19,6 +19,9 @@ import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
 import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
+import { noModelChoices } from "./modelRequest.agency"
+import { Resolved } from "./models.agency"
+import { activePresetName, presetListLines, presetTable } from "./presets.agency"
 import { diffResolved, Ctx } from "./resolution.agency"
 import {
   configureSearch,
@@ -32,6 +35,8 @@ import {
   reactToSlotChange,
   modelChoiceItems,
   parseModelsFilters,
+  parsePresetName,
+  switchPreset,
  } from "./session.agency"
 import { formatTurnFailure } from "./utils.agency"
 import { configureLocalModel, getResolvedSlots, currentProvider } from "../shared.agency"
@@ -58,10 +63,7 @@ import { renderReply, renderUserLine } from "./transcript.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
-let _session: Session = {
-  pin: "",
-  slots: {}
-}
+let _session: Session = noModelChoices()
 
 
 def searchSlashCommand(): boolean {
@@ -157,13 +159,38 @@ def modelSlashCommand(command: string): boolean {
   for (change in out.changes) {
     reactToSlotChange(change)
   }
-  pushMessage("Model set:")
-  for (slot in Object.keys(out.resolved)) {
-    const resolved = out.resolved[slot]
-    if (resolved != null) {
-      pushMessage(color.dim("  ${slot}: ${resolved.model} (${resolved.via})"))
+  pushResolvedSlots("Model set:", out.resolved)
+  return true
+}
+
+def pushResolvedSlots(heading: string, resolved: Record<string, Resolved>) {
+  pushMessage(heading)
+  for (slot in Object.keys(resolved)) {
+    const value = resolved[slot]
+    if (value != null) {
+      pushMessage(color.dim("  ${slot}: ${value.model} (${value.via})"))
     }
   }
+}
+
+def presetSlashCommand(command: string): boolean {
+  const name = parsePresetName(command)
+  if (name == "") {
+    for (line in presetListLines(presetTable(), activePresetName())) {
+      pushMessage(line)
+    }
+    return true
+  }
+  const switched = switchPreset(name)
+  if (switched is failure(reason)) {
+    pushMessage(color.red("Could not switch preset: ${reason}"))
+    return true
+  }
+  _session = switched.value.session
+  for (change in switched.value.changes) {
+    reactToSlotChange(change)
+  }
+  pushResolvedSlots("Preset set: ${name}", switched.value.resolved)
   return true
 }
 
@@ -242,7 +269,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /search, /settings, /mcp, /rename, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /search, /settings, /mcp, /rename, /paste, /help",
       )
       return true
     }
@@ -257,6 +284,7 @@ def _runTurn(msg: string): boolean {
     "/model" => modelSlashCommand(trimmed)
     "/models" => modelsSlashCommand(trimmed)
     "/local" => localSlashCommand()
+    "/preset" => presetSlashCommand(trimmed)
     "/rename" => renameSlashCommand("")
     _ => {
       if (trimmed.startsWith("/rename ")) {
@@ -267,6 +295,9 @@ def _runTurn(msg: string): boolean {
       }
       if (trimmed.startsWith("/models ")) {
         return modelsSlashCommand(trimmed)
+      }
+      if (trimmed.startsWith("/preset ")) {
+        return presetSlashCommand(trimmed)
       }
       return renderUserTurn(trimmed, msg)
     }

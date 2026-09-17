@@ -3,7 +3,9 @@ import { setEnv } from "std::system"
 import { noModelChoices, noModelFlags } from "../lib/modelRequest.agency"
 import { Resolved } from "../lib/models.agency"
 import { Ctx } from "../lib/resolution.agency"
-import { setStartupModelFlags, switchModel } from "../lib/session.agency"
+import { activePresetName, readPresetTable, setPresetTable } from "../lib/presets.agency"
+import { parsePresetName, setStartupModelFlags, switchModel, switchPreset } from "../lib/session.agency"
+import { setStartupLimitFlags } from "../lib/toolLimits.agency"
 
 static const CTX: Ctx = {
   provider: "anthropic",
@@ -17,4 +19,71 @@ node modelKeepsTheStartupFlag(): string {
   const out = switchModel(noModelChoices(), "reasoning=claude-opus-4-8", CTX, {})
   const main: Resolved = out.resolved["main"]
   return "${main.model} (${main.via})"
+}
+
+def usePresets() {
+  setEnv("ANTHROPIC_API_KEY", "test-key") with approve
+  setStartupModelFlags(noModelFlags(), {})
+  setStartupLimitFlags({ maxToolCallRounds: null, maxToolResultChars: null })
+  setPresetTable(readPresetTable({
+    big: { provider: "anthropic", pin: "claude-opus-4-8", maxToolResultChars: 20000 },
+    small: { provider: "anthropic", pin: "claude-sonnet-4-6" },
+    typo: { provider: "no-such-provider" }
+  }))
+}
+
+node switchAppliesModelsAndLimits(): string {
+  usePresets()
+  const switched = switchPreset("big")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  const main: Resolved = switched.value.resolved["main"]
+  return "${activePresetName()} ${main.model} (${main.via}) ${switched.value.limits.maxToolResultChars}"
+}
+
+// A limit the new preset leaves out goes back to the default.
+node switchResetsAnUnsetLimit(): number {
+  usePresets()
+  switchPreset("big")
+  const switched = switchPreset("small")
+  if (isFailure(switched)) {
+    return -1
+  }
+  return switched.value.limits.maxToolResultChars
+}
+
+node startupFlagStillWins(): string {
+  usePresets()
+  setStartupModelFlags({ ...noModelFlags(), pin: "claude-haiku-4-5" }, {})
+  const switched = switchPreset("big")
+  if (isFailure(switched)) {
+    return "failed: ${switched.error}"
+  }
+  const main: Resolved = switched.value.resolved["main"]
+  return "${main.model} (${main.via})"
+}
+
+node unknownPresetChangesNothing(): string {
+  usePresets()
+  switchPreset("small")
+  const switched = switchPreset("nope")
+  if (isFailure(switched)) {
+    return "${activePresetName()}: ${switched.error}"
+  }
+  return "unexpected success"
+}
+
+node unresolvablePresetChangesNothing(): string {
+  usePresets()
+  switchPreset("small")
+  const switched = switchPreset("typo")
+  if (isFailure(switched)) {
+    return activePresetName()
+  }
+  return "unexpected success"
+}
+
+node presetNameFromCommand(): string {
+  return "[${parsePresetName("/preset")}] [${parsePresetName("/preset   cheap ")}]"
 }

@@ -35,8 +35,8 @@ import {
   missingProviderEnvVar,
   Resolved,
  } from "./models.agency"
-import { activePreset } from "./presets.agency"
-import { configureSearch } from "./search.agency"
+import { activePreset, findPreset, setActivePreset } from "./presets.agency"
+import { configureSearch, getSearchSession } from "./search.agency"
 import {
   diffResolved,
   Ctx,
@@ -48,6 +48,7 @@ import {
   loadSettings,
  } from "./settings.agency"
 import { SLOTS } from "./slots.agency"
+import { ToolLimits, applyToolLimits } from "./toolLimits.agency"
 import {
   demoteProvider,
   applyResolved,
@@ -358,4 +359,64 @@ export def pickModelsForAgent(args: Record<string, any>) {
     return
   }
   configureSearch(requestIsLocal(request))
+}
+
+/** What a switch produced. The first three fields have the meaning they
+  have in switchModel's result; `session` is always the empty choices. */
+export type PresetSwitch = {
+  session: Session;
+  resolved: Record<string, Resolved>;
+  changes: SlotChange[];
+  limits: ToolLimits
+}
+
+// configureSearch reads and saves settings.json and may ask the user a
+// question, so it runs only when the switch changes local versus hosted,
+// the same case /local covers.
+def followLocality(isLocal: boolean) {
+  if (isLocal != getSearchSession().isLocal) {
+    configureSearch(isLocal)
+  }
+}
+
+/** The preset name in a `/preset [name]` command line, or "". */
+export def parsePresetName(cmd: string): string {
+  const prefix = "/preset"
+  if (!cmd.startsWith(prefix)) {
+    return ""
+  }
+  return cmd.substring(prefix.length).trim()
+}
+
+export def switchPreset(name: string): Result<PresetSwitch> {
+  """
+  Switch this session to a saved preset, with no /model choices. Takes
+  effect on the next turn. Changes nothing, and returns the reason, when
+  the preset is unknown or its models do not resolve.
+
+  @param name - The preset's name
+  """
+  const preset = findPreset(name)
+  if (preset is failure(reason)) {
+    return failure(reason)
+  }
+  const before = getResolvedSlots()
+  const request: ModelRequest = {
+    flags: _startupFlags,
+    preset: preset.value,
+    choices: noModelChoices()
+  }
+  const applied = applyModelRequest(request, _startupModelSettings)
+  if (applied is failure(reason)) {
+    return failure(reason)
+  }
+  followLocality(requestIsLocal(request))
+  setActivePreset(name)
+  const after = getResolvedSlots()
+  return success({
+    session: noModelChoices(),
+    resolved: after,
+    changes: diffResolved(before, after),
+    limits: applyToolLimits(preset.value, false)
+  })
 }

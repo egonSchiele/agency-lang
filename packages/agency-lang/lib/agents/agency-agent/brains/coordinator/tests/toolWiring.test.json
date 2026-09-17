@@ -4,56 +4,126 @@
       "nodeName": "codeToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [{ "return": "pong" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
     },
     {
       "nodeName": "researchToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [{ "return": "pong" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
     },
     {
       "nodeName": "composedAgencyResearchToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [{ "return": "pong" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
     },
     {
       "nodeName": "composedResearchToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [{ "return": "pong" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
     },
     {
       "nodeName": "oracleToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [{ "return": "pong" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
     },
     {
       "nodeName": "explorerToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [{ "return": "pong" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
     },
     {
       "nodeName": "noBuiltinToolUsesTheLearnedPrefix",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     },
     {
       "nodeName": "coordinatorToolsHaveUniqueNames",
       "input": "",
       "expectedOutput": "\"ok\"",
-      "evaluationCriteria": [{ "type": "exact" }],
-      "llmMocks": [{ "return": "pong" }]
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
+    },
+    {
+      "nodeName": "coordinatorSkillsListPresets",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

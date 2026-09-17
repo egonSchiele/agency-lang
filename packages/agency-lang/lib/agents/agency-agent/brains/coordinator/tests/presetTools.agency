@@ -1,0 +1,131 @@
+/*
+ * The preset tools against a sandboxed settings.json. Every node checks
+ * the sandbox first, so a run without the test runner's agent-home
+ * override cannot touch the real file.
+ */
+import { exists } from "std::shell"
+
+import {
+  POLICY_DIR,
+  SETTINGS_FILE,
+  SETTINGS_PATH,
+  usingDefaultAgentHome,
+ } from "../../../lib/config.agency"
+import { presetTable } from "../../../lib/presets.agency"
+import { deletePreset, savePreset, setDefaultPreset } from "../presetTools.agency"
+
+static const START = """{"search":{"backend":"tavily"},"model":{"slots":{"fast":"gpt-5.5"}},"presets":{"opus":{"default":true,"provider":"anthropic"}}}"""
+
+def startFrom(text: string): boolean {
+  if (usingDefaultAgentHome()) {
+    return false
+  }
+  write(SETTINGS_FILE, text, POLICY_DIR) with approve
+  return true
+}
+
+def fileText(): string {
+  const text = read(SETTINGS_FILE, POLICY_DIR) with approve
+  if (isFailure(text)) {
+    return "unreadable"
+  }
+  return text.value
+}
+
+node saveChangesOnlyPresets(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let reply = ""
+  handle {
+    reply = savePreset("cheap", { provider: "openrouter", slots: { main: "deepseek/deepseek-r1" } })
+  } with approve
+  return "${reply}\n${fileText()}"
+}
+
+node replaceKeepsTheDefault(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let reply = ""
+  handle {
+    reply = savePreset("opus", { provider: "anthropic", pin: "claude-opus-4-8" })
+  } with approve
+  return "${reply}\n${fileText()}"
+}
+
+node setDefaultMovesIt(): string {
+  if (!startFrom("""{"presets":{"opus":{"default":true,"provider":"anthropic"},"cheap":{"provider":"openrouter"}}}""")) {
+    return "not sandboxed"
+  }
+  let reply = ""
+  handle {
+    reply = setDefaultPreset("cheap")
+  } with approve
+  return "${reply}\n${fileText()}"
+}
+
+node deleteTheDefault(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let reply = ""
+  handle {
+    reply = deletePreset("opus")
+  } with approve
+  return "${reply}\n${fileText()}"
+}
+
+node badPresetWritesNothingAndAsksNothing(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let asked = 0
+  let reply = ""
+  handle {
+    reply = savePreset("Cheap", { maxToolCallRounds: 0 })
+  } with (intr) {
+    asked = asked + 1
+    return approve()
+  }
+  const unchanged = fileText() == START
+  return "${asked} ${unchanged} ${reply}"
+}
+
+node corruptFileIsLeftAlone(): string {
+  if (!startFrom("not json{{{")) {
+    return "not sandboxed"
+  }
+  let reply = ""
+  handle {
+    reply = savePreset("cheap", { provider: "openrouter" })
+  } with approve
+  const text = "${fileText() == "not json{{{"} ${reply}"
+  return text.replaceAll(SETTINGS_PATH, "<path>")
+}
+
+node rejectedWriteSavesNothing(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  let reply = ""
+  handle {
+    reply = savePreset("cheap", { provider: "openrouter" })
+  } with (intr) {
+    if (intr.effect == "std::write") {
+      return reject("not now")
+    }
+    return approve()
+  }
+  return "${fileText() == START} ${reply.startsWith("Not saved:")}"
+}
+
+node saveRefreshesTheTable(): string {
+  if (!startFrom(START)) {
+    return "not sandboxed"
+  }
+  handle {
+    savePreset("cheap", { provider: "openrouter" })
+  } with approve
+  return Object.keys(presetTable().presets).join(",")
+}

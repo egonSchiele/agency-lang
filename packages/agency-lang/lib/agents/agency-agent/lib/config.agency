@@ -34,3 +34,10 @@ export static const SESSION_POLICY_PATH = path.join(POLICY_DIR, SESSION_POLICY_F
 export static const HISTORY_PATH = path.join(POLICY_DIR, HISTORY_FILE)
 export static const SETTINGS_FILE = "settings.json"
 export static const SETTINGS_PATH = path.join(POLICY_DIR, SETTINGS_FILE)
+
+/** True when no AGENCY_AGENT_HOME override is in effect. Tests that
+  write to the agent home check this first, so a run without the test
+  runner's sandbox cannot touch the real ~/.agency-agent. */
+export def usingDefaultAgentHome(): boolean {
+  return POLICY_DIR == resolveAgentHome(null)
+}

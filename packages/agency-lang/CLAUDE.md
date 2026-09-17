@@ -282,6 +282,7 @@ Other process docs:
 - `docs/dev/agents/harness-and-model.md` — How to divide credit between harness and model, the six tiers a fix can land in, and what a harness genuinely cannot do.
 - `docs/dev/agents/harness-guidelines.md` — The prescriptive companion: must-dos and must-nots for building and changing the agent harness.
 - `docs/dev/agents/agent-sessions.md` — Save and resume for `agency agent`: a checkpoint between turns, why it is taken from TypeScript after the turn's frames return, where the restore runs, and what a restore does not bring back.
+- `docs/dev/agents/agent-presets.md` — Presets for `agency agent`: the rule table, the `ModelRequest` that startup, `/model`, and `/preset` all resolve, the preset layer, why presets are read once at startup, and how the coordinator's tools write `settings.json`.
 - `docs/dev/agents/learned-catalog.md` — The skills a user taught the agent and the tools it wrote: `designSkill` and `designTool` pointed at the agent home as the coordinator's `learnSkill` and `writeToolFor`, the `learned_` prefix and name cap, and `learnedExtras()`, the per-dispatch list a subagent adds to its tools.
 - `docs/dev/agents/approval-policies.md` — How approval policy rules match, and the matching rules that have caused surprises.
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.

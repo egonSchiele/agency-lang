@@ -151,15 +151,11 @@ node parityMainAnthropic(): Resolved {
 // buildLayers: CLI --model gpt-5.5 over settings slots.reasoning=opus gives gpt-5.5.
 node buildLayersImmediacyOuter(): Resolved {
   const layers = buildLayers(
-    "",
-    {},
-    "gpt-5.5",
-    {},
-    {
-    slots: {
-      reasoning: "opus"
-    }
-  },
+    [
+      { name: "in-session", pin: "", slots: {} },
+      { name: "cli", pin: "gpt-5.5", slots: {} },
+      { name: "settings", pin: "", slots: { reasoning: "opus" } },
+    ],
     ["anthropic", "openai"],
     false,
   )
@@ -188,15 +184,11 @@ node buildLayersImmediacyOuter(): Resolved {
 // true must still split the embedding value.
 node derivedSlotAlwaysParsesPrefix(): Resolved {
   const layers = buildLayers(
-    "",
-    {},
-    "",
-    {},
-    {
-    slots: {
-      embedding: "openai/text-embedding-3-small"
-    }
-  },
+    [
+      { name: "in-session", pin: "", slots: {} },
+      { name: "cli", pin: "", slots: {} },
+      { name: "settings", pin: "", slots: { embedding: "openai/text-embedding-3-small" } },
+    ],
     ["anthropic", "openai", "google"],
     true,
   )
@@ -207,15 +199,11 @@ node derivedSlotAlwaysParsesPrefix(): Resolved {
 // provider instead of inheriting the ctx provider.
 node derivedSlotNeverInheritsProvider(): Resolved {
   const layers = buildLayers(
-    "",
-    {},
-    "",
-    {},
-    {
-    slots: {
-      embedding: "text-embedding-3-small"
-    }
-  },
+    [
+      { name: "in-session", pin: "", slots: {} },
+      { name: "cli", pin: "", slots: {} },
+      { name: "settings", pin: "", slots: { embedding: "text-embedding-3-small" } },
+    ],
     ["anthropic", "openai", "google"],
     false,
   )

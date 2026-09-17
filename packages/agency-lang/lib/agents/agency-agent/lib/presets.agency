@@ -1,0 +1,377 @@
+/** @module
+  @summary The saved presets: the copy read at startup, the preset this
+  session uses, how startup picks one, and the changes the coordinator's
+  preset tools make to the `presets` key of settings.json. The only side
+  effects are startPreset's printing and the module's two globals.
+*/
+import { filterEntries, mapValues } from "std::object"
+
+import { SETTINGS_PATH } from "./config.agency"
+// PresetSlots is imported only because the generated schema for Preset
+// refers to it. Without the import, presets.js fails to load.
+import { Preset, PresetSlots, checkPreset, isPlainObject } from "./presetRules.agency"
+import { Settings } from "./settings.agency"
+
+/** The saved presets that pass the rules, a message per preset that does
+  not, and a message when `presets` itself is not an object. */
+export type PresetTable = {
+  presets: Record<string, Preset>;
+  problems: Record<string, string>;
+  fileProblem: string
+}
+
+/** The preset a run starts with ("" for none) and what to warn about. */
+export type PresetChoice = {
+  name: string;
+  warnings: string[]
+}
+
+/** One change to the saved presets. `preset` is set only for "save". */
+export type PresetEdit = {
+  kind: "save" | "delete" | "setDefault";
+  name: string;
+  preset: Preset | null
+}
+
+/** What was saved under a name before an edit, for the tool's reply. */
+export type PresetEditOutcome = {
+  existed: boolean;
+  wasDefault: boolean
+}
+
+/** What listPresets returns to the model. */
+export type PresetListing = {
+  presets: Record<string, Preset>;
+  default: string;
+  active: string;
+  invalid: Record<string, string>
+}
+
+def emptyTable(): PresetTable {
+  return {
+    presets: {},
+    problems: {},
+    fileProblem: ""
+  }
+}
+
+// Read once at startup, before the policy handler exists, and kept
+// current by the preset tools, so /preset and listPresets raise no
+// interrupt. A resumed session restores both globals.
+let _table: PresetTable = emptyTable()
+let _active: string = ""
+
+export def setPresetTable(table: PresetTable) {
+  _table = table
+  // A deleted preset must not stay the session's active one, or a preset
+  // saved under that name later would be reported as active without
+  // having been applied.
+  if (!hasSavedEntry(table.presets, _active)) {
+    _active = ""
+  }
+}
+
+export def presetTable(): PresetTable {
+  return _table
+}
+
+export def setActivePreset(name: string) {
+  _active = name
+}
+
+export def activePresetName(): string {
+  return _active
+}
+
+/** The active preset, or null when there is none or it was deleted. */
+export def activePreset(): Preset | null {
+  return savedEntry(_table.presets, _active)
+}
+
+// Lookups that only see keys the record really has. A preset may be
+// named `constructor`, and a plain `record[name]` would answer with
+// Object.prototype's value for a name nobody saved.
+def hasSavedEntry(record: Record<string, any>, name: string): boolean {
+  const names = Object.keys(record)
+  return names.includes(name)
+}
+
+// An entry saved as null is present but unusable: hasSavedEntry says it
+// is there, and this returns null for it, like a name nobody saved.
+def savedEntry(record: Record<string, any>, name: string): any {
+  if (!hasSavedEntry(record, name)) {
+    return null
+  }
+  return record[name]
+}
+
+export def readPresetTable(raw: any): PresetTable {
+  """
+  Check every saved preset. Valid ones go in `presets`, and each invalid
+  one gets a message in `problems`.
+
+  @param raw - The `presets` value from settings.json, possibly missing or malformed
+  """
+  if (raw == null) {
+    return emptyTable()
+  }
+  if (!isPlainObject(raw)) {
+    return {
+      ...emptyTable(),
+      fileProblem: "presets must be an object"
+    }
+  }
+  const checked = mapValues(raw, \(preset, name) -> checkPreset(name, preset, true))
+  const passed = filterEntries(checked, \(result, name) -> !isFailure(result))
+  const failed = filterEntries(checked, \(result, name) -> isFailure(result))
+  return {
+    presets: mapValues(passed, \(result, name) -> result.value),
+    problems: mapValues(failed, \(result, name) -> result.error),
+    fileProblem: ""
+  }
+}
+
+export def defaultNames(table: PresetTable): string[] {
+  return [name for name in Object.keys(table.presets) if table.presets[name].default == true]
+}
+
+def savedNamesSentence(table: PresetTable): string {
+  const names = Object.keys(table.presets)
+  if (names.length == 0) {
+    return "No presets are saved in ${SETTINGS_PATH}."
+  }
+  return "Saved presets: ${names.join(", ")}."
+}
+
+export def findPreset(name: string): Result<Preset> {
+  """
+  The saved preset with this name, or a failure that says why it cannot be used.
+
+  @param name - The preset's name
+  """
+  const problem = savedEntry(_table.problems, name)
+  if (problem != null) {
+    return failure(problem)
+  }
+  const preset = savedEntry(_table.presets, name)
+  if (preset == null) {
+    return failure("No preset named ${name}. ${savedNamesSentence(_table)}")
+  }
+  return success(preset)
+}
+
+def tableWarnings(table: PresetTable): string[] {
+  const perPreset = [
+    "Warning: ${table.problems[name]}, in ${SETTINGS_PATH}; ignoring it."
+    for name in Object.keys(table.problems)
+  ]
+  if (table.fileProblem == "") {
+    return perPreset
+  }
+  return ["Warning: ${table.fileProblem} in ${SETTINGS_PATH}; ignoring it.", ...perPreset]
+}
+
+def sayNames(names: string[]): string {
+  if (names.length == 2) {
+    return "${names[0]} and ${names[1]} are both"
+  }
+  const allButLast = names.slice(0, names.length - 1).join(", ")
+  return "${allButLast}, and ${names[names.length - 1]} are all"
+}
+
+def namedChoice(name: string, table: PresetTable, warnings: string[]): Result<PresetChoice> {
+  const problem = savedEntry(table.problems, name)
+  if (problem != null) {
+    return failure("--preset ${name}: ${problem}")
+  }
+  if (savedEntry(table.presets, name) == null) {
+    return failure("Unknown --preset value: ${name}. ${savedNamesSentence(table)}")
+  }
+  return success({
+    name: name,
+    warnings: warnings
+  })
+}
+
+export def choosePreset(flag: string, table: PresetTable): Result<PresetChoice> {
+  """
+  Pick the preset a run starts with: the --preset value, else the one
+  default preset, else none. Two or more defaults mean none, with a warning.
+
+  @param flag - The --preset value, or "" when it was not given
+  @param table - The saved presets
+  """
+  const warnings = tableWarnings(table)
+  if (flag != "") {
+    return namedChoice(flag, table, warnings)
+  }
+  const defaults = defaultNames(table)
+  if (defaults.length > 1) {
+    const warning = "Warning: presets ${sayNames(defaults)} marked default in ${SETTINGS_PATH}; using no preset."
+    return success({
+      name: "",
+      warnings: [...warnings, warning]
+    })
+  }
+  return success({
+    name: defaults[0] ?? "",
+    warnings: warnings
+  })
+}
+
+export def startPreset(flag: string, settings: Settings) {
+  """
+  Load the saved presets and pick the one this run starts with. Prints
+  any warnings. Exits when --preset names a preset that cannot be used.
+
+  @param flag - The --preset value, or ""
+  @param settings - settings.json as loaded at startup
+  """
+  const table = readPresetTable(settings.presets)
+  setPresetTable(table)
+  const choice = choosePreset(flag, table)
+  if (choice is failure(reason)) {
+    print(color.red(reason))
+    process.exit(1)
+    return
+  }
+  for (warning in choice.value.warnings) {
+    print(color.yellow(warning))
+  }
+  setActivePreset(choice.value.name)
+}
+
+export def presetListing(table: PresetTable, active: string): PresetListing {
+  // Two defaults mean startup uses none, so report none here too.
+  const defaults = defaultNames(table)
+  const theDefault = if defaults.length == 1 then defaults[0] else ""
+  return {
+    presets: table.presets,
+    default: theDefault,
+    active: active,
+    invalid: table.problems
+  }
+}
+
+def presetMarks(preset: Preset, isActive: boolean): string {
+  const candidates = [
+    { label: "active", applies: isActive },
+    { label: "default", applies: preset.default == true },
+  ]
+  const marks = [mark.label for mark in candidates if mark.applies]
+  if (marks.length == 0) {
+    return ""
+  }
+  return " (${marks.join(", ")})"
+}
+
+/** The lines /preset prints with no argument. */
+export def presetListLines(table: PresetTable, active: string): string[] {
+  const names = Object.keys(table.presets)
+  const invalid = Object.keys(table.problems)
+  if (names.length == 0 && invalid.length == 0) {
+    return ["No presets are saved. Ask the agent to make one, or add them to ${SETTINGS_PATH}."]
+  }
+  const rows = ["  ${name}${presetMarks(table.presets[name], name == active)}" for name in names]
+  const broken = ["  ${name} (not valid: ${table.problems[name]})" for name in invalid]
+  return ["Presets:", ...rows, ...broken, "Switch with /preset <name>."]
+}
+
+def savedPresets(settings: Settings): Record<string, any> {
+  return settings.presets ?? {}
+}
+
+export def editOutcome(settings: Settings, name: string): PresetEditOutcome {
+  const presets = savedPresets(settings)
+  const previous = savedEntry(presets, name)
+  return {
+    existed: hasSavedEntry(presets, name),
+    wasDefault: previous != null && previous.default == true
+  }
+}
+
+def withPreset(presets: Record<string, any>, name: string, preset: Preset): Record<string, any> {
+  return {
+    ...presets,
+    ...Object.fromEntries([[name, preset]])
+  }
+}
+
+// savePreset takes no `default`, so a replace would drop the flag.
+def keepDefaultFlag(previous: any, preset: Preset): Preset {
+  if (previous != null && previous.default == true) {
+    return {
+      ...preset,
+      default: true
+    }
+  }
+  return preset
+}
+
+def withDefaultFlag(preset: any, isDefault: boolean): any {
+  // A hand-edited file can hold a null or non-object entry. Leave it as
+  // it is: filterEntries would throw on it.
+  if (!isPlainObject(preset)) {
+    return preset
+  }
+  const rest = filterEntries(preset, \(fieldValue, field) -> field != "default")
+  if (isDefault) {
+    return {
+      ...rest,
+      default: true
+    }
+  }
+  return rest
+}
+
+def editedPresets(presets: Record<string, any>, edit: PresetEdit): Record<string, any> {
+  return match(edit.kind) {
+    "save" => withPreset(presets, edit.name, keepDefaultFlag(savedEntry(presets, edit.name), edit.preset ?? {}))
+    "delete" => filterEntries(presets, \(preset, name) -> name != edit.name)
+    "setDefault" => mapValues(presets, \(preset, name) -> withDefaultFlag(preset, name == edit.name))
+    _ => presets
+  }
+}
+
+// A delete may name an invalid preset, so the user can clear it out. A
+// new default must be valid, or the next start would ignore it.
+def editProblem(presets: Record<string, any>, edit: PresetEdit): string {
+  if (edit.kind == "save" && edit.preset == null) {
+    return "no preset was given to save"
+  }
+  if (edit.kind != "save" && !hasSavedEntry(presets, edit.name)) {
+    return "no preset named ${edit.name} is saved"
+  }
+  if (edit.kind != "setDefault") {
+    return ""
+  }
+  const valid = checkPreset(edit.name, savedEntry(presets, edit.name), true)
+  if (valid is failure(reason)) {
+    return "it cannot be the default: ${reason}"
+  }
+  return ""
+}
+
+export def applyPresetEdit(settings: Settings, edit: PresetEdit): Result<Settings> {
+  """
+  Return settings with one change made to its presets. Every other key
+  is kept as it was.
+
+  @param settings - settings.json as read from disk
+  @param edit - The change
+  """
+  if (settings.presets != null && !isPlainObject(settings.presets)) {
+    return failure(
+      "the presets in ${SETTINGS_PATH} are not an object; fix the file by hand, then try again",
+    )
+  }
+  const presets = savedPresets(settings)
+  const problem = editProblem(presets, edit)
+  if (problem != "") {
+    return failure(problem)
+  }
+  return success({
+    ...settings,
+    presets: editedPresets(presets, edit)
+  })
+}

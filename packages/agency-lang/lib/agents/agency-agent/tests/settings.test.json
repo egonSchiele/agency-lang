@@ -140,6 +140,46 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "readRefusesACorruptFile",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "readTreatsAMissingFileAsEmpty",
+      "input": "",
+      "expectedOutput": "\"{}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rawRoundTripKeepsWhatItRead",
+      "input": "",
+      "expectedOutput": "\"{\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\",\\\"typo\\\":\\\"x\\\"}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedWriteIsAFailure",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

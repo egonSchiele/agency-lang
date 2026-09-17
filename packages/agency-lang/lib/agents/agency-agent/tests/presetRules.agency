@@ -1,0 +1,89 @@
+import { checkPreset, presetProblems } from "../lib/presetRules.agency"
+
+// Each rule, one passing and one failing case. A node returns the list of
+// problems, so an expected [] is a pass and a non-empty list names the rule.
+
+node goodHostedPreset(): string[] {
+  return presetProblems("cheap", {
+    provider: "openrouter",
+    slots: { main: "deepseek/deepseek-r1", reasoning: "z-ai/glm-5.2" },
+    maxToolCallRounds: 30
+  }, true)
+}
+
+node goodLocalPreset(): string[] {
+  return presetProblems("offline", {
+    local: "qwen3.5-2b",
+    slots: { embedding: "mlx/nomic-embed" },
+    maxToolResultChars: 0
+  }, true)
+}
+
+node badName(): string[] {
+  return presetProblems("Cheap Preset", { provider: "openai" }, true)
+}
+
+node localWithPin(): string[] {
+  return presetProblems("x", { local: "qwen3.5-2b", pin: "gpt-5.5" }, true)
+}
+
+node localWithProvider(): string[] {
+  return presetProblems("x", { local: "qwen3.5-2b", provider: "anthropic" }, true)
+}
+
+node localWithChatSlot(): string[] {
+  return presetProblems("x", { local: "qwen3.5-2b", slots: { fast: "gpt-5.5" } }, true)
+}
+
+node embeddingWithoutProvider(): string[] {
+  return presetProblems("x", { slots: { embedding: "text-embedding-3-small" } }, true)
+}
+
+node zeroRounds(): string[] {
+  return presetProblems("x", { maxToolCallRounds: 0 }, true)
+}
+
+node negativeChars(): string[] {
+  return presetProblems("x", { maxToolResultChars: -1 }, true)
+}
+
+node fractionalRounds(): string[] {
+  return presetProblems("x", { maxToolCallRounds: 2.5 }, true)
+}
+
+node unknownField(): string[] {
+  return presetProblems("x", { maxToolCalls: 30 }, true)
+}
+
+node unknownSlot(): string[] {
+  return presetProblems("x", { slots: { resoning: "opus" } }, true)
+}
+
+node wrongTypes(): string[] {
+  return presetProblems("x", { pin: 5, default: "yes" }, true)
+}
+
+node defaultNotAllowedFromTheTool(): string[] {
+  return presetProblems("x", { provider: "openai", default: true }, false)
+}
+
+node notAnObject(): string[] {
+  return presetProblems("x", "openai", true)
+}
+
+// Null fields are what a tool call sends for a field it leaves out.
+node checkDropsNullsAndRenamesAliases(): string {
+  const checked = checkPreset("x", { provider: "openai", pin: null, slots: { fast: "gpt-5.5", slow: null } }, false)
+  if (isFailure(checked)) {
+    return "failed: ${checked.error}"
+  }
+  return JSON.stringify(checked.value)
+}
+
+node checkNamesThePreset(): string {
+  const checked = checkPreset("x", { maxToolCallRounds: 0 }, true)
+  if (isFailure(checked)) {
+    return checked.error
+  }
+  return "unexpected success"
+}

@@ -26,9 +26,10 @@ import {
   LOCAL_PROVIDERS,
   Resolved,
  } from "./lib/models.agency"
+import { ModelRequest, detectionInputs, requestLayers, requestProvider } from "./lib/modelRequest.agency"
 import { resolveAll, buildLayers, Ctx } from "./lib/resolution.agency"
 import { resolveAgentHome } from "./lib/config.agency"
-import { getCapabilitySettings, getModelSettings, loadSettings } from "./lib/settings.agency"
+import { ModelSettings, getCapabilitySettings, loadSettings } from "./lib/settings.agency"
 import { slotKind } from "./lib/slots.agency"
 
 
@@ -40,6 +41,11 @@ export static const ONE_SHOT_MAX_TOOL_CALL_ROUNDS = 100
 // Interactive turns get fewer rounds than one-shot: a user is there to
 // ask for more.
 export static const INTERACTIVE_MAX_TOOL_CALL_ROUNDS = 50
+
+// The runtime's own cap on one tool result (DEFAULT_TOOL_RESULT_CHARS in
+// lib/runtime/prompt.ts). Agency code cannot read that constant, and
+// /preset needs a value to go back to.
+export static const DEFAULT_MAX_TOOL_RESULT_CHARS = 100000
 
 /** Effective maxToolCallRounds for a run. An explicit --max-tool-call-rounds
   always wins; otherwise a one-shot run gets ONE_SHOT_MAX_TOOL_CALL_ROUNDS and
@@ -100,8 +106,8 @@ export def enableAgentMemory(embeddings: (EmbeddingsOverride | null) = null) {
   enableMemory(memoryConfigFor(embeddings)) with approve
 }
 
-// The slow ("deep reasoning") model + its provider, set once by
-// `configureModels()`. The deep subagents (oracle, explorer) read these.
+// The slow ("deep reasoning") model + its provider, set by
+// `applyResolved()`. The deep subagents (oracle, explorer) read these.
 // An empty slowProvider means "let smoltalk resolve the provider from
 // the model name".
 let slowModel: string = "gpt-5.6-sol"
@@ -391,83 +397,47 @@ export def currentProvider(): string {
   return slowProvider
 }
 
-/** Resolve and apply the agent's models from CLI flag values (each
- *  already normalized to "" when absent). The fast model becomes the
- *  run-wide default; the slow model is stored for the deep subagents.
- *  Explicit model flags win; an explicit `--provider` for a recognized
- *  provider selects that provider's default models and skips env
- *  auto-detection; otherwise a provider is detected from API-key env
- *  vars. Exits the process with a printed message on any unresolvable
- *  combination (no key, missing key for a forced provider, or a custom
- *  `--provider` with no model). Resolution logic lives in
- *  `lib/models.agency`; this shell just applies the result. */
-export def configureModels(
-  model: string,
-  fast: string,
-  slow: string,
-  embedding: string,
-  provider: string,
-) {
-  const settings = getModelSettings(loadSettings())
-
-  // A saved provider preference (settings.model.provider) acts like --provider
-  // (a forced provider that skips env auto-detection); an explicit --provider
-  // still wins, and env auto-detection is the fallback when neither is set.
-  let effectiveProvider = provider
-  if (effectiveProvider == "" && settings.provider != null && settings.provider != "") {
-    effectiveProvider = settings.provider
+/** Resolve a request against a known provider context. /model calls this
+  directly with the session's current provider; resolveHostedModels calls
+  it after detecting one. */
+export def resolveRequestAgainst(
+  request: ModelRequest,
+  settings: ModelSettings,
+  ctx: Ctx,
+  providerEstablished: boolean,
+): Result<Record<string, Resolved>> {
+  const raw = requestLayers(request, settings)
+  const layers = buildLayers(raw, knownProviders(), providerEstablished)
+  const all = resolveAll(layers, ctx)
+  if (all is failure(reason)) {
+    return failure(reason)
   }
+  return resolveLocalEmbeddingSlot(promoteAll(all.value))
+}
 
-  const detected = resolveDetected(model, fast, slow, effectiveProvider)
-  if (isFailure(detected)) {
-    print(detected.error)
-    process.exit(1)
-    return
+export def resolveHostedModels(
+  request: ModelRequest,
+  settings: ModelSettings,
+): Result<Record<string, Resolved>> {
+  """
+  Resolve a hosted run's models: pick the provider (the request's, else
+  detection from API keys), then resolve every slot. The failure is a
+  message for the user; the caller decides whether to exit.
+
+  @param request - What the run asked for
+  @param settings - settings.model
+  """
+  const provider = requestProvider(request, settings)
+  const inputs = detectionInputs(request)
+  const detected = resolveDetected(inputs.pin, inputs.main, inputs.reasoning, provider)
+  if (detected is failure(reason)) {
+    return failure(reason)
   }
-
-  // CLI flags become layers: --model is a global pin; --fastmodel/--slowmodel
-  // are per-slot overrides. Settings (settings.json model.slots/pin) sit below
-  // CLI. The built-in price-default fills anything unset. See spec 3.3.
   const ctx: Ctx = {
     provider: detected.value,
     price: "standard"
   }
-  let cliSlots: Record<string, string> = {}
-  if (embedding != "") {
-    cliSlots["embedding"] = embedding
-  }
-  if (fast != "") {
-    cliSlots["main"] = fast
-  }
-  if (slow != "") {
-    cliSlots["reasoning"] = slow
-  }
-
-  // providerEstablished is true when a provider is fixed (CLI or settings) so
-  // parseModelSpec will not split a unified provider/model and override it.
-  const providerEstablished = effectiveProvider != ""
-  const layers = buildLayers(
-    "",
-    {},
-    model,
-    cliSlots,
-    settings,
-    knownProviders(),
-    providerEstablished,
-  )
-  const all = resolveAll(layers, ctx)
-  if (isFailure(all)) {
-    print(all.error)
-    process.exit(1)
-    return
-  }
-  const localized = resolveLocalEmbeddingSlot(promoteAll(all.value))
-  if (isFailure(localized)) {
-    print(localized.error)
-    process.exit(1)
-    return
-  }
-  applyResolved(localized.value)
+  return resolveRequestAgainst(request, settings, ctx, provider != "")
 }
 
 /** Turn an embedding slot value for a local provider into the model name
@@ -583,7 +553,7 @@ export def configureLocalModel(value: string, embeddingSpec: string = "") {
   // model name, a download error) as a Result instead of letting the runtime
   // convert the throw to a Failure and silently continue into the REPL. A
   // local-model setup failure is fatal: print it and exit, mirroring how
-  // `configureModels` exits on an unresolvable provider.
+  // startup exits on an unresolvable provider.
   // No explicit cache dir: use the shared default (AGENCY_MODELS_DIR env,
   // else agency.json client.modelsDir, else ~/.agency-agent/models) so a CLI
   // `agency local download` and the agent reuse the same downloaded models.

@@ -1,0 +1,175 @@
+{
+  "sourceFile": "presetRules.agency",
+  "tests": [
+    {
+      "nodeName": "goodHostedPreset",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "goodLocalPreset",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badName",
+      "input": "",
+      "expectedOutput": "[\"its name must use lowercase letters, digits, and hyphens, and start with a letter\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localWithPin",
+      "input": "",
+      "expectedOutput": "[\"local cannot be combined with pin\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localWithProvider",
+      "input": "",
+      "expectedOutput": "[\"local cannot be combined with provider\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "localWithChatSlot",
+      "input": "",
+      "expectedOutput": "[\"local cannot be combined with slots.fast\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "embeddingWithoutProvider",
+      "input": "",
+      "expectedOutput": "[\"slots.embedding needs the provider/model form, e.g. openai/text-embedding-3-small\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "zeroRounds",
+      "input": "",
+      "expectedOutput": "[\"maxToolCallRounds must be a whole number above zero\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "negativeChars",
+      "input": "",
+      "expectedOutput": "[\"maxToolResultChars must be a whole number, zero or more\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "fractionalRounds",
+      "input": "",
+      "expectedOutput": "[\"maxToolCallRounds must be a whole number above zero\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownField",
+      "input": "",
+      "expectedOutput": "[\"has an unknown field 'maxToolCalls'\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownSlot",
+      "input": "",
+      "expectedOutput": "[\"has an unknown slot 'resoning'\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "wrongTypes",
+      "input": "",
+      "expectedOutput": "[\"pin must be a non-empty string\",\"default must be true or false\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "defaultNotAllowedFromTheTool",
+      "input": "",
+      "expectedOutput": "[\"has an unknown field 'default'\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "notAnObject",
+      "input": "",
+      "expectedOutput": "[\"must be an object\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "checkDropsNullsAndRenamesAliases",
+      "input": "",
+      "expectedOutput": "\"{\\\"provider\\\":\\\"openai\\\",\\\"slots\\\":{\\\"main\\\":\\\"gpt-5.5\\\"}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "checkNamesThePreset",
+      "input": "",
+      "expectedOutput": "\"preset 'x': maxToolCallRounds must be a whole number above zero\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

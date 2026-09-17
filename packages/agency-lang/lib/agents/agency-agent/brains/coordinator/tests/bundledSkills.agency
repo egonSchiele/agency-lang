@@ -1,8 +1,7 @@
 /*
  * A bundled skills tool must list the skills in its folder. A wrong
- * folder path does not make skillsDir fail; it builds a tool that lists
- * nothing. These nodes check the real tool and check that the check
- * catches a missing folder.
+ * folder path does not make skillsDir fail. It builds a tool that lists
+ * nothing.
  */
 import { find } from "std::array"
 import { skillsDir } from "std::skills"

@@ -1,0 +1,173 @@
+import { Resolved } from "../lib/models.agency"
+import {
+  ModelFlags,
+  ModelRequest,
+  detectionInputs,
+  localModelOf,
+  modelFlagsFromArgs,
+  noModelChoices,
+  noModelFlags,
+  presetModelSettings,
+  requestLayers,
+  requestProvider,
+ } from "../lib/modelRequest.agency"
+import { buildLayers, resolveAll, Ctx } from "../lib/resolution.agency"
+import { knownProviders } from "../lib/models.agency"
+import { ModelSettings } from "../lib/settings.agency"
+
+static const CTX: Ctx = {
+  provider: "anthropic",
+  price: "standard"
+}
+
+def request(flags: ModelFlags, preset: any, choices: any): ModelRequest {
+  return {
+    flags: flags,
+    preset: preset,
+    choices: choices
+  }
+}
+
+def withPin(pin: string): ModelFlags {
+  return {
+    ...noModelFlags(),
+    pin: pin
+  }
+}
+
+// Resolve one slot through the real layers and report model + via.
+def resolvedSlot(req: ModelRequest, settings: ModelSettings, slot: string): string {
+  const layers = buildLayers(requestLayers(req, settings), knownProviders(), true)
+  const all = resolveAll(layers, CTX)
+  if (isFailure(all)) {
+    return "failed: ${all.error}"
+  }
+  const resolved: Resolved = all.value[slot]
+  return "${resolved.model} (${resolved.via})"
+}
+
+static const SETTINGS: ModelSettings = {
+  slots: { reasoning: "settings-reasoning" }
+}
+
+static const PRESET = {
+  provider: "anthropic",
+  slots: { reasoning: "preset-reasoning", main: "preset-main" }
+}
+
+node presetSlotBeatsSettings(): string {
+  return resolvedSlot(request(noModelFlags(), PRESET, noModelChoices()), SETTINGS, "reasoning")
+}
+
+node flagBeatsPreset(): string {
+  const flags = {
+    ...noModelFlags(),
+    slots: { reasoning: "flag-reasoning" }
+  }
+  return resolvedSlot(request(flags, { slots: { reasoning: "preset-reasoning" } }, noModelChoices()), SETTINGS, "reasoning")
+}
+
+node sessionChoiceBeatsAll(): string {
+  const flags = {
+    ...noModelFlags(),
+    slots: { reasoning: "flag-reasoning" }
+  }
+  const choices = {
+    pin: "",
+    slots: { reasoning: "session-reasoning" }
+  }
+  return resolvedSlot(request(flags, PRESET, choices), SETTINGS, "reasoning")
+}
+
+// A flag for a different slot still drops every model field of the preset.
+node anyModelFlagDropsThePresetModels(): string {
+  const flags = {
+    ...noModelFlags(),
+    slots: { main: "flag-main" }
+  }
+  return resolvedSlot(request(flags, PRESET, noModelChoices()), SETTINGS, "reasoning")
+}
+
+node providerOnlyCountsAsAModelFlag(): ModelSettings {
+  const flags = {
+    ...noModelFlags(),
+    provider: "openai"
+  }
+  return presetModelSettings(request(flags, PRESET, noModelChoices()))
+}
+
+node providerOrder(): string {
+  const fromPreset = requestProvider(request(noModelFlags(), PRESET, noModelChoices()), { provider: "google" })
+  const fromSettings = requestProvider(request(noModelFlags(), null, noModelChoices()), { provider: "google" })
+  const fromFlag = requestProvider(request({ ...noModelFlags(), provider: "openai" }, PRESET, noModelChoices()), {})
+  return "${fromFlag} ${fromPreset} ${fromSettings}"
+}
+
+node detectionSeesThePresetModels(): string {
+  const inputs = detectionInputs(request(noModelFlags(), PRESET, noModelChoices()))
+  return "${inputs.pin}|${inputs.main}|${inputs.reasoning}"
+}
+
+node localPresetRunsLocal(): string {
+  const preset = {
+    local: "qwen3.5-2b",
+    slots: { embedding: "mlx/nomic-embed" }
+  }
+  const local = localModelOf(request(noModelFlags(), preset, noModelChoices()))
+  if (local == null) {
+    return "hosted"
+  }
+  return "${local.model}|${local.embedding}"
+}
+
+node modelFlagOverridesALocalPreset(): string {
+  const local = localModelOf(request(withPin("claude-opus-4-8"), { local: "qwen3.5-2b" }, noModelChoices()))
+  if (local == null) {
+    return "hosted"
+  }
+  return local.model
+}
+
+node flagsFromArgs(): ModelFlags {
+  const args = {
+    flags: { model: "reasoning=opus", fastmodel: "sonnet", provider: "anthropic" },
+    positionals: []
+  }
+  const parsed = modelFlagsFromArgs(args)
+  if (isFailure(parsed)) {
+    return noModelFlags()
+  }
+  return parsed.value
+}
+
+node fastmodelBeatsModelMainFlag(): ModelFlags {
+  const args = {
+    flags: { model: "main=opus", fastmodel: "sonnet" },
+    positionals: []
+  }
+  const parsed = modelFlagsFromArgs(args)
+  if (isFailure(parsed)) {
+    return noModelFlags()
+  }
+  return parsed.value
+}
+
+node localWithChatFlagIsAnError(): boolean {
+  const args = {
+    flags: { local: "qwen3.5-2b", model: "gpt-5.5" },
+    positionals: []
+  }
+  return isFailure(modelFlagsFromArgs(args))
+}
+
+node localWithEmbeddingFlagIsFine(): ModelFlags {
+  const args = {
+    flags: { local: "qwen3.5-2b", model: "embedding=mlx/nomic-embed" },
+    positionals: []
+  }
+  const parsed = modelFlagsFromArgs(args)
+  if (isFailure(parsed)) {
+    return noModelFlags()
+  }
+  return parsed.value
+}

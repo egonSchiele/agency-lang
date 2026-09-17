@@ -14,10 +14,12 @@ import { mergedPalette } from "./lib/commandPalette.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
 import { printPolicyHelp } from "./lib/policy.agency"
+import { activePreset, startPreset } from "./lib/presets.agency"
 import { installSessionHooks, startInteractive } from "./lib/repl.agency"
 import { chooseSession, startSession } from "./lib/resume.agency"
 import { pickModelsForAgent, maybeEnableMemory } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
+import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
 import {
   setBrain,
@@ -28,7 +30,7 @@ import {
   resolveStartTarget,
  } from "./lib/turn.agency"
 import { formatTurnFailure } from "./lib/utils.agency"
-import { resolveMaxToolCallRounds, getCapabilities } from "./shared.agency"
+import { getCapabilities } from "./shared.agency"
 
 // UI mode select — one-line swap between the alt-screen TUI and the
 // line-mode REPL. Both modules expose the same `repl` / `pushMessage`
@@ -136,6 +138,8 @@ node main() {
     startAgent = resolvedStartTarget
   }
 
+  // The preset must be chosen before models resolve: it is one of their layers.
+  startPreset(args.flags.preset ?? "", loadSettings())
   pickModelsForAgent(args)
 
   // Persistent knowledge graph, gated on the capability profile. Must run
@@ -146,19 +150,8 @@ node main() {
   // coordinator. Must run before the first turn (mcpTools ordering contract).
   maybeLoadMcp(loadSettings())
 
-  const maxRounds = resolveMaxToolCallRounds(
-    args.flags["max-tool-call-rounds"] ?? null,
-    isOneShot,
-  )
-  setLlmOptions({
-    maxToolCallRounds: maxRounds
-  })
-  const maxResultChars = args.flags["max-tool-result-chars"]
-  if (maxResultChars != null) {
-    setLlmOptions({
-      maxToolResultChars: maxResultChars
-    })
-  }
+  setStartupLimitFlags(limitFlagsFromArgs(args))
+  applyToolLimits(activePreset(), isOneShot)
 
   const capsMaxTokens = getCapabilities().maxTokens
   if (capsMaxTokens != null) {

@@ -1,0 +1,75 @@
+{
+  "sourceFile": "presetSession.agency",
+  "tests": [
+    {
+      "nodeName": "modelKeepsTheStartupFlag",
+      "input": "",
+      "expectedOutput": "\"claude-sonnet-4-6 (cli:global-pin)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchAppliesModelsAndLimits",
+      "input": "",
+      "expectedOutput": "\"big claude-opus-4-8 (preset:global-pin) 20000\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "switchResetsAnUnsetLimit",
+      "input": "",
+      "expectedOutput": "100000",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "startupFlagStillWins",
+      "input": "",
+      "expectedOutput": "\"claude-haiku-4-5 (cli:global-pin)\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownPresetChangesNothing",
+      "input": "",
+      "expectedOutput": "\"small: No preset named nope. Saved presets: big, small, typo.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unresolvablePresetChangesNothing",
+      "input": "",
+      "expectedOutput": "\"small\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetNameFromCommand",
+      "input": "",
+      "expectedOutput": "\"[] [cheap]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

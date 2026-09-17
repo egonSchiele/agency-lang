@@ -25,13 +25,14 @@ import { buildTools as explorerTools } from "std::agents/explorer"
 // the agent's own tools plus researchTools plus the saveDraft the agent appends.
 import { buildTools as agencyResearcherOwnTools } from "std::agents/agency/researcher"
 import { buildTools as researcherOwnTools } from "std::agents/researcher"
-import { filter, map } from "std::array"
+import { filter, find, map } from "std::array"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
 import { buildTools as reviewTools } from "std::agents/review"
 import { buildTools as writingReviewTools } from "std::agents/writing/review"
 
 import { LEARNED_TOOL_PREFIX } from "../../../lib/learned.agency"
 import { mainAgentTools } from "../coordinator.agency"
+import { checkBundledSkill } from "../lib/bundledSkills.agency"
 
 def pingWith(tools: any[]): string {
   // Reject any interrupt a tool might raise. Under the deterministic
@@ -114,4 +115,15 @@ node noBuiltinToolUsesTheLearnedPrefix() {
 // join. The runtime rejects duplicate names before the request is sent.
 node coordinatorToolsHaveUniqueNames() {
   return pingWith(mainAgentTools)
+}
+
+node coordinatorSkillsListPresets(): string {
+  const tool = find(mainAgentTools, \tool -> tool.name == "coordinator_skills")
+  if (tool == null) {
+    return "mainAgentTools has no tool named coordinator_skills"
+  }
+  return match(checkBundledSkill(tool, "presets")) {
+    failure(reason) => reason
+    _ => ""
+  }
 }

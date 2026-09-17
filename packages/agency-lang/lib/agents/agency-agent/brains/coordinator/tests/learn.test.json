@@ -1,0 +1,44 @@
+{
+  "sourceFile": "learn.agency",
+  "tests": [
+    { "nodeName": "oneShotRunIsRefusedBeforeAnyPrompt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    {
+      "nodeName": "acceptedSkillIsSavedAndCatalogued",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": { "name": "repo-orientation", "description": "Orient in an unfamiliar repo", "body": "Read the README and the top-level layout first." } }
+      ]
+    },
+    {
+      "nodeName": "givenNameAndDescriptionWin",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": { "name": "repo-orientation", "description": "Orient in an unfamiliar repo", "body": "Read the README and the top-level layout first." } }
+      ]
+    },
+    {
+      "nodeName": "rejectedReviewSavesNothing",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": { "name": "repo-orientation", "description": "Orient in an unfamiliar repo", "body": "Read the README and the top-level layout first." } }
+      ]
+    },
+    { "nodeName": "rejectedToolStagingSavesNothing", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
+    {
+      "nodeName": "malformedDraftIsNotSaved",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "llmMocks": [
+        { "return": { "title": "no name field here" } }
+      ]
+    },
+    { "nodeName": "overlongToolNameIsRefusedBeforeAnyPrompt", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

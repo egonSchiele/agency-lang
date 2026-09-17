@@ -140,4 +140,10 @@ describe("config targets", () => {
     expect(out).toContain("team");
     expect(out).toContain("mine — http https://m/mcp [project]");
   });
+
+  it("list fails when the project config does not load", () => {
+    fs.writeFileSync(path.join(dir, "agency.local.json"), "{ not json");
+    expect(mcpList()).toBe(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("agency.local.json"));
+  });
 });

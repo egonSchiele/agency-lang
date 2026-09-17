@@ -314,6 +314,22 @@ describe("runRemove", () => {
     expect(stillThere.client.modelAliases.coder).toBe("hf:org/coder:Q4_K_M");
   });
 
+  it("says the alias is still set when agency.local.json also has it", () => {
+    const localFile = path.join(dir, "agency.local.json");
+    fs.writeFileSync(
+      localFile,
+      JSON.stringify({ client: { modelAliases: { coder: "hf:org/coder:Q4_K_M" } } }),
+    );
+
+    runRemove("coder", { force: false });
+
+    expect(output[0]).toBe(
+      `Removed alias "coder" from ${aliasFile}, but it is still set in ${localFile}. ` +
+        `Remove it there; agency does not edit that file.`,
+    );
+    expect(JSON.parse(fs.readFileSync(aliasFile, "utf-8")).client.modelAliases).toEqual({});
+  });
+
   it("with -f deletes the files", () => {
     runRemove("coder", { force: true });
     expect(output[0]).toBe(`Removed alias "coder" from ${aliasFile}.`);

@@ -130,6 +130,10 @@ export def parseAgentArgs() {
         "max-tool-result-chars": {
           type: "number",
           description: "Max chars of a single tool result fed back to the model (0 disables; default 100000)"
+        },
+        preset: {
+          type: "string",
+          description: "Start with a saved preset from settings.json: a provider, models, and tool limits. Any model flag replaces all of the preset's model settings; --max-tool-call-rounds and --max-tool-result-chars each replace one of its limits"
         }
       }
     },

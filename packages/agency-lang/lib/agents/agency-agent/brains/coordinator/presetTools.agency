@@ -1,0 +1,122 @@
+/** @module
+  @summary The coordinator's preset tools. A write tool describes its
+  change as a PresetEdit and hands it to editPresets, the one place that
+  reads settings.json, applies the change, writes the file, and refreshes
+  the in-memory presets. The policy handler decides the read and the
+  write. Nothing here approves them.
+*/
+import { PresetInput, checkPreset } from "../../lib/presetRules.agency"
+import {
+  PresetEdit,
+  PresetEditOutcome,
+  activePresetName,
+  applyPresetEdit,
+  editOutcome,
+  presetListing,
+  presetTable,
+  readPresetTable,
+  setPresetTable,
+ } from "../../lib/presets.agency"
+import { readSettingsFile, writeSettingsFile } from "../../lib/settings.agency"
+
+def editPresets(edit: PresetEdit): Result<PresetEditOutcome> {
+  const loaded = readSettingsFile()
+  if (loaded is failure(reason)) {
+    return failure(reason)
+  }
+  const edited = applyPresetEdit(loaded.value, edit)
+  if (edited is failure(reason)) {
+    return failure(reason)
+  }
+  const written = writeSettingsFile(edited.value)
+  if (written is failure(reason)) {
+    return failure(reason)
+  }
+  setPresetTable(readPresetTable(edited.value.presets))
+  return success(editOutcome(loaded.value, edit.name))
+}
+
+def useItHint(name: string): string {
+  return "To use it now, the user runs /preset ${name}. To start with it, agency agent --preset ${name}."
+}
+
+def saveReply(name: string, outcome: PresetEditOutcome): string {
+  const verb = if outcome.existed then "Replaced" else "Created"
+  const stillDefault = if outcome.wasDefault then " It is still the default preset." else ""
+  return "${verb} the '${name}' preset.${stillDefault} ${useItHint(name)}"
+}
+
+export def listPresets(): string {
+  """
+  List the saved agent presets as JSON: each preset's settings, the
+  default preset, the preset this session uses, and any saved preset that
+  is not valid, with the reason.
+  """
+  return JSON.stringify(presetListing(presetTable(), activePresetName()), null, 2)
+}
+
+export def savePreset(name: string, preset: PresetInput): string {
+  """
+  Create or replace a saved agent preset: a provider, models, and tool
+  limits the user can start the agent with. The user approves reading and
+  writing settings.json. In a one-shot run nothing is saved. This does not
+  switch the current session. Replacing the default preset keeps it the
+  default.
+
+  @param name - Lowercase letters, digits, and hyphens, starting with a letter, e.g. cheap
+  @param preset - Only the fields the user asked for. For a local model, set local, and optionally slots.embedding, and nothing else.
+  """
+  const checked = checkPreset(name, preset, false)
+  if (checked is failure(reason)) {
+    return "Not saved: ${reason}"
+  }
+  const saved = editPresets({
+    kind: "save",
+    name: name,
+    preset: checked.value
+  })
+  if (saved is failure(reason)) {
+    return "Not saved: ${reason}"
+  }
+  return saveReply(name, saved.value)
+}
+
+export def deletePreset(name: string): string {
+  """
+  Delete a saved agent preset. The user approves reading and writing
+  settings.json. In a one-shot run nothing is deleted.
+
+  @param name - The preset's name, as listPresets shows it
+  """
+  const deleted = editPresets({
+    kind: "delete",
+    name: name,
+    preset: null
+  })
+  if (deleted is failure(reason)) {
+    return "Not deleted: ${reason}"
+  }
+  if (deleted.value.wasDefault) {
+    return "Deleted the '${name}' preset. It was the default, so there is no default preset now."
+  }
+  return "Deleted the '${name}' preset."
+}
+
+export def setDefaultPreset(name: string): string {
+  """
+  Make a saved preset the default: the one the agent starts with when no
+  --preset is given. Every other preset stops being the default. The user
+  approves reading and writing settings.json.
+
+  @param name - The preset's name, as listPresets shows it
+  """
+  const marked = editPresets({
+    kind: "setDefault",
+    name: name,
+    preset: null
+  })
+  if (marked is failure(reason)) {
+    return "Not changed: ${reason}"
+  }
+  return "'${name}' is now the default preset. It applies from the next agent start."
+}

@@ -1,0 +1,85 @@
+{
+  "sourceFile": "presetTools.agency",
+  "tests": [
+    {
+      "nodeName": "saveChangesOnlyPresets",
+      "input": "",
+      "expectedOutput": "\"Created the 'cheap' preset. To use it now, the user runs /preset cheap. To start with it, agency agent --preset cheap.\\n{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\"}},\\\"presets\\\":{\\\"opus\\\":{\\\"default\\\":true,\\\"provider\\\":\\\"anthropic\\\"},\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\",\\\"slots\\\":{\\\"main\\\":\\\"deepseek/deepseek-r1\\\"}}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "replaceKeepsTheDefault",
+      "input": "",
+      "expectedOutput": "\"Replaced the 'opus' preset. It is still the default preset. To use it now, the user runs /preset opus. To start with it, agency agent --preset opus.\\n{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\"}},\\\"presets\\\":{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\",\\\"pin\\\":\\\"claude-opus-4-8\\\",\\\"default\\\":true}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "setDefaultMovesIt",
+      "input": "",
+      "expectedOutput": "\"'cheap' is now the default preset. It applies from the next agent start.\\n{\\\"presets\\\":{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\"},\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\",\\\"default\\\":true}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deleteTheDefault",
+      "input": "",
+      "expectedOutput": "\"Deleted the 'opus' preset. It was the default, so there is no default preset now.\\n{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"model\\\":{\\\"slots\\\":{\\\"fast\\\":\\\"gpt-5.5\\\"}},\\\"presets\\\":{}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badPresetWritesNothingAndAsksNothing",
+      "input": "",
+      "expectedOutput": "\"0 true Not saved: preset 'Cheap': its name must use lowercase letters, digits, and hyphens, and start with a letter; maxToolCallRounds must be a whole number above zero\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "corruptFileIsLeftAlone",
+      "input": "",
+      "expectedOutput": "\"true Not saved: <path> is not valid JSON\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "rejectedWriteSavesNothing",
+      "input": "",
+      "expectedOutput": "\"true true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveRefreshesTheTable",
+      "input": "",
+      "expectedOutput": "\"opus,cheap\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

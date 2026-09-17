@@ -1,0 +1,197 @@
+import {
+  PresetTable,
+  applyPresetEdit,
+  choosePreset,
+  activePresetName,
+  findPreset,
+  presetListing,
+  setActivePreset,
+  setPresetTable,
+  presetListLines,
+  readPresetTable,
+ } from "../lib/presets.agency"
+import { SETTINGS_PATH } from "../lib/config.agency"
+
+static const SAVED = {
+  opus: { default: true, provider: "anthropic", pin: "claude-opus-4-8" },
+  cheap: { provider: "openrouter", maxToolCallRounds: 30 },
+  broken: { maxToolCallRounds: 0 }
+}
+
+def table(): PresetTable {
+  return readPresetTable(SAVED)
+}
+
+node tableKeepsValidPresetsAndNamesBadOnes(): string {
+  const read = table()
+  return "${Object.keys(read.presets).join(",")} | ${Object.keys(read.problems).join(",")}"
+}
+
+node flagWins(): string {
+  const choice = choosePreset("cheap", table())
+  if (isFailure(choice)) {
+    return "failed: ${choice.error}"
+  }
+  return choice.value.name
+}
+
+node oneDefaultIsUsed(): string {
+  const choice = choosePreset("", table())
+  if (isFailure(choice)) {
+    return "failed: ${choice.error}"
+  }
+  return choice.value.name
+}
+
+node badPresetIsAWarning(): string[] {
+  const choice = choosePreset("", table())
+  if (isFailure(choice)) {
+    return ["failed"]
+  }
+  return map(choice.value.warnings, \warning -> warning.replaceAll(SETTINGS_PATH, "<path>"))
+}
+
+node twoDefaultsMeanNoPreset(): string {
+  const both = readPresetTable({
+    opus: { default: true, provider: "anthropic" },
+    cheap: { default: true, provider: "openrouter" }
+  })
+  const choice = choosePreset("", both)
+  if (isFailure(choice)) {
+    return "failed: ${choice.error}"
+  }
+  const text = "${choice.value.name}|${choice.value.warnings.join("|")}"
+  return text.replaceAll(SETTINGS_PATH, "<path>")
+}
+
+node noPresetsMeansNoPreset(): string {
+  const choice = choosePreset("", readPresetTable(null))
+  if (isFailure(choice)) {
+    return "failed: ${choice.error}"
+  }
+  return "[${choice.value.name}]"
+}
+
+node unknownFlagListsTheNames(): string {
+  const choice = choosePreset("fast", table())
+  if (isFailure(choice)) {
+    return choice.error
+  }
+  return "unexpected success"
+}
+
+node badPresetByFlagIsAnError(): string {
+  const choice = choosePreset("broken", table())
+  if (isFailure(choice)) {
+    return choice.error
+  }
+  return "unexpected success"
+}
+
+node saveKeepsOtherKeys(): string {
+  const settings = { search: { backend: "tavily" }, presets: { opus: { provider: "anthropic" } } }
+  const edited = applyPresetEdit(settings, { kind: "save", name: "cheap", preset: { provider: "openrouter" } })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value)
+}
+
+node replacingTheDefaultKeepsIt(): string {
+  const settings = { presets: { opus: { default: true, provider: "anthropic" } } }
+  const edited = applyPresetEdit(settings, { kind: "save", name: "opus", preset: { provider: "openai" } })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value.presets)
+}
+
+node setDefaultLeavesExactlyOne(): string {
+  const settings = { presets: { opus: { default: true, provider: "anthropic" }, cheap: { provider: "openrouter" } } }
+  const edited = applyPresetEdit(settings, { kind: "setDefault", name: "cheap", preset: null })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value.presets)
+}
+
+node setDefaultRefusesABadPreset(): boolean {
+  const settings = { presets: { broken: { maxToolCallRounds: 0 } } }
+  return isFailure(applyPresetEdit(settings, { kind: "setDefault", name: "broken", preset: null }))
+}
+
+node deleteRemovesOnlyThatPreset(): string {
+  const settings = { presets: { opus: { provider: "anthropic" }, cheap: { provider: "openrouter" } } }
+  const edited = applyPresetEdit(settings, { kind: "delete", name: "opus", preset: null })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value.presets)
+}
+
+node deleteOfAnUnknownNameFails(): boolean {
+  return isFailure(applyPresetEdit({}, { kind: "delete", name: "nope", preset: null }))
+}
+
+node listLinesMarkActiveAndDefault(): string[] {
+  return presetListLines(table(), "cheap")
+}
+
+// `constructor` passes the name rule, and a plain record lookup would
+// answer with Object.prototype's value for it.
+node prototypeNamesAreNotSavedPresets(): string {
+  setPresetTable(table())
+  const found = findPreset("constructor")
+  if (found is failure(reason)) {
+    return reason
+  }
+  return "unexpected success"
+}
+
+node deletingAPrototypeNameFails(): boolean {
+  const settings = { presets: { opus: { provider: "anthropic" } } }
+  return isFailure(applyPresetEdit(settings, { kind: "delete", name: "constructor", preset: null }))
+}
+
+// Deleting the active preset must not leave its name behind.
+node activeNameClearsWithThePreset(): string {
+  setPresetTable(table())
+  setActivePreset("cheap")
+  setPresetTable(readPresetTable({ opus: { provider: "anthropic" } }))
+  return "[${activePresetName()}]"
+}
+
+// Startup uses no preset when two are marked default, so the listing
+// reports none either.
+node listingHasNoDefaultWhenTwoAreMarked(): string {
+  const both = readPresetTable({
+    opus: { default: true, provider: "anthropic" },
+    cheap: { default: true, provider: "openrouter" }
+  })
+  return "[${presetListing(both, "").default}]"
+}
+
+// A hand-edited file can hold a null entry. It keeps its place.
+node setDefaultKeepsANullEntry(): string {
+  const settings = { presets: { broken: null, cheap: { provider: "openrouter" } } }
+  const edited = applyPresetEdit(settings, { kind: "setDefault", name: "cheap", preset: null })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value.presets)
+}
+
+node deleteRemovesANullEntry(): string {
+  const settings = { presets: { broken: null, cheap: { provider: "openrouter" } } }
+  const edited = applyPresetEdit(settings, { kind: "delete", name: "broken", preset: null })
+  if (isFailure(edited)) {
+    return "failed: ${edited.error}"
+  }
+  return JSON.stringify(edited.value.presets)
+}
+
+// A presets value that is not an object is left alone, not spread.
+node saveRefusesAMalformedPresetsValue(): boolean {
+  const edited = applyPresetEdit({ presets: "nope" }, { kind: "save", name: "cheap", preset: { provider: "openai" } })
+  return isFailure(edited)
+}

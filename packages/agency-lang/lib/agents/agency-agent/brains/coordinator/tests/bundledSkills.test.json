@@ -1,0 +1,17 @@
+{
+  "sourceFile": "bundledSkills.agency",
+  "tests": [
+    {
+      "nodeName": "superpowersToolListsItsSkills",
+      "input": "",
+      "expectedOutput": "\"\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "checkReportsAMissingFolder",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+/*
+ * A bundled skills tool must list the skills in its folder. A wrong
+ * folder path does not make skillsDir fail. It builds a tool that lists
+ * nothing.
+ */
+import { find } from "std::array"
+import { skillsDir } from "std::skills"
+
+import { checkBundledSkill } from "../lib/bundledSkills.agency"
+import { codeTools } from "../subagents/code.agency"
+
+node superpowersToolListsItsSkills(): string {
+  const tool = find(codeTools, \tool -> tool.name == "superpowersSkill")
+  if (tool == null) {
+    return "codeTools has no tool named superpowersSkill"
+  }
+  return match(checkBundledSkill(tool, "brainstorming")) {
+    failure(reason) => reason
+    _ => ""
+  }
+}
+
+node checkReportsAMissingFolder(): boolean {
+  const tool = skillsDir("${__dirname}/no-such-skills-folder", "flat", name: "missingFolder") with approve
+  return isFailure(checkBundledSkill(tool, "brainstorming"))
+}

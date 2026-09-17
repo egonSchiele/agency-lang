@@ -1,0 +1,62 @@
+/** @module
+  @summary The two tool-loop limits a preset can set. Each comes from the
+  startup flag, then the active preset, then the built-in default.
+*/
+import { setLlmOptions } from "std::llm"
+
+import { Preset } from "./presetRules.agency"
+import { DEFAULT_MAX_TOOL_RESULT_CHARS, resolveMaxToolCallRounds } from "../shared.agency"
+
+/** The two flags, null when not given. */
+export type LimitFlags = {
+  maxToolCallRounds: number | null;
+  maxToolResultChars: number | null
+}
+
+export type ToolLimits = {
+  maxToolCallRounds: number;
+  maxToolResultChars: number
+}
+
+// Kept for the session so /preset still lets a flag win.
+let _startupFlags: LimitFlags = {
+  maxToolCallRounds: null,
+  maxToolResultChars: null
+}
+
+export def limitFlagsFromArgs(args: Record<string, any>): LimitFlags {
+  return {
+    maxToolCallRounds: args.flags["max-tool-call-rounds"] ?? null,
+    maxToolResultChars: args.flags["max-tool-result-chars"] ?? null
+  }
+}
+
+export def setStartupLimitFlags(flags: LimitFlags) {
+  _startupFlags = flags
+}
+
+export def effectiveLimits(flags: LimitFlags, preset: Preset | null, oneShot: boolean): ToolLimits {
+  const fromPreset: Preset = preset ?? {}
+  const rounds = flags.maxToolCallRounds ?? fromPreset.maxToolCallRounds ?? null
+  const chars = flags.maxToolResultChars ?? fromPreset.maxToolResultChars
+  return {
+    maxToolCallRounds: resolveMaxToolCallRounds(rounds, oneShot),
+    maxToolResultChars: chars ?? DEFAULT_MAX_TOOL_RESULT_CHARS
+  }
+}
+
+export def applyToolLimits(preset: Preset | null, oneShot: boolean): ToolLimits {
+  """
+  Set both limits for the next LLM call, from the startup flags and this
+  preset. Returns what it set.
+
+  @param preset - The active preset, or null
+  @param oneShot - Whether this is a one-shot run, which gets more rounds by default
+  """
+  const limits = effectiveLimits(_startupFlags, preset, oneShot)
+  setLlmOptions({
+    maxToolCallRounds: limits.maxToolCallRounds,
+    maxToolResultChars: limits.maxToolResultChars
+  })
+  return limits
+}

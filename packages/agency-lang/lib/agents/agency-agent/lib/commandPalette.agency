@@ -12,6 +12,7 @@ export def builtinPalette(): Record<string, string> {
     "/model": "Switch the model (bare to pick, or slot=model)",
     "/models": "List / filter the hosted model catalog",
     "/local": "Switch to a local model",
+    "/preset": "Switch to a saved preset (bare to list them)",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",
     "/mcp": "List configured MCP servers and their tools",

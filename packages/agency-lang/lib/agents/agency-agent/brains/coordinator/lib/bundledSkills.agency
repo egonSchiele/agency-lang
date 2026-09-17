@@ -1,0 +1,26 @@
+/** @module
+  @summary Checks a skills tool built over a folder that ships with the
+  agent. A wrong folder path does not make skillsDir fail: it builds a
+  tool that lists no skills. So the check looks for one skill the folder
+  is known to hold.
+*/
+
+export def checkBundledSkill(tool: any, skillName: string): Result<boolean> {
+  """
+  Check that a bundled skills tool lists the skill its folder holds. The
+  failure says what went wrong, for printing.
+
+  @param tool - The skillsDir tool to check
+  @param skillName - A skill the tool's folder is known to hold
+  """
+  if (tool is failure(reason)) {
+    return failure("could not build the skills tool that should list ${skillName}: ${reason}")
+  }
+  const description = "${tool.description}"
+  if (!description.includes("<name>${skillName}</name>")) {
+    return failure(
+      "the ${tool.name} tool does not list the ${skillName} skill, so its skills folder path is wrong",
+    )
+  }
+  return success(true)
+}

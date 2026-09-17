@@ -1,0 +1,55 @@
+{
+  "sourceFile": "toolLimits.agency",
+  "tests": [
+    {
+      "nodeName": "defaultsWithNoPreset",
+      "input": "",
+      "expectedOutput": "{\"maxToolCallRounds\":50,\"maxToolResultChars\":100000}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "oneShotDefault",
+      "input": "",
+      "expectedOutput": "{\"maxToolCallRounds\":100,\"maxToolResultChars\":100000}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetFillsBoth",
+      "input": "",
+      "expectedOutput": "{\"maxToolCallRounds\":30,\"maxToolResultChars\":0}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flagBeatsPreset",
+      "input": "",
+      "expectedOutput": "{\"maxToolCallRounds\":7,\"maxToolResultChars\":20000}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "presetWithoutLimitsUsesDefaults",
+      "input": "",
+      "expectedOutput": "{\"maxToolCallRounds\":50,\"maxToolResultChars\":100000}",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

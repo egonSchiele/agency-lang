@@ -6,8 +6,14 @@
  * fs interrupts that read/write/mkdir raise — the test is the user opt-in.
  */
 import { remove } from "std::fs"
+import { exists } from "std::shell"
 
-import { POLICY_DIR, SETTINGS_FILE, SETTINGS_PATH } from "../lib/config.agency"
+import {
+  POLICY_DIR,
+  SETTINGS_FILE,
+  SETTINGS_PATH,
+  usingDefaultAgentHome,
+ } from "../lib/config.agency"
 import {
   loadSettings,
   saveSettings,
@@ -15,6 +21,8 @@ import {
   getModelSettings,
   getCapabilitySettings,
   ModelSettings,
+  readSettingsFile,
+  writeSettingsFile,
  } from "../lib/settings.agency"
 import { resolveBrainName } from "../lib/turn.agency"
 
@@ -215,8 +223,67 @@ node invalidPersistedBrainFallsBack(): string {
   return resolveBrainName(null, loaded)
 }
 
+node readRefusesACorruptFile(): boolean {
+  if (usingDefaultAgentHome()) {
+    return false
+  }
+  write(SETTINGS_FILE, "not json{{{", POLICY_DIR) with approve
+  const loaded = readSettingsFile() with approve
+  return isFailure(loaded)
+}
+
+node readTreatsAMissingFileAsEmpty(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
+  remove(SETTINGS_PATH) with approve
+  const loaded = readSettingsFile() with approve
+  if (isFailure(loaded)) {
+    return "failed: ${loaded.error}"
+  }
+  return JSON.stringify(loaded.value)
+}
+
+// loadSettings would turn `fast` into `main`. A raw read and write must not.
+node rawRoundTripKeepsWhatItRead(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
+  write(SETTINGS_FILE, """{"model":{"slots":{"fast":"gpt-5.5","typo":"x"}}}""", POLICY_DIR) with approve
+  const loaded = readSettingsFile() with approve
+  if (isFailure(loaded)) {
+    return "failed: ${loaded.error}"
+  }
+  writeSettingsFile(loaded.value) with approve
+  const again = read(SETTINGS_FILE, POLICY_DIR) with approve
+  if (isFailure(again)) {
+    return "failed: ${again.error}"
+  }
+  return again.value
+}
+
+node rejectedWriteIsAFailure(): boolean {
+  if (usingDefaultAgentHome()) {
+    return false
+  }
+  remove(SETTINGS_PATH) with approve
+  let result: Result = success(true)
+  handle {
+    result = writeSettingsFile({ brain: "simple" })
+  } with (intr) {
+    if (intr.effect == "std::write") {
+      return reject("not now")
+    }
+    return approve()
+  }
+  return isFailure(result) && !exists(SETTINGS_FILE, POLICY_DIR)
+}
+
 // A file saved before price and allowedProviders were removed still loads.
 node oldModelKeysStillLoad(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   write(SETTINGS_FILE, """{"model":{"price":"cheap","allowedProviders":["openai"],"pin":"gpt-5.5"}}""", POLICY_DIR) with approve
   const loaded = loadSettings() with approve
   const model = getModelSettings(loaded)

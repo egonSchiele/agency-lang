@@ -53,7 +53,7 @@ node applyResolvedSetsSlots(): string {
     provider: "anthropic",
     price: "standard"
   }
-  const layers = buildLayers("", {}, "", {}, {}, knownProviders(), false)
+  const layers = buildLayers([], knownProviders(), false)
   const all = resolveAll(layers, ctx)
   if (isFailure(all)) {
     return "FAIL"

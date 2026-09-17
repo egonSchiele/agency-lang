@@ -1,5 +1,5 @@
 import { wholePath, readText, writeText, mkdir } from "./contained.js";
-import { isPlainObject } from "../configPaths.js";
+import { isPlainObject } from "../config/paths.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";
@@ -12,7 +12,7 @@ import type { AgencyFunction } from "../runtime/agencyFunction.js";
 // precedent localModels.ts follows. Only `.name` is used off a tool.
 // Server maps here are unvalidated: they come from settings.json, from files
 // about to be edited, and from Agency values. The validated type is
-// McpServers in lib/mcpServers.ts.
+// McpServers in lib/config/mcpServers.ts.
 type RawMcpServerConfig = Record<string, unknown>;
 type McpTool = { name: string };
 export type RawMcpServers = Record<string, RawMcpServerConfig>;

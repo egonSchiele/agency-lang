@@ -1,6 +1,6 @@
 import path from "path";
 import { color } from "@/utils/termcolors.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { deploy } from "../../deploy/deploy.js";
 import { renderOutcome } from "../../deploy/render.js";
 import { countExportedEndpoints } from "../exportedEndpoints.js";

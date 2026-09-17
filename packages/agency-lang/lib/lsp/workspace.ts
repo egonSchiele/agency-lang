@@ -1,12 +1,12 @@
 import * as path from "path";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import {
   CONFIG_FILE,
   LOCAL_CONFIG_FILE,
   findProjectRoot,
   projectTarget,
   readConfig,
-} from "../configTarget.js";
+} from "../config/target.js";
 
 type WorkspaceEntry = {
   root: string;

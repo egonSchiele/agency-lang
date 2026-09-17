@@ -1,8 +1,8 @@
-import { AgencyNode } from "./types.js";
-import type { LogLevel } from "./logger.js";
+import { AgencyNode } from "../types.js";
+import type { LogLevel } from "../logger.js";
 import { z } from "zod";
 import { McpServersSchema, type McpServers } from "./mcpServers.js";
-import { mapConfigValues } from "./configPaths.js";
+import { mapConfigValues } from "./paths.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -701,7 +701,7 @@ export function validateConfig(raw: unknown, source: string): ConfigResult {
 }
 
 /** Load exactly one config file. A missing file is an empty config. For a
- *  project directory, use readConfig in lib/configTarget.ts. */
+ *  project directory, use readConfig in lib/config/target.ts. */
 export function loadConfigSafe(configPath: string): ConfigResult {
   if (!fs.existsSync(configPath)) {
     return { config: {} };
@@ -721,7 +721,7 @@ export function loadConfigSafe(configPath: string): ConfigResult {
 // A program's effective AgencyConfig is assembled from three sources, listed
 // here in increasing precedence:
 //
-//   1. Config files          — a ConfigTarget (lib/configTarget.ts): the -c
+//   1. Config files          — a ConfigTarget (lib/config/target.ts): the -c
 //                              file alone, or agency.json with
 //                              agency.local.json merged over it. The base.
 //   2. CLI flags             — per-invocation flags (--trace, --log,
@@ -750,7 +750,7 @@ export function loadConfigSafe(configPath: string): ConfigResult {
  *  infers the provider from the model name.
  *
  *  Declared here rather than in the CLI so `CliFlags` stays self-contained:
- *  `lib/config.ts` must not depend on `lib/cli/`, which would pull the CLI and
+ *  `lib/config/config.ts` must not depend on `lib/cli/`, which would pull the CLI and
  *  the runtime graph behind it into every consumer of the config module. */
 export type ResolvedModelFlag = {
   model: string;

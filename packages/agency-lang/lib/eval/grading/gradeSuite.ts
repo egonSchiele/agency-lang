@@ -1,4 +1,4 @@
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import type { EvalRunGrading } from "@/eval/runTypes.js";
 import { recordGradingPass, type ScoreDraft } from "@/runDirectory/mutations.js";
 import { readRunDirectory } from "@/runDirectory/runDir.js";

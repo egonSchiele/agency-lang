@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { fileTarget } from "../configTarget.js";
+import { fileTarget } from "../config/target.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";

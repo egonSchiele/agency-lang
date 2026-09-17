@@ -6,6 +6,6 @@ export * from "./statelogClient.js";
 export * as smoltalk from "smoltalk";
 export type { StreamChunk } from "smoltalk";
 export { nanoid } from "nanoid";
-export { AgencyConfig } from "./config.js";
+export { AgencyConfig } from "./config/config.js";
 export { color } from "@/utils/termcolors.js";
 export * from "./runtime/index.js";

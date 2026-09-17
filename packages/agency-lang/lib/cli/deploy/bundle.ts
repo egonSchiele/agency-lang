@@ -6,7 +6,7 @@
 
 import fs from "fs";
 import path from "path";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { parseAgency } from "@/parser.js";
 import { compileSource } from "@/compiler/compile.js";
 import {

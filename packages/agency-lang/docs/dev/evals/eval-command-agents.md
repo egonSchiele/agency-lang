@@ -63,7 +63,7 @@ The spawn runner sets two env vars:
   `agent.js` it spawns is). So the agent's own record — tool calls, cost,
   interrupts, its whole process tree — lands exactly where the harness
   folds it into the run directory, and grading/judging work unchanged.
-- `AGENCY_TRACE_ID` (`lib/config.ts`) → one trace id for the whole tree,
+- `AGENCY_TRACE_ID` (`lib/config/config.ts`) → one trace id for the whole tree,
   ROOT INCLUDED: the harness mints the id (`runSuite`), and
   `resolveInvocation` (`lib/runtime/invocationOptions.ts`) uses it for a
   fresh run below an explicit per-invocation `traceId` and above `nanoid()`

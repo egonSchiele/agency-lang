@@ -20,7 +20,7 @@ are still open. Read alongside the type-checker dev docs:
 - `lib/typeChecker/flow.ts` — `mergeFlows(flows)`: drops `exit` inputs; returns `exit` iff **all** inputs are `exit`.
 - `lib/typeChecker/flowBuilder.ts` — `returnStatement` rule returns `{ kind: "exit" }`; `ifElse` merges then/else via `mergeFlows`; `buildFlowGraphs` records each scope's terminal into `FlowEnvironment.scopeTerminals` (null-prototype dict).
 - `lib/typeChecker/definiteReturns.ts` — `checkDefiniteReturns(scopes, ctx)`: `requiresReturn(rt)` exempts absent/`null`, `void`, `never` return types; the loop skips `top-level` and nodes (`ctx.nodeDefs[info.name]`, bare-keyed); flags when `scopeTerminals[scopeKey].kind !== "exit"`.
-- `lib/config.ts` — `typechecker.definiteReturns: "silent" | "warn" | "error"`. **Ships at `"warn"`** (default read-site is `?? "warn"` in `definiteReturns.ts`).
+- `lib/config/config.ts` — `typechecker.definiteReturns: "silent" | "warn" | "error"`. **Ships at `"warn"`** (default read-site is `?? "warn"` in `definiteReturns.ts`).
 - Registered in the pipeline immediately after `checkMatchExhaustiveness` and before `checkConflictingMarkers` (`lib/typeChecker/index.ts`).
 - Tests: `lib/typeChecker/definiteReturns.test.ts`.
 

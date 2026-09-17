@@ -7,7 +7,7 @@ import {
   scopeKey,
   buildCompilationUnit,
 } from "../compilationUnit.js";
-import { AgencyConfig } from "../config.js";
+import { AgencyConfig } from "../config/config.js";
 import {
   AgencyProgram,
   FunctionDefinition,

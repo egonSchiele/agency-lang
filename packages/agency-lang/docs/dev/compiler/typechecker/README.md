@@ -439,7 +439,7 @@ pnpm run agency typecheck --strict myfile.agency
 
 `tc` and `check` are aliases. With no input the command reads from stdin.
 
-`--strict` here sets `typechecker.strictTypes` only, so variables without type annotations become errors. It deliberately does NOT set `typechecker.strict`. This command calls the checker unconditionally and computes its own exit code, so `typechecker.strict` would be inert, and an inert setting that looks meaningful is a trap. `--strict` on `run` and `compile` means both flags. See `applyCliFlags` in `lib/config.ts`.
+`--strict` here sets `typechecker.strictTypes` only, so variables without type annotations become errors. It deliberately does NOT set `typechecker.strict`. This command calls the checker unconditionally and computes its own exit code, so `typechecker.strict` would be inert, and an inert setting that looks meaningful is a trap. `--strict` on `run` and `compile` means both flags. See `applyCliFlags` in `lib/config/config.ts`.
 
 If any errors are found, the process exits with code 1.
 

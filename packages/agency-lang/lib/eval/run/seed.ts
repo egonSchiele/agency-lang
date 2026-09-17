@@ -2,8 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { agentClosure } from "@/analysis/closure.js";
-import type { AgencyConfig } from "@/config.js";
-import { CONFIG_FILE, LOCAL_CONFIG_FILE } from "@/configTarget.js";
+import type { AgencyConfig } from "@/config/config.js";
+import { CONFIG_FILE, LOCAL_CONFIG_FILE } from "@/config/target.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "@/importStrategy.js";
 

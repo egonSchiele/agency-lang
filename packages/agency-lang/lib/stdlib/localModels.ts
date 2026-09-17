@@ -12,7 +12,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import {
   CONFIG_FILE,
   configFiles,
@@ -22,7 +22,7 @@ import {
   readConfig,
   writeTarget,
   type ConfigTarget,
-} from "../configTarget.js";
+} from "../config/target.js";
 import {
   loadLocalProvider,
   loadLocalProviderDetailed,

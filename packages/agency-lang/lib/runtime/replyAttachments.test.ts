@@ -21,7 +21,7 @@ import {
   type HarvestedReplyAttachment,
   type ReplyAttachmentPart,
 } from "./replyAttachments.js";
-import { MAX_REPLY_ATTACHMENTS_PER_CALL } from "../config.js";
+import { MAX_REPLY_ATTACHMENTS_PER_CALL } from "../config/config.js";
 
 function imagePart(p: string): ReplyAttachmentPart {
   return { type: "image", source: { kind: "path", path: p } };

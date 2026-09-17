@@ -2,7 +2,7 @@
 
 ## Overview
 
-`AgencyConfig` (`lib/config.ts`) defines all compiler and runtime configuration options for Agency. It is typically loaded from an `agency.json` file, with an optional `agency.local.json` merged over it, but can also be passed programmatically. The CLI accepts a `-c` / `--config` flag to load one specific file instead.
+`AgencyConfig` (`lib/config/config.ts`) defines all compiler and runtime configuration options for Agency. It is typically loaded from an `agency.json` file, with an optional `agency.local.json` merged over it, but can also be passed programmatically. The CLI accepts a `-c` / `--config` flag to load one specific file instead.
 
 For basic usage examples, see [`docs/misc/config.md`](../../misc/config.md).
 
@@ -10,9 +10,9 @@ For basic usage examples, see [`docs/misc/config.md`](../../misc/config.md).
 
 The effective config for a program is assembled from three sources, defined and
 documented in one place — the "Config resolution" section at the bottom of
-`lib/config.ts`. In increasing precedence:
+`lib/config/config.ts`. In increasing precedence:
 
-1. **Config files** — a `ConfigTarget` (`lib/configTarget.ts`): the `-c` file
+1. **Config files** — a `ConfigTarget` (`lib/config/target.ts`): the `-c` file
    alone, or `agency.json` with `agency.local.json` merged over it. The base.
 2. **CLI flags** — `--trace` / `--log-file` / `--strict`, mapped onto config by
    `applyCliFlags()`. This is the only definition of what each flag means.
@@ -31,14 +31,14 @@ result with `agency config show` (secrets masked; `--show-secrets` to reveal).
 
 ### Config paths
 
-`lib/configPaths.ts` matches dotted config paths, where `*` matches any one key:
+`lib/config/paths.ts` matches dotted config paths, where `*` matches any one key:
 
 ```ts
 matchesConfigPath("mcpServers.*.env.*", ["mcpServers", "fs", "env", "TOKEN"]); // true
 matchesConfigPath("mcpServers.*", ["mcpServers", "fs", "env"]); // false
 ```
 
-Two tables are lists of these paths. `CONFIG_MERGE_RULES` (`lib/configMerge.ts`) lists the fields a local file replaces whole. `SECRET_CONFIG_PATHS` (`lib/config.ts`) lists the fields `agency config show` masks. A test in `lib/config.test.ts` checks that every path in both tables exists in `AgencyConfigSchema`.
+Two tables are lists of these paths. `CONFIG_MERGE_RULES` (`lib/config/merge.ts`) lists the fields a local file replaces whole. `SECRET_CONFIG_PATHS` (`lib/config/config.ts`) lists the fields `agency config show` masks. A test in `lib/config/config.test.ts` checks that every path in both tables exists in `AgencyConfigSchema`.
 
 ### The merge
 
@@ -66,7 +66,7 @@ To add a rule, add a row to `CONFIG_MERGE_RULES` and a row to the table in `docs
 
 ### Config targets
 
-A `ConfigTarget` (`lib/configTarget.ts`) says where config comes from:
+A `ConfigTarget` (`lib/config/target.ts`) says where config comes from:
 
 ```ts
 type ConfigTarget =
@@ -95,7 +95,7 @@ A command that edits config gets its file from `writeTarget` and reads only that
 
 ### MCP servers
 
-The server schema lives in `lib/mcpServers.ts`. `@agency-lang/mcp` imports it, and `readConfig`, from the `agency-lang/config` export (`lib/configPublic.ts`). The stdlib MCP module (`lib/stdlib/mcp.ts`) handles unvalidated server maps, such as the agent's `settings.json`, with its own `RawMcpServers` type.
+The server schema lives in `lib/config/mcpServers.ts`. `@agency-lang/mcp` imports it, and `readConfig`, from the `agency-lang/config` export (`lib/config/public.ts`). The stdlib MCP module (`lib/stdlib/mcp.ts`) handles unvalidated server maps, such as the agent's `settings.json`, with its own `RawMcpServers` type.
 
 ### Secrets
 
@@ -185,7 +185,7 @@ The split is on the **first** slash only, which is what lets an OpenRouter model
 identifier survive as the model name.
 
 With no model anywhere (no flag, no `client.defaultModel`), codegen bakes
-`DEFAULT_MODEL` and `DEFAULT_PROVIDER` from `lib/config.ts` together
+`DEFAULT_MODEL` and `DEFAULT_PROVIDER` from `lib/config/config.ts` together
 (`gpt-5-mini` through `openai-responses`; the provider is named because the
 inferred route for an OpenAI model is the base `openai` client, which has no
 hosted web search). A configured model without a provider is baked alone, so
@@ -227,7 +227,7 @@ cannot affect a later process's validation.
 
 Every field is optional, and the schema is `.loose()`, so an unknown key in
 `agency.json` loads rather than erroring. The list below follows the
-`AgencyConfig` interface and `AgencyConfigSchema` in `lib/config.ts`; read
+`AgencyConfig` interface and `AgencyConfigSchema` in `lib/config/config.ts`; read
 those for the full per-field commentary.
 
 ### Basic

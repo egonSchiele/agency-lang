@@ -245,4 +245,4 @@ Odds and ends for other commands.
 | `viewer` | Color thresholds for `agency logs view`: `slowMs` and `fastMs` for durations, `expensiveUsd` for cost. |
 
 ## References
-- [Full list of options](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/lib/config.ts).
+- [Full list of options](https://github.com/egonSchiele/agency-lang/blob/main/packages/agency-lang/lib/config/config.ts).

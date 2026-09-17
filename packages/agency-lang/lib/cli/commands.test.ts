@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { forEachSource, loadConfig, mergeFixtureConfig, resolveInputSources } from "./commands.js";
-import { fileTarget, projectTarget } from "../configTarget.js";
+import { fileTarget, projectTarget } from "../config/target.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
 function makeTempDir(): string {

@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 
-import { CONFIG_OVERRIDES_ENV, serializeConfigOverrides, TRACE_ID_ENV } from "@/config.js";
+import { CONFIG_OVERRIDES_ENV, serializeConfigOverrides, TRACE_ID_ENV } from "@/config/config.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import type { RunLimits } from "@/runtime/ipc.js";
 

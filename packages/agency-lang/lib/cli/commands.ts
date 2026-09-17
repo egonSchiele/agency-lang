@@ -7,14 +7,14 @@ import {
   readConfigOverrides,
   serializeConfigOverrides,
   TRACE_ID_ENV,
-} from "@/config.js";
+} from "@/config/config.js";
 import {
   configFiles,
   projectTarget,
   readConfig,
   targetPaths,
   type ConfigTarget,
-} from "@/configTarget.js";
+} from "@/config/target.js";
 import { withCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { wrapTracesAsRunDirectories } from "@/runDirectory/mutations.js";
 import { AgencyProgram } from "@/index.js";

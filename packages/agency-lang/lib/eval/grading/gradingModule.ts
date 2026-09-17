@@ -5,7 +5,7 @@ import { pathToFileURL } from "url";
 
 import { build, stop as stopEsbuild, type BuildOptions } from "esbuild";
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { getPackageRoot } from "@/importPaths.js";
 import type { BaseGrader } from "./baseGrader.js";
 import { toGrader, type Grader } from "./functionGrader.js";

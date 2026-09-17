@@ -1,4 +1,4 @@
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { runBundledAgent, type AgentLaunchOptions } from "./runBundledAgent.js";
 
 export function agent(

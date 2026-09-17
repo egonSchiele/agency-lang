@@ -1,7 +1,7 @@
 import { SymbolTable } from "@/symbolTable.js";
 import type { CompilationUnit } from "@/compilationUnit.js";
 import { declaredName } from "../types/hole.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { AgencyGenerator, generateAgency } from "@/backends/agencyGenerator.js";
 import { readFile } from "./commands.js";
 import { parseAgency } from "../parser.js";

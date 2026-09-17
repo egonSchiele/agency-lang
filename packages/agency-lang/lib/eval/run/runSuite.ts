@@ -9,7 +9,7 @@ import { ttyColor } from "@/utils/termcolors.js";
 
 import { makeStatelogCostTailer } from "./costTail.js";
 import { formatElapsed, startStatusBoard } from "./statusBoard.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import {
   batchCostCapFromConfig,
   makeBatchBudget,

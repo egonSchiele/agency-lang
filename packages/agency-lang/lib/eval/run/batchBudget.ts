@@ -1,4 +1,4 @@
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { makeStatelogCostTailer } from "./costTail.js";
 import * as fs from "fs";
 

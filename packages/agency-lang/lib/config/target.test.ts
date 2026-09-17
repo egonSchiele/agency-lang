@@ -15,8 +15,8 @@ import {
   readConfig,
   targetPaths,
   writeTarget,
-} from "./configTarget.js";
-import { safeDeleteDirectoryWithin } from "./utils.js";
+} from "./target.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 
 let dir: string;
 beforeEach(() => {

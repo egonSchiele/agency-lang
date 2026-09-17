@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { pathToFileURL } from "url";
 import picomatch from "picomatch";
-import { AgencyConfig } from "../config.js";
+import { AgencyConfig } from "../config/config.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "../importStrategy.js";
 import { ttyColor } from "../utils/termcolors.js";

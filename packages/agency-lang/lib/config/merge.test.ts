@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { findPackageRoot } from "./importPaths.js";
-import { CONFIG_MERGE_RULES, mergeConfig } from "./configMerge.js";
+import { findPackageRoot } from "../importPaths.js";
+import { CONFIG_MERGE_RULES, mergeConfig } from "./merge.js";
 
 describe("mergeConfig", () => {
   it("merges nested objects key by key", () => {

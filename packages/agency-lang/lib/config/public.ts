@@ -6,7 +6,7 @@ export {
   projectTarget,
   readConfig,
   type ConfigTarget,
-} from "./configTarget.js";
+} from "./target.js";
 export {
   McpServersSchema,
   type McpHttpServerConfig,

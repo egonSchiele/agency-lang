@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { loadConfigSafe, validateConfig, type ConfigResult } from "./config.js";
-import { mergeConfig } from "./configMerge.js";
+import { mergeConfig } from "./merge.js";
 
 export const CONFIG_FILE = "agency.json";
 /** Per-developer overrides, kept out of git. Merged over CONFIG_FILE. */

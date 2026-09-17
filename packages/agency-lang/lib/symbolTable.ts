@@ -4,7 +4,7 @@ import * as path from "path";
 import { parseAgencyFileCached } from "./parseCache.js";
 import { propagateEffects } from "./analysis/effects.js";
 import { parseAgency } from "./parser.js";
-import type { AgencyConfig } from "./config.js";
+import type { AgencyConfig } from "./config/config.js";
 import type {
   AgencyNode,
   AgencyProgram,

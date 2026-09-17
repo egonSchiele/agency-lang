@@ -1,7 +1,7 @@
 import * as path from "path";
 import { isFailure } from "@/runtime/index.js";
 import { agentHomeDir } from "@/runtime/agentHome.js";
-import { projectTarget, readConfig, writeTarget, type ConfigTarget } from "@/configTarget.js";
+import { projectTarget, readConfig, writeTarget, type ConfigTarget } from "@/config/target.js";
 import {
   _addMcpServer,
   _removeMcpServer,

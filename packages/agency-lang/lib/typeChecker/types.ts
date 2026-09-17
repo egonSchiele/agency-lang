@@ -1,6 +1,6 @@
 import type { Scope } from "./scope.js";
 import type { FlowEnvironment } from "./flow.js";
-import { AgencyConfig } from "../config.js";
+import { AgencyConfig } from "../config/config.js";
 import {
   AgencyNode,
   FunctionDefinition,

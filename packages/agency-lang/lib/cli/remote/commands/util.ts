@@ -3,7 +3,7 @@
 // successful values.
 
 import { color } from "@/utils/termcolors.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { buildServeAddress, canonicalOrigin } from "../../statelog/serveUrl.js";
 import type { ServeAddress } from "../../statelog/serveUrl.js";
 import { createAccountClient } from "../../statelog/accountClient.js";

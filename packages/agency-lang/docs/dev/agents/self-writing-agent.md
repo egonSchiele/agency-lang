@@ -503,7 +503,7 @@ unchanged and should still be read as of 2026-07-28.
   in §2 is one of the two guards in the tool loop. See
   [`tool-loop-guards.md`](./tool-loop-guards.md).
 - **Oversized tool schemas: shipped.** `client.maxToolSchemaChars` is a real
-  config field (`lib/config.ts`), and `lib/runtime/toolSchemaSize.ts` emits the
+  config field (`lib/config/config.ts`), and `lib/runtime/toolSchemaSize.ts` emits the
   `warnType: "toolSchemaSize"` statelog warning.
 - **`revise` and `race` examples: still missing** from the prompt.
 - **CI-typechecked prompt examples: still not built.**

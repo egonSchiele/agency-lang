@@ -17,8 +17,8 @@
  */
 import fs from "fs";
 import path from "path";
-import { AgencyConfig } from "../config.js";
-import { hasProjectConfig } from "../configTarget.js";
+import { AgencyConfig } from "../config/config.js";
+import { hasProjectConfig } from "../config/target.js";
 import { mergeFixtureConfig } from "./commands.js";
 import { createBuildSession, type CompileGroup } from "../compiler/buildSession.js";
 import { parseTestFileFull, resolveSourceFile, type FullTestFile } from "../testFormat/schema.js";

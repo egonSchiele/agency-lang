@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { closureFiles } from "./eligibility.js";
-import type { AgencyConfig } from "../../config.js";
+import type { AgencyConfig } from "../../config/config.js";
 import type { Code } from "../../runtime/template/code.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 

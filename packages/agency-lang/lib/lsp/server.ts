@@ -17,7 +17,7 @@ import { SymbolTable } from "../symbolTable.js";
 import { evictParseCache } from "../parseCache.js";
 import { uriToPath } from "./uri.js";
 import { configFileDir, getWorkspaceForFile, invalidateWorkspace } from "./workspace.js";
-import { CONFIG_FILE, LOCAL_CONFIG_FILE } from "../configTarget.js";
+import { CONFIG_FILE, LOCAL_CONFIG_FILE } from "../config/target.js";
 import { runDiagnostics } from "./diagnostics.js";
 import { handleDefinition } from "./definition.js";
 import { getDocumentSymbols } from "./documentSymbol.js";

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import process from "process";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import { SymbolTable } from "../symbolTable.js";
 import type { InterruptEffect } from "../symbolTable.js";
 import { parseAgency } from "../parser.js";

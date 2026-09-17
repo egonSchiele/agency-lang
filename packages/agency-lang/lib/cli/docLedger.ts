@@ -25,7 +25,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import {
   computeCompilerStamp,
   computeDepsHash,

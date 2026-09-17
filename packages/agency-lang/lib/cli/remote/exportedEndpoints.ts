@@ -8,7 +8,7 @@
 // warning uses that to explain the fix instead of just saying "none".
 
 import path from "path";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { collectServeMetadata } from "@/serve/metadata.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { collectAgencyBundle } from "../deploy/bundle.js";

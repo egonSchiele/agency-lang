@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 
 function check(source: string, config: Partial<AgencyConfig> = {}) {
   const parsed = parseAgency(source);

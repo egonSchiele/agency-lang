@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "url";
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { parseAgency } from "@/parser.js";
 import type { GraphNodeDefinition } from "@/types.js";
 import type { LLMMock, ScopedLLMMocks } from "@/runtime/deterministicClient.js";

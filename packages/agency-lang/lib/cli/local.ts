@@ -27,7 +27,7 @@ import {
   type RefreshResult,
   type UnaliasResult,
 } from "../stdlib/localModels.js";
-import { configFiles, writeTarget, type ConfigTarget } from "../configTarget.js";
+import { configFiles, writeTarget, type ConfigTarget } from "../config/target.js";
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
 import type { DownloadEvent } from "../stdlib/hubDownload.js";
 import { ttyColor } from "../utils/termcolors.js";

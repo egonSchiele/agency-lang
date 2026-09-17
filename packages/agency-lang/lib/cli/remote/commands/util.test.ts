@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 const { whoami, fetchAgentInfo } = vi.hoisted(() => ({
   whoami: vi.fn(),
   fetchAgentInfo: vi.fn(),

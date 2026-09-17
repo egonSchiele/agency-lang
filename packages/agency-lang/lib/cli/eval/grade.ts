@@ -1,6 +1,6 @@
 import * as fs from "fs";
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import {
   batchStatisticsByBatchTolerant,
   type BatchStatistics,

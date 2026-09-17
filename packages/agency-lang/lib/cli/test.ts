@@ -24,7 +24,7 @@ import {
   type CompileAttempt,
 } from "./expectedCompileError.js";
 import { safeDeleteFile } from "@/utils.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import path from "path";
 import { mergeFixtureConfig } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";

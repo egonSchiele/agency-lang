@@ -5,7 +5,7 @@ import * as path from "path";
 import type { ZodSchema } from "zod";
 
 import { runAgencyNode } from "@/cli/util.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 
 import type { JSON } from "./types.js";
 

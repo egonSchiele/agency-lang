@@ -18,7 +18,7 @@ import {
   downloadChoices,
   CUSTOM_CHOICE,
 } from "./local.js";
-import { fileTarget } from "../configTarget.js";
+import { fileTarget } from "../config/target.js";
 
 let dir: string;
 let aliasFile: string;

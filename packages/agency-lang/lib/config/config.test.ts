@@ -14,8 +14,8 @@ import {
   serializeConfigOverrides,
   validateConfig,
 } from "./config.js";
-import { CONFIG_MERGE_RULES } from "./configMerge.js";
-import { schemaAtConfigPath } from "./configPaths.js";
+import { CONFIG_MERGE_RULES } from "./merge.js";
+import { schemaAtConfigPath } from "./paths.js";
 
 describe("AgencyConfigSchema", () => {
   it("should accept an empty config", () => {

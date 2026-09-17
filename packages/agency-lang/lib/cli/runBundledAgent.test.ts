@@ -7,7 +7,7 @@ vi.mock("fs", async (importOriginal) => {
   return { ...actual, existsSync: () => true };
 });
 
-import { CONFIG_OVERRIDES_ENV } from "@/config.js";
+import { CONFIG_OVERRIDES_ENV } from "@/config/config.js";
 import * as os from "os";
 import * as path from "path";
 import { resolveAgentLaunchArgs, runBundledAgent } from "./runBundledAgent.js";

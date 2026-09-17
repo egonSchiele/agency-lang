@@ -7,7 +7,7 @@
 // wires the routes to the two apps.
 import * as fs from "fs";
 import * as tty from "tty";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { runViewer } from "@/logsViewer/run.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";

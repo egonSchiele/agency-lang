@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { ResolvedModelFlag } from "@/config.js";
+import type { ResolvedModelFlag } from "@/config/config.js";
 import { _registerLocalModel, _resolveModel, _mlxServedName } from "@/stdlib/localModels.js";
 
 /** Turn `agency run --local <value>` into the shared model-flag shape:

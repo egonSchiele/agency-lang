@@ -81,5 +81,5 @@ to `parse()`; the compile and LSP paths use the default (`lower: true`).
 
 1. Add the command definition in `scripts/agency.ts` using the vendored commander fork (`@/vendor/commander/index.js`): `.command()`, `.argument()`, `.option()`, `.action()`. See `docs/dev/cli/vendored-commander.md` for what the fork changed, and `docs/dev/cli/cli-arguments.md` for where a flag is allowed to sit on the command line.
 2. Implement the command logic in `lib/cli/` (create a new file or add to an existing one). Shared utilities like `promptForTarget`, `pickANode`, and `executeNode` live in `lib/cli/util.ts`.
-3. A flag that changes compiler or runtime configuration must be translated in `applyCliFlags` (`lib/config.ts`), the one place flags become config.
+3. A flag that changes compiler or runtime configuration must be translated in `applyCliFlags` (`lib/config/config.ts`), the one place flags become config.
 4. Optionally add a shortcut script in `package.json` under `"scripts"`.

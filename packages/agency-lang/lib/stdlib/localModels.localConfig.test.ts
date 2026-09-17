@@ -10,7 +10,7 @@ import {
   readModelAliases,
   resolveAliasConfigPath,
 } from "./localModels.js";
-import { fileTarget, projectTarget } from "../configTarget.js";
+import { fileTarget, projectTarget } from "../config/target.js";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 
 const EMPTY_CATALOG = JSON.stringify({ version: 1, models: {} });

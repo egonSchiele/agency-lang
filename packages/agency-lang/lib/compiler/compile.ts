@@ -2,7 +2,7 @@
  * Pure compilation pipeline for Agency source strings.
  * No process.exit(), no console.log(). Returns errors as data.
  */
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { initPlanForModule, type InitPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";

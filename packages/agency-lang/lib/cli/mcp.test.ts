@@ -19,7 +19,7 @@ vi.mock("@/stdlib/mcpBridge.mjs", () => ({
 
 import * as bridge from "@/stdlib/mcpBridge.mjs";
 import { mcpAdd, mcpRemove, mcpList } from "./mcp.js";
-import { fileTarget } from "@/configTarget.js";
+import { fileTarget } from "@/config/target.js";
 import { safeDeleteDirectoryWithin } from "@/utils.js";
 
 let dir: string;

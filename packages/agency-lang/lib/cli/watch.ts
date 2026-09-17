@@ -1,5 +1,5 @@
 import { compile, resetCompilationCache } from "@/compiler/defaultSession.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { color } from "@/utils/termcolors.js";
 import chokidar from "chokidar";
 import { execSync } from "child_process";

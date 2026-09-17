@@ -12,7 +12,7 @@ import { fork } from "child_process";
 import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import { getRuntimeContext, agencyStore } from "./asyncContext.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";

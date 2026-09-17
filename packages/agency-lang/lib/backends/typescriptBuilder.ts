@@ -30,7 +30,7 @@ import {
   BUILTIN_TOOLS,
   BUILTIN_VARIABLES,
   TYPES_THAT_DONT_TRIGGER_NEW_PART,
-} from "@/config.js";
+} from "@/config/config.js";
 import type { SourceLocationOpts } from "@/runtime/state/checkpointStore.js";
 import { BlockArgument } from "@/types/blockArgument.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
@@ -50,7 +50,7 @@ import * as renderBuiltinToolRegistration from "../templates/backends/typescript
 import * as renderResultCheckpointSetup from "../templates/backends/typescriptGenerator/resultCheckpointSetup.js";
 import * as renderFunctionCatchFailure from "../templates/backends/typescriptGenerator/functionCatchFailure.js";
 
-import { AgencyConfig, DEFAULT_MODEL, DEFAULT_PROVIDER } from "@/config.js";
+import { AgencyConfig, DEFAULT_MODEL, DEFAULT_PROVIDER } from "@/config/config.js";
 import { parseDurationMs } from "@/duration.js";
 import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE, PREFIX_OPS } from "@/types/binop.js";
 import { MessageThread } from "@/types/messageThread.js";
@@ -81,7 +81,7 @@ import { NewExpression } from "../types/newExpression.js";
 import { InterruptStatement } from "../types/interruptStatement.js";
 import { moduleIdToOrigin } from "../runtime/origin.js";
 import { escape } from "../utils.js";
-import { mergeConfig } from "../configMerge.js";
+import { mergeConfig } from "../config/merge.js";
 import { generateBuiltinHelpers, mapFunctionName } from "./typescriptGenerator/builtins.js";
 import {
   DEFAULT_SCHEMA,

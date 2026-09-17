@@ -73,14 +73,19 @@ import { evalUpload, formatUploadSummary } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
-import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
+import {
+  AgencyConfig,
+  applyCliFlags,
+  type CliFlags,
+  redactConfigSecrets,
+} from "@/config/config.js";
 import {
   configFiles,
   configTarget,
   projectTarget,
   writeTarget,
   type ConfigTarget,
-} from "@/configTarget.js";
+} from "@/config/target.js";
 import { defaultAliasTarget } from "@/stdlib/localModels.js";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";

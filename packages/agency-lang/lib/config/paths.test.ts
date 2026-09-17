@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import {
-  isPlainObject,
-  mapConfigValues,
-  matchesConfigPath,
-  schemaAtConfigPath,
-} from "./configPaths.js";
+import { isPlainObject, mapConfigValues, matchesConfigPath, schemaAtConfigPath } from "./paths.js";
 
 describe("matchesConfigPath", () => {
   it("matches exact keys and * wildcards", () => {

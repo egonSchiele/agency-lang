@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import type { EvalTarget } from "@/agentTarget.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { extractEvalRecord } from "@/eval/extract.js";
 import type { EvalRecord } from "@/eval/types.js";
 import { computeCodeIdentity } from "@/runDirectory/codeIdentity.js";

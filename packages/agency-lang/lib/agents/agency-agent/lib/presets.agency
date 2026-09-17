@@ -92,7 +92,8 @@ export def activePreset(): Preset | null {
 // named `constructor`, and a plain `record[name]` would answer with
 // Object.prototype's value for a name nobody saved.
 def hasSavedEntry(record: Record<string, any>, name: string): boolean {
-  return Object.keys(record).includes(name)
+  const names = Object.keys(record)
+  return names.includes(name)
 }
 
 // An entry saved as null is present but unusable: hasSavedEntry says it

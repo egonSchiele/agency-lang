@@ -74,6 +74,13 @@ import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
 import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
+import {
+  configFiles,
+  configTarget,
+  projectTarget,
+  writeTarget,
+  type ConfigTarget,
+} from "@/configTarget.js";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
 import { parseTarget } from "@/agentTarget.js";
@@ -245,23 +252,28 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Agency Language CLI")
     .version("0.0.105")
     .option("-v, --verbose", "Enable verbose logging during parsing")
-    .option("-c, --config <path>", "Path to agency.json config file");
+    .option(
+      "-c, --config <path>",
+      "Path to a config file. Loads only this file; agency.local.json is skipped",
+    );
+
+  // The -c file, or the project in the current directory.
+  function getConfigTarget(): ConfigTarget {
+    return configTarget(program.opts().config, projectTarget(process.cwd()));
+  }
 
   function getConfig(): AgencyConfig {
-    const opts = program.opts();
-    const config = loadConfig(opts.config, opts.verbose);
-    if (opts.verbose) {
+    const verbose = program.opts().verbose === true;
+    const config = loadConfig(getConfigTarget(), verbose);
+    if (verbose) {
       config.verbose = true;
     }
     return config;
   }
 
-  // Config plus the exact path it loaded from, so a remote binding writes back
-  // to that file rather than a re-derived one.
+  // Config plus the file a remote binding would write back to.
   function getConfigContext(): RemoteCommandContext {
-    const opts = program.opts();
-    const configPath = opts.config ?? path.resolve(process.cwd(), "agency.json");
-    return { config: getConfig(), configPath };
+    return { config: getConfig(), configPath: writeTarget(getConfigTarget()) };
   }
 
   async function runWithOptions(
@@ -2014,14 +2026,21 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   configCmd
     .command("show", { isDefault: true })
-    .description("Print the resolved, merged agency.json config as JSON")
+    .description(
+      "Print the config Agency will use: agency.json merged with agency.local.json, or the -c file",
+    )
     .option(
       "--show-secrets",
       "Print API keys verbatim instead of masking them (avoid in shared logs / bug reports)",
     )
     .action((opts: { showSecrets?: boolean }) => {
       const config = getConfig();
-      console.log(JSON.stringify(opts.showSecrets ? config : redactConfigSecrets(config), null, 2));
+      const files = configFiles(getConfigTarget());
+      const loaded = files.length > 0 ? files.join(", ") : "no config files";
+      // stderr, so stdout stays valid JSON.
+      console.error(`Loaded: ${loaded}`);
+      const shown = opts.showSecrets ? config : redactConfigSecrets(config);
+      console.log(JSON.stringify(shown, null, 2));
     });
 
   program

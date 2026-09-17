@@ -6,6 +6,7 @@ import * as path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import type { Command } from "@/vendor/commander/index.js";
+import { safeDeleteDirectoryWithin } from "@/utils.js";
 
 // Replace only the three new remote-management recipe modules so registration
 // can be exercised with real `parseAsync` without hitting the network.
@@ -327,6 +328,52 @@ describe.skipIf(!HAS_BUILT_CLI)("config show (integration, requires build)", () 
     expect(JSON.parse(raw.stdout).log.apiKey).toBe("sk-secret-1234");
 
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("merges agency.local.json and reports both files on stderr", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "config-show-local-")));
+    const baseFile = path.join(dir, "agency.json");
+    const localFile = path.join(dir, "agency.local.json");
+    fs.writeFileSync(
+      baseFile,
+      JSON.stringify({
+        outDir: "./built",
+        mcpServers: { search: { type: "http", url: "https://s/mcp" }, fs: { command: "npx" } },
+      }),
+    );
+    fs.writeFileSync(
+      localFile,
+      JSON.stringify({
+        outDir: "./mine",
+        mcpServers: { search: { command: "node", env: { TOKEN: "local-secret-7777" } } },
+      }),
+    );
+
+    const shown = await execFileAsync("node", [CLI, "config", "show"], { cwd: dir });
+    const shownJson = JSON.parse(shown.stdout);
+    expect(shownJson.outDir).toBe("./mine");
+    expect(shownJson.mcpServers.fs).toEqual({ command: "npx" });
+    expect(shownJson.mcpServers.search.command).toBe("node");
+    expect(shownJson.mcpServers.search.type).toBeUndefined();
+    expect(shown.stdout).not.toContain("local-secret-7777");
+    expect(shown.stderr).toContain(`Loaded: ${baseFile}, ${localFile}`);
+
+    const named = await execFileAsync("node", [CLI, "-c", baseFile, "config", "show"], {
+      cwd: dir,
+    });
+    expect(JSON.parse(named.stdout).outDir).toBe("./built");
+    expect(named.stderr).toContain(`Loaded: ${baseFile}`);
+    expect(named.stderr).not.toContain("agency.local.json");
+
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
+  });
+
+  it("says so when there is no config file", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "config-show-none-")));
+    const shown = await execFileAsync("node", [CLI, "config", "show"], { cwd: dir });
+    expect(JSON.parse(shown.stdout)).toEqual({});
+    expect(shown.stderr).toContain("Loaded: no config files");
+    expect(safeDeleteDirectoryWithin(os.tmpdir(), dir).success).toBe(true);
   });
 });
 

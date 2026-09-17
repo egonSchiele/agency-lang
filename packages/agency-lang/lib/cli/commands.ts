@@ -1,13 +1,20 @@
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import {
   AgencyConfig,
+  applyCliFlags,
   CONFIG_OVERRIDES_ENV,
-  loadConfigSafe,
   mergeConfigOverrides,
   readConfigOverrides,
   serializeConfigOverrides,
   TRACE_ID_ENV,
 } from "@/config.js";
+import {
+  configFiles,
+  projectTarget,
+  readConfig,
+  targetPaths,
+  type ConfigTarget,
+} from "@/configTarget.js";
 import { withCodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { wrapTracesAsRunDirectories } from "@/runDirectory/mutations.js";
 import { AgencyProgram } from "@/index.js";
@@ -101,25 +108,36 @@ export function compileWarning(
   ].join("\n");
 }
 
-// Load configuration from agency.json
-export function loadConfig(configPath?: string, verbose: boolean = false): AgencyConfig {
-  const finalConfigPath = configPath || path.join(process.cwd(), "agency.json");
-
-  // Diagnostics go to stderr so they never contaminate a command's
-  // machine-consumed stdout (e.g. `remote logs --json`).
+/** Load config from `target`, exiting on an invalid file. Diagnostics go to
+ *  stderr so they never corrupt a command's machine-read stdout. */
+export function loadConfig(
+  target: ConfigTarget = projectTarget(process.cwd()),
+  verbose: boolean = false,
+): AgencyConfig {
   if (verbose) {
-    console.error(`Looking for config at: ${finalConfigPath}`);
+    console.error(`Looking for config at: ${targetPaths(target).join(", ")}`);
   }
-
-  const { config, error } = loadConfigSafe(finalConfigPath);
-  if (error) {
+  const { config, error } = readConfig(target);
+  if (error !== undefined) {
     console.error(error);
     process.exit(1);
   }
   if (config.verbose) {
-    console.error(`Loaded config from ${finalConfigPath}`);
+    for (const file of configFiles(target)) {
+      console.error(`Loaded config from ${file}`);
+    }
   }
   return config;
+}
+
+/**
+ * `base` with the config files in a test fixture's directory merged over it.
+ * A fixture may opt into features. It cannot cancel a refusal the user asked
+ * for on the command line, so the CLI intent is applied again after the merge.
+ */
+export function mergeFixtureConfig(base: AgencyConfig, dir: string): AgencyConfig {
+  const fixture = loadConfig(projectTarget(dir));
+  return applyCliFlags({ ...base, ...fixture }, { refuseSplices: base.refuseSplices });
 }
 
 export function readStdin(): Promise<string> {

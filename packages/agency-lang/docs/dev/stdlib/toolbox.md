@@ -148,6 +148,33 @@ that fail, and the round's feedback says so. A tool that stamps a date
 computes without effects, but exact expected values for it would be
 wrong tomorrow.
 
+### How the test cases are generated
+
+A case is a `request` for the tool and the value `run` should return.
+The structured-output schema must spell out the request's fields. An
+open object such as `Record<string, Json>` becomes
+`additionalProperties: {}` in the JSON schema. Anthropic rejects that
+with a 400, and OpenAI rejects the `propertyNames` that comes with it.
+
+An `llm()` call's schema is built from the declared type when its file
+is compiled, and `toolbox.agency` is compiled long before a tool's
+`Request` exists. There is no hole in type position either. So
+`runGeneratedTests` compiles a small program, `casesProgram`, against
+the staging directory. It imports `Request` from `impl.agency` and asks
+for `{ request: Request; expectedJson: string }[]`. For
+`request: "{ name: string }"`, the schema says exactly
+`request: { name: string }`. `compile` takes the source as a string, so
+nothing is written to staging and nothing has to be removed. `run`
+starts it in a subprocess, which raises one `std::run` interrupt per
+tested round.
+
+`run` returns JSON, which has no closed schema, so the expected value
+comes back as JSON text. `testFileJson` parses it and wraps it in the
+Result envelope `main` returns. It also puts each request under
+`args.request`, the one parameter `main` takes. A request type that has
+an open field of its own still fails the schema, and the round fails
+with the provider's message.
+
 ### What the handler may return
 
 The answer is text, because that is what a person can type at the
@@ -214,6 +241,12 @@ review mock. `tests/agency/toolbox/generate-designTool-mocks.mjs`
 regenerates `designTool.test.json`; run it whenever
 `fixtures/tools/good/impl.agency` changes. A stale copy fails the coding
 agent's own check and silently spends the round's mocks.
+
+The mocks are scoped by module: `coding` and `review` each have a
+queue. The test-case call runs in a subprocess under a random module id
+(`agency_<random>`), so it always reads the `"*"` queue. Each subprocess
+reads that queue from the start, so every tested round gets the same
+single cases mock.
 
 `tests/agency/toolbox/writeTool.agency` covers the plain primitive with
 no mocks at all, so a model call anywhere on its path fails the suite.

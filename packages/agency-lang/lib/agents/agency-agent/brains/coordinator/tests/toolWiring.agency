@@ -25,6 +25,13 @@ import { buildTools as explorerTools } from "std::agents/explorer"
 // the agent's own tools plus researchTools plus the saveDraft the agent appends.
 import { buildTools as agencyResearcherOwnTools } from "std::agents/agency/researcher"
 import { buildTools as researcherOwnTools } from "std::agents/researcher"
+import { filter, map } from "std::array"
+import { buildTools as agencyReviewTools } from "std::agents/agency/review"
+import { buildTools as reviewTools } from "std::agents/review"
+import { buildTools as writingReviewTools } from "std::agents/writing/review"
+
+import { LEARNED_TOOL_PREFIX } from "../../../lib/learned.agency"
+import { mainAgentTools } from "../coordinator.agency"
 
 def pingWith(tools: any[]): string {
   // Reject any interrupt a tool might raise. Under the deterministic
@@ -76,4 +83,35 @@ node oracleToolsHaveUniqueNames() {
 
 node explorerToolsHaveUniqueNames() {
   return pingWith(explorerTools())
+}
+
+// Learned tools are offered as learned_<name>. That only keeps them from
+// shadowing a built-in tool if no built-in tool uses the prefix. Every
+// list a learned tool can join is here; PR 5 extends it when it wires a
+// subagent whose tools are not yet listed.
+node noBuiltinToolUsesTheLearnedPrefix() {
+  const builtIn: any[] = [
+    ...mainAgentTools,
+    ...codeTools,
+    ...researchTools,
+    ...oracleTools(),
+    ...explorerTools(),
+    ...agencyResearcherOwnTools(),
+    ...researcherOwnTools(),
+    ...reviewTools(),
+    ...agencyReviewTools(),
+    ...writingReviewTools(),
+  ]
+  const names = map(builtIn, \tool -> "${tool.name}")
+  const clashing = filter(names, \name -> name.startsWith(LEARNED_TOOL_PREFIX))
+  if (clashing.length > 0) {
+    return "FAIL: ${clashing.join(", ")}"
+  }
+  return "ok"
+}
+
+// The coordinator's own list, which is the one learnSkill and writeToolFor
+// join. The runtime rejects duplicate names before the request is sent.
+node coordinatorToolsHaveUniqueNames() {
+  return pingWith(mainAgentTools)
 }

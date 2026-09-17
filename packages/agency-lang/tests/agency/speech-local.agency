@@ -70,10 +70,10 @@ node badArgumentsNeverPrompt(): string {
 node badSpeedNeverPrompts(): string {
   let effects = ""
   handle {
-    const r = try speakLocal("Hello there.", "qwen3-tts-mlx", speed: 3)
+    const r = try speakLocal("Hello there.", "qwen3-tts-mlx", speed: 0.25)
     if (r is failure(why)) {
       const msg = "${why}"
-      return "${effects}|${msg.includes("speed must be a number from 0.5 to 2")}"
+      return "${effects}|${msg.includes("speed must be a number from 0.5 to 100")}"
     }
     return "it did not fail"
   } with (intr) {

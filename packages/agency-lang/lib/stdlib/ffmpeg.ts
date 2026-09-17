@@ -1,6 +1,5 @@
 // Copied from packages/kokoro/src/ffmpeg.ts, with pcm and wav output and a
-// speed filter added. Kokoro still uses its own copy; see
-// docs/dev/llm/local-speech.md.
+// speed filter added.
 import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import * as os from "node:os";
@@ -14,6 +13,8 @@ export type TranscodeFormat = (typeof TRANSCODE_FORMATS)[number];
 /** Plenty for speech, and a fraction of the WAV size. */
 export const BITRATE = "96k";
 export const FFMPEG_TIMEOUT_MS = 10 * 60 * 1000;
+/** The probe blocks the event loop, so it gets a short limit. */
+const PROBE_TIMEOUT_MS = 5000;
 
 export class FfmpegError extends Error {
   constructor(message: string) {
@@ -38,7 +39,14 @@ function installHint(): string {
 /** Throws when ffmpeg is not on PATH. Called before any interrupt, so
  *  nobody approves a file that cannot be written. */
 export function assertFfmpegAvailable(): void {
-  const probe = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  const probe = spawnSync("ffmpeg", ["-version"], {
+    stdio: "ignore",
+    timeout: PROBE_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+  if ((probe.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+    throw new FfmpegError(`ffmpeg -version did not finish within ${PROBE_TIMEOUT_MS} ms.`);
+  }
   if (probe.error !== undefined || probe.status !== 0) {
     throw new FfmpegError(
       `ffmpeg is needed to write mp3 or m4a files, or to change the speed, and it is not on PATH. ` +

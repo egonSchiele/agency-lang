@@ -592,9 +592,10 @@ const LOCAL_SPEECH_MIME: Record<LocalSpeechFormat, string> = {
   pcm: "application/octet-stream",
 };
 
-/** The same range as the Kokoro package. Both ends are allowed. */
+/** The range ffmpeg's atempo filter accepts. Checked before the interrupt,
+ *  so a bad speed fails before the model generates anything. */
 const MIN_LOCAL_SPEED = 0.5;
-const MAX_LOCAL_SPEED = 2;
+const MAX_LOCAL_SPEED = 100;
 
 /** The most text one request to the local server carries. A cancelled call
  *  holds the server for at most one piece. */

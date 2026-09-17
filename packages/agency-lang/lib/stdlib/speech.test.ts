@@ -790,13 +790,13 @@ describe("_speakLocal formats and speed", () => {
     await expect(stat(out)).rejects.toThrow();
   });
 
-  it("_validateSpeakLocalArgs accepts a speed from 0.5 to 2 and refuses anything else", () => {
-    for (const speed of [0.5, 1, 2]) {
+  it("_validateSpeakLocalArgs accepts a speed from 0.5 to 100 and refuses anything else", () => {
+    for (const speed of [0.5, 1, 2, 100]) {
       expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "", speed)).not.toThrow();
     }
-    for (const speed of [0.4, 2.1, Number.NaN]) {
+    for (const speed of [0.4, 100.5, Number.NaN]) {
       expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "", speed)).toThrow(
-        /speed must be a number from 0.5 to 2/,
+        /speed must be a number from 0.5 to 100/,
       );
     }
   });
@@ -826,6 +826,6 @@ describe("_speakLocal formats and speed", () => {
     expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "", 1)).not.toThrow();
     expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "pcm", "", 1)).not.toThrow();
     // A bad speed is reported as such even without ffmpeg.
-    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "mp3", "", 3)).toThrow(/speed/);
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "mp3", "", 0.25)).toThrow(/speed/);
   });
 });

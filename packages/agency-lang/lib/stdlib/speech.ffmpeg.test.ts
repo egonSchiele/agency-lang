@@ -12,7 +12,8 @@ import { transcode } from "./ffmpeg.js";
 import { _speakLocal } from "./speech.js";
 import { wavFile } from "./wavFile.js";
 
-const hasFfmpeg = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).error === undefined;
+const probe = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+const hasFfmpeg = probe.error === undefined && probe.status === 0;
 const required = process.env.AGENCY_REQUIRE_FFMPEG === "1";
 
 it("ffmpeg is on the PATH when AGENCY_REQUIRE_FFMPEG=1", () => {

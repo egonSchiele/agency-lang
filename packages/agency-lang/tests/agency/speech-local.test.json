@@ -24,7 +24,7 @@
     },
     {
       "nodeName": "badSpeedNeverPrompts",
-      "description": "A speed outside 0.5 to 2 fails before any interrupt is raised",
+      "description": "A speed outside 0.5 to 100 fails before any interrupt is raised",
       "input": "",
       "expectedOutput": "\"|true\"",
       "evaluationCriteria": [{ "type": "exact" }]

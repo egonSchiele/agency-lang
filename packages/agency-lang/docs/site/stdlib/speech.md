@@ -282,7 +282,7 @@ Speak text into an audio file with a local speech model, and return the path of 
   @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
   @param format - "wav", "mp3", "m4a", or "pcm". Leave empty to use the output file's extension, or wav when there is none. A format you give wins over the extension.
   @param allowedPaths - Directories that outputFile must be inside
-  @param speed - Speaking speed, from 0.5 to 2 (both included). Anything other than 1 needs ffmpeg.
+  @param speed - Speaking speed, from 0.5 to 100 (both included). Anything other than 1 needs ffmpeg.
 
 Use this for speech that must not leave the machine, and for the
 emotion a local model can perform that a cloud voice cannot. Long text is

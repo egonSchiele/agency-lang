@@ -1,0 +1,155 @@
+{
+  "sourceFile": "presets.agency",
+  "tests": [
+    {
+      "nodeName": "tableKeepsValidPresetsAndNamesBadOnes",
+      "input": "",
+      "expectedOutput": "\"opus,cheap | broken\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "flagWins",
+      "input": "",
+      "expectedOutput": "\"cheap\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "oneDefaultIsUsed",
+      "input": "",
+      "expectedOutput": "\"opus\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badPresetIsAWarning",
+      "input": "",
+      "expectedOutput": "[\"Warning: preset 'broken': maxToolCallRounds must be a whole number above zero, in <path>; ignoring it.\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "twoDefaultsMeanNoPreset",
+      "input": "",
+      "expectedOutput": "\"|Warning: presets opus and cheap are both marked default in <path>; using no preset.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noPresetsMeansNoPreset",
+      "input": "",
+      "expectedOutput": "\"[]\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "unknownFlagListsTheNames",
+      "input": "",
+      "expectedOutput": "\"Unknown --preset value: fast. Saved presets: opus, cheap.\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "badPresetByFlagIsAnError",
+      "input": "",
+      "expectedOutput": "\"--preset broken: preset 'broken': maxToolCallRounds must be a whole number above zero\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "saveKeepsOtherKeys",
+      "input": "",
+      "expectedOutput": "\"{\\\"search\\\":{\\\"backend\\\":\\\"tavily\\\"},\\\"presets\\\":{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\"},\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\"}}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "replacingTheDefaultKeepsIt",
+      "input": "",
+      "expectedOutput": "\"{\\\"opus\\\":{\\\"provider\\\":\\\"openai\\\",\\\"default\\\":true}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "setDefaultLeavesExactlyOne",
+      "input": "",
+      "expectedOutput": "\"{\\\"opus\\\":{\\\"provider\\\":\\\"anthropic\\\"},\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\",\\\"default\\\":true}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "setDefaultRefusesABadPreset",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deleteRemovesOnlyThatPreset",
+      "input": "",
+      "expectedOutput": "\"{\\\"cheap\\\":{\\\"provider\\\":\\\"openrouter\\\"}}\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "deleteOfAnUnknownNameFails",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "listLinesMarkActiveAndDefault",
+      "input": "",
+      "expectedOutput": "[\"Presets:\",\"  opus (default)\",\"  cheap (active)\",\"  broken (not valid: preset 'broken': maxToolCallRounds must be a whole number above zero)\",\"Switch with /preset <name>.\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

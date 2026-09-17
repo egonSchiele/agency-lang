@@ -681,65 +681,33 @@ export const AgencyConfigSchema = z
   .partial()
   .loose();
 
-/**
- * Load agency.json at the given path without calling process.exit.
- * Returns the parsed config, or an error message if the file is invalid.
- * Returns an empty config if the file doesn't exist.
- */
-export function loadConfigSafe(configPath: string): {
-  config: AgencyConfig;
-  error?: string;
-} {
+export type ConfigResult = { config: AgencyConfig; error?: string };
+
+/** Check `raw` against AgencyConfigSchema. `source` names where it came from
+ *  in the error message. */
+export function validateConfig(raw: unknown, source: string): ConfigResult {
+  const result = AgencyConfigSchema.safeParse(raw);
+  if (result.success) {
+    return { config: result.data as AgencyConfig };
+  }
+  const issues = result.error.issues
+    .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+    .join("\n");
+  return { config: {}, error: `Invalid config in ${source}:\n${issues}` };
+}
+
+/** Load exactly one config file. A missing file is an empty config. For a
+ *  project directory, use readConfig in lib/configTarget.ts. */
+export function loadConfigSafe(configPath: string): ConfigResult {
   if (!fs.existsSync(configPath)) {
     return { config: {} };
   }
   try {
-    const content = fs.readFileSync(configPath, "utf-8");
-    const parsed = JSON.parse(content);
-    const result = AgencyConfigSchema.safeParse(parsed);
-    if (!result.success) {
-      const issues = result.error.issues
-        .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
-        .join("\n");
-      return {
-        config: {},
-        error: `Invalid agency.json config:\n${issues}`,
-      };
-    }
-    if (result.data.verbose) {
-      // stderr, not stdout: this fires under `config.verbose` and must not
-      // corrupt a command's machine-consumed output.
-      console.error(`Loaded config from ${configPath}:`);
-    }
-    return { config: result.data as AgencyConfig };
+    const raw: unknown = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    return validateConfig(raw, configPath);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return {
-      config: {},
-      error: `Error loading config from ${configPath}: ${message}`,
-    };
-  }
-}
-
-/**
- * Find the agency.json for a given file path by searching upward.
- * Returns the directory containing agency.json, or null if not found.
- */
-export function findProjectRoot(startPath: string): string | null {
-  let current =
-    fs.existsSync(startPath) && fs.statSync(startPath).isDirectory()
-      ? startPath
-      : path.dirname(startPath);
-
-  while (true) {
-    if (fs.existsSync(path.join(current, "agency.json"))) {
-      return current;
-    }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
+    return { config: {}, error: `Error loading config from ${configPath}: ${message}` };
   }
 }
 
@@ -749,8 +717,9 @@ export function findProjectRoot(startPath: string): string | null {
 // A program's effective AgencyConfig is assembled from three sources, listed
 // here in increasing precedence:
 //
-//   1. agency.json           — the file, found by walking up from cwd
-//                              (loadConfigSafe / findProjectRoot). The base.
+//   1. Config files          — a ConfigTarget (lib/configTarget.ts): the -c
+//                              file alone, or agency.json with
+//                              agency.local.json merged over it. The base.
 //   2. CLI flags             — per-invocation flags (--trace, --log,
 //                              --strict, ...) mapped onto config by
 //                              applyCliFlags(). This is the ONLY place that

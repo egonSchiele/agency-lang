@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { findProjectRoot } from "../config.js";
+import { findProjectRoot } from "../configTarget.js";
 
 let tmpDir: string;
 

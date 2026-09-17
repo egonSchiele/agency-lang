@@ -49,7 +49,7 @@
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
-import { findProjectRoot } from "@/config.js";
+import { findProjectRoot } from "@/configTarget.js";
 
 export type ManifestEntry = {
   sourceHash: string;

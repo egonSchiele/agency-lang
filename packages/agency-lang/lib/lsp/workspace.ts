@@ -1,4 +1,5 @@
-import { AgencyConfig, findProjectRoot, loadConfigSafe } from "../config.js";
+import { AgencyConfig, loadConfigSafe } from "../config.js";
+import { findProjectRoot } from "../configTarget.js";
 import * as path from "path";
 
 type WorkspaceEntry = {

@@ -12,6 +12,7 @@ import {
   redactConfigSecrets,
   SECRET_CONFIG_PATHS,
   serializeConfigOverrides,
+  validateConfig,
 } from "./config.js";
 import { CONFIG_MERGE_RULES } from "./configMerge.js";
 import { schemaAtConfigPath } from "./configPaths.js";
@@ -444,5 +445,13 @@ describe("config path tables", () => {
 
   it.each(paths)("%s exists in AgencyConfigSchema", (configPath) => {
     expect(schemaAtConfigPath(AgencyConfigSchema, configPath)).toBeDefined();
+  });
+});
+
+describe("validateConfig", () => {
+  it("names the source in the error", () => {
+    const { error } = validateConfig({ maxToolCallRounds: "many" }, "a.json merged with b.json");
+    expect(error).toContain("Invalid config in a.json merged with b.json");
+    expect(error).toContain("maxToolCallRounds");
   });
 });

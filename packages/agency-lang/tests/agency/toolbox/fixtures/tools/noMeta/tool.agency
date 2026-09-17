@@ -1,0 +1,20 @@
+import { Json } from "std::validation"
+
+import { run, Request } from "./impl.agency"
+
+def runGuarded(request: Request): Result<Json> {
+  """
+  Run this tool. The request type is in impl.agency.
+
+  @param request - The tool's input
+  """
+  return guard(time: 60000, cost: 0.1) {
+    return run(request)
+  }
+}
+
+export static const tool = runGuarded.describe("Add one to a number.")
+
+export node main(request: Request): Result<Json> {
+  return tool(request)
+}

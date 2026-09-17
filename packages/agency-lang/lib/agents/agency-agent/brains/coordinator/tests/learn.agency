@@ -1,10 +1,8 @@
 /*
- * learnSkill and writeToolFor: a one-shot run is refused before any
- * model call or prompt; an accepted skill lands on disk and in the
- * catalog; a rejected review saves nothing; an overlong tool name is
- * refused before any prompt. Roots are repointed at a sandbox under
- * test-output first and verified, so a failing test can never touch
- * the real agent home.
+ * learnSkill and writeToolFor. Roots are repointed at a sandbox under
+ * test-output first, so a failing test can never touch the real agent
+ * home. Run with AGENCY_USE_TEST_LLM_PROVIDER=1, or the drafts go to a
+ * real model.
  */
 import { remove } from "std::fs"
 import { exists } from "std::shell"
@@ -17,9 +15,7 @@ def sandboxRoot(node: string): string {
   return "${__dirname}/test-output/learn/${node}"
 }
 
-// A fresh sandbox for one node. The delete is fenced to the test's own
-// output directory, so a wrong path is refused rather than removed.
-// Returns false if the repoint did not take.
+// A fresh sandbox for one node; false if the repoint did not take.
 def sandboxed(node: string): boolean {
   const root = sandboxRoot(node)
   remove(root, allowedPaths: ["${__dirname}/test-output"]) with approve
@@ -46,8 +42,6 @@ node oneShotRunIsRefusedBeforeAnyPrompt(): boolean {
   return raised == 0 && skillReply == NO_REVIEWER && toolReply == NO_REVIEWER
 }
 
-// The draft is the one llmMocks entry; the review's bare approve is an
-// accept, and the save gate is approved too.
 node acceptedSkillIsSavedAndCatalogued(): boolean {
   if (!sandboxed("accepted")) {
     return false
@@ -62,16 +56,22 @@ node acceptedSkillIsSavedAndCatalogued(): boolean {
   return reply.includes("Saved the 'repo-orientation' skill") && saved && catalogued == 1
 }
 
+// The mock draft carries its own name and description; the caller's win.
 node givenNameAndDescriptionWin(): boolean {
   if (!sandboxed("given")) {
     return false
   }
   let reply = ""
+  let description = ""
   handle {
     reply = learnSkill("How to orient in an unfamiliar repo", "my-name", "My description")
+    const entries = learnedCatalog().skills.entries
+    if (entries.length == 1) {
+      description = entries[0].description
+    }
   } with approve
   const saved = exists("${learnedSkillsRoot()}/my-name.md")
-  return reply.includes("Saved the 'my-name' skill") && saved
+  return reply.includes("Saved the 'my-name' skill") && saved && description == "My description"
 }
 
 node rejectedReviewSavesNothing(): boolean {
@@ -94,8 +94,7 @@ node rejectedReviewSavesNothing(): boolean {
 }
 
 // designTool makes a staging directory before it drafts anything, so
-// rejecting that mkdir is the cheapest way through its failure path: no
-// model call, and the catalog must be untouched afterwards.
+// rejecting that mkdir reaches its failure path without a model call.
 node rejectedToolStagingSavesNothing(): boolean {
   if (!sandboxed("staging-rejected")) {
     return false

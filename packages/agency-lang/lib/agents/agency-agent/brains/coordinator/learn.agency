@@ -1,9 +1,8 @@
 /** @module
-  @summary The coordinator's two learning tools. Each drafts what the
-  caller left out with one model call, hands the draft to the learned
-  catalog's save operation (which runs the stdlib review loop and the
-  save gate), and phrases the reply. In a one-shot run there is no one
-  to review, so both refuse before spending a model call.
+  @summary The coordinator's two learning tools, learnSkill and
+  writeToolFor. Each drafts what the caller left out with one model
+  call, hands the draft to the learned catalog's save operation, and
+  phrases the reply. See docs/dev/agents/learned-catalog.md.
 */
 import { MAX_TOOL_NAME_LEN } from "std::skills"
 
@@ -38,8 +37,6 @@ def givenOr(given: string, drafted: string): string {
   return if given == "" then drafted else given
 }
 
-// The reply is checked against SkillProposal; a reply of another shape
-// is a failure, not a proposal with missing fields.
 def draftSkill(goal: string): SkillProposal! {
   return llm("""Draft a skill file for an AI agent. A skill is reference prose the agent reads on demand when the description says it applies.
 
@@ -94,17 +91,21 @@ def proposeTool(purpose: string, name: string, request: string): Result<ToolProp
   })
 }
 
+/**
+Drafts a skill from the goal, then runs the stdlib review loop through
+the catalog: designSkill shows the user the whole file, redrafts on
+feedback, and saves through its own gate. In a one-shot run the policy
+handler would reject the review, so the tool refuses before drafting.
+*/
 export def learnSkill(
   goal: string,
   name: string = "",
   description: string = "",
 ): string {
   """
-  Teach the agent a skill it keeps across sessions: reference notes that
-  every subagent can read on demand. Drafts the skill from the goal,
-  shows the user the complete file, redrafts on their feedback, and
-  saves once they accept. Nothing is saved without the user's approval,
-  and in a one-shot run there is no one to ask, so nothing is saved.
+  Teach the agent a skill it keeps across sessions: reference notes saved
+  to its skills catalog. The user reviews the draft and can send feedback
+  before anything is saved. Nothing is saved in a one-shot run.
 
   @param goal - What the skill should teach, and when a subagent should reach for it
   @param name - Optional kebab-case name, also the filename; drafted from the goal when empty
@@ -121,21 +122,26 @@ export def learnSkill(
   if (saved is failure(reason)) {
     return "Not saved: ${reason}"
   }
-  return "Saved the '${saved.value.name}' skill. Every subagent can read it from its next dispatch."
+  return "Saved the '${saved.value.name}' skill to the learned catalog."
 }
 
+/**
+Drafts a name and request type when the caller left them out, then runs
+designTool through the catalog: a coding agent writes the implementation,
+it is typechecked and tested, and the user reviews it before the save
+gate. In a one-shot run the policy handler would reject the review, so
+the tool refuses before drafting.
+*/
 export def writeToolFor(
   purpose: string,
   name: string = "",
   request: string = "",
 ): string {
   """
-  Have a reusable tool written and kept across sessions, for every
-  subagent to call. A coding agent drafts the implementation against the
-  request type; the draft is typechecked, tested, and shown to the user,
-  who accepts it or gives feedback for another draft. Takes several
-  model calls. Nothing is saved without the user's approval, and in a
-  one-shot run there is no one to ask, so nothing is saved.
+  Have a reusable tool written and saved to the agent's tool catalog. A
+  coding agent drafts it against the request type, and the user reviews
+  it before anything is saved. Takes several model calls. Nothing is
+  saved in a one-shot run.
 
   @param purpose - What the tool should do, in plain language
   @param name - Optional camelCase name; drafted from the purpose when empty
@@ -152,5 +158,5 @@ export def writeToolFor(
   if (saved is failure(reason)) {
     return "Not saved: ${reason}"
   }
-  return "Saved the '${saved.value.name}' tool. Every subagent can call it as ${LEARNED_TOOL_PREFIX}${saved.value.name} from its next dispatch."
+  return "Saved the '${saved.value.name}' tool to the learned catalog as ${LEARNED_TOOL_PREFIX}${saved.value.name}."
 }

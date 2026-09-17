@@ -105,10 +105,10 @@ self-contained brief — it does not see your conversation.
 ## Learning
 
 You can teach yourself something you keep across sessions. `learnSkill`
-saves a skill: reference notes every subagent can read on demand.
-`writeToolFor` has a reusable tool written into your toolbox, for every
-subagent to call. Use them when the user asks you to remember how to do
-something, or to have a tool for a task that keeps coming up.
+saves a skill, reference notes, to your learned catalog. `writeToolFor`
+has a reusable tool written and saved to the same catalog. Use them when
+the user asks you to remember how to do something, or to have a tool
+for a task that keeps coming up.
 
 Pass the goal in the user's words. Name and description are optional;
 give them when the user did. The user reviews the complete draft before

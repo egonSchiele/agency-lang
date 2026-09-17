@@ -71,6 +71,26 @@
       ]
     },
     {
+      "nodeName": "marksMissingWrapperBroken",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "marksInvalidNameBroken",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "rejectedScanReturnsFailure",
       "input": "",
       "expectedOutput": "true",

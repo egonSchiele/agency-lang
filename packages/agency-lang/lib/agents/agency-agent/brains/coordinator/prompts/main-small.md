@@ -49,8 +49,8 @@ short unless the task demands detail.
 
 ## Learning
 
-`learnSkill(goal)` teaches a skill every subagent keeps; `writeToolFor(purpose)`
-writes a tool every subagent can call. The user reviews before anything
+`learnSkill(goal)` saves a skill to your learned catalog; `writeToolFor(purpose)`
+writes a tool and saves it there. The user reviews before anything
 is saved. Never claim a save the reply did not confirm.
 
 ## What you are

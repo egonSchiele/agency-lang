@@ -181,7 +181,8 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
   interrupt before reading anything, then `std::ls` for the listing. Each entry has: the tool's name and
   directory; what `describe` says about its `run` function (signature,
   docstring, effects); and its meta.json record (purpose, request type,
-  creation time, time limit, version, run count, last-run time).
+  creation time, time limit, version, run count, last-run time). An
+  entry `runTool` would refuse carries the reason in `broken`.
 
   @param dir - The toolbox directory to scan
 
@@ -195,7 +196,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L333))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L343))
 
 ### designTool
 
@@ -253,7 +254,7 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 
 **Throws:** `std::remove`, `std::mkdir`, `std::toolbox::review`, `std::toolbox::save`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`, `std::guard`, `std::run`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L987))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L998))
 
 ### writeTool
 
@@ -305,7 +306,7 @@ in `designTool` ends by publishing through this same gate.
 
 **Throws:** `std::remove`, `std::mkdir`, `std::toolbox::save`, `std::toolbox::scan`, `std::write`, `std::move`, `std::read`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1043))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1054))
 
 ### runTool
 
@@ -338,4 +339,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::toolbox::recordUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1090))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1101))

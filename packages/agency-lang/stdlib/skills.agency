@@ -299,8 +299,7 @@ export def listSkills(
   layout: "flat" | "standard" = "flat",
 ): Result<SkillGroup> raises <std::skills::skillsDir> {
   """
-  List the skills in a directory. Raises one `std::skills::skillsDir`
-  interrupt before reading anything. A directory that does not exist yet
+  List the skills in a directory. A directory that does not exist yet
   has no entries.
 
   @param dir - The skills directory to scan

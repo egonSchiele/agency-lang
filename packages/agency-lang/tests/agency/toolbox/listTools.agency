@@ -23,7 +23,7 @@ node listsEveryDirectory(): boolean {
   const names = map(entries.value, \entry -> entry.name)
   names.sort()
   // `build` is on the walking glob's skip list; a plain listing still shows it.
-  return names.join(",") == "badMeta,broken,build,good,noMeta,partialMeta"
+  return names.join(",") == "bad name,badMeta,broken,build,good,noMeta,noWrapper,partialMeta"
 }
 
 node readsSignatureDocstringAndEffects(): boolean {
@@ -85,6 +85,26 @@ node marksBroken(): boolean {
   }
   const broken = entryNamed(entries.value, "broken")
   return broken.broken != null && broken.module.signature == ""
+}
+
+// runTool refuses a tool with no tool.agency, so listing it as healthy
+// would offer a tool that cannot run.
+node marksMissingWrapperBroken(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const noWrapper = entryNamed(entries.value, "noWrapper")
+  return noWrapper.broken != null && noWrapper.broken =~ re/tool\.agency/ && noWrapper.module.signature != ""
+}
+
+node marksInvalidNameBroken(): boolean {
+  const entries = catalog()
+  if (entries is failure) {
+    return false
+  }
+  const badName = entryNamed(entries.value, "bad name")
+  return badName.broken != null && badName.broken =~ re/camelCase/
 }
 
 node rejectedScanReturnsFailure(): boolean {

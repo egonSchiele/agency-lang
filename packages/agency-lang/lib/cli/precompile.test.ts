@@ -180,6 +180,52 @@ describe("groupTestSources", () => {
     ).not.toThrow();
   });
 
+  test("a dir with only agency.local.json becomes its own group", () => {
+    const root = writeTree({
+      plain: { "main.agency": TRIVIAL, "main.test.json": TEST_JSON },
+      local: {
+        "main.agency": TRIVIAL,
+        "main.test.json": TEST_JSON,
+        "agency.local.json": JSON.stringify({ verbose: true }),
+      },
+    });
+    const groups = groupTestSources({}, [
+      path.join(root, "plain/main.test.json"),
+      path.join(root, "local/main.test.json"),
+    ]);
+    const localFile = path.join(root, "local/main.agency");
+    const localGroup = groups.find((group) => group.files.includes(localFile));
+    expect(groups).toHaveLength(2);
+    expect(localGroup?.config.verbose).toBe(true);
+  });
+
+  test("a config split across agency.json and agency.local.json matches the same config in one file", () => {
+    // The session derives config keys with JSON.stringify. A merged config
+    // must come out in schema order, or the shared helper trips the
+    // cross-config check.
+    const root = writeTree({
+      shared: { "helper.agency": HELPER },
+      a: {
+        "main.agency": IMPORTS_HELPER,
+        "main.test.json": TEST_JSON,
+        "agency.json": '{"verbose": false, "observability": true}',
+      },
+      b: {
+        "main.agency": IMPORTS_HELPER,
+        "main.test.json": TEST_JSON,
+        "agency.json": '{"observability": true}',
+        "agency.local.json": '{"verbose": false}',
+      },
+    });
+    expect(() =>
+      precompileTestSources(
+        {},
+        [path.join(root, "a/main.test.json"), path.join(root, "b/main.test.json")],
+        { quiet: true },
+      ),
+    ).not.toThrow();
+  });
+
   test("test files without a sibling .agency are excluded", () => {
     const root = writeTree({
       orphan: { "main.test.json": TEST_JSON },

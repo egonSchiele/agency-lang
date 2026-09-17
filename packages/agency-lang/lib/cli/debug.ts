@@ -1,4 +1,4 @@
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "../importStrategy.js";
 import { pickANode, resolveCompiledFile } from "./util.js";

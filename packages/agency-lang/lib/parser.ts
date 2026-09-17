@@ -21,7 +21,7 @@ import {
   trace,
 } from "tarsec";
 
-import { AgencyConfig } from "./config.js";
+import { AgencyConfig } from "./config/config.js";
 import { lowerPatterns, PatternLoweringError } from "./lowering/patternLowering.js";
 import { desugarComprehensionsInBody } from "./lowering/comprehensionDesugar.js";
 import { LoweringError } from "./lowering/loweringError.js";

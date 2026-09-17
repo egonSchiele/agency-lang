@@ -12,7 +12,17 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { findFileUp } from "../importPaths.js";
+import type { AgencyConfig } from "../config/config.js";
+import {
+  CONFIG_FILE,
+  configFiles,
+  fileTarget,
+  findProjectRoot,
+  projectTarget,
+  readConfig,
+  writeTarget,
+  type ConfigTarget,
+} from "../config/target.js";
 import {
   loadLocalProvider,
   loadLocalProviderDetailed,
@@ -110,24 +120,37 @@ function isCatalogUri(v: string): boolean {
   return v.startsWith("hf:") || isMlxUri(v) || isGgufPath(v);
 }
 
-/** The agency.json that owns aliases: nearest `agency.json` walking up from
- *  `startDir` (cwd by default); falls back to `~/agency.json` when none is
- *  found. Exported so the CLI can echo it on every write. */
-export function resolveAliasConfigPath(startDir: string = process.cwd()): string {
-  return findFileUp(startDir, "agency.json") ?? path.join(os.homedir(), "agency.json");
+/** Where alias reads and writes go when the caller names no file: the nearest
+ *  project at or above `startDir`, or `~/agency.json` alone. */
+export function defaultAliasTarget(startDir: string = process.cwd()): ConfigTarget {
+  const root = findProjectRoot(startDir);
+  return root === null ? fileTarget(path.join(os.homedir(), CONFIG_FILE)) : projectTarget(root);
 }
 
-/** Treat empty string as "caller wants resolveAliasConfigPath()". */
-function resolveAliasFile(file: string): string {
-  return file === "" ? resolveAliasConfigPath() : file;
+/** The file alias writes go to. Exported so the CLI can echo it. */
+export function resolveAliasConfigPath(startDir: string = process.cwd()): string {
+  return writeTarget(defaultAliasTarget(startDir));
+}
+
+/** The config at `target`, for reading. Throws when a file is invalid. */
+function readAliasConfig(target: ConfigTarget): AgencyConfig {
+  const { config, error } = readConfig(target);
+  if (error !== undefined) {
+    throw new Error(error);
+  }
+  return config;
+}
+
+function describeTarget(target: ConfigTarget): string {
+  return configFiles(target).join(" or ");
 }
 
 /** Read a JSON file as a plain object. A missing file reads as `{}`. */
-/** The `client` object of the nearest `agency.json`, or `{}` when there is
- *  none. For settings read at runtime rather than compiled in: the models
- *  directory, the MLX Python, the MLX base URL. */
+/** The merged `client` object of the default target, or `{}`. For settings
+ *  read at runtime rather than compiled in: the models directory, the MLX
+ *  Python, the MLX base URL. */
 export function readClientConfig(): Record<string, any> {
-  return readJson(resolveAliasConfigPath()).client ?? {};
+  return (readAliasConfig(defaultAliasTarget()).client ?? {}) as Record<string, any>;
 }
 
 function readJson(file: string): Record<string, any> {
@@ -194,26 +217,32 @@ export function aliasUri(value: AliasValue): string {
 
 /** Read `client.modelAliases`. An object alias must carry a `backend` that
  *  agrees with its uri; a string alias reads its backend from its prefix. */
-export function readModelAliases(file: string = ""): Record<string, AliasValue> {
-  const resolved = resolveAliasFile(file);
-  const cfg = readJson(resolved);
-  const aliases = (cfg.client?.modelAliases ?? {}) as Record<string, AliasValue>;
+export function readModelAliases(
+  target: ConfigTarget = defaultAliasTarget(),
+): Record<string, AliasValue> {
+  return checkedAliases(readAliasConfig(target), describeTarget(target));
+}
+
+/** The aliases in `config`, after checking each object alias's backend.
+ *  `source` names where the config came from, for error messages. */
+function checkedAliases(config: Record<string, any>, source: string): Record<string, AliasValue> {
+  const aliases = (config.client?.modelAliases ?? {}) as Record<string, AliasValue>;
   for (const [name, value] of Object.entries(aliases)) {
     if (typeof value === "string") {
       continue;
     }
     if (value.backend === undefined) {
       throw new Error(
-        `${path.basename(resolved)}: alias "${name}" has no "backend". ` +
-          `Add "backend": "llama-cpp" or "backend": "mlx" to the entry in ${resolved}.`,
+        `alias "${name}" has no "backend". ` +
+          `Add "backend": "llama-cpp" or "backend": "mlx" to the entry in ${source}.`,
       );
     }
     const fromUri = backendOfTarget(value.uri);
     if (value.backend !== fromUri) {
       const what = fromUri === "llama-cpp" ? "a GGUF file" : "an MLX model";
       throw new Error(
-        `${path.basename(resolved)}: alias "${name}" says backend "${value.backend}" ` +
-          `but its uri "${value.uri}" is ${what}. Change one of them in ${resolved}.`,
+        `alias "${name}" says backend "${value.backend}" ` +
+          `but its uri "${value.uri}" is ${what}. Change one of them in ${source}.`,
       );
     }
   }
@@ -256,12 +285,15 @@ function isRepoId(value: string): boolean {
   return /^[\w.-]+\/[\w.-]+$/.test(value);
 }
 
-export function _resolveModel(value: string, file: string = ""): ResolvedModel {
+export function _resolveModel(
+  value: string,
+  configTarget: ConfigTarget = defaultAliasTarget(),
+): ResolvedModel {
   const target = asModelDir(value);
   if (isGgufPath(target) || isModelUri(target) || isModelDir(target)) {
     return { backend: backendOfTarget(target), target };
   }
-  const aliases = readModelAliases(file);
+  const aliases = readModelAliases(configTarget);
   const aliasVal = aliases[value];
   if (aliasVal !== undefined) {
     const aliasTarget = asModelDir(aliasUri(aliasVal));
@@ -284,8 +316,11 @@ export function _resolveModel(value: string, file: string = ""): ResolvedModel {
   );
 }
 
-export function _resolveModelName(value: string, file: string = ""): string {
-  return _resolveModel(value, file).target;
+export function _resolveModelName(
+  value: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): string {
+  return _resolveModel(value, target).target;
 }
 
 /** The model name to send to the MLX server for this model. `agency local
@@ -322,7 +357,7 @@ function metaFrom(src: string | Partial<EntryMeta>): EntryMeta {
   return out;
 }
 
-export function _listModelNames(file: string = ""): ModelNameEntry[] {
+export function _listModelNames(target: ConfigTarget = defaultAliasTarget()): ModelNameEntry[] {
   const curatedEntries: ModelNameEntry[] = Object.entries(CURATED_LOCAL_MODELS).map(
     ([name, info]) => ({
       name,
@@ -332,7 +367,7 @@ export function _listModelNames(file: string = ""): ModelNameEntry[] {
       ...metaFrom(info),
     }),
   );
-  const aliasEntries: ModelNameEntry[] = Object.entries(readModelAliases(file)).map(
+  const aliasEntries: ModelNameEntry[] = Object.entries(readModelAliases(target)).map(
     ([name, value]) => ({
       name,
       backend: backendOfTarget(aliasUri(value)),
@@ -349,10 +384,14 @@ export function _listModelNames(file: string = ""): ModelNameEntry[] {
   );
 }
 
-export function _aliasModel(name: string, uri: string, file: string = ""): string {
-  const resolved = resolveAliasFile(file);
-  writeJson(resolved, withAlias(readJson(resolved), name, uri));
-  return resolved;
+export function _aliasModel(
+  name: string,
+  uri: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): string {
+  const file = writeTarget(target);
+  writeJson(file, withAlias(readJson(file), name, uri));
+  return file;
 }
 
 /** Outcome of `_unaliasModel`. `removed` distinguishes the actual mutation
@@ -362,18 +401,21 @@ export function _aliasModel(name: string, uri: string, file: string = ""): strin
 export type UnaliasResult = { file: string; removed: boolean };
 
 /** Remove an alias. Bails early (no write) if file or alias missing. */
-export function _unaliasModel(name: string, file: string = ""): UnaliasResult {
-  const resolved = resolveAliasFile(file);
-  const located = wholePath(resolved);
+export function _unaliasModel(
+  name: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): UnaliasResult {
+  const file = writeTarget(target);
+  const located = wholePath(file);
   if (stat(located.root, located.target) === null) {
-    return { file: resolved, removed: false };
+    return { file, removed: false };
   }
-  const cfg = readJson(resolved);
+  const cfg = readJson(file);
   if (!cfg.client?.modelAliases || !(name in cfg.client.modelAliases)) {
-    return { file: resolved, removed: false };
+    return { file, removed: false };
   }
-  writeJson(resolved, withAlias(cfg, name, undefined));
-  return { file: resolved, removed: true };
+  writeJson(file, withAlias(cfg, name, undefined));
+  return { file, removed: true };
 }
 
 /** One model on disk. For a GGUF file, `name` is the file name. For an MLX
@@ -671,10 +713,13 @@ export type CatalogModel = {
 };
 
 /** Resolve the catalog URL: explicit arg → env → config → built-in default. */
-export function resolveCatalogUrl(explicit: string = "", file: string = ""): string {
+export function resolveCatalogUrl(
+  explicit: string = "",
+  target: ConfigTarget = defaultAliasTarget(),
+): string {
   if (explicit !== "") return explicit;
   if (process.env.AGENCY_MODEL_CATALOG_URL) return process.env.AGENCY_MODEL_CATALOG_URL;
-  const configured = readJson(resolveAliasFile(file)).client?.modelCatalogUrl;
+  const configured = readAliasConfig(target).client?.modelCatalogUrl;
   if (typeof configured === "string" && configured.length > 0) return configured;
   return DEFAULT_CATALOG_URL;
 }
@@ -972,11 +1017,13 @@ export async function _refreshCatalog(
   opts: {
     url?: string;
     fetcher?: (url: string) => Promise<string>;
-    file?: string;
+    target?: ConfigTarget;
   } = {},
 ): Promise<RefreshResult> {
-  const file = resolveAliasFile(opts.file ?? "");
-  const url = resolveCatalogUrl(opts.url ?? "", file);
+  const target = opts.target ?? defaultAliasTarget();
+  // Writes go to one file, and the aliases being rewritten come from it alone.
+  const file = writeTarget(target);
+  const url = resolveCatalogUrl(opts.url ?? "", target);
   const fetcher = opts.fetcher ?? fetchCatalog;
 
   // Fetch + validate BEFORE reading/writing agency.json, so a failure leaves
@@ -988,7 +1035,7 @@ export async function _refreshCatalog(
   // "how aliases come out of agency.json"). `cfg` is needed separately to
   // round-trip non-alias fields back into the file on write.
   const cfg = readJson(file);
-  const existing = readModelAliases(file);
+  const existing = checkedAliases(cfg, file);
 
   // Partition existing aliases by who manages them.
   const userAliases: Record<string, AliasValue> = Object.fromEntries(
@@ -1092,9 +1139,12 @@ export async function _registerLocalProvider(): Promise<void> {
  *  model). An alias entry governs the name entirely — a user alias shadowing a
  *  curated name must NOT borrow the curated hash, but a user MAY opt in by
  *  setting their own `sha256` on the alias object. */
-export function pinnedSha256(value: string, file: string = ""): string | undefined {
+export function pinnedSha256(
+  value: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): string | undefined {
   if (isGgufPath(value) || isModelUri(value)) return undefined;
-  const aliases = readModelAliases(file);
+  const aliases = readModelAliases(target);
   if (Object.hasOwn(aliases, value)) {
     const v = aliases[value];
     return typeof v === "object" ? v.sha256 : undefined;
@@ -1114,19 +1164,10 @@ export function snapshotFreshness(dir: string): FreshnessProbe {
   return (resolved) => !present.includes(path.basename(resolved));
 }
 
-/** `client.mlx.downloadConcurrency` from the nearest `agency.json`, else 8.
- *  The file is read raw here, so the value is checked by hand. */
+/** `client.mlx.downloadConcurrency` from the project config, else 8. The
+ *  config schema requires a positive integer. */
 export function configuredDownloadConcurrency(): number {
-  const n: unknown = readClientConfig().mlx?.downloadConcurrency;
-  if (n === undefined) {
-    return DEFAULT_CONCURRENCY;
-  }
-  if (typeof n !== "number" || !Number.isInteger(n) || n < 1) {
-    throw new Error(
-      `client.mlx.downloadConcurrency in ${resolveAliasConfigPath()} must be a positive integer, got ${JSON.stringify(n)}`,
-    );
-  }
-  return n;
+  return readClientConfig().mlx?.downloadConcurrency ?? DEFAULT_CONCURRENCY;
 }
 
 /** Download one mlx: repo into the models directory and return the
@@ -1164,12 +1205,16 @@ function catalogEntry(value: string, target: string): ModelInfo | undefined {
 /** The repos a model loads by name at runtime. An alias answers for itself,
  *  even when it shadows a catalog name, because it may point somewhere with
  *  no companion at all. Otherwise the curated entry answers. */
-function companionsFor(value: string, target: string, file: string = ""): string[] {
-  const alias = readModelAliases(file)[value];
+function companionsFor(
+  value: string,
+  modelTarget: string,
+  configTarget: ConfigTarget = defaultAliasTarget(),
+): string[] {
+  const alias = readModelAliases(configTarget)[value];
   if (alias !== undefined) {
     return typeof alias === "string" ? [] : (alias.companions ?? []);
   }
-  return catalogEntry(value, target)?.companions ?? [];
+  return catalogEntry(value, modelTarget)?.companions ?? [];
 }
 
 /** Download a model and return where it is: the `.gguf` path, or the MLX
@@ -1220,8 +1265,11 @@ export async function _downloadModel(
 /** What a local model is for, when its catalog or alias entry says. The
  *  value may be the entry's name or the URI it points at; a plain string
  *  alias, a directory, or a URI no entry names has no category. */
-export function _localModelCategory(value: string, file: string = ""): ModelCategory | undefined {
-  const aliases = readModelAliases(file);
+export function _localModelCategory(
+  value: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): ModelCategory | undefined {
+  const aliases = readModelAliases(target);
   const alias = aliases[value];
   if (alias !== undefined) {
     return typeof alias === "string" ? undefined : alias.category;
@@ -1432,8 +1480,8 @@ export function formatLocalList(args: {
  *  models. User aliases (which carry no metadata) follow in an ALIASES
  *  section as `name → target`. Returns the block as a string with no trailing
  *  newline (the caller's `console.log` adds exactly one). */
-export function formatModelCatalog(): string {
-  const entries = _listModelNames();
+export function formatModelCatalog(target: ConfigTarget = defaultAliasTarget()): string {
+  const entries = _listModelNames(target);
   const hasMetadata = (m: ModelNameEntry): boolean =>
     m.params !== undefined ||
     m.sizeBytes !== undefined ||

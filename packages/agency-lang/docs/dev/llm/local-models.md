@@ -103,7 +103,7 @@ display metadata.
    wins next. Its value is either a bare URI string or an object
    `{ uri, …metadata, source?, sha256? }`.
 
-   **Both forms must validate against `ModelAliasSchema` in `lib/config.ts`.**
+   **Both forms must validate against `ModelAliasSchema` in `lib/config/config.ts`.**
    That schema is a separate copy of the same contract as `AliasObject` here,
    and the two have drifted before: the object form was added for
    `agency local refresh` while `config.ts` still required a plain string, so a

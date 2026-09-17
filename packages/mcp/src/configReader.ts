@@ -1,129 +1,29 @@
-import * as fs from "fs";
-import * as path from "path";
-import { z } from "zod";
+import {
+  McpServersSchema,
+  findProjectRoot,
+  projectTarget,
+  readConfig,
+  type McpServers,
+} from "agency-lang/config";
 import { success, failure, type ResultValue } from "agency-lang/runtime";
-import type { McpServerConfig } from "./types.js";
 
-const McpStdioServerSchema = z
-  .object({
-    command: z.string(),
-    args: z.array(z.string()).optional(),
-    env: z.record(z.string(), z.string()).optional(),
-  })
-  .strict();
-
-const McpHttpServerSchema = z
-  .object({
-    type: z.literal("http"),
-    url: z.string(),
-    auth: z.literal("oauth").optional(),
-    authTimeout: z.number().optional(),
-    clientId: z.string().optional(),
-    clientSecret: z.string().optional(),
-    headers: z.record(z.string(), z.string()).optional(),
-  })
-  .strict();
-
-const McpServerSchema = z.union([McpStdioServerSchema, McpHttpServerSchema]);
-
-const McpServersSchema = z
-  .record(
-    z
-      .string()
-      .regex(
-        /^[A-Za-z0-9_-]+$/,
-        "MCP server names must contain only letters, numbers, hyphens, and underscores",
-      ),
-    McpServerSchema,
-  )
-  .superRefine((data, ctx) => {
-    for (const [name, server] of Object.entries(data)) {
-      if ("type" in server && server.type === "http") {
-        const httpServer = server as z.infer<typeof McpHttpServerSchema>;
-        if (httpServer.auth && httpServer.headers) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `MCP server "${name}": cannot specify both 'auth' and 'headers'`,
-            path: [name],
-          });
-        }
-        if (httpServer.authTimeout && httpServer.auth !== "oauth") {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `MCP server "${name}": 'authTimeout' requires 'auth: "oauth"'`,
-            path: [name],
-          });
-        }
-        if (httpServer.clientId && httpServer.auth !== "oauth") {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `MCP server "${name}": 'clientId' requires 'auth: "oauth"'`,
-            path: [name],
-          });
-        }
-        if (httpServer.clientSecret && httpServer.auth !== "oauth") {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `MCP server "${name}": 'clientSecret' requires 'auth: "oauth"'`,
-            path: [name],
-          });
-        }
-        if (httpServer.auth === "oauth") {
-          try {
-            const parsed = new URL(httpServer.url);
-            const isLocalhost = ["127.0.0.1", "localhost"].includes(parsed.hostname);
-            if (parsed.protocol !== "https:" && !isLocalhost) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: `MCP server "${name}": OAuth requires HTTPS (or localhost for development)`,
-                path: [name, "url"],
-              });
-            }
-          } catch {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: `MCP server "${name}": invalid URL "${httpServer.url}"`,
-              path: [name, "url"],
-            });
-          }
-        }
-      }
-    }
-  });
-
-function readAgencyJson(startDir: string): Record<string, any> | null {
-  let dir = startDir;
-  while (true) {
-    const candidate = path.join(dir, "agency.json");
-    try {
-      const contents = fs.readFileSync(candidate, "utf-8");
-      // File exists — parse it (let parse errors propagate)
-      return JSON.parse(contents);
-    } catch (error: any) {
-      if (error?.code === "ENOENT") {
-        // File doesn't exist — try parent directory
-        const parent = path.dirname(dir);
-        if (parent === dir) return null;
-        dir = parent;
-        continue;
-      }
-      throw error;
-    }
+/** The mcpServers of the nearest project, with agency.local.json merged over
+ *  agency.json. Throws when either file is invalid. */
+export function readMcpConfig(cwd?: string): McpServers {
+  const root = findProjectRoot(cwd || process.cwd());
+  if (root === null) {
+    return {};
   }
+  const { config, error } = readConfig(projectTarget(root));
+  if (error !== undefined) {
+    throw new Error(error);
+  }
+  return config.mcpServers ?? {};
 }
 
-export function readMcpConfig(cwd?: string): Record<string, McpServerConfig> {
-  const raw = readAgencyJson(cwd || process.cwd());
-  if (!raw || !raw.mcpServers) return {};
-
-  const result = McpServersSchema.parse(raw.mcpServers);
-  return result as Record<string, McpServerConfig>;
-}
-
-/** Validate an `mcpServers` map against the same schema `readMcpConfig` uses,
- *  without throwing. Returns a `success()` Result when valid, or a `failure()`
- *  whose error joins the zod issues into a readable message. Used by `mcp add`
- *  to reject a bad server before it is written to a config file. */
+/** Validate an `mcpServers` map without throwing. Returns a `success()` Result
+ *  when valid, or a `failure()` whose error joins the zod issues. Used by
+ *  `mcp add` to reject a bad server before it is written to a config file. */
 export function validateMcpServers(servers: Record<string, unknown>): ResultValue {
   const result = McpServersSchema.safeParse(servers);
   if (result.success) {

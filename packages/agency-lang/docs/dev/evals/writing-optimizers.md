@@ -226,7 +226,7 @@ export default (config: BaseOptimizerConfig) => new MyOptimizer(config);
 agency optimize foo.agency --suite inputs.json --optimizer ./myOptimizer.ts
 ```
 
-`--optimizer` treats a value with a `/` or a `.ts`/`.js`/`.mjs` extension as a path: it's loaded with esbuild + `import()` (same as a grading module), the default-exported factory is called with the run config, and the result is used **structurally** as an `Optimizer` (`{ name, optimize }`) — no `instanceof`, so it works even across realms. This is the path for users who don't fork the repo. You can also set it as `eval.optimize.optimizer` in `agency.json` (`lib/config.ts`).
+`--optimizer` treats a value with a `/` or a `.ts`/`.js`/`.mjs` extension as a path: it's loaded with esbuild + `import()` (same as a grading module), the default-exported factory is called with the run config, and the result is used **structurally** as an `Optimizer` (`{ name, optimize }`) — no `instanceof`, so it works even across realms. This is the path for users who don't fork the repo. You can also set it as `eval.optimize.optimizer` in `agency.json` (`lib/config/config.ts`).
 
 **B. A built-in name (in-repo).** Register it so a bare `--optimizer <name>` resolves it:
 

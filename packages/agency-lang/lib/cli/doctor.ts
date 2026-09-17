@@ -1,4 +1,4 @@
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { runBundledAgent } from "./runBundledAgent.js";
 
 // Build the diagnosis prompt the doctor seeds the agent with. Kept pure

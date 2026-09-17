@@ -194,46 +194,6 @@ export function uniqBy<T, K>(arr: T[], keyFn: (item: T) => K): T[] {
   return result;
 }
 
-/**
- * Simple object check.
- */
-export function isObject(item: any): boolean {
-  return item && typeof item === "object" && !Array.isArray(item);
-}
-
-/**
- * Deep merge two objects.
- */
-export function mergeDeep(
-  _objA: Record<string, any>,
-  _objB: Record<string, any>,
-): Record<string, any> {
-  const objA = structuredClone(_objA);
-  const objB = structuredClone(_objB);
-
-  if (isObject(objA) && isObject(objB)) {
-    for (const key in objB) {
-      // console.log("key", key);
-      if (isObject(objB[key])) {
-        // console.log("is object!");
-        if (!objA[key]) {
-          // console.log("initializing", key);
-          Object.assign(objA, { [key]: {} });
-        } else if (!isObject(objA[key])) {
-          // console.log("overwriting non-object key", key, "with object");
-          Object.assign(objA, { [key]: {} });
-        }
-        objA[key] = mergeDeep(objA[key], objB[key]);
-      } else {
-        // console.log("setting", key, "to", objB[key]);
-        Object.assign(objA, { [key]: objB[key] });
-      }
-    }
-  }
-
-  return objA;
-}
-
 export function round(num: number, decimals = 2): number {
   const factor = 10 ** decimals;
   return Math.round(num * factor) / factor;

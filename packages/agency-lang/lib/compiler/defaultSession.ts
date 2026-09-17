@@ -1,4 +1,4 @@
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 
 import { createBuildSession, type BuildSession, type CompileOptions } from "./buildSession.js";
 

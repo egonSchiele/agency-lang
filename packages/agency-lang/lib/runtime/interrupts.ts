@@ -39,7 +39,7 @@ import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
 import { alwaysScopeFor } from "./alwaysScope.js";
 import { runAsHandler, executingHandlers, insideHandlerFunction } from "./executingHandlers.js";
-import { TRACE_ID_ENV } from "../config.js";
+import { TRACE_ID_ENV } from "../config/config.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
 
 // The response API lives in the cycle-free `interruptResponse.ts` leaf (imported

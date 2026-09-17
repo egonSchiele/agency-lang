@@ -255,6 +255,7 @@ export default defineConfig({
             { text: "agent", link: "/cli/agent" },
             { text: "bundle", link: "/cli/trace-and-bundle" },
             { text: "compile", link: "/cli/compile" },
+            { text: "config", link: "/cli/config" },
             { text: "coverage", link: "/cli/coverage" },
             { text: "debug", link: "/cli/debug" },
             { text: "doc", link: "/cli/doc" },

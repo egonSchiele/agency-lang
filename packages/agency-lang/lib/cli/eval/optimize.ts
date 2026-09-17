@@ -3,7 +3,7 @@ import * as path from "path";
 
 import { nanoid } from "nanoid";
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { loadInputs } from "@/eval/loadInputs.js";
 import type { GraderSource } from "@/eval/grading/gradeRun.js";
 import type { Test } from "@/eval/grading/types.js";

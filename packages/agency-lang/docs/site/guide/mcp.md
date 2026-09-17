@@ -65,7 +65,9 @@ const result = llm("Summarize my files", tools: [...safeTools])
 
 ## Configuration
 
-MCP servers are configured in `agency.json` under the `mcpServers` key. The `@agency-lang/mcp` package reads this file automatically at runtime. There are two transport types.
+MCP servers are configured in `agency.json` under the `mcpServers` key. The `@agency-lang/mcp` package reads these files automatically at runtime. There are two transport types.
+
+You can also put servers in `agency.local.json`. A server there replaces a server with the same name in `agency.json`. See [Local overrides](./agency-config-file.md#local-overrides). Servers in `agency.local.json` need `@agency-lang/mcp` 0.0.6 or later.
 
 ### Stdio servers
 

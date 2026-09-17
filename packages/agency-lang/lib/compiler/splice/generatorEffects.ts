@@ -12,7 +12,7 @@ import { callableNamesIn, reachableFrom } from "../../analysis/effects.js";
 import { declaredName } from "../../types/hole.js";
 import { walkNodesArray } from "../../utils/node.js";
 import { closureFiles, importEdgesOf, isAgencyFilePath, parseFileOrNull } from "./eligibility.js";
-import type { AgencyConfig } from "../../config.js";
+import type { AgencyConfig } from "../../config/config.js";
 import type { AgencyProgram } from "../../types.js";
 import type { Hole } from "../../types/hole.js";
 import type { FunctionDefinition } from "../../types/function.js";

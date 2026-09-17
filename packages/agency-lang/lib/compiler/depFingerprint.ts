@@ -14,7 +14,7 @@
  * a discovery problem must degrade to "don't cache this entry", never turn
  * that success into a failure.
  */
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { parseAgencyFileCached } from "@/parseCache.js";
 import { isNonTemplatedStdlib, isPkgImport } from "@/importPaths.js";
 import { walkNodes } from "@/utils/node.js";

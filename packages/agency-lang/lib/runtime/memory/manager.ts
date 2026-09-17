@@ -2,7 +2,7 @@ import { z } from "zod";
 import * as smoltalk from "smoltalk";
 import type { SmolConfig } from "smoltalk";
 
-import { DEFAULT_MODEL } from "@/config.js";
+import { DEFAULT_MODEL } from "@/config/config.js";
 import {
   EMBEDDING_FORMAT_VERSION,
   type MemoryConfig,

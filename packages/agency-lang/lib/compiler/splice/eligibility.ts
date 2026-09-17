@@ -4,7 +4,7 @@ import { parseAgencyFileCached } from "../../parseCache.js";
 import { agencyImportTarget } from "../compileClosure.js";
 import { isStdlibImport } from "../../importPaths.js";
 import { walkNodesArray } from "../../utils/node.js";
-import type { AgencyConfig } from "../../config.js";
+import type { AgencyConfig } from "../../config/config.js";
 import type { AgencyProgram, AgencyNode } from "../../types.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 import { checkGeneratorEffects } from "./generatorEffects.js";

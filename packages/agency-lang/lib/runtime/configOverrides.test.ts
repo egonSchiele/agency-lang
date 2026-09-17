@@ -6,7 +6,7 @@ import {
   setRuntimeConfigOverrides,
   withRuntimeConfigOverrides,
 } from "./configOverrides.js";
-import { CONFIG_OVERRIDES_ENV, serializeConfigOverrides } from "../config.js";
+import { CONFIG_OVERRIDES_ENV, serializeConfigOverrides } from "../config/config.js";
 import { RuntimeContext } from "./state/context.js";
 import { resolveAgentLaunchArgs } from "../cli/runBundledAgent.js";
 

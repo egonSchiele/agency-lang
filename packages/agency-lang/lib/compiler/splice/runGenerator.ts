@@ -8,7 +8,7 @@ import { isCode } from "../../runtime/template/code.js";
 import { safeDeleteDirectory } from "../../utils.js";
 import { makeAgencyTempDir } from "../../utils/agencyTempDir.js";
 import type { Code } from "../../runtime/template/code.js";
-import type { AgencyConfig } from "../../config.js";
+import type { AgencyConfig } from "../../config/config.js";
 import type { Splice } from "../../types/splice.js";
 import type { SpliceDiagnostic, SpliceResult } from "./types.js";
 import type { ImportSource } from "./eligibility.js";

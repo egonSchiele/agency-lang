@@ -40,7 +40,7 @@ InvocationOptions   (public request: { config?, traceId? })
     dangerous sub-field cannot leak through;
   - picks the run id. For a fresh run the precedence is: an inherited subprocess
     id, then a supplied `traceId`, then the environment's `AGENCY_TRACE_ID`
-    (`TRACE_ID_ENV` in `lib/config.ts`, which a harness sets for a whole process
+    (`TRACE_ID_ENV` in `lib/config/config.ts`, which a harness sets for a whole process
     tree), then a fresh `nanoid()`. An empty `AGENCY_TRACE_ID` is treated as
     absent, but a supplied empty `traceId` on a fresh run throws. A resume always
     keeps `interrupt.runId` and ignores any supplied `traceId`, empty or not.

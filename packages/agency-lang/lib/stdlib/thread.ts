@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import { wholePath, stat as statUnder } from "./contained.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
-import { MAX_REPLY_ATTACHMENT_BYTES } from "../config.js";
+import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
 import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
 import { __call } from "../runtime/call.js";

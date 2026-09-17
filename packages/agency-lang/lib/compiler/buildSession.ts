@@ -15,7 +15,7 @@
  * PR 2 adds `freshness`/the manifest here. Until then every compile is a
  * full compile (the historical behavior).
  */
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { initPlanForModule } from "@/backends/typescriptGenerator.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";

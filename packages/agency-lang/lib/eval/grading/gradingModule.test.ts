@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { BaseGrader } from "./baseGrader.js";
 import { loadGradingModule, loadGradingSnapshot, snapshotGradingModule } from "./gradingModule.js";
 

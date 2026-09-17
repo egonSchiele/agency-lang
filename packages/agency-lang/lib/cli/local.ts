@@ -22,9 +22,12 @@ import {
   formatModelCatalog,
   formatLocalList,
   _refreshCatalog,
+  defaultAliasTarget,
   type ModelNameEntry,
   type RefreshResult,
+  type UnaliasResult,
 } from "../stdlib/localModels.js";
+import { configFiles, writeTarget, type ConfigTarget } from "../config/target.js";
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
 import type { DownloadEvent } from "../stdlib/hubDownload.js";
 import { ttyColor } from "../utils/termcolors.js";
@@ -41,27 +44,49 @@ function gate(): void {
   }
 }
 
-// Test-facing helpers: take an optional `file` so the unit tests don't have
-// to mutate process.cwd(). Production CLI wiring passes `undefined`,
-// which the underlying functions resolve via the walk-up rule.
-export function aliasList(file?: string) {
-  return _listModelNames(file ?? "");
+export function aliasList(target: ConfigTarget = defaultAliasTarget()) {
+  return _listModelNames(target);
 }
 
-export function aliasAdd(name: string, uri: string, file?: string): string {
-  const written = _aliasModel(name, uri, file ?? "");
+export function aliasAdd(
+  name: string,
+  uri: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): string {
+  const written = _aliasModel(name, uri, target);
   console.log(`Aliased "${name}" → ${uri} in ${written}`);
   return written;
 }
 
-export function aliasRemove(name: string, file?: string): string {
-  const { file: inspected, removed } = _unaliasModel(name, file ?? "");
-  if (removed) {
-    console.log(`Removed alias "${name}" from ${inspected}`);
+export function aliasRemove(name: string, target: ConfigTarget = defaultAliasTarget()): string {
+  const result = _unaliasModel(name, target);
+  reportAliasRemoval(name, target, result);
+  return result.file;
+}
+
+/** The files besides the write target that `target` reads, such as
+ *  agency.local.json. Commands never edit these. */
+function readOnlyFiles(target: ConfigTarget): string[] {
+  return configFiles(target).filter((file) => file !== writeTarget(target));
+}
+
+/** Say what removing an alias did. The alias may still be set in a file
+ *  agency does not edit, such as agency.local.json. */
+function reportAliasRemoval(name: string, target: ConfigTarget, result: UnaliasResult): void {
+  const stillSet = Object.hasOwn(readModelAliases(target), name);
+  const removeThere = `Remove it there; agency does not edit that file.`;
+  const elsewhere = readOnlyFiles(target).join(" or ");
+  if (result.removed && stillSet) {
+    console.log(
+      `Removed alias "${name}" from ${result.file}, but it is still set in ${elsewhere}. ${removeThere}`,
+    );
+  } else if (result.removed) {
+    console.log(`Removed alias "${name}" from ${result.file}.`);
+  } else if (stillSet) {
+    console.log(`Alias "${name}" is set in ${elsewhere}. ${removeThere}`);
   } else {
-    console.log(`Alias "${name}" not present in ${inspected}; nothing changed`);
+    console.log(`Alias "${name}" not present in ${result.file}; nothing changed.`);
   }
-  return inspected;
 }
 
 /** Deliberately ungated: browsing the catalog needs no provider package
@@ -247,8 +272,12 @@ export function hubRemoveMessage(snapshot: string): string {
   );
 }
 
-export function runRemove(name: string, opts: { force: boolean }): void {
-  const aliases = readModelAliases();
+export function runRemove(
+  name: string,
+  opts: { force: boolean },
+  target: ConfigTarget = defaultAliasTarget(),
+): void {
+  const aliases = readModelAliases(target);
   const isAlias = Object.hasOwn(aliases, name);
   const isCurated = Object.hasOwn(CURATED_LOCAL_MODELS, name);
 
@@ -257,7 +286,7 @@ export function runRemove(name: string, opts: { force: boolean }): void {
   // and its target no longer matters.
   let resolved: ResolvedModel | null;
   try {
-    resolved = _resolveModel(name);
+    resolved = _resolveModel(name, target);
   } catch (err) {
     if (!isAlias) {
       throw err;
@@ -268,8 +297,7 @@ export function runRemove(name: string, opts: { force: boolean }): void {
   const where = files === null ? null : `${files.path} (${formatGB(files.sizeBytes)})`;
 
   if (isAlias) {
-    const { file } = _unaliasModel(name);
-    console.log(`Removed alias "${name}" from ${file}.`);
+    reportAliasRemoval(name, target, _unaliasModel(name, target));
   } else if (isCurated && !opts.force) {
     console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
   }
@@ -322,24 +350,28 @@ export function runRemove(name: string, opts: { force: boolean }): void {
   console.log(removed ? `Deleted ${where}` : `Not found: ${name}`);
 }
 
-export function runResolve(value: string): void {
-  const { backend, target } = _resolveModel(value);
-  console.log(`${backend}  ${target}`);
+export function runResolve(value: string, target: ConfigTarget = defaultAliasTarget()): void {
+  const resolved = _resolveModel(value, target);
+  console.log(`${resolved.backend}  ${resolved.target}`);
 }
 
-export function runAliasList(): void {
+export function runAliasList(target: ConfigTarget = defaultAliasTarget()): void {
   // Aligned-table catalog (curated models + your aliases). The formatting
   // lives in localModels.ts so the agent's bare `--local-model` output and
   // this command render identically.
-  console.log(formatModelCatalog());
+  console.log(formatModelCatalog(target));
 }
 
-export function runAliasAdd(name: string, uri: string): void {
-  aliasAdd(name, uri);
+export function runAliasAdd(
+  name: string,
+  uri: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): void {
+  aliasAdd(name, uri, target);
 }
 
-export function runAliasRemove(name: string): void {
-  aliasRemove(name);
+export function runAliasRemove(name: string, target: ConfigTarget = defaultAliasTarget()): void {
+  aliasRemove(name, target);
 }
 
 /** Format the lines `runRefresh` prints. Pure so it can be unit-tested without
@@ -368,10 +400,13 @@ export function formatRefreshOutput(r: RefreshResult): string[] {
   return lines;
 }
 
-export async function runRefresh(url?: string): Promise<void> {
+export async function runRefresh(
+  url?: string,
+  target: ConfigTarget = defaultAliasTarget(),
+): Promise<void> {
   let result: RefreshResult;
   try {
-    result = await _refreshCatalog({ url: url ?? "" });
+    result = await _refreshCatalog({ url: url ?? "", target });
   } catch (err) {
     console.error(`Refresh failed: ${(err as Error).message}`);
     process.exit(1);

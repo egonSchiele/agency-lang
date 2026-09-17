@@ -1,5 +1,5 @@
 import { parseAgency } from "../parser.js";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import type { LintContext, LintFinding, LintRule } from "./types.js";
 import { unusedImportsRule } from "./rules/unusedImports.js";
 import { missingDocstringRule } from "./rules/missingDocstring.js";

@@ -3,7 +3,7 @@ import { typeCheckSource } from "../compiler/typecheck.js";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 
 const STRICT_UNION_PHRASE = "is not available on every member";
 

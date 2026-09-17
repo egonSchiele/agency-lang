@@ -8,7 +8,7 @@
  * and hasPkgImports); the TRACKER owns policy, hashing, and storage.
  */
 import * as path from "path";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { getStdlibDir } from "@/importPaths.js";
 import { fileURLToPath } from "url";
 import {

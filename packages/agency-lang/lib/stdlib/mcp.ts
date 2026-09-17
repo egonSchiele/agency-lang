@@ -1,4 +1,5 @@
 import { wholePath, readText, writeText, mkdir } from "./contained.js";
+import { isPlainObject } from "../config/paths.js";
 import * as mcpBridge from "./mcpBridge.mjs";
 import { isMcpAvailable, exposeResolvedMcpPath } from "./mcpResolver.js";
 import { gate } from "./mcpGate.js";
@@ -9,9 +10,12 @@ import type { AgencyFunction } from "../runtime/agencyFunction.js";
 // package is an optional, uninstalled dependency, so a build-time import (even
 // type-only) fails to resolve under pnpm (TS2307) and breaks the "non-dependency"
 // precedent localModels.ts follows. Only `.name` is used off a tool.
-type McpServerConfig = Record<string, unknown>;
+// Server maps here are unvalidated: they come from settings.json, from files
+// about to be edited, and from Agency values. The validated type is
+// McpServers in lib/config/mcpServers.ts.
+type RawMcpServerConfig = Record<string, unknown>;
 type McpTool = { name: string };
-export type McpServers = Record<string, McpServerConfig>;
+export type RawMcpServers = Record<string, RawMcpServerConfig>;
 
 export function _isMcpAvailable(): boolean {
   return isMcpAvailable();
@@ -30,7 +34,7 @@ export async function _readProjectMcpConfig(cwd: string): Promise<Record<string,
     return await mcpBridge.readProjectMcpConfig(cwd);
   } catch (error) {
     console.warn(
-      `[mcp] ignoring malformed mcpServers in agency.json: ${error instanceof Error ? error.message : String(error)}`,
+      `[mcp] ignoring MCP servers because the project config did not load: ${error instanceof Error ? error.message : String(error)}`,
     );
     return {};
   }
@@ -47,8 +51,8 @@ export type McpLoadResult = {
  *  target: server names are user-controlled (agency.json / settings.json), and
  *  a key like "__proto__" — which the config schema's name regex permits —
  *  must become a plain data key, never mutate a prototype. */
-export function _mergeMcpServers(global: McpServers, project: McpServers): McpServers {
-  const out: McpServers = Object.create(null);
+export function _mergeMcpServers(global: RawMcpServers, project: RawMcpServers): RawMcpServers {
+  const out: RawMcpServers = Object.create(null);
   for (const key of Object.keys(global)) {
     out[key] = global[key];
   }
@@ -69,7 +73,7 @@ async function _mcpCompatible(): Promise<boolean> {
 
 export async function _loadMcpToolsForServer(
   server: string,
-  merged: McpServers,
+  merged: RawMcpServers,
   onOAuthRequired?: (d: unknown) => void | Promise<void>,
 ): Promise<AgencyFunction[]> {
   // Absent-safe on its own (the Task 8 integration test calls this directly):
@@ -104,7 +108,7 @@ export async function _loadMcpToolsForServer(
 /** Load every configured server and report per-server status. Returns flat
  *  tools plus a { server -> "connected" | "unavailable" } map for `/mcp`. */
 export async function _loadMcpToolsWithStatus(
-  merged: McpServers,
+  merged: RawMcpServers,
   onOAuthRequired?: (d: unknown) => void | Promise<void>,
 ): Promise<McpLoadResult> {
   const empty: McpLoadResult = { tools: [], status: {} };
@@ -142,7 +146,7 @@ export async function _loadMcpToolsWithStatus(
 }
 
 export async function _loadMcpTools(
-  merged: McpServers,
+  merged: RawMcpServers,
   onOAuthRequired?: (d: unknown) => void | Promise<void>,
 ): Promise<AgencyFunction[]> {
   return (await _loadMcpToolsWithStatus(merged, onOAuthRequired)).tools;
@@ -153,18 +157,14 @@ export async function _loadMcpTools(
 // the agent-home settings.json). Every helper returns an Agency Result and the
 // mcpServers block is read/written while all other top-level keys are preserved.
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function serversOf(raw: Record<string, unknown>): McpServers {
-  return isPlainObject(raw.mcpServers) ? (raw.mcpServers as McpServers) : {};
+function serversOf(raw: Record<string, unknown>): RawMcpServers {
+  return isPlainObject(raw.mcpServers) ? (raw.mcpServers as RawMcpServers) : {};
 }
 
 /** Validate an mcpServers map through the package schema. success() when valid,
  *  failure(message) otherwise — including a clear message when the package is
  *  absent or too old to expose the validator. */
-export async function _validateMcpServers(servers: McpServers): Promise<ResultValue> {
+export async function _validateMcpServers(servers: RawMcpServers): Promise<ResultValue> {
   if (!isMcpAvailable()) {
     return failure("@agency-lang/mcp is not installed. Run: npm install @agency-lang/mcp");
   }
@@ -216,7 +216,7 @@ function writeConfigObject(file: string, data: Record<string, unknown>): void {
 
 /** The mcpServers map from a config file. Lenient: a missing or unparseable
  *  file reads as no servers (used by `list`, which must never crash). */
-export function _readMcpServersFromFile(file: string): McpServers {
+export function _readMcpServersFromFile(file: string): RawMcpServers {
   const read = readConfigObject(file);
   if (isFailure(read) || read.value === null) {
     return {};
@@ -229,7 +229,7 @@ export function _readMcpServersFromFile(file: string): McpServers {
  *  never overwrites an existing-but-unparseable file. */
 export async function _addMcpServer(
   name: string,
-  config: McpServerConfig,
+  config: RawMcpServerConfig,
   file: string,
 ): Promise<ResultValue> {
   const valid = await _validateMcpServers({ [name]: config });
@@ -267,7 +267,7 @@ export async function _removeMcpServer(name: string, file: string): Promise<Resu
   if (!Object.prototype.hasOwnProperty.call(servers, name)) {
     return success(false);
   }
-  const next: McpServers = Object.create(null);
+  const next: RawMcpServers = Object.create(null);
   for (const key of Object.keys(servers)) {
     if (key !== name) {
       next[key] = servers[key];

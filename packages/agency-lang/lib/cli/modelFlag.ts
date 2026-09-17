@@ -1,5 +1,5 @@
 import { InvalidArgumentError } from "@/vendor/commander/index.js";
-import type { ResolvedModelFlag } from "@/config.js";
+import type { ResolvedModelFlag } from "@/config/config.js";
 import { levenshtein } from "@/levenshtein.js";
 import { _listHostedModels } from "@/stdlib/llm.js";
 

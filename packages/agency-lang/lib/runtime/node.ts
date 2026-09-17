@@ -17,7 +17,7 @@ import { loadProviderModules } from "./providerModules.js";
 import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import { resolveTraceFilePath } from "./trace/traceWriter.js";
 import { getSubprocessRunInfo } from "./subprocessRunInfo.js";
-import { TRACE_ID_ENV } from "../config.js";
+import { TRACE_ID_ENV } from "../config/config.js";
 import { resolveInvocation, type InvocationOptions } from "./invocationOptions.js";
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Policy } from "./policy.js";

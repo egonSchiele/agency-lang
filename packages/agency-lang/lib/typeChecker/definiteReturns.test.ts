@@ -6,7 +6,7 @@ import { parseAgency } from "../parser.js";
 import { SymbolTable } from "../symbolTable.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import type { TypeCheckError } from "./types.js";
 
 function check(src: string, config: AgencyConfig = {}): TypeCheckError[] {

@@ -15,7 +15,7 @@ import { buildScopes } from "./scopes.js";
 import { collectProgramShadowing } from "./shadowing.js";
 import { validateTypeReferences } from "./validate.js";
 import { ANY_T } from "./primitives.js";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import type { AgencyNode, AgencyProgram, CodeLiteral, TypeAliasEntry } from "../types.js";
 import type { SourceLocation } from "../types/base.js";
 import type { FunctionDefinition } from "../types/function.js";

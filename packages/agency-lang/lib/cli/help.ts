@@ -22,7 +22,7 @@ Arguments:
 Flags:
   -v, --verbose                         Enable verbose logging during parsing
   -i, --in-place                        Format file(s) in-place (use with format command)
-  -c, --config <path>                   Path to agency.json config file (default: ./agency.json)
+  -c, --config <path>                   Config file to load. Loads only this file; agency.local.json is skipped
 
 Config File (agency.json):
   {

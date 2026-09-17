@@ -1,6 +1,6 @@
 import { existsSync } from "fs";
 import { analyzeInterrupts, type AnalysisResult, type HandlerRef } from "@/analysis/interrupts.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 
 /**
  * `agency interrupts <file>`: statically print every interrupt site

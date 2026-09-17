@@ -4,7 +4,7 @@ import { generateExpression } from "../backends/agencyGenerator.js";
 import { declaredName } from "../types/hole.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { bindersOf, freeNamesOf } from "../runtime/template/hygiene.js";
-import { BUILTIN_VARIABLES } from "../config.js";
+import { BUILTIN_VARIABLES } from "../config/config.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
 import { KINDS_FOR_SORT, stampOrigin } from "../runtime/template/origin.js";
@@ -25,7 +25,7 @@ import {
   spliceCacheSlot,
 } from "../compiler/splice/cache.js";
 import type { SymbolTable } from "@/symbolTable.js";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import type { AgencyNode, AgencyProgram } from "../types.js";
 import type { Splice } from "../types/splice.js";
 import type { Code } from "../runtime/template/code.js";

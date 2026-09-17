@@ -1,6 +1,6 @@
 import fs from "fs";
 import { parseAgency, ParseAgencyResult } from "./parser.js";
-import { AgencyConfig } from "./config.js";
+import { AgencyConfig } from "./config/config.js";
 import { isNonTemplatedStdlib } from "./importPaths.js";
 import { AgencyProgram } from "./types.js";
 

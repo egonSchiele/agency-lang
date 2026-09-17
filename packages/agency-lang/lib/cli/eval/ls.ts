@@ -1,4 +1,4 @@
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { isEmptyFilter, selectTests, suiteTags, type TestFilter } from "@/eval/selectTests.js";
 import type { Test } from "@/eval/runTypes.js";
 import { ttyColor } from "@/utils/termcolors.js";

@@ -1,7 +1,7 @@
 import type { PromptResult, StreamChunk, TokenUsage, CostEstimate } from "smoltalk";
 import type { Result } from "smoltalk";
 import { DEFAULT_EMBEDDING_MODEL } from "../constants.js";
-import { DEFAULT_MODEL } from "@/config.js";
+import { DEFAULT_MODEL } from "@/config/config.js";
 
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig, ToolCall } from "./llmClient.js";
 

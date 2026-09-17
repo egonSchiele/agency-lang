@@ -406,7 +406,7 @@ Fetch the remote model catalog and update the `source:"remote"` aliases in
 
   @param url - catalog URL override; empty string uses the
     `AGENCY_MODEL_CATALOG_URL` env var, then `client.modelCatalogUrl` in
-    `agency.json`, then the built-in default.
+    `agency.json` or `agency.local.json`, then the built-in default.
 
 Same operation as the `agency local refresh` CLI command.
 

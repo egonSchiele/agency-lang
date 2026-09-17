@@ -1,5 +1,5 @@
 import { compile } from "@/compiler/defaultSession.js";
-import { loadConfigSafe } from "@/config.js";
+import { loadConfigSafe } from "@/config/config.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";

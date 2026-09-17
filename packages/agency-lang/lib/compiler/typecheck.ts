@@ -7,7 +7,7 @@ import { resolveImports } from "@/preprocessors/importResolver.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { toTypeCheckError } from "./splice/report.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { SymbolTable } from "@/symbolTable.js";

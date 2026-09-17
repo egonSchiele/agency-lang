@@ -7,7 +7,7 @@ import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { typeCheck } from "@/typeChecker/index.js";
 import { getStdlibDir } from "@/importPaths.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import type {
   InterruptCallGraph,
   QualifiedKey,

@@ -24,9 +24,9 @@ import {
   type CompileAttempt,
 } from "./expectedCompileError.js";
 import { safeDeleteFile } from "@/utils.js";
-import { AgencyConfig, applyCliFlags } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import path from "path";
-import { loadConfig } from "./commands.js";
+import { mergeFixtureConfig } from "./commands.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { precompileTestSources } from "./precompile.js";
 import { CompileClosureError } from "../compiler/compileClosure.js";
@@ -866,21 +866,12 @@ async function runTestFile(
 
     const tests: Tests = loadTests(testFile);
 
-    // Merge a sibling agency.json (next to the .test.json) on top of the
-    // project-level config. Keeps default behavior intact for tests that
-    // don't ship one, but lets fixtures opt into config-driven features
-    // like the memory layer with a directory-scoped override.
+    // Merge the config files beside the .test.json over the project config,
+    // so fixtures can opt into config-driven features like the memory layer.
     // The same anchor precompile groups by (lib/cli/precompile.ts), so a
-    // declared sourceFile elsewhere never runs JS compiled under one
-    // config against another.
-    const localConfigPath = path.join(path.dirname(testFile), "agency.json");
-    if (fs.existsSync(localConfigPath)) {
-      // Same ordering rule as precompile's grouping: a fixture-local config
-      // may opt in to features, but must not cancel a refusal the user asked
-      // for on the command line.
-      const cliIntent = { refuseSplices: config.refuseSplices };
-      config = applyCliFlags({ ...config, ...loadConfig(localConfigPath) }, cliIntent);
-    }
+    // declared sourceFile elsewhere never runs JS compiled under one config
+    // against another.
+    config = mergeFixtureConfig(config, path.dirname(testFile));
 
     const cases = Array.isArray(tests.tests) ? tests.tests : [];
     const total = cases.length;
@@ -1280,11 +1271,7 @@ async function runTsTestDir(
     }
 
     const agencyPath = path.join(dir, agencyFile);
-    const localConfigPath = path.join(dir, "agency.json");
-    let mergedConfig = config;
-    if (fs.existsSync(localConfigPath)) {
-      mergedConfig = { ...config, ...loadConfig(localConfigPath) };
-    }
+    const mergedConfig = mergeFixtureConfig(config, dir);
     try {
       compile(mergedConfig, agencyPath, undefined, { allowTestImports: true });
     } catch (e) {

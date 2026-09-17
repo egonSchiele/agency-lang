@@ -1,6 +1,6 @@
 import { TextEdit, DocumentFormattingParams } from "vscode-languageserver-protocol";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { AgencyConfig } from "../config.js";
+import { AgencyConfig } from "../config/config.js";
 import { formatSource } from "../formatter.js";
 
 export function handleFormatting(

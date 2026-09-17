@@ -73,7 +73,20 @@ import { evalUpload, formatUploadSummary } from "@/cli/eval/upload.js";
 import { ttyColor } from "@/utils/termcolors.js";
 import { evalOptimize } from "@/cli/eval/optimize.js";
 import { renderDiagnosticText, renderDiagnosticList } from "@/cli/explain.js";
-import { AgencyConfig, applyCliFlags, type CliFlags, redactConfigSecrets } from "@/config.js";
+import {
+  AgencyConfig,
+  applyCliFlags,
+  type CliFlags,
+  redactConfigSecrets,
+} from "@/config/config.js";
+import {
+  configFiles,
+  configTarget,
+  projectTarget,
+  writeTarget,
+  type ConfigTarget,
+} from "@/config/target.js";
+import { defaultAliasTarget } from "@/stdlib/localModels.js";
 import * as path from "path";
 import { parseAgency } from "@/parser.js";
 import { parseTarget } from "@/agentTarget.js";
@@ -89,7 +102,7 @@ import * as fs from "fs";
 import { color } from "@/utils/termcolors.js";
 import process from "process";
 import { agent } from "@/cli/agent.js";
-import { mcpAdd, mcpRemove, mcpList, type McpAddOptions } from "@/cli/mcp.js";
+import { mcpAdd, mcpRemove, mcpList, type McpAddOptions, type McpScope } from "@/cli/mcp.js";
 import {
   runList as localList,
   runDownload as localDownload,
@@ -245,23 +258,31 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .description("Agency Language CLI")
     .version("0.0.105")
     .option("-v, --verbose", "Enable verbose logging during parsing")
-    .option("-c, --config <path>", "Path to agency.json config file");
+    .option(
+      "-c, --config <path>",
+      "Path to a config file. Loads only this file; agency.local.json is skipped",
+    );
+
+  function getConfigTarget(): ConfigTarget {
+    return configTarget(program.opts().config, projectTarget(process.cwd()));
+  }
+
+  // The -c file, or the model-alias default: the nearest project, or ~/agency.json.
+  function getAliasTarget(): ConfigTarget {
+    return configTarget(program.opts().config, defaultAliasTarget());
+  }
 
   function getConfig(): AgencyConfig {
-    const opts = program.opts();
-    const config = loadConfig(opts.config, opts.verbose);
-    if (opts.verbose) {
+    const verbose = program.opts().verbose === true;
+    const config = loadConfig(getConfigTarget(), verbose);
+    if (verbose) {
       config.verbose = true;
     }
     return config;
   }
 
-  // Config plus the exact path it loaded from, so a remote binding writes back
-  // to that file rather than a re-derived one.
   function getConfigContext(): RemoteCommandContext {
-    const opts = program.opts();
-    const configPath = opts.config ?? path.resolve(process.cwd(), "agency.json");
-    return { config: getConfig(), configPath };
+    return { config: getConfig(), configPath: writeTarget(getConfigTarget()) };
   }
 
   async function runWithOptions(
@@ -1918,34 +1939,34 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .argument("<name>")
     .option("-f, --force", "Delete the model files")
     .action((name: string, opts: { force?: boolean }) =>
-      localRemove(name, { force: opts.force === true }),
+      localRemove(name, { force: opts.force === true }, getAliasTarget()),
     );
   localCmd
     .command("resolve")
     .description("Show what a name/alias resolves to")
     .argument("<value>")
-    .action(localResolve);
+    .action((value: string) => localResolve(value, getAliasTarget()));
   localCmd
     .command("refresh")
     .description("Refresh the model catalog from the remote source")
     .argument("[url]", "Override the catalog URL (else env/config/default)")
-    .action(localRefresh);
+    .action((url?: string) => localRefresh(url, getAliasTarget()));
   const aliasCmd = localCmd.command("alias").description("Manage model name aliases");
   aliasCmd
     .command("list")
     .description("List usable short names (curated + aliases)")
-    .action(localAliasList);
+    .action(() => localAliasList(getAliasTarget()));
   aliasCmd
     .command("add")
     .description("Add a short-name alias")
     .argument("<name>")
     .argument("<uri>")
-    .action(localAliasAdd);
+    .action((name: string, uri: string) => localAliasAdd(name, uri, getAliasTarget()));
   aliasCmd
     .command("remove")
     .description("Remove a short-name alias")
     .argument("<name>")
-    .action(localAliasRemove);
+    .action((name: string) => localAliasRemove(name, getAliasTarget()));
 
   const modelsCmd = program.command("models").description("Browse the hosted model catalog");
   modelsCmd
@@ -2014,14 +2035,21 @@ export function createProgram(deps: CliDependencies = {}): Command {
 
   configCmd
     .command("show", { isDefault: true })
-    .description("Print the resolved, merged agency.json config as JSON")
+    .description(
+      "Print the config Agency will use: agency.json merged with agency.local.json, or the -c file",
+    )
     .option(
       "--show-secrets",
       "Print API keys verbatim instead of masking them (avoid in shared logs / bug reports)",
     )
     .action((opts: { showSecrets?: boolean }) => {
       const config = getConfig();
-      console.log(JSON.stringify(opts.showSecrets ? config : redactConfigSecrets(config), null, 2));
+      const files = configFiles(getConfigTarget());
+      const loaded = files.length > 0 ? files.join(", ") : "no config files";
+      // stderr, so stdout stays valid JSON.
+      console.error(`Loaded: ${loaded}`);
+      const shown = opts.showSecrets ? config : redactConfigSecrets(config);
+      console.log(JSON.stringify(shown, null, 2));
     });
 
   program
@@ -2393,7 +2421,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("list")
     .description("List the Agency agent's configured MCP servers")
     .action(() => {
-      process.exitCode = mcpList();
+      process.exitCode = mcpList(getConfigTarget());
     });
   mcpCmd
     .command("add <name>")
@@ -2402,18 +2430,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option("--args <list>", "comma-separated stdio args")
     .option("--url <url>", "HTTP server URL")
     .option("--oauth", "authenticate the HTTP server with OAuth")
-    .option("--project", "write the project agency.json (default)")
+    .option("--project", "write the project agency.json, or the -c file (default)")
     .option("--global", "write the agent-home settings.json instead")
     .action(async (name: string, opts: McpAddOptions) => {
-      process.exitCode = await mcpAdd(name, opts);
+      process.exitCode = await mcpAdd(name, opts, getConfigTarget());
     });
   mcpCmd
     .command("remove <name>")
     .description("Remove an MCP server the Agency agent connects to")
-    .option("--project", "remove from the project agency.json (default)")
+    .option("--project", "remove from the project agency.json, or the -c file (default)")
     .option("--global", "remove from the agent-home settings.json instead")
-    .action(async (name: string, opts: { global?: boolean }) => {
-      process.exitCode = await mcpRemove(name, opts);
+    .action(async (name: string, opts: McpScope) => {
+      process.exitCode = await mcpRemove(name, opts, getConfigTarget());
     });
 
   const mcpSetupCmd = mcpCmd

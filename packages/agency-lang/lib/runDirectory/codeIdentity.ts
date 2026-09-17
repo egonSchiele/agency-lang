@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { agentClosure, commonAncestor } from "@/analysis/closure.js";
-import { mergeConfigOverrides, type AgencyConfig } from "@/config.js";
+import { mergeConfigOverrides, type AgencyConfig } from "@/config/config.js";
 import { sha256Text } from "@/utils/hash.js";
 
 export type ClosureFile = { file: string; sha256: string };

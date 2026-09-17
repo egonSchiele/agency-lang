@@ -22,7 +22,7 @@ const messageArray: VariableType = {
   },
 };
 
-/** Types for `BUILTIN_VARIABLES` (lib/config.ts) that the checker knows.
+/** Types for `BUILTIN_VARIABLES` (lib/config/config.ts) that the checker knows.
  *  `__dirname` is the per-module directory constant every compiled module
  *  defines (imports.mustache:38). `color` is deliberately absent — it has
  *  never been typed and typing it is unrelated scope. */

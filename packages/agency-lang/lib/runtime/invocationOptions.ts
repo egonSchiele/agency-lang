@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import { validatePolicy } from "./policy.js";
 import type { Policy } from "./policy.js";
 

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import type { Test } from "@/eval/runTypes.js";
 import type { EvalRecord } from "@/eval/types.js";
 import type {

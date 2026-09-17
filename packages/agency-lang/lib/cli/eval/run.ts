@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { loadInputs, inlineInput } from "@/eval/loadInputs.js";
 import { runSuite } from "@/eval/run/runSuite.js";
 import type { EvalInputRunner } from "@/eval/run/subprocess.js";

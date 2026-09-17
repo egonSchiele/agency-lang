@@ -31,7 +31,7 @@ import {
   type RuntimeContextConstructorArgs,
 } from "../configOverrides.js";
 import type { ResolvedInvocation } from "../invocationOptions.js";
-import { readConfigOverrides, TRACE_ID_ENV } from "../../config.js";
+import { readConfigOverrides, TRACE_ID_ENV } from "../../config/config.js";
 import type { Checkpoint } from "./checkpointStore.js";
 import { CheckpointStore, RESULT_ENTRY_LABEL } from "./checkpointStore.js";
 import { PendingPromiseStore } from "./pendingPromiseStore.js";

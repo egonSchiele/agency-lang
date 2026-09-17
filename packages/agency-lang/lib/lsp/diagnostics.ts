@@ -8,7 +8,7 @@ import { resolveImports } from "../preprocessors/importResolver.js";
 import { resolveReExports } from "../preprocessors/resolveReExports.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "../typeChecker/index.js";
-import { AgencyConfig } from "../config.js";
+import { AgencyConfig } from "../config/config.js";
 import { SymbolTable } from "../symbolTable.js";
 import { AgencyProgram } from "../types.js";
 import { CompilationUnit } from "../compilationUnit.js";

@@ -25,7 +25,7 @@ Or in `agency.json`:
 }
 ```
 
-`applyCliFlags` in `lib/config.ts` turns `--trace` into `traceFile: <input>.trace`. With no input file it falls back to `traceDir: "."`.
+`applyCliFlags` in `lib/config/config.ts` turns `--trace` into `traceFile: <input>.trace`. With no input file it falls back to `traceDir: "."`.
 
 `traceDir` is the safer setting for anything that runs concurrently. `resolveTraceFilePath` gives each run its own `${traceDir}/${runId}.agencytrace`, while a fixed `traceFile` makes every run of the module write to one path. If both are set, `traceFile` wins.
 

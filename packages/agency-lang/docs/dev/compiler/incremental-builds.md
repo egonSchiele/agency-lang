@@ -3,7 +3,8 @@
 The compiler skips recompiling `.agency` files whose inputs have not
 changed. The record of those inputs is the **build manifest**:
 `.agency-build/manifest.json` at the project root (the nearest directory
-with an `agency.json`; without one, each compiled file's own directory —
+with an `agency.json` or an `agency.local.json`; without one, each
+compiled file's own directory —
 so an agency.json-less multi-directory project grows one `.agency-build/`
 per directory). The manifest is gitignored, wiped by `make clean`, and
 written atomically (temp file + rename), so concurrent compiles get

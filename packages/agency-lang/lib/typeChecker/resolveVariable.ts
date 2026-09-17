@@ -1,7 +1,7 @@
 import type { FunctionDefinition, GraphNodeDefinition } from "../types.js";
 import type { ImportedFunctionSignature } from "../compilationUnit.js";
 import { BUILTIN_FUNCTION_TYPES } from "./builtins.js";
-import { BUILTIN_VARIABLES } from "../config.js";
+import { BUILTIN_VARIABLES } from "../config/config.js";
 import { JS_GLOBALS, type JsRegistryEntry } from "./resolveCall.js";
 
 /**

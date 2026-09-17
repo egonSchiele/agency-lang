@@ -2,7 +2,7 @@
 // target, gather the source bundle, check it compiles, then upload. Each step's
 // "how" lives in its own module.
 
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import { resolveDeployTarget } from "./target.js";
 import type { DeployTarget, TargetProvenance } from "./target.js";
 import { collectAgencyBundle, validateBundleCompiles } from "./bundle.js";

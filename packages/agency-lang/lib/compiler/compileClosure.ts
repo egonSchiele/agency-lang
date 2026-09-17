@@ -19,7 +19,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { AgencyProgram, AgencyNode } from "../types.js";
-import { AgencyConfig } from "../config.js";
+import { AgencyConfig } from "../config/config.js";
 import { parseAgencyFileCached } from "../parseCache.js";
 import { SymbolTable } from "../symbolTable.js";
 import { resolveReExports } from "../preprocessors/resolveReExports.js";

@@ -4,7 +4,7 @@ import { TypeScriptBuilder } from "./typescriptBuilder.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
 import { printTs } from "../ir/prettyPrint.js";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 
 /**
  * The builder's splice tripwire, exercised by deliberately skipping

@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import type { AgencyConfig } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
 import {
   DOC_LEDGER_NAME,
   DOC_LOCK_NAME,

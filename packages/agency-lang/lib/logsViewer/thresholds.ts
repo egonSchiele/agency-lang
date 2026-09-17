@@ -2,7 +2,7 @@
 // `SLOW_MS` and costs above `EXPENSIVE_USD` render bright-red so
 // long/expensive operations jump out. Durations under `FAST_MS`
 // render gray so the noise fades. Tunable via `agency.json` —
-// see `lib/config.ts`.
+// see `lib/config/config.ts`.
 
 export type ViewerThresholds = {
   slowMs: number;

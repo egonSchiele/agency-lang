@@ -1,8 +1,8 @@
 import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
 import { fork } from "child_process";
 
-import type { AgencyConfig } from "@/config.js";
-import { TRACE_ID_ENV } from "@/config.js";
+import type { AgencyConfig } from "@/config/config.js";
+import { TRACE_ID_ENV } from "@/config/config.js";
 import type { IpcDecisionMessage } from "@/runtime/ipc.js";
 import {
   buildForkOptions,

@@ -7,7 +7,7 @@ import * as builtinFunctionsSleep from "../../templates/backends/typescriptGener
 import * as builtinFunctionsSystem from "../../templates/backends/typescriptGenerator/builtinFunctions/system.js";
 import * as builtinFunctionsSetLLMClient from "../../templates/backends/typescriptGenerator/builtinFunctions/setLLMClient.js";
 import * as builtinFunctionsRegisterTools from "../../templates/backends/typescriptGenerator/builtinFunctions/registerTools.js";
-import { BUILTIN_FUNCTIONS } from "@/config.js";
+import { BUILTIN_FUNCTIONS } from "@/config/config.js";
 
 /**
  * Maps an Agency function name to its TypeScript equivalent

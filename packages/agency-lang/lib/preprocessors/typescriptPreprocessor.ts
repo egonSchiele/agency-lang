@@ -1,5 +1,5 @@
 import { declaredName } from "../types/hole.js";
-import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config.js";
+import { AgencyConfig, BUILTIN_FUNCTIONS } from "@/config/config.js";
 import type { CompilationUnit, ImportedFunctionSignature } from "@/compilationUnit.js";
 import {
   AgencyMultiLineComment,

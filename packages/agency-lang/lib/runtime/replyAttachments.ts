@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { modelSupportsInputModality, type ImagePart, type FilePart } from "smoltalk";
-import { MAX_REPLY_ATTACHMENTS_PER_CALL, MAX_REPLY_ATTACHMENT_BYTES } from "../config.js";
+import { MAX_REPLY_ATTACHMENTS_PER_CALL, MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
 import { MIME_TYPES } from "../stdlib/mediaPathScan.js";
 import { success, failure, isSuccess, type ResultValue } from "./result.js";
 

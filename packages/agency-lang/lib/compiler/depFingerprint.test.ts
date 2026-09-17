@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 
 // Hoisted seam: exercises the classifier's actual CATCH path (a missing
 // file never reaches it — parseAgencyFileCached converts that to a failed

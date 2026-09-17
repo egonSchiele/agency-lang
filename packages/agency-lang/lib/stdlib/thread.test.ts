@@ -7,7 +7,7 @@ import { RuntimeContext } from "../runtime/state/context.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { AgencyAbort, makeAbortCause } from "../runtime/errors.js";
 import { isFailure } from "../runtime/result.js";
-import { MAX_REPLY_ATTACHMENT_BYTES } from "../config.js";
+import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
 import { _runGuarded, _viewFilePrecheck } from "./thread.js";
 
 describe("_viewFilePrecheck", () => {

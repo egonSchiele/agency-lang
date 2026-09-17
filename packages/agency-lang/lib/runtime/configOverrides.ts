@@ -1,7 +1,7 @@
 import type { SmolConfig } from "smoltalk";
 
 import { parseDurationMs } from "../duration.js";
-import type { AgencyConfig } from "../config.js";
+import type { AgencyConfig } from "../config/config.js";
 import type { StatelogConfig } from "../statelogClient.js";
 import type { LogLevel } from "../logger.js";
 import type { MemoryConfig } from "./memory/types.js";
@@ -69,7 +69,7 @@ export async function withRuntimeConfigOverrides<T>(
  *   • subprocess IPC: the parent forwards `configOverrides` in the spawn
  *     message (`setRuntimeConfigOverrides` sets the active value).
  *   • bundled agents / packed bundles: `AGENCY_CONFIG_OVERRIDES` in the env
- *     (`config.ts` `readConfigOverrides`), passed explicitly by the caller.
+ *     (`lib/config/config.ts` `readConfigOverrides`), passed explicitly by the caller.
  *
  * Fields honored (others are ignored — the runtime has its own pathways):
  *   • `log.*` + `observability` → statelogConfig

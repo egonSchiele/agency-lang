@@ -1,22 +1,12 @@
+import type {
+  McpHttpServerConfig,
+  McpServerConfig,
+  McpStdioServerConfig,
+} from "agency-lang/config";
+
+export type { McpHttpServerConfig, McpServerConfig, McpStdioServerConfig };
+
 export type ServerName = string;
-
-export type McpStdioServerConfig = {
-  command: string;
-  args?: string[];
-  env?: Record<string, string>;
-};
-
-export type McpHttpServerConfig = {
-  type: "http";
-  url: string;
-  auth?: "oauth";
-  authTimeout?: number;
-  clientId?: string;
-  clientSecret?: string;
-  headers?: Record<string, string>;
-};
-
-export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
 
 export function isHttpServer(config: McpServerConfig): config is McpHttpServerConfig {
   return "type" in config && config.type === "http";

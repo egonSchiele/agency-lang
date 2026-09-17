@@ -18,7 +18,7 @@ import renderEvaluate from "@/templates/cli/evaluate.js";
 import renderJudgeEvaluate from "@/templates/cli/judgeEvaluate.js";
 import { compile } from "@/compiler/defaultSession.js";
 import { RunStrategy } from "../importStrategy.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { parseAgency } from "@/parser.js";
 import type { LLMMock, ScopedLLMMocks } from "../runtime/deterministicClient.js";
 import type { FetchMock } from "../runtime/fetchMock.js";

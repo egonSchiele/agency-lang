@@ -6,7 +6,7 @@ import {
   readConfigOverrides,
   serializeConfigOverrides,
   type CliFlags,
-} from "@/config.js";
+} from "@/config/config.js";
 import { resolveBudget } from "./budget.js";
 import { stageConfiguredAgent } from "./stageConfiguredAgent.js";
 import { compiledOutputNodeArgs } from "./commands.js";

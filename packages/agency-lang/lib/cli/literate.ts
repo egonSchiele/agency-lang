@@ -1,4 +1,4 @@
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { generateAgency } from "@/backends/agencyGenerator.js";
 import { parse, readFile } from "./commands.js";
 import { findRecursively } from "@/utils/findRecursively.js";

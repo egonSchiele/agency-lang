@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { fileTarget } from "../config/target.js";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -53,21 +54,23 @@ afterEach(() => {
 
 describe("name resolution", () => {
   it("passes paths and uris through", () => {
-    expect(_resolveModelName("/x/y.gguf", aliasFile)).toBe("/x/y.gguf");
-    expect(_resolveModelName("hf:org/repo:Q4", aliasFile)).toBe("hf:org/repo:Q4");
+    expect(_resolveModelName("/x/y.gguf", fileTarget(aliasFile))).toBe("/x/y.gguf");
+    expect(_resolveModelName("hf:org/repo:Q4", fileTarget(aliasFile))).toBe("hf:org/repo:Q4");
   });
   it("maps a curated short name to its uri", () => {
     const k = Object.keys(CURATED_LOCAL_MODELS)[0];
-    expect(_resolveModelName(k, aliasFile)).toBe(CURATED_LOCAL_MODELS[k].uri);
+    expect(_resolveModelName(k, fileTarget(aliasFile))).toBe(CURATED_LOCAL_MODELS[k].uri);
   });
   it("throws listing known names for an unknown one", () => {
-    expect(() => _resolveModelName("nope", aliasFile)).toThrow(/Unknown local model "nope"/);
+    expect(() => _resolveModelName("nope", fileTarget(aliasFile))).toThrow(
+      /Unknown local model "nope"/,
+    );
   });
   it("user alias overrides a curated short name with the same key", () => {
     fs.writeFileSync(aliasFile, "{}");
     const curatedKey = Object.keys(CURATED_LOCAL_MODELS)[0];
-    _aliasModel(curatedKey, "hf:custom/override:Q4", aliasFile);
-    expect(_resolveModelName(curatedKey, aliasFile)).toBe("hf:custom/override:Q4");
+    _aliasModel(curatedKey, "hf:custom/override:Q4", fileTarget(aliasFile));
+    expect(_resolveModelName(curatedKey, fileTarget(aliasFile))).toBe("hf:custom/override:Q4");
   });
 });
 
@@ -128,41 +131,47 @@ describe("curated catalog shape", () => {
 describe("aliases", () => {
   it("add → resolve → list → remove round-trips via the provided file", () => {
     fs.writeFileSync(aliasFile, "{}");
-    const file = _aliasModel("my7b", "hf:org/repo:Q4_K_M", aliasFile);
+    const file = _aliasModel("my7b", "hf:org/repo:Q4_K_M", fileTarget(aliasFile));
     expect(file).toBe(aliasFile);
-    expect(_resolveModelName("my7b", aliasFile)).toBe("hf:org/repo:Q4_K_M");
-    expect(_listModelNames(aliasFile)).toContainEqual({
+    expect(_resolveModelName("my7b", fileTarget(aliasFile))).toBe("hf:org/repo:Q4_K_M");
+    expect(_listModelNames(fileTarget(aliasFile))).toContainEqual({
       name: "my7b",
       backend: "llama-cpp",
       target: "hf:org/repo:Q4_K_M",
       source: "alias",
     });
-    _unaliasModel("my7b", aliasFile);
-    expect(() => _resolveModelName("my7b", aliasFile)).toThrow();
+    _unaliasModel("my7b", fileTarget(aliasFile));
+    expect(() => _resolveModelName("my7b", fileTarget(aliasFile))).toThrow();
   });
   it("preserves other config fields when writing", () => {
     fs.writeFileSync(aliasFile, JSON.stringify({ client: { defaultModel: "gpt-4o-mini" } }));
-    _aliasModel("a", "hf:x/y:Q4", aliasFile);
+    _aliasModel("a", "hf:x/y:Q4", fileTarget(aliasFile));
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf-8"));
     expect(cfg.client.defaultModel).toBe("gpt-4o-mini");
     expect(cfg.client.modelAliases.a).toBe("hf:x/y:Q4");
   });
   it("unaliasModel bails early when the file or alias is missing (no write)", () => {
-    const r1 = _unaliasModel("ghost", aliasFile);
+    const r1 = _unaliasModel("ghost", fileTarget(aliasFile));
     expect(r1).toEqual({ file: aliasFile, removed: false });
     expect(fs.existsSync(aliasFile)).toBe(false);
     fs.writeFileSync(aliasFile, JSON.stringify({ client: { defaultModel: "x" } }, null, 2));
     const before = fs.readFileSync(aliasFile, "utf-8");
-    const r2 = _unaliasModel("ghost", aliasFile);
+    const r2 = _unaliasModel("ghost", fileTarget(aliasFile));
     expect(r2).toEqual({ file: aliasFile, removed: false });
     expect(fs.readFileSync(aliasFile, "utf-8")).toBe(before);
   });
   it("unaliasModel returns { removed: true } when the alias was actually written out", () => {
     fs.writeFileSync(aliasFile, "{}");
-    _aliasModel("toRemove", "hf:x/y:Q4", aliasFile);
-    expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: true });
+    _aliasModel("toRemove", "hf:x/y:Q4", fileTarget(aliasFile));
+    expect(_unaliasModel("toRemove", fileTarget(aliasFile))).toEqual({
+      file: aliasFile,
+      removed: true,
+    });
     // Idempotent: a second remove is a no-op and reports removed=false.
-    expect(_unaliasModel("toRemove", aliasFile)).toEqual({ file: aliasFile, removed: false });
+    expect(_unaliasModel("toRemove", fileTarget(aliasFile))).toEqual({
+      file: aliasFile,
+      removed: false,
+    });
   });
 });
 
@@ -180,7 +189,7 @@ describe("configuredDownloadConcurrency", () => {
           JSON.stringify({ client: { mlx: { downloadConcurrency: bad } } }),
         );
         expect(() => configuredDownloadConcurrency()).toThrow(
-          `client.mlx.downloadConcurrency in ${aliasFile} must be a positive integer, got ${JSON.stringify(bad)}`,
+          new RegExp(`Invalid config in ${aliasFile}[\\s\\S]*client\\.mlx\\.downloadConcurrency`),
         );
       }
     } finally {
@@ -589,7 +598,7 @@ describe("object-valued aliases", () => {
         client: { modelAliases: { foo: { backend: "llama-cpp", uri: "hf:org/repo:Q4_K_M" } } },
       }),
     );
-    expect(_resolveModelName("foo", aliasFile)).toBe("hf:org/repo:Q4_K_M");
+    expect(_resolveModelName("foo", fileTarget(aliasFile))).toBe("hf:org/repo:Q4_K_M");
   });
 
   it("resolves a string alias to its uri (back-compat shape)", () => {
@@ -597,7 +606,7 @@ describe("object-valued aliases", () => {
       aliasFile,
       JSON.stringify({ client: { modelAliases: { bar: "hf:org/bar:Q4_K_M" } } }),
     );
-    expect(_resolveModelName("bar", aliasFile)).toBe("hf:org/bar:Q4_K_M");
+    expect(_resolveModelName("bar", fileTarget(aliasFile))).toBe("hf:org/bar:Q4_K_M");
   });
 
   it("lists an object alias with its metadata and dedupes by name (alias wins)", () => {
@@ -616,7 +625,7 @@ describe("object-valued aliases", () => {
         },
       }),
     );
-    const entries = _listModelNames(aliasFile);
+    const entries = _listModelNames(fileTarget(aliasFile));
     const matches = entries.filter((e) => e.name === "smollm2-135m");
     expect(matches.length).toBe(1); // deduped: alias shadows the curated built-in
     expect(matches[0].target).toBe("hf:custom/smol:Q4_K_M");
@@ -671,20 +680,20 @@ describe("resolveCatalogUrl", () => {
   });
 
   it("uses the explicit arg first", () => {
-    expect(resolveCatalogUrl("https://x/y.json", aliasFile)).toBe("https://x/y.json");
+    expect(resolveCatalogUrl("https://x/y.json", fileTarget(aliasFile))).toBe("https://x/y.json");
   });
   it("falls back to the env var", () => {
     process.env.AGENCY_MODEL_CATALOG_URL = "https://env/c.json";
-    expect(resolveCatalogUrl("", aliasFile)).toBe("https://env/c.json");
+    expect(resolveCatalogUrl("", fileTarget(aliasFile))).toBe("https://env/c.json");
   });
   it("then the config, then the default", () => {
     fs.writeFileSync(
       aliasFile,
       JSON.stringify({ client: { modelCatalogUrl: "https://cfg/c.json" } }),
     );
-    expect(resolveCatalogUrl("", aliasFile)).toBe("https://cfg/c.json");
+    expect(resolveCatalogUrl("", fileTarget(aliasFile))).toBe("https://cfg/c.json");
     fs.writeFileSync(aliasFile, "{}");
-    expect(resolveCatalogUrl("", aliasFile)).toContain(
+    expect(resolveCatalogUrl("", fileTarget(aliasFile))).toContain(
       "raw.githubusercontent.com/egonSchiele/agency-lang",
     );
   });
@@ -821,7 +830,7 @@ describe("_refreshCatalog", () => {
   it("writes blob models as source:remote aliases and reports them added", async () => {
     fs.writeFileSync(aliasFile, "{}");
     const r = await _refreshCatalog({
-      file: aliasFile,
+      target: fileTarget(aliasFile),
       fetcher: async () =>
         blob({ "qwen3.5-2b": { backend: "llama-cpp", uri: "hf:org/q:Q4_K_M", params: "2B" } }),
     });
@@ -842,7 +851,7 @@ describe("_refreshCatalog", () => {
       JSON.stringify({ client: { modelAliases: { "qwen3.5-2b": "hf:mine/custom:Q4_K_M" } } }),
     );
     const r = await _refreshCatalog({
-      file: aliasFile,
+      target: fileTarget(aliasFile),
       fetcher: async () =>
         blob({ "qwen3.5-2b": { backend: "llama-cpp", uri: "hf:org/remote:Q4_K_M" } }),
     });
@@ -859,7 +868,7 @@ describe("_refreshCatalog", () => {
     fs.writeFileSync(aliasFile, "{}");
     // First run: seed two managed entries.
     await _refreshCatalog({
-      file: aliasFile,
+      target: fileTarget(aliasFile),
       fetcher: async () =>
         blob({
           a: { backend: "llama-cpp", uri: "hf:org/a:Q4_K_M", params: "1B" },
@@ -870,7 +879,7 @@ describe("_refreshCatalog", () => {
     // metadata change vs first run (it's new — `added`), and `a` gets a new
     // params value (this is the actual `updated` case).
     const r = await _refreshCatalog({
-      file: aliasFile,
+      target: fileTarget(aliasFile),
       fetcher: async () =>
         blob({
           a: { backend: "llama-cpp", uri: "hf:org/a:Q4_K_M", params: "2B" }, // metadata changed
@@ -890,8 +899,8 @@ describe("_refreshCatalog", () => {
     fs.writeFileSync(aliasFile, "{}");
     const fetcher = async () =>
       blob({ a: { backend: "llama-cpp", uri: "hf:org/a:Q4_K_M", params: "1B" } });
-    await _refreshCatalog({ file: aliasFile, fetcher });
-    const r = await _refreshCatalog({ file: aliasFile, fetcher });
+    await _refreshCatalog({ target: fileTarget(aliasFile), fetcher });
+    const r = await _refreshCatalog({ target: fileTarget(aliasFile), fetcher });
     expect(r.added).toEqual([]);
     expect(r.updated).toEqual([]);
     expect(r.unchanged).toEqual(["a"]);
@@ -904,7 +913,7 @@ describe("_refreshCatalog", () => {
       JSON.stringify({ client: { modelAliases: { keep: "hf:k:Q4_K_M" } } }),
     );
     await expect(
-      _refreshCatalog({ file: aliasFile, fetcher: async () => "{not json" }),
+      _refreshCatalog({ target: fileTarget(aliasFile), fetcher: async () => "{not json" }),
     ).rejects.toThrow(/valid JSON/);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.keep).toBe("hf:k:Q4_K_M");
@@ -914,7 +923,7 @@ describe("_refreshCatalog", () => {
     const sha = "deadbeef".repeat(8); // a valid 64-hex sha256
     fs.writeFileSync(aliasFile, "{}");
     await _refreshCatalog({
-      file: aliasFile,
+      target: fileTarget(aliasFile),
       fetcher: async () =>
         JSON.stringify({
           version: 1,
@@ -930,7 +939,7 @@ describe("_refreshCatalog", () => {
     // "toString" exists on Object.prototype, so a naive `name in userAliases`
     // would falsely report a collision. With own-property checks it's added.
     const r = await _refreshCatalog({
-      file: aliasFile,
+      target: fileTarget(aliasFile),
       fetcher: async () => blob({ toString: { backend: "llama-cpp", uri: "hf:org/ts:Q4_K_M" } }),
     });
     expect(r.added).toEqual(["toString"]);
@@ -951,7 +960,7 @@ describe("_refreshCatalog", () => {
         models: { m: { backend: "llama-cpp", uri: "hf:org/m:Q4_K_M", params: "2B" } },
       }),
     );
-    const r = await _refreshCatalog({ url: catalogPath, file: aliasFile });
+    const r = await _refreshCatalog({ url: catalogPath, target: fileTarget(aliasFile) });
     expect(r.added).toEqual(["m"]);
     const cfg = JSON.parse(fs.readFileSync(aliasFile, "utf8"));
     expect(cfg.client.modelAliases.m).toEqual({
@@ -1001,7 +1010,7 @@ describe("model file verification", () => {
     const k = Object.keys(CURATED_LOCAL_MODELS)[0];
     // Curated lookup mirrors the curated entry's sha256 — undefined before the
     // Task 4 pins are added, hex after; this assertion holds in both states.
-    expect(pinnedSha256(k, aliasFile)).toBe(CURATED_LOCAL_MODELS[k].sha256);
+    expect(pinnedSha256(k, fileTarget(aliasFile))).toBe(CURATED_LOCAL_MODELS[k].sha256);
     fs.writeFileSync(
       aliasFile,
       JSON.stringify({
@@ -1013,10 +1022,10 @@ describe("model file verification", () => {
         },
       }),
     );
-    expect(pinnedSha256("obj", aliasFile)).toBe("aa"); // alias object hash
-    expect(pinnedSha256("str", aliasFile)).toBeUndefined(); // string alias has none
-    expect(pinnedSha256("hf:o/z:Q4", aliasFile)).toBeUndefined(); // raw uri
-    expect(pinnedSha256("/abs/x.gguf", aliasFile)).toBeUndefined(); // raw path
+    expect(pinnedSha256("obj", fileTarget(aliasFile))).toBe("aa"); // alias object hash
+    expect(pinnedSha256("str", fileTarget(aliasFile))).toBeUndefined(); // string alias has none
+    expect(pinnedSha256("hf:o/z:Q4", fileTarget(aliasFile))).toBeUndefined(); // raw uri
+    expect(pinnedSha256("/abs/x.gguf", fileTarget(aliasFile))).toBeUndefined(); // raw path
   });
 
   it("pinnedSha256: a user alias shadowing a curated name uses the alias (not curated)", () => {
@@ -1026,7 +1035,7 @@ describe("model file verification", () => {
       JSON.stringify({ client: { modelAliases: { [k]: "hf:mine/custom:Q4" } } }),
     );
     // string alias governs → no pin (must NOT fall back to the curated hash)
-    expect(pinnedSha256(k, aliasFile)).toBeUndefined();
+    expect(pinnedSha256(k, fileTarget(aliasFile))).toBeUndefined();
   });
 });
 
@@ -1125,8 +1134,8 @@ describe("backend field", () => {
       aliasFile,
       JSON.stringify({ client: { modelAliases: { coder: { uri: "hf:org/repo:Q4_K_M" } } } }),
     );
-    expect(() => _resolveModelName("coder", aliasFile)).toThrow(
-      `alias "coder" has no "backend". Add "backend": "llama-cpp" or "backend": "mlx" to the entry in ${aliasFile}.`,
+    expect(() => _resolveModelName("coder", fileTarget(aliasFile))).toThrow(
+      new RegExp(`Invalid config in ${aliasFile}[\\s\\S]*client\\.modelAliases\\.coder`),
     );
   });
 
@@ -1137,7 +1146,7 @@ describe("backend field", () => {
         client: { modelAliases: { coder: { backend: "mlx", uri: "hf:org/repo:Q4_K_M" } } },
       }),
     );
-    expect(() => _resolveModelName("coder", aliasFile)).toThrow(
+    expect(() => _resolveModelName("coder", fileTarget(aliasFile))).toThrow(
       /says backend "mlx" but its uri "hf:org\/repo:Q4_K_M" is a GGUF file/,
     );
   });
@@ -1149,7 +1158,7 @@ describe("backend field", () => {
         client: { modelAliases: { coder: "mlx:mlx-community/Qwen3-Coder-Next-4bit" } },
       }),
     );
-    const entry = _listModelNames(aliasFile).find((e) => e.name === "coder");
+    const entry = _listModelNames(fileTarget(aliasFile)).find((e) => e.name === "coder");
     expect(entry?.backend).toBe("mlx");
   });
 
@@ -1207,10 +1216,10 @@ describe("_localModelCategory", () => {
         },
       }),
     );
-    expect(_localModelCategory("emb", file)).toBe("embedding");
-    expect(_localModelCategory("mlx:org/emb", file)).toBe("embedding");
-    expect(_localModelCategory("plain", file)).toBeUndefined();
-    expect(_localModelCategory("mlx:org/anything", file)).toBeUndefined();
+    expect(_localModelCategory("emb", fileTarget(file))).toBe("embedding");
+    expect(_localModelCategory("mlx:org/emb", fileTarget(file))).toBe("embedding");
+    expect(_localModelCategory("plain", fileTarget(file))).toBeUndefined();
+    expect(_localModelCategory("mlx:org/anything", fileTarget(file))).toBeUndefined();
   });
 });
 
@@ -1229,7 +1238,10 @@ describe("_resolveModel", () => {
     fs.writeFileSync(path.join(model, "model.safetensors"), "");
     fs.writeFileSync(aliasFile, JSON.stringify({ client: { modelAliases: { local: model } } }));
     expect(_resolveModel("mlx:org/repo")).toEqual({ backend: "mlx", target: "mlx:org/repo" });
-    expect(_resolveModel("local", aliasFile)).toEqual({ backend: "mlx", target: model });
+    expect(_resolveModel("local", fileTarget(aliasFile))).toEqual({
+      backend: "mlx",
+      target: model,
+    });
     expect(_resolveModel(model)).toEqual({ backend: "mlx", target: model });
   });
 

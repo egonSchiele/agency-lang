@@ -1,7 +1,7 @@
 import { AgencyProgram } from "../types.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit, type CompilationUnit } from "@/compilationUnit.js";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { TypeScriptBuilder } from "./typescriptBuilder.js";
 import { sha256Text } from "@/utils/hash.js";
 import { printTs } from "../ir/prettyPrint.js";

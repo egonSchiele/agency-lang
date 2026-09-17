@@ -1,6 +1,8 @@
-import { AgencyNode } from "./types.js";
-import type { LogLevel } from "./logger.js";
+import { AgencyNode } from "../types.js";
+import type { LogLevel } from "../logger.js";
 import { z } from "zod";
+import { McpServersSchema, type McpServers } from "./mcpServers.js";
+import { mapConfigValues } from "./paths.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -36,6 +38,9 @@ export const MAX_REPLY_ATTACHMENT_BYTES = 20 * 1024 * 1024;
  */
 export interface AgencyConfig {
   verbose?: boolean;
+
+  /** MCP servers the program and the agent can connect to. */
+  mcpServers?: McpServers;
 
   /**
    * Let a compile-time splice run a generator that imports JavaScript.
@@ -206,6 +211,9 @@ export interface AgencyConfig {
      *  `AGENCY_MODELS_DIR` env var; defaults to `~/.agency-agent/models`. Read
      *  at runtime by `std::agency/local` and the `agency local` CLI. */
     modelsDir: string;
+    /** Where `agency local refresh` fetches the model catalog. Overridden by
+     *  the `AGENCY_MODEL_CATALOG_URL` env var. Read at runtime. */
+    modelCatalogUrl: string;
     /** Settings for MLX models, which run in a server. */
     mlx?: Partial<{
       /** Python with mlx-lm installed, used by `agency local serve`. Overridden
@@ -484,6 +492,7 @@ export type ModelAlias = z.infer<typeof ModelAliasSchema>;
 export const AgencyConfigSchema = z
   .object({
     verbose: z.boolean(),
+    mcpServers: McpServersSchema,
     allowNonAgencyGenerators: z.boolean(),
     refuseSplices: z.boolean(),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
@@ -580,6 +589,7 @@ export const AgencyConfigSchema = z
         providerModules: z.array(z.string()),
         modelAliases: z.record(z.string(), ModelAliasSchema),
         modelsDir: z.string(),
+        modelCatalogUrl: z.string(),
         mlx: z
           .object({
             python: z.string(),
@@ -675,65 +685,33 @@ export const AgencyConfigSchema = z
   .partial()
   .loose();
 
-/**
- * Load agency.json at the given path without calling process.exit.
- * Returns the parsed config, or an error message if the file is invalid.
- * Returns an empty config if the file doesn't exist.
- */
-export function loadConfigSafe(configPath: string): {
-  config: AgencyConfig;
-  error?: string;
-} {
+export type ConfigResult = { config: AgencyConfig; error?: string };
+
+/** Check `raw` against AgencyConfigSchema. `source` names where it came from
+ *  in the error message. */
+export function validateConfig(raw: unknown, source: string): ConfigResult {
+  const result = AgencyConfigSchema.safeParse(raw);
+  if (result.success) {
+    return { config: result.data as AgencyConfig };
+  }
+  const issues = result.error.issues
+    .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
+    .join("\n");
+  return { config: {}, error: `Invalid config in ${source}:\n${issues}` };
+}
+
+/** Load exactly one config file. A missing file is an empty config. For a
+ *  project directory, use readConfig in lib/config/target.ts. */
+export function loadConfigSafe(configPath: string): ConfigResult {
   if (!fs.existsSync(configPath)) {
     return { config: {} };
   }
   try {
-    const content = fs.readFileSync(configPath, "utf-8");
-    const parsed = JSON.parse(content);
-    const result = AgencyConfigSchema.safeParse(parsed);
-    if (!result.success) {
-      const issues = result.error.issues
-        .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
-        .join("\n");
-      return {
-        config: {},
-        error: `Invalid agency.json config:\n${issues}`,
-      };
-    }
-    if (result.data.verbose) {
-      // stderr, not stdout: this fires under `config.verbose` and must not
-      // corrupt a command's machine-consumed output.
-      console.error(`Loaded config from ${configPath}:`);
-    }
-    return { config: result.data as AgencyConfig };
+    const raw: unknown = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    return validateConfig(raw, configPath);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return {
-      config: {},
-      error: `Error loading config from ${configPath}: ${message}`,
-    };
-  }
-}
-
-/**
- * Find the agency.json for a given file path by searching upward.
- * Returns the directory containing agency.json, or null if not found.
- */
-export function findProjectRoot(startPath: string): string | null {
-  let current =
-    fs.existsSync(startPath) && fs.statSync(startPath).isDirectory()
-      ? startPath
-      : path.dirname(startPath);
-
-  while (true) {
-    if (fs.existsSync(path.join(current, "agency.json"))) {
-      return current;
-    }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
+    return { config: {}, error: `Error loading config from ${configPath}: ${message}` };
   }
 }
 
@@ -743,8 +721,9 @@ export function findProjectRoot(startPath: string): string | null {
 // A program's effective AgencyConfig is assembled from three sources, listed
 // here in increasing precedence:
 //
-//   1. agency.json           — the file, found by walking up from cwd
-//                              (loadConfigSafe / findProjectRoot). The base.
+//   1. Config files          — a ConfigTarget (lib/config/target.ts): the -c
+//                              file alone, or agency.json with
+//                              agency.local.json merged over it. The base.
 //   2. CLI flags             — per-invocation flags (--trace, --log,
 //                              --strict, ...) mapped onto config by
 //                              applyCliFlags(). This is the ONLY place that
@@ -771,7 +750,7 @@ export function findProjectRoot(startPath: string): string | null {
  *  infers the provider from the model name.
  *
  *  Declared here rather than in the CLI so `CliFlags` stays self-contained:
- *  `lib/config.ts` must not depend on `lib/cli/`, which would pull the CLI and
+ *  `lib/config/config.ts` must not depend on `lib/cli/`, which would pull the CLI and
  *  the runtime graph behind it into every consumer of the config module. */
 export type ResolvedModelFlag = {
   model: string;
@@ -969,25 +948,30 @@ export function mergeConfigOverrides(
   return merged;
 }
 
-/** Return a deep copy of `config` with secret-bearing fields masked, for
- *  human-facing output (`agency config show`). Masks every `apiKey` — the
- *  top-level `log.apiKey` string and each key under `client.apiKey` /
- *  `client.statelog.apiKey` — to `•••<last4>`. */
+/** Config paths that hold secrets. `agency config show` masks these. */
+export const SECRET_CONFIG_PATHS = [
+  "log.apiKey",
+  "client.apiKey.*",
+  "client.statelog.apiKey",
+  "mcpServers.*.clientSecret",
+  "mcpServers.*.headers.*",
+  "mcpServers.*.env.*",
+];
+
+const VISIBLE_SECRET_CHARS = 4;
+
+function maskSecret(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+  if (value.length <= VISIBLE_SECRET_CHARS) {
+    return "•••";
+  }
+  return `•••${value.slice(-VISIBLE_SECRET_CHARS)}`;
+}
+
+/** A copy of `config` with every SECRET_CONFIG_PATHS value masked to its last
+ *  four characters. For human-facing output such as `agency config show`. */
 export function redactConfigSecrets(config: AgencyConfig): AgencyConfig {
-  const mask = (value: string): string => (value.length <= 4 ? "•••" : `•••${value.slice(-4)}`);
-  const clone = JSON.parse(JSON.stringify(config)) as AgencyConfig;
-  const redactKeyMap = (obj: Record<string, unknown> | undefined): void => {
-    if (!obj) return;
-    for (const key of Object.keys(obj)) {
-      if (typeof obj[key] === "string") obj[key] = mask(obj[key] as string);
-    }
-  };
-  if (clone.log && typeof clone.log.apiKey === "string") {
-    clone.log.apiKey = mask(clone.log.apiKey);
-  }
-  redactKeyMap(clone.client?.apiKey as Record<string, unknown> | undefined);
-  if (clone.client?.statelog && typeof clone.client.statelog.apiKey === "string") {
-    clone.client.statelog.apiKey = mask(clone.client.statelog.apiKey);
-  }
-  return clone;
+  return mapConfigValues(config, SECRET_CONFIG_PATHS, maskSecret) as AgencyConfig;
 }

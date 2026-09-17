@@ -3,7 +3,7 @@ import * as path from "path";
 import { builtinModules, createRequire } from "module";
 import { fileURLToPath } from "url";
 import { build, type Plugin } from "esbuild";
-import { AgencyConfig } from "@/config.js";
+import { AgencyConfig } from "@/config/config.js";
 import { findPackageRoot } from "@/importPaths.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { compile } from "@/compiler/defaultSession.js";

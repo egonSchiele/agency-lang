@@ -4,7 +4,7 @@ import * as path from "path";
 
 import { z } from "zod";
 
-import { DEFAULT_MODEL, type AgencyConfig } from "@/config.js";
+import { DEFAULT_MODEL, type AgencyConfig } from "@/config/config.js";
 import { executeNodeAsync } from "@/cli/util.js";
 import type { Test } from "@/eval/runTypes.js";
 import { getAgentsDir } from "@/importPaths.js";

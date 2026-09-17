@@ -1,0 +1,30 @@
+import { effectiveLimits, LimitFlags, ToolLimits } from "../lib/toolLimits.agency"
+
+static const NO_FLAGS: LimitFlags = {
+  maxToolCallRounds: null,
+  maxToolResultChars: null
+}
+
+node defaultsWithNoPreset(): ToolLimits {
+  return effectiveLimits(NO_FLAGS, null, false)
+}
+
+node oneShotDefault(): ToolLimits {
+  return effectiveLimits(NO_FLAGS, null, true)
+}
+
+node presetFillsBoth(): ToolLimits {
+  return effectiveLimits(NO_FLAGS, { maxToolCallRounds: 30, maxToolResultChars: 0 }, false)
+}
+
+node flagBeatsPreset(): ToolLimits {
+  const flags: LimitFlags = {
+    maxToolCallRounds: 7,
+    maxToolResultChars: null
+  }
+  return effectiveLimits(flags, { maxToolCallRounds: 30, maxToolResultChars: 20000 }, false)
+}
+
+node presetWithoutLimitsUsesDefaults(): ToolLimits {
+  return effectiveLimits(NO_FLAGS, { provider: "anthropic" }, false)
+}

@@ -197,8 +197,9 @@ before writing anything. That effect is separate from the cloud
 
 `speakLocal` is its own function rather than a provider on `speak` because
 the arguments do not match: a local call takes `instructions` and no
-`speed` or `apiKey`, and its effect would otherwise depend on an argument,
-which a handler cannot match on.
+`apiKey`, its `speed` stretches finished audio rather than asking the model,
+and its effect would otherwise depend on an argument, which a handler cannot
+match on.
 
 ### What it shares with speak
 
@@ -206,7 +207,8 @@ which a handler cannot match on.
 the same way: resolve and authorize the output path, refuse to overwrite an
 existing file, run the work inside `meteredDispatch`, record usage, send the
 statelog event, enforce guards, check the MIME type, and publish the bytes.
-Each caller supplies only a `produce` function. Every failure message starts
+Each caller supplies a `produce` function, the MIME type it expects, and
+optionally a `finish` function that runs after accounting. Every failure message starts
 with the caller's name, so the local one reads `speakLocal failed: …`.
 
 ### Pieces
@@ -234,6 +236,56 @@ every PCM reply rather than reading what the server sent. Both served
 families are 24 kHz. A model at another rate would need smoltalk to pass
 the server's own rate through.
 
+### Formats and speed
+
+`speakLocal` writes `wav`, `mp3`, `m4a`, or `pcm`. `resolveLocalFormat` in
+`speech.ts` picks one: the `format` argument, then the output file's
+extension, then wav. An explicit format wins over the extension, as in the
+Kokoro package, so this call writes wav bytes to `a.mp3`:
+
+    speakLocal("Hi.", "qwen3-tts-mlx", outputFile: "a.mp3", format: "wav")
+
+Cloud `speak` refuses the same mismatch. The check lives in
+`_synthesizeSpeech`, not in `synthesizeToFile`, so that the two can differ.
+The `std::localSpeech` interrupt carries the chosen `format` next to
+`outputFile`, so a person approving the call sees both.
+
+Neither served family can change its own speed, and the server refuses any
+speed other than 1. So `speakLocal` always asks the server for pcm at speed 1,
+and changes the speed itself. It joins the pieces into a wav, and ffmpeg's
+`atempo` filter stretches it without changing the pitch. The range is 0.5 to
+2, the same as Kokoro's. Near either end the voice sounds slightly processed.
+
+ffmpeg runs for mp3, m4a, or a speed other than 1. It is not needed for wav
+or pcm at speed 1. `_validateSpeakLocalArgs` checks for ffmpeg before the
+interrupt, after the format and speed checks, so a bad format or speed gives
+the same error with or without ffmpeg installed.
+
+The ffmpeg run happens in `synthesizeToFile`'s `finish` step, which runs
+after the usage is recorded and the guards are checked. When `produce`
+fails, the call's usage is marked incomplete, because a failed request to a
+paid provider may still have cost money. An ffmpeg failure has nothing to do
+with cost, so it happens after that point. It still writes no file. The
+statelog `timeTaken` covers the model's time only.
+
+`lib/stdlib/ffmpeg.ts` was copied from `packages/kokoro/src/ffmpeg.ts`, with
+wav and pcm output and the speed filter added. The wav output drops ffmpeg's
+`LIST` chunk, so the file is the header plus the samples. The pcm output
+needs `-f s16le`, because ffmpeg cannot tell raw samples from a `.pcm`
+extension. Kokoro still uses its own copy. It declares `agency-lang >=0.19.3`
+as a peer dependency, and moving it to the core copy means raising that.
+
+`throwAbortReason` lives in `lib/stdlib/abortReason.ts`, so that
+`ffmpeg.ts` and `speech.ts` do not import each other. `speech.ts`
+re-exports it, because Kokoro imports it from
+`agency-lang/stdlib-lib/speech.js`.
+
+The tests that run the real ffmpeg are in `lib/stdlib/speech.ffmpeg.test.ts`,
+apart from `speech.test.ts`, which mocks `ffmpeg.js` for the whole file. They
+skip when ffmpeg is missing. The `speech-ffmpeg` job in
+`.github/workflows/test.yml` installs ffmpeg and sets
+`AGENCY_REQUIRE_FFMPEG=1`, which makes them fail instead of skip.
+
 ### The address and the model name
 
 `mlxBaseUrl()` (`lib/stdlib/mlxServerModels.ts`) resolves `client.baseUrl.mlx`,
@@ -256,7 +308,9 @@ A request the model cannot honour gets a 400 that names what it takes:
     "alloy" is not a voice of this model. Its voices are serena, vivian, ...
 
 The same goes for a `speed` other than 1, which no family supports, and a
-`response_format` other than `wav` or `pcm`. A model calling the speech
+`response_format` other than `wav` or `pcm`. `speakLocal` still offers
+other speeds and mp3 and m4a: it always asks the server for pcm at speed 1,
+and does the rest with ffmpeg (see "Formats and speed"). A model calling the speech
 function as a tool reads the message and can fix its next call. A silently
 ignored field would give it audio that does not match what it asked for.
 

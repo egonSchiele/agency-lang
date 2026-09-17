@@ -3,7 +3,7 @@
   "tests": [
     {
       "nodeName": "interruptCarriesPayload",
-      "description": "The std::localSpeech interrupt carries the model, voice, text length, and real output path",
+      "description": "The std::localSpeech interrupt carries the model, voice, text length, real output path, and format",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [{ "type": "exact" }]
@@ -20,6 +20,13 @@
       "description": "An empty model and an unsupported format fail before any interrupt is raised",
       "input": "",
       "expectedOutput": "\"|true|true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "badSpeedNeverPrompts",
+      "description": "A speed outside 0.5 to 2 fails before any interrupt is raised",
+      "input": "",
+      "expectedOutput": "\"|true\"",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

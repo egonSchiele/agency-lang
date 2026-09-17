@@ -14,6 +14,15 @@ import {
   LOCAL_PIECE_CHARS,
   publishSpeechOutput,
 } from "./speech.js";
+import { assertFfmpegAvailable, transcode } from "./ffmpeg.js";
+import type * as ffmpegModule from "./ffmpeg.js";
+
+// No ffmpeg here: speech.ffmpeg.test.ts runs the real one.
+vi.mock("./ffmpeg.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ffmpegModule>()),
+  assertFfmpegAvailable: vi.fn(),
+  transcode: vi.fn(),
+}));
 
 // Each test gets a unique disposable root; nothing touches $HOME, the repo, or a
 // shared /tmp path (see plan §12j).
@@ -500,6 +509,7 @@ describe("_speakLocal", () => {
         "Calm.",
         "wav",
         [root],
+        1,
       );
       expect(returned).toBe(path.join(realpathSync(root), "out.wav"));
       expect(calls).toHaveLength(1);
@@ -529,7 +539,7 @@ describe("_speakLocal", () => {
       return pcmOk([0, 0]);
     };
     await withClient({ speak }, async () => {
-      await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "pcm", []);
+      await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "pcm", [], 1);
       await _speakLocal(
         "Hi.",
         "",
@@ -538,6 +548,7 @@ describe("_speakLocal", () => {
         "",
         "pcm",
         [],
+        1,
       );
     });
     expect(configs.map((c) => c.model)).toEqual([
@@ -557,7 +568,7 @@ describe("_speakLocal", () => {
       (_, i) => `Sentence number ${i} says something short.`,
     ).join(" ");
     await withClient({ speak }, async () => {
-      await _speakLocal(text, out, "qwen3-tts-mlx", "", "", "pcm", [root]);
+      await _speakLocal(text, out, "qwen3-tts-mlx", "", "", "pcm", [root], 1);
     });
     const bytes = [...new Uint8Array(await readFile(out))];
     expect(bytes.length).toBeGreaterThan(1);
@@ -575,7 +586,7 @@ describe("_speakLocal", () => {
       (_, i) => `Sentence number ${i} says something short.`,
     ).join(" ");
     await withClient({ speak }, async ({ speechSynthesis, meter }) => {
-      await _speakLocal(text, "", "qwen3-tts-mlx", "ryan", "Calm.", "wav", []);
+      await _speakLocal(text, "", "qwen3-tts-mlx", "ryan", "Calm.", "wav", [], 1);
       expect(calls.length).toBeGreaterThan(3);
       expect(calls.every((c) => c.text.length <= LOCAL_PIECE_CHARS)).toBe(true);
       expect(
@@ -612,7 +623,7 @@ describe("_speakLocal", () => {
         (_, i) => `Sentence number ${i} says something short.`,
       ).join(" ");
       await expect(
-        _speakLocal(text, "", "qwen3-tts-mlx", "", "", "wav", []),
+        _speakLocal(text, "", "qwen3-tts-mlx", "", "", "wav", [], 1),
       ).rejects.toBeInstanceOf(AgencyCancelledError);
       expect(calls).toBe(1);
     });
@@ -628,7 +639,7 @@ describe("_speakLocal", () => {
         return { success: false, error: "Connection error." };
       };
       await withClient({ speak }, async () => {
-        await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [])).rejects.toThrow(
+        await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [], 1)).rejects.toThrow(
           "speakLocal failed: no MLX server answered at http://127.0.0.1:9100/v1. Start one with:\n  agency local serve --speech qwen3-tts-mlx",
         );
       });
@@ -647,9 +658,9 @@ describe("_speakLocal", () => {
     await writeFile(out, Buffer.from([0]));
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async () => {
-      await expect(_speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root])).rejects.toThrow(
-        /already exists/,
-      );
+      await expect(
+        _speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root], 1),
+      ).rejects.toThrow(/already exists/);
       expect(speak).not.toHaveBeenCalled();
     });
   });
@@ -659,36 +670,162 @@ describe("_speakLocal", () => {
       { speak: async () => ({ success: false, error: '"alloy" is not a voice of this model.' }) },
       async () => {
         await expect(
-          _speakLocal("Hi.", "", "qwen3-tts-mlx", "alloy", "", "wav", []),
+          _speakLocal("Hi.", "", "qwen3-tts-mlx", "alloy", "", "wav", [], 1),
         ).rejects.toThrow(/not a voice of this model/);
       },
     );
     await withClient({ speak: async () => speakOk({ mimeType: "audio/wav" }) }, async () => {
-      await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [])).rejects.toThrow(
+      await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [], 1)).rejects.toThrow(
         /returned "audio\/wav"/,
       );
     });
   });
 
-  it("_validateSpeakLocalArgs refuses empty text, an empty or unknown model, and a format other than wav or pcm", () => {
-    expect(() => _validateSpeakLocalArgs("", "qwen3-tts-mlx", "wav")).toThrow(
+  it("_validateSpeakLocalArgs refuses empty text, an empty or unknown model, and an unknown format", () => {
+    expect(() => _validateSpeakLocalArgs("", "qwen3-tts-mlx", "wav", "", 1)).toThrow(
       "speakLocal text cannot be empty",
     );
     // Whitespace alone would otherwise prompt, then publish an empty file.
-    expect(() => _validateSpeakLocalArgs("   \n ", "qwen3-tts-mlx", "wav")).toThrow(
+    expect(() => _validateSpeakLocalArgs("   \n ", "qwen3-tts-mlx", "wav", "", 1)).toThrow(
       "speakLocal text cannot be empty",
     );
     // A GGUF model is refused before the interrupt, not after approval.
-    expect(() => _validateSpeakLocalArgs("Hi.", "smollm2-135m", "wav")).toThrow(/is a GGUF model/);
-    expect(() => _validateSpeakLocalArgs("Hi.", "", "wav")).toThrow(
+    expect(() => _validateSpeakLocalArgs("Hi.", "smollm2-135m", "wav", "", 1)).toThrow(
+      /is a GGUF model/,
+    );
+    expect(() => _validateSpeakLocalArgs("Hi.", "", "wav", "", 1)).toThrow(
       "speakLocal model cannot be empty",
     );
-    expect(() => _validateSpeakLocalArgs("Hi.", "no-such-model", "wav")).toThrow(
+    expect(() => _validateSpeakLocalArgs("Hi.", "no-such-model", "wav", "", 1)).toThrow(
       /Unknown local model/,
     );
-    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "mp3")).toThrow(
-      'speakLocal: unsupported format "mp3" (supported: wav, pcm).',
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "ogg", "", 1)).toThrow(
+      'speakLocal: unsupported format "ogg" (supported: wav, mp3, m4a, pcm).',
     );
-    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "WAV")).not.toThrow();
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "WAV", "", 1)).not.toThrow();
+  });
+});
+
+describe("_speakLocal formats and speed", () => {
+  const ENCODED = [7, 7, 7];
+  const speak: SpeakImpl = async () => pcmOk([1, 0, 2, 0]);
+
+  beforeEach(() => {
+    vi.mocked(assertFfmpegAvailable).mockReset();
+    vi.mocked(transcode).mockReset();
+    vi.mocked(transcode).mockResolvedValue(new Uint8Array(ENCODED));
+  });
+
+  function isWav(bytes: Uint8Array): boolean {
+    return String.fromCharCode(...bytes.slice(0, 4)) === "RIFF";
+  }
+
+  it("takes the format from the extension, and transcodes the joined wav to mp3", async () => {
+    const out = path.join(root, "out.mp3");
+    await withClient({ speak }, async () => {
+      await _speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1);
+    });
+    expect(transcode).toHaveBeenCalledTimes(1);
+    const [wav, format, speed] = vi.mocked(transcode).mock.calls[0];
+    expect(isWav(wav)).toBe(true);
+    expect([...wav.slice(44)]).toEqual([1, 0, 2, 0]);
+    expect(format).toBe("mp3");
+    expect(speed).toBe(1);
+    expect([...new Uint8Array(await readFile(out))]).toEqual(ENCODED);
+  });
+
+  it("lets an explicit format win over the extension", async () => {
+    const out = path.join(root, "out.mp3");
+    await withClient({ speak }, async () => {
+      await _speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root], 1);
+    });
+    expect(transcode).not.toHaveBeenCalled();
+    expect(isWav(new Uint8Array(await readFile(out)))).toBe(true);
+  });
+
+  it("writes wav with no format and no extension, and names a temp file by its format", async () => {
+    let wavPath = "";
+    let m4aPath = "";
+    await withClient({ speak }, async () => {
+      wavPath = await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "", [], 1);
+      m4aPath = await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "m4a", [], 1);
+    });
+    try {
+      expect(path.extname(wavPath)).toBe(".wav");
+      expect(isWav(new Uint8Array(await readFile(wavPath)))).toBe(true);
+      expect(path.extname(m4aPath)).toBe(".m4a");
+      expect(vi.mocked(transcode).mock.calls.map((c) => c[1])).toEqual(["m4a"]);
+    } finally {
+      await rm(wavPath, { force: true });
+      await rm(m4aPath, { force: true });
+    }
+  });
+
+  it("stretches wav and pcm through ffmpeg when the speed is not 1, starting from a wav", async () => {
+    await withClient({ speak }, async () => {
+      await _speakLocal("Hi.", path.join(root, "a.wav"), "qwen3-tts-mlx", "", "", "", [root], 1.5);
+      await _speakLocal("Hi.", path.join(root, "b.pcm"), "qwen3-tts-mlx", "", "", "", [root], 0.5);
+    });
+    const calls = vi.mocked(transcode).mock.calls;
+    expect(calls.map((c) => [c[1], c[2]])).toEqual([
+      ["wav", 1.5],
+      ["pcm", 0.5],
+    ]);
+    expect(calls.every((c) => isWav(c[0]))).toBe(true);
+    expect([...new Uint8Array(await readFile(path.join(root, "b.pcm")))]).toEqual(ENCODED);
+  });
+
+  it("a failed transcode writes no file and leaves the usage recorded and complete", async () => {
+    vi.mocked(transcode).mockRejectedValue(new Error("ffmpeg exited with code 1: no codec"));
+    const out = path.join(root, "out.mp3");
+    await withClient({ speak }, async ({ meter, speechSynthesis }) => {
+      await expect(_speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1)).rejects.toThrow(
+        "no codec",
+      );
+      const { usage } = meter.snapshot();
+      expect(usage.entries).toHaveLength(1);
+      expect(usage.pricingComplete).toBe(true);
+      expect(speechSynthesis).toHaveBeenCalledTimes(1);
+    });
+    await expect(stat(out)).rejects.toThrow();
+  });
+
+  it("_validateSpeakLocalArgs accepts a speed from 0.5 to 2 and refuses anything else", () => {
+    for (const speed of [0.5, 1, 2]) {
+      expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "", speed)).not.toThrow();
+    }
+    for (const speed of [0.4, 2.1, Number.NaN]) {
+      expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "", speed)).toThrow(
+        /speed must be a number from 0.5 to 2/,
+      );
+    }
+  });
+
+  it("_validateSpeakLocalArgs returns the format that will be written", () => {
+    expect(_validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "", "a.MP3", 1)).toBe("mp3");
+    expect(_validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "a.mp3", 1)).toBe("wav");
+    expect(_validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "", "", 1)).toBe("wav");
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "", "a.ogg", 1)).toThrow(
+      /unsupported format "ogg"/,
+    );
+  });
+
+  it("asks for ffmpeg only for mp3, m4a, or a speed other than 1", () => {
+    vi.mocked(assertFfmpegAvailable).mockImplementation(() => {
+      throw new Error("ffmpeg is needed");
+    });
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "mp3", "", 1)).toThrow(
+      "ffmpeg is needed",
+    );
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "m4a", "", 1)).toThrow(
+      "ffmpeg is needed",
+    );
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "", 1.5)).toThrow(
+      "ffmpeg is needed",
+    );
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "wav", "", 1)).not.toThrow();
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "pcm", "", 1)).not.toThrow();
+    // A bad speed is reported as such even without ffmpeg.
+    expect(() => _validateSpeakLocalArgs("Hi.", "qwen3-tts-mlx", "mp3", "", 3)).toThrow(/speed/);
   });
 });

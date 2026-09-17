@@ -58,11 +58,13 @@ effect std::synthesizeSpeech {
 // Local text-to-speech with an MLX model on this machine. A DISTINCT effect
 // from cloud `std::synthesizeSpeech`: approving one never approves the other.
 // `outputFile` is the real path that will be written, or "" for a temp file.
+// `format` is the format that will be written: wav, mp3, m4a, or pcm.
 effect std::localSpeech {
   model: string,
   voice: string,
   textLength: number,
   outputFile: string,
+  format: string,
 }
 
 /** Ctrl-C, a race loss, or a time-guard abort stops in-progress speech
@@ -250,15 +252,21 @@ export def speak(
 emotion a local model can perform that a cloud voice cannot. Long text is
 sent to the server in pieces, so Ctrl-C stops within one piece and writes
 no file. The usage record costs nothing, and statelog gets one event per
-call however many pieces the text becomes. */
+call however many pieces the text becomes.
+
+Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
+`speakLocal` refuses such a call before raising any interrupt when
+`ffmpeg` is missing. The local models cannot change their own speed, so
+`speed` stretches the audio after it is generated, keeping its pitch. */
 export def speakLocal(
   text: string,
   model: string,
   voice: string = "",
   instructions: string = "",
   outputFile: string = "",
-  format: string = "wav",
+  format: string = "",
   allowedPaths: string[] = [],
+  speed: number = 1,
 ): string raises <std::localSpeech> {
   """
   Speak text into an audio file with a local speech model, and return the path of that file.
@@ -268,17 +276,19 @@ export def speakLocal(
   @param voice - A voice of that model. Leave empty for the model's default. VoiceDesign models take no voice.
   @param instructions - How the speech should sound, such as "Alarmed and urgent". Qwen3-TTS models only; Orpheus takes tags in the text instead.
   @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
-  @param format - "wav" (default) or "pcm"
+  @param format - "wav", "mp3", "m4a", or "pcm". Leave empty to use the output file's extension, or wav when there is none. A format you give wins over the extension.
   @param allowedPaths - Directories that outputFile must be inside
+  @param speed - Speaking speed, from 0.5 to 2 (both included). Anything other than 1 needs ffmpeg.
   """
-  _validateSpeakLocalArgs(text, model, format)
+  const audioFormat = _validateSpeakLocalArgs(text, model, format, outputFile, speed)
   const out = realOutput(outputFile)
   return interrupt std::localSpeech("Write speech audio with a local model?", {
     model: model,
     voice: voice,
     textLength: text.length,
     outputFile: out,
+    format: audioFormat,
   })
 
-  return _speakLocal(text, out, model, voice, instructions, format, allowedPaths)
+  return _speakLocal(text, out, model, voice, instructions, audioFormat, allowedPaths, speed)
 }

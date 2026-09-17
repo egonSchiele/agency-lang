@@ -19,7 +19,6 @@ export function projectTarget(dir: string): ConfigTarget {
   return { kind: "project", dir };
 }
 
-/** The -c file when the user passed one, else `fallback`. */
 export function configTarget(cliConfig: string | undefined, fallback: ConfigTarget): ConfigTarget {
   return cliConfig === undefined ? fallback : fileTarget(cliConfig);
 }
@@ -32,7 +31,6 @@ export function targetPaths(target: ConfigTarget): string[] {
   return [CONFIG_FILE, LOCAL_CONFIG_FILE].map((name) => path.join(target.dir, name));
 }
 
-/** The files the target reads that exist. */
 export function configFiles(target: ConfigTarget): string[] {
   return targetPaths(target).filter((file) => fs.existsSync(file));
 }

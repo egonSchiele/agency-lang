@@ -141,7 +141,6 @@ function readAliasConfig(target: ConfigTarget): AgencyConfig {
   return config;
 }
 
-/** The files a target read, for error messages. */
 function describeTarget(target: ConfigTarget): string {
   return configFiles(target).join(" or ");
 }

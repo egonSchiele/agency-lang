@@ -25,6 +25,7 @@ import {
   defaultAliasTarget,
   type ModelNameEntry,
   type RefreshResult,
+  type UnaliasResult,
 } from "../stdlib/localModels.js";
 import { configFiles, writeTarget, type ConfigTarget } from "../configTarget.js";
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
@@ -58,19 +59,34 @@ export function aliasAdd(
 }
 
 export function aliasRemove(name: string, target: ConfigTarget = defaultAliasTarget()): string {
-  const { file: inspected, removed } = _unaliasModel(name, target);
-  if (removed) {
-    console.log(`Removed alias "${name}" from ${inspected}`);
-  } else {
-    console.log(`Alias "${name}" not present in ${inspected}; nothing changed`);
-  }
-  return inspected;
+  const result = _unaliasModel(name, target);
+  reportAliasRemoval(name, target, result);
+  return result.file;
 }
 
 /** The files besides the write target that `target` reads, such as
  *  agency.local.json. Commands never edit these. */
 function readOnlyFiles(target: ConfigTarget): string[] {
   return configFiles(target).filter((file) => file !== writeTarget(target));
+}
+
+/** Say what removing an alias did. The alias may still be set in a file
+ *  agency does not edit, such as agency.local.json. */
+function reportAliasRemoval(name: string, target: ConfigTarget, result: UnaliasResult): void {
+  const stillSet = Object.hasOwn(readModelAliases(target), name);
+  const removeThere = `Remove it there; agency does not edit that file.`;
+  const elsewhere = readOnlyFiles(target).join(" or ");
+  if (result.removed && stillSet) {
+    console.log(
+      `Removed alias "${name}" from ${result.file}, but it is still set in ${elsewhere}. ${removeThere}`,
+    );
+  } else if (result.removed) {
+    console.log(`Removed alias "${name}" from ${result.file}.`);
+  } else if (stillSet) {
+    console.log(`Alias "${name}" is set in ${elsewhere}. ${removeThere}`);
+  } else {
+    console.log(`Alias "${name}" not present in ${result.file}; nothing changed.`);
+  }
 }
 
 /** Deliberately ungated: browsing the catalog needs no provider package
@@ -281,15 +297,7 @@ export function runRemove(
   const where = files === null ? null : `${files.path} (${formatGB(files.sizeBytes)})`;
 
   if (isAlias) {
-    const { file, removed } = _unaliasModel(name, target);
-    if (removed) {
-      console.log(`Removed alias "${name}" from ${file}.`);
-    } else {
-      const elsewhere = readOnlyFiles(target).join(" or ");
-      console.log(
-        `Alias "${name}" is set in ${elsewhere}. Remove it there; agency does not edit that file.`,
-      );
-    }
+    reportAliasRemoval(name, target, _unaliasModel(name, target));
   } else if (isCurated && !opts.force) {
     console.log(`"${name}" is a built-in catalog entry, so there is no alias to remove.`);
   }

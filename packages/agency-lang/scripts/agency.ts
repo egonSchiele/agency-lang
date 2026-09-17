@@ -258,7 +258,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Path to a config file. Loads only this file; agency.local.json is skipped",
     );
 
-  // The -c file, or the project in the current directory.
   function getConfigTarget(): ConfigTarget {
     return configTarget(program.opts().config, projectTarget(process.cwd()));
   }
@@ -277,7 +276,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
     return config;
   }
 
-  // Config plus the file a remote binding would write back to.
   function getConfigContext(): RemoteCommandContext {
     return { config: getConfig(), configPath: writeTarget(getConfigTarget()) };
   }

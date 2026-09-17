@@ -36,7 +36,6 @@ export function invalidateWorkspace(root: string): void {
   delete workspaces[root];
 }
 
-/** The directory holding `fsPath` when it is a config file, else null. */
 export function configFileDir(fsPath: string): string | null {
   return CONFIG_FILE_NAMES.includes(path.basename(fsPath)) ? path.dirname(fsPath) : null;
 }

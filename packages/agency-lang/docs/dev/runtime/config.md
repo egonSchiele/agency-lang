@@ -60,7 +60,7 @@ Two tables are lists of these paths. `CONFIG_MERGE_RULES` (`lib/configMerge.ts`)
 3. Any other value in the override replaces the base value.
 4. A `"__proto__"` key is dropped from both sides. Every other key name is copied.
 
-A value at a `CONFIG_MERGE_RULES` path replaces the base value whole. With the rule `mcpServers.*`, a local server named `search` replaces the base `search` entry, and a base server the local file does not name is kept. Without the rule, a local stdio server would keep the base entry's `"type": "http"`.
+A value at a `CONFIG_MERGE_RULES` path replaces the base value whole. With the rule `mcpServers.*`, a local server named `search` replaces the base `search` entry, and a base server the local file does not name is kept.
 
 To add a rule, add a row to `CONFIG_MERGE_RULES` and a row to the table in `docs/site/guide/agency-config-file.md`. A test in `lib/configMerge.test.ts` checks that the guide lists every rule.
 

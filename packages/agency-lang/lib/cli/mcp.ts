@@ -2,7 +2,6 @@ import * as path from "path";
 import { isFailure } from "@/runtime/index.js";
 import { agentHomeDir } from "@/runtime/agentHome.js";
 import { projectTarget, readConfig, writeTarget, type ConfigTarget } from "@/configTarget.js";
-import type { McpServers } from "@/mcpServers.js";
 import {
   _addMcpServer,
   _removeMcpServer,
@@ -23,19 +22,9 @@ const scopeFile = (scope: McpScope, target: ConfigTarget): string =>
   scope.global ? globalFile() : writeTarget(target);
 const scopeName = (scope: McpScope): string => (scope.global ? "global" : "project");
 
-/** An error message when --global and -c both name a file. */
 function scopeConflict(scope: McpScope, target: ConfigTarget): string | null {
   const bothNamed = scope.global === true && target.kind === "file";
   return bothNamed ? "--global and -c name different config files. Pass only one of them." : null;
-}
-
-/** The project's servers, as Agency will load them. */
-function projectServers(target: ConfigTarget): McpServers {
-  const { config, error } = readConfig(target);
-  if (error !== undefined) {
-    console.error(error);
-  }
-  return config.mcpServers ?? {};
 }
 
 function transportSummary(config: unknown): string {
@@ -102,7 +91,12 @@ export async function mcpRemove(
 }
 
 export function mcpList(target: ConfigTarget = currentProject()): number {
-  const project: RawMcpServers = projectServers(target);
+  const { config, error } = readConfig(target);
+  if (error !== undefined) {
+    console.error(error);
+    return 1;
+  }
+  const project: RawMcpServers = config.mcpServers ?? {};
   const global = _readMcpServersFromFile(globalFile());
   const names = Array.from(new Set([...Object.keys(global), ...Object.keys(project)])).sort();
   if (names.length === 0) {

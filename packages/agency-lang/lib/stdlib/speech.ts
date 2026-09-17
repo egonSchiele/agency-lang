@@ -32,7 +32,14 @@ import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
 import { _resolveModel, _mlxServedName } from "./localModels.js";
 import { mlxBaseUrl } from "./mlxServerModels.js";
 import { sentencePieces } from "./speechPieces.js";
+import { throwAbortReason } from "./abortReason.js";
 import { wavFile, concatBytes } from "./wavFile.js";
+import {
+  TRANSCODE_FORMATS,
+  assertFfmpegAvailable,
+  transcode,
+  type TranscodeFormat,
+} from "./ffmpeg.js";
 import type { Result } from "smoltalk";
 import type {
   AudioInput,
@@ -43,6 +50,9 @@ import type {
 } from "../runtime/llmClient.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
+
+// Re-exported: packages/kokoro imports it from agency-lang/stdlib-lib/speech.js.
+export { throwAbortReason };
 
 /** TTS speed bounds (OpenAI). Validated before the interrupt in speech.agency
  *  and again defensively at the runtime boundary for direct/deterministic callers. */
@@ -254,17 +264,6 @@ export async function _record(
 // Both helpers THROW on failure (the std::speech / std::fs idiom) — a smoltalk
 // failure Result becomes a thrown Error with its already-redacted message.
 
-/** Throw the branch signal's abort reason UNCHANGED (identity preserved — a
- *  string/object/null reason can matter to cancellation handling). Only
- *  synthesize an error when the reason is genuinely `undefined` (an explicit
- *  `null` is a valid reason and is preserved). */
-export function throwAbortReason(signal: AbortSignal): never {
-  if (signal.reason !== undefined) {
-    throw signal.reason;
-  }
-  throw new AgencyCancelledError("operation cancelled");
-}
-
 /** Strip cost to its total for statelog (never the raw provider cost object). */
 function projectStatelogCost(cost: { totalCost?: number } | undefined) {
   if (!cost) return undefined;
@@ -452,6 +451,14 @@ export async function _synthesizeSpeech(
   // direct/deterministic caller that bypassed speech.agency's pre-interrupt check.
   const canonicalFormat = normalizeSpeakFormat(format);
   validateSpeakArgs(canonicalFormat, speed);
+  // speakLocal lets an explicit format win over the extension; cloud speak
+  // refuses the mismatch.
+  const explicitExt = path.extname(outputFile).replace(/^\./, "").toLowerCase();
+  if (explicitExt && explicitExt !== canonicalFormat) {
+    throw new Error(
+      `speak: output file extension ".${explicitExt}" does not match format "${canonicalFormat}".`,
+    );
+  }
 
   const client = speakClient();
   const config: SpeakConfig = {
@@ -468,6 +475,7 @@ export async function _synthesizeSpeech(
     text,
     outputFile,
     format: canonicalFormat,
+    expectedMime: SPEECH_FORMAT_TO_MIME[canonicalFormat],
     allowedPaths,
     model,
     voice,
@@ -494,12 +502,18 @@ type Synthesis = {
   name: string;
   text: string;
   outputFile: string;
-  format: SpeakFormat;
+  /** The file extension of a temp output file, and what the trace names. */
+  format: string;
+  /** The MIME type the published audio must have. */
+  expectedMime: string;
   allowedPaths: string[];
   /** What the usage record and the trace name. */
   model: string;
   voice: string;
   produce: (signal: AbortSignal) => Promise<Result<SpeechResult>>;
+  /** Runs after the usage is recorded, so a failure here does not mark the
+   *  usage incomplete. speakLocal transcodes here. */
+  finish?: (speech: SpeechResult, signal: AbortSignal) => Promise<SpeechResult>;
 };
 
 /** The file, accounting and publish steps both speak paths share. Resolves +
@@ -515,12 +529,6 @@ async function synthesizeToFile(s: Synthesis): Promise<string> {
   let finalPath: string;
   if (s.outputFile) {
     finalPath = await outputPath(s.outputFile, s.allowedPaths);
-    const explicitExt = path.extname(finalPath).replace(/^\./, "").toLowerCase();
-    if (explicitExt && explicitExt !== s.format) {
-      throw new Error(
-        `${s.name}: output file extension ".${explicitExt}" does not match format "${s.format}".`,
-      );
-    }
   } else {
     // The real spelling of the temp dir, so the no-follow check below sees
     // no link in it (/var is a link on macOS).
@@ -539,7 +547,7 @@ async function synthesizeToFile(s: Synthesis): Promise<string> {
     recordUnresolvedAttempt(ctx, stack, "speech");
     throw new Error(`${s.name} failed: ${result.error}`);
   }
-  const speech = result.value;
+  const produced = result.value;
 
   // Account + trace the paid work BEFORE guards, and BEFORE any file mechanics,
   // so a later write failure or MIME mismatch never un-bills real spend.
@@ -547,7 +555,7 @@ async function synthesizeToFile(s: Synthesis): Promise<string> {
     type: "provider",
     kind: "speech",
     configuredModel: s.model,
-    cost: speech.cost,
+    cost: produced.cost,
     tokens: undefined, // TTS is per-character; no token usage
   });
   ctx.statelogClient.speechSynthesis({
@@ -556,15 +564,15 @@ async function synthesizeToFile(s: Synthesis): Promise<string> {
     voice: s.voice,
     format: s.format,
     timeTaken,
-    cost: projectStatelogCost(speech.cost),
+    cost: projectStatelogCost(produced.cost),
   });
   stack.enforceGuards(); // LAST accounting gate — a trip means no file is written
 
-  const expectedMime = SPEECH_FORMAT_TO_MIME[s.format];
-  if (speech.mimeType !== expectedMime) {
+  const speech = s.finish ? await s.finish(produced, signal) : produced;
+  if (speech.mimeType !== s.expectedMime) {
     // Usage is already accounted; we simply do not publish a mismatched artifact.
     throw new Error(
-      `${s.name}: provider returned "${speech.mimeType}" but format "${s.format}" expects "${expectedMime}".`,
+      `${s.name}: provider returned "${speech.mimeType}" but format "${s.format}" expects "${s.expectedMime}".`,
     );
   }
 
@@ -572,10 +580,22 @@ async function synthesizeToFile(s: Synthesis): Promise<string> {
   return finalPath;
 }
 
-/** Formats a local model can write. WAV is the server's PCM with a header
- *  added here; anything else would need ffmpeg, which core does not have. */
-const LOCAL_SPEECH_FORMATS = ["wav", "pcm"] as const;
-type LocalSpeechFormat = (typeof LOCAL_SPEECH_FORMATS)[number];
+/** Formats a local model can write. wav and pcm are the server's PCM, with
+ *  or without a header added here. mp3 and m4a are encoded by ffmpeg. */
+const LOCAL_SPEECH_FORMATS = TRANSCODE_FORMATS;
+type LocalSpeechFormat = TranscodeFormat;
+
+const LOCAL_SPEECH_MIME: Record<LocalSpeechFormat, string> = {
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  pcm: "application/octet-stream",
+};
+
+/** The range ffmpeg's atempo filter accepts. Checked before the interrupt,
+ *  so a bad speed fails before the model generates anything. */
+const MIN_LOCAL_SPEED = 0.5;
+const MAX_LOCAL_SPEED = 100;
 
 /** The most text one request to the local server carries. A cancelled call
  *  holds the server for at most one piece. */
@@ -586,9 +606,32 @@ export const LOCAL_PIECE_CHARS = 500;
  *  families are 24 kHz. */
 const DEFAULT_SAMPLE_RATE = 24000;
 
+/** The format speakLocal writes: the explicit `format` when given,
+ *  otherwise the output file's extension, otherwise wav. Returns whatever
+ *  it found, so the caller can name an unknown format in its error. */
+function resolveLocalFormat(format: string, outputFile: string): string {
+  if (format !== "") {
+    return format;
+  }
+  const extension = path.extname(outputFile).replace(/^\./, "");
+  return extension === "" ? "wav" : extension;
+}
+
+/** wav and pcm at speed 1 are written without ffmpeg. */
+function needsFfmpeg(format: LocalSpeechFormat, speed: number): boolean {
+  return format === "mp3" || format === "m4a" || speed !== 1;
+}
+
 /** Pre-interrupt validation hook for `std::speech.speakLocal` — see
- *  speech.agency. An unknown model or format never prompts. */
-export function _validateSpeakLocalArgs(text: string, model: string, format: string): void {
+ *  speech.agency. An unknown model, format, or speed never prompts.
+ *  Returns the format that will be written. */
+export function _validateSpeakLocalArgs(
+  text: string,
+  model: string,
+  format: string,
+  outputFile: string,
+  speed: number,
+): LocalSpeechFormat {
   // Whitespace alone would pass the server's own check and publish an
   // empty file, so it is refused here, before anything prompts.
   if (text.trim() === "") {
@@ -603,7 +646,22 @@ export function _validateSpeakLocalArgs(text: string, model: string, format: str
       `speakLocal: "${model}" is a GGUF model. Local speech models are MLX models served by agency local serve --speech.`,
     );
   }
-  normalizeFormat(format, LOCAL_SPEECH_FORMATS, "speakLocal");
+  // The ffmpeg check comes last, so a bad format or speed gives the same
+  // error whether or not ffmpeg is installed.
+  const resolvedFormat = normalizeFormat(
+    resolveLocalFormat(format, outputFile),
+    LOCAL_SPEECH_FORMATS,
+    "speakLocal",
+  );
+  if (!Number.isFinite(speed) || speed < MIN_LOCAL_SPEED || speed > MAX_LOCAL_SPEED) {
+    throw new Error(
+      `speakLocal: speed must be a number from ${MIN_LOCAL_SPEED} to ${MAX_LOCAL_SPEED} (got ${speed}).`,
+    );
+  }
+  if (needsFfmpeg(resolvedFormat, speed)) {
+    assertFfmpegAvailable();
+  }
+  return resolvedFormat;
 }
 
 /** True for the failure smoltalk returns when nothing listens at the base
@@ -645,15 +703,11 @@ async function speakPieces(
 
 /** One SpeechResult from the pieces: a WAV with one header, or the raw PCM
  *  joined. The cost is zero; the server is on this machine. */
-function assemble(
-  chunks: Uint8Array[],
-  sampleRate: number,
-  format: LocalSpeechFormat,
-): SpeechResult {
+function assemble(chunks: Uint8Array[], sampleRate: number, format: "wav" | "pcm"): SpeechResult {
   const audio = format === "wav" ? wavFile(chunks, sampleRate) : concatBytes(chunks);
   return {
     audio,
-    mimeType: SPEECH_FORMAT_TO_MIME[format],
+    mimeType: LOCAL_SPEECH_MIME[format],
     cost: { inputCost: 0, outputCost: 0, totalCost: 0, currency: "USD" },
   };
 }
@@ -671,11 +725,12 @@ export async function _speakLocal(
   instructions: string,
   format: string,
   allowedPaths: string[],
+  speed: number,
 ): Promise<string> {
   // Again at the runtime boundary, for a direct or deterministic caller
   // that bypassed speech.agency's pre-interrupt check.
-  _validateSpeakLocalArgs(text, model, format);
-  const localFormat = normalizeFormat(format, LOCAL_SPEECH_FORMATS, "speakLocal");
+  const localFormat = _validateSpeakLocalArgs(text, model, format, outputFile, speed);
+  const transcoded = needsFfmpeg(localFormat, speed);
   const resolved = _resolveModel(model);
   const client = speakClient();
   const baseUrl = mlxBaseUrl();
@@ -696,6 +751,7 @@ export async function _speakLocal(
     text,
     outputFile,
     format: localFormat,
+    expectedMime: LOCAL_SPEECH_MIME[localFormat],
     allowedPaths,
     model,
     voice,
@@ -712,9 +768,21 @@ export async function _speakLocal(
       }
       return {
         success: true,
-        value: assemble(spoken.value.chunks, spoken.value.sampleRate, localFormat),
+        // ffmpeg reads a wav, so a transcoded call assembles one first.
+        value: assemble(
+          spoken.value.chunks,
+          spoken.value.sampleRate,
+          localFormat === "pcm" && !transcoded ? "pcm" : "wav",
+        ),
       };
     },
+    finish: transcoded
+      ? async (wav, signal) => ({
+          ...wav,
+          audio: await transcode(wav.audio, localFormat, speed, signal),
+          mimeType: LOCAL_SPEECH_MIME[localFormat],
+        })
+      : undefined,
   });
 }
 

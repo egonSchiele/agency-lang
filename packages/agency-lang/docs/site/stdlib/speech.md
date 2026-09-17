@@ -71,11 +71,12 @@ effect std::localSpeech {
   model: string;
   voice: string;
   textLength: number;
-  outputFile: string
+  outputFile: string;
+  format: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L62))
 
 ## Functions
 
@@ -113,7 +114,7 @@ Speak text aloud locally using the operating system's text-to-speech
 
 **Throws:** `std::say`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L86))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L88))
 
 ### record
 
@@ -152,7 +153,7 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L123))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L125))
 
 ### transcribe
 
@@ -201,7 +202,7 @@ time-guard abort. Cost, spend guards, and statelog apply.
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L141))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L143))
 
 ### speak
 
@@ -255,7 +256,7 @@ and statelog apply.
 
 **Throws:** `std::synthesizeSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L194))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L196))
 
 ### speakLocal
 
@@ -266,8 +267,9 @@ speakLocal(
   voice: string = "",
   instructions: string = "",
   outputFile: string = "",
-  format: string = "wav",
+  format: string = "",
   allowedPaths: string[] = [],
+  speed: number = 1,
 ): string raises <std::localSpeech>
 ```
 
@@ -278,14 +280,20 @@ Speak text into an audio file with a local speech model, and return the path of 
   @param voice - A voice of that model. Leave empty for the model's default. VoiceDesign models take no voice.
   @param instructions - How the speech should sound, such as "Alarmed and urgent". Qwen3-TTS models only; Orpheus takes tags in the text instead.
   @param outputFile - Where to write the file. Leave empty for a new temp file. An existing file is never overwritten.
-  @param format - "wav" (default) or "pcm"
+  @param format - "wav", "mp3", "m4a", or "pcm". Leave empty to use the output file's extension, or wav when there is none. A format you give wins over the extension.
   @param allowedPaths - Directories that outputFile must be inside
+  @param speed - Speaking speed, from 0.5 to 100 (both included). Anything other than 1 needs ffmpeg.
 
 Use this for speech that must not leave the machine, and for the
 emotion a local model can perform that a cloud voice cannot. Long text is
 sent to the server in pieces, so Ctrl-C stops within one piece and writes
 no file. The usage record costs nothing, and statelog gets one event per
 call however many pieces the text becomes.
+
+Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
+`speakLocal` refuses such a call before raising any interrupt when
+`ffmpeg` is missing. The local models cannot change their own speed, so
+`speed` stretches the audio after it is generated, keeping its pitch.
 
 **Parameters:**
 
@@ -296,11 +304,12 @@ call however many pieces the text becomes.
 | voice | `string` | "" |
 | instructions | `string` | "" |
 | outputFile | `string` | "" |
-| format | `string` | "wav" |
+| format | `string` | "" |
 | allowedPaths | `string[]` | [] |
+| speed | `number` | 1 |
 
 **Returns:** `string`
 
 **Throws:** `std::localSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L254))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L261))

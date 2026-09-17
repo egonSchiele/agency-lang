@@ -4,18 +4,21 @@ import { speakLocal } from "std::speech"
 // than with isFailure, which narrows a Result.
 
 // The interrupt carries what a handler needs to decide: the model, the
-// voice, how much text, and the real output path. The handler rejects, so
-// nothing is sent, and the rejection text proves what the payload held.
+// voice, how much text, the real output path, and the format. The handler
+// rejects, so nothing is sent, and the rejection text proves what the
+// payload held. The format comes from the extension; pcm needs no ffmpeg,
+// which CI does not have here.
 node interruptCarriesPayload(): boolean {
   handle {
-    const r = try speakLocal("Hello there.", "qwen3-tts-mlx", "ryan")
+    const r = try speakLocal("Hello there.", "qwen3-tts-mlx", "ryan", outputFile: "speech-local-never-written.pcm")
     if (r is failure(why)) {
       const msg = "${why}"
-      return msg.includes("std::localSpeech|qwen3-tts-mlx|ryan|12|")
+      const fields = msg.includes("std::localSpeech|qwen3-tts-mlx|ryan|12|")
+      return fields && msg.includes("speech-local-never-written.pcm|pcm")
     }
     return false
   } with (intr) {
-    return reject("${intr.effect}|${intr.data.model}|${intr.data.voice}|${intr.data.textLength}|${intr.data.outputFile}")
+    return reject("${intr.effect}|${intr.data.model}|${intr.data.voice}|${intr.data.textLength}|${intr.data.outputFile}|${intr.data.format}")
   }
 }
 
@@ -43,7 +46,7 @@ node badArgumentsNeverPrompt(): string {
   let effects = ""
   handle {
     const a = try speakLocal("Hello there.", "", "ryan")
-    const b = try speakLocal("Hello there.", "qwen3-tts-mlx", "ryan", "", "", "mp3")
+    const b = try speakLocal("Hello there.", "qwen3-tts-mlx", "ryan", "", "", "ogg")
     // Each binder needs its own `if` condition: a compound condition has
     // nowhere to bind them.
     if (a is failure(e1)) {
@@ -56,6 +59,23 @@ node badArgumentsNeverPrompt(): string {
       }
     }
     return "one of them did not fail"
+  } with (intr) {
+    effects = "${effects}${intr.effect} "
+    return approve()
+  }
+  return "unreachable"
+}
+
+// A speed out of range is refused before the interrupt too.
+node badSpeedNeverPrompts(): string {
+  let effects = ""
+  handle {
+    const r = try speakLocal("Hello there.", "qwen3-tts-mlx", speed: 0.25)
+    if (r is failure(why)) {
+      const msg = "${why}"
+      return "${effects}|${msg.includes("speed must be a number from 0.5 to 100")}"
+    }
+    return "it did not fail"
   } with (intr) {
     effects = "${effects}${intr.effect} "
     return approve()

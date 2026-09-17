@@ -92,6 +92,35 @@ jobs:
       if: matrix.shard == 1
       run: pnpm --filter '!agency-lang' -r --if-present --stream run test:run
 
+  # The speech tests that run the real ffmpeg. The unit shards have no ffmpeg,
+  # so these cases skip there. Here AGENCY_REQUIRE_FFMPEG=1 makes them fail
+  # instead of skip, so removing the install step turns this job red. No
+  # `make`: the tests run from source.
+  speech-ffmpeg:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        run_install: false
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.13.0
+        cache: 'pnpm'
+    - name: Install ffmpeg
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+    - run: pnpm install
+    - name: Speech tests with ffmpeg
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_REQUIRE_FFMPEG: "1"
+      run: pnpm exec vitest run lib/stdlib/speech.ffmpeg.test.ts
+
   # Node 23.x build check. The full unit suite runs on 22.x only (see
   # `unit-tests`); this confirms the toolchain still installs, builds, and
   # compiles the stdlib under node 23.x.

@@ -197,8 +197,8 @@ before writing anything. That effect is separate from the cloud
 
 `speakLocal` is its own function rather than a provider on `speak` because
 the arguments do not match: a local call takes `instructions` and no
-`speed` or `apiKey`, and its effect would otherwise depend on an argument,
-which a handler cannot match on.
+`apiKey`, and its effect would otherwise depend on an argument, which a
+handler cannot match on.
 
 ### What it shares with speak
 
@@ -206,7 +206,8 @@ which a handler cannot match on.
 the same way: resolve and authorize the output path, refuse to overwrite an
 existing file, run the work inside `meteredDispatch`, record usage, send the
 statelog event, enforce guards, check the MIME type, and publish the bytes.
-Each caller supplies only a `produce` function. Every failure message starts
+Each caller supplies a `produce` function, the MIME type it expects, and
+optionally a `finish` function that runs after accounting. Every failure message starts
 with the caller's name, so the local one reads `speakLocal failed: …`.
 
 ### Pieces
@@ -234,6 +235,34 @@ every PCM reply rather than reading what the server sent. Both served
 families are 24 kHz. A model at another rate would need smoltalk to pass
 the server's own rate through.
 
+### Formats and speed
+
+`speakLocal` writes `wav`, `mp3`, `m4a`, or `pcm`. The format is the
+`format` argument, then the output file's extension, then wav. An explicit
+format wins over the extension, as in the Kokoro package, so this call
+writes wav bytes to `a.mp3`:
+
+    speakLocal("Hi.", "qwen3-tts-mlx", outputFile: "a.mp3", format: "wav")
+
+Cloud `speak` refuses that mismatch instead. The interrupt carries the
+chosen `format` next to `outputFile`, so a person approving the call sees
+both.
+
+Neither served family can change its own speed, so `speakLocal` always asks
+the server for pcm at speed 1. For mp3, m4a, or another speed, it joins the
+pieces into a wav and runs it through ffmpeg (`lib/stdlib/ffmpeg.ts`). The
+`atempo` filter changes the speed without changing the pitch, and accepts
+0.5 to 100. A call that needs ffmpeg checks for it before the interrupt.
+
+ffmpeg runs in `synthesizeToFile`'s `finish` step, after the usage is
+recorded. A failure in `produce` marks the call's usage incomplete, because
+a failed request to a paid provider may still have cost money. An ffmpeg
+failure costs nothing, so it must not do that.
+
+The tests that run the real ffmpeg are in `lib/stdlib/speech.ffmpeg.test.ts`.
+They skip without ffmpeg, except in the `speech-ffmpeg` CI job, which sets
+`AGENCY_REQUIRE_FFMPEG=1`.
+
 ### The address and the model name
 
 `mlxBaseUrl()` (`lib/stdlib/mlxServerModels.ts`) resolves `client.baseUrl.mlx`,
@@ -256,7 +285,8 @@ A request the model cannot honour gets a 400 that names what it takes:
     "alloy" is not a voice of this model. Its voices are serena, vivian, ...
 
 The same goes for a `speed` other than 1, which no family supports, and a
-`response_format` other than `wav` or `pcm`. A model calling the speech
+`response_format` other than `wav` or `pcm`. `speakLocal` handles other
+speeds and formats itself (see "Formats and speed"). A model calling the speech
 function as a tool reads the message and can fix its next call. A silently
 ignored field would give it audio that does not match what it asked for.
 

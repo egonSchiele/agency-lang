@@ -1,0 +1,41 @@
+import {
+  cliPolicyHandler,
+  missingPolicyRules,
+  addPolicyRules,
+  recommendedAutoApprovePolicy,
+  ScopedRuleFields,
+} from "std::policy"
+
+const FIELDS: ScopedRuleFields = {}
+
+def removeStaging(dir: string): string {
+  interrupt std::toolbox::removeStaging("remove it?", { root: dir, dir: "${dir}/staging/x", name: "x" })
+  return "removed"
+}
+
+def outcomeOf(result: any): string {
+  if (result is failure) {
+    return "asked"
+  }
+  return "approved"
+}
+
+// What /policy does: the saved file was made before `recommended` had a
+// removeStaging rule, so the removal asks. After the missing rules are
+// added it goes through, and nothing is left to add.
+node updatesASavedPolicy(args: { policyFile: string, toolsDir: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let report: string[] = []
+  handle {
+    const before = try removeStaging(args.toolsDir)
+    report.push(outcomeOf(before))
+    const missing = missingPolicyRules(recommendedAutoApprovePolicy)
+    report.push("${missing["std::toolbox::removeStaging"] != null}")
+    report.push("${missing["std::bash"] != null}")
+    addPolicyRules(missing)
+    const after = try removeStaging(args.toolsDir)
+    report.push(outcomeOf(after))
+    report.push("${Object.keys(missingPolicyRules(recommendedAutoApprovePolicy)).length}")
+  } with handler
+  return report
+}

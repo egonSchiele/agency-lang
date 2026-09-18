@@ -1,0 +1,8 @@
+{
+  "report": ["asked", "true", "false", "approved", "0"],
+  "inputCalls": 2,
+  "bashRules": [{ "action": "reject" }],
+  "firstReadRule": { "match": { "dir": "/mine" }, "action": "approve" },
+  "readRulesGrew": true,
+  "removeStagingOnDisk": true
+}

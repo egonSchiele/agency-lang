@@ -17,6 +17,10 @@ import type { Policy } from "@/runtime/policy.js";
 // them so `std::policy` can surface the same set to Agency code (the agent).
 // The --approve / --reject overlay, shared with `agency run` (resolveRunPolicy).
 export { policyOverlayFromFlags as _policyOverlayFromFlags } from "@/runtime/policyFlags.js";
+export {
+  missingPolicyRules as _missingPolicyRules,
+  appendPolicyRules as _appendPolicyRules,
+} from "@/runtime/policyUpdate.js";
 
 export {
   builtinPolicy as _builtinPolicy,

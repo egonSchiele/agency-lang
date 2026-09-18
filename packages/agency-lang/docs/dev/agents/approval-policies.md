@@ -44,6 +44,39 @@ line (`⏺ Policy rejected std::read (dir: /private/tmp, filename: …)`).
 Without it a rejection is invisible: the only sign is the agent quietly
 taking another route.
 
+## A saved policy does not follow `recommended`
+
+`policy.json` is written once, from the built-in the user picked on
+their first run. After that `getPolicyForAgent` reads the file and
+nothing else, so a rule added to `recommended` later never reaches
+anyone who already has a file. For example, `recommended` approves
+`std::toolbox::removeStaging`, and a user whose file predates that rule
+is still asked about it when a tool-writing run cleans up.
+
+The fix is a command the user runs, `/policy` in the agent
+(`policySlashCommand` in `lib/agents/agency-agent/lib/repl.agency`). It
+lists the rules `recommended` has and the saved policy lacks, and adds
+them on a yes. It is deliberately not a startup step: a policy file
+should never gain an approval its owner did not ask for, and a user who
+chose `minimal`, or deleted a rule on purpose, would get it back.
+
+The two pure functions are in `lib/runtime/policyUpdate.ts`, and
+`std::policy` exposes them as `missingPolicyRules` and `addPolicyRules`,
+which work on the handler's active policy:
+
+- Two rules are the same when their action, `rejectMessage`, and `match`
+  entries are the same. A saved rule with an expanded path
+  (`/Users/me/.agency-agent/tools`) is not the same as the placeholder
+  form (`<agent-home>/tools`), so the command can offer a rule that
+  repeats one the user already has. The repeat is harmless.
+- An effect the saved policy decides with a rule that has no `match` is
+  skipped. The first match wins, so nothing after that rule is reached.
+- New rules are appended, never put in front, for the same reason: every
+  rule the user has, a reject included, keeps deciding what it decided.
+- Under `--policy`, `--approve`, or `--reject` the session runs on a
+  per-session copy, so the command says so and changes nothing
+  (`usesSavedPolicy` in `turn.agency`).
+
 ## Reading what you are approving
 
 The prompt's first line is the effect, in bold, then the interrupt's

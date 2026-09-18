@@ -22,6 +22,8 @@ import {
   _escapeGlob,
   _alwaysScopeFor,
   _allAlwaysScopes,
+  _missingPolicyRules,
+  _appendPolicyRules,
  } from "agency-lang/stdlib-lib/policy.js"
 
 
@@ -613,6 +615,38 @@ def maybeFlush() {
       _internalIo = ""
     }
   }
+}
+
+/**
+ * A saved policy file is a copy of a built-in policy from the day it was
+ * created, plus the user's own "always" answers, so a rule added to the
+ * built-in later never reaches it. These two functions let a program
+ * show the user what their file lacks and add it when they say so.
+ * Neither runs on its own, and nothing is added without being asked for.
+ */
+export def missingPolicyRules(base: Policy): Policy {
+  """
+  The rules `base` has that the `cliPolicyHandler`'s active policy lacks, keyed by effect. An effect the active policy already decides with a rule that has no `match` is left out, because a rule added after it could never match.
+
+  @param base - The policy to compare against, such as `recommendedAutoApprovePolicy`.
+  """
+  maybeLoadPolicy()
+  return _missingPolicyRules(_policy ?? {}, base)
+}
+
+export def addPolicyRules(additions: Policy) {
+  """
+  Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.
+
+  @param additions - The rules to append, keyed by effect, such as the result of `missingPolicyRules`.
+  """
+  maybeLoadPolicy()
+  const merged = _appendPolicyRules(_policy ?? {}, additions)
+  _policy = merged
+  _internalIo = "std::write"
+  const written = writePolicyFile(globalCliPolicyOpts.file, merged, []) with approve
+  _internalIo = ""
+  return written
 }
 
 /**

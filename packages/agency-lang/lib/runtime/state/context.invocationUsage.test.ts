@@ -71,14 +71,17 @@ describe("execution-context invocation meter", () => {
     expect(b.invocationUsage.snapshot().unpricedCallCount).toBe(0);
   });
 
-  it("restoreState leaves the meter alone: an in-run restore does not un-spend money", async () => {
+  it("restoreState sets the meter to what the checkpoint saved: cost goes back with a rewind", async () => {
     const execCtx = await makeContext().createExecutionContext({ runId: "run-1" });
     execCtx.invocationUsage.merge(delta(0.5));
+    const saved = execCtx.invocationUsage.snapshot();
+    const checkpoint = { ...execCtx.stateToJSON(), usage: saved } as unknown as Checkpoint;
 
-    const checkpoint = execCtx.stateToJSON() as unknown as Checkpoint;
+    // A try that is then rewound away.
+    execCtx.invocationUsage.merge(delta(0.25));
     execCtx.restoreState(checkpoint);
 
-    expect(execCtx.invocationUsage.snapshot().cost.totalCost).toBeCloseTo(0.5);
+    expect(execCtx.invocationUsage.snapshot()).toEqual(saved);
   });
 
   it("no serialization includes the meter", async () => {

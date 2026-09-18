@@ -447,8 +447,8 @@ export class RuntimeContext<T> {
     // config/override budget. Without this the root budget is a silent no-op.
     execCtx.budget = effective.budget;
     // Fresh meter per execution context (Object.create bypasses the field
-    // initializer). Never carried from the parent context. A resume starts
-    // it from its checkpoint afterwards (see resumeSetup.ts).
+    // initializer). Never carried from the parent context. `restoreState`
+    // sets it from the checkpoint it restores.
     execCtx.invocationUsage = new InvocationUsageMeter();
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     // The execution context is built via Object.create, bypassing the
@@ -787,6 +787,9 @@ export class RuntimeContext<T> {
 
     this.globals = GlobalStore.fromJSON(globals);
     this.globals.restoreTokenStats(currentTokenStats);
+    // Cost is state: it goes wherever the stack goes, so the meter, getCost()
+    // and getTokens() agree after a restore as well as before one.
+    this.invocationUsage.resumeFrom(checkpoint.usage);
     this.pendingPromises.clear();
   }
 

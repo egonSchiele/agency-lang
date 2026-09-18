@@ -43,6 +43,15 @@
         { "return": "inner result" },
         { "return": "done" }
       ]
+    },
+    {
+      "nodeName": "modelBreakdownRewinds",
+      "description": "A rewind takes cost back with it: getTokens() and getModelCosts() both report the path that led here (2 calls × 2 tokens), not the try that was rewound away",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [{ "return": "before" }, { "return": "try one" }, { "return": "try two" }]
     }
   ]
 }

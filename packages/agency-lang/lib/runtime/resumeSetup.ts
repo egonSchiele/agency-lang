@@ -122,7 +122,6 @@ export async function restoreForResume(
 
   await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
   execCtx.restoreState(checkpoint);
-  execCtx.invocationUsage.resumeFrom(checkpoint.usage);
   reinstallRootBudget(execCtx.stateStack, execCtx.budget);
   applyRestoreOverrides(execCtx, checkpoint, {
     args: request.overrides?.args,

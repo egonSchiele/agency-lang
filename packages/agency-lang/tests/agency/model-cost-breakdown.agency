@@ -1,4 +1,5 @@
 import { getModelCosts, getTokens } from "std::thread"
+import { getMutable, setMutable } from "../helpers/mutableVar.js"
 
 // getModelCosts() exposes the per-model usage breakdown from the global
 // __tokenStats accumulator. The deterministic test provider tags every
@@ -41,4 +42,19 @@ node modelBreakdownMatchesTotal(): boolean {
   llm("outer", { tools: [innerTool] })
   const byModel = getModelCosts()
   return byModel[0].inputTokens + byModel[0].outputTokens == getTokens()
+}
+
+// Cost is part of the run's state, so a rewind takes it back too. Three calls
+// are made here and one is rewound away: every accessor reports the two on the
+// path that led here (2 tokens each), and they agree with each other.
+node modelBreakdownRewinds(): boolean {
+  llm("before the checkpoint")
+  const cp = checkpoint()
+  setMutable("breakdownTries", getMutable("breakdownTries", 0) + 1)
+  llm("a try")
+  if (getMutable("breakdownTries", 0) == 1) {
+    restore(cp, {})
+  }
+  const byModel = getModelCosts()
+  return getTokens() == 4 && byModel[0].inputTokens + byModel[0].outputTokens == 4
 }

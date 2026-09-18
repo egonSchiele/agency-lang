@@ -463,8 +463,19 @@ function recoverIpcEntry(raw: unknown): IpcEntryRecovery {
   };
 }
 
-/** The accumulator for one run. A fresh run starts it at zero; a resumed run
- *  starts it from its checkpoint (`resumeFrom`). Buckets attribution
+function emptyIndex(): Record<UsageKind, Record<string, number>> {
+  return {
+    completion: Object.create(null),
+    embedding: Object.create(null),
+    image: Object.create(null),
+    transcription: Object.create(null),
+    speech: Object.create(null),
+    manual: Object.create(null),
+  };
+}
+
+/** The accumulator for one run. A fresh run starts it at zero, and every
+ *  restore sets it to what the restored checkpoint saved (`resumeFrom`). Buckets attribution
  *  by (kind, model) via a nested null-prototype index into `entries` (first-seen
  *  order); keeps authoritative call-order flat totals with checked-add saturation. */
 export class InvocationUsageMeter {
@@ -473,23 +484,24 @@ export class InvocationUsageMeter {
   private unpricedCallCount = 0;
   private complete = true;
   private entries: UsageEntry[] = [];
-  private index: Record<UsageKind, Record<string, number>> = {
-    completion: Object.create(null),
-    embedding: Object.create(null),
-    image: Object.create(null),
-    transcription: Object.create(null),
-    speech: Object.create(null),
-    manual: Object.create(null),
-  };
+  private index: Record<UsageKind, Record<string, number>> = emptyIndex();
 
-  /** Start a fresh meter from the usage a checkpoint saved, so a resumed run
-   *  keeps counting from where it paused and its figures never depend on
-   *  whether it was resumed. The checkpoint comes back from the host, so it is
-   *  recovered like any other untrusted input: every valid figure is kept and
-   *  anything unusable makes the total a lower bound. A checkpoint with no
-   *  saved usage says nothing about what the run spent before it, which is a
-   *  lower bound too. */
+  /** Set the meter to the usage a checkpoint saved. Cost is part of a run's
+   *  state: it continues across a resume and goes back with a `restore()`, so
+   *  the figure never depends on whether the run was resumed or rewound, and it
+   *  always agrees with `getCost()`. Spend on a path that was rewound away is
+   *  not in it; a program that wants that total reads the cost before it
+   *  rewinds. The checkpoint comes back from the host, so it is recovered like
+   *  any other untrusted input: every valid figure is kept and anything
+   *  unusable makes the total a lower bound. A checkpoint with no saved usage
+   *  says nothing about what the run spent before it, which is a lower bound
+   *  too. */
   resumeFrom(saved: unknown): void {
+    this.cost = zeroCost();
+    this.tokens = zeroTokens();
+    this.unpricedCallCount = 0;
+    this.entries = [];
+    this.index = emptyIndex();
     if (saved === null || typeof saved !== "object") {
       this.complete = false;
       return;

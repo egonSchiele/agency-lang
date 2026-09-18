@@ -108,6 +108,36 @@ fast".
 End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation) and
 `lib/statelog/appendReader.test.ts` (UTF-8 split across read boundaries, offset rewind).
 
+## Folding a long message
+
+An agent's system prompt is hundreds of lines long and is resent on every
+round, so expanding a trace used to bury the conversation under it: one real
+agent trace came to 2,181 rows, of which 1,841 were seven copies of two long
+messages.
+
+So `messageRows` in `treeRows.ts` lays out the transcript a message at a time.
+A message that comes to fewer than `FOLD_MESSAGE_LINES` (15) display lines
+becomes flat `convoLine` rows, exactly as before. Anything longer becomes one
+`convoMessage` header — the role tag, the first line of the body that has text
+on it, and the line count — owning those lines as children, so they appear only
+when the header is expanded. Both the `promptCompletion` leaf and the flattened
+`llmCall` span go through it.
+
+No keybinding changed. `e` and `z` add ids from the persistent forest to the
+expanded set, and these headers are synthetic, so they stay shut without either
+key knowing they exist; `Enter` on a header opens that one message. Two places
+do have to know:
+
+- `collapseSubtree` (`E`) deletes real-forest ids, which would leave an opened
+  fold in the expanded set to spring back the next time you opened its span. It
+  now also drops expanded ids namespaced under the node.
+- `search.ts` walks the hidden lines and, in `expandSyntheticAncestors`, opens
+  the fold around a match, or `/` would highlight a row `n` could never reach.
+
+The header's text and the body are laid out at two different widths, because
+the body sits one level deeper and the header gives up columns to its line
+count.
+
 ## Composing rows over lib/tui: two layout rules that will bite you
 
 Both were found the hard way while building tables (the runs-explorer

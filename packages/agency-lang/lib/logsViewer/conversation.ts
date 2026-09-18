@@ -34,12 +34,29 @@ type ToolCall = {
 export function formatConversation(messages: ConvoMessage[], width?: number): string[] {
   const out: string[] = [];
   for (const msg of messages) {
-    out.push(...formatMessage(msg, width));
+    out.push(...formatMessageLines(msg, width));
   }
   return out;
 }
 
-function formatMessage(msg: ConvoMessage, width?: number): string[] {
+// The one-line stand-in for a message too long to show in full: its role
+// tag over the first line of the body that has anything on it. A message
+// that opens with a blank line would otherwise fold into a header with
+// nothing on it but the tag.
+export function messageHeadline(msg: ConvoMessage, width?: number): string {
+  const body = contentText(msg.content);
+  const firstLine = (body ?? "").split("\n").find((line) => line.trim().length > 0);
+  if (firstLine === undefined) return formatMessageLines(msg, width)[0];
+  return formatMessageLines(
+    { ...msg, content: firstLine, toolCalls: [], tool_calls: [] },
+    width,
+  )[0];
+}
+
+// The display lines for one message. The viewer calls this per message so
+// it can decide, message by message, whether the lines go on screen as
+// they are or behind a fold.
+export function formatMessageLines(msg: ConvoMessage, width?: number): string[] {
   const role = msg.role ?? "unknown";
   const label = roleLabel(role, msg);
   const prefix = color.green(label);

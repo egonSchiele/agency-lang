@@ -335,3 +335,93 @@ describe("trace annotations", () => {
     expect(renderRowText(rows[0], false, false, { traceAnnotations: {} })).toBe(plain);
   });
 });
+
+// A long message — typically an agent's system prompt, which can run to
+// hundreds of wrapped lines — is folded behind a single header row so it
+// cannot bury the actual conversation. Short messages are untouched.
+describe("folding long messages", () => {
+  const longSystemPrompt = Array.from({ length: 40 }, (_, i) => `system prompt line ${i}`).join(
+    "\n",
+  );
+
+  function pcLeafWith(messages: unknown[]): TreeNode {
+    return {
+      id: "evt-0",
+      traceId: "t",
+      parentId: "trace-t",
+      children: [],
+      nodeKind: "event",
+      label: "promptCompletion",
+      summary: "promptCompletion",
+      event: {
+        format_version: 1,
+        trace_id: "t",
+        project_id: "p",
+        span_id: null,
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-01-01T00:00:00Z",
+          messages,
+        },
+      },
+    };
+  }
+
+  it("shows a long message as one header row carrying its line count", () => {
+    const t = trace([
+      pcLeafWith([
+        { role: "system", content: longSystemPrompt },
+        { role: "user", content: "hi" },
+      ]),
+    ]);
+    const rows = flattenVisibleRows(baseState([t], ["trace-t", "evt-0"]));
+    const kinds = rows.map((r) => r.node.nodeKind);
+    expect(kinds).toEqual(["trace", "event", "convoMessage", "convoLine", "rawDataToggle"]);
+    expect(rows[2].node.summary).toContain("[system]");
+    expect(rows[2].node.summary).toContain("system prompt line 0");
+    expect(rows[2].node.summary).toContain("(40 lines)");
+    expect(rows[3].node.summary).toContain("hi");
+  });
+
+  it("reveals the message body when the header is expanded", () => {
+    const t = trace([pcLeafWith([{ role: "system", content: longSystemPrompt }])]);
+    const headerId = "evt-0:convo:msg:0";
+    const rows = flattenVisibleRows(baseState([t], ["trace-t", "evt-0", headerId]));
+    const bodyRows = rows.filter((r) => r.node.nodeKind === "convoLine");
+    expect(bodyRows).toHaveLength(40);
+    expect(bodyRows[0].node.id).toBe(`${headerId}:0`);
+    expect(bodyRows[39].node.summary).toContain("system prompt line 39");
+  });
+
+  it("leaves a message shorter than the fold threshold flat", () => {
+    const shortPrompt = Array.from({ length: 14 }, (_, i) => `line ${i}`).join("\n");
+    const t = trace([pcLeafWith([{ role: "system", content: shortPrompt }])]);
+    const rows = flattenVisibleRows(baseState([t], ["trace-t", "evt-0"]));
+    expect(rows.filter((r) => r.node.nodeKind === "convoMessage")).toHaveLength(0);
+    expect(rows.filter((r) => r.node.nodeKind === "convoLine")).toHaveLength(14);
+  });
+
+  it("folds inside an llmCall span's flattened conversation too", () => {
+    const leaf = pcLeafWith([
+      { role: "system", content: longSystemPrompt },
+      { role: "user", content: "hi" },
+    ]);
+    const call: TreeNode = {
+      id: "span-1",
+      traceId: "t",
+      parentId: "trace-t",
+      children: [{ ...leaf, parentId: "span-1" }],
+      nodeKind: "span",
+      label: "llmCall",
+      summary: "llmCall",
+    };
+    const t = trace([call]);
+    const rows = flattenVisibleRows(baseState([t], ["trace-t", "span-1"]));
+    const header = rows.find((r) => r.node.nodeKind === "convoMessage");
+    expect(header?.node.id).toBe("span-1:llm:convo:msg:0");
+    expect(header?.node.summary).toContain("(40 lines)");
+    // The user message stays visible next to it.
+    expect(rows.some((r) => r.node.summary.includes("hi"))).toBe(true);
+  });
+});

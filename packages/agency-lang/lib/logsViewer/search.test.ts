@@ -296,3 +296,59 @@ describe("highlightMatches", () => {
     ]);
   });
 });
+
+// A long message is folded behind a header row, so its text is two
+// synthetic levels down. Search still has to find it, and `n`/`N` has to
+// be able to land on it — which means opening the fold as well as the
+// leaf.
+describe("searching inside a folded message", () => {
+  const longPrompt = [
+    ...Array.from({ length: 30 }, (_, i) => `boilerplate line ${i}`),
+    "the needle is here",
+  ].join("\n");
+
+  function foldedLeaf(): TreeNode {
+    return {
+      id: "evt-0",
+      traceId: "T",
+      parentId: "T",
+      children: [],
+      nodeKind: "event",
+      label: "promptCompletion",
+      summary: "promptCompletion",
+      event: {
+        format_version: 1,
+        trace_id: "T",
+        project_id: "p",
+        span_id: null,
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "2026-01-01T00:00:00Z",
+          messages: [{ role: "system", content: longPrompt }],
+        },
+      },
+    };
+  }
+
+  it("matches a line hidden behind the fold", () => {
+    const t = trace("T", [foldedLeaf()]);
+    const matches = findMatches([t], "the needle is here");
+    expect(matches).toContain("evt-0:convo:msg:0:30");
+  });
+
+  it("opens the fold and the leaf so the match becomes visible", () => {
+    const t = trace("T", [foldedLeaf()]);
+    const state: ViewerState = {
+      roots: [t],
+      expanded: new Set(),
+      cursorId: "T",
+      scrollTop: 0,
+      quit: false,
+    };
+    const next = expandAncestorsOf(state, ["evt-0:convo:msg:0:30"]);
+    expect(next.expanded.has("evt-0:convo:msg:0")).toBe(true);
+    expect(next.expanded.has("evt-0")).toBe(true);
+    expect(next.expanded.has("T")).toBe(true);
+  });
+});

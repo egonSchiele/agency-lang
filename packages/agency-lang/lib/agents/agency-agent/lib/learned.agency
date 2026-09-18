@@ -65,14 +65,17 @@ def learnedSkillsTool(): any | null {
 // would read as "any" and a model would guess at the shape. The tool's
 // `request` is given the schema meta.json recorded for its Request type
 // instead. A tool saved before schemas were recorded has none, and its
-// description names the type.
+// description names the type. The description also names the source
+// file, because a model asked about a tool's code otherwise has to guess
+// where the toolbox is.
 def learnedToolFromEntry(entry: ToolEntry): any {
   const tool = runTool.partial(name: entry.name, dir: learnedToolsDir()).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
+  const source = "Source: ${entry.dir}/impl.agency"
   const requestSchema = entry.meta.requestSchema
   if (requestSchema == null) {
-    return tool.describe("${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}")
+    return tool.describe("${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}\n${source}")
   }
-  return tool.describe(entry.meta.purpose).withParamSchema("request", requestSchema)
+  return tool.describe("${entry.meta.purpose}\n\n${source}").withParamSchema("request", requestSchema)
 }
 
 // A broken entry, or one whose prefixed name would exceed the provider cap,

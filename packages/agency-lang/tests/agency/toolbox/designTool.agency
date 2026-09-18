@@ -433,6 +433,46 @@ node symlinkedToolIsRefused(): boolean {
 // A refused write is not something a new draft can fix, so designTool
 // stops after the first round instead of drafting maxRounds times. If it
 // looped, the error would read "gave up after".
+// The toolbox's own bookkeeping raises its own effects, so a policy can
+// name them without granting writes anywhere else. Nothing it does to a
+// draft comes through as a plain std::write, std::mkdir or std::move,
+// and it reads nothing back out of staging.
+node draftRaisesOnlyToolboxEffects(): boolean {
+  cleanup("addFifteen")
+  let generic: string[] = []
+  let sawWriteFile = false
+  let sawCreateStaging = false
+  let result: Result = failure("not run")
+  handle {
+    result = designTool(
+      name: "addFifteen",
+      purpose: "Add one to a number.",
+      request: REQUEST,
+      dir: OUT,
+    )
+  } with (intr) {
+    if (intr.effect == "std::toolbox::writeFile") {
+      sawWriteFile = true
+    }
+    if (intr.effect == "std::toolbox::createStaging") {
+      sawCreateStaging = true
+    }
+    const staged = "${intr.data.dir}" =~ re/\/staging\//
+    if (intr.effect == "std::write" || intr.effect == "std::mkdir" || intr.effect == "std::move") {
+      generic.push(intr.effect)
+    }
+    if (intr.effect == "std::read" && staged) {
+      generic.push("std::read")
+    }
+    if (intr.effect == "std::toolbox::review") {
+      return approve("accept")
+    }
+    return approve()
+  }
+  cleanup("addFifteen")
+  return result is success && sawWriteFile && sawCreateStaging && generic.length == 0
+}
+
 node refusedWriteStopsTheRounds(): boolean {
   cleanup("addFourteen")
   let result: Result = success(null)
@@ -446,7 +486,7 @@ node refusedWriteStopsTheRounds(): boolean {
     )
   } with (intr) {
     return match(intr.effect) {
-      "std::write" => {
+      "std::toolbox::writeFile" => {
         if (intr.data.filename == "impl.agency") {
           return reject("no writes today")
         }

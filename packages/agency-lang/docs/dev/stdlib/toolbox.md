@@ -139,6 +139,52 @@ tests. `saveTool` re-checks that `<dir>/<name>` is still free (the check
 in `checkName` is stale after the approval and any model calls) and then
 `move`s the staged directory into place. A tool is either fully present or absent.
 
+### The toolbox's own file work
+
+Writing one tool used to put eleven prompts in front of the user, and
+nine of them were the toolbox working in its own directories: a
+`std::mkdir` for the staging directory, four `std::write`s, two
+`std::read`s, a `std::move` to publish, and the scan. Only the review and
+the save were decisions.
+
+Those now raise the toolbox's own effects, as `recordUse` already did for
+the use count:
+
+- `std::toolbox::writeFile { root, dir, filename, content }` for each of
+  the four files. The four names are constants and `dir` is a directory
+  built from a name `checkNameSyntax` has passed, so a model never
+  chooses a path here.
+- `std::toolbox::createStaging { root, dir, name }` when the staging
+  directory is made, `std::toolbox::removeStaging` when an unsaved draft's
+  directory is removed, and `std::toolbox::removeStagedFile { …, filename }`
+  when a stale `tool.test.json` is cleared. One effect each, so a policy
+  can tell creating a directory from removing one.
+
+Both carry `root`, the toolbox root, as the `@alwaysUnder` field, so
+"approve always here" pins the toolbox instead of one draft's staging
+directory, whose name ends in a random number and never recurs.
+
+The publish `move` raises nothing of its own: the `std::toolbox::save`
+gate was answered a moment earlier and named the same root and name.
+`recommended` auto-approves all of them under the agent home, alongside
+the use count. Writing a draft's files decides nothing: the user reads
+the finished draft at the review gate and answers for it at the save
+gate, and those two are the prompts a tool costs.
+
+Each wrapper resolves the directory with `_realDir` before it raises and
+hands that same spelling to the primitive (`_write`, `_mkdir`, `_remove`,
+`_move`), which re-resolves it with the `fixed*` pair. A directory
+swapped for a symlink while the prompt is open is refused rather than
+followed. See `docs/dev/stdlib/contained-files.md`.
+
+The two reads are gone rather than renamed. `assembleTool` typechecks the
+source the template just produced (`typecheck(source, dir:)`) instead of
+reading `tool.agency` back, and `runGeneratedTests` runs its cases from
+memory (`test(dir, file, cases)`) instead of reading `tool.test.json`
+back. The file is still written, because it ships with the tool.
+`prepareCases` parses each expected value once, so the file and the run
+that checks it cannot disagree.
+
 ### Only pure tools are tested
 
 `llm()` raises no interrupt, so it cannot be scripted in a sandbox test

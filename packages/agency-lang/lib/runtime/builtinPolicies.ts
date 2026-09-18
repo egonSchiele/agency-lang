@@ -56,10 +56,15 @@ export function readScopeRules(): PolicyRule[] {
   ];
 }
 
-// runTool's use count in a tool's meta.json. An effect of its own, never
-// a std::write rule on the file; docs/dev/agents/approval-policies.md
-// says why.
-function toolboxRecordUseRules(): PolicyRule[] {
+// The toolbox working in its own directories under the agent home:
+// runTool's use count in a tool's meta.json, the staging directory a
+// draft is built in, and the draft's own files. Each is an effect of its
+// own, never a std::write or std::mkdir rule on the file;
+// docs/dev/agents/approval-policies.md says why. The draft's files are
+// approved because writing them decides nothing: the user sees the
+// finished draft at std::toolbox::review and says yes or no to it at
+// std::toolbox::save, and both of those are left to the prompt.
+function toolboxHousekeepingRules(): PolicyRule[] {
   return [{ match: { dir: `${AGENT_HOME}/tools/**` }, action: "approve" }];
 }
 
@@ -98,7 +103,11 @@ export const recommendedAutoApprovePolicy: Policy = {
   "std::skills::skillsDir": readScopeRules(),
   "std::skills::commandsDir": readScopeRules(),
   "std::toolbox::scan": readScopeRules(),
-  "std::toolbox::recordUse": toolboxRecordUseRules(),
+  "std::toolbox::recordUse": toolboxHousekeepingRules(),
+  "std::toolbox::writeFile": toolboxHousekeepingRules(),
+  "std::toolbox::createStaging": toolboxHousekeepingRules(),
+  "std::toolbox::removeStaging": toolboxHousekeepingRules(),
+  "std::toolbox::removeStagedFile": toolboxHousekeepingRules(),
   "std::notify": approve,
   "std::clipboardCopy": approve,
   "std::git::status": approve,
@@ -173,7 +182,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills and tools (plus the toolbox use count there), and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills and tools (plus the toolbox's own drafting and use-count files there), and web/search; prompt for reads elsewhere, writes, shell, and git changes.",
   },
   {
     name: "minimal",

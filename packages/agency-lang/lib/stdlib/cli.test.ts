@@ -800,6 +800,35 @@ describe("stickyInterruptPrompt (integration)", () => {
     expect(cap.captured.join("")).toContain("line19");
   });
 
+  it("a resize while the prompt is up changes what 'v' means", async () => {
+    // Three long lines: one row each on a wide terminal, many on a narrow one.
+    const body = Array.from({ length: 3 }, (_unused, index) => `row${index}`.repeat(30)).join("\n");
+    const cap = captureStdout();
+    (process.stdin as any).isTTY = false;
+    const savedColumns = process.stdout.columns;
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => {} };
+    process.stdout.columns = 400;
+    const pending = _internal.stickyInterruptPrompt(fakeRl, {
+      title: "write file?",
+      body,
+      allowFreeText: true,
+      allowCancel: true,
+      items: [{ key: "a", label: "approve once" }],
+    });
+    // Narrower now: the body no longer fits, so 'v' reveals it instead of
+    // being submitted as a reason.
+    process.stdout.columns = 20;
+    fakeRl._ttyWrite("v", { name: "v" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    fakeRl._ttyWrite("a", { name: "a" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    const answer = await pending;
+    process.stdout.columns = savedColumns;
+    cap.restore();
+    expect(answer).toBe("a");
+    expect(cap.captured.join("")).toContain("row2".repeat(30));
+  });
+
   it("Escape rejects with AgencyCancelledError", async () => {
     const cap = captureStdout();
     (process.stdin as any).isTTY = false;

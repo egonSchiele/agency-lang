@@ -59,8 +59,10 @@ patched stdout the bottom region installs, which is what puts it above
 the footer rather than over it. No caller offers the option and no effect
 can claim the key: `renderInterruptFooter` appends it and
 `submitInterrupt` checks it before the option keys and before free text,
-both gated on the same `bodyIsTruncated`. When nothing is cut off, `v` is
-an ordinary free-text reason.
+both gated on the same `bodyIsTruncated`, which the shell re-evaluates at
+each keystroke so a resize mid-prompt cannot leave the footer offering a
+key the reducer no longer honours. When nothing is cut off, `v` is an
+ordinary free-text reason.
 
 ## What "approve always here" pins
 

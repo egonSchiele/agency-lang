@@ -651,12 +651,15 @@ function assertRawMode(): () => void {
 function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Promise<string> {
   stopSpinnerIfRunning();
   const restoreRaw = assertRawMode();
-  const config: InterruptConfig = {
+  // Read at each keystroke, not once: the terminal can be resized while the
+  // prompt is up, and the footer that offers the view key re-renders at the
+  // new width, so the check has to move with it.
+  const config = (): InterruptConfig => ({
     validKeys: opts.items.map((item) => item.key),
     allowFreeText: opts.allowFreeText,
     allowCancel: opts.allowCancel,
     canReveal: bodyIsTruncated(opts.body, process.stdout.columns || 80),
-  };
+  });
   let state = INITIAL_INTERRUPT_STATE;
 
   const region = installBottomRegion(
@@ -685,7 +688,7 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
     };
     rlAny._ttyWrite = (sequence: unknown, key: unknown): void => {
       const action = classifyInterruptKey(sequence, key as KeyMeta | undefined);
-      const step = reduceInterrupt(state, action, config);
+      const step = reduceInterrupt(state, action, config());
       state = step.state;
       const outcome = step.outcome;
       if (outcome.kind === "exit") {

@@ -771,8 +771,6 @@ export def askUserChoices(intr: any): ChoiceItem[] {
 // type a rejection reason instead of picking a key. That single
 // keystroke flow replaces the old two-step "(r), then type reason".
 def askUser(intr: any): AskUserResult {
-  // The effect first, so the user knows which permission is being asked
-  // for before reading why.
   const title = "${color.bold(intr.effect)}  ${intr.message}"
   const body = prettyPrintInterruptData(intr.data, intr.effect)
 
@@ -783,10 +781,9 @@ def askUser(intr: any): AskUserResult {
   // re-prompting. The "r" option still lets you reject a single action
   // (and optionally tell the agent what to do instead).
   const answer: AskUserResult = withLock("std::tty") {
-    // Parallel tool calls raise their interrupts together, and every one
-    // of them passed the policy check before any was answered. An
-    // "always" answer to the first has to cover the rest, so the check
-    // runs again here, once this interrupt's turn at the terminal comes.
+    // Checked again here, at this interrupt's turn at the terminal: the
+    // interrupt ahead of it may have saved an "always" rule since its
+    // first check ran. See approval-policies.md.
     const rules = _policy
     if (rules != null) {
       const decided = checkPolicy(rules, intr)
@@ -984,7 +981,9 @@ def _handler(intr: any): any {
 def applyRule(intr: any, decision: any, late: boolean): any {
   if (decision.type == "approve") {
     if (late && _interactive) {
-      print(color.dim("⏺ Approved ${intr.effect}${oneLineData(intr.data)} by the rule just saved"))
+      print(
+        color.dim("⏺ Approved ${intr.effect}${oneLineData(intr.data)} by the rule just saved"),
+      )
     }
     // Auto-approved: the user never sees the approval prompt (which would
     // render an edit as a diff), so surface an edit's diff here. Other

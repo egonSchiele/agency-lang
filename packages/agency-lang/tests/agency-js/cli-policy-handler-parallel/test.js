@@ -18,7 +18,10 @@ globalThis.__agencyInputOverride = async () => {
 try {
   const result = await main({ policyFile });
   writeFileSync("__result.json", JSON.stringify({
-    result: result.data,
+    // All three ran past their interrupt, so the rule the first answer
+    // saved covered the two already waiting. Without it they would have
+    // prompted, and without the answer carrying they would be rejected.
+    approved: result.data,
     remainingAnswers: answers.length,
   }, null, 2));
 } finally {

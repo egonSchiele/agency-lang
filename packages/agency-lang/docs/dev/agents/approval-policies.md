@@ -46,6 +46,10 @@ taking another route.
 
 ## Reading what you are approving
 
+The prompt's first line is the effect, in bold, then the interrupt's
+message, so which permission is being asked for is legible before the
+reason for it.
+
 The prompt is a pinned footer at the bottom of the terminal, so it shows
 at most six physical rows of the interrupt's body
 (`INTERRUPT_BODY_MAX_LINES` in `lib/stdlib/cli.ts`) and then an ellipsis.
@@ -66,32 +70,42 @@ ordinary free-text reason.
 
 ## An "always" answer covers the interrupts already waiting
 
-Parallel tool calls raise their interrupts together. Each one runs
-`cliPolicyHandler`'s check against the saved rules before any of them is
-answered, finds no rule, and queues for the terminal lock behind the
-prompt. Until this was fixed, answering "approve always" to the first
-saved the rule and approved that one interrupt, and then every queued
-sibling prompted anyway, because its check had already run.
+Parallel tool calls raise their interrupts together, so every one of them
+runs its policy check before any of them is answered. None finds a rule,
+and they queue for the `std::tty` lock behind the first one's prompt. An
+"always" answer to that first prompt has to cover the rest, or the user
+answers the same question once per tool call.
 
-`askUser` now runs `checkPolicy` a second time once it holds the
-`std::tty` lock, just before it would draw the prompt, and records an
-"always" answer before it releases the lock. Both halves matter: the
-first attempt recorded the rule in the handler, after `askUser` had
-returned, and the next interrupt took the lock and checked in that gap.
-A rule saved by the answer to the interrupt ahead decides the waiting
-one, and the user sees one dim line, "Approved … by the rule just
-saved", instead of a prompt. `applyRule` carries out a rule's decision
-from both checks.
-`tests/agency-js/cli-policy-handler-parallel` has a mock LLM round call
-three tools at once, each raising the same effect, and scripts exactly
-one answer. It has to go through the tool loop: a `parallel` block does
-not show the bug, because its arms consult the handler one after
-another, and a plain `parallel` block also gives each arm its own copy
-of the module's globals, where the saved rules live.
+Two things make that work, and both are needed:
 
-The prompt's first line names the effect, in bold, before the message,
-so the user knows which permission is being asked for before reading
-why.
+- `askUser` runs `checkPolicy` again once it holds the lock, just before
+  it would draw the prompt, so a rule saved by the interrupt ahead of it
+  is seen. `applyRule` carries out the decision from either check.
+- `recordAnswer` saves an "always" answer *before* releasing the lock.
+  Recording it after, which is where it used to happen, loses the race to
+  the next interrupt's check.
+
+A sibling decided this way prints `⏺ Approved … by the rule just saved`
+rather than nothing, so the prompt that did not appear is accounted for.
+
+A "reject always" answer needs none of this: rejecting the first
+interrupt sends the rest back through the handler, where the ordinary
+check finds the new rule.
+
+Concurrency is also the thing to be careful about around `_internalIo`,
+the flag that makes the handler approve its own reads and writes of the
+policy file. It is one module-level boolean held across a file operation,
+so an interrupt from another branch that arrived while it was set would
+be approved with no check at all. It does not happen today, on either the
+load or the flush: `cli-policy-handler-parallel-rule` and
+`cli-policy-handler-parallel-flush` put three branches in the handler
+while one of them is reading or writing that file, and a policy that
+rejects the effect still rejects all three. Keep those tests if you touch
+the flag.
+
+Testing this needs the LLM tool loop, not a `parallel` block: a
+`parallel` block's arms consult the handler one after another, and each
+arm gets its own copy of the module globals that hold the saved rules.
 
 ## What "approve always here" pins
 

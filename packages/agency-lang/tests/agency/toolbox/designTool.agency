@@ -441,7 +441,7 @@ node draftRaisesOnlyToolboxEffects(): boolean {
   cleanup("addFifteen")
   let generic: string[] = []
   let sawWriteFile = false
-  let sawStage = false
+  let sawCreateStaging = false
   let result: Result = failure("not run")
   handle {
     result = designTool(
@@ -454,8 +454,8 @@ node draftRaisesOnlyToolboxEffects(): boolean {
     if (intr.effect == "std::toolbox::writeFile") {
       sawWriteFile = true
     }
-    if (intr.effect == "std::toolbox::stage") {
-      sawStage = true
+    if (intr.effect == "std::toolbox::createStaging") {
+      sawCreateStaging = true
     }
     const staged = "${intr.data.dir}" =~ re/\/staging\//
     if (intr.effect == "std::write" || intr.effect == "std::mkdir" || intr.effect == "std::move") {
@@ -470,7 +470,7 @@ node draftRaisesOnlyToolboxEffects(): boolean {
     return approve()
   }
   cleanup("addFifteen")
-  return result is success && sawWriteFile && sawStage && generic.length == 0
+  return result is success && sawWriteFile && sawCreateStaging && generic.length == 0
 }
 
 node refusedWriteStopsTheRounds(): boolean {

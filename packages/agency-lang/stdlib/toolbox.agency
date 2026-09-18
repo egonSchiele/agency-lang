@@ -138,16 +138,32 @@ effect std::toolbox::writeFile {
   content: string
 }
 
-// The staging directory for one draft: created before the draft is
-// written, removed when the draft is abandoned, and one file inside it
-// cleared when a revision stops being testable. `target` is that file, or
-// "" for the directory itself. Same scope as the writes that go into it.
+// The staging directory for one draft, created before the draft is
+// written. Same scope as the writes that go into it.
 @alwaysUnder(root)
-effect std::toolbox::stage {
+effect std::toolbox::createStaging {
+  root: string;
+  dir: string;
+  name: string
+}
+
+// The staging directory of a draft that was not saved, removed with
+// everything in it.
+@alwaysUnder(root)
+effect std::toolbox::removeStaging {
+  root: string;
+  dir: string;
+  name: string
+}
+
+// One file in a draft's staging directory, removed when a revision stops
+// being testable and the previous round's tests must not ship with it.
+@alwaysUnder(root)
+effect std::toolbox::removeStagedFile {
   root: string;
   dir: string;
   name: string;
-  target: string
+  filename: string
 }
 
 effect std::toolbox::review {
@@ -692,34 +708,41 @@ def writeToolFile(
 // Create this draft's staging directory. Raised before it exists, so the
 // payload carries the path the toolbox built, not a resolved one.
 def makeStagingDir(root: string, dir: string, name: string): Result {
-  return interrupt std::toolbox::stage("Are you sure you want to create this staging directory?", {
+  return interrupt std::toolbox::createStaging("Are you sure you want to create this staging directory?", {
     root: root,
     dir: dir,
-    name: name,
-    target: ""
+    name: name
   })
   destructive {
     return try _mkdir(dir)
   }
 }
 
-// Remove the staging directory, or one file inside it.
-def clearStaged(
+def removeStagingDir(root: string, dir: string, name: string): Result {
+  return interrupt std::toolbox::removeStaging("Are you sure you want to remove this staging directory?", {
+    root: root,
+    dir: dir,
+    name: name
+  })
+  destructive {
+    return try _remove(dir)
+  }
+}
+
+def removeStagedFile(
   root: string,
   dir: string,
   name: string,
-  target: string,
+  filename: string,
 ): Result {
-  const what = if target == "" then "staging directory" else target
-  return interrupt std::toolbox::stage("Are you sure you want to remove this ${what}?", {
+  return interrupt std::toolbox::removeStagedFile("Are you sure you want to remove this staged file?", {
     root: root,
     dir: dir,
     name: name,
-    target: target
+    filename: filename
   })
   destructive {
-    const path = if target == "" then dir else "${dir}/${target}"
-    return try _remove(path)
+    return try _remove("${dir}/${filename}")
   }
 }
 
@@ -865,7 +888,7 @@ def testSource(source: string, settings: DraftSettings): Result<Draft> {
     // A previous round may have been pure and left a test file behind;
     // it must not ship with this draft.
     if (exists(TEST_FILE, settings.stagingDir)) {
-      const cleared = clearStaged(
+      const cleared = removeStagedFile(
         settings.root,
         settings.stagingDir,
         settings.name,
@@ -1188,7 +1211,7 @@ def clearStaging(
   if (outcome is success) {
     return outcome
   }
-  const removed = clearStaged(root, stagingDir, name, "")
+  const removed = removeStagingDir(root, stagingDir, name)
   if (removed is failure(removeErr)) {
     return failure(
       "${outcome.error}\n(could not clear staging directory ${stagingDir}: ${removeErr})",

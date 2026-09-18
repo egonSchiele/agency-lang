@@ -40,11 +40,25 @@ describe("builtinPolicy", () => {
     }
   });
 
-  it("approves the toolbox use count only under the agent home's toolbox", () => {
-    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::recordUse"]).toEqual([
-      { match: { dir: "<agent-home>/tools/**" }, action: "approve" },
-    ]);
-    expect(builtinPolicy("minimal", "/tmp/base")!["std::toolbox::recordUse"]).toBeUndefined();
+  it("approves the toolbox's own file work only under the agent home's toolbox", () => {
+    const housekeeping = [
+      "std::toolbox::recordUse",
+      "std::toolbox::writeFile",
+      "std::toolbox::createStaging",
+      "std::toolbox::removeStaging",
+      "std::toolbox::removeStagedFile",
+    ];
+    for (const effect of housekeeping) {
+      expect(builtinPolicy("recommended", "/tmp/base")![effect]).toEqual([
+        { match: { dir: "<agent-home>/tools/**" }, action: "approve" },
+      ]);
+      expect(builtinPolicy("minimal", "/tmp/base")![effect]).toBeUndefined();
+    }
+  });
+
+  it("leaves the toolbox review and save to the prompt", () => {
+    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::review"]).toBeUndefined();
+    expect(builtinPolicy("recommended", "/tmp/base")!["std::toolbox::save"]).toBeUndefined();
   });
 
   it("approves GitHub reads under 'recommended' and leaves every GitHub write to the prompt", () => {

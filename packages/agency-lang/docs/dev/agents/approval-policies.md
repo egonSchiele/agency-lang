@@ -82,10 +82,13 @@ counting a use in `meta.json`, or building a draft in its staging
 directory. Those raise an effect of their own and then do the file work
 with the non-interrupt primitives, so a policy can allow them without a
 `std::write` rule on the agent home, and a rejection of writes elsewhere
-still holds. `std::toolbox::recordUse`, `std::toolbox::scan`,
-`std::toolbox::stage`, and `std::toolbox::writeFile` are the current set;
-`recommended` approves the first three under the agent home and prompts
-for the fourth, which carries the tool's code.
+still holds. `std::toolbox::scan`, `std::toolbox::recordUse`,
+`std::toolbox::writeFile`, `std::toolbox::createStaging`,
+`std::toolbox::removeStaging`, and `std::toolbox::removeStagedFile` are
+the current set, and `recommended` approves every one of them under the
+agent home. Writing a draft's files decides nothing: the user reads the
+finished draft at `std::toolbox::review` and answers for it at
+`std::toolbox::save`, and those two stay with the prompt.
 
 An effect like this must scope its `@always` field to something durable.
 `std::toolbox::writeFile` pins `root`, the toolbox, not `dir`, the

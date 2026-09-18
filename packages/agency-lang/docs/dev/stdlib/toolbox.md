@@ -154,9 +154,11 @@ the use count:
   the four files. The four names are constants and `dir` is a directory
   built from a name `checkNameSyntax` has passed, so a model never
   chooses a path here.
-- `std::toolbox::stage { root, dir, name, target }` for the staging
-  directory's creation and removal, and for clearing a stale
-  `tool.test.json`. `target` is that file, or `""` for the directory.
+- `std::toolbox::createStaging { root, dir, name }` when the staging
+  directory is made, `std::toolbox::removeStaging` when an unsaved draft's
+  directory is removed, and `std::toolbox::removeStagedFile { …, filename }`
+  when a stale `tool.test.json` is cleared. One effect each, so a policy
+  can tell creating a directory from removing one.
 
 Both carry `root`, the toolbox root, as the `@alwaysUnder` field, so
 "approve always here" pins the toolbox instead of one draft's staging
@@ -164,9 +166,10 @@ directory, whose name ends in a random number and never recurs.
 
 The publish `move` raises nothing of its own: the `std::toolbox::save`
 gate was answered a moment earlier and named the same root and name.
-`recommended` auto-approves `std::toolbox::stage` under the agent home,
-alongside the use count. Writing a draft's files stays a prompt, because
-that is the tool's code.
+`recommended` auto-approves all of them under the agent home, alongside
+the use count. Writing a draft's files decides nothing: the user reads
+the finished draft at the review gate and answers for it at the save
+gate, and those two are the prompts a tool costs.
 
 Each wrapper resolves the directory with `_realDir` before it raises and
 hands that same spelling to the primitive (`_write`, `_mkdir`, `_remove`,

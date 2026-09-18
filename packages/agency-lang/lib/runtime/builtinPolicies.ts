@@ -171,7 +171,10 @@ export function withWritesPolicy(baseDir: string): Policy {
   };
 }
 
-// Approve EVERY interrupt, no scoping. Use ONLY in a disposable sandbox.
+// Approve every interrupt, no scoping, except a raise that asks for a
+// value — no rule can answer one of those, whatever it says (see
+// `isOwnPolicyIo`'s neighbours in stdlib/policy.agency). Use ONLY in a
+// disposable sandbox.
 export const approveAllPolicy: Policy = {
   "*": [{ action: "approve" }],
 };
@@ -197,7 +200,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "approve-all",
     description:
-      "Approve EVERY interrupt — reads, writes, shell, git, anywhere, no scoping. UNSAFE outside a disposable sandbox.",
+      "Approve EVERY interrupt — reads, writes, shell, git, anywhere, no scoping. A raise that asks for a value (a question, a draft to review) still goes to the user, because an approval from a rule carries no answer. UNSAFE outside a disposable sandbox.",
   },
 ];
 

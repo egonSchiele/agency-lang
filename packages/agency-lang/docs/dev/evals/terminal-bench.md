@@ -52,7 +52,9 @@ Everything runs from `~/bench-agency/` (a separate dir, not this repo).
     agency agent --agent code --policy approve-all --verbose --debug \
       --max-tool-call-rounds 100 --provider <p> --model <m> -p -- <instruction>
     ```
-    - `--policy approve-all` approves EVERY interrupt with no scoping. The
+    - `--policy approve-all` approves EVERY interrupt with no scoping, bar a
+      raise that asks for a value, which no rule can answer and which a
+      headless run therefore rejects. The
       built-in describes itself as unsafe outside a disposable sandbox
       (`lib/runtime/builtinPolicies.ts`), and a benchmark container is exactly
       that. Never use it on a real machine; `with-writes` is the everyday

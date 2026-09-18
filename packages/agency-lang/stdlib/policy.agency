@@ -552,6 +552,14 @@ export def writePolicyFile(
 // and Agency exposes no realpath to compare with. A read of a same-named
 // file in another directory, from another branch, inside the window, is
 // what is left.
+//
+// Only the read half matches anything today. `_writePolicyFile`
+// (`lib/stdlib/policy.ts`) calls `writeText` straight, so a flush raises
+// no `std::write` for this to approve. The flag is still set around it,
+// because the window is real either way — the containment check it
+// awaits is time another branch can arrive in — and because a flush that
+// ever goes through Agency's own `write` should find the guard already
+// here rather than need it added.
 def isOwnPolicyIo(intr: any): boolean {
   if (_internalIo == "" || intr.effect != _internalIo) {
     return false
@@ -984,15 +992,27 @@ def _handler(intr: any): any {
   if (decision.type == "reject") {
     return applyRule(intr, decision)
   }
-  if (decision.type == "approve" && intr.expectsValue != true) {
+  const ruleApproves = decision.type == "approve"
+  if (ruleApproves && intr.expectsValue != true) {
     return applyRule(intr, decision)
   }
 
-  // No rule decided, and no user is at a terminal to ask: reject with a
-  // reason. The reason becomes the failing call's error, so an LLM whose
-  // tool raised this effect reads why and can take another approach
-  // instead of the process dying on a prompt nobody can answer.
+  // Nobody is at a terminal to ask. Reject with a reason: it becomes the
+  // failing call's error, so an LLM whose tool raised this effect reads
+  // why and can take another approach instead of the process dying on a
+  // prompt nobody can answer.
+  //
+  // A rule that approves this effect but could not be used, because the
+  // raise asks for a value, gets its own reason. "No rule for this
+  // effect" is false in the one case that produces it, and sends whoever
+  // reads it looking for a policy bug. `--policy approve-all` is the
+  // usual way to arrive here.
   if (!_interactive) {
+    if (ruleApproves) {
+      return reject(
+        "\"${intr.effect}\" was rejected automatically: a policy rule approves this effect, but this raise asks for a value and an approval from a rule carries none, so only a person can answer it. This is a non-interactive run. Take an approach that does not need an answer, or re-run interactively.",
+      )
+    }
     return reject(
       "\"${intr.effect}\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"${intr.effect}\".",
     )

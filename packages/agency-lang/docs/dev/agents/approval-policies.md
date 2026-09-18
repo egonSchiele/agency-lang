@@ -117,16 +117,27 @@ an interrupt by three routes:
   message.
 
 The cost is that a policy file cannot express "approve this
-value-expecting effect without asking". Headlessly such an interrupt is
-rejected with the usual explanation instead. For the effects that expect
-a value today, a silent empty answer was not a useful thing to be able to
-ask for.
+value-expecting effect without asking", and `approve-all` is no longer
+quite all — its description says so. For the effects that expect a value
+today (`std::question`, `std::skills::review`, `std::toolbox::review`), a
+silent empty answer was not a useful thing to be able to ask for.
+
+Headlessly such an interrupt is rejected, and the rejection says which of
+the two things happened. "The policy has no rule for this effect" is the
+message for no rule; a rule that approves but could not be used gets its
+own, because the first one is false in exactly the case that produces it
+and sends whoever reads it looking for a policy bug.
 
 ## The handler's own file operations
 
 `_internalIo` names the operation open on the handler's own policy file,
 `"std::read"` while it loads and `"std::write"` while it flushes, and is
-`""` the rest of the time. `isOwnPolicyIo` approves an interrupt without
+`""` the rest of the time. Only the read half matches anything today:
+`_writePolicyFile` writes through `writeText` directly, so a flush raises
+no `std::write`. The flag is still set around it, because the window is
+real either way — the containment check it awaits is time another branch
+can arrive in — and a flush that ever goes through Agency's own `write`
+should find the guard already here. `isOwnPolicyIo` approves an interrupt without
 consulting the policy when it is that operation, on that file's name.
 
 It is worth being clear about what this is not for. A handler never hears

@@ -91,28 +91,16 @@ snapshot to the value they return, as `RunNodeResult.usage`, through
 a compiled agent in-process reads its per-kind-and-model spend there. The
 `onAgentEnd` hook's result carries it too.
 
-Cost is part of a run's state. Every checkpoint saves the meter's snapshot
-(`Checkpoint.usage`), and `restoreState` sets the meter to what the restored
-checkpoint saved (`InvocationUsageMeter.resumeFrom`). That one rule covers a
-host resuming a paused run, a program calling `restore()`, and a session loaded
-from disk. So `usage` on a result, `getCost()`, `getTokens()` and
-`getModelCosts()` always agree, and none of them depends on whether the code is
-running before or after a resume or a rewind. A cost guard's `spent` follows
-the same rule, because it is serialized with the stack.
-
-What that figure means is the cost of the path that led to the current state.
-A resumed run's figure includes what it spent before it paused. Spend on a path
-that a `restore()` rewound away is not in it. A program that tries several
-strategies from one checkpoint and wants the total across all of them reads
-`getCost()` at the checkpoint and again before each `restore()`, and keeps
-those readings somewhere a rewind does not reach, such as a TypeScript helper.
-With a checkpoint at $0.50 and tries of $0.25, $0.60 and $0.70, the readings
-are 0.50, 0.75, 1.10 and 1.20, and the total is
-0.50 + 0.25 + 0.60 + 0.70 = $2.05.
+Cost is part of a run's state: every checkpoint saves the meter's snapshot, and
+every restore sets the meter to what the restored checkpoint saved. So `usage`
+on a result always agrees with `getCost()`, `getTokens()` and
+`getModelCosts()`, and a resumed run's figure includes what it spent before it
+paused. See [Cost is part of a run's state](../runtime/cost-is-state.md) for
+the rule, what the figure means when a program rewinds, and why.
 
 The result also carries `traceId`, the same on every result of one run. A host
 that records a paused result keys it by `traceId` and replaces it when the run
-reports again; summing results would count the earlier legs twice. The same
+reports again. Summing results would count the earlier legs twice. The same
 applies to `RouteResult.usage` on the serve path.
 
 A checkpoint comes back from the host, so `resumeFrom` recovers it as untrusted

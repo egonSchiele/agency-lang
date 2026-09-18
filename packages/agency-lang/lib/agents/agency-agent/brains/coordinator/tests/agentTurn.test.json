@@ -47,6 +47,16 @@
       ]
     },
     {
+      "nodeName": "switchWithAPickerKeyChangesProvider",
+      "input": "",
+      "expectedOutput": "\"openai-responses|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "switchPerSlotOnly",
       "input": "",
       "expectedOutput": "\"claude-sonnet-5|claude-opus-4-8\"",
@@ -137,7 +147,17 @@
       ]
     },
     {
-      "nodeName": "modelItemKeyIsModelName",
+      "nodeName": "modelItemKeysCarryTheirProvider",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "modelItemsUnderAnEstablishedProvider",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

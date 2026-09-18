@@ -33,6 +33,7 @@ import {
   Session,
   switchModel,
   reactToSlotChange,
+  establishedProvider,
   modelChoiceItems,
   parseModelsFilters,
   parsePresetName,
@@ -151,7 +152,7 @@ def modelSlashCommand(command: string): boolean {
         pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
       }
     }
-    const items = modelChoiceItems({})
+    const items = modelChoiceItems({}, establishedProvider(_session))
     const choice = chooseOption(
       "Model",
       "Pick a model, or type one (or slot=model, e.g. reasoning=claude-opus-4-8). Empty to cancel.",

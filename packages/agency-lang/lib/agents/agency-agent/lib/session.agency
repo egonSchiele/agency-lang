@@ -275,12 +275,30 @@ export def reactToSlotChange(change: SlotChange): boolean {
 
 // ChoiceItem list for the model pickers: the hosted catalog, filtered, each
 // labeled with provider + input price for an informed pick.
-export def modelChoiceItems(filters: ModelFilters): ChoiceItem[] {
+/** The provider a session is held to by --provider, a preset, or
+  settings.model, or "" when none is. switchModel never splits a
+  `provider/model` spec under one, so the picker has to know. */
+export def establishedProvider(choices: ModelChoices): string {
+  return requestProvider(currentModelRequest(choices), _startupModelSettings)
+}
+
+// The key is what switchModel receives, so it carries the provider:
+// a bare `gpt-5.6-sol` picked in an anthropic session would be sent to
+// anthropic. Under an established provider a `provider/model` key is
+// never split, so there the list narrows to that provider and the keys
+// stay bare. Providers are compared and written demoted, because the
+// catalog says `openai-responses` and the resolver only knows `openai`.
+export def modelChoiceItems(filters: ModelFilters, established: string = ""): ChoiceItem[] {
   let items: ChoiceItem[] = []
   for (model in filterHostedModels(listHostedModels(), filters)) {
+    const provider = demoteProvider(model.provider)
+    if (established != "" && provider != demoteProvider(established)) {
+      continue
+    }
     const label = "${model.name}  (${model.provider}, $${model.inputCost}/1M in)"
+    const key = if established == "" then "${provider}/${model.name}" else model.name
     items.push({
-      key: model.name,
+      key: key,
       label: label
     })
   }

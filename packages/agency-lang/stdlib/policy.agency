@@ -214,7 +214,7 @@ let _interactive: boolean = true
 // `_policy == null` default-reject would veto the `with approve` on the
 // file op (any handler can veto an interrupt), the load/save would fail,
 // and every real interrupt would fall through to prompting.
-let _internalIo: boolean = false
+let _internalIo: string = ""
 
 /**
  * Evaluate a policy against a single interrupt. Returns the result
@@ -526,30 +526,34 @@ export def writePolicyFile(
 }
 
 // The one interrupt the handler approves without consulting the policy:
-// its own read or write of the policy file, while `_internalIo` marks
-// that window. The file operation carries `with approve` already, but
-// that is not enough on its own — this handler is in its chain, and a
-// no-match propagate or the `_policy == null` default would veto the
-// read, leaving every later interrupt to prompt.
+// its own read or write of the policy file. `_internalIo` names the
+// operation that is open, and is "" the rest of the time.
 //
-// The window is real time, not an instant. The file operation is
-// awaited, and other execution paths — parallel tool calls, a fork —
-// reach the handler while it is open. So the flag alone is not the
-// answer: `if (_internalIo) { return approve() }` would approve anything
-// any branch raised in that window, with no check at all. It has to be
-// this file operation, so that a tool call running alongside it is still
-// decided by the policy.
+// This is not the guard against the handler hearing its own raise. A
+// handler never hears that: the chain walk skips an entry while that
+// entry is executing, so the read inside `maybeLoadPolicy` does not come
+// back here at all. What this covers is a SECOND entry of this same
+// handler in the chain, which does hear it, shares these module globals,
+// and whose no-match propagate or `_policy == null` default would veto
+// the read and leave every later interrupt prompting.
 //
-// Matched on the effect and the file's name. Not its directory: the
-// interrupt reports the directory the containment layer resolved, which
-// is the realpath, and on macOS that is not the string the caller passed
-// (/tmp is /private/tmp). A read of a same-named file elsewhere during
-// the window is the remaining gap, and it is a far smaller one.
+// The other entry is not the only thing that reaches the handler while
+// the flag is set. The file operation is awaited, and other execution
+// paths — parallel tool calls, a fork — have their own entries and are
+// not excluded. So the flag alone cannot be the answer: a bare
+// `if (_internalIo) { return approve() }` would approve anything any
+// branch raised for the length of a file read, with no check at all. It
+// has to be this operation: the effect that is open, and the policy
+// file's own name.
+//
+// The name and not the directory, because the directory the interrupt
+// reports is the one the containment layer resolved, the realpath, which
+// on macOS is not the string the caller passed (/tmp is /private/tmp),
+// and Agency exposes no realpath to compare with. A read of a same-named
+// file in another directory, from another branch, inside the window, is
+// what is left.
 def isOwnPolicyIo(intr: any): boolean {
-  if (!_internalIo) {
-    return false
-  }
-  if (intr.effect != "std::read" && intr.effect != "std::write") {
+  if (_internalIo == "" || intr.effect != _internalIo) {
     return false
   }
   if (intr.data == null) {
@@ -566,9 +570,9 @@ def isOwnPolicyIo(intr: any): boolean {
 def maybeLoadPolicy() {
   if (!_policyLoaded) {
     _policyLoaded = true
-    _internalIo = true
+    _internalIo = "std::read"
     const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
-    _internalIo = false
+    _internalIo = ""
     if (isFailure(loaded)) {
       // A missing file is a normal first run. Anything else means the
       // user's saved decisions are NOT in effect — say so, or a
@@ -596,9 +600,9 @@ def maybeFlush() {
     // sets `_policy` — but if that invariant ever breaks, skip the write
     // rather than clobber the policy file with `null`.
     if (_policy != null) {
-      _internalIo = true
+      _internalIo = "std::write"
       writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      _internalIo = false
+      _internalIo = ""
     }
   }
 }
@@ -619,9 +623,9 @@ export def flushPolicy() {
   if (_pendingSave) {
     _pendingSave = false
     if (_policy != null) {
-      _internalIo = true
+      _internalIo = "std::write"
       writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      _internalIo = false
+      _internalIo = ""
     }
   }
 }

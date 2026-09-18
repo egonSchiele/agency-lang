@@ -108,32 +108,45 @@ not the menu.
 
 ## The handler's own file operations
 
-`_internalIo` marks the window where the handler reads or writes its own
-policy file. Inside it the handler approves without consulting the
-policy, because its `with approve` is not enough on its own: this handler
-is in that operation's chain, and its no-match propagate or its
-`_policy == null` default would veto the read, leaving every later
+`_internalIo` names the operation open on the handler's own policy file,
+`"std::read"` while it loads and `"std::write"` while it flushes, and is
+`""` the rest of the time. `isOwnPolicyIo` approves an interrupt without
+consulting the policy when it is that operation, on that file's name.
+
+It is worth being clear about what this is not for. A handler never hears
+its own raise: the chain walk skips an entry while that entry is
+executing (see [handlers.md](../../site/guide/handlers.md)), so the read
+inside `maybeLoadPolicy` does not come back through `_handler` at all. A
+print put inside `isOwnPolicyIo` never fires on a plain load. What the
+flag covers is a *second* entry of this same handler in the chain, which
+does hear that read, shares these module globals, and whose no-match
+propagate or `_policy == null` default would veto it, leaving every later
 interrupt to prompt.
 
-That window is a span of real time, not an instant — the file operation
-is awaited, and other branches reach the handler while it is open. So the
-flag is necessary but not sufficient, and `isOwnPolicyIo` also requires
-the interrupt to be a `std::read` or `std::write` of the policy file's
-own name. Without that, anything any branch raised during a policy load
-would be approved with no check at all.
+That second entry is not the only thing that can reach the handler while
+the flag is set, which is the reason the check is narrow. The file
+operation is awaited, and other execution paths — parallel tool calls, a
+fork — have their own entries and are not excluded from anything. A bare
+`if (_internalIo) { return approve() }`, which is what this was, approves
+whatever any branch raises for the length of a file read, with no check
+at all.
 
 The name is matched, not the directory: the interrupt reports the
 directory the containment layer resolved, which is the realpath, and on
-macOS that is not the string the caller passed. A read of a same-named
-file in another directory during the window is the gap that remains.
+macOS that is not the string the caller passed (`/tmp` against
+`/private/tmp`), and Agency exposes no realpath to compare with. A read
+of a same-named file in another directory, from another branch, inside
+the window, is what is left.
 
 `cli-policy-handler-parallel-rule` and `-flush` put three branches in the
 handler while one of them reads or writes that file, with a policy that
 rejects the effect, and count three rejections. Those rejections come
 from a rule in the file, so the tests also show the load and the flush
-still work through the narrower guard. What they cannot show is that a
-branch really did land inside the window; that is up to the scheduler.
-The guarantee is `isOwnPolicyIo`, not the timing.
+still work through the narrower check — which is the real risk in
+tightening it, because a check that is too tight fails silently and makes
+everything prompt. What they cannot show is that a branch really did land
+inside the window; that is up to the scheduler. The guarantee is
+`isOwnPolicyIo`, not the timing.
 
 
 ## What "approve always here" pins

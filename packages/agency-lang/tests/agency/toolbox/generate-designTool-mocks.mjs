@@ -59,7 +59,6 @@ const cases = [
   { request: { n: 0 }, expectedJson: "1" },
 ];
 const codeMock = (source) => ({ return: { code: source } });
-const reviewOk = { return: [] };
 const casesMock = { return: cases };
 const testCase = (nodeName, rounds) => ({
   nodeName,
@@ -77,7 +76,21 @@ const testCase = (nodeName, rounds) => ({
 // program that runs in its own process under a random module id, so it
 // reads the "*" queue, from the start, every time. That is why the other
 // two calls need their own queues.
-const draftRound = (source, tested) => ({ source, tested });
+// `review` is what the review agent returns for the round, or null when
+// the round must not be reviewed at all: a redraft that answered the
+// reviewer with `cannotFix` goes to the user without a second review, and
+// a review call there would find its queue empty. `cannotFix` lists the
+// tool calls the coding agent makes before it returns the draft.
+const draftRound = (source, tested, review = [], cannotFix = []) => ({
+  source,
+  tested,
+  review,
+  cannotFix,
+});
+const finding = (error, feedback) => ({ error, feedback });
+const cannotFixCall = (point, reason) => ({
+  toolCall: { name: "cannotFix", args: { point, reason } },
+});
 const pureRound = [draftRound(good, true)];
 const modelRound = [draftRound(modelImpl, false)];
 const readRound = [draftRound(readImpl, false)];
@@ -86,13 +99,27 @@ const wrongRequestRound = [draftRound(wrongRequest, false)];
 const nodeImportRound = [draftRound(nodeImportImpl, false)];
 const dateRound = [draftRound(dateImpl, false)];
 const aliasRound = [draftRound(aliasImpl, false)];
+const ADVICE = "search() returns no dates, so publicationTime is a guess. Use a dated source or drop the field.";
+const PROBLEM = "run ignores request.n.";
+const UNFIXABLE = "The purpose asks for a publication time.";
+const REASON = "No std:: search function returns a date.";
+const advisedRound = [draftRound(good, true, [finding(false, ADVICE)])];
+const blockedRound = [draftRound(good, false, [finding(true, PROBLEM)])];
+const blockedAgainRound = [draftRound(good, true, [finding(true, PROBLEM)])];
+const unfixableRound = [draftRound(good, false, [finding(true, UNFIXABLE)])];
+const cannotFixRound = [draftRound(good, true, null, [{ point: UNFIXABLE, reason: REASON }])];
 const scopedMocks = (rounds) => {
   if (rounds.length === 0) {
     return [];
   }
   const mocks = {
-    coding: rounds.map((round) => codeMock(round.source)),
-    review: rounds.map(() => reviewOk),
+    coding: rounds.flatMap((round) => [
+      ...round.cannotFix.map((call) => cannotFixCall(call.point, call.reason)),
+      codeMock(round.source),
+    ]),
+    review: rounds
+      .filter((round) => round.review !== null)
+      .map((round) => ({ return: round.review })),
   };
   if (rounds.some((round) => round.tested)) {
     mocks["*"] = [casesMock];
@@ -134,5 +161,11 @@ const tests = [
   testCase("runToolRefusesAMissingTool", []),
   testCase("runToolRefusesAPath", []),
   testCase("runToolRefusesCorruptMeta", []),
+  testCase("reviewerAdviceReachesTheUser", advisedRound),
+  testCase("firstBlockIsFixedWithoutTheUser", [...blockedRound, ...pureRound]),
+  testCase("cannotFixSkipsTheSecondReview", [...unfixableRound, ...cannotFixRound]),
+  testCase("secondBlockGoesToTheUser", [...blockedRound, ...blockedAgainRound]),
+  testCase("unacceptedBlockedDraftNamesTheFindings", [...blockedRound, ...blockedAgainRound]),
+  testCase("unresolvedPointsAreKeptPerStagingDir", []),
 ];
 writeFileSync(join(here, "designTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");

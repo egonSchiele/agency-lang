@@ -1,6 +1,7 @@
 import { remove, mkdir } from "std::fs"
 import { exists, ls, exec } from "std::shell"
 import { designTool, listTools, runTool } from "std::toolbox"
+import test { cannotFix, takeUnresolved } from "std::toolbox"
 
 const OUT = __dirname + "/test-output"
 const TOOLS = __dirname + "/fixtures/tools"
@@ -559,4 +560,106 @@ node runToolRefusesCorruptMeta(): boolean {
     n: 1
   }, TOOLS) with approve
   return answer is failure && "${answer.error}" =~ re/meta\.json/
+}
+
+// The reviews a design raised, in order, so a test can read what the user
+// was shown. Filled by runDesignSeeing.
+let _reviews: any[] = []
+
+def runDesignSeeing(name: string, answers: any[]) {
+  _reviews = []
+  let reviewCount = 0
+  handle {
+    return designTool(
+      name: name,
+      purpose: "Add one to a number.",
+      request: REQUEST,
+      dir: OUT,
+      maxRounds: 3,
+    )
+  } with (intr) {
+    if (intr.effect != "std::toolbox::review") {
+      return approve()
+    }
+    _reviews.push(intr.data)
+    const answer = answers[reviewCount]
+    reviewCount = reviewCount + 1
+    if (answer == null) {
+      return reject("nobody is here to review it")
+    }
+    return approve(answer)
+  }
+}
+
+// A finding the reviewer marks error=false does not block the draft. It
+// used to be thrown away; now the user reads it beside the first draft.
+node reviewerAdviceReachesTheUser(): boolean {
+  cleanup("addAdvised")
+  const result = runDesignSeeing("addAdvised", ["accept"])
+  const shown = _reviews.length == 1 && _reviews[0].notes.length == 1 && _reviews[0].notes[0] =~ re/publicationTime/
+  const clean = _reviews[0].blocking.length == 0 && _reviews[0].unresolved.length == 0
+  cleanup("addAdvised")
+  return result is success && shown && clean
+}
+
+// The reviewer's first blocking findings go back to the author. The user
+// sees one review, of the second draft, with nothing open on it.
+node firstBlockIsFixedWithoutTheUser(): boolean {
+  cleanup("addFixed")
+  const result = runDesignSeeing("addFixed", ["accept"])
+  const once = _reviews.length == 1 && _reviews[0].blocking.length == 0
+  cleanup("addFixed")
+  return result is success && once
+}
+
+// The author answers the reviewer's point with cannotFix. The draft goes
+// to the user with the point and the reason, and is not reviewed again:
+// the review queue holds one mock, so a second review call would fail.
+node cannotFixSkipsTheSecondReview(): boolean {
+  cleanup("addStuck")
+  const result = runDesignSeeing("addStuck", ["accept"])
+  let told = false
+  if (_reviews.length == 1 && _reviews[0].unresolved.length == 1) {
+    const item = _reviews[0].unresolved[0]
+    told = item.point =~ re/publication time/ && item.reason =~ re/returns a date/
+  }
+  cleanup("addStuck")
+  return result is success && told
+}
+
+// The reviewer blocks the redraft too, and the author reported nothing.
+// The user is shown the draft with the findings instead of waiting
+// through a third round, and may accept it anyway.
+node secondBlockGoesToTheUser(): boolean {
+  cleanup("addBlocked")
+  const result = runDesignSeeing("addBlocked", ["accept"])
+  const shown = _reviews.length == 1 && _reviews[0].blocking.length == 1 && _reviews[0].blocking[0] =~ re/ignores request/
+  cleanup("addBlocked")
+  return result is success && shown
+}
+
+// With nobody to review it, as in a one-shot run, the blocked draft is
+// not saved and the failure says what the reviewer objected to.
+node unacceptedBlockedDraftNamesTheFindings(): boolean {
+  cleanup("addUnsaved")
+  const result = runDesignSeeing("addUnsaved", [null])
+  let named = false
+  if (result is failure(reason)) {
+    named = reason =~ re/nobody is here/ && reason =~ re/Reviewer: run ignores request/
+  }
+  const unsaved = !exists("addUnsaved/impl.agency", OUT)
+  cleanup("addUnsaved")
+  return named && unsaved
+}
+
+// Two designTool calls made as tool calls in one LLM round share module
+// globals, so the points are kept under each call's staging directory.
+node unresolvedPointsAreKeptPerStagingDir(): boolean {
+  cannotFix("/staging/a-1", "point a", "reason a")
+  cannotFix("/staging/b-2", "point b", "reason b")
+  cannotFix("/staging/a-1", "point a2", "reason a2")
+  const forA = takeUnresolved("/staging/a-1")
+  const forB = takeUnresolved("/staging/b-2")
+  const again = takeUnresolved("/staging/a-1")
+  return forA.length == 2 && forA[1].point == "point a2" && forB.length == 1 && forB[0].reason == "reason b" && again.length == 0
 }

@@ -10,6 +10,10 @@
   "controlCharsStripped": true,
   "carriageReturnStripped": true,
   "bidiOverrideStripped": true,
+  "reviewerNoteShown": true,
+  "blockingShown": true,
+  "unresolvedShown": true,
+  "quietDraftHasNoFindings": true,
   "survivedNullPayload": "survived",
   "titleReached": true
 }

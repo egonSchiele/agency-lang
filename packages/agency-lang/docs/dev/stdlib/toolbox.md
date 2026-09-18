@@ -92,9 +92,10 @@ raised.
 
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
 → `askUser` → `gateAndSave`, each a def with one job that returns a
-`Result`. `rounds` is the loop. It carries two things between rounds:
-`feedback`, holding the last problem or the user's revision request, and
-`previous`, the draft the user last saw. `previous` rides along on the
+`Result`. `rounds` is the loop. It carries three things between rounds:
+`feedback`, holding the last problem or the user's revision request,
+`fromReviewer`, which says whether that feedback is the reviewer's (see
+the next section), and `previous`, the draft the user last saw. `previous` rides along on the
 review interrupt so the approval prompt can diff this round's draft
 against it and show what changed rather than the whole tool again; on the
 first round it is `""` and the diff is all insertions. A round that
@@ -102,10 +103,62 @@ produced no draft passes `previous` through unchanged. It does mean a
 review interrupt carries the tool twice, in every checkpoint and every
 statelog event for it; a diff is worth that for something the user is
 being asked to read and judge. Only a `DraftProblem`
-(a coding-agent failure, review findings, a typecheck or compile error,
-a failed test) becomes feedback. Any other failure, such as a refused
+(a coding-agent failure, the reviewer's first blocking findings, a
+typecheck or compile error, a failed test) becomes feedback. Any other failure, such as a refused
 write or a review agent that did not run, ends the loop at once, since
 another draft cannot fix it.
+
+### What the reviewer may block, and when the user is asked
+
+A parse error, a typecheck error, a bad import, or a failing generated
+test is a fact, and it goes back to the author without the user. The
+reviewer's findings are judgments, and they are handled differently,
+because of one run. A user asked for a news tool, and the purpose text
+asked for a publication time on each item. Every draft used
+`std::web/search`, which returns a title, a URL, and a description. The
+reviewer blocked all three drafts on the missing date. It was right, and
+the author could not fix it. The user waited fifteen minutes, saw no
+code, and the call failed with "gave up after 3 rounds".
+
+Four rules came out of that:
+
+1. `reviewSource` passes the reviewer `REVIEW_LIMITS` as `context`. It
+   says the author can change this module and nothing else, that
+   `error=true` is for problems the author can fix inside that limit,
+   and that a limit of the available functions or a disagreement with
+   the purpose is `error=false`, written as advice to the user. The
+   shared review agent is unchanged.
+2. `error=false` findings used to be filtered out and dropped. They are
+   now `Review.notes`, carried on the draft and on the
+   `std::toolbox::review` payload, and printed under the diff
+   (`renderReviewFindings` in `stdlib/policy.agency`).
+3. The reviewer's first blocking findings go back to the author as
+   feedback with `fromReviewer` set. On that redraft only, the brief says
+   "fix it, or call `cannotFix` with the reason", and the coding agent is
+   given `cannotFix.partial(stagingDir: ...)` through `extraTools`. If
+   the author calls it, the draft is not reviewed again. It goes to the
+   user with each point and the author's reason (`Review.unresolved`).
+4. If the author reports nothing and the reviewer blocks the redraft
+   too, the draft goes to the user with the findings (`Review.blocking`).
+   The user never waits for more than two reviews before seeing code, and
+   may accept the draft anyway.
+
+`cannotFix` writes to `_unresolved`, a module-level record keyed by
+staging directory. The key matters in one case. Separate runs and
+`fork`/`parallel` branches each have their own globals, but two tool
+calls in the same LLM round share them (see `runBatch.md`), and a model
+can call `designTool` twice in one round. That sharing is also what lets
+`designTool` read what the tool wrote from inside the coding agent's
+tool loop. Globals are checkpoint state, so the record survives an
+interrupt in the middle of a draft.
+
+A draft nobody accepts is not saved. When it had open review points, the
+failure lists them (`notAccepted`), so the model that called `designTool`
+in a run with no user at a terminal can say why.
+
+`progress` prints a line at each stage with `print`, the channel
+`whatIAmDoing` uses, and lists the reviewer's findings when there are
+any. The work does not stop for it.
 
 `writeTool` is `stage` → `assembleTool` → `gateAndSave`. A
 `DraftProblem` from `assembleTool` becomes a plain failure, since there

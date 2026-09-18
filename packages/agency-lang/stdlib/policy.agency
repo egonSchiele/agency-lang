@@ -748,6 +748,36 @@ def renderSourceDiff(
   return lines.join("\n")
 }
 
+// What the reviewer and the author said about a tool draft, printed under
+// its diff. The text is written by a model, so it is stripped like the
+// source is. A payload from before these fields existed has none of them.
+def renderReviewFindings(data: any): string {
+  let lines: string[] = []
+  const unresolved = data.unresolved ?? []
+  if (unresolved.length > 0) {
+    lines.push(color.yellow("The author could not fix ${unresolved.length} review points:"))
+    for (item in unresolved) {
+      lines.push("- Reviewer: ${stripControlChars(item.point)}")
+      lines.push("  Author: ${stripControlChars(item.reason)}")
+    }
+  }
+  const blocking = data.blocking ?? []
+  if (blocking.length > 0) {
+    lines.push(color.yellow("The reviewer still objects after a redraft:"))
+    for (point in blocking) {
+      lines.push("- ${stripControlChars(point)}")
+    }
+  }
+  const notes = data.notes ?? []
+  if (notes.length > 0) {
+    lines.push(color.yellow("The reviewer notes:"))
+    for (note in notes) {
+      lines.push("- ${stripControlChars(note)}")
+    }
+  }
+  return lines.join("\n")
+}
+
 // The diff for an interrupt that changes code, or "" for every other
 // effect. These interrupts carry the old and new source in their data,
 // and the change is what the user is being asked to judge, so the
@@ -768,12 +798,17 @@ def renderInterruptDiff(intr: any): string {
     )
   }
   if (intr.effect == "std::toolbox::review") {
-    return renderSourceDiff(
+    const changed = renderSourceDiff(
       "Tool: ${intr.data.name}",
       intr.data.previous,
       intr.data.source,
       "agency",
     )
+    const findings = renderReviewFindings(intr.data)
+    if (findings == "") {
+      return changed
+    }
+    return "${changed}\n\n${findings}"
   }
   return ""
 }
@@ -810,13 +845,14 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
   // The source an edit or a tool review carries is printed above the
   // prompt as a diff, so the prompt's own body holds what is left: the
   // metadata that says which change this is. We drop the source itself
-  // (`before`/`after`, `source`/`previous`) and `edits`, the raw op list
-  // the diff already shows.
+  // (`before`/`after`, `source`/`previous`), `edits`, the raw op list
+  // the diff already shows, and a tool review's findings, which are
+  // printed under its diff.
   if (effect == "std::edit") {
     return renderObjAsTable(data, excludeKeys: ["before", "after", "edits"])
   }
   if (effect == "std::toolbox::review") {
-    return renderObjAsTable(data, excludeKeys: ["source", "previous"])
+    return renderObjAsTable(data, excludeKeys: ["source", "previous", "notes", "blocking", "unresolved"])
   }
 
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields

@@ -66,6 +66,16 @@ writeFileSync("__result.json", JSON.stringify({
   // The trojan-source characters that make code read as something else,
   // in the draft and in the interrupt's own message.
   bidiOverrideStripped: !printed.includes("\u202e") && !printed.includes("\u061c"),
+  // The reviewer's advice, its open objections, and the point the
+  // author could not fix with its reason, each printed once: under the
+  // diff, and not again in the prompt's table.
+  reviewerNoteShown: (plain.match(/search results carry no dates/g) || []).length === 1,
+  blockingShown: (plain.match(/run ignores the topic/g) || []).length === 1,
+  unresolvedShown:
+    plain.includes("Reviewer: asks for a publication time") &&
+    plain.includes("Author: no std search returns one"),
+  // A draft with nothing said about it prints no findings headings.
+  quietDraftHasNoFindings: (plain.match(/The reviewer notes:/g) || []).length === 1,
   survivedNullPayload,
   titleReached: plain.includes("review this tool?"),
 }, null, 2));

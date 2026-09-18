@@ -638,7 +638,7 @@ type AskUserResult = {
 def stripControlChars(text: string): string {
   const unixEndings = (text || "").replace(re/\r\n/g, "\n")
   const noControls = unixEndings.replace(re/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "")
-  return noControls.replace(re/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "")
+  return noControls.replace(re/[\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "")
 }
 
 // A change to code, as a header line and a syntax-highlighted unified
@@ -833,7 +833,9 @@ export def askUserChoices(intr: any): ChoiceItem[] {
 def askUser(intr: any): AskUserResult {
   // `!= null` compiles to `!== null` (Agency strict equality), so an
   // undefined entry would slip through. Use the explicit existence check.
-  const title = intr.message
+  // The message comes from whoever raised the interrupt, a tool the agent
+  // wrote among them, and it goes to the footer whole.
+  const title = stripControlChars(intr.message)
   const body = prettyPrintInterruptData(intr.data, intr.effect)
 
   const items = askUserChoices(intr)

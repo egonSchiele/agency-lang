@@ -10,5 +10,6 @@
   "controlCharsStripped": true,
   "carriageReturnStripped": true,
   "bidiOverrideStripped": true,
-  "survivedNullPayload": "survived"
+  "survivedNullPayload": "survived",
+  "titleReached": true
 }

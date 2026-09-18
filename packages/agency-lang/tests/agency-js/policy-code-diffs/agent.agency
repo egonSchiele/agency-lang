@@ -20,7 +20,7 @@ node main(args: { policyFile: string }): string {
       before: "def greet(): string {\n  return \"hi\"\n}",
       after: "def greet(): string {\n  return \"hello\"\n}",
     })
-    interrupt std::toolbox::review("review this tool?", {
+    interrupt std::toolbox::review("review this tool?\u001b[2J\u061c", {
       // A tool name is chosen by the agent and lands in the prompt's own
       // table, which keeps a carriage return: everything after it
       // overwrites the row up to that point.
@@ -46,7 +46,7 @@ node autoApproved(args: { policyFile: string }): string {
   setPolicy(args.policyFile, APPROVE_REVIEW)
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   handle {
-    interrupt std::toolbox::review("review this tool?", {
+    interrupt std::toolbox::review("review this tool?\u001b[2J\u061c", {
       name: "silentTool",
       stagingDir: "/tmp/staging",
       source: "def run(): string {\n  return \"quiet\"\n}",

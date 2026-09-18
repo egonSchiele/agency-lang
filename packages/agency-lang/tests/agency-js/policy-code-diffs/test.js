@@ -36,6 +36,9 @@ try {
 
 // The diff body, with the ANSI the highlighter adds taken back off.
 const plain = printed.replace(/\x1b\[[\d;]*m/g, "");
+// The table row the tool's name renders on, which is where a CR the
+// strip missed would do its damage.
+const nameRow = (printed.split("\n").find((line) => line.includes("greetHindi")) ?? "");
 
 writeFileSync("__result.json", JSON.stringify({
   editHeader: plain.includes("⏺ Edit: greet.agency"),
@@ -57,8 +60,12 @@ writeFileSync("__result.json", JSON.stringify({
   // raw ESC the model wrote.
   controlCharsStripped: !printed.includes("\u001b[2J"),
   // The table keeps a CR, which would put " wiped" on top of the name.
-  carriageReturnStripped: !printed.includes("\r"),
-  // The trojan-source characters that make code read as something else.
-  bidiOverrideStripped: !printed.includes("\u202e"),
+  // Scoped to the row the name renders on: a CR anywhere else in the
+  // output is not this assertion's business.
+  carriageReturnStripped: !nameRow.includes("\r"),
+  // The trojan-source characters that make code read as something else,
+  // in the draft and in the interrupt's own message.
+  bidiOverrideStripped: !printed.includes("\u202e") && !printed.includes("\u061c"),
   survivedNullPayload,
+  titleReached: plain.includes("review this tool?"),
 }, null, 2));

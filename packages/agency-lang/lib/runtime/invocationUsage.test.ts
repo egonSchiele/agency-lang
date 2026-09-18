@@ -596,3 +596,67 @@ describe("unwrapWithUsage", () => {
     }
   });
 });
+
+describe("InvocationUsageMeter.resumeFrom", () => {
+  const spent = (): InvocationUsageMeter => {
+    const meter = new InvocationUsageMeter();
+    meter.merge(
+      normalizeObservation({
+        type: "provider",
+        kind: "completion",
+        reportedModel: "opus",
+        cost: { inputCost: 0.25, outputCost: 0.25, totalCost: 0.5, currency: "USD" } as any,
+        tokens: { inputTokens: 10, outputTokens: 2, totalTokens: 12 } as any,
+      }),
+    );
+    return meter;
+  };
+
+  it("starts from the saved usage and keeps counting into the same entry", () => {
+    const saved = JSON.parse(JSON.stringify(spent().snapshot()));
+    const resumed = new InvocationUsageMeter();
+    resumed.resumeFrom(saved);
+    expect(resumed.snapshot()).toEqual(saved);
+
+    resumed.merge(
+      normalizeObservation({
+        type: "provider",
+        kind: "completion",
+        reportedModel: "opus",
+        cost: { inputCost: 0.25, outputCost: 0.25, totalCost: 0.5, currency: "USD" } as any,
+        tokens: { inputTokens: 10, outputTokens: 2, totalTokens: 12 } as any,
+      }),
+    );
+    const usage = resumed.snapshot();
+    expect(usage.cost.totalCost).toBeCloseTo(1);
+    expect(usage.tokens.totalTokens).toBe(24);
+    expect(usage.entries).toHaveLength(1);
+    expect(usage.complete).toBe(true);
+  });
+
+  it("keeps a saved lower bound a lower bound", () => {
+    const resumed = new InvocationUsageMeter();
+    resumed.resumeFrom({ ...spent().snapshot(), complete: false });
+    expect(resumed.snapshot().complete).toBe(false);
+    expect(resumed.snapshot().cost.totalCost).toBeCloseTo(0.5);
+  });
+
+  it.each([
+    ["no saved usage", undefined],
+    ["a non-object", "0.5"],
+  ])("reports a lower bound for %s", (_label, saved) => {
+    const resumed = new InvocationUsageMeter();
+    resumed.resumeFrom(saved);
+    expect(resumed.snapshot().complete).toBe(false);
+    expect(resumed.snapshot().cost.totalCost).toBe(0);
+  });
+
+  it("keeps the valid totals and reports a lower bound when an entry is unusable", () => {
+    const resumed = new InvocationUsageMeter();
+    resumed.resumeFrom({ ...spent().snapshot(), entries: [{ kind: "nonsense", model: "x" }] });
+    const usage = resumed.snapshot();
+    expect(usage.cost.totalCost).toBeCloseTo(0.5);
+    expect(usage.entries).toHaveLength(0);
+    expect(usage.complete).toBe(false);
+  });
+});

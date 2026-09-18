@@ -7,8 +7,9 @@ import {
 } from "./agent.js";
 import { writeFileSync } from "fs";
 
-// Every public entry point returns the run's spend as `usage`, and nothing
-// else on the result reports spend.
+// Every public entry point returns what the run has spent since it began as
+// `usage`, under the same `traceId`, and nothing else on the result reports
+// spend. A resumed leg's figure includes what the run spent before it paused.
 const seen = [];
 const callbacks = {
   onCheckpoint: ({ runId, checkpoint }) => {
@@ -26,18 +27,18 @@ function report(result) {
   };
 }
 
-// 1. runNode: the leg up to the gate made one call.
+// 1. runNode: one call before the gate.
 const first = await main({ callbacks });
 
-// 2. resumeFromCheckpoint: from the run's first checkpoint, which replays the
-//    call before the gate on a fresh meter.
-const stored = seen[0];
+// 2. resumeFromCheckpoint: from the last checkpoint before the pause. It makes
+//    no call of its own, so it reports the one call the checkpoint carried.
+const stored = seen[seen.length - 1];
 const resumed = await resumeFromCheckpoint(
   { type: "paused", checkpoint: JSON.parse(stored.json), runId: stored.runId },
   { metadata: { callbacks } },
 );
 
-// 3. respondToInterrupts: the leg after the gate made one call of its own.
+// 3. respondToInterrupts: one more call after the gate, two in total.
 const final = await respondToInterrupts(first.data, first.data.map(() => approve()), {
   metadata: { callbacks },
 });
@@ -47,6 +48,7 @@ writeFileSync(
   JSON.stringify(
     {
       interrupted: hasInterrupts(first.data),
+      sameTraceId: first.traceId === resumed.traceId && first.traceId === final.traceId,
       runNode: report(first),
       resumeFromCheckpoint: report(resumed),
       respondToInterrupts: report(final),

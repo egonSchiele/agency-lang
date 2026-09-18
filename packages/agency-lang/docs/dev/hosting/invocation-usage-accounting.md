@@ -91,8 +91,23 @@ snapshot to the value they return, as `RunNodeResult.usage`, through
 a compiled agent in-process reads its per-kind-and-model spend there. The
 `onAgentEnd` hook's result carries it too.
 
-Each invocation and each resume leg has its own meter, so a run that pauses
-once reports two figures that sum to its cost.
+The figure is cumulative for the run. Every checkpoint saves the meter's
+snapshot (`Checkpoint.usage`), and a resume starts its meter from the
+checkpoint it resumes (`InvocationUsageMeter.resumeFrom`, called from
+`resumeSetup.ts`). So `usage` on a resumed result includes what the run spent
+before it paused, and it agrees with `getCost()`, `getTokens()` and
+`getModelCosts()` inside the program, none of which depend on whether the code
+is running before or after a resume. An in-run `restore()` does not touch the
+meter: money spent after the restored checkpoint was still spent.
+
+The result also carries `traceId`, the same on every result of one run. A host
+that records a paused result keys it by `traceId` and replaces it when the run
+reports again; summing results would count the earlier legs twice. The same
+applies to `RouteResult.usage` on the serve path.
+
+A checkpoint comes back from the host, so `resumeFrom` recovers it as untrusted
+input: valid figures are kept, and anything unusable, or a checkpoint with no
+saved usage, makes the total a lower bound (`complete: false`).
 
 A thrown run still throws the original error unchanged and carries no usage on
 this path. Only the serve entry points report usage for a throw.

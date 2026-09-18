@@ -71,16 +71,13 @@ describe("execution-context invocation meter", () => {
     expect(b.invocationUsage.snapshot().unpricedCallCount).toBe(0);
   });
 
-  it("restoreState neither resets nor hydrates the meter (resume-leg isolation is structural)", async () => {
+  it("restoreState leaves the meter alone: an in-run restore does not un-spend money", async () => {
     const execCtx = await makeContext().createExecutionContext({ runId: "run-1" });
     execCtx.invocationUsage.merge(delta(0.5));
 
     const checkpoint = execCtx.stateToJSON() as unknown as Checkpoint;
     execCtx.restoreState(checkpoint);
 
-    // The meter is exactly what it was — restore did not touch it. (In real
-    // resume the FRESH execCtx is what gives per-leg isolation; here we prove
-    // restore itself carries no meter state.)
     expect(execCtx.invocationUsage.snapshot().cost.totalCost).toBeCloseTo(0.5);
   });
 

@@ -446,8 +446,9 @@ export class RuntimeContext<T> {
     // installRootBudget, which reads execCtx.budget, actually sees the resolved
     // config/override budget. Without this the root budget is a silent no-op.
     execCtx.budget = effective.budget;
-    // Fresh meter per invocation/leg (Object.create bypasses the field
-    // initializer). Never carried from the parent context or a checkpoint.
+    // Fresh meter per execution context (Object.create bypasses the field
+    // initializer). Never carried from the parent context. A resume starts
+    // it from its checkpoint afterwards (see resumeSetup.ts).
     execCtx.invocationUsage = new InvocationUsageMeter();
     execCtx.checkpoints = new CheckpointStore(this.maxRestores);
     // The execution context is built via Object.create, bypassing the

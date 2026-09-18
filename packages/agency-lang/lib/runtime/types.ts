@@ -16,8 +16,8 @@ export type GraphState = {
   isResume?: boolean;
 };
 
-/** A run's result before its entry point attaches `usage`. */
-export type RunNodeCoreResult<T> = Omit<RunNodeResult<T>, "usage">;
+/** A run's result before its entry point attaches `usage` and `traceId`. */
+export type RunNodeCoreResult<T> = Omit<RunNodeResult<T>, "usage" | "traceId">;
 
 export type NodeReturnValue<T> = {
   data: T;
@@ -27,8 +27,12 @@ export type NodeReturnValue<T> = {
 export type RunNodeResult<T> = {
   messages: ThreadStoreJSON;
   data: T;
-  /** What this run spent, per kind and model. */
+  /** What the run has spent since it began, per kind and model. A resumed
+   *  run's figure includes what it spent before it paused, so a host that
+   *  records a paused result replaces that record when the run reports again. */
   usage: RunUsage;
+  /** The run's id, the same on every result of one run across pauses. */
+  traceId: string;
 };
 
 export type Rejected = { type: "reject"; value?: any };

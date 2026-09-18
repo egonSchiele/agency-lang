@@ -516,7 +516,11 @@ async function runNodeCore({
                   name: "onAgentEnd",
                   data: {
                     nodeName,
-                    result: { ...returnObject, usage: execCtx.invocationUsage.snapshot() },
+                    result: {
+                      ...returnObject,
+                      usage: execCtx.invocationUsage.snapshot(),
+                      traceId: execCtx.getRunId(),
+                    },
                   },
                 }),
             );

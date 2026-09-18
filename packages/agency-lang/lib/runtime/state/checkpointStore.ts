@@ -10,6 +10,7 @@ import { checkpointSchema } from "./schemas.js";
 import type { SourceLocation } from "./sourceLocation.js";
 import type { StateStackJSON } from "./stateStack.js";
 import type { StateStack } from "./stateStack.js";
+import type { RunUsage } from "../invocationUsage.js";
 
 /** Label used for pinned checkpoints created at function entry for Result error handling. */
 export const RESULT_ENTRY_LABEL = "result-entry";
@@ -40,6 +41,7 @@ export type CheckpointArgs = {
   label?: string | null;
   pinned?: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
+  usage?: unknown;
   signature?: string;
 };
 
@@ -54,6 +56,7 @@ export type CheckpointJSON = {
   label: string | null;
   pinned: boolean;
   moduleFingerprints?: Record<string, ModuleFingerprint>;
+  usage?: unknown;
   signature?: string;
 };
 
@@ -70,6 +73,10 @@ export class Checkpoint implements SourceLocation {
   /** Fingerprint + compile time of each module with a live frame, captured at
    *  creation so a resume can refuse when the code changed. */
   public moduleFingerprints?: Record<string, ModuleFingerprint>;
+  /** What the run had spent when this checkpoint was taken, so a resumed run
+   *  keeps counting from there. `unknown` because a checkpoint comes back from
+   *  the host; `InvocationUsageMeter.resumeFrom` recovers it. */
+  public usage?: unknown;
   /** HMAC checksum embedded at creation when a signing key is configured.
    *  Absent on unsigned checkpoints. See lib/runtime/checkpointChecksum.ts. */
   public signature?: string;
@@ -85,6 +92,7 @@ export class Checkpoint implements SourceLocation {
     this.label = args.label ?? null;
     this.pinned = args.pinned ?? false;
     this.moduleFingerprints = args.moduleFingerprints;
+    this.usage = args.usage;
     this.signature = args.signature;
   }
 
@@ -193,6 +201,9 @@ export class Checkpoint implements SourceLocation {
     if (this.moduleFingerprints !== undefined) {
       json.moduleFingerprints = this.moduleFingerprints;
     }
+    if (this.usage !== undefined) {
+      json.usage = this.usage;
+    }
     if (this.signature !== undefined) {
       json.signature = this.signature;
     }
@@ -224,11 +235,15 @@ export class Checkpoint implements SourceLocation {
       );
     }
     const stackJson = stateStack.toJSON();
+    // Optional only for contexts built by hand in tests; a real context always
+    // has a meter.
+    const usage: RunUsage | undefined = ctx.invocationUsage?.snapshot();
     const moduleFingerprints = collectModuleFingerprints(stackJson);
     const args: CheckpointArgs = {
       stack: stackJson,
       globals: ctx.globals.toJSON(),
       nodeId,
+      usage,
       ...opts,
     };
     if (Object.keys(moduleFingerprints).length > 0) {

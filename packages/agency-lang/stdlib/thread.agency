@@ -309,11 +309,11 @@ export type ModelCost = {
 }
 
 /** Unlike the per-branch cost/token accessors, this covers every branch of
- *  the current invocation, so it attributes spend per model even for
+ *  the run, so it attributes spend per model even for
  *  subagents and tool calls that run on a different model. */
 export def getModelCosts(): ModelCost[] {
   """
-  Return what the current invocation has spent so far, one entry per kind
+  Return what the run has spent since it began, one entry per kind
   and model (completions, images, embeddings, speech), sorted by cost
   descending. This is the same figure the host reads from the run result's
   usage entries.

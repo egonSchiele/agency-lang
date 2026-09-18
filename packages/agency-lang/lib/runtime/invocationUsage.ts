@@ -463,7 +463,8 @@ function recoverIpcEntry(raw: unknown): IpcEntryRecovery {
   };
 }
 
-/** A fresh, non-serialized accumulator for one invocation/leg. Buckets attribution
+/** The accumulator for one run. A fresh run starts it at zero; a resumed run
+ *  starts it from its checkpoint (`resumeFrom`). Buckets attribution
  *  by (kind, model) via a nested null-prototype index into `entries` (first-seen
  *  order); keeps authoritative call-order flat totals with checked-add saturation. */
 export class InvocationUsageMeter {
@@ -480,6 +481,50 @@ export class InvocationUsageMeter {
     speech: Object.create(null),
     manual: Object.create(null),
   };
+
+  /** Start a fresh meter from the usage a checkpoint saved, so a resumed run
+   *  keeps counting from where it paused and its figures never depend on
+   *  whether it was resumed. The checkpoint comes back from the host, so it is
+   *  recovered like any other untrusted input: every valid figure is kept and
+   *  anything unusable makes the total a lower bound. A checkpoint with no
+   *  saved usage says nothing about what the run spent before it, which is a
+   *  lower bound too. */
+  resumeFrom(saved: unknown): void {
+    if (saved === null || typeof saved !== "object") {
+      this.complete = false;
+      return;
+    }
+    const obj = saved as Record<string, unknown>;
+    const { cost, priced } = buildCost(obj.cost);
+    const { tokens, malformed } = buildIpcTokens(obj.tokens);
+    this.cost = cost;
+    this.tokens = tokens;
+    const countIsValid = isSafeCount(obj.unpricedCallCount);
+    this.unpricedCallCount = isSafeCount(obj.unpricedCallCount) ? obj.unpricedCallCount : 0;
+    const entriesRecovered = this.resumeEntries(obj.entries);
+    this.complete =
+      obj.complete === true && priced && !malformed && countIsValid && entriesRecovered;
+  }
+
+  /** True when every saved entry was recovered intact. */
+  private resumeEntries(saved: unknown): boolean {
+    if (!Array.isArray(saved)) {
+      return false;
+    }
+    let intact = true;
+    for (const raw of saved) {
+      const recovery = recoverIpcEntry(raw);
+      if (recovery.status !== "ok") {
+        intact = false;
+        continue;
+      }
+      const target = this.entryFor(recovery.entry);
+      this.addCostInto(target.cost, recovery.entry.cost);
+      this.addTokensInto(target.tokens, recovery.entry.tokens);
+      intact = intact && !recovery.malformed;
+    }
+    return intact;
+  }
 
   /** Accumulate one delta. Returns true only when THIS merge newly makes usage
    *  incomplete (via a count-overflow transition). */
@@ -582,12 +627,12 @@ export function unwrapServedInvocationOutcome<T>(outcome: ServedInvocationOutcom
   throw outcome.error;
 }
 
-/** Unwrap like `unwrapServedInvocationOutcome`, and put the run's usage on the
- *  returned value. A thrown outcome still throws the exact original error; its
+/** Unwrap like `unwrapServedInvocationOutcome`, and put the run's usage and
+ *  trace id on the returned value. A thrown outcome still throws the exact original error; its
  *  usage does not travel with it. */
 export function unwrapWithUsage<T extends object>(
   outcome: ServedInvocationOutcome<T>,
-): T & { usage: RunUsage } {
+): T & { usage: RunUsage; traceId: string } {
   const value: T = unwrapServedInvocationOutcome(outcome);
-  return { ...value, usage: outcome.usage };
+  return { ...value, usage: outcome.usage, traceId: outcome.traceId };
 }

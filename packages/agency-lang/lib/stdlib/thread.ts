@@ -366,9 +366,9 @@ function toModelCost(entry: UsageEntry): ModelCost {
 }
 
 /**
- * What the current invocation has spent so far, one row per kind and model,
- * from the same meter the run result's `usage.entries` comes from. It covers
- * every branch, subagent and tool of the invocation. Sorted by cost
+ * What the run has spent since it began, one row per kind and model, from the
+ * same meter the run result's `usage.entries` comes from. It covers every
+ * branch, subagent and tool, and a resumed run's earlier spend. Sorted by cost
  * descending, model name as the tiebreak.
  */
 export async function _getModelCosts(): Promise<ModelCost[]> {

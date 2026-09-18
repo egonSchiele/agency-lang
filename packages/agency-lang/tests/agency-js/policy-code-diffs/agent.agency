@@ -1,0 +1,74 @@
+import { cliPolicyHandler, setPolicy, Policy, ScopedRuleFields } from "std::policy"
+
+// The two effects that carry source code show it as a diff printed above
+// the approval prompt, not as source inside the prompt's own body, where
+// the footer would cut it off after a few lines. The diff prints whether
+// a rule decided the interrupt or the user was asked, so an auto-approved
+// change is still visible.
+
+const FIELDS: ScopedRuleFields = {}
+const POLICY = {}
+const APPROVE_REVIEW: Policy = { "std::toolbox::review": [{ action: "approve" }] }
+
+node main(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, POLICY)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::edit("apply this edit?", {
+      dir: ".",
+      filename: "greet.agency",
+      before: "def greet(): string {\n  return \"hi\"\n}",
+      after: "def greet(): string {\n  return \"hello\"\n}",
+    })
+    interrupt std::toolbox::review("review this tool?\u001b[2J\u061c", {
+      // A tool name is chosen by the agent and lands in the prompt's own
+      // table, which keeps a carriage return: everything after it
+      // overwrites the row up to that point.
+      name: "greetHindi\r wiped",
+      stagingDir: "/tmp/staging",
+      // The draft goes through the diff, which keeps an escape sequence
+      // (it clears the screen) and a bidi override (it makes the code
+      // read as something other than what it runs as).
+      source: "def run(): string {\n  return \"namaste\"\u001b[2J\u202e\n}",
+      previous: "def run(): string {\n  return \"hello\"\n}",
+      effects: ["std::llm"],
+      tested: true
+    })
+  } with (data) {
+    return handler(data)
+  }
+  return "completed"
+}
+
+// A rule answers this one, so no prompt is drawn. The diff is then the
+// only place the user sees what the agent wrote.
+node autoApproved(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, APPROVE_REVIEW)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::toolbox::review("review this tool?\u001b[2J\u061c", {
+      name: "silentTool",
+      stagingDir: "/tmp/staging",
+      source: "def run(): string {\n  return \"quiet\"\n}",
+      previous: "",
+      effects: [],
+      tested: true
+    })
+  } with (data) {
+    return handler(data)
+  }
+  return "completed"
+}
+
+// An interrupt with no data at all. Reading a field off it throws, and
+// the diff renderer runs in front of the guard that used to catch that.
+node nullPayload(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, APPROVE_REVIEW)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::toolbox::review("review nothing?", null)
+  } with (data) {
+    return handler(data)
+  }
+  return "survived"
+}

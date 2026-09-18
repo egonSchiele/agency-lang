@@ -1,0 +1,9 @@
+[
+  {
+    "toolCalls": [
+      { "name": "editOne", "args": {} },
+      { "name": "editTwo", "args": {} }
+    ]
+  },
+  { "return": "edited" }
+]

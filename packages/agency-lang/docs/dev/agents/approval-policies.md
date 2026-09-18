@@ -53,8 +53,9 @@ reason for it.
 The prompt is a pinned footer at the bottom of the terminal, so it shows
 at most six physical rows of the interrupt's body
 (`INTERRUPT_BODY_MAX_LINES` in `lib/stdlib/cli.ts`) and then an ellipsis.
-Six rows is nothing next to a file being written or a tool draft being
-reviewed, and those are the prompts where the body is the whole point.
+Six rows is nothing next to a file being written, and that is a prompt
+where the body is the whole point. (The two effects that carry source
+code do not rely on the footer at all; see the next section.)
 
 When the body is cut off, the widget adds one option of its own, `v`.
 Typing it prints the entire body into the scrollback above the prompt,
@@ -175,6 +176,50 @@ everything prompt. What they cannot show is that a branch really did land
 inside the window; that is up to the scheduler. The guarantee is
 `isOwnPolicyIo`, not the timing.
 
+## Code changes are shown as a diff
+
+Two effects carry source code: `std::edit`, which is a change to a file,
+and `std::toolbox::review`, which is a tool the agent has drafted. For
+both, the change is the thing being judged, and six rows of a footer
+cannot hold it. So the handler prints the whole change above the prompt,
+as a syntax-highlighted unified diff, and the prompt's own body drops the
+source and keeps the metadata that names the change.
+
+`renderInterruptDiff` in `stdlib/policy.agency` decides whether an
+interrupt has a diff and builds it; `printInterruptDiff` prints it. There
+are exactly two callers, which is the part that is easy to get wrong:
+
+- `askUser`, after its second policy check and before it draws the
+  prompt. After that check, so an interrupt a rule decides there prints
+  once rather than twice; under the lock, so a diff and the prompt it
+  belongs to cannot be split apart by another branch's prompt.
+- `applyRule`'s approve branch, which is where an interrupt a rule
+  decided ends up, whether that rule was already in the policy or was
+  saved a moment ago by a sibling in the same round. Neither draws a
+  prompt, so the diff is the only record the user has of what happened.
+
+The two differ on purpose. `askUser` prints under the lock; `applyRule`
+does not, because `withLock` is non-reentrant and throws when the same
+owner takes a lock it already holds, and a rule can decide an interrupt
+raised by code that is already inside the lock. `applyRule` also prints
+in a headless run, where the rejection line below it stays quiet: a
+rejection there is a decision nobody needs the detail of, while an
+approved change is the one record of something that happened.
+
+A review's diff needs something to diff against. The design loop carries
+the last draft the user saw in `previous` alongside `source` (see
+`rounds` in `stdlib/toolbox.agency`), so the second round shows what
+changed instead of the whole tool again. On the first round `previous` is
+`""` and the diff is all insertions, which is how a new file reads too.
+
+Both the source and the header run through `stripControlChars`, and so
+do the prompt's title and every string value in its table, since the
+agent picks some of those too (a tool's name, a filename, and the message
+a tool it wrote raises its own interrupt with). It removes control
+characters, a lone carriage return, and the bidi and zero-width characters behind
+trojan source. Each of the three renderers drops a different subset on
+its own — `diff` drops carriage returns, the table renderer drops ANSI —
+so none of them can be relied on for this. Tabs and newlines stay.
 
 ## What "approve always here" pins
 

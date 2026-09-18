@@ -92,8 +92,16 @@ raised.
 
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
 → `askUser` → `gateAndSave`, each a def with one job that returns a
-`Result`. `rounds` is the loop; `feedback` is its only state, holding
-the last problem or the user's revision request. Only a `DraftProblem`
+`Result`. `rounds` is the loop. It carries two things between rounds:
+`feedback`, holding the last problem or the user's revision request, and
+`previous`, the draft the user last saw. `previous` rides along on the
+review interrupt so the approval prompt can diff this round's draft
+against it and show what changed rather than the whole tool again; on the
+first round it is `""` and the diff is all insertions. A round that
+produced no draft passes `previous` through unchanged. It does mean a
+review interrupt carries the tool twice, in every checkpoint and every
+statelog event for it; a diff is worth that for something the user is
+being asked to read and judge. Only a `DraftProblem`
 (a coding-agent failure, review findings, a typecheck or compile error,
 a failed test) becomes feedback. Any other failure, such as a refused
 write or a review agent that did not run, ends the loop at once, since

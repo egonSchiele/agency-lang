@@ -1,0 +1,15 @@
+{
+  "editHeader": true,
+  "editShowsChange": true,
+  "toolHeader": true,
+  "toolShowsChange": true,
+  "sourceShownOnce": true,
+  "autoApprovedHeader": true,
+  "autoApprovedShowsSource": true,
+  "promptsDrawn": 2,
+  "controlCharsStripped": true,
+  "carriageReturnStripped": true,
+  "bidiOverrideStripped": true,
+  "survivedNullPayload": "survived",
+  "titleReached": true
+}

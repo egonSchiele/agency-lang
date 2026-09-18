@@ -170,6 +170,10 @@ effect std::toolbox::review {
   name: string;
   stagingDir: string;
   source: string;
+  /** The draft the previous round showed, or "" on the first round. The
+    approval prompt diffs `source` against it, so a redraft shows what
+    changed rather than the whole tool again. */
+  previous: string;
   effects: string[];
   tested: boolean
 }
@@ -935,11 +939,13 @@ def askUser(
   name: string,
   settings: DraftSettings,
   draft: Draft,
+  previous: string,
 ): Result<string | null> {
   const answer = interrupt std::toolbox::review("Review this tool before it is saved: answer accept, or give feedback for the next draft", {
     name: name,
     stagingDir: settings.stagingDir,
     source: draft.source,
+    previous: previous,
     effects: draft.effects,
     tested: draft.tested
   })
@@ -1029,8 +1035,9 @@ def saveTool(
   return success(entryFor(root, name))
 }
 
-// `feedback` is the only state carried between rounds: the last problem,
-// or the user's revision request.
+// Two things carry between rounds: `feedback`, the last problem or the
+// user's revision request, and the draft the user last saw, so the next
+// round's review prompt shows a diff against it.
 def rounds(
   root: string,
   name: string,
@@ -1038,12 +1045,14 @@ def rounds(
   maxRounds: number,
 ): Result<ToolEntry> {
   let feedback = ""
+  let previous = ""
   for (round in range(maxRounds)) {
-    const outcome = oneRound(root, name, settings, feedback)
+    const outcome = oneRound(root, name, settings, feedback, previous)
     if (outcome.done != null) {
       return outcome.done
     }
     feedback = outcome.feedback
+    previous = outcome.source
   }
   return failure("gave up after ${maxRounds} rounds. Last problem:\n${feedback}")
 }
@@ -1062,10 +1071,13 @@ def gateAndSave(
   return saveTool(root, name, settings)
 }
 
-/** `done` ends the loop; otherwise `feedback` goes into the next round. */
+/** `done` ends the loop; otherwise `feedback` goes into the next round.
+  `source` is the draft this round showed the user, which the next round
+  diffs its own draft against. */
 type RoundOutcome = {
   done?: Result<ToolEntry>;
-  feedback: string
+  feedback: string;
+  source: string
 }
 
 def oneRound(
@@ -1073,23 +1085,30 @@ def oneRound(
   name: string,
   settings: DraftSettings,
   feedback: string,
+  previous: string,
 ): RoundOutcome {
   const prepared = prepareDraft(settings, feedback)
   if (prepared is failure(problem)) {
+    // No draft to show, so the next round still diffs against the last
+    // one the user saw.
     if (prepared.data.retryable == true) {
-      return { done: null, feedback: problem }
+      return { done: null, feedback: problem, source: previous }
     }
-    return { done: failure(problem), feedback: "" }
+    return { done: failure(problem), feedback: "", source: previous }
   }
   const draft = prepared.value
-  const answer = askUser(name, settings, draft)
+  const answer = askUser(name, settings, draft, previous)
   if (answer is failure(rejected)) {
-    return { done: failure(rejected), feedback: "" }
+    return { done: failure(rejected), feedback: "", source: draft.source }
   }
   if (answer.value == null) {
-    return { done: gateAndSave(root, name, settings, draft.source, draft.effects), feedback: "" }
+    return {
+      done: gateAndSave(root, name, settings, draft.source, draft.effects),
+      feedback: "",
+      source: draft.source
+    }
   }
-  return { done: null, feedback: answer.value }
+  return { done: null, feedback: answer.value, source: draft.source }
 }
 
 // The name is a directory name under the toolbox, so anything but an

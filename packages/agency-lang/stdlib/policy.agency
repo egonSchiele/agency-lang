@@ -670,17 +670,41 @@ type AskUserResult = {
   rule?: any
 }
 
-// Render a `std::edit` interrupt's payload as a colored diff. `payload` is
-// the interrupt's `data` ({filename, before, after, ...}). It shows the
-// filename as a header and renders the change as a unified diff.
-def renderEditDiff(payload: any): string {
+// Text a model wrote, on its way to a terminal the user is reading in
+// order to decide whether to approve it. Three groups come out:
+//
+//   - Control characters. An escape sequence moves the cursor or clears
+//     the screen; C1 codes do the same on terminals that decode them.
+//   - A lone carriage return, which returns the cursor to the start of
+//     the line so that whatever follows overwrites what came before it.
+//     `diff` splits on newlines, so a CR stays inside a rendered line.
+//     CRLF is normalized to LF first, leaving a Windows file readable.
+//   - The bidi overrides and zero-width characters behind trojan source,
+//     which make code read as something other than what it runs as.
+//
+// Tabs and newlines stay, because they are part of the code.
+def stripControlChars(text: string): string {
+  const unixEndings = (text || "").replace(re/\r\n/g, "\n")
+  const noControls = unixEndings.replace(re/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, "")
+  return noControls.replace(re/[\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "")
+}
+
+// A change to code, as a header line and a syntax-highlighted unified
+// diff. `before` is "" for something being created, which reads as a
+// diff of all insertions.
+def renderSourceDiff(
+  header: string,
+  before: string,
+  after: string,
+  language: string,
+): string {
   let lines = []
-  lines.push(color.yellow("⏺ Edit: ${payload.filename}"))
+  lines.push(color.yellow("⏺ ${stripControlChars(header)}"))
   lines.push(
     diff(
-    payload.before || "",
-    payload.after || "",
-    language: "auto",
+    stripControlChars(before),
+    stripControlChars(after),
+    language: language,
     color: true,
     lineNumbers: true,
     context: 3,
@@ -690,10 +714,50 @@ def renderEditDiff(payload: any): string {
   return lines.join("\n")
 }
 
+// The diff for an interrupt that changes code, or "" for every other
+// effect. These interrupts carry the old and new source in their data,
+// and the change is what the user is being asked to judge, so the
+// handler prints this above the prompt instead of putting the source in
+// the prompt's own body, where it would be cut off after a few lines.
+def renderInterruptDiff(intr: any): string {
+  // Reading a field off a null payload throws, and a handler is the
+  // worst place for that. `prettyPrintInterruptData` guards the same way.
+  if (intr.data == null) {
+    return ""
+  }
+  if (intr.effect == "std::edit") {
+    return renderSourceDiff(
+      "Edit: ${intr.data.filename}",
+      intr.data.before,
+      intr.data.after,
+      "auto",
+    )
+  }
+  if (intr.effect == "std::toolbox::review") {
+    return renderSourceDiff(
+      "Tool: ${intr.data.name}",
+      intr.data.previous,
+      intr.data.source,
+      "agency",
+    )
+  }
+  return ""
+}
+
+// Print an interrupt's diff, when it has one. Called on both paths: a
+// rule can approve without asking, and then this is the only place the
+// user sees what the agent did.
+def printInterruptDiff(intr: any) {
+  const changed = renderInterruptDiff(intr)
+  if (changed != "") {
+    print(changed)
+  }
+}
+
 // Render the data of one interrupt for the approval prompt. `data` is the
 // interrupt's payload (`intr.data`); `effect` is `intr.effect`, used to
-// special-case effects that have a nicer representation than a key/value
-// table, currently `std::edit`, which renders as a diff.
+// leave out the fields an effect shows better elsewhere, as the two
+// code-changing effects show their source as a diff above the prompt.
 def prettyPrintInterruptData(data: any, effect: string = ""): string {
   // JS reports `null` as `typeof == "object"`, so guard explicitly.
   // Otherwise `for (key in data)` would throw and crash the interrupt
@@ -702,24 +766,23 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
     return ""
   }
 
+  // The agent picks some of these (a tool's name, a filename), and the
+  // footer's width math counts a CSI sequence as visible width, so one
+  // in a value breaks the wrap as well as reaching the terminal.
   if (typeof data == "string") {
-    return data
+    return stripControlChars(data)
   }
 
-  // An edit reads best as a diff. Show any non-content metadata (e.g.
-  // `dir`) as a table, then the change as a colored diff. We exclude
-  // `before`/`after` (huge, shown in the diff), `edits` (the raw op list,
-  // redundant with the diff), and `filename` (already in the diff header).
+  // The source an edit or a tool review carries is printed above the
+  // prompt as a diff, so the prompt's own body holds what is left: the
+  // metadata that says which change this is. We drop the source itself
+  // (`before`/`after`, `source`/`previous`) and `edits`, the raw op list
+  // the diff already shows.
   if (effect == "std::edit") {
-    const meta = renderObjAsTable(
-      data,
-      excludeKeys: ["before", "after", "filename", "edits"],
-    )
-    const editDiff = renderEditDiff(data)
-    if (meta == "") {
-      return editDiff
-    }
-    return "${meta}\n\n${editDiff}"
+    return renderObjAsTable(data, excludeKeys: ["before", "after", "edits"])
+  }
+  if (effect == "std::toolbox::review") {
+    return renderObjAsTable(data, excludeKeys: ["source", "previous"])
   }
 
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields
@@ -816,7 +879,10 @@ export def askUserChoices(intr: any): ChoiceItem[] {
 // type a rejection reason instead of picking a key. That single
 // keystroke flow replaces the old two-step "(r), then type reason".
 def askUser(intr: any): AskUserResult {
-  const title = "${color.bold(intr.effect)}  ${intr.message}"
+  // The message comes from whoever raised the interrupt, a tool the agent
+  // wrote among them, and it goes to the footer whole. The effect beside
+  // it is a name from the code.
+  const title = "${color.bold(intr.effect)}  ${stripControlChars(intr.message)}"
   const body = prettyPrintInterruptData(intr.data, intr.effect)
 
   const items = askUserChoices(intr)
@@ -847,6 +913,11 @@ def askUser(intr: any): AskUserResult {
         }
       }
     }
+    // After the check above, so an interrupt a rule decides prints its
+    // diff through `applyRule` rather than twice. Under the lock, so the
+    // diff and the prompt it belongs to reach the terminal together even
+    // when other branches are interrupting too.
+    printInterruptDiff(intr)
     const choice = interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
     const result = choiceResult(choice)
     // Recorded before the lock is released, so the interrupt waiting
@@ -1064,12 +1135,12 @@ def _handler(intr: any): any {
 // terminal.
 def applyRule(intr: any, decision: any): any {
   if (decision.type == "approve") {
-    // Auto-approved: the user never sees the approval prompt (which would
-    // render an edit as a diff), so surface an edit's diff here. Other
-    // effects auto-approve silently as before.
-    if (intr.effect == "std::edit") {
-      print(renderEditDiff(intr.data))
-    }
+    // No prompt is drawn on this path, so this is the only place the
+    // change is shown. Both routes here need it: the check every
+    // interrupt runs, and the one an interrupt runs again at its turn at
+    // the terminal, which is how a rule a sibling saved this round
+    // decides it. Effects that carry no source approve silently.
+    printInterruptDiff(intr)
     return approve()
   }
   // A rule rejected without asking. Say so on the terminal: a silent

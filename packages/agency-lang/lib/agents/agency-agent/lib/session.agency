@@ -295,7 +295,7 @@ export def modelChoiceItems(filters: ModelFilters, established: string = ""): Ch
     if (established != "" && provider != demoteProvider(established)) {
       continue
     }
-    const label = "${model.name}  (${model.provider}, $${model.inputCost}/1M in)"
+    const label = "${model.name}  (${model.provider}, $${model.inputCost}/1M in, $${model.outputCost}/1M out)"
     const key = if established == "" then "${provider}/${model.name}" else model.name
     items.push({
       key: key,

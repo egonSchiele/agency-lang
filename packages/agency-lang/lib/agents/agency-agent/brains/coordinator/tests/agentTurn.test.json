@@ -325,6 +325,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "modelItemLabelShowsBothPrices",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

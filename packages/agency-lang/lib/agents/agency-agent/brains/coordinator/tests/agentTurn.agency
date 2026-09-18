@@ -472,3 +472,10 @@ node switchPerSlotFromPromotedOpenaiSession(): string {
   }
   return "${main.model}/${reasoning.model}"
 }
+
+// A model's price is two numbers, and the output one is usually the
+// larger, so a picker row shows both.
+node modelItemLabelShowsBothPrices(): boolean {
+  const label = modelChoiceItems({ provider: "anthropic" })[0].label
+  return label.includes("/1M in") && label.includes("/1M out")
+}

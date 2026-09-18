@@ -273,7 +273,7 @@ def modelsSlashCommand(trimmed: string): boolean {
   }
   for (model in models) {
     pushMessage(
-      "  ${model.name}  (${model.provider}, $${model.inputCost}/1M in, ${model.contextWindow} ctx)",
+      "  ${model.name}  (${model.provider}, $${model.inputCost}/1M in, $${model.outputCost}/1M out, ${model.contextWindow} ctx)",
     )
   }
   return true

@@ -527,7 +527,10 @@ export def writePolicyFile(
 
 // The one interrupt the handler approves without consulting the policy:
 // its own read or write of the policy file, while `_internalIo` marks
-// that window.
+// that window. The file operation carries `with approve` already, but
+// that is not enough on its own — this handler is in its chain, and a
+// no-match propagate or the `_policy == null` default would veto the
+// read, leaving every later interrupt to prompt.
 //
 // The window is real time, not an instant. The file operation is
 // awaited, and other execution paths — parallel tool calls, a fork —
@@ -938,13 +941,8 @@ def oneLineData(data: any): string {
  * to construct one.
  */
 def _handler(intr: any): any {
-  // Re-entrancy guard: while we read/write our OWN policy file (inside
-  // maybeLoadPolicy / maybeFlush below), that file op raises a nested
-  // std::read / std::write that re-enters this handler. Approve it
-  // directly so the file op's own `with approve` actually takes effect.
-  // Without this, the `_policy == null` default-reject (or a no-match
-  // propagate) would veto it and the load/save would silently fail,
-  // making every real interrupt prompt. See `_internalIo`.
+  // Re-entrancy: the handler's own read or write of the policy file
+  // re-enters it. See `isOwnPolicyIo`.
   if (isOwnPolicyIo(intr)) {
     return approve()
   }

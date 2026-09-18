@@ -1,0 +1,26 @@
+import { cliPolicyHandler } from "std::policy"
+
+// A plain raise. "approve always" to this one saves an effect-wide rule.
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  return "one"
+}
+
+// A raise in assignment position, so it expects a value: whoever
+// approves it answers with one, and each raise wants its own answer.
+// Two things must not happen to it. A rule saved by the sibling above
+// must not answer it, and "approve always" typed at its own prompt must
+// not save a rule, since its menu only offered the once-only answers.
+// Either one accepts something nobody read: with std::toolbox::review,
+// a tool draft.
+def deployTwo(): string {
+  const reply = interrupt myapp::deploy("two", { env: "prod" })
+  return "${reply}"
+}
+
+node main(args: { policyFile: string }) {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, deployTwo] })
+  } with handler
+}

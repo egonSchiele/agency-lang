@@ -92,20 +92,49 @@ A "reject always" answer needs none of this: rejecting the first
 interrupt sends the rest back through the handler, where the ordinary
 check finds the new rule.
 
-Concurrency is also the thing to be careful about around `_internalIo`,
-the flag that makes the handler approve its own reads and writes of the
-policy file. It is one module-level boolean held across a file operation,
-so an interrupt from another branch that arrived while it was set would
-be approved with no check at all. It does not happen today, on either the
-load or the flush: `cli-policy-handler-parallel-rule` and
-`cli-policy-handler-parallel-flush` put three branches in the handler
-while one of them is reading or writing that file, and a policy that
-rejects the effect still rejects all three. Keep those tests if you touch
-the flag.
-
-Testing this needs the LLM tool loop, not a `parallel` block: a
+Testing any of it needs the LLM tool loop, not a `parallel` block: a
 `parallel` block's arms consult the handler one after another, and each
 arm gets its own copy of the module globals that hold the saved rules.
+
+An interrupt that expects a value is left out of all of this.
+`askUserChoices` offers it only the once-only answers, because an
+effect-wide rule cannot answer a raise that wants its own answer, and an
+`approve()` with no value is taken as a bare yes — for
+`std::toolbox::review`, accepting a draft. So the second check skips such
+an interrupt, and `recordAnswer` saves nothing for one. That second guard
+is not redundant: the prompt accepts free text, so a user can type "aa"
+at a prompt that never offered it, and `choiceResult` reads the string,
+not the menu.
+
+## The handler's own file operations
+
+`_internalIo` marks the window where the handler reads or writes its own
+policy file. Inside it the handler approves without consulting the
+policy, because its `with approve` is not enough on its own: this handler
+is in that operation's chain, and its no-match propagate or its
+`_policy == null` default would veto the read, leaving every later
+interrupt to prompt.
+
+That window is a span of real time, not an instant — the file operation
+is awaited, and other branches reach the handler while it is open. So the
+flag is necessary but not sufficient, and `isOwnPolicyIo` also requires
+the interrupt to be a `std::read` or `std::write` of the policy file's
+own name. Without that, anything any branch raised during a policy load
+would be approved with no check at all.
+
+The name is matched, not the directory: the interrupt reports the
+directory the containment layer resolved, which is the realpath, and on
+macOS that is not the string the caller passed. A read of a same-named
+file in another directory during the window is the gap that remains.
+
+`cli-policy-handler-parallel-rule` and `-flush` put three branches in the
+handler while one of them reads or writes that file, with a policy that
+rejects the effect, and count three rejections. Those rejections come
+from a rule in the file, so the tests also show the load and the flush
+still work through the narrower guard. What they cannot show is that a
+branch really did land inside the window; that is up to the scheduler.
+The guarantee is `isOwnPolicyIo`, not the timing.
+
 
 ## What "approve always here" pins
 

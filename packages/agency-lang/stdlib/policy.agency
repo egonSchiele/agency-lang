@@ -525,6 +525,36 @@ export def writePolicyFile(
   return try _writePolicyFile(path, policy, allowedPaths)
 }
 
+// The one interrupt the handler approves without consulting the policy:
+// its own read or write of the policy file, while `_internalIo` marks
+// that window.
+//
+// The window is real time, not an instant. The file operation is
+// awaited, and other execution paths — parallel tool calls, a fork —
+// reach the handler while it is open. So the flag alone is not the
+// answer: `if (_internalIo) { return approve() }` would approve anything
+// any branch raised in that window, with no check at all. It has to be
+// this file operation, so that a tool call running alongside it is still
+// decided by the policy.
+//
+// Matched on the effect and the file's name. Not its directory: the
+// interrupt reports the directory the containment layer resolved, which
+// is the realpath, and on macOS that is not the string the caller passed
+// (/tmp is /private/tmp). A read of a same-named file elsewhere during
+// the window is the remaining gap, and it is a far smaller one.
+def isOwnPolicyIo(intr: any): boolean {
+  if (!_internalIo) {
+    return false
+  }
+  if (intr.effect != "std::read" && intr.effect != "std::write") {
+    return false
+  }
+  if (intr.data == null) {
+    return false
+  }
+  return intr.data.filename == basename(globalCliPolicyOpts.file)
+}
+
 // Lazy-load the on-disk policy on first handler invocation. Uses
 // flip-flag-first so the std::read interrupt's chain re-entry sees
 // `_policyLoaded == true` and returns without recursing. Missing or
@@ -784,8 +814,15 @@ def askUser(intr: any): AskUserResult {
     // Checked again here, at this interrupt's turn at the terminal: the
     // interrupt ahead of it may have saved an "always" rule since its
     // first check ran. See approval-policies.md.
+    //
+    // Not for a raise that expects a value. `askUserChoices` withholds
+    // the "always" answers from those for the same reason: each raise
+    // wants its own answer, and approving one from an effect-wide rule
+    // hands the raise site an empty one. A sibling in this round can
+    // create such a rule, which is what makes this check different from
+    // the one in `_handler`.
     const rules = _policy
-    if (rules != null) {
+    if (rules != null && intr.expectsValue != true) {
       const decided = checkPolicy(rules, intr)
       if (decided.type == "approve" || decided.type == "reject") {
         return {
@@ -807,9 +844,15 @@ def askUser(intr: any): AskUserResult {
 }
 
 // An "always" answer becomes a rule now, in memory; maybeFlush writes it.
+//
+// Nothing is recorded for a raise that expects a value. `askUserChoices`
+// offers it only "once" answers, but the prompt takes free text too, so
+// a user who types "aa" at one reaches this with an "always" action the
+// menu never offered. Saving an effect-wide rule from that would answer
+// every later raise of the effect, each of which wants its own answer.
 def recordAnswer(intr: any, answer: AskUserResult) {
   const rules = _policy
-  if (rules == null) {
+  if (rules == null || intr.expectsValue == true) {
     return
   }
   if (answer.action == "approve-always") {
@@ -902,7 +945,7 @@ def _handler(intr: any): any {
   // Without this, the `_policy == null` default-reject (or a no-match
   // propagate) would veto it and the load/save would silently fail,
   // making every real interrupt prompt. See `_internalIo`.
-  if (_internalIo) {
+  if (isOwnPolicyIo(intr)) {
     return approve()
   }
 
@@ -930,7 +973,7 @@ def _handler(intr: any): any {
 
   const decision = checkPolicy(_policy, intr)
   if (decision.type == "approve" || decision.type == "reject") {
-    return applyRule(intr, decision, late: false)
+    return applyRule(intr, decision)
   }
 
   // No rule decided, and no user is at a terminal to ask: reject with a
@@ -945,7 +988,16 @@ def _handler(intr: any): any {
 
   const answer = askUser(intr)
   if (answer.rule != null) {
-    return applyRule(intr, answer.rule, late: true)
+    // A rule saved by the interrupt ahead of this one decided it while it
+    // waited, so say why the prompt did not appear. Only an approval gets
+    // here: a "reject always" answer sends its siblings back through the
+    // handler, where the check above them finds the rule.
+    if (answer.rule.type == "approve" && _interactive) {
+      print(
+        color.dim("⏺ Approved ${intr.effect}${oneLineData(intr.data)} by the rule just saved"),
+      )
+    }
+    return applyRule(intr, answer.rule)
   }
   // The "always" answers were recorded by askUser, under the lock.
   if (answer.action == "approve-always" || answer.action == "approve-always-here") {
@@ -975,16 +1027,11 @@ def _handler(intr: any): any {
   return reject(reason)
 }
 
-// A rule's decision, carried out. `late` means the rule was saved while
-// this interrupt waited for the terminal, so the user is told why the
-// prompt they might expect did not appear.
-def applyRule(intr: any, decision: any, late: boolean): any {
+// A rule's decision, carried out. Both checks end here: the one every
+// interrupt runs, and the one an interrupt runs again at its turn at the
+// terminal.
+def applyRule(intr: any, decision: any): any {
   if (decision.type == "approve") {
-    if (late && _interactive) {
-      print(
-        color.dim("⏺ Approved ${intr.effect}${oneLineData(intr.data)} by the rule just saved"),
-      )
-    }
     // Auto-approved: the user never sees the approval prompt (which would
     // render an edit as a diff), so surface an edit's diff here. Other
     // effects auto-approve silently as before.

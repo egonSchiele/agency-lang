@@ -622,17 +622,31 @@ type AskUserResult = {
   reason?: string
 }
 
-// Render a `std::edit` interrupt's payload as a colored diff. `payload` is
-// the interrupt's `data` ({filename, before, after, ...}). It shows the
-// filename as a header and renders the change as a unified diff.
-def renderEditDiff(payload: any): string {
+// The source in these diffs is written by a model, so it can carry
+// terminal control characters. They come out before anything is
+// rendered: an escape sequence in a draft would otherwise move the
+// cursor or clear the screen the user is reading that draft on. Tabs and
+// newlines stay, because they are part of the code.
+def stripControlChars(text: string): string {
+  return (text || "").replace(re/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")
+}
+
+// A change to code, as a header line and a syntax-highlighted unified
+// diff. `before` is "" for something being created, which reads as a
+// diff of all insertions.
+def renderSourceDiff(
+  header: string,
+  before: string,
+  after: string,
+  language: string,
+): string {
   let lines = []
-  lines.push(color.yellow("⏺ Edit: ${payload.filename}"))
+  lines.push(color.yellow("⏺ ${stripControlChars(header)}"))
   lines.push(
     diff(
-    payload.before || "",
-    payload.after || "",
-    language: "auto",
+    stripControlChars(before),
+    stripControlChars(after),
+    language: language,
     color: true,
     lineNumbers: true,
     context: 3,
@@ -642,10 +656,45 @@ def renderEditDiff(payload: any): string {
   return lines.join("\n")
 }
 
+// The diff for an interrupt that changes code, or "" for every other
+// effect. These interrupts carry the old and new source in their data,
+// and the change is what the user is being asked to judge, so the
+// handler prints this above the prompt instead of putting the source in
+// the prompt's own body, where it would be cut off after a few lines.
+def renderInterruptDiff(intr: any): string {
+  if (intr.effect == "std::edit") {
+    return renderSourceDiff(
+      "Edit: ${intr.data.filename}",
+      intr.data.before,
+      intr.data.after,
+      "auto",
+    )
+  }
+  if (intr.effect == "std::toolbox::review") {
+    return renderSourceDiff(
+      "Tool: ${intr.data.name}",
+      intr.data.previous,
+      intr.data.source,
+      "agency",
+    )
+  }
+  return ""
+}
+
+// Print an interrupt's diff, when it has one. Called on both paths: a
+// rule can approve without asking, and then this is the only place the
+// user sees what the agent did.
+def printInterruptDiff(intr: any) {
+  const changed = renderInterruptDiff(intr)
+  if (changed != "") {
+    print(changed)
+  }
+}
+
 // Render the data of one interrupt for the approval prompt. `data` is the
 // interrupt's payload (`intr.data`); `effect` is `intr.effect`, used to
-// special-case effects that have a nicer representation than a key/value
-// table, currently `std::edit`, which renders as a diff.
+// leave out the fields an effect shows better elsewhere, as the two
+// code-changing effects show their source as a diff above the prompt.
 def prettyPrintInterruptData(data: any, effect: string = ""): string {
   // JS reports `null` as `typeof == "object"`, so guard explicitly.
   // Otherwise `for (key in data)` would throw and crash the interrupt
@@ -658,20 +707,16 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
     return data
   }
 
-  // An edit reads best as a diff. Show any non-content metadata (e.g.
-  // `dir`) as a table, then the change as a colored diff. We exclude
-  // `before`/`after` (huge, shown in the diff), `edits` (the raw op list,
-  // redundant with the diff), and `filename` (already in the diff header).
+  // The source an edit or a tool review carries is printed above the
+  // prompt as a diff, so the prompt's own body holds what is left: the
+  // metadata that says which change this is. We drop the source itself
+  // (`before`/`after`, `source`/`previous`) and `edits`, the raw op list
+  // the diff already shows.
   if (effect == "std::edit") {
-    const meta = renderObjAsTable(
-      data,
-      excludeKeys: ["before", "after", "filename", "edits"],
-    )
-    const editDiff = renderEditDiff(data)
-    if (meta == "") {
-      return editDiff
-    }
-    return "${meta}\n\n${editDiff}"
+    return renderObjAsTable(data, excludeKeys: ["before", "after", "edits"])
+  }
+  if (effect == "std::toolbox::review") {
+    return renderObjAsTable(data, excludeKeys: ["source", "previous"])
   }
 
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields
@@ -779,17 +824,11 @@ def askUser(intr: any): AskUserResult {
   // cancellation that unwinds the turn back to the REPL prompt) instead of
   // re-prompting. The "r" option still lets you reject a single action
   // (and optionally tell the agent what to do instead).
-  // An interrupt that expects a value is answered about its body, as a
-  // review is about the source, so the body is shown in full up front.
   const answer = withLock("std::tty") {
-    return interruptChoice(
-      title,
-      body,
-      items,
-      allowFreeText: true,
-      allowCancel: true,
-      revealBody: intr.expectsValue == true,
-    )
+    // Under the lock, so the diff and the prompt it belongs to reach the
+    // terminal together even when other branches are interrupting too.
+    printInterruptDiff(intr)
+    return interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
   }
   return match(answer) {
     "a" => ({
@@ -893,12 +932,10 @@ def _handler(intr: any): any {
 
   const decision = checkPolicy(_policy, intr)
   if (decision.type == "approve") {
-    // Auto-approved: the user never sees the approval prompt (which would
-    // render an edit as a diff), so surface an edit's diff here. Other
-    // effects auto-approve silently as before.
-    if (intr.effect == "std::edit") {
-      print(renderEditDiff(intr.data))
-    }
+    // Auto-approved: no prompt is drawn, so this is the only place the
+    // change is shown. Effects that carry no source approve silently, as
+    // before.
+    printInterruptDiff(intr)
     return approve()
   }
   if (decision.type == "reject") {

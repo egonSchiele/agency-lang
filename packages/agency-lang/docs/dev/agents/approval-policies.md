@@ -49,8 +49,9 @@ taking another route.
 The prompt is a pinned footer at the bottom of the terminal, so it shows
 at most six physical rows of the interrupt's body
 (`INTERRUPT_BODY_MAX_LINES` in `lib/stdlib/cli.ts`) and then an ellipsis.
-Six rows is nothing next to a file being written or a tool draft being
-reviewed, and those are the prompts where the body is the whole point.
+Six rows is nothing next to a file being written, and that is a prompt
+where the body is the whole point. (The two effects that carry source
+code do not rely on the footer at all; see the next section.)
 
 When the body is cut off, the widget adds one option of its own, `v`.
 Typing it prints the entire body into the scrollback above the prompt,
@@ -64,10 +65,33 @@ each keystroke so a resize mid-prompt cannot leave the footer offering a
 key the reducer no longer honours. When nothing is cut off, `v` is an
 ordinary free-text reason.
 
-An interrupt that expects a value, such as `std::toolbox::review`, is
-answered about its body, so `askUser` passes `revealBody` and the widget
-prints a cut-off body above the footer as the prompt opens, without a
-keypress. A body that fits is not printed again.
+## Code changes are shown as a diff
+
+Two effects carry source code: `std::edit`, which is a change to a file,
+and `std::toolbox::review`, which is a tool the agent has drafted. For
+both, the change is the thing being judged, and six rows of a footer
+cannot hold it. So the handler prints the whole change above the prompt,
+as a syntax-highlighted unified diff, and the prompt's own body drops the
+source and keeps the metadata that names the change.
+
+`renderInterruptDiff` in `stdlib/policy.agency` decides whether an
+interrupt has a diff and builds it; `printInterruptDiff` prints it. It is
+called on both paths, which is the part that is easy to get wrong: a rule
+can approve without ever drawing a prompt, and then the diff is the only
+record the user has of what the agent did. On the prompt path the print
+happens inside the `std::tty` lock, so a diff and the prompt it belongs
+to cannot be split apart by another branch's prompt.
+
+A review's diff needs something to diff against. The design loop carries
+the last draft the user saw in `previous` alongside `source` (see
+`rounds` in `stdlib/toolbox.agency`), so the second round shows what
+changed instead of the whole tool again. On the first round `previous` is
+`""` and the diff is all insertions, which is how a new file reads too.
+
+Both the source and the header run through `stripControlChars` first.
+That source was written by a model, and an escape sequence in it would
+move the cursor or clear the screen the user is reading it on. Tabs and
+newlines stay.
 
 ## What "approve always here" pins
 

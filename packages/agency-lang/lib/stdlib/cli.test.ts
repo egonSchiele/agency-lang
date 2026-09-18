@@ -800,49 +800,6 @@ describe("stickyInterruptPrompt (integration)", () => {
     expect(cap.captured.join("")).toContain("line19");
   });
 
-  it("revealBody prints a cut-off body before any key is pressed", async () => {
-    const body = Array.from({ length: 20 }, (_unused, index) => `line${index}`).join("\n");
-    const cap = captureStdout();
-    (process.stdin as any).isTTY = false;
-    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => {} };
-    const pending = _internal.stickyInterruptPrompt(fakeRl, {
-      title: "review this?",
-      body,
-      allowFreeText: true,
-      allowCancel: true,
-      items: [{ key: "a", label: "approve once" }],
-      revealBody: true,
-    });
-    const beforeAnyKey = cap.captured.join("");
-    fakeRl._ttyWrite("a", { name: "a" });
-    fakeRl._ttyWrite(null, { name: "return" });
-    const answer = await pending;
-    cap.restore();
-    expect(answer).toBe("a");
-    expect(beforeAnyKey).toContain("line19");
-  });
-
-  it("revealBody prints nothing when the body fits", async () => {
-    const cap = captureStdout();
-    (process.stdin as any).isTTY = false;
-    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => {} };
-    const pending = _internal.stickyInterruptPrompt(fakeRl, {
-      title: "review this?",
-      body: "one line",
-      allowFreeText: true,
-      allowCancel: true,
-      items: [{ key: "a", label: "approve once" }],
-      revealBody: true,
-    });
-    const beforeAnyKey = cap.captured.join("");
-    fakeRl._ttyWrite("a", { name: "a" });
-    fakeRl._ttyWrite(null, { name: "return" });
-    await pending;
-    cap.restore();
-    // The footer shows the body already; printing it again would double it.
-    expect(beforeAnyKey).not.toContain("\none line\n");
-  });
-
   it("a resize while the prompt is up changes what 'v' means", async () => {
     // Three long lines: one row each on a wide terminal, many on a narrow one.
     const body = Array.from({ length: 3 }, (_unused, index) => `row${index}`.repeat(30)).join("\n");

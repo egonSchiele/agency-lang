@@ -1,0 +1,57 @@
+import { cliPolicyHandler, setPolicy, Policy, ScopedRuleFields } from "std::policy"
+
+// The two effects that carry source code show it as a diff printed above
+// the approval prompt, not as source inside the prompt's own body, where
+// the footer would cut it off after a few lines. The diff prints whether
+// a rule decided the interrupt or the user was asked, so an auto-approved
+// change is still visible.
+
+const FIELDS: ScopedRuleFields = {}
+const POLICY = {}
+const APPROVE_REVIEW: Policy = { "std::toolbox::review": [{ action: "approve" }] }
+
+node main(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, POLICY)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::edit("apply this edit?", {
+      dir: ".",
+      filename: "greet.agency",
+      before: "def greet(): string {\n  return \"hi\"\n}",
+      after: "def greet(): string {\n  return \"hello\"\n}",
+    })
+    interrupt std::toolbox::review("review this tool?", {
+      name: "greetHindi",
+      stagingDir: "/tmp/staging",
+      // The escape sequence a model could hide in a draft: it clears the
+      // screen the user is reading the draft on.
+      source: "def run(): string {\n  return \"namaste\"\u001b[2J\n}",
+      previous: "def run(): string {\n  return \"hello\"\n}",
+      effects: ["std::llm"],
+      tested: true
+    })
+  } with (data) {
+    return handler(data)
+  }
+  return "completed"
+}
+
+// A rule answers this one, so no prompt is drawn. The diff is then the
+// only place the user sees what the agent wrote.
+node autoApproved(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, APPROVE_REVIEW)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::toolbox::review("review this tool?", {
+      name: "silentTool",
+      stagingDir: "/tmp/staging",
+      source: "def run(): string {\n  return \"quiet\"\n}",
+      previous: "",
+      effects: [],
+      tested: true
+    })
+  } with (data) {
+    return handler(data)
+  }
+  return "completed"
+}

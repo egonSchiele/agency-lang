@@ -334,6 +334,25 @@ export class AgencyFunction {
    * require unique tool names (Anthropic returns a 400). `.rename(...)` gives
    * each derived tool a distinct name.
    */
+  /**
+   * Return a copy whose `name` parameter is described to the model by
+   * `jsonSchema`, a JSON Schema document, instead of the schema its
+   * declaration gave it. For a parameter whose type is only known at run
+   * time, such as a saved tool's request. The parameter must be unbound,
+   * and the other parameters keep the schemas they have.
+   */
+  withParamSchema(name: string, jsonSchema: unknown): AgencyFunction {
+    const param = this.params.find((p) => p.name === name);
+    if (!param || param.isBound) {
+      throw new Error(`Unknown or bound parameter '${name}' in .withParamSchema() call`);
+    }
+    const current = this.toolDefinition?.schema as { shape?: Record<string, z.ZodType> } | null;
+    const shape: Record<string, z.ZodType> = { ...(current?.shape ?? {}) };
+    shape[name] = z.fromJSONSchema(jsonSchema as Parameters<typeof z.fromJSONSchema>[0]);
+    const base = this.toolDefinition ?? { name: this.name, description: "", schema: null };
+    return this.withToolDefinition({ ...base, schema: z.object(shape) });
+  }
+
   rename(newName: string): AgencyFunction {
     const newToolDef = this.toolDefinition ? { ...this.toolDefinition, name: newName } : null;
     return new AgencyFunction({

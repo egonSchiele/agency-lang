@@ -50,14 +50,16 @@ tells the model the saved tools arrive as `learned_<name>` and that
 `learned_skills` reads the skills; without that the model knows how to
 save one but not that it can call one.
 
-`runTool` takes its request as `Json`, so the schema the model sees for
-a learned tool says only "any", and a model asked to call one tends to
-send the whole request as JSON text. `runTool` parses a string request
-when it holds an object or a list (`normalizeRequest` in
-`stdlib/toolbox.agency`); a string that holds neither is passed through,
-because a tool's `Request` may itself be a string. Before that, such a
-call reached the tool as a string and the tool returned a result built
-from `undefined` fields instead of failing.
+`runTool` takes its request as `Json`, so on its own the schema the
+model sees for a learned tool would say only "any", and a model asked to
+call one would send the whole request as JSON text. Instead the learned
+tool's `request` parameter is given the JSON Schema of the tool's
+`Request` type, with `withParamSchema` on the runtime's `AgencyFunction`.
+The schema comes from `meta.json`, where `saveTool` records what the
+tool's own `requestSchema` node returns (`schema(Request).toJSONSchema()`
+in the tool template), so it is derived from the compiled type, not from
+the type text. A tool saved before schemas were recorded has no
+`requestSchema`; its description names the type instead.
 
 Handing `learnedExtras()` to each subagent is not done yet, nor are
 the `/skills` and `/toolbox` commands.

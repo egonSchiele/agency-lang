@@ -619,6 +619,60 @@ describe("describe()", () => {
   });
 });
 
+describe("withParamSchema()", () => {
+  const requestSchema = {
+    type: "object",
+    properties: { n: { type: "number" } },
+    required: ["n"],
+    additionalProperties: false,
+  };
+  const twoParams = () =>
+    AgencyFunction.create(
+      {
+        name: "runTool",
+        module: "test",
+        fn: (a: number, b: unknown) => [a, b],
+        params: [
+          { name: "a", hasDefault: false, defaultValue: undefined, variadic: false },
+          { name: "b", hasDefault: false, defaultValue: undefined, variadic: false },
+        ],
+        toolDefinition: {
+          name: "runTool",
+          description: "Run.",
+          schema: z.object({ a: z.number(), b: z.any() }),
+        },
+      },
+      {},
+    );
+  const jsonSchemaOf = (fn: AgencyFunction): any =>
+    (fn.toolDefinition!.schema as z.ZodType).toJSONSchema();
+
+  it("replaces one parameter's schema and keeps the others", () => {
+    const fn = twoParams();
+    const shaped = fn.withParamSchema("b", requestSchema);
+    const schema = jsonSchemaOf(shaped);
+    expect(schema.properties.a).toEqual({ type: "number" });
+    expect(schema.properties.b.properties.n).toEqual({ type: "number" });
+    expect(schema.properties.b.required).toEqual(["n"]);
+    expect(jsonSchemaOf(fn).properties.b.properties).toBeUndefined();
+  });
+
+  it("validates against the new schema", () => {
+    const shaped = twoParams().withParamSchema("b", requestSchema);
+    const bSchema = (shaped.toolDefinition!.schema as z.ZodObject).shape.b;
+    expect(bSchema.safeParse({ n: 1 }).success).toBe(true);
+    expect(bSchema.safeParse('{ "n": 1 }').success).toBe(false);
+  });
+
+  it("works after partial() and on the unbound parameter only", () => {
+    const bound = twoParams().partial({ a: 1 });
+    const schema = jsonSchemaOf(bound.withParamSchema("b", requestSchema));
+    expect(Object.keys(schema.properties)).toEqual(["b"]);
+    expect(() => bound.withParamSchema("a", requestSchema)).toThrow(/bound parameter 'a'/);
+    expect(() => bound.withParamSchema("zz", requestSchema)).toThrow(/parameter 'zz'/);
+  });
+});
+
 describe("preapprove handler wiring", () => {
   it("invokes via withPushedHandler: handler pushed during call, popped after", async () => {
     const ctx = makeMockCtx();

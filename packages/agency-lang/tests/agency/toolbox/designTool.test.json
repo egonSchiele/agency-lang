@@ -778,7 +778,7 @@
       }
     },
     {
-      "nodeName": "runToolAcceptsRequestAsJsonText",
+      "nodeName": "savedMetaRecordsTheRequestSchema",
       "input": "",
       "expectedOutput": "true",
       "evaluationCriteria": [

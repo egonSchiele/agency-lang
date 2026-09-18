@@ -355,18 +355,22 @@ node runToolRunsAndRecords(): boolean {
   return answer is success && answer.value == 42 && recorded && namedTheTool
 }
 
-// A model that sees only `Json` in the schema tends to send the whole
-// request as JSON text. It reaches the tool as the value it describes.
-node runToolAcceptsRequestAsJsonText(): boolean {
+// meta.json records the JSON Schema of the Request type, reported by the
+// saved tool's own requestSchema node, so whoever offers the tool to a
+// model can give its request the real shape.
+node savedMetaRecordsTheRequestSchema(): boolean {
   cleanup("addNine")
   const written = runDesign("addNine", OUT, ["accept"])
   if (written is failure) {
     cleanup("addNine")
     return false
   }
-  const answer = runTool("addNine", "{ \"n\": 41 }", OUT) with approve
+  const recorded = written.value.meta.requestSchema
   cleanup("addNine")
-  return answer is success && answer.value == 42
+  if (recorded == null) {
+    return false
+  }
+  return recorded.properties.n.type == "number" && recorded.required.includes("n")
 }
 
 // The count is only a count: a declined recordUse leaves meta.json as it

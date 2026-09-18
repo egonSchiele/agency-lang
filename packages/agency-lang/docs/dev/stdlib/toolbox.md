@@ -12,12 +12,16 @@ One directory per tool under the toolbox (default `~/.agency-agent/tools`):
 - `toolbox.agency` generates `tool.agency` from a template. It imports
   `run` and `Request` from `impl.agency` and wraps `run` in a guard with
   time and cost limits (the wrapper is `runGuarded`). It exports `tool`,
-  which is `runGuarded` with the purpose set through `.describe()`, and
-  `node main`.
+  which is `runGuarded` with the purpose set through `.describe()`,
+  `node main`, and `node requestSchema`, which returns
+  `schema(Request).toJSONSchema()`. `saveTool` runs that node once, in the
+  same sandbox as the tests, and records the answer in `meta.json`, so
+  whoever offers the tool to a model can give its request the real shape.
 - `tool.test.json` holds generated test cases, only for a tool that does
   nothing but compute.
-- `meta.json` holds the purpose, the request type text, the creation
-  time, the time limit, and a use count with the last-used time. It
+- `meta.json` holds the purpose, the request type text and its JSON
+  Schema, the creation time, the time limit, and a use count with the
+  last-used time. It
   records no outcomes or results, because a failure message can carry
   the request's contents. It does not hold the tool's name either; the
   directory name is the only name.

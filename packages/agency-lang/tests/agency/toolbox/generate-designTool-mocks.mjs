@@ -122,7 +122,7 @@ const tests = [
   testCase("dateToolSkipsTests", dateRound),
   testCase("staleTestFileDoesNotShip", [...pureRound, ...modelRound]),
   testCase("runToolRunsAndRecords", pureRound),
-  testCase("runToolAcceptsRequestAsJsonText", pureRound),
+  testCase("savedMetaRecordsTheRequestSchema", pureRound),
   testCase("declinedRecordUseKeepsTheResult", pureRound),
   testCase("symlinkedToolIsRefused", []),
   testCase("refusedWriteStopsTheRounds", pureRound),

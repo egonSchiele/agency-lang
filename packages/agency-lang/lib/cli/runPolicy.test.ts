@@ -4,6 +4,8 @@ import { tmpdir } from "os";
 import path from "path";
 import { resolveRunPolicy } from "./runPolicy.js";
 import { readScopeRules } from "../runtime/builtinPolicies.js";
+import { checkPolicy } from "../runtime/policy.js";
+import { agentHomeDir } from "../runtime/agentHome.js";
 
 describe("resolveRunPolicy", () => {
   it("returns null when no policy flags are set", () => {
@@ -87,7 +89,12 @@ describe("resolveRunPolicy", () => {
   it("threads cwd into the 'with-writes' base scope", () => {
     const r = resolveRunPolicy({ policy: "with-writes", cwd: "/work" });
     const p = JSON.parse(r!.policyJson);
-    expect(p["std::write"]).toEqual([{ match: { dir: "{/work,/work/**}" }, action: "approve" }]);
+    // The agent's own settings rule comes from `recommended` underneath,
+    // then the project scope this flag asked for.
+    expect(p["std::write"]).toEqual([
+      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
+      { match: { dir: "{/work,/work/**}" }, action: "approve" },
+    ]);
   });
 
   it("leaves base rules for unaffected effects untouched", () => {
@@ -99,7 +106,22 @@ describe("resolveRunPolicy", () => {
     const p = JSON.parse(r!.policyJson);
     // std::read (in base, not in inline flags) keeps its built-in rules
     expect(p["std::read"]).toEqual(readScopeRules());
-    expect(p["std::write"]).toEqual([{ action: "reject" }]);
+    // The flag goes in front of the base rules rather than replacing
+    // them, the same as for every other effect. Its catch-all reject
+    // matches first, so `--reject std::write` still rejects the write
+    // `recommended` approves on its own.
+    expect(p["std::write"]).toEqual([
+      { action: "reject" },
+      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
+    ]);
+    expect(
+      checkPolicy(p, {
+        effect: "std::write",
+        message: "write settings?",
+        data: { dir: agentHomeDir(), filename: "settings.json" },
+        origin: "test",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("exposes the parsed policy, matching its JSON, for in-process callers", () => {

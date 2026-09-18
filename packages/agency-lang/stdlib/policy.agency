@@ -779,8 +779,17 @@ def askUser(intr: any): AskUserResult {
   // cancellation that unwinds the turn back to the REPL prompt) instead of
   // re-prompting. The "r" option still lets you reject a single action
   // (and optionally tell the agent what to do instead).
+  // An interrupt that expects a value is answered about its body, as a
+  // review is about the source, so the body is shown in full up front.
   const answer = withLock("std::tty") {
-    return interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
+    return interruptChoice(
+      title,
+      body,
+      items,
+      allowFreeText: true,
+      allowCancel: true,
+      revealBody: intr.expectsValue == true,
+    )
   }
   return match(answer) {
     "a" => ({

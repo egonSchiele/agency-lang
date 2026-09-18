@@ -141,6 +141,7 @@ export def interruptChoice(
   items: any[],
   allowFreeText: boolean = false,
   allowCancel: boolean = false,
+  revealBody: boolean = false,
 ): string {
   """
   Approval prompt for line mode: renders a sticky footer pinned to the
@@ -155,9 +156,10 @@ export def interruptChoice(
   @param items - The {key, label} choices.
   @param allowFreeText - Accept a free-form rejection reason.
   @param allowCancel - When true, Escape cancels the whole request.
+  @param revealBody - When true, a body too long for the footer is printed above it as the prompt opens, so the user reads it without asking.
   """
   if (_stickyInterruptAvailable()) {
-    return _interruptChoice(title, body, items, allowFreeText, allowCancel)
+    return _interruptChoice(title, body, items, allowFreeText, allowCancel, revealBody)
   }
   return chooseOption(title, body, items, allowFreeText: allowFreeText, allowCancel: allowCancel)
 }

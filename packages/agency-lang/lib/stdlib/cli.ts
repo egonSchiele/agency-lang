@@ -614,6 +614,9 @@ type InterruptOpts = {
   items: { key: string; label: string }[];
   allowFreeText: boolean;
   allowCancel: boolean;
+  /** Print a cut-off body into the scrollback as soon as the prompt opens,
+   *  for a prompt whose answer is about the body, such as a review. */
+  revealBody?: boolean;
 };
 
 /** Stop the "Thinking" spinner if the REPL has one running (which also
@@ -679,6 +682,12 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
   const rlAny = rl as unknown as { _ttyWrite: (sequence: unknown, key: unknown) => void };
   const originalTtyWrite = rlAny._ttyWrite;
 
+  // Same write the view key makes, made for the user: the region is up,
+  // so this lands above the footer.
+  if (opts.revealBody === true && config().canReveal) {
+    process.stdout.write(`\n${opts.body}\n`);
+  }
+
   return new Promise<string>((resolve, reject) => {
     const settle = (finish: () => void): void => {
       rlAny._ttyWrite = originalTtyWrite;
@@ -726,12 +735,13 @@ export async function _interruptChoice(
   items: { key: string; label: string }[],
   allowFreeText: boolean,
   allowCancel: boolean,
+  revealBody: boolean = false,
 ): Promise<string> {
   const hook = (globalThis as any).__agencyInterruptPrompt;
   if (typeof hook !== "function") {
     throw new Error("_interruptChoice: no active line-mode REPL");
   }
-  return hook({ title, body, items, allowFreeText, allowCancel });
+  return hook({ title, body, items, allowFreeText, allowCancel, revealBody });
 }
 
 /** True when a line-mode REPL is running AND both ends are real terminals,

@@ -64,6 +64,11 @@ each keystroke so a resize mid-prompt cannot leave the footer offering a
 key the reducer no longer honours. When nothing is cut off, `v` is an
 ordinary free-text reason.
 
+An interrupt that expects a value, such as `std::toolbox::review`, is
+answered about its body, so `askUser` passes `revealBody` and the widget
+prints a cut-off body above the footer as the prompt opens, without a
+keypress. A body that fits is not printed again.
+
 ## What "approve always here" pins
 
 The prompt's "approve always here" answer saves a rule scoped to some of

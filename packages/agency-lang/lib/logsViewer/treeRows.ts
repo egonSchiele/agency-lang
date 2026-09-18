@@ -1,7 +1,8 @@
 import { TreeNode, ViewerState } from "./types.js";
 import { summarizeSpanStyled, summarizeTraceStyled } from "./summary.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
-import { formatConversation } from "./conversation.js";
+import { formatMessageLines, messageHeadline, ConvoMessage } from "./conversation.js";
+import { color } from "@/utils/termcolors.js";
 
 export type Viewport = { rows: number; cols: number };
 export type VisibleRow = { node: TreeNode; depth: number };
@@ -84,7 +85,7 @@ export function rawDataChildren(toggle: TreeNode): TreeNode[] {
 // the request `messages` plus the assistant turn from `completion`.
 // Render the assistant turn whenever it has text OR tool calls — the
 // common tool-calling completion has `output: null` and a non-empty
-// `toolCalls` array, and `formatConversation` already renders an
+// `toolCalls` array, and the conversation formatter already renders an
 // assistant message's `toolCalls`, so we just pass them through.
 function assembleTranscript(event: NonNullable<TreeNode["event"]>): any[] {
   const messages = Array.isArray(event.data.messages) ? event.data.messages : [];
@@ -104,8 +105,10 @@ function assembleTranscript(event: NonNullable<TreeNode["event"]>): any[] {
 // renderRowText prefixes each row with `marker` (2 chars) + indent
 // (`depth * 2` chars); subtract both so wrapped chunks fit without
 // triggering the TUI clipper. Undefined cols (tests) disables wrapping.
-function availableWidth(childDepth: number, cols?: number): number | undefined {
-  return cols !== undefined ? Math.max(20, cols - childDepth * 2 - 2) : undefined;
+// `reserve` holds back columns for text the caller appends to the row,
+// such as a fold's line count.
+function availableWidth(childDepth: number, cols?: number, reserve = 0): number | undefined {
+  return cols !== undefined ? Math.max(20, cols - childDepth * 2 - 2 - reserve) : undefined;
 }
 
 // Turn one conversation line into one-or-more wrapped `convoLine` nodes.
@@ -141,11 +144,68 @@ function rawDataToggleNode(id: string, parent: TreeNode, event: TreeNode["event"
   };
 }
 
+// A message this many display lines long or longer is folded behind a
+// header row: an agent's system prompt runs to hundreds of lines and
+// would otherwise bury the conversation around it.
+const FOLD_MESSAGE_LINES = 15;
+
+// Where a transcript is being laid out: the row it hangs off, the
+// synthetic id namespace its rows take, and the depth that sets width.
+type MessageLayout = {
+  idPrefix: string;
+  parent: TreeNode;
+  childDepth: number;
+  cols?: number;
+};
+
+// The rows for one message: its lines laid out flat, or, when it is long
+// enough to fold, a single header row owning them as children. A fold is
+// keyed by the message's position in the transcript, so its id survives
+// the re-parses follow mode does.
+function messageRows(
+  layout: MessageLayout,
+  msg: ConvoMessage,
+  msgIdx: number,
+  firstLineIdx: number,
+): TreeNode[] {
+  const { idPrefix, parent, childDepth, cols } = layout;
+  const lines = formatMessageLines(msg, availableWidth(childDepth, cols));
+  if (lines.length < FOLD_MESSAGE_LINES) {
+    return lines.map((line, i) => convoLineNode(idPrefix, parent, line, firstLineIdx + i));
+  }
+  // Header and body are laid out again at the widths they are drawn at:
+  // the body is indented one level deeper than a flat line, and the
+  // header gives up room to its line count.
+  const count = `(${lines.length} lines)`;
+  const headerId = `${idPrefix}:msg:${msgIdx}`;
+  const headline = messageHeadline(msg, availableWidth(childDepth, cols, count.length + 1));
+  const body = formatMessageLines(msg, availableWidth(childDepth + 1, cols)).map((line, i) => ({
+    ...convoLineNode(headerId, parent, line, i),
+    parentId: headerId,
+  }));
+  return [
+    {
+      id: headerId,
+      traceId: parent.traceId,
+      parentId: parent.id,
+      children: body,
+      nodeKind: "convoMessage" as const,
+      label: "",
+      summary: `${headline} ${color.dim(count)}`,
+    },
+  ];
+}
+
 function promptCompletionChildren(leaf: TreeNode, childDepth = 0, cols?: number): TreeNode[] {
-  const available = availableWidth(childDepth, cols);
-  const convoLines = formatConversation(assembleTranscript(leaf.event!), available);
-  const convoNodes = convoLines.map((line, i) => convoLineNode(`${leaf.id}:convo`, leaf, line, i));
-  return [...convoNodes, rawDataToggleNode(`${leaf.id}:raw`, leaf, leaf.event)];
+  const layout = { idPrefix: `${leaf.id}:convo`, parent: leaf, childDepth, cols };
+  const out: TreeNode[] = [];
+  let lineIdx = 0;
+  for (const [msgIdx, msg] of assembleTranscript(leaf.event!).entries()) {
+    const rows = messageRows(layout, msg, msgIdx, lineIdx);
+    lineIdx += rows.length;
+    out.push(...rows);
+  }
+  return [...out, rawDataToggleNode(`${leaf.id}:raw`, leaf, leaf.event)];
 }
 
 // Synthetic children shown when an `llmCall` span is expanded — the
@@ -174,15 +234,15 @@ export function llmCallSpanChildren(span: TreeNode, childDepth = 0, cols?: numbe
 
   const last = pcLeaves[pcLeaves.length - 1];
   const transcript = assembleTranscript(last.event!);
-  const available = availableWidth(childDepth, cols);
 
+  const layout = { idPrefix: `${span.id}:llm:convo`, parent: span, childDepth, cols };
   const out: TreeNode[] = [];
   const queue = [...toolExecs];
   let lineIdx = 0;
-  for (const msg of transcript) {
-    for (const line of formatConversation([msg], available)) {
-      out.push(convoLineNode(`${span.id}:llm:convo`, span, line, lineIdx++));
-    }
+  for (const [msgIdx, msg] of transcript.entries()) {
+    const rows = messageRows(layout, msg, msgIdx, lineIdx);
+    lineIdx += rows.length;
+    out.push(...rows);
     const toolCallCount = (msg?.toolCalls ?? msg?.tool_calls ?? []).length;
     for (let i = 0; i < toolCallCount && queue.length > 0; i++) {
       out.push(queue.shift()!);
@@ -317,7 +377,9 @@ function splitOnTags(text: string): Part[] {
 
 function chooseGlyph(node: TreeNode, isExpanded: boolean): string {
   if (node.nodeKind === "jsonLine" || node.nodeKind === "convoLine") return "";
-  if (node.nodeKind === "rawDataToggle") return isExpanded ? "▼" : "▶";
+  if (node.nodeKind === "rawDataToggle" || node.nodeKind === "convoMessage") {
+    return isExpanded ? "▼" : "▶";
+  }
   if (node.nodeKind === "event") {
     // Event leaves with a payload are expandable (inline JSON).
     if (node.event) return isExpanded ? "▼" : "▶";

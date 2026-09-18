@@ -108,6 +108,27 @@ fast".
 End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation) and
 `lib/statelog/appendReader.test.ts` (UTF-8 split across read boundaries, offset rewind).
 
+## Folding a long message
+
+An agent's system prompt is hundreds of lines long and is resent on every
+round, so expanding a trace buried the conversation under it — a real agent
+trace came to 2,181 rows, 1,841 of them copies of two long messages.
+
+`messageRows` in `treeRows.ts` lays out a transcript a message at a time. Under
+`FOLD_MESSAGE_LINES` (15) display lines a message becomes flat `convoLine`
+rows; at or over it, one `convoMessage` header owning those lines as children,
+so they appear only when the header is expanded. Both the `promptCompletion`
+leaf and the flattened `llmCall` span go through it.
+
+No keybinding changed, because `e` and `z` add ids from the persistent forest
+and these headers are synthetic. Two places do have to know about them:
+
+- `collapseSubtree` (`E`) deletes real-forest ids, which would leave an opened
+  fold in the expanded set to spring back the next time you opened its span. It
+  also drops expanded ids namespaced under the node.
+- `search.ts` walks the hidden lines and, in `expandSyntheticAncestors`, opens
+  the fold around a match, or `/` would highlight a row `n` could never reach.
+
 ## Composing rows over lib/tui: two layout rules that will bite you
 
 Both were found the hard way while building tables (the runs-explorer

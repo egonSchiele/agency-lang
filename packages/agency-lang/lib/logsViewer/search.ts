@@ -39,6 +39,9 @@ export function findMatches(
       for (const child of llmCallSpanChildren(node, depth + 1, cols)) {
         if (child.nodeKind === "convoLine") {
           pushIfMatches(child);
+        } else if (child.nodeKind === "convoMessage") {
+          pushIfMatches(child);
+          for (const line of child.children) pushIfMatches(line);
         } else if (child.nodeKind === "rawDataToggle") {
           pushIfMatches(child);
           for (const json of rawDataChildren(child)) pushIfMatches(json);
@@ -51,6 +54,9 @@ export function findMatches(
     if (node.nodeKind === "event" && node.event) {
       for (const synth of eventExpansionChildren(node, depth + 1, cols)) {
         pushIfMatches(synth);
+        // A folded message hides its lines as children; they are still
+        // searchable.
+        for (const line of synth.children) pushIfMatches(line);
         if (synth.nodeKind !== "rawDataToggle") {
           continue;
         }
@@ -101,6 +107,8 @@ export function expandAncestorsOf(state: ViewerState, matchIds: string[]): Viewe
 //   <span>:llm:convo:<n>      — conversation line under an llmCall span
 //   <span>:llm:raw            — "raw data" toggle under an llmCall span
 //   <span>:llm:raw:json:<n>   — JSON line under that opened raw toggle
+//   <leaf>:convo:msg:<i>      — header of a folded message
+//   <leaf>:convo:msg:<i>:<n>  — one line of a folded message's body
 // Real node ids themselves are returned unchanged.
 function expandSyntheticAncestors(id: string, expanded: Set<string>): string {
   const colon = id.indexOf(":");
@@ -115,6 +123,9 @@ function expandSyntheticAncestors(id: string, expanded: Set<string>): string {
   } else if (rest === "llm:raw" || rest.startsWith("llm:raw:")) {
     expanded.add(`${realId}:llm:raw`);
   }
+  // A line inside a folded message needs its fold opened as well.
+  const fold = /^(.*:msg:\d+):\d+$/.exec(id);
+  if (fold) expanded.add(fold[1]);
   return realId;
 }
 

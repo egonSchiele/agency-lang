@@ -118,12 +118,18 @@ function expandSubtree(state: ViewerState, rows: VisibleRow[], idx: number): Vie
 function collapseSubtree(state: ViewerState, rows: VisibleRow[], idx: number): ViewerState {
   if (idx < 0) return state;
   const node = rows[idx].node;
-  const next = new Set(state.expanded);
+  const subtree: string[] = [];
   const walk = (n: TreeNode): void => {
-    next.delete(n.id);
+    subtree.push(n.id);
     for (const c of n.children) walk(c);
   };
   walk(node);
+  // Synthetic rows — folded messages, raw-data toggles — are not in the
+  // forest, but their ids are namespaced under the row they hang off, so
+  // dropping ids prefixed by a collapsed node reaches them too.
+  const collapsed = (id: string): boolean =>
+    subtree.some((inSubtree) => id === inSubtree || id.startsWith(`${inSubtree}:`));
+  const next = new Set([...state.expanded].filter((id) => !collapsed(id)));
   return next.size === state.expanded.size
     ? state
     : { ...state, expanded: next, cursorId: node.id };

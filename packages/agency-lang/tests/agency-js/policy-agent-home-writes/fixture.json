@@ -1,0 +1,7 @@
+{
+  "settings": "approved",
+  "policy": "rejected",
+  "skill": "rejected",
+  "read": "approved",
+  "inputCalls": 4
+}

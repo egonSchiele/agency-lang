@@ -17,17 +17,44 @@ describe("builtinPolicy", () => {
       expect(p![effect]).toEqual([
         { match: { dir: "{.,./**}" }, action: "approve" },
         { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
-        {
-          match: {
-            dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**}",
-          },
-          action: "approve",
-        },
+        { match: { dir: "{<agent-home>,<agent-home>/**}" }, action: "approve" },
       ]);
     }
-    // No std::write rule at all: the toolbox use count goes through its
-    // own effect, never a write approval.
-    expect(p!["std::write"]).toBeUndefined();
+    // The only write is the agent's own settings file, by name. The
+    // toolbox use count still goes through its own effect.
+    expect(p!["std::write"]).toEqual([
+      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
+    ]);
+  });
+
+  it("approves the agent's own settings file and nothing else beside it", () => {
+    const rule = builtinPolicy("recommended", "/tmp/base")!["std::write"][0].match!;
+    // The rule names the file. Matching the directory alone would cover
+    // every one of these, which is the point of naming it.
+    expect(rule.filename).toBe("settings.json");
+    for (const other of ["policy.json", "session-policy.json", "history"]) {
+      expect(picomatch.isMatch(other, rule.filename!)).toBe(false);
+    }
+    // The gated subtrees are not the agent home's own directory, so the
+    // `dir` half does not reach them either.
+    for (const sub of ["<agent-home>/skills", "<agent-home>/tools/greetHindi"]) {
+      expect(picomatch.isMatch(sub, rule.dir!)).toBe(false);
+    }
+  });
+
+  it("keeps reading the whole agent home, not just its skills and tools", () => {
+    const rules = builtinPolicy("recommended", "/tmp/base")!["std::read"];
+    const home = rules[2].match!.dir!;
+    for (const dir of [
+      "<agent-home>",
+      "<agent-home>/sessions",
+      "<agent-home>/memory/2026-09",
+      "<agent-home>/tools/greetHindi",
+    ]) {
+      expect(picomatch.isMatch(dir, home)).toBe(true);
+    }
+    // Still scoped: the home's parent and its siblings are not in it.
+    expect(picomatch.isMatch("<agent-home>-other", home)).toBe(false);
   });
 
   it("scopes every scan like a read under 'recommended' and omits them under 'minimal'", () => {
@@ -120,8 +147,13 @@ describe("builtinPolicy", () => {
   it("scopes 'with-writes' effects on their correct path fields", () => {
     const p = builtinPolicy("with-writes", "/work");
     const scope = "{/work,/work/**}";
-    // dir field
-    expect(p!["std::write"]).toEqual([{ match: { dir: scope }, action: "approve" }]);
+    // dir field, after the agent-home settings rule `recommended` already
+    // carries: scoping writes to a project must not stop the agent saving
+    // its own settings.
+    expect(p!["std::write"]).toEqual([
+      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
+      { match: { dir: scope }, action: "approve" },
+    ]);
     // target field (remove) — a fat-fingered "dir" here would silently disable scoping
     expect(p!["std::remove"]).toEqual([{ match: { target: scope }, action: "approve" }]);
     // src + dest fields (copy/move)
@@ -132,7 +164,7 @@ describe("builtinPolicy", () => {
 
   it("scopes with-writes literally even when baseDir has glob metacharacters", () => {
     const p = builtinPolicy("with-writes", "/a,b");
-    const pattern = p!["std::write"][0].match!.dir;
+    const pattern = p!["std::write"][1].match!.dir;
     // Inside the real directory: matches. Widened brace alternatives (/a, b): not.
     expect(picomatch.isMatch("/a,b/file.txt", pattern)).toBe(true);
     expect(picomatch.isMatch("/a/file.txt", pattern)).toBe(false);

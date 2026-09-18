@@ -1,0 +1,73 @@
+import { cliPolicyHandler, setPolicy, recommendedAutoApprovePolicy, ScopedRuleFields } from "std::policy"
+
+const FIELDS: ScopedRuleFields = {}
+
+def writeThere(dir: string, filename: string): string {
+  interrupt std::write("write it?", { dir: dir, filename: filename })
+  return "wrote it"
+}
+
+def readThere(dir: string, filename: string): string {
+  interrupt std::read("read it?", { dir: dir, filename: filename })
+  return "read it"
+}
+
+def outcomeOf(result: any): string {
+  if (result is failure) {
+    return "rejected"
+  }
+  return "approved"
+}
+
+// The write /model and /preset make. Under `recommended` it must go
+// through without asking: an agent that stops to ask whether it may
+// remember a setting you just changed is asking the wrong question.
+node savesSettings(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try writeThere(args.home, "settings.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// The policy file lives in that same directory. Approving writes to it
+// would let the agent grant itself anything, so it still asks.
+node doesNotSavePolicy(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try writeThere(args.home, "policy.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// A learned skill enters through its own review gate, so a plain write
+// into that subtree still asks too.
+node doesNotWriteSkills(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try writeThere("${args.home}/skills/greet", "SKILL.md")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// Reading the agent's own home: its sessions, its memory, anything it
+// keeps about itself.
+node readsItsOwnHome(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try readThere("${args.home}/sessions", "last.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}

@@ -268,15 +268,34 @@ places only (`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
   `agencyStdlib`, ...) are `read` partially applied to
   `stdlib/docs/<section>`, and the bundled skills are read the same way, so
   without this rule those tools return rejections in a headless run;
-- the agent home's learned skills and tools, written as
-  `{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**}`.
-  The roots are listed as well as their contents because a catalog scan
-  of the whole directory names the root itself in its payload. Those directories
-  hold skills the user taught the agent and tools it wrote, and both
-  enter them only through a review interrupt. Without this rule every
-  read of a learned skill, every catalog scan, and every `runTool` would
-  prompt, and would auto-reject headless. The home itself is not covered,
-  so `~/.agency-agent/policy.json` and `settings.json` still prompt.
+- the agent's own home, written as `{<agent-home>,<agent-home>/**}`. The
+  root is listed as well as its contents because a catalog scan of a
+  whole directory names the root itself in its payload. The home holds
+  the agent's settings, its history, its memory, and the skills and tools
+  it has learned; reading any of it tells the agent about itself.
+  Without this rule every read of a learned skill, every catalog scan,
+  and every `runTool` would prompt, and would auto-reject headless.
+
+## The one thing `recommended` lets the agent write
+
+`std::write` has exactly one rule: `settings.json` in the agent home
+(`agentHomeWriteRules`). `/model` and `/preset` write that file, and
+without the rule, changing a model stops to ask whether the agent may
+remember that you changed it. `std::mkdir` has the matching rule for the
+home itself, which `writeSettingsFile` creates when it is not there yet.
+`with-writes` keeps both and adds its own scope after them, so scoping
+writes to a project does not take the agent's settings away.
+
+The rule names the file rather than matching the directory. Three things
+in that same directory have to keep asking, and a `dir`-only rule would
+cover all of them:
+
+- `policy.json` and `session-policy.json`. They *are* this policy. An
+  agent that can rewrite them can grant itself anything it likes, and the
+  approval prompt stops meaning what it says.
+- `skills/**`. A skill gets there through `designSkill`'s review; a plain
+  write would put one there without it.
+- `tools/**`. The same, through the toolbox's review and save gates.
 
 `recommended` also approves `std::toolbox::recordUse` under
 `<agent-home>/tools/**`, the effect `runTool` raises before counting a
@@ -285,13 +304,13 @@ use in the tool's `meta.json`. It is an effect of its own rather than a
 stdlib's bookkeeping from any program writing arbitrary content into
 `meta.json`, whose `purpose` text `listTools` then trusts and whose
 `maxTime` sets the run's time limit. Approving the effect approves only
-the record the stdlib composes. No `std::write` is approved anywhere.
+the record the stdlib composes.
 
 The save and review gates (`std::skills::save`, `std::skills::review`,
 `std::toolbox::save`, `std::toolbox::review`) have no rule in any
 built-in but `approve-all`. They prompt.
 
-All three read rules are placeholders, not paths. `.` expands to the
+All three read rules, and the write rule, are placeholders, not paths. `.` expands to the
 process cwd, `<agency>` to the directory the agency package is installed
 in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
 `getPackageRoot`), and `<agent-home>` to `AGENCY_AGENT_HOME` or

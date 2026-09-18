@@ -336,9 +336,9 @@ describe("trace annotations", () => {
   });
 });
 
-// A long message — typically an agent's system prompt, which can run to
+// A long message — typically an agent's system prompt, which runs to
 // hundreds of wrapped lines — is folded behind a single header row so it
-// cannot bury the actual conversation. Short messages are untouched.
+// cannot bury the conversation around it.
 describe("folding long messages", () => {
   const longSystemPrompt = Array.from({ length: 40 }, (_, i) => `system prompt line ${i}`).join(
     "\n",

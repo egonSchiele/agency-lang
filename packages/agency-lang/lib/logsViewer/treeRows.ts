@@ -145,13 +145,12 @@ function rawDataToggleNode(id: string, parent: TreeNode, event: TreeNode["event"
 }
 
 // A message this many display lines long or longer is folded behind a
-// header row. An agent's system prompt runs to hundreds of lines and
-// would otherwise bury the conversation around it; anything shorter is
-// cheaper to read than to unfold.
+// header row: an agent's system prompt runs to hundreds of lines and
+// would otherwise bury the conversation around it.
 const FOLD_MESSAGE_LINES = 15;
 
 // Where a transcript is being laid out: the row it hangs off, the
-// synthetic id namespace its rows take, and the width they have.
+// synthetic id namespace its rows take, and the depth that sets width.
 type MessageLayout = {
   idPrefix: string;
   parent: TreeNode;
@@ -161,8 +160,8 @@ type MessageLayout = {
 
 // The rows for one message: its lines laid out flat, or, when it is long
 // enough to fold, a single header row owning them as children. A fold is
-// keyed by `msgIdx`, its position in the transcript, so it keeps the same
-// id across the re-parses follow mode does.
+// keyed by the message's position in the transcript, so its id survives
+// the re-parses follow mode does.
 function messageRows(
   layout: MessageLayout,
   msg: ConvoMessage,
@@ -174,9 +173,9 @@ function messageRows(
   if (lines.length < FOLD_MESSAGE_LINES) {
     return lines.map((line, i) => convoLineNode(idPrefix, parent, line, firstLineIdx + i));
   }
-  // The body sits one level deeper than an unfolded line would, and the
-  // header gives up room to its line count, so both are laid out again
-  // at the width they will actually be drawn at.
+  // Header and body are laid out again at the widths they are drawn at:
+  // the body is indented one level deeper than a flat line, and the
+  // header gives up room to its line count.
   const count = `(${lines.length} lines)`;
   const headerId = `${idPrefix}:msg:${msgIdx}`;
   const headline = messageHeadline(msg, availableWidth(childDepth, cols, count.length + 1));

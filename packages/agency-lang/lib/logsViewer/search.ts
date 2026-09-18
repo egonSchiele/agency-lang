@@ -54,8 +54,7 @@ export function findMatches(
     if (node.nodeKind === "event" && node.event) {
       for (const synth of eventExpansionChildren(node, depth + 1, cols)) {
         pushIfMatches(synth);
-        // A folded message keeps its lines as children; a raw-data
-        // toggle recomputes its JSON. Either way the hidden rows are
+        // A folded message hides its lines as children; they are still
         // searchable.
         for (const line of synth.children) pushIfMatches(line);
         if (synth.nodeKind !== "rawDataToggle") {

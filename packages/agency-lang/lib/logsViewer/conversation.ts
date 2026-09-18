@@ -40,9 +40,8 @@ export function formatConversation(messages: ConvoMessage[], width?: number): st
 }
 
 // The one-line stand-in for a message too long to show in full: its role
-// tag over the first line of the body that has anything on it. A message
-// that opens with a blank line would otherwise fold into a header with
-// nothing on it but the tag.
+// tag over the first line of the body that has text on it. A message that
+// opens with a blank line would otherwise get a header with nothing on it.
 export function messageHeadline(msg: ConvoMessage, width?: number): string {
   const body = contentText(msg.content);
   const firstLine = (body ?? "").split("\n").find((line) => line.trim().length > 0);
@@ -53,9 +52,7 @@ export function messageHeadline(msg: ConvoMessage, width?: number): string {
   )[0];
 }
 
-// The display lines for one message. The viewer calls this per message so
-// it can decide, message by message, whether the lines go on screen as
-// they are or behind a fold.
+// The display lines for one message.
 export function formatMessageLines(msg: ConvoMessage, width?: number): string[] {
   const role = msg.role ?? "unknown";
   const label = roleLabel(role, msg);

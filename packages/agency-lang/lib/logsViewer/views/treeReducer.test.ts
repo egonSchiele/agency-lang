@@ -264,10 +264,9 @@ describe("handleKey", () => {
   });
 });
 
-// Folded messages live outside the persistent forest, so `e` cannot
-// reach them and they stay shut — that is the whole point of the fold.
-// `E` has to clear them anyway, or a span you collapse and reopen comes
-// back with a system prompt sprawling out of it.
+// Folded messages live outside the persistent forest, so `e` cannot reach
+// them and they stay shut. `E` has to clear them anyway, or a span you
+// collapse and reopen comes back with its system prompt sprawling out.
 describe("expanding and collapsing around folded messages", () => {
   const withFold = (expanded: string[], cursorId = "a"): ViewerState => ({
     roots: [

@@ -1,0 +1,28 @@
+import { cliPolicyHandler } from "std::policy"
+
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  return "one"
+}
+
+def deployTwo(): string {
+  interrupt myapp::deploy("two", { env: "prod" })
+  return "two"
+}
+
+def deployThree(): string {
+  interrupt myapp::deploy("three", { env: "prod" })
+  return "three"
+}
+
+// One LLM round calls three tools at once, and each raises the same
+// effect. All three pass the policy check before the first is answered;
+// "approve always" to that one must cover the other two, or they prompt
+// for answers nobody scripted.
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, deployTwo, deployThree] })
+  } with handler
+  return "pass"
+}

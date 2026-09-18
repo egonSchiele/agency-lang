@@ -64,6 +64,35 @@ each keystroke so a resize mid-prompt cannot leave the footer offering a
 key the reducer no longer honours. When nothing is cut off, `v` is an
 ordinary free-text reason.
 
+## An "always" answer covers the interrupts already waiting
+
+Parallel tool calls raise their interrupts together. Each one runs
+`cliPolicyHandler`'s check against the saved rules before any of them is
+answered, finds no rule, and queues for the terminal lock behind the
+prompt. Until this was fixed, answering "approve always" to the first
+saved the rule and approved that one interrupt, and then every queued
+sibling prompted anyway, because its check had already run.
+
+`askUser` now runs `checkPolicy` a second time once it holds the
+`std::tty` lock, just before it would draw the prompt, and records an
+"always" answer before it releases the lock. Both halves matter: the
+first attempt recorded the rule in the handler, after `askUser` had
+returned, and the next interrupt took the lock and checked in that gap.
+A rule saved by the answer to the interrupt ahead decides the waiting
+one, and the user sees one dim line, "Approved … by the rule just
+saved", instead of a prompt. `applyRule` carries out a rule's decision
+from both checks.
+`tests/agency-js/cli-policy-handler-parallel` has a mock LLM round call
+three tools at once, each raising the same effect, and scripts exactly
+one answer. It has to go through the tool loop: a `parallel` block does
+not show the bug, because its arms consult the handler one after
+another, and a plain `parallel` block also gives each arm its own copy
+of the module's globals, where the saved rules live.
+
+The prompt's first line names the effect, in bold, before the message,
+so the user knows which permission is being asked for before reading
+why.
+
 ## What "approve always here" pins
 
 The prompt's "approve always here" answer saves a rule scoped to some of

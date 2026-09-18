@@ -619,7 +619,10 @@ def describeScopedMatch(intr: any): string {
  */
 type AskUserResult = {
   action: Decision;
-  reason?: string
+  reason?: string;
+  /** Set when a rule decided this interrupt while it waited for the
+    terminal, so no one was asked. Holds that rule's decision. */
+  rule?: any
 }
 
 // Render a `std::edit` interrupt's payload as a colored diff. `payload` is
@@ -768,9 +771,9 @@ export def askUserChoices(intr: any): ChoiceItem[] {
 // type a rejection reason instead of picking a key. That single
 // keystroke flow replaces the old two-step "(r), then type reason".
 def askUser(intr: any): AskUserResult {
-  // `!= null` compiles to `!== null` (Agency strict equality), so an
-  // undefined entry would slip through. Use the explicit existence check.
-  const title = intr.message
+  // The effect first, so the user knows which permission is being asked
+  // for before reading why.
+  const title = "${color.bold(intr.effect)}  ${intr.message}"
   const body = prettyPrintInterruptData(intr.data, intr.effect)
 
   const items = askUserChoices(intr)
@@ -779,9 +782,55 @@ def askUser(intr: any): AskUserResult {
   // cancellation that unwinds the turn back to the REPL prompt) instead of
   // re-prompting. The "r" option still lets you reject a single action
   // (and optionally tell the agent what to do instead).
-  const answer = withLock("std::tty") {
-    return interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
+  const answer: AskUserResult = withLock("std::tty") {
+    // Parallel tool calls raise their interrupts together, and every one
+    // of them passed the policy check before any was answered. An
+    // "always" answer to the first has to cover the rest, so the check
+    // runs again here, once this interrupt's turn at the terminal comes.
+    const rules = _policy
+    if (rules != null) {
+      const decided = checkPolicy(rules, intr)
+      if (decided.type == "approve" || decided.type == "reject") {
+        return {
+          action: decided.type,
+          reason: null,
+          rule: decided
+        }
+      }
+    }
+    const choice = interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
+    const result = choiceResult(choice)
+    // Recorded before the lock is released, so the interrupt waiting
+    // behind this one finds the rule the moment its turn comes. Recording
+    // it after would lose the race to that interrupt's check.
+    recordAnswer(intr, result)
+    return result
   }
+  return answer
+}
+
+// An "always" answer becomes a rule now, in memory; maybeFlush writes it.
+def recordAnswer(intr: any, answer: AskUserResult) {
+  const rules = _policy
+  if (rules == null) {
+    return
+  }
+  if (answer.action == "approve-always") {
+    _policy = recordRule(rules, intr.effect, "approve")
+    _pendingSave = true
+  }
+  if (answer.action == "approve-always-here") {
+    _policy = recordScopedRule(rules, intr, globalCliPolicyOpts.fields)
+    _pendingSave = true
+  }
+  if (answer.action == "reject-always") {
+    _policy = recordRule(rules, intr.effect, "reject")
+    _pendingSave = true
+  }
+}
+
+// The user's keystroke, or their typed reason, as a decision.
+def choiceResult(answer: string): AskUserResult {
   return match(answer) {
     "a" => ({
       action: "approve",
@@ -883,24 +932,8 @@ def _handler(intr: any): any {
   }
 
   const decision = checkPolicy(_policy, intr)
-  if (decision.type == "approve") {
-    // Auto-approved: the user never sees the approval prompt (which would
-    // render an edit as a diff), so surface an edit's diff here. Other
-    // effects auto-approve silently as before.
-    if (intr.effect == "std::edit") {
-      print(renderEditDiff(intr.data))
-    }
-    return approve()
-  }
-  if (decision.type == "reject") {
-    // A rule rejected without asking. Say so on the terminal: a silent
-    // rejection looks, from the outside, like the agent changing its mind.
-    if (_interactive) {
-      print(color.dim("⏺ Policy rejected ${intr.effect}${oneLineData(intr.data)}"))
-    }
-    // The rule's rejectMessage, when set: the model reads it as the
-    // rejection reason and can steer its next attempt.
-    return reject(decision.message)
+  if (decision.type == "approve" || decision.type == "reject") {
+    return applyRule(intr, decision, late: false)
   }
 
   // No rule decided, and no user is at a terminal to ask: reject with a
@@ -914,19 +947,14 @@ def _handler(intr: any): any {
   }
 
   const answer = askUser(intr)
-  if (answer.action == "approve-always") {
-    _policy = recordRule(_policy, intr.effect, "approve")
-    _pendingSave = true
-    return approve()
+  if (answer.rule != null) {
+    return applyRule(intr, answer.rule, late: true)
   }
-  if (answer.action == "approve-always-here") {
-    _policy = recordScopedRule(_policy, intr, globalCliPolicyOpts.fields)
-    _pendingSave = true
+  // The "always" answers were recorded by askUser, under the lock.
+  if (answer.action == "approve-always" || answer.action == "approve-always-here") {
     return approve()
   }
   if (answer.action == "reject-always") {
-    _policy = recordRule(_policy, intr.effect, "reject")
-    _pendingSave = true
     return reject()
   }
   if (answer.action == "approve") {
@@ -948,6 +976,32 @@ def _handler(intr: any): any {
     return reject()
   }
   return reject(reason)
+}
+
+// A rule's decision, carried out. `late` means the rule was saved while
+// this interrupt waited for the terminal, so the user is told why the
+// prompt they might expect did not appear.
+def applyRule(intr: any, decision: any, late: boolean): any {
+  if (decision.type == "approve") {
+    if (late && _interactive) {
+      print(color.dim("⏺ Approved ${intr.effect}${oneLineData(intr.data)} by the rule just saved"))
+    }
+    // Auto-approved: the user never sees the approval prompt (which would
+    // render an edit as a diff), so surface an edit's diff here. Other
+    // effects auto-approve silently as before.
+    if (intr.effect == "std::edit") {
+      print(renderEditDiff(intr.data))
+    }
+    return approve()
+  }
+  // A rule rejected without asking. Say so on the terminal: a silent
+  // rejection looks, from the outside, like the agent changing its mind.
+  if (_interactive) {
+    print(color.dim("⏺ Policy rejected ${intr.effect}${oneLineData(intr.data)}"))
+  }
+  // The rule's rejectMessage, when set: the model reads it as the
+  // rejection reason and can steer its next attempt.
+  return reject(decision.message)
 }
 
 /**

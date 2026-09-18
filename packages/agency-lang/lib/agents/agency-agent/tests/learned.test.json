@@ -12,6 +12,16 @@
       ]
     },
     {
+      "nodeName": "learnedToolCarriesTheRequestSchema",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
       "nodeName": "eachRootIsScannedOnce",
       "input": "",
       "expectedOutput": "true",

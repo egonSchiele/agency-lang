@@ -1,6 +1,18 @@
 {
   "purpose": "Fetch top stories",
   "request": "{ maxItems: number }",
+  "requestSchema": {
+    "type": "object",
+    "properties": {
+      "maxItems": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "maxItems"
+    ],
+    "additionalProperties": false
+  },
   "createdAt": "2026-09-01T00:00:00Z",
   "version": 1,
   "uses": 0

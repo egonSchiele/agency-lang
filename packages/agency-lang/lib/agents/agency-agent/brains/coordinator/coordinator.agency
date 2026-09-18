@@ -12,6 +12,7 @@ import { skillsDir } from "std::skills"
 import { Attachment, systemMessage } from "std::thread"
 
 import { generateImageFile, viewImageFile } from "../../lib/images.agency"
+import { learnedExtras } from "../../lib/learned.agency"
 import { getMcpTools } from "../../lib/mcp.agency"
 import { learnSkill, writeToolFor } from "./learn.agency"
 import { checkBundledSkill } from "./lib/bundledSkills.agency"
@@ -106,6 +107,19 @@ def coordinatorInit(context: BrainContext) {
   setCodeOneShot(!context.interactive)
 }
 
+// The tools one turn offers. The learned ones are read from the agent
+// home on every turn, not once at startup, so a tool the user saves in
+// this session is callable on the next turn.
+export def turnTools(turnStart: any): any[] {
+  return [
+    ...mainAgentTools,
+    ...getMcpTools(),
+    ...learnedExtras(),
+    whatIAmDoing,
+    elapsedTime.partial(since: turnStart),
+  ]
+}
+
 def mainAgent(prompt: string | (string | Attachment)[]): string {
   // The prompt tells the model to report progress (whatIAmDoing) and watch
   // the clock (elapsedTime), so both must be in its tool list. elapsedTime
@@ -128,12 +142,7 @@ def mainAgent(prompt: string | (string | Attachment)[]): string {
     // the subagents' own slots.
     const options: any = {
       memory: true,
-      tools: [
-        ...mainAgentTools,
-        ...getMcpTools(),
-        whatIAmDoing,
-        elapsedTime.partial(since: turnStart),
-      ]
+      tools: turnTools(turnStart)
     }
     const slowModel = getSlowModel()
     if (slowModel != "") {

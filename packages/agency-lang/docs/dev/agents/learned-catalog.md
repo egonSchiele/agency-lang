@@ -40,6 +40,27 @@ so every dispatch scans both directories. Both scans are approved under
 `<agent-home>` by the `recommended` policy. A directory that does not
 exist is skipped without a prompt, and a rejected scan offers nothing.
 
+## What the coordinator gets
+
+`turnTools()` in `brains/coordinator/coordinator.agency` builds the
+coordinator's list for one turn: its fixed tools, the MCP tools, then
+`learnedExtras()`. It is built per turn, not once at startup, so a tool
+saved in this session is callable on the next turn. The system prompt
+tells the model the saved tools arrive as `learned_<name>` and that
+`learned_skills` reads the skills; without that the model knows how to
+save one but not that it can call one.
+
+`runTool` takes its request as `Json`, so on its own the schema the
+model sees for a learned tool would say only "any", and a model asked to
+call one would send the whole request as JSON text. Instead the learned
+tool's `request` parameter is given the JSON Schema of the tool's
+`Request` type, with `withParamSchema` on the runtime's `AgencyFunction`.
+The schema comes from `meta.json`, where `saveTool` records what the
+tool's own `requestSchema` node returns (`schema(Request).toJSONSchema()`
+in the tool template), so it is derived from the compiled type, not from
+the type text. A tool saved before schemas were recorded has no
+`requestSchema`; its description names the type instead.
+
 Handing `learnedExtras()` to each subagent is not done yet, nor are
 the `/skills` and `/toolbox` commands.
 
@@ -62,4 +83,7 @@ bad name fails every LLM call that lists it.
 - `lib/agents/agency-agent/brains/coordinator/tests/learn.agency`. No
   node makes a model call.
 - `brains/coordinator/tests/toolWiring.agency`: no built-in tool uses
-  the `learned_` prefix.
+  the `learned_` prefix, and the coordinator's turn list offers the
+  fixture's learned tools.
+- `tests/agency/toolbox/designTool.agency`:
+  `runToolAcceptsRequestAsJsonText`.

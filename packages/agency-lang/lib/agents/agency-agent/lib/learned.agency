@@ -61,9 +61,18 @@ def learnedSkillsTool(): any | null {
   return skillsDir(dir, "flat", LEARNED_SKILLS_TOOL) catch null
 }
 
+// `runTool` takes the request as `Json`, so on its own the parameter
+// would read as "any" and a model would guess at the shape. The tool's
+// `request` is given the schema meta.json recorded for its Request type
+// instead. A tool saved before schemas were recorded has none, and its
+// description names the type.
 def learnedToolFromEntry(entry: ToolEntry): any {
-  const description = "${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}"
-  return runTool.partial(name: entry.name, dir: learnedToolsDir()).describe(description).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
+  const tool = runTool.partial(name: entry.name, dir: learnedToolsDir()).rename("${LEARNED_TOOL_PREFIX}${entry.name}")
+  const requestSchema = entry.meta.requestSchema
+  if (requestSchema == null) {
+    return tool.describe("${entry.meta.purpose}\n\nRequest type: ${entry.meta.request}")
+  }
+  return tool.describe(entry.meta.purpose).withParamSchema("request", requestSchema)
 }
 
 // A broken entry, or one whose prefixed name would exceed the provider cap,

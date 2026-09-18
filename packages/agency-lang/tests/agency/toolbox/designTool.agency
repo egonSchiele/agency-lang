@@ -355,6 +355,24 @@ node runToolRunsAndRecords(): boolean {
   return answer is success && answer.value == 42 && recorded && namedTheTool
 }
 
+// meta.json records the JSON Schema of the Request type, reported by the
+// saved tool's own requestSchema node, so whoever offers the tool to a
+// model can give its request the real shape.
+node savedMetaRecordsTheRequestSchema(): boolean {
+  cleanup("addNine")
+  const written = runDesign("addNine", OUT, ["accept"])
+  if (written is failure) {
+    cleanup("addNine")
+    return false
+  }
+  const recorded = written.value.meta.requestSchema
+  cleanup("addNine")
+  if (recorded == null) {
+    return false
+  }
+  return recorded.properties.n.type == "number" && recorded.required.includes("n")
+}
+
 // The count is only a count: a declined recordUse leaves meta.json as it
 // was and the run still returns the tool's result.
 node declinedRecordUseKeepsTheResult(): boolean {

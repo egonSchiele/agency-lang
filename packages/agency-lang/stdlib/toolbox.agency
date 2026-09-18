@@ -101,6 +101,7 @@ const STAGING_DIR = "staging"
 
 const IMPL_FILE = "impl.agency"
 const TOOL_FILE = "tool.agency"
+const REQUEST_SCHEMA_NODE = "requestSchema"
 const TEST_FILE = "tool.test.json"
 const META_FILE = "meta.json"
 
@@ -145,10 +146,14 @@ export type ModuleFacts = {
   effects: string[]
 }
 
-/** What meta.json holds: how the tool was made, and how often it ran. */
+/** What meta.json holds: how the tool was made, and how often it ran.
+  `requestSchema` is the JSON Schema of the Request type, as the tool's
+  own `requestSchema` node reported it at save time; null for a tool
+  saved before schemas were recorded. */
 export type ToolMeta = {
   purpose: string;
   request: string;
+  requestSchema: Json | null;
   createdAt: string;
   maxTime: number;
   version: number;
@@ -171,6 +176,7 @@ const ACCEPT = "accept"
 const DEFAULT_META: ToolMeta = {
   purpose: "",
   request: "",
+  requestSchema: null,
   createdAt: "",
   maxTime: 3m,
   version: 1,
@@ -232,6 +238,7 @@ def moduleFacts(root: string, name: string): Result<ModuleFacts> {
 type MetaFile = {
   purpose?: string;
   request?: string;
+  requestSchema?: Json;
   createdAt?: string;
   maxTime?: number;
   version?: number;
@@ -393,6 +400,10 @@ static const toolTemplate = [|
 
   export node main(request: Request): Result<Json> {
     return tool(request)
+  }
+
+  export node requestSchema(): Json {
+    return schema(Request).toJSONSchema()
   }
 |]
 
@@ -822,15 +833,32 @@ def askToSave(
 // directory with one rename, so a tool is either fully present or absent.
 // The existence check is repeated here because the one in checkName is
 // stale after the approval and any model calls.
+// The JSON Schema of the draft's Request type, from the `requestSchema`
+// node the template gives every tool. It is what a model is shown as the
+// learned tool's parameter, so it comes from the compiled type and not
+// from the type text, and it runs in the same sandbox as the tests.
+def requestSchemaOf(settings: DraftSettings): Result<Json> {
+  const ran = runFile(settings.stagingDir, TOOL_FILE, REQUEST_SCHEMA_NODE)
+  if (ran is failure(runErr)) {
+    return failure("could not derive the request schema: ${runErr}")
+  }
+  return success(ran.value.data)
+}
+
 def saveTool(
   root: string,
   name: string,
   settings: DraftSettings,
 ): Result<ToolEntry> {
+  const requestSchema = requestSchemaOf(settings)
+  if (requestSchema is failure) {
+    return requestSchema
+  }
   const meta: ToolMeta = {
     ...DEFAULT_META,
     purpose: settings.purpose,
     request: settings.request,
+    requestSchema: requestSchema.value,
     createdAt: format(now()),
     maxTime: settings.maxTime
   }

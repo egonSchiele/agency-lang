@@ -4,7 +4,7 @@
  * a rejected scan offers nothing. Every node repoints the roots first, so
  * a failing test can never touch the real agent home.
  */
-import { map } from "std::array"
+import { find, map } from "std::array"
 
 import test { _setLearnedRoot } from "../lib/learned.agency"
 import {
@@ -40,6 +40,24 @@ node extrasAreSkillsToolThenPrefixedTools(): boolean {
   }
   const names = extraNames()
   return names.length == 2 && names[0] == LEARNED_SKILLS_TOOL && names[1] == "${LEARNED_TOOL_PREFIX}hnTop"
+}
+
+// The tool's `request` parameter carries the schema meta.json recorded
+// for its Request type, so the model sees the request's real shape.
+node learnedToolCarriesTheRequestSchema(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let tools: any[] = []
+  handle {
+    tools = learnedExtras()
+  } with approve
+  const tool = find(tools, \candidate -> candidate.name == "${LEARNED_TOOL_PREFIX}hnTop")
+  if (tool == null) {
+    return false
+  }
+  const shape = tool.toolDefinition.schema.toJSONSchema()
+  return shape.properties.request.properties.maxItems.type == "number"
 }
 
 node eachRootIsScannedOnce(): boolean {

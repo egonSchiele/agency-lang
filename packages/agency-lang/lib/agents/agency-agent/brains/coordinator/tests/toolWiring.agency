@@ -26,12 +26,14 @@ import { buildTools as explorerTools } from "std::agents/explorer"
 import { buildTools as agencyResearcherOwnTools } from "std::agents/agency/researcher"
 import { buildTools as researcherOwnTools } from "std::agents/researcher"
 import { filter, find, map } from "std::array"
+import { now } from "std::date"
 import { buildTools as agencyReviewTools } from "std::agents/agency/review"
 import { buildTools as reviewTools } from "std::agents/review"
 import { buildTools as writingReviewTools } from "std::agents/writing/review"
 
-import { LEARNED_TOOL_PREFIX } from "../../../lib/learned.agency"
-import { mainAgentTools } from "../coordinator.agency"
+import test { _setLearnedRoot } from "../../../lib/learned.agency"
+import { LEARNED_SKILLS_TOOL, LEARNED_TOOL_PREFIX } from "../../../lib/learned.agency"
+import { mainAgentTools, turnTools } from "../coordinator.agency"
 import { checkBundledSkill } from "../lib/bundledSkills.agency"
 
 def pingWith(tools: any[]): string {
@@ -115,6 +117,24 @@ node noBuiltinToolUsesTheLearnedPrefix() {
 // join. The runtime rejects duplicate names before the request is sent.
 node coordinatorToolsHaveUniqueNames() {
   return pingWith(mainAgentTools)
+}
+
+// The coordinator builds its list per turn so a tool saved in this
+// session is callable on the next one. Before this was wired, a saved
+// tool was never offered to any agent.
+node coordinatorTurnOffersLearnedTools(): string {
+  _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
+  let names: string[] = []
+  handle {
+    names = map(turnTools(now()), \tool -> "${tool.name}")
+  } with approve
+  if (!names.includes(LEARNED_SKILLS_TOOL)) {
+    return "FAIL: no ${LEARNED_SKILLS_TOOL} in ${names.join(", ")}"
+  }
+  if (!names.includes("${LEARNED_TOOL_PREFIX}hnTop")) {
+    return "FAIL: no ${LEARNED_TOOL_PREFIX}hnTop in ${names.join(", ")}"
+  }
+  return "ok"
 }
 
 node coordinatorSkillsListPresets(): string {

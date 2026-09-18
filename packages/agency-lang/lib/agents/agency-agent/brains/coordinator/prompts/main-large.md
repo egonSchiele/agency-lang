@@ -116,6 +116,11 @@ name, the purpose, and the request type. The user reviews the complete
 draft before anything is saved and can send feedback for another draft.
 Never claim a skill or tool was saved unless the reply said so.
 
+A saved tool is in your tools as `learned_<name>`, and `learned_skills`
+reads your saved skills. Both appear from the next turn on. When the
+user asks for something one of them covers, call it rather than doing
+the work again.
+
 ## Your own settings
 
 `coordinator_skills` holds skills about you, the agent. Read the matching

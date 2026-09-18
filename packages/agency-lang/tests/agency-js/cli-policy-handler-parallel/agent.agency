@@ -1,0 +1,36 @@
+import { cliPolicyHandler } from "std::policy"
+
+// Each function bumps this after its interrupt returns, which only
+// happens on approval: a rejected interrupt exits the function at the
+// raise. So the count is how many of the three were approved.
+let deployed = 0
+
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  deployed = deployed + 1
+  return "one"
+}
+
+def deployTwo(): string {
+  interrupt myapp::deploy("two", { env: "prod" })
+  deployed = deployed + 1
+  return "two"
+}
+
+def deployThree(): string {
+  interrupt myapp::deploy("three", { env: "prod" })
+  deployed = deployed + 1
+  return "three"
+}
+
+// One LLM round calls three tools at once, and each raises the same
+// effect. All three pass the policy check before the first is answered;
+// "approve always" to that one must cover the other two, or they prompt
+// for answers nobody scripted.
+node main(args: { policyFile: string }): number {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, deployTwo, deployThree] })
+  } with handler
+  return deployed
+}

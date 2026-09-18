@@ -1,0 +1,5 @@
+[
+  { "toolCalls": [ { "name": "askFirst", "args": {} } ] },
+  { "toolCalls": [ { "name": "deploySecond", "args": {} } ] },
+  { "return": "deployed" }
+]

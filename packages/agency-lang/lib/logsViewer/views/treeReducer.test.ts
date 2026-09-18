@@ -263,3 +263,41 @@ describe("handleKey", () => {
     expect(handleKey(state, k("tab"))).toBe(state);
   });
 });
+
+// Folded messages live outside the persistent forest, so `e` cannot reach
+// them and they stay shut. `E` has to clear them anyway, or a span you
+// collapse and reopen comes back with its system prompt sprawling out.
+describe("expanding and collapsing around folded messages", () => {
+  const withFold = (expanded: string[], cursorId = "a"): ViewerState => ({
+    roots: [
+      {
+        id: "trace-t",
+        traceId: "t",
+        parentId: null,
+        children: [{ ...child("a"), children: [child("a-child")] }],
+        nodeKind: "trace",
+        label: "t",
+        summary: "trace t",
+      },
+    ],
+    expanded: new Set(expanded),
+    cursorId,
+    scrollTop: 0,
+    quit: false,
+  });
+
+  it("e leaves a folded message folded", () => {
+    const next = handleKey(withFold(["trace-t"]), k("e"));
+    expect(next.expanded.has("a-child")).toBe(true);
+    expect(next.expanded.has("a-child:llm:convo:msg:0")).toBe(false);
+  });
+
+  it("E forgets an opened fold under the collapsed node", () => {
+    const state = withFold(["trace-t", "a", "a-child", "a-child:llm:convo:msg:0"]);
+    const next = handleKey(state, k("E"));
+    expect(next.expanded.has("a-child:llm:convo:msg:0")).toBe(false);
+    // A fold under an untouched sibling subtree is left alone.
+    const other = handleKey(withFold(["trace-t", "a", "b:llm:convo:msg:0"]), k("E"));
+    expect(other.expanded.has("b:llm:convo:msg:0")).toBe(true);
+  });
+});

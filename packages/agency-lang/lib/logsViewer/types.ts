@@ -16,9 +16,12 @@ export type TreeNode = {
   // expanded — none are part of the persistent forest:
   //   - "jsonLine"      : one rendered line of the leaf's JSON payload
   //   - "convoLine"     : one rendered conversation message (promptCompletion only)
+  //   - "convoMessage"  : header for a message too long to show inline; its
+  //                       convoLine children appear only when it is expanded
   //   - "rawDataToggle" : expandable "raw data" header that, when opened,
   //                       reveals the underlying JSON payload as jsonLine rows
-  nodeKind: "trace" | "span" | "event" | "jsonLine" | "convoLine" | "rawDataToggle";
+  nodeKind:
+    "trace" | "span" | "event" | "jsonLine" | "convoLine" | "convoMessage" | "rawDataToggle";
   // For "trace": the trace_id; for "span": the span type (agentRun,
   // llmCall, ...); for "event": the data.type.
   label: string;

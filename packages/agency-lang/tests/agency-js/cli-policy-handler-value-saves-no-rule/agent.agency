@@ -1,0 +1,24 @@
+import { cliPolicyHandler } from "std::policy"
+
+// Round one. This raise expects a value, so its menu offers only the
+// once-only answers. The prompt takes free text as well, so "approve
+// always" typed here arrives as an "always" action anyway, and it must
+// not become a rule.
+def askFirst(): string {
+  const reply = interrupt myapp::deploy("one", { env: "prod" })
+  return "${reply}"
+}
+
+// Round two, same effect, plain. If round one had saved a rule, this is
+// approved without asking.
+def deploySecond(): string {
+  interrupt myapp::deploy("two", { env: "prod" })
+  return "two"
+}
+
+node main(args: { policyFile: string }) {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [askFirst, deploySecond] })
+  } with handler
+}

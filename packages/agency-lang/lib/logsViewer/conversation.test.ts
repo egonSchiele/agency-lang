@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatConversation } from "./conversation.js";
+import { formatConversation, messageHeadline } from "./conversation.js";
 import { color } from "@/utils/termcolors.js";
 
 describe("formatConversation", () => {
@@ -141,5 +141,21 @@ describe("formatConversation", () => {
   it("emits a placeholder row for empty turns", () => {
     const lines = formatConversation([{ role: "assistant", content: null }]);
     expect(lines).toEqual([color.green("[assistant]")]);
+  });
+});
+
+describe("messageHeadline", () => {
+  it("skips leading blank lines so the header says something", () => {
+    const line = messageHeadline({ role: "user", content: "\n\n  \nwhat is the area of France" });
+    expect(line).toContain("what is the area of France");
+  });
+
+  it("falls back to the tool call when a message has no text", () => {
+    const line = messageHeadline({
+      role: "assistant",
+      content: null,
+      toolCalls: [{ id: "1", name: "getArea", arguments: { country: "France" } }],
+    });
+    expect(line).toContain("getArea");
   });
 });

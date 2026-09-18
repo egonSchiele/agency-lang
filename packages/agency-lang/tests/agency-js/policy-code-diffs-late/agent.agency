@@ -1,0 +1,34 @@
+import { cliPolicyHandler } from "std::policy"
+
+// Two edits in one LLM round. Their interrupts are raised together, so
+// both pass the policy check before either is answered.
+def editOne(): string {
+  interrupt std::edit("apply this edit?", {
+    dir: ".",
+    filename: "one.agency",
+    before: "def one(): string {\n  return \"a\"\n}",
+    after: "def one(): string {\n  return \"ONE\"\n}"
+  })
+  return "one"
+}
+
+def editTwo(): string {
+  interrupt std::edit("apply this edit?", {
+    dir: ".",
+    filename: "two.agency",
+    before: "def two(): string {\n  return \"b\"\n}",
+    after: "def two(): string {\n  return \"TWO\"\n}"
+  })
+  return "two"
+}
+
+// "approve always" to whichever is asked first decides the other where
+// it waits, and that one draws no prompt at all. Its diff has to print
+// anyway: it is the only record the user gets of a change made on their
+// behalf.
+node main(args: { policyFile: string }) {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("edit everything", { tools: [editOne, editTwo] })
+  } with handler
+}

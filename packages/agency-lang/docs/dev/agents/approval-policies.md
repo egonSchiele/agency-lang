@@ -46,6 +46,10 @@ taking another route.
 
 ## Reading what you are approving
 
+The prompt's first line is the effect, in bold, then the interrupt's
+message, so which permission is being asked for is legible before the
+reason for it.
+
 The prompt is a pinned footer at the bottom of the terminal, so it shows
 at most six physical rows of the interrupt's body
 (`INTERRUPT_BODY_MAX_LINES` in `lib/stdlib/cli.ts`) and then an ellipsis.
@@ -65,6 +69,113 @@ each keystroke so a resize mid-prompt cannot leave the footer offering a
 key the reducer no longer honours. When nothing is cut off, `v` is an
 ordinary free-text reason.
 
+## An "always" answer covers the interrupts already waiting
+
+Parallel tool calls raise their interrupts together, so every one of them
+runs its policy check before any of them is answered. None finds a rule,
+and they queue for the `std::tty` lock behind the first one's prompt. An
+"always" answer to that first prompt has to cover the rest, or the user
+answers the same question once per tool call.
+
+Two things make that work, and both are needed:
+
+- `askUser` runs `checkPolicy` again once it holds the lock, just before
+  it would draw the prompt, so a rule saved by the interrupt ahead of it
+  is seen. `applyRule` carries out the decision from either check.
+- `recordAnswer` saves an "always" answer *before* releasing the lock.
+  Recording it after, which is where it used to happen, loses the race to
+  the next interrupt's check.
+
+A sibling decided this way prints `⏺ Approved … by the rule just saved`
+rather than nothing, so the prompt that did not appear is accounted for.
+
+A "reject always" answer needs none of this: rejecting the first
+interrupt sends the rest back through the handler, where the ordinary
+check finds the new rule.
+
+Testing any of it needs the LLM tool loop, not a `parallel` block: a
+`parallel` block's arms consult the handler one after another, and each
+arm gets its own copy of the module globals that hold the saved rules.
+
+## A rule never approves a raise that expects a value
+
+`askUserChoices` offers such a raise only the once-only answers, because
+an effect-wide rule cannot answer a question that wants its own answer,
+and an `approve()` carries no value, so the raise site reads it as a bare
+yes — for `std::toolbox::review`, accepting a draft nobody looked at.
+
+That one refusal has to hold in three places, because a rule reaches such
+an interrupt by three routes:
+
+- `recordAnswer` saves nothing for one. The prompt takes free text, so a
+  user can type "aa" at a prompt that never offered it and
+  `choiceResult` will read the string rather than the menu.
+- The check under the lock skips one, so a rule a sibling saved in the
+  same round cannot answer it.
+- `_handler`'s ordinary check approves one no longer either, since a rule
+  saved in an *earlier* round arrives by that route. A rule may still
+  reject it: rejecting is the fail-closed direction and carries its
+  message.
+
+The cost is that a policy file cannot express "approve this
+value-expecting effect without asking", and `approve-all` is no longer
+quite all — its description says so. For the effects that expect a value
+today (`std::question`, `std::skills::review`, `std::toolbox::review`), a
+silent empty answer was not a useful thing to be able to ask for.
+
+Headlessly such an interrupt is rejected, and the rejection says which of
+the two things happened. "The policy has no rule for this effect" is the
+message for no rule; a rule that approves but could not be used gets its
+own, because the first one is false in exactly the case that produces it
+and sends whoever reads it looking for a policy bug.
+
+## The handler's own file operations
+
+`_internalIo` names the operation open on the handler's own policy file,
+`"std::read"` while it loads and `"std::write"` while it flushes, and is
+`""` the rest of the time. Only the read half matches anything today:
+`_writePolicyFile` writes through `writeText` directly, so a flush raises
+no `std::write`. The flag is still set around it, because the window is
+real either way — the containment check it awaits is time another branch
+can arrive in — and a flush that ever goes through Agency's own `write`
+should find the guard already here. `isOwnPolicyIo` approves an interrupt without
+consulting the policy when it is that operation, on that file's name.
+
+It is worth being clear about what this is not for. A handler never hears
+its own raise: the chain walk skips an entry while that entry is
+executing (see [handlers.md](../../site/guide/handlers.md)), so the read
+inside `maybeLoadPolicy` does not come back through `_handler` at all. A
+print put inside `isOwnPolicyIo` never fires on a plain load. What the
+flag covers is a *second* entry of this same handler in the chain, which
+does hear that read, shares these module globals, and whose no-match
+propagate or `_policy == null` default would veto it, leaving every later
+interrupt to prompt.
+
+That second entry is not the only thing that can reach the handler while
+the flag is set, which is the reason the check is narrow. The file
+operation is awaited, and other execution paths — parallel tool calls, a
+fork — have their own entries and are not excluded from anything. A bare
+`if (_internalIo) { return approve() }`, which is what this was, approves
+whatever any branch raises for the length of a file read, with no check
+at all.
+
+The name is matched, not the directory: the interrupt reports the
+directory the containment layer resolved, which is the realpath, and on
+macOS that is not the string the caller passed (`/tmp` against
+`/private/tmp`), and Agency exposes no realpath to compare with. A read
+of a same-named file in another directory, from another branch, inside
+the window, is what is left.
+
+`cli-policy-handler-parallel-rule` and `-flush` put three branches in the
+handler while one of them reads or writes that file, with a policy that
+rejects the effect, and count three rejections. Those rejections come
+from a rule in the file, so the tests also show the load and the flush
+still work through the narrower check — which is the real risk in
+tightening it, because a check that is too tight fails silently and makes
+everything prompt. What they cannot show is that a branch really did land
+inside the window; that is up to the scheduler. The guarantee is
+`isOwnPolicyIo`, not the timing.
+
 ## Code changes are shown as a diff
 
 Two effects carry source code: `std::edit`, which is a change to a file,
@@ -75,12 +186,25 @@ as a syntax-highlighted unified diff, and the prompt's own body drops the
 source and keeps the metadata that names the change.
 
 `renderInterruptDiff` in `stdlib/policy.agency` decides whether an
-interrupt has a diff and builds it; `printInterruptDiff` prints it. It is
-called on both paths, which is the part that is easy to get wrong: a rule
-can approve without ever drawing a prompt, and then the diff is the only
-record the user has of what the agent did. On the prompt path the print
-happens inside the `std::tty` lock, so a diff and the prompt it belongs
-to cannot be split apart by another branch's prompt.
+interrupt has a diff and builds it; `printInterruptDiff` prints it. There
+are exactly two callers, which is the part that is easy to get wrong:
+
+- `askUser`, after its second policy check and before it draws the
+  prompt. After that check, so an interrupt a rule decides there prints
+  once rather than twice; under the lock, so a diff and the prompt it
+  belongs to cannot be split apart by another branch's prompt.
+- `applyRule`'s approve branch, which is where an interrupt a rule
+  decided ends up, whether that rule was already in the policy or was
+  saved a moment ago by a sibling in the same round. Neither draws a
+  prompt, so the diff is the only record the user has of what happened.
+
+The two differ on purpose. `askUser` prints under the lock; `applyRule`
+does not, because `withLock` is non-reentrant and throws when the same
+owner takes a lock it already holds, and a rule can decide an interrupt
+raised by code that is already inside the lock. `applyRule` also prints
+in a headless run, where the rejection line below it stays quiet: a
+rejection there is a decision nobody needs the detail of, while an
+approved change is the one record of something that happened.
 
 A review's diff needs something to diff against. The design loop carries
 the last draft the user saw in `previous` alongside `source` (see
@@ -88,19 +212,11 @@ the last draft the user saw in `previous` alongside `source` (see
 changed instead of the whole tool again. On the first round `previous` is
 `""` and the diff is all insertions, which is how a new file reads too.
 
-The two calls differ on purpose. The prompt path prints under the lock;
-the rule path does not, because `withLock` is non-reentrant and throws
-when the same owner takes a lock it already holds, and a rule can decide
-an interrupt raised by code that is already inside the lock. The rule
-path also prints in a headless run, where the rejection line below it
-stays quiet: a rejection there is a decision nobody needs the detail of,
-while an approved change is the one record of something that happened.
-
 Both the source and the header run through `stripControlChars`, and so
 do the prompt's title and every string value in its table, since the
 agent picks some of those too (a tool's name, a filename, and the message
-a tool it wrote raises its own interrupt with). It removes control characters,
-a lone carriage return, and the bidi and zero-width characters behind
+a tool it wrote raises its own interrupt with). It removes control
+characters, a lone carriage return, and the bidi and zero-width characters behind
 trojan source. Each of the three renderers drops a different subset on
 its own — `diff` drops carriage returns, the table renderer drops ANSI —
 so none of them can be relied on for this. Tabs and newlines stay.

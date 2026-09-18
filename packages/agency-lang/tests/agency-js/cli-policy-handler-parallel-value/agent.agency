@@ -1,0 +1,28 @@
+import { cliPolicyHandler } from "std::policy"
+
+// A plain raise. "approve always" to this one saves an effect-wide rule.
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  return "one"
+}
+
+// The same effect, raised in assignment position, so it expects a
+// value: whoever approves it answers with one, and each raise wants its
+// own answer. The rule the sibling above saves must not answer this one
+// — with std::toolbox::review that accepts a draft nobody read.
+//
+// That a value raise saves no rule of its own is the other half, and it
+// is not tested here: whenever the plain raise reaches the terminal
+// first, a rule for the effect exists either way and nothing would show.
+// `cli-policy-handler-value-saves-no-rule` pins it without a race.
+def deployTwo(): string {
+  const reply = interrupt myapp::deploy("two", { env: "prod" })
+  return "${reply}"
+}
+
+node main(args: { policyFile: string }) {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, deployTwo] })
+  } with handler
+}

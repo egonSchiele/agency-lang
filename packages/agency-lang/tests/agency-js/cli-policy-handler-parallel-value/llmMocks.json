@@ -1,0 +1,9 @@
+[
+  {
+    "toolCalls": [
+      { "name": "deployOne", "args": {} },
+      { "name": "deployTwo", "args": {} }
+    ]
+  },
+  { "return": "deployed" }
+]

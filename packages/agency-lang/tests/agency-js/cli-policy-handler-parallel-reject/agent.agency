@@ -1,0 +1,33 @@
+import { cliPolicyHandler } from "std::policy"
+
+// Bumped after the interrupt returns, which happens only on approval.
+let deployed = 0
+
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  deployed = deployed + 1
+  return "one"
+}
+
+def deployTwo(): string {
+  interrupt myapp::deploy("two", { env: "prod" })
+  deployed = deployed + 1
+  return "two"
+}
+
+def deployThree(): string {
+  interrupt myapp::deploy("three", { env: "prod" })
+  deployed = deployed + 1
+  return "three"
+}
+
+// The mirror of cli-policy-handler-parallel: "reject always" to the first
+// of three interrupts raised together has to reject the two already
+// waiting, without asking again.
+node main(args: { policyFile: string }): number {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, deployTwo, deployThree] })
+  } with handler
+  return deployed
+}

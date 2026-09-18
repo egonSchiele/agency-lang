@@ -60,6 +60,24 @@ node learnedToolCarriesTheRequestSchema(): boolean {
   return shape.properties.request.properties.maxItems.type == "number"
 }
 
+// The description names the tool's source file, so a model asked about
+// the code knows where it is instead of searching for it.
+node learnedToolNamesItsSource(): boolean {
+  if (!sandboxed(fixtureRoot())) {
+    return false
+  }
+  let tools: any[] = []
+  handle {
+    tools = learnedExtras()
+  } with approve
+  const tool = find(tools, \candidate -> candidate.name == "${LEARNED_TOOL_PREFIX}hnTop")
+  if (tool == null) {
+    return false
+  }
+  const description: string = tool.toolDefinition.description
+  return description.includes("Source: ${fixtureRoot()}/tools/hnTop/impl.agency")
+}
+
 node eachRootIsScannedOnce(): boolean {
   if (!sandboxed(fixtureRoot())) {
     return false

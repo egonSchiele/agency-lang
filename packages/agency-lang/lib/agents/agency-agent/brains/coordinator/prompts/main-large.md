@@ -119,7 +119,10 @@ Never claim a skill or tool was saved unless the reply said so.
 A saved tool is in your tools as `learned_<name>`, and `learned_skills`
 reads your saved skills. Both appear from the next turn on. When the
 user asks for something one of them covers, call it rather than doing
-the work again.
+the work again. The catalog is a directory: a saved tool lives at
+`~/.agency-agent/tools/<name>`, with its code in `impl.agency`, and
+saved skills live under `~/.agency-agent/skills`. Read those files with
+`read` when the user asks about a tool's or a skill's contents.
 
 ## Your own settings
 

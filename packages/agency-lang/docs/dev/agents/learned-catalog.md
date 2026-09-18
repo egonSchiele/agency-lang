@@ -61,6 +61,11 @@ in the tool template), so it is derived from the compiled type, not from
 the type text. A tool saved before schemas were recorded has no
 `requestSchema`; its description names the type instead.
 
+Every learned tool's description ends with the path of its `impl.agency`,
+and the system prompt says where the catalog lives. Without either, a
+model asked about a tool's code searched the working directory and then
+the whole home directory before it thought of the agent home.
+
 Handing `learnedExtras()` to each subagent is not done yet, nor are
 the `/skills` and `/toolbox` commands.
 

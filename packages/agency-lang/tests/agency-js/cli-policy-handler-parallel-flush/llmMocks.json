@@ -1,0 +1,11 @@
+[
+  { "toolCalls": [ { "name": "deployOne", "args": {} } ] },
+  {
+    "toolCalls": [
+      { "name": "otherOne", "args": {} },
+      { "name": "otherTwo", "args": {} },
+      { "name": "otherThree", "args": {} }
+    ]
+  },
+  { "return": "deployed" }
+]

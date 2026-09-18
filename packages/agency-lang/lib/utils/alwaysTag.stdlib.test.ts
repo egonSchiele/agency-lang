@@ -159,6 +159,12 @@ const EXPECTED: Record<string, string[]> = {
   "std::skills::review": [],
   "std::toolbox::scan": ["dir/**"],
   "std::toolbox::recordUse": ["dir/**"],
+  // The toolbox's own file work pins the toolbox root, not the staging
+  // directory: a staging name ends in a random number and never recurs.
+  "std::toolbox::writeFile": ["root/**"],
+  "std::toolbox::createStaging": ["root/**"],
+  "std::toolbox::removeStaging": ["root/**"],
+  "std::toolbox::removeStagedFile": ["root/**"],
   "std::toolbox::review": [],
   "std::toolbox::save": ["dir/**"],
   "std::memory::enableMemory": [],

@@ -1,0 +1,23 @@
+import { cliPolicyHandler } from "std::policy"
+
+// Round one. "approve always" here saves a rule for the whole effect.
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  return "one"
+}
+
+// Round two, same effect, but this raise expects a value. The rule saved
+// a round ago reaches the handler's ordinary check, which must not use
+// it: approving carries no value, and the raise site reads that as a
+// bare yes. The user was never offered "always" for this raise.
+def deployTwo(): string {
+  const reply = interrupt myapp::deploy("two", { env: "prod" })
+  return "${reply}"
+}
+
+node main(args: { policyFile: string }) {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, deployTwo] })
+  } with handler
+}

@@ -973,8 +973,18 @@ def _handler(intr: any): any {
     return reject()
   }
 
+  // A rule may reject anything. A rule may not approve a raise that
+  // expects a value: `approve()` carries no value, so the raise site
+  // reads it as a bare yes, and for `std::toolbox::review` that accepts a
+  // draft nobody looked at. The menu withholds the "always" answers from
+  // these for the same reason, and an effect-wide rule is reachable here
+  // one round after a plain raise of the same effect was answered
+  // "approve always". Such an interrupt goes on to ask.
   const decision = checkPolicy(_policy, intr)
-  if (decision.type == "approve" || decision.type == "reject") {
+  if (decision.type == "reject") {
+    return applyRule(intr, decision)
+  }
+  if (decision.type == "approve" && intr.expectsValue != true) {
     return applyRule(intr, decision)
   }
 

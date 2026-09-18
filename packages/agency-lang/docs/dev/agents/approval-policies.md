@@ -96,15 +96,31 @@ Testing any of it needs the LLM tool loop, not a `parallel` block: a
 `parallel` block's arms consult the handler one after another, and each
 arm gets its own copy of the module globals that hold the saved rules.
 
-An interrupt that expects a value is left out of all of this.
-`askUserChoices` offers it only the once-only answers, because an
-effect-wide rule cannot answer a raise that wants its own answer, and an
-`approve()` with no value is taken as a bare yes — for
-`std::toolbox::review`, accepting a draft. So the second check skips such
-an interrupt, and `recordAnswer` saves nothing for one. That second guard
-is not redundant: the prompt accepts free text, so a user can type "aa"
-at a prompt that never offered it, and `choiceResult` reads the string,
-not the menu.
+## A rule never approves a raise that expects a value
+
+`askUserChoices` offers such a raise only the once-only answers, because
+an effect-wide rule cannot answer a question that wants its own answer,
+and an `approve()` carries no value, so the raise site reads it as a bare
+yes — for `std::toolbox::review`, accepting a draft nobody looked at.
+
+That one refusal has to hold in three places, because a rule reaches such
+an interrupt by three routes:
+
+- `recordAnswer` saves nothing for one. The prompt takes free text, so a
+  user can type "aa" at a prompt that never offered it and
+  `choiceResult` will read the string rather than the menu.
+- The check under the lock skips one, so a rule a sibling saved in the
+  same round cannot answer it.
+- `_handler`'s ordinary check approves one no longer either, since a rule
+  saved in an *earlier* round arrives by that route. A rule may still
+  reject it: rejecting is the fail-closed direction and carries its
+  message.
+
+The cost is that a policy file cannot express "approve this
+value-expecting effect without asking". Headlessly such an interrupt is
+rejected with the usual explanation instead. For the effects that expect
+a value today, a silent empty answer was not a useful thing to be able to
+ask for.
 
 ## The handler's own file operations
 

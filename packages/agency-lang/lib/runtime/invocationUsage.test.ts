@@ -5,6 +5,8 @@ import {
   normalizeIpcUsageDelta,
   usageReconcileTolerance,
   unwrapServedInvocationOutcome,
+  unwrapWithUsage,
+  type InvocationUsage,
   type NormalizedDelta,
   type ServedInvocationOutcome,
 } from "./invocationUsage.js";
@@ -538,6 +540,59 @@ describe("unwrapServedInvocationOutcome", () => {
     const frozen = Object.freeze(new Error("x"));
     try {
       unwrapServedInvocationOutcome({ status: "threw", error: frozen, ...snap });
+      expect.fail("throw");
+    } catch (e) {
+      expect(e).toBe(frozen);
+    }
+  });
+});
+
+describe("unwrapWithUsage", () => {
+  const usage: InvocationUsage = {
+    cost: {
+      inputCost: 0,
+      outputCost: 0,
+      cachedInputCost: 0,
+      cacheCreationInputCost: 0,
+      hostedToolsCost: 0,
+      totalCost: 0.5,
+      currency: "USD",
+    },
+    tokens: {
+      inputTokens: 10,
+      outputTokens: 2,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalTokens: 12,
+    },
+    unknownCostCallCount: 0,
+    pricingComplete: true,
+    entries: [],
+  };
+
+  it("puts the snapshot on a returned value and keeps the value's own fields", () => {
+    const out = unwrapWithUsage({
+      status: "returned",
+      value: { data: "hi", messages: {} },
+      traceId: "t1",
+      usage,
+      usageComplete: true,
+    });
+    expect(out.data).toBe("hi");
+    expect(out.messages).toEqual({});
+    expect(out.invocationUsage).toEqual({ usage, usageComplete: true });
+  });
+
+  it("throws the identical error for a thrown outcome", () => {
+    const frozen = Object.freeze(new Error("boom"));
+    try {
+      unwrapWithUsage({
+        status: "threw",
+        error: frozen,
+        traceId: "t1",
+        usage,
+        usageComplete: false,
+      });
       expect.fail("throw");
     } catch (e) {
       expect(e).toBe(frozen);

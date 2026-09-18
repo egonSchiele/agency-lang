@@ -33,7 +33,7 @@ import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
 import type { HandlerEntry } from "./types.js";
-import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./invocationUsage.js";
+import { unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
@@ -972,13 +972,13 @@ export async function resumeFromCheckpoint(args: ResumeFromCheckpointArgs): Prom
     metadata: args.metadata,
     signals: { abortSignal: args.abortSignal, pauseSignal: args.pauseSignal },
   });
-  return unwrapServedInvocationOutcome(served);
+  return unwrapWithUsage(served);
 }
 
-/** Public entry point — unchanged contract: returns the resume result or throws
- *  the identical original error. */
+/** Public entry point — returns the resume result with its usage snapshot
+ *  attached, or throws the identical original error. */
 export async function respondToInterrupts(args: RespondToInterruptsArgs): Promise<any> {
-  return unwrapServedInvocationOutcome(await respondToInterruptsCore(args));
+  return unwrapWithUsage(await respondToInterruptsCore(args));
 }
 
 /** Serve-only entry point: hands the resume outcome (result/error + usage

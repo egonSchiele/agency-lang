@@ -146,6 +146,7 @@ export type {
   InvocationUsage,
   InvocationUsageSnapshot,
   ServedInvocationOutcome,
+  UsageEntry,
 } from "./invocationUsage.js";
 export { reportBudgetExceededAndExit, formatBudgetExceeded } from "./budgetExit.js";
 export { Runner } from "./runner.js";

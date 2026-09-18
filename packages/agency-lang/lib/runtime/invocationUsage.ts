@@ -580,3 +580,20 @@ export function unwrapServedInvocationOutcome<T>(outcome: ServedInvocationOutcom
   }
   throw outcome.error;
 }
+
+/** Unwrap like `unwrapServedInvocationOutcome`, and put the snapshot on the
+ *  returned value so a `runNode` caller gets the same per-kind-and-model
+ *  figure the serve adapter gets. A thrown outcome still throws the exact
+ *  original error; the snapshot does not travel with it. */
+export function unwrapWithUsage<T extends object>(
+  outcome: ServedInvocationOutcome<T>,
+): T & { invocationUsage: InvocationUsageSnapshot } {
+  const value: T = unwrapServedInvocationOutcome(outcome);
+  return {
+    ...value,
+    invocationUsage: {
+      usage: outcome.usage,
+      usageComplete: outcome.usageComplete,
+    },
+  };
+}

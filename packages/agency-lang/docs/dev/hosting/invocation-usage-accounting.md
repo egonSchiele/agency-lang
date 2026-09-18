@@ -83,6 +83,18 @@ independently-valid field, omits an unusable entry while KEEPING the flat money,
 sets `attributionLost`, and returns `null` only when the whole message is not an
 object. It never silently drops money.
 
+## On the `runNode` result
+
+`runNode`, `respondToInterrupts` and `resumeFromCheckpoint` attach the snapshot
+to the value they return, as `RunNodeResult.invocationUsage`, through
+`unwrapWithUsage`. A host that runs a compiled agent in-process (BMO does) reads
+its per-kind-and-model spend there, the same figure the serve adapter gets on its
+outcome. The `tokens` field beside it is the older `__tokenStats` object; it
+counts chat completions only, so a host that wants image, embedding or speech
+spend must read `invocationUsage`. A thrown run still throws the original error
+unchanged and carries no snapshot on this path; only the serve entry points
+report usage for a throw.
+
 ## The one sink — `lib/runtime/recordPaidUsage.ts`
 
 `recordUsageDelta` (private) is the single place a delta is accounted:

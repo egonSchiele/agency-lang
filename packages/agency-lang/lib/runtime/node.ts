@@ -28,7 +28,11 @@ import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
-import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./invocationUsage.js";
+import {
+  unwrapServedInvocationOutcome,
+  unwrapWithUsage,
+  type ServedInvocationOutcome,
+} from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 
 export function setupNode(args: { state: GraphState }): {
@@ -577,10 +581,10 @@ async function runNodeCore({
   return finishServedInvocation(execCtx, outcome, () => finalizeExecCtx(execCtx));
 }
 
-/** Public entry point — unchanged contract: returns the RunNodeResult or throws
- *  the identical original error. */
+/** Public entry point — returns the RunNodeResult with its usage snapshot
+ *  attached, or throws the identical original error. */
 export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
-  return unwrapServedInvocationOutcome(await runNodeCore(args));
+  return unwrapWithUsage(await runNodeCore(args));
 }
 
 /** Serve-only entry point: hands the outcome (RunNodeResult/error + usage

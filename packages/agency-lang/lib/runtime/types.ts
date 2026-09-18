@@ -1,6 +1,7 @@
 import { CostEstimate, TokenUsage } from "smoltalk";
 import { RuntimeContext, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
+import type { InvocationUsageSnapshot } from "./invocationUsage.js";
 
 export type GraphState = {
   messages?: ThreadStore;
@@ -24,6 +25,13 @@ export type RunNodeResult<T> = {
   messages: ThreadStoreJSON;
   data: T;
   tokens?: TokenStats;
+  /** What this invocation spent, per kind and model, with the flags that say
+   *  whether the figure is complete. Attached by `runNode`,
+   *  `respondToInterrupts` and `resumeFromCheckpoint` on the returned path; a
+   *  thrown run carries it only on the serve entry points' outcome. Optional
+   *  because a `createReturnObject` value does not have it until the entry
+   *  point adds it. */
+  invocationUsage?: InvocationUsageSnapshot;
 };
 
 export type TokenStats = {

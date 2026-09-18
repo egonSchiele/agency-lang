@@ -21,11 +21,15 @@ node main(args: { policyFile: string }): string {
       after: "def greet(): string {\n  return \"hello\"\n}",
     })
     interrupt std::toolbox::review("review this tool?", {
-      name: "greetHindi",
+      // A tool name is chosen by the agent and lands in the prompt's own
+      // table, which keeps a carriage return: everything after it
+      // overwrites the row up to that point.
+      name: "greetHindi\r wiped",
       stagingDir: "/tmp/staging",
-      // The escape sequence a model could hide in a draft: it clears the
-      // screen the user is reading the draft on.
-      source: "def run(): string {\n  return \"namaste\"\u001b[2J\n}",
+      // The draft goes through the diff, which keeps an escape sequence
+      // (it clears the screen) and a bidi override (it makes the code
+      // read as something other than what it runs as).
+      source: "def run(): string {\n  return \"namaste\"\u001b[2J\u202e\n}",
       previous: "def run(): string {\n  return \"hello\"\n}",
       effects: ["std::llm"],
       tested: true
@@ -54,4 +58,17 @@ node autoApproved(args: { policyFile: string }): string {
     return handler(data)
   }
   return "completed"
+}
+
+// An interrupt with no data at all. Reading a field off it throws, and
+// the diff renderer runs in front of the guard that used to catch that.
+node nullPayload(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, APPROVE_REVIEW)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  handle {
+    interrupt std::toolbox::review("review nothing?", null)
+  } with (data) {
+    return handler(data)
+  }
+  return "survived"
 }

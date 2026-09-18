@@ -88,10 +88,21 @@ the last draft the user saw in `previous` alongside `source` (see
 changed instead of the whole tool again. On the first round `previous` is
 `""` and the diff is all insertions, which is how a new file reads too.
 
-Both the source and the header run through `stripControlChars` first.
-That source was written by a model, and an escape sequence in it would
-move the cursor or clear the screen the user is reading it on. Tabs and
-newlines stay.
+The two calls differ on purpose. The prompt path prints under the lock;
+the rule path does not, because `withLock` is non-reentrant and throws
+when the same owner takes a lock it already holds, and a rule can decide
+an interrupt raised by code that is already inside the lock. The rule
+path also prints in a headless run, where the rejection line below it
+stays quiet: a rejection there is a decision nobody needs the detail of,
+while an approved change is the one record of something that happened.
+
+Both the source and the header run through `stripControlChars`, and so
+does every string value in the prompt's table, since the agent picks some
+of those too (a tool's name, a filename). It removes control characters,
+a lone carriage return, and the bidi and zero-width characters behind
+trojan source. Each of the three renderers drops a different subset on
+its own — `diff` drops carriage returns, the table renderer drops ANSI —
+so none of them can be relied on for this. Tabs and newlines stay.
 
 ## What "approve always here" pins
 

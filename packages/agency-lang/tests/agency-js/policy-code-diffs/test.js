@@ -1,4 +1,4 @@
-import { main, autoApproved } from "./agent.js";
+import { main, autoApproved, nullPayload } from "./agent.js";
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -18,6 +18,7 @@ globalThis.__agencyInputOverride = async () => {
 
 // Everything the handler printed, so we can check what reached the
 // terminal alongside each prompt.
+let survivedNullPayload = "threw";
 let printed = "";
 const realLog = console.log;
 console.log = (...args) => {
@@ -27,6 +28,7 @@ console.log = (...args) => {
 try {
   await main({ policyFile });
   await autoApproved({ policyFile });
+  survivedNullPayload = (await nullPayload({ policyFile })).data;
 } finally {
   console.log = realLog;
   rmSync(dir, { recursive: true, force: true });
@@ -54,4 +56,9 @@ writeFileSync("__result.json", JSON.stringify({
   // had the highlighter's own colors removed, so what is left is the
   // raw ESC the model wrote.
   controlCharsStripped: !printed.includes("\u001b[2J"),
+  // The table keeps a CR, which would put " wiped" on top of the name.
+  carriageReturnStripped: !printed.includes("\r"),
+  // The trojan-source characters that make code read as something else.
+  bidiOverrideStripped: !printed.includes("\u202e"),
+  survivedNullPayload,
 }, null, 2));

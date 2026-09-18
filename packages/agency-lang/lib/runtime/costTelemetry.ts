@@ -28,7 +28,7 @@ export type IpcInvocationUsageMessage = {
   type: "invocationUsage";
   cost?: unknown;
   tokens?: unknown;
-  unknownCostCallCount?: unknown;
+  unpricedCallCount?: unknown;
   entry?: unknown;
   attributionLost?: unknown;
 };
@@ -91,7 +91,7 @@ function costIsZero(cost: NormalizedDelta["cost"]): boolean {
  *  never suppressed. */
 function isNoOpDelta(delta: NormalizedDelta): boolean {
   if (delta.attributionLost) return false;
-  if (delta.unknownCostCallCount !== 0) return false;
+  if (delta.unpricedCallCount !== 0) return false;
   if (!costIsZero(delta.cost)) return false;
   if (!tokensAreZero(delta.tokens)) return false;
   if (delta.entry !== undefined) {
@@ -102,7 +102,7 @@ function isNoOpDelta(delta: NormalizedDelta): boolean {
 }
 
 /** Relay a full normalized usage delta to the parent, once. Sends the complete
- *  nested breakdown (`cost`, `tokens`, `entry`, `unknownCostCallCount`,
+ *  nested breakdown (`cost`, `tokens`, `entry`, `unpricedCallCount`,
  *  `attributionLost`). Skips an all-zero delta. */
 export function sendInvocationUsageToParent(delta: NormalizedDelta): void {
   if (!canSend()) return;

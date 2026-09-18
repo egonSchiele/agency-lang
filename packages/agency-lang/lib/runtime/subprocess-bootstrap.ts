@@ -219,7 +219,7 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
       type: "result",
       value: {
         data: result.data,
-        tokens: result.tokens,
+        usage: result.usage,
         messages: result.messages?.toJSON?.() ?? result.messages,
       },
     });

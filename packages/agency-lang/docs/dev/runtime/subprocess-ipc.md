@@ -96,7 +96,7 @@ On the parent side, `_run` — a `runBatch` adopter with a single child (`subpro
 { type: "interrupted", interrupts: SerializedInterrupt[], checkpoint, subprocessSessionId }
 { type: "error", error: string }
 { type: "lockAcquire" | "lockRelease", ... }
-{ type: "invocationUsage", cost?, tokens?, entry?, unknownCostCallCount?, attributionLost? }
+{ type: "invocationUsage", cost?, tokens?, entry?, unpricedCallCount?, attributionLost? }
                                  // fire-and-forget, one per paid call
 { type: "invocationUsageIncomplete" } // usage from here down is a lower bound
 { type: "callback", name, data } // fire-and-forget, one per lifecycle event (see Callback forwarding)
@@ -141,7 +141,7 @@ Wall-clock, memory, ipcPayload, and stdout limits clamp each subprocess, with ce
 
 The `ipcPayload` limit applies to the `interrupted` message, whose dominant term is the child checkpoint — an oversized pause **fails loudly** with the structured `limit_exceeded` failure rather than pausing un-resumably (`limit-ipc-payload-interrupted` test).
 
-Token stats live in the child's per-execution `GlobalStore` (`__tokenStats`), which serializes inside the checkpoint's `globals`, so they accumulate across pause/resume segments and the final `result.tokens` is cumulative.
+The child's terminal `result.usage` is its own meter's snapshot for that execution segment. The parent does not bill from it: every paid call was already relayed upward as an `invocationUsage` message when it happened.
 
 Locks brokered through the parent are released at segment settle, and lock-acquisition steps are completed steps that replay skips — **locks do not survive a pause**, which is already the in-process checkpoint semantic (releasers are not serialized there either).
 
@@ -161,8 +161,7 @@ paid call, matching in-process CostGuard semantics. A child that can no
 longer guarantee delivery sends `invocationUsageIncomplete`, which marks
 the owning invocation's usage a lower bound. The parent marks the same
 on every abnormal termination, so a killed child's unsent telemetry is
-never presented as an authoritative total. `result.tokens` is still the
-cumulative terminal report. One `getCost()` edge: telemetry arriving
+never presented as an authoritative total. One `getCost()` edge: telemetry arriving
 after a kill still charges budgets through the shared guard references,
 but can be invisible to `getCost()` if the owning fork branch already
 joined. Budgets never undercount. `getCost()` may, and only on abnormal

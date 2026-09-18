@@ -1,0 +1,25 @@
+import { bump, bumpCount } from "./counter.js"
+
+effect test::gate { step: number }
+
+// Restores forever once the gate is approved. Only the run's restore limit
+// can stop it.
+node afterInterrupt(): number {
+  raise test::gate("ok to continue?", { step: 1 })
+  const cp = checkpoint()
+  bump()
+  restore(cp, {})
+  return bumpCount()
+}
+
+// Hands its checkpoint out on the first pass, so the test can rewind from it.
+// Every later pass restores forever.
+node forRewind(): any {
+  const cp = checkpoint()
+  bump()
+  if (bumpCount() == 1) {
+    return getCheckpoint(cp)
+  }
+  restore(cp, {})
+  return null
+}

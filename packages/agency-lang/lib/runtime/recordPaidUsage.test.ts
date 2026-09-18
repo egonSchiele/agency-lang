@@ -50,7 +50,7 @@ function delta(over: Partial<NormalizedDelta>): NormalizedDelta {
   return {
     cost: zeroCost(),
     tokens: zeroTokens(),
-    unknownCostCallCount: 0,
+    unpricedCallCount: 0,
     attributionLost: false,
     ...over,
   };
@@ -79,7 +79,7 @@ describe("recordUsage (provider + manual observations)", () => {
       tokens: { inputTokens: 100, outputTokens: 20, totalTokens: 120 } as any,
     });
     expect(branch.localCost).toBeCloseTo(0.25);
-    const { usage } = ctx.invocationUsage.snapshot();
+    const usage = ctx.invocationUsage.snapshot();
     expect(usage.cost.totalCost).toBeCloseTo(0.25);
     expect(usage.tokens.inputTokens).toBe(100);
     expect(usage.entries.map((e) => `${e.kind}:${e.model}`)).toEqual(["completion:opus"]);
@@ -92,7 +92,7 @@ describe("recordUsage (provider + manual observations)", () => {
     const branch = new StateStack();
     recordUsage(ctx, branch, { type: "manual", amount: 0.03 });
     expect(branch.localCost).toBeCloseTo(0.03);
-    const { usage } = ctx.invocationUsage.snapshot();
+    const usage = ctx.invocationUsage.snapshot();
     expect(usage.cost.totalCost).toBeCloseTo(0.03);
     expect(usage.entries).toHaveLength(1);
     expect(usage.entries[0]).toMatchObject({ kind: "manual", model: "" });
@@ -114,10 +114,7 @@ describe("recordUsage (provider + manual observations)", () => {
       reportedModel: "sonnet",
       cost: { totalCost: 0.2, currency: "USD" } as any,
     });
-    expect(ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual([
-      "opus",
-      "sonnet",
-    ]);
+    expect(ctx.invocationUsage.snapshot().entries.map((e) => e.model)).toEqual(["opus", "sonnet"]);
   });
 });
 
@@ -142,7 +139,7 @@ describe("recordCompletionUsage — audio-token projection consistency", () => {
       },
       "gpt-audio-1.5",
     );
-    const { usage } = ctx.invocationUsage.snapshot();
+    const usage = ctx.invocationUsage.snapshot();
     expect(usage.tokens.totalTokens).toBe(44); // meter
     expect(branch.localTokens).toBe(44); // branch total agrees
     // Audio-token fields never surface in the normalized breakdown.
@@ -155,9 +152,9 @@ describe("recordUnresolvedAttempt", () => {
   it("adds one unknown-cost call, no cost, and flips pricingComplete false", () => {
     const ctx = makeCtx();
     recordUnresolvedAttempt(ctx, ctx.stateStack, "completion");
-    const { usage } = ctx.invocationUsage.snapshot();
-    expect(usage.unknownCostCallCount).toBe(1);
-    expect(usage.pricingComplete).toBe(false);
+    const usage = ctx.invocationUsage.snapshot();
+    expect(usage.unpricedCallCount).toBe(1);
+    expect(usage.unpricedCallCount).toBeGreaterThan(0);
     expect(usage.cost.totalCost).toBe(0);
     expect(ctx.stateStack.localCost).toBe(0);
   });
@@ -180,7 +177,7 @@ describe("recordUsageDelta sink: order, suppression, and degrade-once", () => {
     );
     // FIFO preserves the recovered money before degrading the ancestor.
     expect(sentTypes(send)).toEqual(["invocationUsage", "invocationUsageIncomplete"]);
-    expect(ctx.invocationUsage.snapshot().usageComplete).toBe(false);
+    expect(ctx.invocationUsage.snapshot().complete).toBe(false);
   });
 
   it("a no-op (all-zero) delta emits no IPC message", () => {
@@ -228,8 +225,8 @@ describe("recordUsageDelta sink: order, suppression, and degrade-once", () => {
     );
     expect(sentTypes(send)).toEqual(["invocationUsage"]);
     const s = ctx.invocationUsage.snapshot();
-    expect(s.usage.tokens.inputTokens).toBe(MAX);
-    expect(s.usageComplete).toBe(false);
+    expect(s.tokens.inputTokens).toBe(MAX);
+    expect(s.complete).toBe(false);
   });
 });
 
@@ -237,7 +234,7 @@ describe("meteredDispatch", () => {
   it("a resolved dispatch records nothing", async () => {
     const ctx = makeCtx();
     await meteredDispatch(ctx, ctx.stateStack, "completion", async () => "ok");
-    expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(0);
+    expect(ctx.invocationUsage.snapshot().unpricedCallCount).toBe(0);
   });
 
   it("a rejected dispatch records exactly one unresolved attempt", async () => {
@@ -248,7 +245,7 @@ describe("meteredDispatch", () => {
       }),
     ).rejects.toThrow("boom");
     await Promise.resolve();
-    expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(1);
+    expect(ctx.invocationUsage.snapshot().unpricedCallCount).toBe(1);
   });
 
   it("returns the dispatch promise unchanged (no extra microtask tick)", () => {
@@ -262,7 +259,7 @@ describe("addCost (ambient target)", () => {
   it("records a manual charge against the active frame and enforces guards", async () => {
     const ctx = makeCtx();
     await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), async () => addCost(0.25));
-    expect(ctx.invocationUsage.snapshot().usage.cost.totalCost).toBeCloseTo(0.25);
+    expect(ctx.invocationUsage.snapshot().cost.totalCost).toBeCloseTo(0.25);
     expect(ctx.stateStack.localCost).toBeCloseTo(0.25);
   });
 
@@ -283,7 +280,7 @@ describe("addCost (ambient target)", () => {
       expect(() => addCost(Number.POSITIVE_INFINITY)).toThrow(msg);
     });
     expect(ctx.stateStack.localCost).toBe(0);
-    expect(ctx.invocationUsage.snapshot().usage.cost.totalCost).toBe(0);
+    expect(ctx.invocationUsage.snapshot().cost.totalCost).toBe(0);
   });
 });
 
@@ -296,6 +293,6 @@ describe("markInvocationUsageIncompleteAt", () => {
     markInvocationUsageIncompleteAt(ctx);
     markInvocationUsageIncompleteAt(ctx);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsageIncomplete" });
-    expect(ctx.invocationUsage.snapshot().usageComplete).toBe(false);
+    expect(ctx.invocationUsage.snapshot().complete).toBe(false);
   });
 });

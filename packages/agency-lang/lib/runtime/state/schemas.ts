@@ -110,6 +110,7 @@ export const checkpointSchema = z.object({
   moduleFingerprints: z
     .record(z.string(), z.object({ hash: z.string(), compiledAt: z.string() }))
     .optional(),
+  usage: z.unknown().optional(),
   signature: z.string().optional(),
 });
 

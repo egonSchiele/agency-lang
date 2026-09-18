@@ -9,10 +9,7 @@ import { errorMessage, toArgs, parseJsonBody } from "../util.js";
 import { validateResumeBatch } from "../../runtime/interrupts.js";
 import { readCause, CheckpointCodeChangedError } from "../../runtime/errors.js";
 import { formatBudgetExceeded } from "../../runtime/budgetExit.js";
-import type {
-  ServedInvocationOutcome,
-  InvocationUsageSnapshot,
-} from "../../runtime/invocationUsage.js";
+import type { ServedInvocationOutcome, RunUsage } from "../../runtime/invocationUsage.js";
 import type { InvocationOptions } from "../../runtime/invocationOptions.js";
 import type { Logger } from "../../logger.js";
 import {
@@ -72,8 +69,7 @@ export type RouteResult = {
    *  post-execution outcome (success/interrupt/402/failure/cancel) and absent
    *  on pre-execution results (/list, 404, validation 400). Read in-process by
    *  the host (statelog); not part of the standalone HTTP body. */
-  usage?: InvocationUsageSnapshot["usage"];
-  usageComplete?: boolean;
+  usage?: RunUsage;
   /** The run's effective root trace id. Present on the same post-execution
    *  outcomes as `usage` (absent on /list, 404, validation 400). Lets a host
    *  correlate a call to its trace even when it did not pre-supply an id. */
@@ -152,7 +148,6 @@ function withUsage(base: RouteResult, outcome: ServedInvocationOutcome<unknown>)
   return {
     ...base,
     usage: outcome.usage,
-    usageComplete: outcome.usageComplete,
     traceId: outcome.traceId,
   };
 }

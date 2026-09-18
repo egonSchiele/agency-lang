@@ -40,7 +40,8 @@ The direct CLI path uses the same resume loop as interrupt response. A resumed
 run can therefore interrupt again. Completion emits the agent lifecycle end,
 writes the trace footer, flushes statelog work, and releases the execution
 context. A new interrupt pauses the trace without a footer because the run has
-not finished.
+not finished. The result carries `usage` and `traceId`, the same two fields
+`runNode` puts on a fresh run's result.
 
 ## Integrity and code identity
 

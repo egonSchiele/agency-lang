@@ -1033,7 +1033,7 @@ function accountChildUsage(s: RunSession, delta: NormalizedDelta): void {
 /** Full per-invocation usage delta from a child. Recovered field-by-field from
  *  untrusted input by `normalizeIpcUsageDelta`: independently-valid money and
  *  tokens survive a malformed sibling, an unusable attribution entry is omitted
- *  and degrades `usageComplete`, and only a wholly non-object message is
+ *  and degrades `complete`, and only a wholly non-object message is
  *  dropped. The recovered delta (including its `attributionLost`) then flows
  *  through the same accounting sink as an in-process charge. */
 export function handleInvocationUsageMessage(s: RunSession, msg: IpcInvocationUsageMessage): void {

@@ -6,10 +6,10 @@ import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { AgencyFunction } from "./agencyFunction.js";
-import { CheckpointError, PauseSignal, RestoreSignal } from "./errors.js";
+import { PauseSignal, RestoreSignal } from "./errors.js";
 import { withExternalSignals } from "./externalSignals.js";
 import { pausedReturnObject } from "./pause.js";
-import { applyRestoreOverrides } from "./resumeSetup.js";
+import { applyRestoreSignal } from "./resumeSetup.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
@@ -22,13 +22,18 @@ import { resolveInvocation, type InvocationOptions } from "./invocationOptions.j
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Policy } from "./policy.js";
 import { installRootBudget } from "./rootBudget.js";
-import { GraphState, RunNodeResult } from "./types.js";
+import { GraphState, RunNodeCoreResult, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
-import { unwrapServedInvocationOutcome, type ServedInvocationOutcome } from "./invocationUsage.js";
+import {
+  tokenStatsOf,
+  unwrapServedInvocationOutcome,
+  unwrapWithUsage,
+  type ServedInvocationOutcome,
+} from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 
 export function setupNode(args: { state: GraphState }): {
@@ -375,7 +380,7 @@ async function runNodeCore({
   pauseSignal,
   invocation,
   input,
-}: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+}: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   // The resolver owns run-id policy: a subprocess INHERITS the parent's runId
   // (seeded from the run instruction) so child statelog events land in the same
   // trace; otherwise an injected traceId wins, then a harness-set
@@ -405,7 +410,7 @@ async function runNodeCore({
   // cleanup. ===
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
-  let outcome: RawOutcome<RunNodeResult<any>>;
+  let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     // Bootstrapped and capped inside initFreshExecCtx; see its comment for
     // the ordering (root policy and budget first, then init).
@@ -492,7 +497,7 @@ async function runNodeCore({
               entryNode: nodeName,
               result: returnObject.data,
               timeTaken: performance.now() - agentStartTime,
-              tokenStats: returnObject.tokens,
+              tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
             });
             // onAgentEnd fires AFTER the run finished, so seed ALS with
             // the real per-run ThreadStore: user callbacks that inspect
@@ -509,7 +514,14 @@ async function runNodeCore({
                 callHook({
                   ctx: execCtx,
                   name: "onAgentEnd",
-                  data: { nodeName, result: returnObject },
+                  data: {
+                    nodeName,
+                    result: {
+                      ...returnObject,
+                      usage: execCtx.invocationUsage.snapshot(),
+                      traceId: execCtx.getRunId(),
+                    },
+                  },
                 }),
             );
             await execCtx.closeTraceWriter();
@@ -520,28 +532,9 @@ async function runNodeCore({
             return { status: "returned" as const, value: await pausedReturnObject(execCtx, e) };
           }
           if (e instanceof RestoreSignal) {
-            execCtx._restoreCount++;
-            if (execCtx._restoreCount > execCtx.maxRestores) {
-              throw new CheckpointError(
-                `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,
-              );
-            }
-            const cp = e.checkpoint;
-            execCtx.statelogClient.checkpointRestored({
-              checkpointId: cp.id,
-              restoreCount: execCtx._restoreCount,
-              maxRestores: execCtx.maxRestores,
-              overrides: {
-                args: !!e.options?.args,
-                globals: !!e.options?.globals,
-              },
-            });
-            execCtx.restoreState(cp);
-            applyRestoreOverrides(execCtx, cp, e.options);
-            nodeName = cp.nodeId;
+            nodeName = applyRestoreSignal(execCtx, e);
             data = {};
             isResume = true;
-            execCtx.stateStack.nodesTraversed = [cp.nodeId];
             // Reset ThreadStore for the restored execution
             threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
             continue;
@@ -556,16 +549,12 @@ async function runNodeCore({
       errorType: "runtimeError",
       message: errorMessage,
     });
-    // Pull whatever token usage accumulated before the crash so cost
-    // dashboards still attribute partial spend to failed runs.
-    const partialReturn = createReturnObject({
-      result: { data: undefined as any },
-      globals: execCtx.globals,
-    });
+    // Whatever was spent before the crash, so cost dashboards still attribute
+    // partial spend to failed runs.
     execCtx.statelogClient.agentEnd({
       entryNode: nodeName,
       timeTaken: performance.now() - agentStartTime,
-      tokenStats: partialReturn.tokens,
+      tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
     });
     outcome = { status: "threw", error };
   } finally {
@@ -577,16 +566,16 @@ async function runNodeCore({
   return finishServedInvocation(execCtx, outcome, () => finalizeExecCtx(execCtx));
 }
 
-/** Public entry point — unchanged contract: returns the RunNodeResult or throws
- *  the identical original error. */
+/** Public entry point — returns the RunNodeResult with its usage snapshot
+ *  attached, or throws the identical original error. */
 export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
-  return unwrapServedInvocationOutcome(await runNodeCore(args));
+  return unwrapWithUsage(await runNodeCore(args));
 }
 
 /** Serve-only entry point: hands the outcome (RunNodeResult/error + usage
  *  snapshot) to the serve adapter instead of unwrapping it. */
 export async function runNodeForServe(
   args: RunNodeArgs,
-): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   return runNodeCore(args);
 }

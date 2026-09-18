@@ -82,10 +82,24 @@ def searchSlashCommand(): boolean {
   return true
 }
 
+// getModelCosts() returns one row per kind and model, so the model name alone
+// does not identify a row: a model used for completions and for images has
+// two, and an addCost() charge has kind "manual" and no model at all.
+def costRowLabel(kind: string, model: string): string {
+  if (kind == "completion") {
+    return model
+  }
+  if (model == "") {
+    return "(${kind})"
+  }
+  return "${model} (${kind})"
+}
+
 def costSlashCommand(): boolean {
   // Derive BOTH the header total and the per-model breakdown from the
-  // same process-wide accumulator (getModelCosts), so the `Cost:` /
-  // `Tokens:` lines and the rows below them can never visibly disagree.
+  // same figure (getModelCosts, the invocation's usage meter), so the
+  // `Cost:` / `Tokens:` lines and the rows below them can never visibly
+  // disagree.
   // (getCost()/getTokens() read the per-branch accumulator, a different
   // scope — adjacent in the output, they could in principle diverge.)
   // Rows are sorted by cost descending by getModelCosts(); a subagent
@@ -119,7 +133,7 @@ def costSlashCommand(): boolean {
     for (m in byModel) {
       const up = m.inputTokens + m.cachedInputTokens + m.cacheCreationInputTokens
       pushMessage(
-        "  ${m.model}  ↑${up} ↓${m.outputTokens}  $${m.cost.toFixed(4)}",
+        "  ${costRowLabel(m.kind, m.model)}  ↑${up} ↓${m.outputTokens}  $${m.cost.toFixed(4)}",
       )
     }
   }

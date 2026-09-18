@@ -42,7 +42,7 @@ function delta(over: Partial<NormalizedDelta> = {}): NormalizedDelta {
   return {
     cost: cost(),
     tokens: tokens(),
-    unknownCostCallCount: 0,
+    unpricedCallCount: 0,
     attributionLost: false,
     ...over,
   };
@@ -72,7 +72,7 @@ describe("sendInvocationUsageToParent", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
     sendInvocationUsageToParent(
-      delta({ tokens: tokens({ inputTokens: 3, totalTokens: 4 }), unknownCostCallCount: 1 }),
+      delta({ tokens: tokens({ inputTokens: 3, totalTokens: 4 }), unpricedCallCount: 1 }),
     );
     expect(send).toHaveBeenCalledOnce();
   });

@@ -1,6 +1,7 @@
 import { CostEstimate, TokenUsage } from "smoltalk";
 import { RuntimeContext, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
+import type { RunUsage } from "./invocationUsage.js";
 
 export type GraphState = {
   messages?: ThreadStore;
@@ -15,6 +16,9 @@ export type GraphState = {
   isResume?: boolean;
 };
 
+/** A run's result before its entry point attaches `usage` and `traceId`. */
+export type RunNodeCoreResult<T> = Omit<RunNodeResult<T>, "usage" | "traceId">;
+
 export type NodeReturnValue<T> = {
   data: T;
   messages: ThreadStore;
@@ -23,12 +27,12 @@ export type NodeReturnValue<T> = {
 export type RunNodeResult<T> = {
   messages: ThreadStoreJSON;
   data: T;
-  tokens?: TokenStats;
-};
-
-export type TokenStats = {
-  usage: TokenUsage;
-  cost: CostEstimate;
+  /** What the run has spent since it began, per kind and model. A resumed
+   *  run's figure includes what it spent before it paused, so a host that
+   *  records a paused result replaces that record when the run reports again. */
+  usage: RunUsage;
+  /** The run's id, the same on every result of one run across pauses. */
+  traceId: string;
 };
 
 export type Rejected = { type: "reject"; value?: any };

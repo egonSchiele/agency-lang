@@ -25,7 +25,6 @@ import {
   recordUsage,
   recordUnresolvedAttempt,
 } from "../runtime/recordPaidUsage.js";
-import { addTokens } from "../runtime/cost.js";
 import { projectProviderTokenUsage } from "../runtime/invocationUsage.js";
 import { SPEAK_FORMATS, SPEECH_FORMAT_TO_MIME, type SpeakFormat } from "../runtime/audioFormats.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
@@ -389,7 +388,7 @@ export async function _transcribe(
   }
   const tr = result.value;
 
-  // One projection feeds the meter (via recordUsage), the branch total (addTokens),
+  // One projection feeds the meter and the branch total (via recordUsage),
   // and statelog — so they agree and no audio-token field leaks to a sink.
   const projected = projectProviderTokenUsage(tr.usage, "transcription").usage;
   recordUsage(ctx, stack, {
@@ -399,7 +398,6 @@ export async function _transcribe(
     cost: tr.cost,
     tokens: tr.usage,
   });
-  addTokens(projected.totalTokens);
   ctx.statelogClient.transcription({
     textPreview: tr.text.slice(0, PROMPT_PREVIEW_MAX),
     model,

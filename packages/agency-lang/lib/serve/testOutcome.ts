@@ -1,52 +1,44 @@
 // Test-only builders for ServedInvocationOutcome, so adapter/discovery unit
 // tests can supply plain-JS invokers without spinning up a real runtime.
-import type {
-  InvocationUsageSnapshot,
-  ServedInvocationOutcome,
-} from "../runtime/invocationUsage.js";
+import type { RunUsage, ServedInvocationOutcome } from "../runtime/invocationUsage.js";
 
-const ZERO_SNAPSHOT: InvocationUsageSnapshot = {
-  usage: {
-    cost: {
-      inputCost: 0,
-      outputCost: 0,
-      cachedInputCost: 0,
-      cacheCreationInputCost: 0,
-      hostedToolsCost: 0,
-      totalCost: 0,
-      currency: "USD",
-    },
-    tokens: {
-      inputTokens: 0,
-      outputTokens: 0,
-      cachedInputTokens: 0,
-      cacheCreationInputTokens: 0,
-      totalTokens: 0,
-    },
-    unknownCostCallCount: 0,
-    pricingComplete: true,
-    entries: [],
+const ZERO_USAGE: RunUsage = {
+  cost: {
+    inputCost: 0,
+    outputCost: 0,
+    cachedInputCost: 0,
+    cacheCreationInputCost: 0,
+    hostedToolsCost: 0,
+    totalCost: 0,
+    currency: "USD",
   },
-  usageComplete: true,
+  tokens: {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    totalTokens: 0,
+  },
+  entries: [],
+  complete: true,
+  unpricedCallCount: 0,
 };
 
 /** A returned outcome carrying a fixed usage snapshot and trace id (override
  *  `usage`/`traceId` when a test asserts specific figures or identity). */
 export function returnedOutcome<T>(
   value: T,
-  overrides: Partial<Pick<ServedInvocationOutcome<T>, "usage" | "usageComplete" | "traceId">> = {},
+  overrides: Partial<Pick<ServedInvocationOutcome<T>, "usage" | "traceId">> = {},
 ): ServedInvocationOutcome<T> {
-  return { status: "returned", value, traceId: "test-trace", ...ZERO_SNAPSHOT, ...overrides };
+  return { status: "returned", value, traceId: "test-trace", usage: ZERO_USAGE, ...overrides };
 }
 
 /** A threw outcome carrying the identical error. */
 export function threwOutcome(
   error: unknown,
-  overrides: Partial<
-    Pick<ServedInvocationOutcome<never>, "usage" | "usageComplete" | "traceId">
-  > = {},
+  overrides: Partial<Pick<ServedInvocationOutcome<never>, "usage" | "traceId">> = {},
 ): ServedInvocationOutcome<never> {
-  return { status: "threw", error, traceId: "test-trace", ...ZERO_SNAPSHOT, ...overrides };
+  return { status: "threw", error, traceId: "test-trace", usage: ZERO_USAGE, ...overrides };
 }
 
 /** The PUBLIC raw `invoke` member on an ExportedFunction/Node. Adapter tests

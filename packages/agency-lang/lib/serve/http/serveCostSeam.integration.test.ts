@@ -81,8 +81,8 @@ describe("serve cost seam — end to end", () => {
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ success: true, value: "done" });
     expect(result.usage?.cost.totalCost).toBeCloseTo(0.03);
-    expect(result.usage?.pricingComplete).toBe(true);
-    expect(result.usageComplete).toBe(true);
+    expect(result.usage?.unpricedCallCount).toBe(0);
+    expect(result.usage?.complete).toBe(true);
   });
 
   it("success carries a reconciled manual breakdown (addCost has model '')", async () => {
@@ -130,7 +130,7 @@ describe("serve cost seam — end to end", () => {
     expect(result.usage?.cost.totalCost).toBeCloseTo(0.02);
     // The breakdown is not dropped on the error path.
     expect(result.usage?.entries[0]?.cost.totalCost).toBeCloseTo(0.02);
-    expect(result.usageComplete).toBe(true);
+    expect(result.usage?.complete).toBe(true);
   });
 
   it("a baked budget trip returns 402 carrying the cost up to the trip", async () => {
@@ -148,6 +148,6 @@ describe("serve cost seam — end to end", () => {
     setup();
     const result = await handlerFor(makeCtx(), () => "x")("GET", "/list", undefined);
     expect(result.usage).toBeUndefined();
-    expect(result.usageComplete).toBeUndefined();
+    expect(result.usage).toBeUndefined();
   });
 });

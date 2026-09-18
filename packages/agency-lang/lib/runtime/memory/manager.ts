@@ -57,9 +57,8 @@ function recordMemoryUsageIfInFrame(observation: UsageObservation): void {
 }
 
 /** Run a memory provider dispatch as a metered attempt WHEN in an execution
- *  frame: a rejected dispatch records one unresolved attempt (so
- *  `pricingComplete` cannot stay true after a post-dispatch throw), mirroring the
- *  prompt path. Outside a frame (direct-construction unit tests) it just runs
+ *  frame: a rejected dispatch records one unresolved attempt (so the throw
+ *  still counts as an unpriced call), mirroring the prompt path. Outside a frame (direct-construction unit tests) it just runs
  *  the dispatch — there is no meter to record into. A resolved `Result.failure`
  *  is NOT metered here (deferred to agency-lang #809). */
 function meteredMemoryDispatch<T>(kind: ProviderUsageKind, dispatch: () => Promise<T>): Promise<T> {

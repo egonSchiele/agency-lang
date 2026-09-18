@@ -2,7 +2,7 @@ import type { Checkpoint } from "./state/checkpointStore.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
 import { RestoreSignal } from "./errors.js";
-import { applyLocalOverrides, applyRestoreOverrides, restoreForResume } from "./resumeSetup.js";
+import { applyLocalOverrides, applyRestoreSignal, restoreForResume } from "./resumeSetup.js";
 import { RuntimeContext } from "./state/context.js";
 import type { GraphState } from "./types.js";
 import { createReturnObject } from "./utils.js";
@@ -65,11 +65,7 @@ export async function rewindFrom(args: {
         return createReturnObject({ result, globals: execCtx.globals });
       } catch (e) {
         if (e instanceof RestoreSignal) {
-          const cp = e.checkpoint;
-          execCtx.restoreState(cp);
-          applyRestoreOverrides(execCtx, cp, e.options);
-          nodeName = cp.nodeId;
-          execCtx.stateStack.nodesTraversed = [cp.nodeId];
+          nodeName = applyRestoreSignal(execCtx, e);
           continue;
         }
         throw e;

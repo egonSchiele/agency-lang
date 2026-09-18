@@ -446,11 +446,11 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
       type: "invocationUsage",
       cost: fullCost,
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: { kind: "completion", model: "opus-4.8", cost: fullCost, tokens: fullTokens },
     });
     expect(stack.localCost).toBeCloseTo(0.5);
-    const { usage } = ctx.invocationUsage.snapshot();
+    const usage = ctx.invocationUsage.snapshot();
     expect(usage.cost.totalCost).toBeCloseTo(0.5);
     expect(usage.tokens.inputTokens).toBe(100);
     expect(usage.entries.map((e) => `${e.kind}:${e.model}`)).toEqual(["completion:opus-4.8"]);
@@ -462,7 +462,7 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     handleInvocationUsageMessage(first.session, {
       type: "invocationUsage",
       cost: { totalCost: 0.1, currency: "USD" },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: {
         kind: "completion",
         model: "opus",
@@ -473,7 +473,7 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     handleInvocationUsageMessage(second.session, {
       type: "invocationUsage",
       cost: { totalCost: 0.2, currency: "USD" },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: {
         kind: "completion",
         model: "haiku",
@@ -481,12 +481,8 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
         tokens: fullTokens,
       },
     });
-    expect(first.ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual([
-      "opus",
-    ]);
-    expect(second.ctx.invocationUsage.snapshot().usage.entries.map((e) => e.model)).toEqual([
-      "haiku",
-    ]);
+    expect(first.ctx.invocationUsage.snapshot().entries.map((e) => e.model)).toEqual(["opus"]);
+    expect(second.ctx.invocationUsage.snapshot().entries.map((e) => e.model)).toEqual(["haiku"]);
   });
 
   it("recovers flat money but omits an unusable entry and degrades usageComplete", () => {
@@ -495,20 +491,20 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
       type: "invocationUsage",
       cost: fullCost,
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: { kind: "nope", model: "x", cost: fullCost, tokens: fullTokens },
     });
     const s = ctx.invocationUsage.snapshot();
-    expect(s.usage.cost.totalCost).toBeCloseTo(0.5);
-    expect(s.usage.entries).toHaveLength(0);
-    expect(s.usageComplete).toBe(false);
+    expect(s.cost.totalCost).toBeCloseTo(0.5);
+    expect(s.entries).toHaveLength(0);
+    expect(s.complete).toBe(false);
   });
 
   it("drops a wholly non-object message", () => {
     const { session, ctx, stack } = makeUsageSession();
     handleInvocationUsageMessage(session, 42 as any);
     expect(stack.localCost).toBe(0);
-    expect(ctx.invocationUsage.snapshot().usage.cost.totalCost).toBe(0);
+    expect(ctx.invocationUsage.snapshot().cost.totalCost).toBe(0);
   });
 
   it("accumulates exact totals across multiple child messages (one-child)", () => {
@@ -517,20 +513,20 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
       type: "invocationUsage",
       cost: { totalCost: 0.1, currency: "USD" },
       tokens: { inputTokens: 5, outputTokens: 1, totalTokens: 6 },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
     });
     handleInvocationUsageMessage(session, {
       type: "invocationUsage",
       cost: { totalCost: 0.2, currency: "USD" },
       tokens: { inputTokens: 7, outputTokens: 2, totalTokens: 9 },
-      unknownCostCallCount: 1,
+      unpricedCallCount: 1,
     });
     const s = ctx.invocationUsage.snapshot();
-    expect(s.usage.cost.totalCost).toBeCloseTo(0.3);
-    expect(s.usage.tokens.inputTokens).toBe(12);
-    expect(s.usage.tokens.outputTokens).toBe(3);
-    expect(s.usage.unknownCostCallCount).toBe(1);
-    expect(s.usage.pricingComplete).toBe(false);
+    expect(s.cost.totalCost).toBeCloseTo(0.3);
+    expect(s.tokens.inputTokens).toBe(12);
+    expect(s.tokens.outputTokens).toBe(3);
+    expect(s.unpricedCallCount).toBe(1);
+    expect(s.unpricedCallCount).toBeGreaterThan(0);
   });
 
   it("re-relays the recovered delta upward once when this process is itself a child (grandchild path)", () => {
@@ -549,7 +545,7 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
       type: "invocationUsage",
       cost: fullCost,
       tokens: wireTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: { kind: "completion", model: "opus", cost: fullCost, tokens: wireTokens },
     });
     // A fully well-formed message recovers cleanly, so exactly the usage delta is
@@ -564,12 +560,12 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
       type: "invocationUsage",
       cost: { totalCost: -1, currency: "USD" },
       tokens: { inputTokens: 9, outputTokens: 3, totalTokens: 12 },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
     });
     expect(stack.localCost).toBe(0);
     const s = ctx.invocationUsage.snapshot();
-    expect(s.usage.tokens.inputTokens).toBe(9);
-    expect(s.usage.unknownCostCallCount).toBe(1);
+    expect(s.tokens.inputTokens).toBe(9);
+    expect(s.unpricedCallCount).toBe(1);
   });
 
   it("a guard trip from a usage message kills+rejects the session", () => {
@@ -579,7 +575,7 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
       type: "invocationUsage",
       cost: { totalCost: 0.2, currency: "USD" },
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
     });
     expect(kills).toEqual(["SIGKILL"]);
     expect(rejections).toHaveLength(1);
@@ -593,10 +589,10 @@ describe("handleInvocationUsageMessage (untrusted recovery + relay)", () => {
     handleInvocationUsageMessage(session, {
       type: "invocationUsage",
       cost: { totalCost: 0.2, currency: "USD" },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
     });
     expect(stack.localCost).toBeCloseTo(0.2);
-    expect(ctx.invocationUsage.snapshot().usage.cost.totalCost).toBeCloseTo(0.2);
+    expect(ctx.invocationUsage.snapshot().cost.totalCost).toBeCloseTo(0.2);
   });
 });
 
@@ -615,7 +611,7 @@ describe("handleInvocationUsageIncompleteMessage", () => {
     const session = makeSession({ ctx });
     handleInvocationUsageIncompleteMessage(session);
     handleInvocationUsageIncompleteMessage(session);
-    expect(ctx.invocationUsage.snapshot().usageComplete).toBe(false);
+    expect(ctx.invocationUsage.snapshot().complete).toBe(false);
     expect(send).toHaveBeenCalledExactlyOnceWith({ type: "invocationUsageIncomplete" });
   });
 });

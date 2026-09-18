@@ -277,8 +277,8 @@ describe("HTTP adapter", () => {
         cacheCreationInputTokens: 0,
         totalTokens: 0,
       },
-      unknownCostCallCount: 0,
-      pricingComplete: true,
+      complete: true,
+      unpricedCallCount: 0,
       entries: [
         {
           kind: "manual" as const,

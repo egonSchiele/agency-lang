@@ -1,7 +1,7 @@
 import { color } from "@/utils/termcolors.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
-import { RunNodeResult } from "./types.js";
+import { RunNodeCoreResult } from "./types.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { failure, isSuccess, success, ResultValue } from "./result.js";
 
@@ -151,7 +151,7 @@ export function createReturnObject<T>({
 }: {
   result: { data: T; messages?: ThreadStore };
   globals: GlobalStore;
-}): RunNodeResult<T> {
+}): RunNodeCoreResult<T> {
   // Note: we're *not* using structuredClone here because structuredClone
   // doesn't call `toJSON`, so it's not cloning our message objects correctly.
   return JSON.parse(
@@ -159,7 +159,6 @@ export function createReturnObject<T>({
       {
         messages: result.messages,
         data: result.data,
-        tokens: globals.get(GlobalStore.INTERNAL_MODULE, "__tokenStats"),
       },
       nativeTypeReplacer,
     ),

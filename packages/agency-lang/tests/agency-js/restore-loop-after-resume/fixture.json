@@ -1,0 +1,6 @@
+{
+  "resumedLoop": "CheckpointError: Exceeded maximum number of restores (100). Possible infinite loop.",
+  "resumedLoopBumps": 100,
+  "rewoundLoop": "CheckpointError: Exceeded maximum number of restores (100). Possible infinite loop.",
+  "rewoundLoopBumps": 101
+}

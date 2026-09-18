@@ -1,0 +1,8 @@
+effect test::gate { step: number }
+
+// One LLM call on each side of the gate, so every leg has spend to report.
+node main(): string {
+  llm("before the gate")
+  raise test::gate("ok to continue?", { step: 1 })
+  return llm("after the gate")
+}

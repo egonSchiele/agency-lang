@@ -11,7 +11,7 @@ Every invocation carries two things that must not be confused:
 
 - **The authoritative flat total**: `usage.cost` (a full `CostBreakdown`) and
   `usage.tokens` (a full `TokenBreakdown`). This is what gets billed. It is
-  always trusted as long as `usageComplete` is true.
+  always trusted as long as `usage.complete` is true.
 - **The best-effort attribution**: `usage.entries`, one entry per `(kind,
   model)`. This is a convenience for "which model cost what". It is reconciled
   against the flat total only when telemetry is complete. The flat total is
@@ -26,11 +26,10 @@ Provider kinds always carry a non-empty model.
 
 Two independent completeness axes ride alongside:
 
-- `usage.pricingComplete === (usage.unknownCostCallCount === 0)`. Did every
-  call arrive with a usable USD price? A call with no price still counts its
-  tokens, and only bumps `unknownCostCallCount`.
-- `usageComplete`, a SIBLING of `usage` rather than a nested field. Did all
-  telemetry arrive? A killed subprocess or a degraded IPC recovery flips this
+- `usage.unpricedCallCount`. Did every call arrive with a usable USD price?
+  Zero means yes. A call with no price still counts its tokens, and only bumps
+  the count.
+- `usage.complete`. Did all telemetry arrive? A killed subprocess or a degraded IPC recovery flips this
   false, which makes the whole figure a trusted LOWER BOUND.
 
 ## The value layer — `lib/runtime/invocationUsage.ts`
@@ -49,7 +48,7 @@ to get wrong:
 
 - **A price is valid only when `totalCost` is finite-nonnegative AND
   `currency === "USD"`.** Otherwise all six cost fields become zero and
-  `unknownCostCallCount` bumps, even if the named components look fine.
+  `unpricedCallCount` bumps, even if the named components look fine.
   `totalCost: 0` is known-free, so it counts as priced rather than unknown.
 - **Named cost components are best-effort.** Each is copied only if it is a
   finite nonnegative number; absent/negative/NaN/±Infinity → 0. They are never
@@ -70,7 +69,7 @@ to get wrong:
   the global token stats, and every statelog payload all run raw usage through
   it, so they agree on the total by construction.
 - All count arithmetic is checked-add saturating at `Number.MAX_SAFE_INTEGER`;
-  a saturation degrades `usageComplete`.
+  a saturation degrades `usage.complete`.
 
 `InvocationUsageMeter` accumulates deltas. `merge(delta)` returns `true` ONLY on
 the first count-overflow transition to incomplete, so a caller relays exactly
@@ -82,6 +81,34 @@ one upward marker. Attribution buckets live in a nested null-prototype index
 independently-valid field, omits an unusable entry while KEEPING the flat money,
 sets `attributionLost`, and returns `null` only when the whole message is not an
 object. It never silently drops money.
+
+## On the `runNode` result
+
+`runNode`, `respondToInterrupts` and `resumeFromCheckpoint` attach the meter's
+snapshot to the value they return, as `RunNodeResult.usage`, through
+`unwrapWithUsage`. It is a `RunUsage`, the same value the serve adapter puts on
+`RouteResult.usage`, and the only spend figure on the result. A host that runs
+a compiled agent in-process reads its per-kind-and-model spend there. The
+`onAgentEnd` hook's result carries it too.
+
+Cost is part of a run's state: every checkpoint saves the meter's snapshot, and
+every restore sets the meter to what the restored checkpoint saved. So `usage`
+on a result always agrees with `getCost()`, `getTokens()` and
+`getModelCosts()`, and a resumed run's figure includes what it spent before it
+paused. See [Cost is part of a run's state](../runtime/cost-is-state.md) for
+the rule, what the figure means when a program rewinds, and why.
+
+The result also carries `traceId`, the same on every result of one run. A host
+that records a paused result keys it by `traceId` and replaces it when the run
+reports again. Summing results would count the earlier legs twice. The same
+applies to `RouteResult.usage` on the serve path.
+
+A checkpoint comes back from the host, so `resumeFrom` recovers it as untrusted
+input: valid figures are kept, and anything unusable, or a checkpoint with no
+saved usage, makes the total a lower bound (`complete: false`).
+
+A thrown run still throws the original error unchanged and carries no usage on
+this path. Only the serve entry points report usage for a throw.
 
 ## The one sink — `lib/runtime/recordPaidUsage.ts`
 

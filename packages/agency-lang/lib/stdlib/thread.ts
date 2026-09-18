@@ -9,7 +9,8 @@ import type { ReplyAttachmentPart } from "../runtime/replyAttachments.js";
 import { __tryCall, type ResultValue } from "../runtime/result.js";
 import { __call } from "../runtime/call.js";
 import { CostGuard, TimeGuard } from "../runtime/guard.js";
-import { normalizeModelUsage, type ModelUsage } from "../runtime/utils.js";
+import type { ModelUsage } from "../runtime/utils.js";
+import type { UsageEntry, UsageKind } from "../runtime/invocationUsage.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -350,21 +351,32 @@ export async function _threadHasSystemMessage(content: string): Promise<boolean>
   );
 }
 
-export type ModelCost = ModelUsage;
+export type ModelCost = ModelUsage & { kind: UsageKind };
+
+function toModelCost(entry: UsageEntry): ModelCost {
+  return {
+    kind: entry.kind,
+    model: entry.model,
+    inputTokens: entry.tokens.inputTokens,
+    outputTokens: entry.tokens.outputTokens,
+    cachedInputTokens: entry.tokens.cachedInputTokens,
+    cacheCreationInputTokens: entry.tokens.cacheCreationInputTokens,
+    cost: entry.cost.totalCost,
+  };
+}
 
 /**
- * Per-model usage breakdown from the global `__tokenStats.models`
- * accumulator (populated by `updateTokenStats` on every LLM call,
- * including subagent/tool branches that pointer-share it). Returned
- * sorted by cost descending so callers can show the priciest model
- * first. Unlike `_getCost`/`_getTokens`, this reads the process-wide
- * total (not the per-branch accumulator), which is the right scope for
- * a `/cost` summary that attributes spend across every model used.
+ * What the run has spent since it began, one row per kind and model, from the
+ * same meter the run result's `usage.entries` comes from. It covers every
+ * branch, subagent and tool, and a resumed run's earlier spend. Sorted by cost
+ * descending, model name as the tiebreak.
  */
 export async function _getModelCosts(): Promise<ModelCost[]> {
   const { ctx } = getRuntimeContext();
-  const stats = ctx?.globals?.getTokenStats?.();
-  return normalizeModelUsage(stats?.models);
+  const entries: UsageEntry[] = ctx?.invocationUsage?.snapshot().entries ?? [];
+  return entries
+    .map(toModelCost)
+    .sort((first, second) => second.cost - first.cost || first.model.localeCompare(second.model));
 }
 
 /**

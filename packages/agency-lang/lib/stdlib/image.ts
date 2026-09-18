@@ -1,7 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
-import { addTokens } from "../runtime/cost.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
 import { classifySource } from "./thread.js";
 // One image type surface — imported from llmClient.ts, not smoltalk directly.
@@ -62,7 +61,7 @@ export async function _generateImage(
 
   const start = performance.now();
   // Metered dispatch: a rejected image() promise records one unresolved attempt
-  // (so pricingComplete cannot stay true after a post-dispatch throw), mirroring
+  // (so the throw still counts as an unpriced call), mirroring
   // the prompt path. A resolved failure Result is handled below (not metered
   // here — deferred to #809).
   const result = await meteredDispatch(ctx, stack, "image", () =>
@@ -94,7 +93,6 @@ export async function _generateImage(
     cost: gen.costEstimate,
     tokens: gen.tokenUsage,
   });
-  addTokens(gen.tokenUsage?.totalTokens ?? 0);
   if (first) {
     ctx.statelogClient.imageGeneration({
       promptPreview: prompt.slice(0, PROMPT_PREVIEW_MAX),

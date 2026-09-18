@@ -1,9 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
-import { addTokens } from "../runtime/cost.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
-import { projectProviderTokenUsage } from "../runtime/invocationUsage.js";
 // One embedding type surface — imported from llmClient.ts, not smoltalk directly.
 import type { EmbedConfig } from "../runtime/llmClient.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
@@ -112,9 +110,6 @@ export async function _embedTexts(
     cost: res.costEstimate,
     tokens: res.tokenUsage,
   });
-  // Some providers report input tokens with no total. The projection sums
-  // the parts so those calls still count toward getTokens().
-  addTokens(projectProviderTokenUsage(res.tokenUsage, "embedding").usage.totalTokens);
   if (first) {
     ctx.statelogClient.embedCompletion({
       inputPreview: texts[0].slice(0, PROMPT_PREVIEW_MAX),

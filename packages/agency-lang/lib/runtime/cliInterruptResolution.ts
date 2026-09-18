@@ -11,7 +11,7 @@
 import { resolveInterrupts, buildDecider } from "./interruptResolution.js";
 import type { ResumeFn } from "./interruptResolution.js";
 import { hasInterrupts, reportUnhandledInterrupts } from "./interrupts.js";
-import type { RunNodeResult } from "./types.js";
+import type { RunNodeCoreResult } from "./types.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { hasRunPolicyMechanism } from "./runPolicyHandler.js";
 import { AGENCY_RUN_POLICY_INTERACTIVE, AGENCY_RUN_POLICY_INTERACTIVE_ON } from "@/constants.js";
@@ -31,10 +31,10 @@ export type ResolveCliInterruptOptions = {
  * non-zero — the historical no-flag behavior.
  */
 export async function resolveCliInterrupts(
-  result: RunNodeResult<any>,
-  respond: ResumeFn<RunNodeResult<any>>,
+  result: RunNodeCoreResult<any>,
+  respond: ResumeFn<RunNodeCoreResult<any>>,
   options?: ResolveCliInterruptOptions,
-): Promise<RunNodeResult<any>> {
+): Promise<RunNodeCoreResult<any>> {
   if (!hasInterrupts(result.data)) {
     return result;
   }

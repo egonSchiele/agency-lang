@@ -142,7 +142,7 @@ describe("_generateImage", () => {
     );
   });
 
-  it("a rejected image dispatch records one unresolved attempt (pricingComplete goes false)", async () => {
+  it("a rejected image dispatch records one unresolved attempt (the run has an unpriced call)", async () => {
     await withClient(
       async () => {
         throw new Error("provider 500 after dispatch");
@@ -152,9 +152,9 @@ describe("_generateImage", () => {
           /provider 500/,
         );
         await Promise.resolve();
-        const { usage } = meter.snapshot();
-        expect(usage.unknownCostCallCount).toBe(1);
-        expect(usage.pricingComplete).toBe(false);
+        const usage = meter.snapshot();
+        expect(usage.unpricedCallCount).toBe(1);
+        expect(usage.unpricedCallCount).toBeGreaterThan(0);
       },
     );
   });

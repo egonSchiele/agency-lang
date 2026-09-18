@@ -294,6 +294,8 @@ export def getTokens(): number {
 }
 
 export type ModelCost = {
+  // "completion", "image", "embedding", "transcription", "speech" or "manual".
+  kind: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -306,14 +308,15 @@ export type ModelCost = {
   cost: number
 }
 
-/** Unlike the per-branch cost/token accessors, this reads process-wide
- *  totals across every branch, so it attributes spend per model even for
+/** Unlike the per-branch cost/token accessors, this covers every branch of
+ *  the run, so it attributes spend per model even for
  *  subagents and tool calls that run on a different model. */
 export def getModelCosts(): ModelCost[] {
   """
-  Return a per-model breakdown of cumulative LLM usage across the whole
-  process, one entry per model that has been called, sorted by cost
-  descending.
+  Return what the run has spent since it began, one entry per kind
+  and model (completions, images, embeddings, speech), sorted by cost
+  descending. This is the same figure the host reads from the run result's
+  usage entries.
   """
   return _getModelCosts()
 }

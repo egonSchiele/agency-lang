@@ -131,7 +131,7 @@ describe("MemoryManager", () => {
       ),
     ).rejects.toThrow(/no vectors/);
     expect(ctx.stateStack.localCost).toBeCloseTo(0.5);
-    const { usage } = ctx.invocationUsage.snapshot();
+    const usage = ctx.invocationUsage.snapshot();
     expect(usage.cost.totalCost).toBeCloseTo(0.5);
     expect(usage.entries.some((entry) => entry.kind === "embedding")).toBe(true);
   });

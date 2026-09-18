@@ -41,7 +41,7 @@ The three source-location fields identify where in the program the checkpoint wa
 
 Key behavior:
 - **ID generation**: a module-level `globalCheckpointCounter` hands out 0, 1, 2, and so on. The counter is preserved across serialization, so a resumed execution continues from the correct next ID. Note that the counter is module-global, not per-store, so ids stay unique across stores in one process.
-- **Infinite loop protection**: `trackRestore(id)` counts how many times each checkpoint has been restored, and throws `CheckpointError` past `maxRestores` (default 100, configurable in `agency.json`). `runNode()` enforces a second, whole-run cap with the same limit. `trackLocationRestore` counts restores per source location, which backs the `maxRestores` option on `restore()`.
+- **Infinite loop protection**: `trackRestore(id)` counts how many times each checkpoint has been restored, and throws `CheckpointError` past `maxRestores` (default 100, configurable in `agency.json`). Every run loop enforces a second, whole-run cap with the same limit, through `applyRestoreSignal` in `lib/runtime/resumeSetup.ts`. `trackLocationRestore` counts restores per source location, which backs the `maxRestores` option on `restore()`.
 - **Invalidation**: `deleteAfterCheckpoint(id)` removes every checkpoint newer than the one being restored. This prevents restoring to a "future" checkpoint after rolling back.
 - **Rolling checkpoints**: `createRolling` replaces the unpinned checkpoint at the same location, strips `__dbg_` locals, and evicts down to `maxSize`. `createPinned` opts out of both.
 - **Serialization**: `toJSON()` / `fromJSON()` support for interrupt persistence.
@@ -74,11 +74,11 @@ The location comes from the active frame's `callsite` slot, which `Runner.runInS
 
 ### How restore works end-to-end
 
-`restore()` throws a `RestoreSignal` exception. This propagates up through the generated code and is caught by the node runner loop in `runNode()` (`lib/runtime/node.ts`):
+`restore()` throws a `RestoreSignal` exception. This propagates up through the generated code and is caught by the loop that is running the program. There are three: `runNode()` in `lib/runtime/node.ts` for a fresh run, `runResumeLoop` in `lib/runtime/interrupts.ts` for a run resumed after an interrupt or a pause, and `rewindFrom` in `lib/runtime/rewind.ts`. All three hand the signal to `applyRestoreSignal` in `lib/runtime/resumeSetup.ts`, so the whole-run cap below holds in each of them. Keep it that way: a loop that handles `RestoreSignal` on its own has no cap.
 
 ```
 restore() → throws RestoreSignal
-  → caught in runNode() retry loop
+  → caught by the run loop, which calls applyRestoreSignal()
   → bumps execCtx._restoreCount, throws CheckpointError past execCtx.maxRestores
   → emits a checkpointRestored statelog event
   → calls ctx.restoreState(checkpoint)

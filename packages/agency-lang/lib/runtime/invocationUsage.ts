@@ -6,7 +6,7 @@
 // domain observations; `normalizeObservation` turns each into a `NormalizedDelta`;
 // `InvocationUsageMeter` accumulates. Untrusted IPC input goes through
 // `normalizeIpcUsageDelta`, which recovers every independently-valid field and
-// degrades `usageComplete` rather than dropping money.
+// degrades `usage.complete` rather than dropping money.
 
 import type { EmbedResult, ImageGenResult, PromptResult } from "smoltalk";
 import type { RuntimeContext } from "./state/context.js";
@@ -54,19 +54,18 @@ export type UsageEntry = {
   cost: CostBreakdown;
   tokens: TokenBreakdown;
 };
-export type InvocationUsage = {
-  cost: CostBreakdown; // AUTHORITATIVE flat total (billed)
-  tokens: TokenBreakdown; // AUTHORITATIVE flat total
-  unknownCostCallCount: number;
-  pricingComplete: boolean; // === (unknownCostCallCount === 0)
-  entries: UsageEntry[]; // best-effort attribution, one per (kind, model)
-};
-export type InvocationUsageSnapshot = {
-  usage: InvocationUsage;
-  /** ⚠️ SIBLING of `usage`. When false, the whole figure is a trusted LOWER
-   *  BOUND (abnormal subprocess termination, or recovered-but-degraded IPC).
-   *  Distinct axis from `usage.pricingComplete` (price availability). */
-  usageComplete: boolean;
+export type RunUsage = {
+  /** Authoritative total. The entries are best-effort attribution. */
+  cost: CostBreakdown;
+  tokens: TokenBreakdown;
+  /** One per (kind, model). */
+  entries: UsageEntry[];
+  /** False when this figure is a trusted LOWER BOUND: a subprocess died, or a
+   *  delta arrived with its attribution lost. Separate from pricing: a
+   *  complete figure can still contain unpriced calls. */
+  complete: boolean;
+  /** Calls dispatched to a provider that never resolved to a priced result. */
+  unpricedCallCount: number;
 };
 export type UsageObservation =
   | {
@@ -83,7 +82,7 @@ export type NormalizedDelta = {
   entry?: UsageEntry;
   cost: CostBreakdown;
   tokens: TokenBreakdown;
-  unknownCostCallCount: number;
+  unpricedCallCount: number;
   attributionLost: boolean;
 };
 
@@ -91,8 +90,8 @@ export type NormalizedDelta = {
 // stamped with). It rides the outcome so the serve adapter can echo it on the
 // RouteResult without re-deriving identity.
 export type ServedInvocationOutcome<T> =
-  | ({ status: "returned"; value: T; traceId: string } & InvocationUsageSnapshot)
-  | ({ status: "threw"; error: unknown; traceId: string } & InvocationUsageSnapshot);
+  | { status: "returned"; value: T; traceId: string; usage: RunUsage }
+  | { status: "threw"; error: unknown; traceId: string; usage: RunUsage };
 
 export type InvocationAccountingTarget = {
   ctx: RuntimeContext<GraphState>;
@@ -111,7 +110,7 @@ export function usageReconcileTolerance(total: number): number {
 const MAX_COUNT = Number.MAX_SAFE_INTEGER;
 
 /** Add two counts without ever performing the unsafe addition first: saturate at
- *  MAX_COUNT and report it, so the caller can degrade `usageComplete`. */
+ *  MAX_COUNT and report it, so the caller can degrade `complete`. */
 function checkedAddCount(left: number, right: number): { value: number; saturated: boolean } {
   if (right > MAX_COUNT - left) {
     return { value: MAX_COUNT, saturated: true };
@@ -348,13 +347,13 @@ function anyToken(tokens: TokenBreakdown): boolean {
 
 /** Turn a trusted domain observation into a normalized delta (the four
  *  provider outcomes + manual). `attributionLost` is set only by token
- *  malformation/saturation — never by pricing (which uses unknownCostCallCount). */
+ *  malformation/saturation — never by pricing (which uses unpricedCallCount). */
 export function normalizeObservation(observation: UsageObservation): NormalizedDelta {
   if (observation.type === "attempt") {
     return {
       cost: zeroCost(),
       tokens: zeroTokens(),
-      unknownCostCallCount: 1,
+      unpricedCallCount: 1,
       attributionLost: false,
     };
   }
@@ -366,7 +365,7 @@ export function normalizeObservation(observation: UsageObservation): NormalizedD
       cost: copyCost(cost),
       tokens: zeroTokens(),
     };
-    return { entry, cost, tokens: zeroTokens(), unknownCostCallCount: 0, attributionLost: false };
+    return { entry, cost, tokens: zeroTokens(), unpricedCallCount: 0, attributionLost: false };
   }
   const model = resolveCompletionModel(observation.reportedModel, observation.configuredModel);
   const { cost, priced } = buildCost(observation.cost);
@@ -377,7 +376,7 @@ export function normalizeObservation(observation: UsageObservation): NormalizedD
     cost: copyCost(cost),
     tokens: copyTokens(tokens),
   };
-  return { entry, cost, tokens, unknownCostCallCount: priced ? 0 : 1, attributionLost: malformed };
+  return { entry, cost, tokens, unpricedCallCount: priced ? 0 : 1, attributionLost: malformed };
 }
 
 function isUsageKind(value: unknown): value is UsageKind {
@@ -387,7 +386,7 @@ function isUsageKind(value: unknown): value is UsageKind {
 /** Recover a normalized delta from UNTRUSTED IPC input. Never drops
  *  independently-valid money; a message carrying real value it cannot fully
  *  attribute preserves the authoritative totals, omits the entry, and sets
- *  `attributionLost` (which degrades `usageComplete`). Returns null only when the
+ *  `attributionLost` (which degrades `complete`). Returns null only when the
  *  whole message is unusable (not an object). */
 export function normalizeIpcUsageDelta(raw: unknown): NormalizedDelta | null {
   if (raw === null || typeof raw !== "object") {
@@ -400,31 +399,31 @@ export function normalizeIpcUsageDelta(raw: unknown): NormalizedDelta | null {
   const { tokens, malformed } = buildIpcTokens(obj.tokens);
   if (malformed) attributionLost = true;
 
-  let unknownCostCallCount = 0;
-  if (isSafeCount(obj.unknownCostCallCount)) {
-    unknownCostCallCount = obj.unknownCostCallCount;
+  let unpricedCallCount = 0;
+  if (isSafeCount(obj.unpricedCallCount)) {
+    unpricedCallCount = obj.unpricedCallCount;
   } else {
     attributionLost = true; // absent or present-but-malformed
   }
   if (!priced) {
-    const bumped = checkedAddCount(unknownCostCallCount, 1);
-    unknownCostCallCount = bumped.value;
+    const bumped = checkedAddCount(unpricedCallCount, 1);
+    unpricedCallCount = bumped.value;
     if (bumped.saturated) attributionLost = true;
   }
 
   const recovery = recoverIpcEntry(obj.entry);
   if (recovery.status === "invalid") {
-    return { cost, tokens, unknownCostCallCount, attributionLost: true };
+    return { cost, tokens, unpricedCallCount, attributionLost: true };
   }
   if (recovery.status === "absent") {
     // A well-formed provider/manual delta always carries its entry; an entry-less
     // delta is legitimate ONLY as an all-zero unresolved attempt. Measurable
     // money/tokens with no entry means attribution was lost in transit.
     if (cost.totalCost > 0 || anyToken(tokens)) attributionLost = true;
-    return { cost, tokens, unknownCostCallCount, attributionLost };
+    return { cost, tokens, unpricedCallCount, attributionLost };
   }
   if (recovery.malformed) attributionLost = true;
-  return { entry: recovery.entry, cost, tokens, unknownCostCallCount, attributionLost };
+  return { entry: recovery.entry, cost, tokens, unpricedCallCount, attributionLost };
 }
 
 type IpcEntryRecovery =
@@ -464,16 +463,8 @@ function recoverIpcEntry(raw: unknown): IpcEntryRecovery {
   };
 }
 
-/** A fresh, non-serialized accumulator for one invocation/leg. Buckets attribution
- *  by (kind, model) via a nested null-prototype index into `entries` (first-seen
- *  order); keeps authoritative call-order flat totals with checked-add saturation. */
-export class InvocationUsageMeter {
-  private cost: CostBreakdown = zeroCost();
-  private tokens: TokenBreakdown = zeroTokens();
-  private unknownCostCallCount = 0;
-  private usageComplete = true;
-  private entries: UsageEntry[] = [];
-  private index: Record<UsageKind, Record<string, number>> = {
+function emptyIndex(): Record<UsageKind, Record<string, number>> {
+  return {
     completion: Object.create(null),
     embedding: Object.create(null),
     image: Object.create(null),
@@ -481,6 +472,71 @@ export class InvocationUsageMeter {
     speech: Object.create(null),
     manual: Object.create(null),
   };
+}
+
+/** The accumulator for one run. A fresh run starts it at zero, and every
+ *  restore sets it to what the restored checkpoint saved (`resumeFrom`). Buckets attribution
+ *  by (kind, model) via a nested null-prototype index into `entries` (first-seen
+ *  order); keeps authoritative call-order flat totals with checked-add saturation. */
+export class InvocationUsageMeter {
+  private cost: CostBreakdown = zeroCost();
+  private tokens: TokenBreakdown = zeroTokens();
+  private unpricedCallCount = 0;
+  private complete = true;
+  private entries: UsageEntry[] = [];
+  private index: Record<UsageKind, Record<string, number>> = emptyIndex();
+
+  /** Set the meter to the usage a checkpoint saved. Cost is part of a run's
+   *  state: it continues across a resume and goes back with a `restore()`, so
+   *  the figure never depends on whether the run was resumed or rewound, and it
+   *  always agrees with `getCost()`. Spend on a path that was rewound away is
+   *  not in it; a program that wants that total reads the cost before it
+   *  rewinds. The checkpoint comes back from the host, so it is recovered like
+   *  any other untrusted input: every valid figure is kept and anything
+   *  unusable makes the total a lower bound. A checkpoint with no saved usage
+   *  says nothing about what the run spent before it, which is a lower bound
+   *  too. */
+  resumeFrom(saved: unknown): void {
+    this.cost = zeroCost();
+    this.tokens = zeroTokens();
+    this.unpricedCallCount = 0;
+    this.entries = [];
+    this.index = emptyIndex();
+    if (saved === null || typeof saved !== "object") {
+      this.complete = false;
+      return;
+    }
+    const obj = saved as Record<string, unknown>;
+    const { cost, priced } = buildCost(obj.cost);
+    const { tokens, malformed } = buildIpcTokens(obj.tokens);
+    this.cost = cost;
+    this.tokens = tokens;
+    const countIsValid = isSafeCount(obj.unpricedCallCount);
+    this.unpricedCallCount = isSafeCount(obj.unpricedCallCount) ? obj.unpricedCallCount : 0;
+    const entriesRecovered = this.resumeEntries(obj.entries);
+    this.complete =
+      obj.complete === true && priced && !malformed && countIsValid && entriesRecovered;
+  }
+
+  /** True when every saved entry was recovered intact. */
+  private resumeEntries(saved: unknown): boolean {
+    if (!Array.isArray(saved)) {
+      return false;
+    }
+    let intact = true;
+    for (const raw of saved) {
+      const recovery = recoverIpcEntry(raw);
+      if (recovery.status !== "ok") {
+        intact = false;
+        continue;
+      }
+      const target = this.entryFor(recovery.entry);
+      this.addCostInto(target.cost, recovery.entry.cost);
+      this.addTokensInto(target.tokens, recovery.entry.tokens);
+      intact = intact && !recovery.malformed;
+    }
+    return intact;
+  }
 
   /** Accumulate one delta. Returns true only when THIS merge newly makes usage
    *  incomplete (via a count-overflow transition). */
@@ -488,8 +544,8 @@ export class InvocationUsageMeter {
     let saturated = false;
     this.addCostInto(this.cost, delta.cost);
     saturated = this.addTokensInto(this.tokens, delta.tokens) || saturated;
-    const bumped = checkedAddCount(this.unknownCostCallCount, delta.unknownCostCallCount);
-    this.unknownCostCallCount = bumped.value;
+    const bumped = checkedAddCount(this.unpricedCallCount, delta.unpricedCallCount);
+    this.unpricedCallCount = bumped.value;
     saturated = saturated || bumped.saturated;
 
     if (delta.entry !== undefined) {
@@ -546,30 +602,32 @@ export class InvocationUsageMeter {
    *  true only on the first complete → incomplete transition, so a caller relays
    *  a single upward marker. */
   markIncomplete(): boolean {
-    if (!this.usageComplete) {
+    if (!this.complete) {
       return false;
     }
-    this.usageComplete = false;
+    this.complete = false;
     return true;
   }
 
-  snapshot(): InvocationUsageSnapshot {
+  snapshot(): RunUsage {
     return {
-      usage: {
-        cost: copyCost(this.cost),
-        tokens: copyTokens(this.tokens),
-        unknownCostCallCount: this.unknownCostCallCount,
-        pricingComplete: this.unknownCostCallCount === 0,
-        entries: this.entries.map((entry) => ({
-          kind: entry.kind,
-          model: entry.model,
-          cost: copyCost(entry.cost),
-          tokens: copyTokens(entry.tokens),
-        })),
-      },
-      usageComplete: this.usageComplete,
+      cost: copyCost(this.cost),
+      tokens: copyTokens(this.tokens),
+      entries: this.entries.map((entry) => ({
+        kind: entry.kind,
+        model: entry.model,
+        cost: copyCost(entry.cost),
+        tokens: copyTokens(entry.tokens),
+      })),
+      complete: this.complete,
+      unpricedCallCount: this.unpricedCallCount,
     };
   }
+}
+
+/** A run's totals in the shape statelog's `agentEnd` event takes. */
+export function tokenStatsOf(usage: RunUsage): { usage: TokenBreakdown; cost: CostBreakdown } {
+  return { usage: usage.tokens, cost: usage.cost };
 }
 
 /** Take a run core's outcome back to a raw value-or-throw, preserving the exact
@@ -579,4 +637,14 @@ export function unwrapServedInvocationOutcome<T>(outcome: ServedInvocationOutcom
     return outcome.value;
   }
   throw outcome.error;
+}
+
+/** Unwrap like `unwrapServedInvocationOutcome`, and put the run's usage and
+ *  trace id on the returned value. A thrown outcome still throws the exact original error; its
+ *  usage does not travel with it. */
+export function unwrapWithUsage<T extends object>(
+  outcome: ServedInvocationOutcome<T>,
+): T & { usage: RunUsage; traceId: string } {
+  const value: T = unwrapServedInvocationOutcome(outcome);
+  return { ...value, usage: outcome.usage, traceId: outcome.traceId };
 }

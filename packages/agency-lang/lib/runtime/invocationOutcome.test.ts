@@ -35,8 +35,8 @@ describe("runExportedFunctionForServe outcomes", () => {
     });
     expect(outcome.status).toBe("returned");
     if (outcome.status === "returned") expect(outcome.value).toEqual(value);
-    expect(outcome.usage).toMatchObject({ cost: { totalCost: 0 }, pricingComplete: true });
-    expect(outcome.usageComplete).toBe(true);
+    expect(outcome.usage).toMatchObject({ cost: { totalCost: 0 }, unpricedCallCount: 0 });
+    expect(outcome.usage.complete).toBe(true);
   });
 
   it.each([
@@ -200,7 +200,7 @@ describe("finishServedInvocation cleanup semantics", () => {
             cacheCreationInputTokens: 0,
             totalTokens: 0,
           },
-          unknownCostCallCount: 0,
+          unpricedCallCount: 0,
           attributionLost: false,
         });
       },

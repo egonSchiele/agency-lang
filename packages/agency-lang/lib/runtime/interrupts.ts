@@ -22,7 +22,7 @@ import { isAborted } from "./abortedResult.js";
 import { throwIfNodeResultAborted } from "./abortBoundary.js";
 import { mergeFor, mergeForIpc } from "./effectMerge.js";
 import {
-  applyRestoreOverrides,
+  applyRestoreSignal,
   restoreForResume,
   type ResumeMetadata,
   type ResumeOverrides,
@@ -750,16 +750,7 @@ async function runResumeLoop(
         return await pausedReturnObject(execCtx, e);
       }
       if (e instanceof RestoreSignal) {
-        const cp = e.checkpoint;
-        execCtx._restoreCount++;
-        execCtx.statelogClient.checkpointRestored({
-          checkpointId: cp.id,
-          restoreCount: execCtx._restoreCount,
-        });
-        execCtx.restoreState(cp);
-        applyRestoreOverrides(execCtx, cp, e.options);
-        nodeName = cp.nodeId;
-        execCtx.stateStack.nodesTraversed = [cp.nodeId];
+        nodeName = applyRestoreSignal(execCtx, e);
         continue;
       }
       throw e;
@@ -774,7 +765,8 @@ export type ResumeCliFromCheckpointArgs = {
 };
 
 /** Resume a checkpoint as a complete CLI run, including lifecycle events and
- * trace finalization. */
+ * trace finalization. Like `runNode`, the result carries the run's `usage`
+ * and `traceId`. */
 export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs): Promise<any> {
   const resolved = resolveInvocation({
     kind: "fresh",
@@ -784,6 +776,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
   const execCtx = await args.ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
+  let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     const checkpoint = await restoreForResume(execCtx, {
       checkpoint: args.checkpoint,
@@ -791,26 +784,35 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
     });
     agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
     execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
-    return await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
+    const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
+    outcome = { status: "returned", value };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     execCtx.statelogClient.error({ errorType: "runtimeError", message: errorMessage });
     execCtx.statelogClient.agentEnd({
       entryNode: args.checkpoint.nodeId,
       timeTaken: performance.now() - agentStartTime,
+      tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
     });
-    await execCtx.closeTraceWriter();
-    throw error;
+    outcome = { status: "threw", error };
   } finally {
     if (agentRunSpanId !== undefined) {
       execCtx.statelogClient.endSpan(agentRunSpanId);
     }
+  }
+  const failed = outcome.status === "threw";
+  const served = await finishServedInvocation(execCtx, outcome, async () => {
     try {
+      // A run that returned has already closed or paused its trace.
+      if (failed) {
+        await execCtx.closeTraceWriter();
+      }
       await execCtx.statelogClient.flush();
     } finally {
       execCtx.cleanup();
     }
-  }
+  });
+  return unwrapWithUsage(served);
 }
 
 type RespondToInterruptsArgs = {

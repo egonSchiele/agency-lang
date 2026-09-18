@@ -6,10 +6,10 @@ import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { AgencyFunction } from "./agencyFunction.js";
-import { CheckpointError, PauseSignal, RestoreSignal } from "./errors.js";
+import { PauseSignal, RestoreSignal } from "./errors.js";
 import { withExternalSignals } from "./externalSignals.js";
 import { pausedReturnObject } from "./pause.js";
-import { applyRestoreOverrides } from "./resumeSetup.js";
+import { applyRestoreSignal } from "./resumeSetup.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { __initAllRegistered, __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
@@ -532,28 +532,9 @@ async function runNodeCore({
             return { status: "returned" as const, value: await pausedReturnObject(execCtx, e) };
           }
           if (e instanceof RestoreSignal) {
-            execCtx._restoreCount++;
-            if (execCtx._restoreCount > execCtx.maxRestores) {
-              throw new CheckpointError(
-                `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,
-              );
-            }
-            const cp = e.checkpoint;
-            execCtx.statelogClient.checkpointRestored({
-              checkpointId: cp.id,
-              restoreCount: execCtx._restoreCount,
-              maxRestores: execCtx.maxRestores,
-              overrides: {
-                args: !!e.options?.args,
-                globals: !!e.options?.globals,
-              },
-            });
-            execCtx.restoreState(cp);
-            applyRestoreOverrides(execCtx, cp, e.options);
-            nodeName = cp.nodeId;
+            nodeName = applyRestoreSignal(execCtx, e);
             data = {};
             isResume = true;
-            execCtx.stateStack.nodesTraversed = [cp.nodeId];
             // Reset ThreadStore for the restored execution
             threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
             continue;

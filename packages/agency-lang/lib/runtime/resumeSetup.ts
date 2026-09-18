@@ -3,6 +3,7 @@ import { runInBootstrapFrame } from "./asyncContext.js";
 import { signCheckpoint } from "./checkpointChecksum.js";
 import { __initAllRegisteredCallbacks } from "./crossModuleInitRegistry.js";
 import type { AgencyCallbacks } from "./hooks.js";
+import { CheckpointError, type RestoreSignal } from "./errors.js";
 import { ensureConfiguredLocalProvider } from "./localProvider.js";
 import type { Policy } from "./policy.js";
 import { loadProviderModules } from "./providerModules.js";
@@ -93,6 +94,37 @@ export function applyRestoreOverrides(
       target.globals.set(checkpoint.moduleId, name, value);
     }
   }
+}
+
+/** React to a `restore(cp)` the program made mid-run: count it against
+ *  `maxRestores`, put the checkpoint's state back, and return the node to run
+ *  next. Every run loop goes through here, so the limit holds on a fresh run,
+ *  a resumed run, and a rewind alike. The limit matters because a restore also
+ *  rewinds what a cost guard has spent, so a guard cannot stop a restore loop. */
+export function applyRestoreSignal(
+  execCtx: RuntimeContext<GraphState>,
+  signal: RestoreSignal,
+): string {
+  execCtx._restoreCount++;
+  if (execCtx._restoreCount > execCtx.maxRestores) {
+    throw new CheckpointError(
+      `Exceeded maximum number of restores (${execCtx.maxRestores}). Possible infinite loop.`,
+    );
+  }
+  const cp = signal.checkpoint;
+  execCtx.statelogClient.checkpointRestored({
+    checkpointId: cp.id,
+    restoreCount: execCtx._restoreCount,
+    maxRestores: execCtx.maxRestores,
+    overrides: {
+      args: !!signal.options?.args,
+      globals: !!signal.options?.globals,
+    },
+  });
+  execCtx.restoreState(cp);
+  applyRestoreOverrides(execCtx, cp, signal.options);
+  execCtx.stateStack.nodesTraversed = [cp.nodeId];
+  return cp.nodeId;
 }
 
 export async function restoreForResume(

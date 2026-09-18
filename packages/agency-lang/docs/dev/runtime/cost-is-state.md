@@ -174,3 +174,9 @@ keep correct.
 A loop that rewinds to a checkpoint taken inside a `guard(cost: ...)` also
 rewinds that guard's `spent` counter. `maxRestores` bounds such a loop. The
 dollar limit does not.
+
+That makes the restore cap the only thing standing between such a loop and an
+unbounded bill, so it has to hold everywhere a program can restore: a fresh
+run, a run resumed after an interrupt, and a rewind. All three loops count
+restores through `applyRestoreSignal` in `lib/runtime/resumeSetup.ts`. The
+test is `tests/agency-js/restore-loop-after-resume`.

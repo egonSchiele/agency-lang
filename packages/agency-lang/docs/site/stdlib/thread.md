@@ -65,6 +65,8 @@ export type MessageAttachment =
 
 ```ts
 export type ModelCost = {
+  // "completion", "image", "embedding", "transcription", "speech" or "manual".
+  kind: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -100,7 +102,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L324))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L327))
 
 ### ThreadMessage
 
@@ -111,7 +113,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L347))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L350))
 
 ### ThreadInfo
 
@@ -127,7 +129,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L352))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L355))
 
 ## Effects
 
@@ -451,17 +453,18 @@ Return the cumulative token count for the current execution branch.
 getModelCosts(): ModelCost[]
 ```
 
-Return a per-model breakdown of cumulative LLM usage across the whole
-  process, one entry per model that has been called, sorted by cost
-  descending.
+Return what the run has spent since it began, one entry per kind
+  and model (completions, images, embeddings, speech), sorted by cost
+  descending. This is the same figure the host reads from the run result's
+  usage entries.
 
-Unlike the per-branch cost/token accessors, this reads process-wide
- *  totals across every branch, so it attributes spend per model even for
+Unlike the per-branch cost/token accessors, this covers every branch of
+ *  the run, so it attributes spend per model even for
  *  subagents and tool calls that run on a different model.
 
 **Returns:** `ModelCost[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L312))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L314))
 
 ### listThreads
 
@@ -494,7 +497,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L424))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L427))
 
 ### sessionThreadId
 
@@ -513,7 +516,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L477))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L480))
 
 ### currentThreadId
 
@@ -528,7 +531,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L485))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L488))
 
 ### getThread
 
@@ -560,4 +563,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L495))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L498))

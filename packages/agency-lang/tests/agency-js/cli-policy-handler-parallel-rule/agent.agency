@@ -1,0 +1,31 @@
+import { cliPolicyHandler } from "std::policy"
+
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  return "one"
+}
+
+def deployTwo(): string {
+  interrupt myapp::deploy("two", { env: "prod" })
+  return "two"
+}
+
+def deployThree(): string {
+  interrupt myapp::deploy("three", { env: "prod" })
+  return "three"
+}
+
+// The handler approves its own reads and writes of the policy file
+// (`_internalIo`), so that the `with approve` on them takes effect. That
+// flag is one module-level boolean, and these three branches are in the
+// handler at the same time while the first one loads the file. A branch
+// that landed inside that window would be approved without any check, so
+// the policy here rejects every myapp::deploy and the test counts three
+// rejections.
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, deployTwo, deployThree] })
+  } with handler
+  return "pass"
+}

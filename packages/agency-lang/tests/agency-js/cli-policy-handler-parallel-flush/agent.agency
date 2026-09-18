@@ -1,0 +1,34 @@
+import { cliPolicyHandler } from "std::policy"
+
+def deployOne(): string {
+  interrupt myapp::deploy("one", { env: "prod" })
+  return "one"
+}
+
+def otherOne(): string {
+  interrupt myapp::other("one", { env: "prod" })
+  return "one"
+}
+
+def otherTwo(): string {
+  interrupt myapp::other("two", { env: "prod" })
+  return "two"
+}
+
+def otherThree(): string {
+  interrupt myapp::other("three", { env: "prod" })
+  return "three"
+}
+
+// Round one answers "approve always" for myapp::deploy, which leaves a
+// rule pending a write. Round two's first handler flushes that write,
+// and while it is in flight its two siblings enter the handler. The
+// policy file rejects every myapp::other, so any that slips through the
+// `_internalIo` window is approved instead.
+node main(args: { policyFile: string }): string {
+  const handler = cliPolicyHandler(file: args.policyFile)
+  handle {
+    llm("deploy everything", { tools: [deployOne, otherOne, otherTwo, otherThree] })
+  } with handler
+  return "pass"
+}

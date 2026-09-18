@@ -214,7 +214,7 @@ let _interactive: boolean = true
 // `_policy == null` default-reject would veto the `with approve` on the
 // file op (any handler can veto an interrupt), the load/save would fail,
 // and every real interrupt would fall through to prompting.
-let _internalIo: boolean = false
+let _internalIo: string = ""
 
 /**
  * Evaluate a policy against a single interrupt. Returns the result
@@ -525,6 +525,51 @@ export def writePolicyFile(
   return try _writePolicyFile(path, policy, allowedPaths)
 }
 
+// The one interrupt the handler approves without consulting the policy:
+// its own read or write of the policy file. `_internalIo` names the
+// operation that is open, and is "" the rest of the time.
+//
+// This is not the guard against the handler hearing its own raise. A
+// handler never hears that: the chain walk skips an entry while that
+// entry is executing, so the read inside `maybeLoadPolicy` does not come
+// back here at all. What this covers is a SECOND entry of this same
+// handler in the chain, which does hear it, shares these module globals,
+// and whose no-match propagate or `_policy == null` default would veto
+// the read and leave every later interrupt prompting.
+//
+// The other entry is not the only thing that reaches the handler while
+// the flag is set. The file operation is awaited, and other execution
+// paths — parallel tool calls, a fork — have their own entries and are
+// not excluded. So the flag alone cannot be the answer: a bare
+// `if (_internalIo) { return approve() }` would approve anything any
+// branch raised for the length of a file read, with no check at all. It
+// has to be this operation: the effect that is open, and the policy
+// file's own name.
+//
+// The name and not the directory, because the directory the interrupt
+// reports is the one the containment layer resolved, the realpath, which
+// on macOS is not the string the caller passed (/tmp is /private/tmp),
+// and Agency exposes no realpath to compare with. A read of a same-named
+// file in another directory, from another branch, inside the window, is
+// what is left.
+//
+// Only the read half matches anything today. `_writePolicyFile`
+// (`lib/stdlib/policy.ts`) calls `writeText` straight, so a flush raises
+// no `std::write` for this to approve. The flag is still set around it,
+// because the window is real either way — the containment check it
+// awaits is time another branch can arrive in — and because a flush that
+// ever goes through Agency's own `write` should find the guard already
+// here rather than need it added.
+def isOwnPolicyIo(intr: any): boolean {
+  if (_internalIo == "" || intr.effect != _internalIo) {
+    return false
+  }
+  if (intr.data == null) {
+    return false
+  }
+  return intr.data.filename == basename(globalCliPolicyOpts.file)
+}
+
 // Lazy-load the on-disk policy on first handler invocation. Uses
 // flip-flag-first so the std::read interrupt's chain re-entry sees
 // `_policyLoaded == true` and returns without recursing. Missing or
@@ -533,9 +578,9 @@ export def writePolicyFile(
 def maybeLoadPolicy() {
   if (!_policyLoaded) {
     _policyLoaded = true
-    _internalIo = true
+    _internalIo = "std::read"
     const loaded = parsePolicyFile(globalCliPolicyOpts.file) with approve
-    _internalIo = false
+    _internalIo = ""
     if (isFailure(loaded)) {
       // A missing file is a normal first run. Anything else means the
       // user's saved decisions are NOT in effect — say so, or a
@@ -563,9 +608,9 @@ def maybeFlush() {
     // sets `_policy` — but if that invariant ever breaks, skip the write
     // rather than clobber the policy file with `null`.
     if (_policy != null) {
-      _internalIo = true
+      _internalIo = "std::write"
       writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      _internalIo = false
+      _internalIo = ""
     }
   }
 }
@@ -586,9 +631,9 @@ export def flushPolicy() {
   if (_pendingSave) {
     _pendingSave = false
     if (_policy != null) {
-      _internalIo = true
+      _internalIo = "std::write"
       writePolicyFile(globalCliPolicyOpts.file, _policy, []) with approve
-      _internalIo = false
+      _internalIo = ""
     }
   }
 }
@@ -619,7 +664,10 @@ def describeScopedMatch(intr: any): string {
  */
 type AskUserResult = {
   action: Decision;
-  reason?: string
+  reason?: string;
+  /** Set when a rule decided this interrupt while it waited for the
+    terminal, so no one was asked. Holds that rule's decision. */
+  rule?: any
 }
 
 // Render a `std::edit` interrupt's payload as a colored diff. `payload` is
@@ -768,9 +816,7 @@ export def askUserChoices(intr: any): ChoiceItem[] {
 // type a rejection reason instead of picking a key. That single
 // keystroke flow replaces the old two-step "(r), then type reason".
 def askUser(intr: any): AskUserResult {
-  // `!= null` compiles to `!== null` (Agency strict equality), so an
-  // undefined entry would slip through. Use the explicit existence check.
-  const title = intr.message
+  const title = "${color.bold(intr.effect)}  ${intr.message}"
   const body = prettyPrintInterruptData(intr.data, intr.effect)
 
   const items = askUserChoices(intr)
@@ -779,9 +825,67 @@ def askUser(intr: any): AskUserResult {
   // cancellation that unwinds the turn back to the REPL prompt) instead of
   // re-prompting. The "r" option still lets you reject a single action
   // (and optionally tell the agent what to do instead).
-  const answer = withLock("std::tty") {
-    return interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
+  const answer: AskUserResult = withLock("std::tty") {
+    // Checked again here, at this interrupt's turn at the terminal: the
+    // interrupt ahead of it may have saved an "always" rule since its
+    // first check ran. See approval-policies.md.
+    //
+    // Not for a raise that expects a value. `askUserChoices` withholds
+    // the "always" answers from those for the same reason: each raise
+    // wants its own answer, and approving one from an effect-wide rule
+    // hands the raise site an empty one. A sibling in this round can
+    // create such a rule, which is what makes this check different from
+    // the one in `_handler`.
+    const rules = _policy
+    if (rules != null && intr.expectsValue != true) {
+      const decided = checkPolicy(rules, intr)
+      if (decided.type == "approve" || decided.type == "reject") {
+        return {
+          action: decided.type,
+          reason: null,
+          rule: decided
+        }
+      }
+    }
+    const choice = interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
+    const result = choiceResult(choice)
+    // Recorded before the lock is released, so the interrupt waiting
+    // behind this one finds the rule the moment its turn comes. Recording
+    // it after would lose the race to that interrupt's check.
+    recordAnswer(intr, result)
+    return result
   }
+  return answer
+}
+
+// An "always" answer becomes a rule now, in memory; maybeFlush writes it.
+//
+// Nothing is recorded for a raise that expects a value. `askUserChoices`
+// offers it only "once" answers, but the prompt takes free text too, so
+// a user who types "aa" at one reaches this with an "always" action the
+// menu never offered. Saving an effect-wide rule from that would answer
+// every later raise of the effect, each of which wants its own answer.
+def recordAnswer(intr: any, answer: AskUserResult) {
+  const rules = _policy
+  if (rules == null || intr.expectsValue == true) {
+    return
+  }
+  if (answer.action == "approve-always") {
+    _policy = recordRule(rules, intr.effect, "approve")
+    _pendingSave = true
+  }
+  if (answer.action == "approve-always-here") {
+    _policy = recordScopedRule(rules, intr, globalCliPolicyOpts.fields)
+    _pendingSave = true
+  }
+  if (answer.action == "reject-always") {
+    _policy = recordRule(rules, intr.effect, "reject")
+    _pendingSave = true
+  }
+}
+
+// The user's keystroke, or their typed reason, as a decision.
+def choiceResult(answer: string): AskUserResult {
   return match(answer) {
     "a" => ({
       action: "approve",
@@ -849,14 +953,9 @@ def oneLineData(data: any): string {
  * to construct one.
  */
 def _handler(intr: any): any {
-  // Re-entrancy guard: while we read/write our OWN policy file (inside
-  // maybeLoadPolicy / maybeFlush below), that file op raises a nested
-  // std::read / std::write that re-enters this handler. Approve it
-  // directly so the file op's own `with approve` actually takes effect.
-  // Without this, the `_policy == null` default-reject (or a no-match
-  // propagate) would veto it and the load/save would silently fail,
-  // making every real interrupt prompt. See `_internalIo`.
-  if (_internalIo) {
+  // Re-entrancy: the handler's own read or write of the policy file
+  // re-enters it. See `isOwnPolicyIo`.
+  if (isOwnPolicyIo(intr)) {
     return approve()
   }
 
@@ -882,51 +981,61 @@ def _handler(intr: any): any {
     return reject()
   }
 
+  // A rule may reject anything. A rule may not approve a raise that
+  // expects a value: `approve()` carries no value, so the raise site
+  // reads it as a bare yes, and for `std::toolbox::review` that accepts a
+  // draft nobody looked at. The menu withholds the "always" answers from
+  // these for the same reason, and an effect-wide rule is reachable here
+  // one round after a plain raise of the same effect was answered
+  // "approve always". Such an interrupt goes on to ask.
   const decision = checkPolicy(_policy, intr)
-  if (decision.type == "approve") {
-    // Auto-approved: the user never sees the approval prompt (which would
-    // render an edit as a diff), so surface an edit's diff here. Other
-    // effects auto-approve silently as before.
-    if (intr.effect == "std::edit") {
-      print(renderEditDiff(intr.data))
-    }
-    return approve()
-  }
   if (decision.type == "reject") {
-    // A rule rejected without asking. Say so on the terminal: a silent
-    // rejection looks, from the outside, like the agent changing its mind.
-    if (_interactive) {
-      print(color.dim("⏺ Policy rejected ${intr.effect}${oneLineData(intr.data)}"))
-    }
-    // The rule's rejectMessage, when set: the model reads it as the
-    // rejection reason and can steer its next attempt.
-    return reject(decision.message)
+    return applyRule(intr, decision)
+  }
+  const ruleApproves = decision.type == "approve"
+  if (ruleApproves && intr.expectsValue != true) {
+    return applyRule(intr, decision)
   }
 
-  // No rule decided, and no user is at a terminal to ask: reject with a
-  // reason. The reason becomes the failing call's error, so an LLM whose
-  // tool raised this effect reads why and can take another approach
-  // instead of the process dying on a prompt nobody can answer.
+  // Nobody is at a terminal to ask. Reject with a reason: it becomes the
+  // failing call's error, so an LLM whose tool raised this effect reads
+  // why and can take another approach instead of the process dying on a
+  // prompt nobody can answer.
+  //
+  // A rule that approves this effect but could not be used, because the
+  // raise asks for a value, gets its own reason. "No rule for this
+  // effect" is false in the one case that produces it, and sends whoever
+  // reads it looking for a policy bug. `--policy approve-all` is the
+  // usual way to arrive here.
   if (!_interactive) {
+    if (ruleApproves) {
+      return reject(
+        "\"${intr.effect}\" was rejected automatically: a policy rule approves this effect, but this raise asks for a value and an approval from a rule carries none, so only a person can answer it. This is a non-interactive run. Take an approach that does not need an answer, or re-run interactively.",
+      )
+    }
     return reject(
       "\"${intr.effect}\" was rejected automatically: this is a non-interactive run and the approval policy has no rule for this effect, so there is no one to ask. Take an approach that does not need this permission, or the user must re-run with a policy that decides \"${intr.effect}\".",
     )
   }
 
   const answer = askUser(intr)
-  if (answer.action == "approve-always") {
-    _policy = recordRule(_policy, intr.effect, "approve")
-    _pendingSave = true
-    return approve()
+  if (answer.rule != null) {
+    // A rule saved by the interrupt ahead of this one decided it while it
+    // waited, so say why the prompt did not appear. Only an approval gets
+    // here: a "reject always" answer sends its siblings back through the
+    // handler, where the check above them finds the rule.
+    if (answer.rule.type == "approve" && _interactive) {
+      print(
+        color.dim("⏺ Approved ${intr.effect}${oneLineData(intr.data)} by the rule just saved"),
+      )
+    }
+    return applyRule(intr, answer.rule)
   }
-  if (answer.action == "approve-always-here") {
-    _policy = recordScopedRule(_policy, intr, globalCliPolicyOpts.fields)
-    _pendingSave = true
+  // The "always" answers were recorded by askUser, under the lock.
+  if (answer.action == "approve-always" || answer.action == "approve-always-here") {
     return approve()
   }
   if (answer.action == "reject-always") {
-    _policy = recordRule(_policy, intr.effect, "reject")
-    _pendingSave = true
     return reject()
   }
   if (answer.action == "approve") {
@@ -948,6 +1057,29 @@ def _handler(intr: any): any {
     return reject()
   }
   return reject(reason)
+}
+
+// A rule's decision, carried out. Both checks end here: the one every
+// interrupt runs, and the one an interrupt runs again at its turn at the
+// terminal.
+def applyRule(intr: any, decision: any): any {
+  if (decision.type == "approve") {
+    // Auto-approved: the user never sees the approval prompt (which would
+    // render an edit as a diff), so surface an edit's diff here. Other
+    // effects auto-approve silently as before.
+    if (intr.effect == "std::edit") {
+      print(renderEditDiff(intr.data))
+    }
+    return approve()
+  }
+  // A rule rejected without asking. Say so on the terminal: a silent
+  // rejection looks, from the outside, like the agent changing its mind.
+  if (_interactive) {
+    print(color.dim("⏺ Policy rejected ${intr.effect}${oneLineData(intr.data)}"))
+  }
+  // The rule's rejectMessage, when set: the model reads it as the
+  // rejection reason and can steer its next attempt.
+  return reject(decision.message)
 }
 
 /**

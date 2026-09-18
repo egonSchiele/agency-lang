@@ -1,0 +1,26 @@
+import { cliPolicyHandler, setPolicy, Policy } from "std::policy"
+
+// What `--policy approve-all` is: a rule that approves everything.
+const APPROVE_ALL: Policy = { "*": [{ action: "approve" }] }
+
+// A raise that asks for a value. No rule can answer one, whatever it
+// says, because an approval from a rule carries no value.
+def askForOne(): string {
+  const reply = interrupt myapp::question("Which environment?", { of: "env" })
+  return "${reply}"
+}
+
+node main(args: { policyFile: string }): string {
+  setPolicy(args.policyFile, APPROVE_ALL)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: {}, interactive: false)
+  let outcome = ""
+  handle {
+    const result = try askForOne()
+    if (result is success(v)) {
+      outcome = "approved: ${v}"
+    } else if (result is failure(f)) {
+      outcome = "failure: ${f}"
+    }
+  } with handler
+  return outcome
+}

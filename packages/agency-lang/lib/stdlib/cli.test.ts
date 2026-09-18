@@ -612,6 +612,7 @@ describe("reduceInterrupt", () => {
     validKeys: ["a", "r", "aa", "ap", "rr"],
     allowFreeText: true,
     allowCancel: true,
+    canReveal: false,
   };
   const from = (buffer: string) => ({ buffer, notice: "" });
   const reduce = _internal.reduceInterrupt;
@@ -658,6 +659,17 @@ describe("reduceInterrupt", () => {
     const step = reduce(from("zzz"), "submit", { ...config, allowFreeText: false });
     expect(step.outcome).toEqual({ kind: "pending" });
     expect(step.state.notice).toBe("not a valid option");
+  });
+  it("the view key reveals and clears the buffer when the body is cut off", () => {
+    const step = reduce(from("v"), "submit", { ...config, canReveal: true });
+    expect(step.outcome).toEqual({ kind: "reveal" });
+    expect(step.state).toEqual({ buffer: "", notice: "" });
+  });
+  it("the view key is an ordinary reason when nothing is cut off", () => {
+    expect(reduce(from("v"), "submit", config).outcome).toEqual({
+      kind: "resolve",
+      value: "v",
+    });
   });
   it("an ignored key pends without changing state", () => {
     expect(reduce(from("a"), null, config)).toEqual({
@@ -722,6 +734,15 @@ describe("renderInterruptFooter", () => {
     expect(lines.filter((line) => /line\d/.test(line)).length).toBe(6);
     expect(lines.some((line) => line.includes("…"))).toBe(true);
   });
+  it("offers the view option only when the body is cut off", () => {
+    const body = Array.from({ length: 20 }, (_unused, index) => `line${index}`).join("\n");
+    expect(_internal.renderInterruptFooter({ ...base, body }).join("\n")).toContain(
+      "v=view it all",
+    );
+    expect(_internal.renderInterruptFooter({ ...base, body: "one line" }).join("\n")).not.toContain(
+      "v=view it all",
+    );
+  });
   it("shows a notice when present", () => {
     const lines = _internal.renderInterruptFooter({
       ...base,
@@ -754,6 +775,58 @@ describe("stickyInterruptPrompt (integration)", () => {
     cap.restore();
     expect(answer).toBe("aa");
     expect(cap.captured.join("")).toContain('⏺ read("x")\n');
+  });
+
+  it("'v' prints the whole body above the prompt, which stays up", async () => {
+    const body = Array.from({ length: 20 }, (_unused, index) => `line${index}`).join("\n");
+    const cap = captureStdout();
+    (process.stdin as any).isTTY = false;
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => {} };
+    const pending = _internal.stickyInterruptPrompt(fakeRl, {
+      title: "write file?",
+      body,
+      allowFreeText: true,
+      allowCancel: true,
+      items: [{ key: "a", label: "approve once" }],
+    });
+    fakeRl._ttyWrite("v", { name: "v" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    // The prompt is still waiting: this answers it.
+    fakeRl._ttyWrite("a", { name: "a" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    const answer = await pending;
+    cap.restore();
+    expect(answer).toBe("a");
+    expect(cap.captured.join("")).toContain("line19");
+  });
+
+  it("a resize while the prompt is up changes what 'v' means", async () => {
+    // Three long lines: one row each on a wide terminal, many on a narrow one.
+    const body = Array.from({ length: 3 }, (_unused, index) => `row${index}`.repeat(30)).join("\n");
+    const cap = captureStdout();
+    (process.stdin as any).isTTY = false;
+    const savedColumns = process.stdout.columns;
+    const fakeRl: any = { _ttyWrite: (_s: any, _k: any) => {} };
+    process.stdout.columns = 400;
+    const pending = _internal.stickyInterruptPrompt(fakeRl, {
+      title: "write file?",
+      body,
+      allowFreeText: true,
+      allowCancel: true,
+      items: [{ key: "a", label: "approve once" }],
+    });
+    // Narrower now: the body no longer fits, so 'v' reveals it instead of
+    // being submitted as a reason.
+    process.stdout.columns = 20;
+    fakeRl._ttyWrite("v", { name: "v" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    fakeRl._ttyWrite("a", { name: "a" });
+    fakeRl._ttyWrite(null, { name: "return" });
+    const answer = await pending;
+    process.stdout.columns = savedColumns;
+    cap.restore();
+    expect(answer).toBe("a");
+    expect(cap.captured.join("")).toContain("row2".repeat(30));
   });
 
   it("Escape rejects with AgencyCancelledError", async () => {

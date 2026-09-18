@@ -31,7 +31,7 @@ function delta(totalCost: number, over: Partial<NormalizedDelta> = {}): Normaliz
       cacheCreationInputTokens: 0,
       totalTokens: 0,
     },
-    unknownCostCallCount: 0,
+    unpricedCallCount: 0,
     attributionLost: false,
     ...over,
   };
@@ -44,34 +44,31 @@ describe("execution-context invocation meter", () => {
     const b = await parent.createExecutionContext({ runId: "run-b" });
 
     expect(a.invocationUsage.snapshot()).toEqual({
-      usage: {
-        cost: {
-          inputCost: 0,
-          outputCost: 0,
-          cachedInputCost: 0,
-          cacheCreationInputCost: 0,
-          hostedToolsCost: 0,
-          totalCost: 0,
-          currency: "USD",
-        },
-        tokens: {
-          inputTokens: 0,
-          outputTokens: 0,
-          cachedInputTokens: 0,
-          cacheCreationInputTokens: 0,
-          totalTokens: 0,
-        },
-        unknownCostCallCount: 0,
-        pricingComplete: true,
-        entries: [],
+      cost: {
+        inputCost: 0,
+        outputCost: 0,
+        cachedInputCost: 0,
+        cacheCreationInputCost: 0,
+        hostedToolsCost: 0,
+        totalCost: 0,
+        currency: "USD",
       },
-      usageComplete: true,
+      tokens: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        totalTokens: 0,
+      },
+      entries: [],
+      complete: true,
+      unpricedCallCount: 0,
     });
 
-    a.invocationUsage.merge(delta(1, { unknownCostCallCount: 1 }));
+    a.invocationUsage.merge(delta(1, { unpricedCallCount: 1 }));
     // b is untouched by a's spend (concurrent-invocation isolation).
-    expect(b.invocationUsage.snapshot().usage.cost.totalCost).toBe(0);
-    expect(b.invocationUsage.snapshot().usage.pricingComplete).toBe(true);
+    expect(b.invocationUsage.snapshot().cost.totalCost).toBe(0);
+    expect(b.invocationUsage.snapshot().unpricedCallCount).toBe(0);
   });
 
   it("restoreState neither resets nor hydrates the meter (resume-leg isolation is structural)", async () => {
@@ -84,7 +81,7 @@ describe("execution-context invocation meter", () => {
     // The meter is exactly what it was — restore did not touch it. (In real
     // resume the FRESH execCtx is what gives per-leg isolation; here we prove
     // restore itself carries no meter state.)
-    expect(execCtx.invocationUsage.snapshot().usage.cost.totalCost).toBeCloseTo(0.5);
+    expect(execCtx.invocationUsage.snapshot().cost.totalCost).toBeCloseTo(0.5);
   });
 
   it("no serialization includes the meter", async () => {

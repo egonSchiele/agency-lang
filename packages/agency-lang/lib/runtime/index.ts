@@ -142,12 +142,7 @@ export {
   runNodeForServe,
   runExportedFunctionForServe,
 } from "./node.js";
-export type {
-  InvocationUsage,
-  InvocationUsageSnapshot,
-  ServedInvocationOutcome,
-  UsageEntry,
-} from "./invocationUsage.js";
+export type { RunUsage, ServedInvocationOutcome, UsageEntry } from "./invocationUsage.js";
 export { reportBudgetExceededAndExit, formatBudgetExceeded } from "./budgetExit.js";
 export { Runner } from "./runner.js";
 

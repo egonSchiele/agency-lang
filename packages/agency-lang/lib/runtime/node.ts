@@ -22,13 +22,14 @@ import { resolveInvocation, type InvocationOptions } from "./invocationOptions.j
 import { installRunPolicyHandler } from "./runPolicyHandler.js";
 import type { Policy } from "./policy.js";
 import { installRootBudget } from "./rootBudget.js";
-import { GraphState, RunNodeResult } from "./types.js";
+import { GraphState, RunNodeCoreResult, RunNodeResult } from "./types.js";
 import { createReturnObject } from "./utils.js";
 import { color } from "@/utils/termcolors.js";
 import { nanoid } from "nanoid";
 import { hasInterrupts } from "./interrupts.js";
 import { throwIfNodeResultAborted, throwIfValueAborted } from "./abortBoundary.js";
 import {
+  tokenStatsOf,
   unwrapServedInvocationOutcome,
   unwrapWithUsage,
   type ServedInvocationOutcome,
@@ -379,7 +380,7 @@ async function runNodeCore({
   pauseSignal,
   invocation,
   input,
-}: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+}: RunNodeArgs): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   // The resolver owns run-id policy: a subprocess INHERITS the parent's runId
   // (seeded from the run instruction) so child statelog events land in the same
   // trace; otherwise an injected traceId wins, then a harness-set
@@ -409,7 +410,7 @@ async function runNodeCore({
   // cleanup. ===
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
-  let outcome: RawOutcome<RunNodeResult<any>>;
+  let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     // Bootstrapped and capped inside initFreshExecCtx; see its comment for
     // the ordering (root policy and budget first, then init).
@@ -496,7 +497,7 @@ async function runNodeCore({
               entryNode: nodeName,
               result: returnObject.data,
               timeTaken: performance.now() - agentStartTime,
-              tokenStats: returnObject.tokens,
+              tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
             });
             // onAgentEnd fires AFTER the run finished, so seed ALS with
             // the real per-run ThreadStore: user callbacks that inspect
@@ -513,7 +514,10 @@ async function runNodeCore({
                 callHook({
                   ctx: execCtx,
                   name: "onAgentEnd",
-                  data: { nodeName, result: returnObject },
+                  data: {
+                    nodeName,
+                    result: { ...returnObject, usage: execCtx.invocationUsage.snapshot() },
+                  },
                 }),
             );
             await execCtx.closeTraceWriter();
@@ -560,16 +564,12 @@ async function runNodeCore({
       errorType: "runtimeError",
       message: errorMessage,
     });
-    // Pull whatever token usage accumulated before the crash so cost
-    // dashboards still attribute partial spend to failed runs.
-    const partialReturn = createReturnObject({
-      result: { data: undefined as any },
-      globals: execCtx.globals,
-    });
+    // Whatever was spent before the crash, so cost dashboards still attribute
+    // partial spend to failed runs.
     execCtx.statelogClient.agentEnd({
       entryNode: nodeName,
       timeTaken: performance.now() - agentStartTime,
-      tokenStats: partialReturn.tokens,
+      tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
     });
     outcome = { status: "threw", error };
   } finally {
@@ -591,6 +591,6 @@ export async function runNode(args: RunNodeArgs): Promise<RunNodeResult<any>> {
  *  snapshot) to the serve adapter instead of unwrapping it. */
 export async function runNodeForServe(
   args: RunNodeArgs,
-): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   return runNodeCore(args);
 }

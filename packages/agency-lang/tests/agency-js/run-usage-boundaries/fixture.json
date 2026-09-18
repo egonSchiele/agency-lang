@@ -1,0 +1,30 @@
+{
+  "interrupted": true,
+  "runNode": {
+    "hasTokensField": false,
+    "complete": true,
+    "unpricedCallCount": 0,
+    "totalTokens": 2,
+    "entries": [
+      "completion:deterministic"
+    ]
+  },
+  "resumeFromCheckpoint": {
+    "hasTokensField": false,
+    "complete": true,
+    "unpricedCallCount": 0,
+    "totalTokens": 2,
+    "entries": [
+      "completion:deterministic"
+    ]
+  },
+  "respondToInterrupts": {
+    "hasTokensField": false,
+    "complete": true,
+    "unpricedCallCount": 0,
+    "totalTokens": 2,
+    "entries": [
+      "completion:deterministic"
+    ]
+  }
+}

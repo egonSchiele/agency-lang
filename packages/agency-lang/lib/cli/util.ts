@@ -331,8 +331,8 @@ export async function runAgencyNode({
     });
     const results = JSON.parse(readFileSync(resultsFile, "utf-8"));
     // The subprocess reports its own LLM spend in the results file
-    // (`tokens.cost.totalCost`); surface it so callers can account for it.
-    const costUsd = results.tokens?.cost?.totalCost;
+    // (`usage.cost.totalCost`); surface it so callers can account for it.
+    const costUsd = results.usage?.cost?.totalCost;
     return {
       data: results.data,
       stdout,

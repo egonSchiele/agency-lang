@@ -31,9 +31,9 @@ import { Checkpoint } from "./state/checkpointStore.js";
 import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
-import { Approved, GraphState, Rejected, RunNodeResult } from "./types.js";
+import { Approved, GraphState, Rejected, RunNodeCoreResult, RunNodeResult } from "./types.js";
 import type { HandlerEntry } from "./types.js";
-import { unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
+import { tokenStatsOf, unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
 import { isIpcMode, sendInterruptToParent } from "./ipc.js";
@@ -740,7 +740,7 @@ async function runResumeLoop(
           entryNode: nodeName,
           result: returnObject.data,
           timeTaken: performance.now() - agentStartTime,
-          tokenStats: returnObject.tokens,
+          tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
         });
         await execCtx.closeTraceWriter();
       }
@@ -830,7 +830,7 @@ type RespondToInterruptsArgs = {
 
 async function respondToInterruptsCore(
   args: RespondToInterruptsArgs,
-): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   const { ctx, interrupts, responses, metadata = {} } = args;
   const responseMap = buildResponseMap(interrupts, responses);
 
@@ -898,12 +898,12 @@ type ResumeInvocationArgs = {
  *  setup failure still yields an outcome-with-usage and still runs cleanup. */
 async function runResumeInvocation(
   args: ResumeInvocationArgs,
-): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   const { ctx, resolved, checkpoint, metadata = {}, signals } = args;
   const execCtx = await ctx.createExecutionContext(resolved);
   const agentStartTime = performance.now();
   let agentRunSpanId: ReturnType<typeof execCtx.statelogClient.startSpan> | undefined;
-  let outcome: RawOutcome<RunNodeResult<any>>;
+  let outcome: RawOutcome<RunNodeCoreResult<any>>;
   try {
     await restoreForResume(execCtx, {
       checkpoint,
@@ -985,6 +985,6 @@ export async function respondToInterrupts(args: RespondToInterruptsArgs): Promis
  *  snapshot) to the serve adapter instead of unwrapping it. */
 export async function respondToInterruptsForServe(
   args: RespondToInterruptsArgs,
-): Promise<ServedInvocationOutcome<RunNodeResult<any>>> {
+): Promise<ServedInvocationOutcome<RunNodeCoreResult<any>>> {
   return respondToInterruptsCore(args);
 }

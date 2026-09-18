@@ -5,7 +5,7 @@
 // subprocess's relayed usage (ipc.ts) — becomes one domain observation or one
 // already-recovered IPC delta that flows through this ONE synchronous sink. The
 // sink (1) bills the branch's cost guards via `StateStack.billCharge`, (2)
-// merges the invocation's usage meter, (3) degrades `usageComplete` when this
+// merges the invocation's usage meter, (3) degrades `complete` when this
 // delta lost attribution, and (4) relays the delta upward — then, after it, one
 // incompleteness marker on the first meter transition — when this process is
 // itself a subprocess. Because all four happen together, "authoritative cost"
@@ -18,7 +18,6 @@ import type { StateStack } from "./state/stateStack.js";
 import type { GraphState } from "./types.js";
 import {
   normalizeObservation,
-  projectProviderTokenUsage,
   type NormalizedDelta,
   type ProviderUsageKind,
   type UsageObservation,
@@ -34,7 +33,7 @@ type AccountingTarget = {
 };
 
 /** THE accounting sink — private to this module. Bills the branch, merges the
- *  meter once, and degrades `usageComplete` when the delta lost attribution. It
+ *  meter once, and degrades `complete` when the delta lost attribution. It
  *  then relays the normalized delta upward and, only when a meter transition
  *  actually happened (a first count-overflow inside `merge`, or the
  *  attribution-loss `markIncomplete`), relays ONE incompleteness marker AFTER
@@ -42,6 +41,7 @@ type AccountingTarget = {
  *  ancestor, and the marker is never sent twice for the same transition. */
 function recordUsageDelta(target: AccountingTarget, delta: NormalizedDelta): void {
   target.stack.billCharge(delta.cost.totalCost);
+  target.stack.localTokens += delta.tokens.totalTokens;
   const overflowTransition = target.ctx.invocationUsage.merge(delta);
   const attributionTransition = delta.attributionLost
     ? target.ctx.invocationUsage.markIncomplete()
@@ -63,9 +63,7 @@ export function recordUsage(
 }
 
 /** Account one LLM completion (the prompt completion site) as a provider
- *  observation AND update the per-branch total-token accumulator that
- *  std::thread's getTokens() reports. The branch-local update is a compatibility
- *  side effect kept deliberately out of the general sink. */
+ *  observation. */
 export function recordCompletionUsage(
   ctx: RuntimeContext<GraphState>,
   stack: StateStack,
@@ -80,17 +78,12 @@ export function recordCompletionUsage(
     cost: completion.cost,
     tokens: completion.usage,
   });
-  // Use the SAME projected total the meter recorded, so the branch total that
-  // getTokens() reports never disagrees with the meter for an audio completion
-  // whose raw `totalTokens` was absent (see projectProviderTokenUsage).
-  stack.localTokens += projectProviderTokenUsage(completion.usage, "completion").usage.totalTokens;
 }
 
 /** Record one UNRESOLVED provider attempt: a request that was dispatched to the
  *  provider but never resolved to a priced result (timeout / cancel / a
  *  post-dispatch provider error — possible spend, no price metadata). Adds one
- *  to `unknownCostCallCount` (no cost, no tokens) so `pricingComplete` goes
- *  false. A failure PROVEN before dispatch never calls this. */
+ *  to `unpricedCallCount` (no cost, no tokens). A failure PROVEN before dispatch never calls this. */
 export function recordUnresolvedAttempt(
   ctx: RuntimeContext<GraphState>,
   stack: StateStack,
@@ -113,7 +106,7 @@ export function recordNormalizedUsageDelta(
 /** Run one provider dispatch as a metered attempt (serve cost seam; each retry
  *  is a fresh attempt). A resolved dispatch is priced later at its completion
  *  site; a dispatched-but-UNRESOLVED attempt records one unresolved attempt so
- *  `pricingComplete` goes false. A pre-dispatch failure never enters here.
+ *  `unpricedCallCount` goes up. A pre-dispatch failure never enters here.
  *
  *  Returns the dispatch promise UNCHANGED (not wrapped in await/then): the
  *  attempt record is a fire-and-forget side effect on rejection, so this adds no

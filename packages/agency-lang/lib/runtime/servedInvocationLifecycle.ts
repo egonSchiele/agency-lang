@@ -37,7 +37,7 @@ export async function finishServedInvocation<T>(
   }
   return {
     ...finalOutcome,
-    ...execCtx.invocationUsage.snapshot(),
+    usage: execCtx.invocationUsage.snapshot(),
     traceId: execCtx.getRunId(),
   };
 }

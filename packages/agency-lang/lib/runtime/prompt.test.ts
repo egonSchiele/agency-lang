@@ -486,8 +486,8 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
     const ctx = makeCtx();
     const out = await meteredDispatch(ctx, ctx.stateStack, "completion", async () => "ok");
     expect(out).toBe("ok");
-    expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(0);
-    expect(ctx.invocationUsage.snapshot().usage.pricingComplete).toBe(true);
+    expect(ctx.invocationUsage.snapshot().unpricedCallCount).toBe(0);
+    expect(ctx.invocationUsage.snapshot().unpricedCallCount).toBe(0);
   });
 
   it("a dispatched-but-unresolved throw records one unknown-cost attempt and rethrows", async () => {
@@ -499,9 +499,9 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
       }),
     ).rejects.toBe(err);
     const s = ctx.invocationUsage.snapshot();
-    expect(s.usage.unknownCostCallCount).toBe(1);
-    expect(s.usage.cost.totalCost).toBe(0);
-    expect(s.usage.pricingComplete).toBe(false);
+    expect(s.unpricedCallCount).toBe(1);
+    expect(s.cost.totalCost).toBe(0);
+    expect(s.unpricedCallCount).toBeGreaterThan(0);
   });
 
   it("failed-retry-then-success counts exactly one unknown attempt (each dispatch is an attempt)", async () => {
@@ -513,6 +513,6 @@ describe("meteredDispatch — provider-attempt unknown-cost accounting", () => {
       }),
     ).rejects.toThrow();
     await meteredDispatch(ctx, ctx.stateStack, "completion", async () => "recovered");
-    expect(ctx.invocationUsage.snapshot().usage.unknownCostCallCount).toBe(1);
+    expect(ctx.invocationUsage.snapshot().unpricedCallCount).toBe(1);
   });
 });

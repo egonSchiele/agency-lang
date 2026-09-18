@@ -84,8 +84,9 @@ def searchSlashCommand(): boolean {
 
 def costSlashCommand(): boolean {
   // Derive BOTH the header total and the per-model breakdown from the
-  // same process-wide accumulator (getModelCosts), so the `Cost:` /
-  // `Tokens:` lines and the rows below them can never visibly disagree.
+  // same figure (getModelCosts, the invocation's usage meter), so the
+  // `Cost:` / `Tokens:` lines and the rows below them can never visibly
+  // disagree.
   // (getCost()/getTokens() read the per-branch accumulator, a different
   // scope — adjacent in the output, they could in principle diverge.)
   // Rows are sorted by cost descending by getModelCosts(); a subagent

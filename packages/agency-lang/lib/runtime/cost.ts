@@ -21,7 +21,9 @@ export function addCost(amount: number): void {
 }
 
 /** Add `amount` tokens to the active branch accumulator. Sibling of addCost;
- *  tokens don't interact with guards (guards are cost-based). */
+ *  tokens don't interact with guards (guards are cost-based). A manual token
+ *  charge reaches getTokens() only: the run's `usage.tokens` counts provider
+ *  tokens. */
 export function addTokens(amount: number): void {
   getRuntimeContext().stack.localTokens += amount;
 }

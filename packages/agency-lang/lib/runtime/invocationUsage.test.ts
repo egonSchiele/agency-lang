@@ -6,7 +6,7 @@ import {
   usageReconcileTolerance,
   unwrapServedInvocationOutcome,
   unwrapWithUsage,
-  type InvocationUsage,
+  type RunUsage,
   type NormalizedDelta,
   type ServedInvocationOutcome,
 } from "./invocationUsage.js";
@@ -39,7 +39,7 @@ describe("normalizeObservation — provider cost", () => {
       tokens: fullTokens as any,
     });
     expect(d.cost).toEqual(fullCost);
-    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.unpricedCallCount).toBe(0);
     expect(d.attributionLost).toBe(false);
     expect(d.entry).toMatchObject({ kind: "completion", model: "opus" });
   });
@@ -81,14 +81,14 @@ describe("normalizeObservation — provider cost", () => {
       totalCost: 0,
       currency: "USD",
     });
-    expect(nonUsd.unknownCostCallCount).toBe(1);
+    expect(nonUsd.unpricedCallCount).toBe(1);
     expect(nonUsd.entry?.tokens.totalTokens).toBe(128);
     const noCost = normalizeObservation({
       type: "provider",
       kind: "completion",
       reportedModel: "m",
     });
-    expect(noCost.unknownCostCallCount).toBe(1);
+    expect(noCost.unpricedCallCount).toBe(1);
     expect(noCost.cost.totalCost).toBe(0);
   });
   it("known-free (totalCost 0) is priced", () => {
@@ -98,7 +98,7 @@ describe("normalizeObservation — provider cost", () => {
       reportedModel: "e",
       cost: { totalCost: 0, currency: "USD" } as any,
     });
-    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.unpricedCallCount).toBe(0);
     expect(d.cost.totalCost).toBe(0);
   });
 });
@@ -112,7 +112,7 @@ describe("normalizeObservation — audio (transcription/speech) kinds", () => {
       cost: { totalCost: 0.006, currency: "USD" } as any,
       tokens: { totalTokens: 7 } as any,
     });
-    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.unpricedCallCount).toBe(0);
     expect(d.cost.totalCost).toBe(0.006);
     expect(d.entry).toMatchObject({ kind: "transcription", model: "whisper-1" });
     expect(d.tokens.totalTokens).toBe(7);
@@ -124,7 +124,7 @@ describe("normalizeObservation — audio (transcription/speech) kinds", () => {
       configuredModel: "tts-1",
       cost: { totalCost: 0.015, currency: "USD" } as any,
     });
-    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.unpricedCallCount).toBe(0);
     expect(d.cost.totalCost).toBe(0.015);
     expect(d.entry).toMatchObject({ kind: "speech", model: "tts-1" });
     expect(d.tokens.totalTokens).toBe(0);
@@ -253,12 +253,12 @@ describe("normalizeObservation — manual & attempt", () => {
     expect(d.entry).toMatchObject({ kind: "manual", model: "" });
     expect(d.entry?.cost.totalCost).toBe(0.03);
     expect(d.cost.totalCost).toBe(0.03);
-    expect(d.unknownCostCallCount).toBe(0);
+    expect(d.unpricedCallCount).toBe(0);
   });
   it("attempt → no entry, +1 unknown, zero money", () => {
     const d = normalizeObservation({ type: "attempt", kind: "completion" });
     expect(d.entry).toBeUndefined();
-    expect(d.unknownCostCallCount).toBe(1);
+    expect(d.unpricedCallCount).toBe(1);
     expect(d.cost.totalCost).toBe(0);
   });
 });
@@ -290,8 +290,8 @@ describe("InvocationUsageMeter", () => {
         cost: { totalCost: 0.05, currency: "USD" } as any,
       }),
     );
-    const { usage, usageComplete } = m.snapshot();
-    expect(usageComplete).toBe(true);
+    const usage = m.snapshot();
+    expect(usage.complete).toBe(true);
     expect(usage.entries.map((e) => `${e.kind}:${e.model}`)).toEqual([
       "completion:opus",
       "embedding:opus",
@@ -314,16 +314,16 @@ describe("InvocationUsageMeter", () => {
       }),
     );
     const a = m.snapshot();
-    a.usage.cost.totalCost = 999;
-    a.usage.tokens.inputTokens = 999;
-    a.usage.entries[0].cost.totalCost = 999;
-    a.usage.entries[0].tokens.inputTokens = 999;
-    a.usage.entries.push({ kind: "manual", model: "", cost: {} as any, tokens: {} as any });
+    a.cost.totalCost = 999;
+    a.tokens.inputTokens = 999;
+    a.entries[0].cost.totalCost = 999;
+    a.entries[0].tokens.inputTokens = 999;
+    a.entries.push({ kind: "manual", model: "", cost: {} as any, tokens: {} as any });
     const b = m.snapshot();
-    expect(b.usage.cost.totalCost).toBeCloseTo(0.1);
-    expect(b.usage.entries).toHaveLength(1);
-    expect(b.usage.entries[0].cost.totalCost).toBeCloseTo(0.1);
-    expect(b.usage.entries[0].tokens.inputTokens).toBe(5);
+    expect(b.cost.totalCost).toBeCloseTo(0.1);
+    expect(b.entries).toHaveLength(1);
+    expect(b.entries[0].cost.totalCost).toBeCloseTo(0.1);
+    expect(b.entries[0].tokens.inputTokens).toBe(5);
   });
   it("saturates a token overflow, marks incomplete, and merge reports only the first transition", () => {
     const m = new InvocationUsageMeter();
@@ -344,7 +344,7 @@ describe("InvocationUsageMeter", () => {
         cacheCreationInputTokens: 0,
         totalTokens: MAX,
       },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       attributionLost: false,
     };
     const one: NormalizedDelta = {
@@ -361,14 +361,14 @@ describe("InvocationUsageMeter", () => {
     expect(m.merge(one)).toBe(true);
     expect(m.merge(one)).toBe(false);
     const s = m.snapshot();
-    expect(s.usageComplete).toBe(false);
-    expect(s.usage.tokens.inputTokens).toBe(MAX);
+    expect(s.complete).toBe(false);
+    expect(s.tokens.inputTokens).toBe(MAX);
   });
   it("markIncomplete is idempotent", () => {
     const m = new InvocationUsageMeter();
     expect(m.markIncomplete()).toBe(true);
     expect(m.markIncomplete()).toBe(false);
-    expect(m.snapshot().usageComplete).toBe(false);
+    expect(m.snapshot().complete).toBe(false);
   });
 });
 
@@ -377,7 +377,7 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
     const d = normalizeIpcUsageDelta({
       cost: fullCost,
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: { kind: "completion", model: "opus", cost: fullCost, tokens: fullTokens },
     });
     expect(d?.cost.totalCost).toBe(0.42);
@@ -394,17 +394,17 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
         cacheCreationInputTokens: 0,
         totalTokens: 6,
       },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
     });
     expect(d?.cost.totalCost).toBe(0);
-    expect(d?.unknownCostCallCount).toBe(1);
+    expect(d?.unpricedCallCount).toBe(1);
     expect(d?.tokens.inputTokens).toBe(5);
   });
   it("unusable entry kind → preserve flat money, omit entry, degrade", () => {
     const d = normalizeIpcUsageDelta({
       cost: fullCost,
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: { kind: "nope", model: "x", cost: fullCost, tokens: fullTokens },
     });
     expect(d?.cost.totalCost).toBe(0.42);
@@ -415,7 +415,7 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
     const d = normalizeIpcUsageDelta({
       cost: fullCost,
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: {
         kind: "completion",
         model: "opus",
@@ -432,7 +432,7 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
     // not — cache may overlap input, so the safe lower bound is input+output.
     const d = normalizeIpcUsageDelta({
       cost: fullCost,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       tokens: {
         inputTokens: 100,
         outputTokens: 0,
@@ -448,7 +448,7 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
     const d = normalizeIpcUsageDelta({
       cost: fullCost,
       tokens: { inputTokens: 5, outputTokens: 1, totalTokens: 6 },
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: { kind: "completion", model: "m", cost: fullCost, tokens: fullTokens },
     });
     expect(d?.tokens.cachedInputTokens).toBe(0);
@@ -458,7 +458,7 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
     const d = normalizeIpcUsageDelta({
       cost: fullCost,
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
     });
     expect(d?.entry).toBeUndefined();
     expect(d?.cost.totalCost).toBe(0.42);
@@ -474,17 +474,17 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
         cacheCreationInputTokens: 0,
         totalTokens: 0,
       },
-      unknownCostCallCount: 1,
+      unpricedCallCount: 1,
     });
     expect(d?.entry).toBeUndefined();
-    expect(d?.unknownCostCallCount).toBe(1);
+    expect(d?.unpricedCallCount).toBe(1);
     expect(d?.attributionLost).toBe(false);
   });
   it("a valid-kind/model entry with malformed components survives but degrades", () => {
     const d = normalizeIpcUsageDelta({
       cost: fullCost,
       tokens: fullTokens,
-      unknownCostCallCount: 0,
+      unpricedCallCount: 0,
       entry: {
         kind: "completion",
         model: "opus",
@@ -496,7 +496,7 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
     expect(d?.entry?.cost.totalCost).toBe(0);
     expect(d?.attributionLost).toBe(true);
   });
-  it("a malformed-cost bump that saturates unknownCostCallCount degrades", () => {
+  it("a malformed-cost bump that saturates unpricedCallCount degrades", () => {
     const d = normalizeIpcUsageDelta({
       cost: { totalCost: -1, currency: "USD" },
       tokens: {
@@ -506,9 +506,9 @@ describe("normalizeIpcUsageDelta — recover, never drop", () => {
         cacheCreationInputTokens: 0,
         totalTokens: 0,
       },
-      unknownCostCallCount: MAX,
+      unpricedCallCount: MAX,
     });
-    expect(d?.unknownCostCallCount).toBe(MAX);
+    expect(d?.unpricedCallCount).toBe(MAX);
     expect(d?.attributionLost).toBe(true);
   });
   it("a non-object message is dropped", () => {
@@ -522,11 +522,10 @@ describe("unwrapServedInvocationOutcome", () => {
     usage: {
       cost: {} as any,
       tokens: {} as any,
-      unknownCostCallCount: 0,
-      pricingComplete: true,
       entries: [],
+      complete: true,
+      unpricedCallCount: 0,
     },
-    usageComplete: true,
     traceId: "test-trace",
   };
   it("returns / rethrows identity", () => {
@@ -548,7 +547,7 @@ describe("unwrapServedInvocationOutcome", () => {
 });
 
 describe("unwrapWithUsage", () => {
-  const usage: InvocationUsage = {
+  const usage: RunUsage = {
     cost: {
       inputCost: 0,
       outputCost: 0,
@@ -565,22 +564,21 @@ describe("unwrapWithUsage", () => {
       cacheCreationInputTokens: 0,
       totalTokens: 12,
     },
-    unknownCostCallCount: 0,
-    pricingComplete: true,
     entries: [],
+    complete: true,
+    unpricedCallCount: 0,
   };
 
-  it("puts the snapshot on a returned value and keeps the value's own fields", () => {
+  it("puts the usage on a returned value and keeps the value's own fields", () => {
     const out = unwrapWithUsage({
       status: "returned",
       value: { data: "hi", messages: {} },
       traceId: "t1",
       usage,
-      usageComplete: true,
     });
     expect(out.data).toBe("hi");
     expect(out.messages).toEqual({});
-    expect(out.invocationUsage).toEqual({ usage, usageComplete: true });
+    expect(out.usage).toEqual(usage);
   });
 
   it("throws the identical error for a thrown outcome", () => {
@@ -591,7 +589,6 @@ describe("unwrapWithUsage", () => {
         error: frozen,
         traceId: "t1",
         usage,
-        usageComplete: false,
       });
       expect.fail("throw");
     } catch (e) {

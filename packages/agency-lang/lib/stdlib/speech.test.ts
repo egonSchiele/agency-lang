@@ -138,8 +138,8 @@ describe("_transcribe", () => {
       expect(stack.localTokens).toBe(7);
       expect(transcription).toHaveBeenCalledTimes(1);
       expect(stack.enforceGuards).toHaveBeenCalled();
-      const { usage } = meter.snapshot();
-      expect(usage.unknownCostCallCount).toBe(0);
+      const usage = meter.snapshot();
+      expect(usage.unpricedCallCount).toBe(0);
       expect(usage.entries).toHaveLength(1);
       expect(usage.entries[0].kind).toBe("transcription");
       expect(usage.entries[0].model).toBe("whisper-1");
@@ -192,9 +192,9 @@ describe("_transcribe", () => {
       await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toThrow(
         /transcribe failed: boom/,
       );
-      const { usage } = meter.snapshot();
-      expect(usage.unknownCostCallCount).toBe(1);
-      expect(usage.pricingComplete).toBe(false);
+      const usage = meter.snapshot();
+      expect(usage.unpricedCallCount).toBe(1);
+      expect(usage.unpricedCallCount).toBeGreaterThan(0);
       expect(stack.localCost).toBe(0); // an unresolved attempt bills no money
       expect(transcription).not.toHaveBeenCalled();
     });
@@ -207,7 +207,7 @@ describe("_transcribe", () => {
         _transcribe(path.join(root, "nope.wav"), "", [root], "whisper-1", "", "", "", ""),
       ).rejects.toThrow();
       expect(transcribe).not.toHaveBeenCalled();
-      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+      expect(meter.snapshot().unpricedCallCount).toBe(0);
     });
   });
 
@@ -221,7 +221,7 @@ describe("_transcribe", () => {
         reason,
       );
       expect(transcribe).not.toHaveBeenCalled();
-      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+      expect(meter.snapshot().unpricedCallCount).toBe(0);
     });
   });
 
@@ -237,9 +237,9 @@ describe("_transcribe", () => {
       await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toBe(
         reason,
       );
-      const { usage } = meter.snapshot();
-      expect(usage.unknownCostCallCount).toBe(1); // meteredDispatch records it
-      expect(usage.pricingComplete).toBe(false);
+      const usage = meter.snapshot();
+      expect(usage.unpricedCallCount).toBe(1); // meteredDispatch records it
+      expect(usage.unpricedCallCount).toBeGreaterThan(0);
       expect(transcription).not.toHaveBeenCalled();
     });
   });
@@ -267,7 +267,7 @@ describe("_synthesizeSpeech", () => {
       expect(stack.localTokens).toBe(0); // TTS is per-character, no tokens
       expect(speechSynthesis).toHaveBeenCalledTimes(1);
       expect(stack.enforceGuards).toHaveBeenCalled();
-      const { usage } = meter.snapshot();
+      const usage = meter.snapshot();
       expect(usage.entries).toHaveLength(1);
       expect(usage.entries[0].kind).toBe("speech");
     });
@@ -282,7 +282,7 @@ describe("_synthesizeSpeech", () => {
         _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/already exists/);
       expect(speak).not.toHaveBeenCalled();
-      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+      expect(meter.snapshot().unpricedCallCount).toBe(0);
       expect(stack.chargeGuards).not.toHaveBeenCalled();
     });
   });
@@ -333,7 +333,7 @@ describe("_synthesizeSpeech", () => {
       await expect(
         _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/speak failed: no key/);
-      expect(meter.snapshot().usage.unknownCostCallCount).toBe(1);
+      expect(meter.snapshot().unpricedCallCount).toBe(1);
       expect(stack.localCost).toBe(0); // an unresolved attempt bills no money
       await expect(stat(out)).rejects.toThrow();
     });
@@ -358,7 +358,7 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
         ),
       ).rejects.toThrow(/unsupported format/);
       expect(speak).not.toHaveBeenCalled();
-      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+      expect(meter.snapshot().unpricedCallCount).toBe(0);
     });
   });
 
@@ -416,7 +416,7 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
         _transcribe(filepath, "", [root], "whisper-1", "", "", "bogus", ""),
       ).rejects.toThrow(/timestampGranularity/);
       expect(transcribe).not.toHaveBeenCalled();
-      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+      expect(meter.snapshot().unpricedCallCount).toBe(0);
     });
   });
 
@@ -443,7 +443,7 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
         _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
       ).rejects.toThrow();
       expect(transcribe).not.toHaveBeenCalled();
-      expect(meter.snapshot().usage.unknownCostCallCount).toBe(0);
+      expect(meter.snapshot().unpricedCallCount).toBe(0);
     });
     await chmod(filepath, 0o644); // let afterEach rm the temp root
   });
@@ -527,7 +527,7 @@ describe("_speakLocal", () => {
       expect([...bytes.slice(44)]).toEqual([1, 0, 2, 0]);
       expect(stack.localCost).toBe(0);
       expect(speechSynthesis).toHaveBeenCalledTimes(1);
-      expect(meter.snapshot().usage.entries).toHaveLength(1);
+      expect(meter.snapshot().entries).toHaveLength(1);
       expect(stack.enforceGuards).toHaveBeenCalled();
     });
   });
@@ -604,7 +604,7 @@ describe("_speakLocal", () => {
           .replace(/\s+/g, ""),
       ).toBe(text.replace(/\s+/g, ""));
       expect(speechSynthesis).toHaveBeenCalledTimes(1);
-      expect(meter.snapshot().usage.entries).toHaveLength(1);
+      expect(meter.snapshot().entries).toHaveLength(1);
     });
   });
 
@@ -782,9 +782,9 @@ describe("_speakLocal formats and speed", () => {
       await expect(_speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1)).rejects.toThrow(
         "no codec",
       );
-      const { usage } = meter.snapshot();
+      const usage = meter.snapshot();
       expect(usage.entries).toHaveLength(1);
-      expect(usage.pricingComplete).toBe(true);
+      expect(usage.unpricedCallCount).toBe(0);
       expect(speechSynthesis).toHaveBeenCalledTimes(1);
     });
     await expect(stat(out)).rejects.toThrow();

@@ -710,7 +710,7 @@ The rules `base` has that the `cliPolicyHandler`'s active policy lacks, keyed by
 addPolicyRules(additions: Policy)
 ```
 
-Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.
+Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. When the write fails, the active policy is left as it was and the failure is returned. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.
 
   @param additions - The rules to append, keyed by effect, such as the result of `missingPolicyRules`.
 
@@ -742,7 +742,7 @@ Write any pending always-rule additions to the policy file now.
  * `std::write` via `with approve` (you opted in by installing the
  * handler).
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L663))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L667))
 
 ### cliPolicyHandler
 
@@ -832,4 +832,4 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
 
 **Returns:** `any`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1286))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L1290))

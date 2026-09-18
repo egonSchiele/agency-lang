@@ -1,4 +1,4 @@
-import { updatesASavedPolicy } from "./agent.js";
+import { updatesASavedPolicy, unsavedRulesDoNotApply } from "./agent.js";
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -22,15 +22,22 @@ writeFileSync(policyFile, JSON.stringify(saved));
 let inputCalls = 0;
 globalThis.__agencyInputOverride = async () => {
   inputCalls += 1;
-  return inputCalls === 1 ? "r" : "";
+  // Odd calls are the menu, even calls the reason.
+  return inputCalls % 2 === 1 ? "r" : "";
 };
 
 try {
   const report = (await updatesASavedPolicy({ policyFile, toolsDir })).data;
   const onDisk = JSON.parse(readFileSync(policyFile, "utf8"));
+  const callsForUpdate = inputCalls;
+  const unsaved = (
+    await unsavedRulesDoNotApply({ policyFile: join(home, "no-such-dir", "policy.json"), toolsDir })
+  ).data;
   writeFileSync("__result.json", JSON.stringify({
     report,
-    inputCalls,
+    inputCalls: callsForUpdate,
+    // The write failed, so the removal still asks.
+    unsaved,
     // The user's blanket reject decides std::bash, so nothing was added to it.
     bashRules: onDisk["std::bash"],
     // The user's own read rule is still first.

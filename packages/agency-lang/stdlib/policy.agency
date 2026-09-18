@@ -636,16 +636,20 @@ export def missingPolicyRules(base: Policy): Policy {
 
 export def addPolicyRules(additions: Policy) {
   """
-  Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.
+  Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. When the write fails, the active policy is left as it was and the failure is returned. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.
 
   @param additions - The rules to append, keyed by effect, such as the result of `missingPolicyRules`.
   """
   maybeLoadPolicy()
   const merged = _appendPolicyRules(_policy ?? {}, additions)
-  _policy = merged
   _internalIo = "std::write"
   const written = writePolicyFile(globalCliPolicyOpts.file, merged, []) with approve
   _internalIo = ""
+  // Only a saved rule takes effect. Otherwise the session would approve
+  // under rules the user was just told could not be saved.
+  if (written is success) {
+    _policy = merged
+  }
   return written
 }
 

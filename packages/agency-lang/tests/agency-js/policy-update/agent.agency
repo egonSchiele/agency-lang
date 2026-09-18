@@ -39,3 +39,23 @@ node updatesASavedPolicy(args: { policyFile: string, toolsDir: string }): string
   } with handler
   return report
 }
+
+// The policy file cannot be written: its directory does not exist. The
+// rules must not take effect for the rest of the session either, or the
+// user would be approving under rules they were told were not saved.
+node unsavedRulesDoNotApply(args: { policyFile: string, toolsDir: string }): string[] {
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let report: string[] = []
+  handle {
+    const missing = missingPolicyRules(recommendedAutoApprovePolicy)
+    const written = addPolicyRules(missing)
+    if (written is failure) {
+      report.push("write failed")
+    } else {
+      report.push("written")
+    }
+    const after = try removeStaging(args.toolsDir)
+    report.push(outcomeOf(after))
+  } with handler
+  return report
+}

@@ -385,9 +385,8 @@ export async function executeNodeAsync({
   // ~/.agency-agent path from AGENCY_AGENT_HOME when set, so tests can
   // never delete/corrupt the developer's real settings or race each other
   // on the shared file (issue #469). The test runner asks for this on
-  // every case. It used to happen only in deterministic mode, and the
-  // agent's settings tests, which make no LLM call, overwrote the real
-  // settings.json when run without it. Deterministic mode still gets one.
+  // every case, because a test needs no LLM call to write settings.json.
+  // Deterministic mode always gets one.
   let agentHomeCleanup: (() => void) | undefined;
   if (sandboxAgentHome || useDeterministic) {
     const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));

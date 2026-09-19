@@ -144,9 +144,7 @@ else; tags are for choosing a subset to run.
   web search, a search followed by reading the results, a fetch of an API
   that publishes it, or a connector for this exact data; a bare model
   call is not one), every input reaches the lookup, and nothing is
-  declared and left unused. They came from a tool-writing run where the
-  writer asked for news from a search that returns no dates, was pushed
-  to GDELT, and wrote a prompt that never named the country.
+  declared and left unused.
 - `outside-info-connector` — the control for those three: the top Hacker
   News stories, where `hnStories` is the right answer. A change that
   sends every lookup through a web search lowers this score. Run the four

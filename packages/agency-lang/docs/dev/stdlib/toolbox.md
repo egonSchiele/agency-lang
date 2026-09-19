@@ -111,37 +111,29 @@ another draft cannot fix it.
 ### What the reviewer may block, and when the user is asked
 
 A parse error, a typecheck error, a bad import, or a failing generated
-test is a fact, and it goes back to the author without the user. The
-reviewer's findings are judgments, and they are handled differently,
-because of one run. A user asked for a news tool, and the purpose text
-asked for a publication time on each item. Every draft used
-`std::web/search`, which returns a title, a URL, and a description. The
-reviewer blocked all three drafts on the missing date. It was right, and
-the author could not fix it. The user waited fifteen minutes, saw no
-code, and the call failed with "gave up after 3 rounds".
-
-Four rules came out of that:
+test is a fact, and it goes back to the author without the user. A
+reviewer finding is a judgment, and the author may be unable to act on
+it: it can change one module, not the purpose, the request type, or what
+a stdlib function returns. A purpose that asks for a publication time,
+written against a search that returns none, would otherwise be blocked
+in every round and never shown to anyone.
 
 1. `reviewSource` passes the reviewer `REVIEW_LIMITS` as `context`. It
-   says the author can change this module and nothing else, that
-   `error=true` is for problems the author can fix inside that limit,
-   and that a limit of the available functions or a disagreement with
-   the purpose is `error=false`, written as advice to the user. The
-   shared review agent is unchanged.
-2. `error=false` findings used to be filtered out and dropped. They are
-   now `Review.notes`, carried on the draft and on the
-   `std::toolbox::review` payload, and printed under the diff
+   says what the author can change, that `error=true` is for problems
+   inside that limit, and that anything else is `error=false`, written
+   as advice to the user.
+2. `error=false` findings are `Review.notes`. They ride on the draft and
+   on the `std::toolbox::review` payload, and print under the diff
    (`renderReviewFindings` in `stdlib/policy.agency`).
-3. The reviewer's first blocking findings go back to the author as
-   feedback with `fromReviewer` set. On that redraft only, the brief says
-   "fix it, or call `cannotFix` with the reason", and the coding agent is
-   given `cannotFix.partial(stagingDir: ...)` through `extraTools`. If
-   the author calls it, the draft is not reviewed again. It goes to the
-   user with each point and the author's reason (`Review.unresolved`).
+3. The reviewer's first blocking findings go back to the author with
+   `fromReviewer` set. On that redraft the brief says "fix it, or call
+   `cannotFix` with the reason", and the coding agent is given
+   `cannotFix.partial(stagingDir: ...)` through `extraTools`. A draft
+   whose author called it is not reviewed again. It goes to the user
+   with each point and the author's reason (`Review.unresolved`).
 4. If the author reports nothing and the reviewer blocks the redraft
-   too, the draft goes to the user with the findings (`Review.blocking`).
-   The user never waits for more than two reviews before seeing code, and
-   may accept the draft anyway.
+   too, the draft goes to the user with the findings (`Review.blocking`),
+   who may accept it anyway. Nobody waits for more than two reviews.
 
 `cannotFix` writes to `_unresolved`, a module-level record keyed by
 staging directory. The key matters in one case. Separate runs and
@@ -149,47 +141,42 @@ staging directory. The key matters in one case. Separate runs and
 calls in the same LLM round share them (see `runBatch.md`), and a model
 can call `designTool` twice in one round. That sharing is also what lets
 `designTool` read what the tool wrote from inside the coding agent's
-tool loop. Globals are checkpoint state, so the record survives an
-interrupt in the middle of a draft.
+tool loop.
+
+The record is read without being cleared. A redraft that reports a point
+and then fails `testSource` leads to another draft, and the point is
+still true of that draft, so the failure keeps `fromReviewer` set and
+the author keeps the tool. The record is cleared when the reviewer
+issues new findings and when a draft is shown.
 
 A draft nobody accepts is not saved. When it had open review points, the
-failure lists them (`notAccepted`), so the model that called `designTool`
-in a run with no user at a terminal can say why.
+failure lists them (`notAccepted`), so a model that called `designTool`
+with no user at a terminal can say why.
 
 `progress` prints a line at each stage with `print`, the channel
-`whatIAmDoing` uses, and lists the reviewer's findings when there are
-any. The work does not stop for it.
+`whatIAmDoing` uses.
 
 ### A draft nobody accepted is kept for the session
-
-A user cancelled a design at the review prompt, changed their mind, and
-asked for the tool again. The whole run started over: seventeen more
-minutes of drafting and reviewing for a draft that already existed.
 
 `presentDraft` records every draft it is about to show in `_unfinished`,
 a module-level record keyed by toolbox root and tool name, holding the
 request text, the source, and the review. It records before it asks,
-because a cancelled turn never comes back from `askUser`. A saved tool is
-removed from the record. A rejected or cancelled one stays.
+because a cancelled turn never comes back from `askUser`. Saving the
+tool removes the entry. A rejected or cancelled draft stays.
 
-`rounds` starts with `resumeDraft`. When a kept draft exists for this
-name and the same request text, it is run through `testSource` again,
-into this call's own staging directory, and shown with `resumed: true`.
-No model writes or reviews it again. The user accepts it, or gives
-feedback, which starts a normal round that diffs against it. A kept
-draft that no longer passes `testSource` is dropped and a new one is
-written.
+`rounds` starts with `resumeDraft`. A kept draft for this name and the
+same request text is run through `testSource` again, into this call's
+own staging directory, and shown with `resumed: true`. No model writes
+or reviews it again. Feedback starts a normal round that diffs against
+it. A kept draft that no longer passes `testSource` is dropped.
 
-Decisions:
-
-- The record is in memory and lasts as long as the process. Looking
-  through the staging directories on disk was considered and dropped: it
-  has to guess which leftover fits the request, and it verifies drafts
-  that may not be the one the user meant.
-- It holds the source, not a staging directory, because a rejected review
-  clears staging.
-- The purpose is not compared. The calling model rewords it from one call
-  to the next.
+- The record lasts as long as the process. Looking through the staging
+  directories on disk instead would mean guessing which leftover fits
+  the request.
+- It holds the source, not a staging directory, because a rejected
+  review clears staging.
+- The purpose is not compared. The calling model rewords it from one
+  call to the next.
 
 `writeTool` is `stage` → `assembleTool` → `gateAndSave`. A
 `DraftProblem` from `assembleTool` becomes a plain failure, since there

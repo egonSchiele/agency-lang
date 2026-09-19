@@ -49,16 +49,16 @@ taking another route.
 `policy.json` is written once, from the built-in the user picked on
 their first run. After that `getPolicyForAgent` reads the file and
 nothing else, so a rule added to `recommended` later never reaches
-anyone who already has a file. For example, `recommended` approves
-`std::toolbox::removeStaging`, and a user whose file predates that rule
-is still asked about it when a tool-writing run cleans up.
+anyone who already has a file.
 
-The fix is a command the user runs, `/policy` in the agent
-(`policySlashCommand` in `lib/agents/agency-agent/lib/repl.agency`). It
-lists the rules `recommended` has and the saved policy lacks, and adds
-them on a yes. It is deliberately not a startup step: a policy file
-should never gain an approval its owner did not ask for, and a user who
-chose `minimal`, or deleted a rule on purpose, would get it back.
+`/policy` in the agent
+(`lib/agents/agency-agent/lib/slashCommands/policy.agency`) lists the
+rules `recommended` has and the saved policy lacks, and adds them on a
+yes. It is a command and not a startup step: a policy file should not
+gain an approval its owner did not ask for. The saved file does not
+record which built-in it came from, so the prompt says the rules are
+`recommended`'s, and that adding them to a policy that started as
+`minimal` makes it approve what `recommended` approves.
 
 The two pure functions are in `lib/runtime/policyUpdate.ts`, and
 `std::policy` exposes them as `missingPolicyRules` and `addPolicyRules`,
@@ -71,8 +71,13 @@ which work on the handler's active policy:
   repeats one the user already has. The repeat is harmless.
 - An effect the saved policy decides with a rule that has no `match` is
   skipped. The first match wins, so nothing after that rule is reached.
-- New rules are appended, never put in front, for the same reason: every
-  rule the user has, a reject included, keeps deciding what it decided.
+- A saved `"*"` rule with no `match` makes the whole policy complete.
+  Effect-specific rules are checked before the wildcard, so any added
+  rule would overturn what the wildcard decides today.
+- New rules are appended, never put in front, so every rule the user has
+  keeps deciding what it decided.
+- `addPolicyRules` changes the active policy only after the file is
+  written. A failed save leaves the session on its old rules.
 - Under `--policy`, `--approve`, or `--reject` the session runs on a
   per-session copy, so the command says so and changes nothing
   (`usesSavedPolicy` in `turn.agency`).
@@ -301,18 +306,30 @@ places only (`readScopeRules` in `lib/runtime/builtinPolicies.ts`):
   `agencyStdlib`, ...) are `read` partially applied to
   `stdlib/docs/<section>`, and the bundled skills are read the same way, so
   without this rule those tools return rejections in a headless run;
-- the agent's own home, written as `{<agent-home>,<agent-home>/**}`. The
-  root is listed as well as its contents because a catalog scan of a
-  whole directory names the root itself in its payload. The home holds
-  the agent's settings, its history, its memory, and the skills and tools
-  it has learned; reading any of it tells the agent about itself.
-  Without this rule every read of a learned skill, every catalog scan,
-  and every `runTool` would prompt, and would auto-reject headless.
+- three directories of the agent home: its learned `skills/` and
+  `tools/`, and its `memory/`, each listed as the directory and
+  everything under it. The root is listed as well as its contents because
+  a catalog scan of a whole directory names the root itself in its
+  payload. Without this rule every read of a learned skill, every catalog
+  scan, and every `runTool` would prompt, and would auto-reject headless.
+
+The agent home as a whole is not in scope, and that is deliberate.
+`sessions/` and `history` hold earlier conversations, often from other
+projects, and these same rules cover `std::grep`, `std::glob`, and
+`std::ls`, which search a whole tree. With the home in scope, text
+injected into a file in one project could have the agent grep every
+earlier conversation and put what it found into the query of a web
+search, which `recommended` also approves. The user would not be asked
+at any step.
+
+`std::read` has one more rule than the others: `settings.json` in the
+agent home, by name (`agentSettingsRules`). The tree-searching effects
+carry no `filename`, so a rule that names one cannot match them.
 
 ## The one thing `recommended` lets the agent write
 
 `std::write` has exactly one rule: `settings.json` in the agent home
-(`agentHomeWriteRules`). `/model` and `/preset` write that file, and
+(`agentSettingsRules`, the same rule `std::read` gets). `/model` and `/preset` write that file, and
 without the rule, changing a model stops to ask whether the agent may
 remember that you changed it. `std::mkdir` has the matching rule for the
 home itself, which `writeSettingsFile` creates when it is not there yet.

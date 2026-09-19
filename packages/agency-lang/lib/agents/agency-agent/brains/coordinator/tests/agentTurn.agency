@@ -131,9 +131,8 @@ node switchPinsAllSlots(): string {
   const out = switchModel(freshSession(), "gpt-5.5", SWITCH_CTX, SWITCH_BEFORE)
   return "${slotModel(out.resolved, "main")}|${slotModel(out.resolved, "reasoning")}"
 }
-// The key the /model picker hands over. The session is on another
-// provider, and the pick has to leave it: a bare name stayed behind and
-// asked anthropic for an openai model.
+// The key the /model picker hands over names its provider, so picking a
+// model of another provider moves the session to that provider.
 node switchWithAPickerKeyChangesProvider(): string {
   saveSettings({}) with approve
   const openaiKeys = filter(modelChoiceItems({ provider: "openai" }), \item -> item.key.startsWith("openai/"))
@@ -271,8 +270,7 @@ node modelItemsFilterNarrows(): boolean {
   return modelChoiceItems({ provider: "anthropic" }).length < modelChoiceItems({}).length
 }
 
-// The item key is what switchModel receives, so it names the provider:
-// a bare openai name picked in an anthropic session went to anthropic.
+// The item key is what switchModel receives, so it names the provider.
 // Every key must split into a provider switchModel recognizes and a real
 // model name.
 node modelItemKeysCarryTheirProvider(): boolean {

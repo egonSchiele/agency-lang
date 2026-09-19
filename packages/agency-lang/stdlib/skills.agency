@@ -167,6 +167,15 @@ def skillToolName(dir: string): string {
   return capToolName("skills_${cleaned}")
 }
 
+// One line of a brief listing. A file with no description is listed by its
+// path alone.
+def briefEntry(entry: SkillEntry): string {
+  if (entry.description == "") {
+    return entry.location
+  }
+  return "${entry.location} - ${entry.description}"
+}
+
 def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
   """
   Build a SkillEntry for one skill in the standard SKILL.md layout.
@@ -224,12 +233,12 @@ export def skillsToolFromEntries(
   @param dir - The directory the entries were scanned from; the tool reads each entry's location relative to it. For scanSkillsSubdirs output, pass the group's own dir, not the root.
   @param entries - The skills to list in the tool description
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters; defaults to a name derived from `dir`.
-  @param brief - List each file's path only, with no name or description. For a directory with so many files that the full listing is too long to send on every model call.
+  @param brief - List each file as one `path - description` line, with no XML and no directory path. For a directory with so many files that the full listing is too long to send on every model call.
   """
   let description = ""
   if (brief) {
-    const paths = [entry.location for entry in entries]
-    description = "Read a file from '${dir}' by passing its path as `filename` to the tool. Files:\n" + paths.join("\n")
+    const briefLines = [briefEntry(entry) for entry in entries]
+    description = "Read a file by passing its path as `filename` to the tool. Files:\n" + briefLines.join("\n")
   } else {
     const lines = map(entries) as entry {
       return renderEntry(entry)
@@ -674,7 +683,7 @@ export def docsSkill(
   Build a docs tool for an LLM over the packaged Agency documentation.
 
   @param section - Which documentation set to serve
-  @param brief - List each page's path only, with no description
+  @param brief - List each page as one `path - description` line
   """
   // No approval interrupt for the startup scan: these docs ship inside
   // the agency package, so scanning them carries the same trust as

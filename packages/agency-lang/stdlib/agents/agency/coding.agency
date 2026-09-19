@@ -40,8 +40,9 @@ type GeneratedCode = {
 // a docs page, so what it needs most often has to already be in front of it.
 static const tutorial = agentPrompt("agency-tutorial.md")
 
-// The docs tools list paths only. With a description per page, the guide and
-// the stdlib reference came to about 18 KB each, on every model call.
+// The docs tools use the brief listing: one line per page. The XML listing
+// of the guide and of the stdlib reference came to about 18 KB each, on every
+// model call.
 static const guideDocs = docsSkill("guide", brief: true).rename("agencyGuide")
 static const cliDocs = docsSkill("cli", brief: true).rename("agencyCliDocs")
 static const diagnosticsDocs = docsSkill("diagnostics", brief: true).rename("agencyDiagnostics")

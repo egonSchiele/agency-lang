@@ -1,6 +1,7 @@
-import { agentPrompt, docsSkill } from "std::skills"
+import { agentPrompt, bundledDocsDir, docsSkill } from "std::skills"
 
-// A brief docs tool lists the page paths and nothing else, and the writer's
+// A brief docs tool lists each page as one `path - description` line, with no
+// XML and no directory path, and the writer's
 // tutorial ships with the package. Both are built outside any handler, which
 // pins that neither raises an interrupt.
 node main() {
@@ -8,9 +9,10 @@ node main() {
   const full = docsSkill("guide")
   const tutorial = agentPrompt("agency-tutorial.md")
   return [
-    brief.description.includes("basic-syntax.md"),
-    brief.description.includes("<description>"),
-    brief.description.length < full.description.length / 4,
+    brief.description.includes("\nbasic-syntax.md - "),
+    brief.description.includes("<skill>"),
+    brief.description.includes(bundledDocsDir()),
+    brief.description.length < full.description.length,
     tutorial.includes("## Interrupts"),
   ]
 }

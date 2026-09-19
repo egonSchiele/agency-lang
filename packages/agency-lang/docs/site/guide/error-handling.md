@@ -43,10 +43,9 @@ const result = divide(10, 0)
   }
 ```
 
-## The message, and extra data
+## Extra data
 
-A failure always carries a string message. It can also carry an object of
-extra detail:
+The first argument to the `failure` function is always a string error message. You can have an optional second argument where you can pass in an object containing extra data.
 
 ```ts
 def parseConfig(path: string): Result {
@@ -54,7 +53,7 @@ def parseConfig(path: string): Result {
 }
 ```
 
-Read the message with `.error` and the detail with `.data`:
+You can read the message with `.error` and the extra data with `.data`:
 
 ```ts
 const result = parseConfig("app.json")

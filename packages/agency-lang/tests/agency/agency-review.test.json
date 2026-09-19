@@ -28,6 +28,13 @@
           ]
         }
       ]
+    },
+    {
+      "nodeName": "contextReachesThePrompt",
+      "description": "the context argument is folded into the reviewer's prompt",
+      "input": "",
+      "expectedOutput": "[true,false]",
+      "evaluationCriteria": [{ "type": "exact" }]
     }
   ]
 }

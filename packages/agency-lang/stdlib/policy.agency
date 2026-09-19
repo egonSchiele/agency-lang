@@ -757,6 +757,9 @@ def renderSourceDiff(
 // source is. A payload from before these fields existed has none of them.
 def renderReviewFindings(data: any): string {
   let lines: string[] = []
+  if (data.resumed == true) {
+    lines.push(color.yellow("This is the draft from earlier in this session. It was checked again, and not reviewed again."))
+  }
   const unresolved = data.unresolved ?? []
   if (unresolved.length > 0) {
     lines.push(color.yellow("The author could not fix ${unresolved.length} review points:"))
@@ -856,7 +859,7 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
     return renderObjAsTable(data, excludeKeys: ["before", "after", "edits"])
   }
   if (effect == "std::toolbox::review") {
-    return renderObjAsTable(data, excludeKeys: ["source", "previous", "notes", "blocking", "unresolved"])
+    return renderObjAsTable(data, excludeKeys: ["source", "previous", "notes", "blocking", "unresolved", "resumed"])
   }
 
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields

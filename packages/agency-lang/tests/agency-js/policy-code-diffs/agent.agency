@@ -37,7 +37,8 @@ node main(args: { policyFile: string }): string {
       // model-written text, so the same escape sequence is stripped.
       notes: ["search results carry no dates\u001b[2J"],
       blocking: ["run ignores the topic"],
-      unresolved: [{ point: "asks for a publication time", reason: "no std search returns one" }]
+      unresolved: [{ point: "asks for a publication time", reason: "no std search returns one" }],
+      resumed: true
     })
   } with (data) {
     return handler(data)
@@ -60,7 +61,8 @@ node autoApproved(args: { policyFile: string }): string {
       tested: true,
       notes: [],
       blocking: [],
-      unresolved: []
+      unresolved: [],
+      resumed: false
     })
   } with (data) {
     return handler(data)

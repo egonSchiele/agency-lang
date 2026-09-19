@@ -566,14 +566,14 @@ node runToolRefusesCorruptMeta(): boolean {
 // was shown. Filled by runDesignSeeing.
 let _reviews: any[] = []
 
-def runDesignSeeing(name: string, answers: any[]) {
+def runDesignSeeing(name: string, answers: any[], request: string = "{ n: number }") {
   _reviews = []
   let reviewCount = 0
   handle {
     return designTool(
       name: name,
       purpose: "Add one to a number.",
-      request: REQUEST,
+      request: request,
       dir: OUT,
       maxRounds: 3,
     )
@@ -662,4 +662,41 @@ node unresolvedPointsAreKeptPerStagingDir(): boolean {
   const forB = takeUnresolved("/staging/b-2")
   const again = takeUnresolved("/staging/a-1")
   return forA.length == 2 && forA[1].point == "point a2" && forB.length == 1 && forB[0].reason == "reason b" && again.length == 0
+}
+
+// A draft that was ready and that nobody accepted is kept for the rest of
+// the session. Asking for the same tool again shows that draft: the
+// coding queue holds one draft, so writing a second would fail.
+node unacceptedDraftIsOfferedAgain(): boolean {
+  cleanup("addLater")
+  const first = runDesignSeeing("addLater", [null])
+  const firstWasNew = _reviews.length == 1 && _reviews[0].resumed == false
+  const second = runDesignSeeing("addLater", ["accept"])
+  const offeredAgain = _reviews.length == 1 && _reviews[0].resumed == true && _reviews[0].source =~ re/request\.n \+ 1/
+  const saved = savedFiles("addLater")
+  cleanup("addLater")
+  return first is failure && firstWasNew && second is success && offeredAgain && saved
+}
+
+// The kept draft was written for another request type, so it is not
+// offered, and a new draft is written for the new request.
+node draftForAnotherRequestIsNotOfferedAgain(): boolean {
+  cleanup("addOther")
+  runDesignSeeing("addOther", [null])
+  const second = runDesignSeeing("addOther", ["accept"], "{ text: string }")
+  const fresh = _reviews.length == 1 && _reviews[0].resumed == false && _reviews[0].source =~ re/request\.text/
+  cleanup("addOther")
+  return second is success && fresh
+}
+
+// Saving a tool forgets its draft. The next design of that name starts
+// from a new draft.
+node savedToolIsForgotten(): boolean {
+  cleanup("addOnce")
+  runDesignSeeing("addOnce", ["accept"])
+  cleanup("addOnce")
+  const second = runDesignSeeing("addOnce", ["accept"])
+  const fresh = _reviews.length == 1 && _reviews[0].resumed == false
+  cleanup("addOnce")
+  return second is success && fresh
 }

@@ -190,7 +190,10 @@ effect std::toolbox::review {
     raised again. Empty unless the draft is here because of them. */
   blocking: string[];
   /** Review points the author reported it could not fix, with its reason. */
-  unresolved: Unresolved[]
+  unresolved: Unresolved[];
+  /** True when this is a draft from earlier in the session that nobody
+    accepted, shown again instead of writing a new one. */
+  resumed: boolean
 }
 
 // Every publish into a toolbox raises this, whether the source came from
@@ -1080,6 +1083,7 @@ def askUser(
   settings: DraftSettings,
   draft: Draft,
   previous: string,
+  resumed: boolean,
 ): Result<string | null> {
   const answer = interrupt std::toolbox::review("Review this tool before it is saved: answer accept, or give feedback for the next draft", {
     name: name,
@@ -1090,7 +1094,8 @@ def askUser(
     tested: draft.tested,
     notes: draft.review.notes,
     blocking: draft.review.blocking,
-    unresolved: draft.review.unresolved
+    unresolved: draft.review.unresolved,
+    resumed: resumed
   })
   if (answer == null || answer == ACCEPT) {
     return success(null)
@@ -1178,6 +1183,56 @@ def saveTool(
   return success(entryFor(root, name))
 }
 
+// A draft that was ready for the user and that nobody accepted: the turn
+// was cancelled at the review prompt, or the review was rejected. Kept
+// for the rest of the session, keyed by toolbox root and tool name, so
+// "go ahead and save that tool" does not cost another drafting run. It is
+// the source and its review, not a staging directory, because a rejected
+// review clears staging. A saved tool is forgotten.
+type Unfinished = {
+  request: string;
+  source: string;
+  review: Review
+}
+
+let _unfinished: Record<string, Unfinished> = {}
+
+def unfinishedKey(root: string, name: string): string {
+  return "${root}/${name}"
+}
+
+// Only a draft written for the same request type is offered again. The
+// purpose is not compared: the caller rewords it from one call to the next.
+def unfinishedDraft(root: string, name: string, request: string): Unfinished | null {
+  const kept = _unfinished[unfinishedKey(root, name)]
+  if (kept == null || kept.request.trim() != request.trim()) {
+    return null
+  }
+  return kept
+}
+
+// The kept draft goes through assembleTool and the tests again, into this
+// call's own staging directory, so it is checked and staged like any
+// other draft. No model writes or reviews it a second time.
+def resumeDraft(
+  root: string,
+  name: string,
+  settings: DraftSettings,
+): RoundOutcome | null {
+  const kept = unfinishedDraft(root, name, settings.request)
+  if (kept == null) {
+    return null
+  }
+  progress(settings, "picking up the draft from earlier in this session")
+  const draft = testSource(kept.source, settings, kept.review)
+  if (draft is failure) {
+    _unfinished[unfinishedKey(root, name)] = null
+    progress(settings, "that draft no longer passes its checks, so starting a new one")
+    return null
+  }
+  return presentDraft(root, name, settings, draft.value, "", true)
+}
+
 // Three things carry between rounds: `feedback`, the last problem or the
 // user's revision request; whether that feedback is the reviewer's, which
 // decides if the author may answer it with `cannotFix`; and the draft the
@@ -1191,6 +1246,14 @@ def rounds(
   let feedback = ""
   let fromReviewer = false
   let previous = ""
+  const resumed = resumeDraft(root, name, settings)
+  if (resumed != null) {
+    if (resumed.done != null) {
+      return resumed.done
+    }
+    feedback = resumed.feedback
+    previous = resumed.source
+  }
   for (round in range(maxRounds)) {
     const outcome = oneRound(root, name, settings, feedback, fromReviewer, previous, round)
     if (outcome.done != null) {
@@ -1264,9 +1327,23 @@ def oneRound(
     }
     return { done: failure(problem), feedback: "", fromReviewer: false, source: previous }
   }
-  const draft = prepared.value
   progress(settings, "draft ${round + 1} is ready for you to look at")
-  const answer = askUser(name, settings, draft, previous)
+  return presentDraft(root, name, settings, prepared.value, previous, false)
+}
+
+// Show a checked draft to the user and act on the answer. The draft is
+// remembered first: a cancelled turn never comes back from `askUser`.
+def presentDraft(
+  root: string,
+  name: string,
+  settings: DraftSettings,
+  draft: Draft,
+  previous: string,
+  resumed: boolean,
+): RoundOutcome {
+  const key = unfinishedKey(root, name)
+  _unfinished[key] = { request: settings.request, source: draft.source, review: draft.review }
+  const answer = askUser(name, settings, draft, previous, resumed)
   if (answer is failure(rejected)) {
     return {
       done: failure(notAccepted(rejected, draft.review)),
@@ -1276,12 +1353,11 @@ def oneRound(
     }
   }
   if (answer.value == null) {
-    return {
-      done: gateAndSave(root, name, settings, draft.source, draft.effects),
-      feedback: "",
-      fromReviewer: false,
-      source: draft.source
+    const saved = gateAndSave(root, name, settings, draft.source, draft.effects)
+    if (saved is success) {
+      _unfinished[key] = null
     }
+    return { done: saved, feedback: "", fromReviewer: false, source: draft.source }
   }
   return { done: null, feedback: answer.value, fromReviewer: false, source: draft.source }
 }

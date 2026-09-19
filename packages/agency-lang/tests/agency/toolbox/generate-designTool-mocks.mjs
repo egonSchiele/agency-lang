@@ -54,6 +54,10 @@ const dateImpl = modelImpl
 const aliasImpl = dateImpl
   .replace('import { today } from "std::date"', 'import { now as clock } from "std::date"')
   .replace('return "${request.n} on ${today()}"', 'return "${request.n} at ${clock()}"');
+// The model tool again, for a request of `{ text: string }`.
+const modelTextImpl = modelImpl
+  .replace("export type Request = {\n  n: number\n}", "export type Request = {\n  text: string\n}")
+  .replace("Say hello to number ${request.n}", "Say hello to ${request.text}");
 const cases = [
   { request: { n: 41 }, expectedJson: "42" },
   { request: { n: 0 }, expectedJson: "1" },
@@ -108,6 +112,7 @@ const blockedRound = [draftRound(good, false, [finding(true, PROBLEM)])];
 const blockedAgainRound = [draftRound(good, true, [finding(true, PROBLEM)])];
 const unfixableRound = [draftRound(good, false, [finding(true, UNFIXABLE)])];
 const cannotFixRound = [draftRound(good, true, null, [{ point: UNFIXABLE, reason: REASON }])];
+const modelTextRound = [draftRound(modelTextImpl, false)];
 const scopedMocks = (rounds) => {
   if (rounds.length === 0) {
     return [];
@@ -167,5 +172,8 @@ const tests = [
   testCase("secondBlockGoesToTheUser", [...blockedRound, ...blockedAgainRound]),
   testCase("unacceptedBlockedDraftNamesTheFindings", [...blockedRound, ...blockedAgainRound]),
   testCase("unresolvedPointsAreKeptPerStagingDir", []),
+  testCase("unacceptedDraftIsOfferedAgain", pureRound),
+  testCase("draftForAnotherRequestIsNotOfferedAgain", [...pureRound, ...modelTextRound]),
+  testCase("savedToolIsForgotten", [...pureRound, ...pureRound]),
 ];
 writeFileSync(join(here, "designTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");

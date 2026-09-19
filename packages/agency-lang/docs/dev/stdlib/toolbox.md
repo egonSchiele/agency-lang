@@ -160,6 +160,37 @@ in a run with no user at a terminal can say why.
 `whatIAmDoing` uses, and lists the reviewer's findings when there are
 any. The work does not stop for it.
 
+### A draft nobody accepted is kept for the session
+
+A user cancelled a design at the review prompt, changed their mind, and
+asked for the tool again. The whole run started over: seventeen more
+minutes of drafting and reviewing for a draft that already existed.
+
+`presentDraft` records every draft it is about to show in `_unfinished`,
+a module-level record keyed by toolbox root and tool name, holding the
+request text, the source, and the review. It records before it asks,
+because a cancelled turn never comes back from `askUser`. A saved tool is
+removed from the record. A rejected or cancelled one stays.
+
+`rounds` starts with `resumeDraft`. When a kept draft exists for this
+name and the same request text, it is run through `testSource` again,
+into this call's own staging directory, and shown with `resumed: true`.
+No model writes or reviews it again. The user accepts it, or gives
+feedback, which starts a normal round that diffs against it. A kept
+draft that no longer passes `testSource` is dropped and a new one is
+written.
+
+Decisions:
+
+- The record is in memory and lasts as long as the process. Looking
+  through the staging directories on disk was considered and dropped: it
+  has to guess which leftover fits the request, and it verifies drafts
+  that may not be the one the user meant.
+- It holds the source, not a staging directory, because a rejected review
+  clears staging.
+- The purpose is not compared. The calling model rewords it from one call
+  to the next.
+
 `writeTool` is `stage` → `assembleTool` → `gateAndSave`. A
 `DraftProblem` from `assembleTool` becomes a plain failure, since there
 is no loop to feed it to. No tests are generated: a caller who wrote the

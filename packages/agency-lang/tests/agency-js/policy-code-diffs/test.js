@@ -74,6 +74,8 @@ writeFileSync("__result.json", JSON.stringify({
   unresolvedShown:
     plain.includes("Reviewer: asks for a publication time") &&
     plain.includes("Author: no std search returns one"),
+  // Only the resumed draft says it is one.
+  resumedDraftSaysSo: (plain.match(/draft from earlier in this session/g) || []).length === 1,
   // A draft with nothing said about it prints no findings headings.
   quietDraftHasNoFindings: (plain.match(/The reviewer notes:/g) || []).length === 1,
   survivedNullPayload,

@@ -15,7 +15,13 @@ import { exists } from "std::shell"
 import { _read } from "agency-lang/stdlib-lib/builtins.js"
 import { _glob } from "agency-lang/stdlib-lib/shell.js"
 import { _realDir } from "agency-lang/stdlib-lib/contained.js"
-import { _docsDir, _bundledDocsDir, _agentSkillsDir, _stringifyFrontmatter } from "agency-lang/stdlib-lib/skills.js"
+import {
+  _docsDir,
+  _bundledDocsDir,
+  _agentSkillsDir,
+  _agentPromptsDir,
+  _stringifyFrontmatter,
+ } from "agency-lang/stdlib-lib/skills.js"
 
 
 /** @module
@@ -210,6 +216,7 @@ export def skillsToolFromEntries(
   dir: string,
   entries: SkillEntry[],
   name: string = "",
+  brief: boolean = false,
 ) {
   """
   Build the skills tool for `dir` from already-scanned entries.
@@ -217,13 +224,20 @@ export def skillsToolFromEntries(
   @param dir - The directory the entries were scanned from; the tool reads each entry's location relative to it. For scanSkillsSubdirs output, pass the group's own dir, not the root.
   @param entries - The skills to list in the tool description
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters; defaults to a name derived from `dir`.
+  @param brief - List each file's path only, with no name or description. For a directory with so many files that the full listing is too long to send on every model call.
   """
-  const lines = map(entries) as entry {
-    return renderEntry(entry)
+  let description = ""
+  if (brief) {
+    const paths = [entry.location for entry in entries]
+    description = "Read a file from '${dir}' by passing its path as `filename` to the tool. Files:\n" + paths.join("\n")
+  } else {
+    const lines = map(entries) as entry {
+      return renderEntry(entry)
+    }
+    const header = "Read a skill file from the skills directory '${dir}' by passing its <location> as `filename` to the tool. Available skills:\n<available_skills>\n"
+    const footer = "\n</available_skills>"
+    description = header + lines.join("\n") + footer
   }
-  const header = "Read a skill file from the skills directory '${dir}' by passing its <location> as `filename` to the tool. Available skills:\n<available_skills>\n"
-  const footer = "\n</available_skills>"
-  const description = header + lines.join("\n") + footer
   // `.rename(...)` is essential, not cosmetic: without it every skillsDir
   // tool is named `read` (the base of `read.partial`), so two of them in one
   // `tools:` list trip the provider's unique-name requirement.
@@ -277,8 +291,14 @@ def buildSkillsTool(
   layout: "flat" | "standard",
   name: string = "",
   recursive: boolean = false,
+  brief: boolean = false,
 ) {
-  return skillsToolFromEntries(dir, scanEntries(dir, ".", layout, recursive, MAX_SKILL_FILES), name)
+  return skillsToolFromEntries(
+    dir,
+    scanEntries(dir, ".", layout, recursive, MAX_SKILL_FILES),
+    name,
+    brief: brief,
+  )
 }
 
 export def skillsDir(
@@ -648,18 +668,20 @@ export def docsSkill(
   | "diagnostics"
   | "stdlib"
   | "agent",
+  brief: boolean = false,
 ) {
   """
   Build a docs tool for an LLM over the packaged Agency documentation.
 
   @param section - Which documentation set to serve
+  @param brief - List each page's path only, with no description
   """
   // No approval interrupt for the startup scan: these docs ship inside
   // the agency package, so scanning them carries the same trust as
   // running the stdlib itself. The returned tool is read.partial, so
   // every read the LLM later performs still raises std::read and goes
   // through handlers/policies exactly like any other read tool.
-  return buildSkillsTool(_docsDir(section), "flat", "", true)
+  return buildSkillsTool(_docsDir(section), "flat", "", true, brief: brief)
 }
 
 export def bundledDocsDir(): string {
@@ -688,6 +710,17 @@ export def agentSkill(agent: string) {
   // absolute install path, so it differs per machine and gets truncated.
   const name = "skills_${agent.replace("/", "_")}"
   return buildSkillsTool(_agentSkillsDir(agent), "flat", name)
+}
+
+export def agentPrompt(filename: string): string {
+  """
+  Read one of the prompt files shipped for the stdlib agents.
+
+  @param filename - The file to read, as a path under the shipped prompts directory
+  """
+  // No approval interrupt, for the reason docsSkill gives: the file ships
+  // inside the agency package. The read is confined to the prompts directory.
+  return _read(_agentPromptsDir(), filename, 0, 0)
 }
 
 // ============================================================

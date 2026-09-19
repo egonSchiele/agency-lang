@@ -1,0 +1,16 @@
+import { agentPrompt, docsSkill } from "std::skills"
+
+// A brief docs tool lists the page paths and nothing else, and the writer's
+// tutorial ships with the package. Both are built outside any handler, which
+// pins that neither raises an interrupt.
+node main() {
+  const brief = docsSkill("guide", brief: true)
+  const full = docsSkill("guide")
+  const tutorial = agentPrompt("agency-tutorial.md")
+  return [
+    brief.description.includes("basic-syntax.md"),
+    brief.description.includes("<description>"),
+    brief.description.length < full.description.length / 4,
+    tutorial.includes("## Interrupts"),
+  ]
+}

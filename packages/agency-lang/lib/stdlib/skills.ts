@@ -49,3 +49,12 @@ export function _agentSkillsDir(agent: string): string {
   }
   return resolved;
 }
+
+/**
+ * Absolute path to the prompt text we ship for the stdlib agents, under
+ * `stdlib/agents/prompts`. Resolved through getStdlibDir for the same
+ * reason as _docsDir.
+ */
+export function _agentPromptsDir(): string {
+  return path.join(getStdlibDir(), "agents", "prompts");
+}

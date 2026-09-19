@@ -16,12 +16,11 @@ import {
   docsOnlyHandler,
  } from "std::agents/lib/shared"
 import {
-  agencyDocTools,
   readOnlyFileTools,
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { agentSkill } from "std::skills"
+import { agentPrompt, agentSkill, docsSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -37,16 +36,33 @@ type GeneratedCode = {
   code: string
 }
 
+// A short tour of the language, sent on every call. The writer rarely opens
+// a docs page, so what it needs most often has to already be in front of it.
+static const tutorial = agentPrompt("agency-tutorial.md")
+
+// The docs tools list paths only. With a description per page, the guide and
+// the stdlib reference came to about 18 KB each, on every model call.
+static const guideDocs = docsSkill("guide", brief: true).rename("agencyGuide")
+static const cliDocs = docsSkill("cli", brief: true).rename("agencyCliDocs")
+static const diagnosticsDocs = docsSkill("diagnostics", brief: true).rename("agencyDiagnostics")
+static const stdlibDocs = docsSkill("stdlib", brief: true).rename("agencyStdlib")
+static const agentDocs = docsSkill("agent", brief: true).rename("agencyAgent")
+
 // Kept in sync by hand with the syntax rules in the code subagent prompt
 // (lib/agents/agency-agent/brains/coordinator/subagents/code.agency) — the authoritative
 // source is docs/site/guide/basic-syntax.md, which the model can read
 // through the docs tool.
 static const systemPrompt = """You write code in the Agency language.
+
+<agency_tutorial>
+${tutorial}
+</agency_tutorial>
+
 Agency syntax rules you MUST follow:
 - Functions: def name(param: Type): ReturnType { ... }
 - Nodes: node name() { ... } — export the entry node.
 - if / while / for require parentheses AND curly braces: if (x > 5) { ... }
-- The ONLY for loop is for-in over an array: for (item in items) { ... }
+- The ONLY for loop is for-in: for (item in items) { ... }
   There is NO C-style for (let i = 0; i < n; i++) loop. To count, use a
   while loop:
     let i = 1
@@ -216,7 +232,11 @@ export def buildTools(): any[] {
   harness to test yet.
   """
   return [
-    ...agencyDocTools(),
+    guideDocs,
+    cliDocs,
+    diagnosticsDocs,
+    stdlibDocs,
+    agentDocs,
     typecheck,
     parseAST,
     format,

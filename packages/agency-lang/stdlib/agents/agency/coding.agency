@@ -16,12 +16,12 @@ import {
   docsOnlyHandler,
  } from "std::agents/lib/shared"
 import {
-  agencyDocTools,
+  agencyDocToolsBrief,
   readOnlyFileTools,
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { agentSkill } from "std::skills"
+import { agentPrompt, agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -37,16 +37,26 @@ type GeneratedCode = {
   code: string
 }
 
+// A tour of the language, sent on every call. A failure here means the file
+// did not ship; agencyCodingAgent refuses to run without it.
+static const tutorial = agentPrompt("agency-tutorial.md")
+static const tutorialText = tutorial catch ""
+
 // Kept in sync by hand with the syntax rules in the code subagent prompt
 // (lib/agents/agency-agent/brains/coordinator/subagents/code.agency) — the authoritative
 // source is docs/site/guide/basic-syntax.md, which the model can read
 // through the docs tool.
 static const systemPrompt = """You write code in the Agency language.
+
+<agency_tutorial>
+${tutorialText}
+</agency_tutorial>
+
 Agency syntax rules you MUST follow:
 - Functions: def name(param: Type): ReturnType { ... }
 - Nodes: node name() { ... } — export the entry node.
 - if / while / for require parentheses AND curly braces: if (x > 5) { ... }
-- The ONLY for loop is for-in over an array: for (item in items) { ... }
+- The ONLY for loop is for-in: for (item in items) { ... }
   There is NO C-style for (let i = 0; i < n; i++) loop. To count, use a
   while loop:
     let i = 1
@@ -73,8 +83,6 @@ Going over a list, in order of preference:
        return "\${o.customer}: \${subtotal}"
      }
 4. A plain for or while loop only when the loop must stop early.
-map, filter, reduce, sortBy, unique, groupBy, count, and range are always
-in scope; do not import them and do not prefix them with a module name.
 Never call a JavaScript array method that takes a callback (.map, .filter,
 .reduce, .sort, .find, .forEach): a callback cannot raise an interrupt, so
 the call typechecks and then crashes. Methods with no callback, such as
@@ -180,21 +188,13 @@ node main(): Summary {
   return s
 }
 
-Commonly useful standard library modules:
-- std::shell: bash, exec, ls, grep, glob (run commands, inspect files)
-- std::http: fetch, fetchJSON (call web APIs)
-- std::fs: read, write, remove (files)
-- std::agency: runCode (run Agency code)
-
 If you are unsure about syntax or a standard-library function, read the
 relevant page with the docs tool before writing code. When a diagnostic code
 (AG####) comes back, look it up in the diagnostics reference rather than
 guessing at the fix.
 
 Typecheck your draft before returning it, and fix what it reports. An
-attempt you already know does not typecheck wastes a whole round. Then
-run the format tool on the draft and return the text it gives back, so
-the file is in the standard Agency layout.
+attempt you already know does not typecheck wastes a whole round.
 You cannot save files or run tests from here: the caller saves the code
 you return and runs any tests after that. Do not look for the file or try
 to run its tests; when the draft typechecks, return it.
@@ -216,10 +216,9 @@ export def buildTools(): any[] {
   harness to test yet.
   """
   return [
-    ...agencyDocTools(),
+    ...agencyDocToolsBrief(),
     typecheck,
     parseAST,
-    format,
     ...readOnlyFileTools(),
     ...readOnlyGitTools(),
     fetch,
@@ -227,6 +226,29 @@ export def buildTools(): any[] {
     fetchMarkdown,
     skills,
   ]
+}
+
+// An accepted draft in the formatter's layout. The checks run on the text
+// the model wrote, so the line numbers in a critique match what it sees.
+// The formatted text is compiled once more, and the draft goes out as
+// written when that fails, so a formatter bug cannot change what ships.
+def formatted(source: string, dir: string): string {
+  const pretty = format(source) catch source
+  if (pretty == source) {
+    return source
+  }
+  const recompiled = compile(pretty, dir)
+  if (recompiled is failure) {
+    return source
+  }
+  return pretty
+}
+
+// extraTools may repeat a tool the writer already has, and a provider
+// rejects two tools with one name.
+def withoutNamesOf(extra: any[], taken: any[]): any[] {
+  const names = [tool.name for tool in taken]
+  return [tool for tool in extra if !names.includes(tool.name)]
 }
 
 /** True when the source declares a `node main` entry point. Missing main is
@@ -295,7 +317,7 @@ def outcomeFor(source: string, requireMain: boolean, dir: string): WriteOutcome 
   if (critique.accepted) {
     return {
       valid: true,
-      source: source,
+      source: formatted(source, dir),
       problems: []
     }
   }
@@ -346,12 +368,13 @@ def generateLoop(
     if (critique == "") {
       prompt = opening
     }
+    const writerTools = buildTools()
     const generated: GeneratedCode = llm(
       prompt,
       llmOptions(
         model: model,
         provider: provider,
-        tools: buildTools().concat(extraTools),
+        tools: writerTools.concat(withoutNamesOf(extraTools, writerTools)),
       ),
     )
     const outcome = outcomeFor(source: generated.code, requireMain: requireMain, dir: dir)
@@ -393,6 +416,13 @@ export def agencyCodingAgent(
   @param dir - Directory the draft's relative imports resolve against, so a
     draft that imports a sibling file typechecks. "" when it imports none.
   """
+  if (tutorial is failure(missing)) {
+    const problem = "agencyCodingAgent could not read its language tutorial: ${missing}"
+    return failure(problem, {
+      source: "",
+      problems: [problem]
+    })
+  }
   const captured = guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent") {
     let outcome: WriteOutcome = {
       valid: false,

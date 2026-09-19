@@ -1139,3 +1139,33 @@ type GuardFailureData = {
 
 - `cost:` — a `number` of dollars, eg `$2.0`.
 - `time:` — a `number` of milliseconds (or use the [unit literals](/guide/basic-syntax.html#unit-literals): `30s`, `5m`, `100ms`, `1h`).
+
+## The standard library
+
+### Already in scope: never import these, never prefix them
+
+- Output and input: `print`, `printJSON`, `input`, `sleep`
+- Files: `read`, `write`, `readBinary`, `writeBinary`
+- Lists: `map`, `mapWithIndex`, `filter`, `exclude`, `find`, `findIndex`, `reduce`, `flatMap`, `flatten`, `every`, `some`, `count`, `sortBy`, `unique`, `groupBy`, `range`
+- Model calls: `llm`, `saveDraft`
+
+Before you write a loop that builds a list, counts, groups, or removes duplicates, check this list. The function already exists:
+
+```ts
+const byExt = groupBy(files, \f -> extname(f.path))
+const pages = range(1, total + 1)
+```
+
+### Modules you import
+
+- `std::thread`: the conversation with the model. `systemMessage`, `ensureSystemMessage`, `userMessage`, `image`, `file`, `getCost`, `getTokens`
+- `std::system`: the process and its environment. `cwd`, `env`, `setEnv`, `args`, `isTTY`, `readStdin`, `exit`
+- `std::shell`: commands and looking at the file system. `bash`, `exec`, `ls`, `grep`, `glob`, `exists`, `stat`, `which`
+- `std::fs`: changing files (`read` and `write` are already in scope). `edit`, `mkdir`, `copy`, `move`, `remove`
+- `std::path`: `join`, `resolve`, `basename`, `dirname`, `extname`, `relative`
+- `std::object`: `keys`, `values`, `entries`, `mapValues`, `mapEntries`, `filterEntries`
+- `std::date`: `now`, `today`, `format`, `parse`, `elapsedTime`, `formatDuration`
+- `std::validation`: types and checks for structured output. `Json`, `JsonObject`, `Email`, `MatchesPattern`, `isInt`, `isPositive`
+- `std::http`: `fetch`, `fetchJSON`, `fetchMarkdown`
+
+The standard library has many more modules than these: web search, data sources, git, GitHub, images, speech, terminal UI, memory, and ready-made agents. When a task needs something not listed here, look through the `agencyStdlib` tool's file list before writing it by hand. The task is likely already a function.

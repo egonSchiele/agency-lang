@@ -89,8 +89,6 @@ Going over a list, in order of preference:
        return "\${o.customer}: \${subtotal}"
      }
 4. A plain for or while loop only when the loop must stop early.
-map, filter, reduce, sortBy, unique, groupBy, count, and range are always
-in scope; do not import them and do not prefix them with a module name.
 Never call a JavaScript array method that takes a callback (.map, .filter,
 .reduce, .sort, .find, .forEach): a callback cannot raise an interrupt, so
 the call typechecks and then crashes. Methods with no callback, such as
@@ -195,12 +193,6 @@ node main(): Summary {
   const s: Summary = llm("Summarize the water cycle with a title and three bullet points.")
   return s
 }
-
-Commonly useful standard library modules:
-- std::shell: bash, exec, ls, grep, glob (run commands, inspect files)
-- std::http: fetch, fetchJSON (call web APIs)
-- std::fs: read, write, remove (files)
-- std::agency: runCode (run Agency code)
 
 If you are unsure about syntax or a standard-library function, read the
 relevant page with the docs tool before writing code. When a diagnostic code

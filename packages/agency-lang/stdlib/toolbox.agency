@@ -1030,7 +1030,7 @@ def reviewDraft(source: string, settings: DraftSettings, fromReviewer: boolean):
     )
     return success({ notes: [], blocking: [], unresolved: unresolved })
   }
-  progress(settings, "the draft typechecks, reviewing it")
+  progress(settings, "the draft is written, reviewing it")
   return reviewSource(source, settings)
 }
 

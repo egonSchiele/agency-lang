@@ -278,6 +278,7 @@ Other process docs:
 
 ### Agents (`agency agent`, the stdlib agents)
 
+- `docs/dev/agents/agency-writer-prompt.md` — How the Agency writer learns the language: the tutorial in its system prompt and how its standard library section was chosen, the brief `path - description` docs listing and why paths alone failed, the formatting and typecheck instruction the harness owns, and the eval table behind each choice.
 - `docs/dev/agents/agent-brains.md` — How `agency agent` splits into a harness and pluggable brains, and what each half owns.
 - `docs/dev/agents/harness-and-model.md` — How to divide credit between harness and model, the six tiers a fix can land in, and what a harness genuinely cannot do.
 - `docs/dev/agents/harness-guidelines.md` — The prescriptive companion: must-dos and must-nots for building and changing the agent harness.

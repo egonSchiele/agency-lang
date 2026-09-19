@@ -714,8 +714,8 @@ The final keyword is `pass`. `pass` just says, "I don't have an opinion about th
 ```ts
 handle {
  doSomeWork()
-} with (intr) {
- return match (intr.effect) {
+} with (data) {
+ return match (data.effect) {
  "std::guard" => reject()
  _ => pass()
  }

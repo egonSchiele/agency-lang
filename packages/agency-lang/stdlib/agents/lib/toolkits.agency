@@ -58,7 +58,7 @@ import { remember, recall } from "std::memory"
 import { safeBash } from "std::safeBash"
 import { ls, glob, grep, exec } from "std::shell"
 import { readSpill, grepSpill } from "std::spill"
-import { docsSkill } from "std::skills"
+import { docsEntries, docsToolFromEntries } from "std::skills"
 import {
   search as wikipediaSearch,
   summary as wikipediaSummary,
@@ -68,11 +68,25 @@ import {
 // Bundled Agency docs. `static` caches each tool across calls. Each gets an
 // explicit name: the name docsSkill derives from a directory embeds the
 // absolute install path, which differs per machine and is truncated to fit.
-static const docSkill = docsSkill("guide").rename("agencyGuide")
-static const cliSkill = docsSkill("cli").rename("agencyCliDocs")
-static const diagnosticsSkill = docsSkill("diagnostics").rename("agencyDiagnostics")
-static const stdlibSkill = docsSkill("stdlib").rename("agencyStdlib")
-static const agentSkill = docsSkill("agent").rename("agencyAgent")
+// Each section is scanned once, and its full and brief tools are built from
+// the same entries.
+static const guideEntries = docsEntries("guide")
+static const cliEntries = docsEntries("cli")
+static const diagnosticsEntries = docsEntries("diagnostics")
+static const stdlibEntries = docsEntries("stdlib")
+static const agentEntries = docsEntries("agent")
+
+static const docSkill = docsToolFromEntries("guide", guideEntries).rename("agencyGuide")
+static const cliSkill = docsToolFromEntries("cli", cliEntries).rename("agencyCliDocs")
+static const diagnosticsSkill = docsToolFromEntries("diagnostics", diagnosticsEntries).rename("agencyDiagnostics")
+static const stdlibSkill = docsToolFromEntries("stdlib", stdlibEntries).rename("agencyStdlib")
+static const agentSkill = docsToolFromEntries("agent", agentEntries).rename("agencyAgent")
+
+static const briefDocSkill = docsToolFromEntries("guide", guideEntries, brief: true).rename("agencyGuide")
+static const briefCliSkill = docsToolFromEntries("cli", cliEntries, brief: true).rename("agencyCliDocs")
+static const briefDiagnosticsSkill = docsToolFromEntries("diagnostics", diagnosticsEntries, brief: true).rename("agencyDiagnostics")
+static const briefStdlibSkill = docsToolFromEntries("stdlib", stdlibEntries, brief: true).rename("agencyStdlib")
+static const briefAgentSkill = docsToolFromEntries("agent", agentEntries, brief: true).rename("agencyAgent")
 
 export def whatIAmDoing(message: string): string {
   """
@@ -240,6 +254,22 @@ export def agencyDocTools(): any[] {
   reference.
   """
   return [docSkill, cliSkill, diagnosticsSkill, stdlibSkill, agentSkill]
+}
+
+export def agencyDocToolsBrief(): any[] {
+  """
+  Return the same five documentation tools as agencyDocTools, under the same
+  names, with each page listed as one `path - description` line. For an agent
+  whose prompt already teaches the language. Offer one set or the other: the
+  names collide.
+  """
+  return [
+    briefDocSkill,
+    briefCliSkill,
+    briefDiagnosticsSkill,
+    briefStdlibSkill,
+    briefAgentSkill,
+  ]
 }
 
 export def agencyCodeTools(): any[] {

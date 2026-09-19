@@ -16,11 +16,12 @@ import {
   docsOnlyHandler,
  } from "std::agents/lib/shared"
 import {
+  agencyDocToolsBrief,
   readOnlyFileTools,
   readOnlyGitTools,
  } from "std::agents/lib/toolkits"
 import { fetch, fetchJSON, fetchMarkdown } from "std::http"
-import { agentPrompt, agentSkill, docsSkill } from "std::skills"
+import { agentPrompt, agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
 import { Critique, revise } from "std::strategy"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -36,18 +37,10 @@ type GeneratedCode = {
   code: string
 }
 
-// A short tour of the language, sent on every call. The writer rarely opens
-// a docs page, so what it needs most often has to already be in front of it.
+// A tour of the language, sent on every call. A failure here means the file
+// did not ship; agencyCodingAgent refuses to run without it.
 static const tutorial = agentPrompt("agency-tutorial.md")
-
-// The docs tools use the brief listing: one line per page. The XML listing
-// of the guide and of the stdlib reference came to about 18 KB each, on every
-// model call.
-static const guideDocs = docsSkill("guide", brief: true).rename("agencyGuide")
-static const cliDocs = docsSkill("cli", brief: true).rename("agencyCliDocs")
-static const diagnosticsDocs = docsSkill("diagnostics", brief: true).rename("agencyDiagnostics")
-static const stdlibDocs = docsSkill("stdlib", brief: true).rename("agencyStdlib")
-static const agentDocs = docsSkill("agent", brief: true).rename("agencyAgent")
+static const tutorialText = tutorial catch ""
 
 // Kept in sync by hand with the syntax rules in the code subagent prompt
 // (lib/agents/agency-agent/brains/coordinator/subagents/code.agency) — the authoritative
@@ -56,7 +49,7 @@ static const agentDocs = docsSkill("agent", brief: true).rename("agencyAgent")
 static const systemPrompt = """You write code in the Agency language.
 
 <agency_tutorial>
-${tutorial}
+${tutorialText}
 </agency_tutorial>
 
 Agency syntax rules you MUST follow:
@@ -223,11 +216,7 @@ export def buildTools(): any[] {
   harness to test yet.
   """
   return [
-    guideDocs,
-    cliDocs,
-    diagnosticsDocs,
-    stdlibDocs,
-    agentDocs,
+    ...agencyDocToolsBrief(),
     typecheck,
     parseAST,
     ...readOnlyFileTools(),
@@ -239,15 +228,31 @@ export def buildTools(): any[] {
   ]
 }
 
-/** True when the source declares a `node main` entry point. Missing main is
-  not a typecheck diagnostic, so the loop checks for it directly. */
-// The harness formats every draft, so the layout never depends on the model
-// remembering to. A draft that does not parse cannot be formatted; it goes
-// on as written, and the checks report the parse error.
-def formatted(source: string): string {
-  return format(source) catch source
+// An accepted draft in the formatter's layout. The checks run on the text
+// the model wrote, so the line numbers in a critique match what it sees.
+// The formatted text is compiled once more, and the draft goes out as
+// written when that fails, so a formatter bug cannot change what ships.
+def formatted(source: string, dir: string): string {
+  const pretty = format(source) catch source
+  if (pretty == source) {
+    return source
+  }
+  const recompiled = compile(pretty, dir)
+  if (recompiled is failure) {
+    return source
+  }
+  return pretty
 }
 
+// extraTools may repeat a tool the writer already has, and a provider
+// rejects two tools with one name.
+def withoutNamesOf(extra: any[], taken: any[]): any[] {
+  const names = [tool.name for tool in taken]
+  return [tool for tool in extra if !names.includes(tool.name)]
+}
+
+/** True when the source declares a `node main` entry point. Missing main is
+  not a typecheck diagnostic, so the loop checks for it directly. */
 def hasMainNode(source: string): boolean {
   return source =~ re/node\s+main\s*\(/
 }
@@ -312,7 +317,7 @@ def outcomeFor(source: string, requireMain: boolean, dir: string): WriteOutcome 
   if (critique.accepted) {
     return {
       valid: true,
-      source: source,
+      source: formatted(source, dir),
       problems: []
     }
   }
@@ -363,19 +368,16 @@ def generateLoop(
     if (critique == "") {
       prompt = opening
     }
+    const writerTools = buildTools()
     const generated: GeneratedCode = llm(
       prompt,
       llmOptions(
         model: model,
         provider: provider,
-        tools: buildTools().concat(extraTools),
+        tools: writerTools.concat(withoutNamesOf(extraTools, writerTools)),
       ),
     )
-    const outcome = outcomeFor(
-      source: formatted(generated.code),
-      requireMain: requireMain,
-      dir: dir,
-    )
+    const outcome = outcomeFor(source: generated.code, requireMain: requireMain, dir: dir)
     saveDraft(outcome)
     return outcome
   }
@@ -414,6 +416,13 @@ export def agencyCodingAgent(
   @param dir - Directory the draft's relative imports resolve against, so a
     draft that imports a sibling file typechecks. "" when it imports none.
   """
+  if (tutorial is failure(missing)) {
+    const problem = "agencyCodingAgent could not read its language tutorial: ${missing}"
+    return failure(problem, {
+      source: "",
+      problems: [problem]
+    })
+  }
   const captured = guard(cost: maxCost, time: maxTime, label: "agencyCodingAgent") {
     let outcome: WriteOutcome = {
       valid: false,

@@ -523,8 +523,20 @@ print(`Hello, ${name}!`)
 You can read and write files using the `read` and `write` functions. For example:
 
 ```ts
-const content = read("file.txt") with approve
+const content = read("file.txt") catch "" with approve
 write("file.txt", "Hello, world!") with approve
+```
+
+`read` returns a `Result`, not a string. `catch ""` unwraps it, giving `""` if the read failed. Write `catch` before `with approve`. To handle the failure yourself, keep the Result and match on it:
+
+```ts
+const loaded = read("file.txt") with approve
+if (loaded is success(text)) {
+ print(text)
+}
+if (loaded is failure(error)) {
+ print("Could not read the file: ${error}")
+}
 ```
 
 These functions raise interrupts and so we have to approve them using with approve. Let's talk about interrupts next.
@@ -610,15 +622,15 @@ Handlers are how you can respond to an interrupt in agency code.
 ### Shorthand syntax
 
 ```ts
-const results = read("./README.md") with approve
+const text = read("./README.md") catch "" with approve
 ```
 
 ### Block syntax
 
 ```ts
 handle {
- const results = read("./README.md")
- print(results)
+ const text = read("./README.md") catch ""
+ print(text)
 } with (data) {
  print(data.message)
  return approve()
@@ -629,8 +641,8 @@ handle {
 
 ```ts
 handle {
- const results = read("./README.md")
- print(results)
+ const text = read("./README.md") catch ""
+ print(text)
 } with approve
 ```
 
@@ -643,8 +655,8 @@ def handleInterrupt(data) {
 }
 
 handle {
- const results = read("./README.md")
- print(results)
+ const text = read("./README.md") catch ""
+ print(text)
 } with handleInterrupt
 ```
 
@@ -966,7 +978,7 @@ const log = []
 But what about if you're reading a system prompt from a file? Or making a fetch request?
 
 ```
-const prompt = read("./prompts/system.md") with approve
+const prompt = read("./prompts/system.md") catch "" with approve
 ```
 
 Initializing these every time can get expensive. That's why we have static variables.
@@ -977,7 +989,7 @@ If a variable should get initialized exactly once at the start of each agent, an
 
 ```ts
 // initialized once, shared across all runs, immutable
-static const prompt = read("prompt.txt") with approve
+static const prompt = read("prompt.txt") catch "" with approve
 ```
 
 Static variables:

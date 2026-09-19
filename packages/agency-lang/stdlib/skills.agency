@@ -167,13 +167,24 @@ def skillToolName(dir: string): string {
   return capToolName("skills_${cleaned}")
 }
 
-// One line of a brief listing. A file with no description is listed by its
-// path alone.
+// Frontmatter text on one line. A user wrote it, and a line break in it
+// would read as another entry in a brief listing.
+def oneLine(text: string): string {
+  return text.replace(re/\s+/g, " ").trim()
+}
+
+// One line of a brief listing: the path, then the description, or the name
+// when the file has no description and its name says more than its path.
 def briefEntry(entry: SkillEntry): string {
-  if (entry.description == "") {
+  const description = oneLine(entry.description)
+  if (description != "") {
+    return "${entry.location} - ${description}"
+  }
+  const name = oneLine(entry.name)
+  if (name == "" || name == entry.location) {
     return entry.location
   }
-  return "${entry.location} - ${entry.description}"
+  return "${entry.location} - ${name}"
 }
 
 def standardEntry(skillPath: string, parsedFrontmatter: any): SkillEntry {
@@ -300,14 +311,8 @@ def buildSkillsTool(
   layout: "flat" | "standard",
   name: string = "",
   recursive: boolean = false,
-  brief: boolean = false,
 ) {
-  return skillsToolFromEntries(
-    dir,
-    scanEntries(dir, ".", layout, recursive, MAX_SKILL_FILES),
-    name,
-    brief: brief,
-  )
+  return skillsToolFromEntries(dir, scanEntries(dir, ".", layout, recursive, MAX_SKILL_FILES), name)
 }
 
 export def skillsDir(
@@ -670,27 +675,47 @@ export def designSkill(
   return failure("gave up after ${maxRounds} reviews. Last feedback:\n${feedback}")
 }
 
-export def docsSkill(
-  section:
-  | "guide"
-  | "cli"
-  | "diagnostics"
-  | "stdlib"
-  | "agent",
+type DocsSection = "guide" | "cli" | "diagnostics" | "stdlib" | "agent"
+
+export def docsEntries(section: DocsSection): SkillEntry[] {
+  """
+  Scan one section of the packaged Agency documentation. Pass the result to
+  docsToolFromEntries to build the full and the brief tool from one scan.
+
+  @param section - Which documentation set to scan
+  """
+  // No approval interrupt for the startup scan: these docs ship inside
+  // the agency package, so scanning them carries the same trust as
+  // running the stdlib itself.
+  return scanEntries(_docsDir(section), ".", "flat", true, MAX_SKILL_FILES)
+}
+
+export def docsToolFromEntries(
+  section: DocsSection,
+  entries: SkillEntry[],
   brief: boolean = false,
 ) {
+  """
+  Build a docs tool for an LLM from entries docsEntries returned.
+
+  @param section - The documentation set the entries were scanned from
+  @param entries - The pages to list in the tool description
+  @param brief - List each page as one `path - description` line
+  """
+  // The returned tool is read.partial, so every read the LLM performs
+  // raises std::read and goes through handlers and policies like any
+  // other read tool.
+  return skillsToolFromEntries(_docsDir(section), entries, "", brief: brief)
+}
+
+export def docsSkill(section: DocsSection, brief: boolean = false) {
   """
   Build a docs tool for an LLM over the packaged Agency documentation.
 
   @param section - Which documentation set to serve
   @param brief - List each page as one `path - description` line
   """
-  // No approval interrupt for the startup scan: these docs ship inside
-  // the agency package, so scanning them carries the same trust as
-  // running the stdlib itself. The returned tool is read.partial, so
-  // every read the LLM later performs still raises std::read and goes
-  // through handlers/policies exactly like any other read tool.
-  return buildSkillsTool(_docsDir(section), "flat", "", true, brief: brief)
+  return docsToolFromEntries(section, docsEntries(section), brief: brief)
 }
 
 export def bundledDocsDir(): string {
@@ -721,15 +746,16 @@ export def agentSkill(agent: string) {
   return buildSkillsTool(_agentSkillsDir(agent), "flat", name)
 }
 
-export def agentPrompt(filename: string): string {
+export def agentPrompt(filename: string): Result<string> {
   """
-  Read one of the prompt files shipped for the stdlib agents.
+  Read one of the prompt files shipped for the stdlib agents. A failure
+  means the file did not ship or cannot be read.
 
   @param filename - The file to read, as a path under the shipped prompts directory
   """
-  // No approval interrupt, for the reason docsSkill gives: the file ships
+  // No approval interrupt, for the reason docsEntries gives: the file ships
   // inside the agency package. The read is confined to the prompts directory.
-  return _read(_agentPromptsDir(), filename, 0, 0)
+  return try _read(_agentPromptsDir(), filename, 0, 0)
 }
 
 // ============================================================

@@ -2,9 +2,9 @@
   "tests": [
     {
       "nodeName": "main",
-      "description": "a brief docsSkill lists one line per page with no XML and no directory path, and the writer's tutorial is readable from the package",
+      "description": "a brief docsSkill lists one line per page with no XML and no directory path, the writer's tutorial is readable from the package, and a missing prompt file is a failure",
       "input": "",
-      "expectedOutput": "[true,false,false,true,true]",
+      "expectedOutput": "[true,false,false,true,true,true,true,false,true]",
       "evaluationCriteria": [{ "type": "exact" }]
     }
   ]

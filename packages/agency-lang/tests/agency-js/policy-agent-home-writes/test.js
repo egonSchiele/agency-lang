@@ -1,4 +1,11 @@
-import { savesSettings, doesNotSavePolicy, doesNotWriteSkills, readsItsOwnHome } from "./agent.js";
+import {
+  savesSettings,
+  doesNotSavePolicy,
+  doesNotWriteSkills,
+  readsItsMemory,
+  readsItsSettings,
+  doesNotReadSessions,
+} from "./agent.js";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -15,7 +22,7 @@ process.env.AGENCY_AGENT_HOME = home;
 // a hang. A rejection asks twice: the menu, then "what should the agent
 // do instead", which "" declines.
 let inputCalls = 0;
-const answers = ["r", "", "r", ""];
+const answers = ["r", "", "r", "", "r", ""];
 globalThis.__agencyInputOverride = async () => {
   inputCalls += 1;
   return answers.shift() ?? "r";
@@ -25,14 +32,18 @@ try {
   const settings = (await savesSettings({ policyFile, home })).data;
   const policy = (await doesNotSavePolicy({ policyFile, home })).data;
   const skill = (await doesNotWriteSkills({ policyFile, home })).data;
-  const read = (await readsItsOwnHome({ policyFile, home })).data;
+  const memory = (await readsItsMemory({ policyFile, home })).data;
+  const settingsRead = (await readsItsSettings({ policyFile, home })).data;
+  const sessions = (await doesNotReadSessions({ policyFile, home })).data;
   writeFileSync("__result.json", JSON.stringify({
     settings,
     policy,
     skill,
-    read,
-    // Two of the four had to ask, two calls each. The settings write and
-    // the read drew nothing: no user was consulted at all.
+    memory,
+    settingsRead,
+    sessions,
+    // Three of the six had to ask, two calls each. The rest drew nothing:
+    // no user was consulted at all.
     inputCalls,
   }, null, 2));
 } finally {

@@ -59,9 +59,33 @@ node doesNotWriteSkills(args: { policyFile: string, home: string }): string {
   return outcome
 }
 
-// Reading the agent's own home: its sessions, its memory, anything it
-// keeps about itself.
-node readsItsOwnHome(args: { policyFile: string, home: string }): string {
+// The agent's memory is its own, and reading it does not ask.
+node readsItsMemory(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try readThere("${args.home}/memory", "facts.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// Neither does reading the settings file it saves.
+node readsItsSettings(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try readThere(args.home, "settings.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// Earlier conversations are in the same home, and often belong to other
+// projects. Reading them asks.
+node doesNotReadSessions(args: { policyFile: string, home: string }): string {
   setPolicy(args.policyFile, recommendedAutoApprovePolicy)
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   let outcome = ""

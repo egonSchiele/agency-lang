@@ -15,7 +15,7 @@ describe("resolveRunPolicy", () => {
   it("resolves a built-in name", () => {
     const r = resolveRunPolicy({ policy: "recommended", cwd: "/x" });
     const p = JSON.parse(r!.policyJson);
-    expect(p["std::read"]).toEqual(readScopeRules());
+    expect(p["std::grep"]).toEqual(readScopeRules());
     expect(r!.interactive).toBe(false);
   });
 
@@ -66,7 +66,10 @@ describe("resolveRunPolicy", () => {
     });
     const p = JSON.parse(r!.policyJson);
     // reject rule prepended ahead of the built-in's approve rules
-    expect(p["std::read"]).toEqual([{ action: "reject" }, ...readScopeRules()]);
+    expect(p["std::read"].slice(0, 1 + readScopeRules().length)).toEqual([
+      { action: "reject" },
+      ...readScopeRules(),
+    ]);
   });
 
   it("rejects on overlap: reject rule sits ahead of approve", () => {
@@ -104,8 +107,8 @@ describe("resolveRunPolicy", () => {
       cwd: "/x",
     });
     const p = JSON.parse(r!.policyJson);
-    // std::read (in base, not in inline flags) keeps its built-in rules
-    expect(p["std::read"]).toEqual(readScopeRules());
+    // std::grep (in base, not in inline flags) keeps its built-in rules
+    expect(p["std::grep"]).toEqual(readScopeRules());
     // The flag goes in front of the base rules rather than replacing
     // them, the same as for every other effect. Its catch-all reject
     // matches first, so `--reject std::write` still rejects the write

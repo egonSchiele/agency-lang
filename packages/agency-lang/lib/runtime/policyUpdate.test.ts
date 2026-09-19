@@ -49,6 +49,21 @@ describe("missingPolicyRules", () => {
   });
 });
 
+describe("missingPolicyRules under a blanket wildcard", () => {
+  it("offers nothing, because any added rule would overturn the wildcard", () => {
+    for (const action of ["reject", "approve"] as const) {
+      const saved: Policy = { "*": [{ action }] };
+      expect(missingPolicyRules(saved, recommendedAutoApprovePolicy)).toEqual({});
+    }
+  });
+
+  it("still offers rules when the wildcard is scoped by a match", () => {
+    const saved: Policy = { "*": [{ match: { dir: "/tmp" }, action: "reject" }] };
+    const base: Policy = { e: [{ match: { dir: "/a" }, action: "approve" }] };
+    expect(missingPolicyRules(saved, base)).toEqual(base);
+  });
+});
+
 describe("appendPolicyRules", () => {
   it("leaves every decision the saved policy already made as it was", () => {
     const saved: Policy = { "std::write": [{ match: { dir: "/home" }, action: "reject" }] };

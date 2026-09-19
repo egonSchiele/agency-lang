@@ -2,6 +2,8 @@
   "settings": "approved",
   "policy": "rejected",
   "skill": "rejected",
-  "read": "approved",
-  "inputCalls": 4
+  "memory": "approved",
+  "settingsRead": "approved",
+  "sessions": "rejected",
+  "inputCalls": 6
 }

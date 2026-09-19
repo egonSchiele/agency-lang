@@ -13,13 +13,25 @@ describe("builtinPolicy", () => {
     expect(p).not.toBeNull();
     // Both rules are tokens the matcher resolves at match time, so a saved
     // copy pins neither the launch directory nor the install path.
-    for (const effect of ["std::read", "std::readBinary", "std::ls", "std::glob", "std::grep"]) {
-      expect(p![effect]).toEqual([
-        { match: { dir: "{.,./**}" }, action: "approve" },
-        { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
-        { match: { dir: "{<agent-home>,<agent-home>/**}" }, action: "approve" },
-      ]);
+    const scope = [
+      { match: { dir: "{.,./**}" }, action: "approve" },
+      { match: { dir: "{<agency>/stdlib/**,<agency>/dist/**}" }, action: "approve" },
+      {
+        match: {
+          dir: "{<agent-home>/skills,<agent-home>/skills/**,<agent-home>/tools,<agent-home>/tools/**,<agent-home>/memory,<agent-home>/memory/**}",
+        },
+        action: "approve",
+      },
+    ];
+    for (const effect of ["std::readBinary", "std::ls", "std::glob", "std::grep"]) {
+      expect(p![effect]).toEqual(scope);
     }
+    // A plain read also gets the settings file, by name. The tree-searching
+    // effects carry no filename, so they do not.
+    expect(p!["std::read"]).toEqual([
+      ...scope,
+      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
+    ]);
     // The only write is the agent's own settings file, by name. The
     // toolbox use count still goes through its own effect.
     expect(p!["std::write"]).toEqual([
@@ -42,26 +54,31 @@ describe("builtinPolicy", () => {
     }
   });
 
-  it("keeps reading the whole agent home, not just its skills and tools", () => {
-    const rules = builtinPolicy("recommended", "/tmp/base")!["std::read"];
-    const home = rules[2].match!.dir!;
+  it("reads the agent's skills, tools, and memory, and none of its conversations", () => {
+    const home = builtinPolicy("recommended", "/tmp/base")!["std::grep"][2].match!.dir!;
     for (const dir of [
-      "<agent-home>",
-      "<agent-home>/sessions",
+      "<agent-home>/skills",
       "<agent-home>/memory/2026-09",
       "<agent-home>/tools/greetHindi",
     ]) {
       expect(picomatch.isMatch(dir, home)).toBe(true);
     }
-    // Still scoped: the home's parent and its siblings are not in it.
-    expect(picomatch.isMatch("<agent-home>-other", home)).toBe(false);
+    // A grep of the home itself searches sessions/ and history too, so
+    // the root is out of scope along with them.
+    for (const dir of [
+      "<agent-home>",
+      "<agent-home>/sessions",
+      "<agent-home>/sessions/project-a",
+    ]) {
+      expect(picomatch.isMatch(dir, home)).toBe(false);
+    }
   });
 
   it("scopes every scan like a read under 'recommended' and omits them under 'minimal'", () => {
     const scans = ["std::toolbox::scan", "std::skills::skillsDir", "std::skills::commandsDir"];
     for (const effect of scans) {
       expect(builtinPolicy("recommended", "/tmp/base")![effect]).toEqual(
-        builtinPolicy("recommended", "/tmp/base")!["std::read"],
+        builtinPolicy("recommended", "/tmp/base")!["std::grep"],
       );
       expect(builtinPolicy("minimal", "/tmp/base")![effect]).toBeUndefined();
     }

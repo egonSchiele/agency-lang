@@ -1,9 +1,9 @@
 import type { Policy, PolicyRule } from "./policy.js";
 
-// A saved policy file is a copy of a built-in policy taken on the day it
-// was created, plus the user's own "always" answers. Rules added to the
-// built-in later never reach it. These two functions are what the agent's
-// /policy command shows and applies; nothing here runs on its own.
+// A saved policy file is a copy of a built-in policy from the day it was
+// created, plus the user's own "always" answers. Rules added to the
+// built-in later never reach it. The agent's /policy command uses these
+// two functions to show the difference and apply it.
 
 function sameMatch(a: PolicyRule["match"], b: PolicyRule["match"]): boolean {
   const left = a ?? {};
@@ -26,8 +26,14 @@ function decidesEverything(rules: PolicyRule[]): boolean {
 
 /** The rules `base` has and `saved` lacks, keyed by effect. An effect the
  *  saved policy already decides outright is left out: a rule added after
- *  its catch-all could never match. */
+ *  its catch-all could never match.
+ *
+ *  A saved `"*"` rule with no `match` decides every interrupt the
+ *  effect's own rules do not. An effect-specific rule is checked before
+ *  the wildcard, so adding one would overturn the wildcard's decision.
+ *  Such a policy is missing nothing. */
 export function missingPolicyRules(saved: Policy, base: Policy): Policy {
+  if (decidesEverything(saved["*"] ?? [])) return {};
   const missing: Policy = {};
   for (const effect of Object.keys(base)) {
     const have = saved[effect] ?? [];

@@ -65,19 +65,26 @@ export function readScopeRules(): PolicyRule[] {
   ];
 }
 
-// The agent's own settings file, read and written by name. `/model` and
-// `/preset` save it, and without a rule that save stops to ask. Only
-// `std::read` gets the read half: the tree-searching effects carry no
-// filename, so a rule that names one cannot match them.
+// The agent's own settings file, read by name. Only `std::read` gets it:
+// the tree-searching effects carry no filename, so a rule that names one
+// cannot match them.
 //
-// The file is named, not its directory. Three things beside it must keep
-// asking, and a `dir`-only write rule would cover all of them:
+// Writing it is left to the prompt on purpose. settings.json decides
+// what the next agent start runs: an `mcpServers` entry is a command,
+// which `maybeLoadMcp` hands to the mcp package and the next start
+// spawns, and `loadSettings` does not sanitize that field. A rule
+// approving the write would let text injected into one project write
+// the agent a command to run, with the user asked at no step. `/model`
+// and `/preset` therefore ask before they save, like any other write.
+//
+// Three things beside the file are the same kind of hole, which is why
+// no rule covers the directory either:
 //
 //   - policy.json and session-policy.json. They are this policy. An
 //     agent that can rewrite them can grant itself anything.
 //   - skills/**. A skill enters through `designSkill`'s review.
 //   - tools/**. Same, through the toolbox's review and save gates.
-function agentSettingsRules(): PolicyRule[] {
+function settingsReadRule(): PolicyRule[] {
   return [{ match: { dir: AGENT_HOME, filename: "settings.json" }, action: "approve" }];
 }
 
@@ -112,11 +119,10 @@ export const recommendedAutoApprovePolicy: Policy = {
   // choose, and the read tools take a file name, never a path.
   "std::spill::write": approve,
   "std::spill::read": approve,
-  "std::write": agentSettingsRules(),
-  // `writeSettingsFile` creates the agent home when it is missing, so the
-  // first run of `/model` does not stop to ask for the directory.
+  // `writeSettingsFile` creates the agent home when it is missing. An
+  // empty directory decides nothing, and the write into it still asks.
   "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }],
-  "std::read": [...readScopeRules(), ...agentSettingsRules()],
+  "std::read": [...readScopeRules(), ...settingsReadRule()],
   "std::readBinary": readScopeRules(),
   "std::ls": readScopeRules(),
   "std::glob": readScopeRules(),
@@ -181,10 +187,7 @@ export function withWritesPolicy(baseDir: string): Policy {
   const cwdRule: PolicyRule[] = [{ match: { cwd: scope }, action: "approve" }];
   return {
     ...recommendedAutoApprovePolicy,
-    // Appended, not replacing: `recommended` already approves the agent
-    // writing its own settings, and scoping writes to a project directory
-    // should not take that away.
-    "std::write": [...agentSettingsRules(), ...dirRule],
+    "std::write": dirRule,
     "std::writeBinary": dirRule,
     "std::edit": dirRule,
     "std::mkdir": [{ match: { dir: AGENT_HOME }, action: "approve" }, ...dirRule],
@@ -217,7 +220,7 @@ export const BUILTIN_POLICIES: { name: string; description: string }[] = [
   {
     name: "recommended",
     description:
-      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search, and the agent reading and saving its own settings.json; prompt for reads elsewhere, every other write, shell, and git changes.",
+      "Auto-approve reads under the current directory, the agency install's own docs and skills, and the agent home's learned skills, tools, and memory (plus the toolbox's own drafting and use-count files there), web/search, and the agent reading its own settings.json; prompt for reads elsewhere, every write, shell, and git changes.",
   },
   {
     name: "minimal",

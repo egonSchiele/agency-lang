@@ -32,15 +32,17 @@ describe("builtinPolicy", () => {
       ...scope,
       { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
     ]);
-    // The only write is the agent's own settings file, by name. The
-    // toolbox use count still goes through its own effect.
-    expect(p!["std::write"]).toEqual([
-      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
-    ]);
+    // No write is approved anywhere. settings.json is executable
+    // configuration: an mcpServers entry is a command the next agent
+    // start spawns, so saving it asks like any other write.
+    expect(p!["std::write"]).toBeUndefined();
+    expect(p!["std::writeBinary"]).toBeUndefined();
+    expect(p!["std::edit"]).toBeUndefined();
   });
 
-  it("approves the agent's own settings file and nothing else beside it", () => {
-    const rule = builtinPolicy("recommended", "/tmp/base")!["std::write"][0].match!;
+  it("reads the agent's own settings file and nothing else beside it", () => {
+    const read = builtinPolicy("recommended", "/tmp/base")!["std::read"];
+    const rule = read[read.length - 1].match!;
     // The rule names the file. Matching the directory alone would cover
     // every one of these, which is the point of naming it.
     expect(rule.filename).toBe("settings.json");
@@ -164,13 +166,10 @@ describe("builtinPolicy", () => {
   it("scopes 'with-writes' effects on their correct path fields", () => {
     const p = builtinPolicy("with-writes", "/work");
     const scope = "{/work,/work/**}";
-    // dir field, after the agent-home settings rule `recommended` already
-    // carries: scoping writes to a project must not stop the agent saving
-    // its own settings.
-    expect(p!["std::write"]).toEqual([
-      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
-      { match: { dir: scope }, action: "approve" },
-    ]);
+    // dir field. The agent home is not in scope here either: the settings
+    // file is written by the same std::write, and a project scope is no
+    // reason to stop asking about it.
+    expect(p!["std::write"]).toEqual([{ match: { dir: scope }, action: "approve" }]);
     // target field (remove) — a fat-fingered "dir" here would silently disable scoping
     expect(p!["std::remove"]).toEqual([{ match: { target: scope }, action: "approve" }]);
     // src + dest fields (copy/move)
@@ -181,7 +180,7 @@ describe("builtinPolicy", () => {
 
   it("scopes with-writes literally even when baseDir has glob metacharacters", () => {
     const p = builtinPolicy("with-writes", "/a,b");
-    const pattern = p!["std::write"][1].match!.dir;
+    const pattern = p!["std::write"][0].match!.dir;
     // Inside the real directory: matches. Widened brace alternatives (/a, b): not.
     expect(picomatch.isMatch("/a,b/file.txt", pattern)).toBe(true);
     expect(picomatch.isMatch("/a/file.txt", pattern)).toBe(false);

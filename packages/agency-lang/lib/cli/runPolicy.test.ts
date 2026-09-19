@@ -92,35 +92,29 @@ describe("resolveRunPolicy", () => {
   it("threads cwd into the 'with-writes' base scope", () => {
     const r = resolveRunPolicy({ policy: "with-writes", cwd: "/work" });
     const p = JSON.parse(r!.policyJson);
-    // The agent's own settings rule comes from `recommended` underneath,
-    // then the project scope this flag asked for.
-    expect(p["std::write"]).toEqual([
-      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
-      { match: { dir: "{/work,/work/**}" }, action: "approve" },
-    ]);
+    // The project scope this flag asked for, and nothing else:
+    // `recommended` underneath approves no write of its own.
+    expect(p["std::write"]).toEqual([{ match: { dir: "{/work,/work/**}" }, action: "approve" }]);
   });
 
   it("leaves base rules for unaffected effects untouched", () => {
     const r = resolveRunPolicy({
       policy: "recommended",
-      reject: "std::write",
+      reject: "std::read",
       cwd: "/x",
     });
     const p = JSON.parse(r!.policyJson);
     // std::grep (in base, not in inline flags) keeps its built-in rules
     expect(p["std::grep"]).toEqual(readScopeRules());
     // The flag goes in front of the base rules rather than replacing
-    // them, the same as for every other effect. Its catch-all reject
-    // matches first, so `--reject std::write` still rejects the write
-    // `recommended` approves on its own.
-    expect(p["std::write"]).toEqual([
-      { action: "reject" },
-      { match: { dir: "<agent-home>", filename: "settings.json" }, action: "approve" },
-    ]);
+    // them. Its catch-all reject matches first, so `--reject std::read`
+    // still rejects the settings read `recommended` approves on its own.
+    expect(p["std::read"][0]).toEqual({ action: "reject" });
+    expect(p["std::read"].length).toBe(readScopeRules().length + 2);
     expect(
       checkPolicy(p, {
-        effect: "std::write",
-        message: "write settings?",
+        effect: "std::read",
+        message: "read settings?",
         data: { dir: agentHomeDir(), filename: "settings.json" },
         origin: "test",
       }),

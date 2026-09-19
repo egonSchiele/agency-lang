@@ -19,10 +19,10 @@ def outcomeOf(result: any): string {
   return "approved"
 }
 
-// The write /model and /preset make. Under `recommended` it must go
-// through without asking: an agent that stops to ask whether it may
-// remember a setting you just changed is asking the wrong question.
-node savesSettings(args: { policyFile: string, home: string }): string {
+// The write /model and /preset make. settings.json is executable
+// configuration -- an mcpServers entry is a command the next agent start
+// spawns -- so this write asks too, like every other one.
+node doesNotSaveSettings(args: { policyFile: string, home: string }): string {
   setPolicy(args.policyFile, recommendedAutoApprovePolicy)
   const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
   let outcome = ""

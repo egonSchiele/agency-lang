@@ -323,22 +323,27 @@ search, which `recommended` also approves. The user would not be asked
 at any step.
 
 `std::read` has one more rule than the others: `settings.json` in the
-agent home, by name (`agentSettingsRules`). The tree-searching effects
+agent home, by name (`settingsReadRule`). The tree-searching effects
 carry no `filename`, so a rule that names one cannot match them.
 
-## The one thing `recommended` lets the agent write
+## Why `recommended` has no `std::write` rule
 
-`std::write` has exactly one rule: `settings.json` in the agent home
-(`agentSettingsRules`, the same rule `std::read` gets). `/model` and `/preset` write that file, and
-without the rule, changing a model stops to ask whether the agent may
-remember that you changed it. `std::mkdir` has the matching rule for the
-home itself, which `writeSettingsFile` creates when it is not there yet.
-`with-writes` keeps both and adds its own scope after them, so scoping
-writes to a project does not take the agent's settings away.
+It approves no file write at all. `std::mkdir` has one, for the agent home
+itself, which `writeSettingsFile` creates when it is not there yet: an
+empty directory decides nothing, and the write into it still asks.
 
-The rule names the file rather than matching the directory. Three things
-in that same directory have to keep asking, and a `dir`-only rule would
-cover all of them:
+The write the agent most obviously wants is its own `settings.json`,
+which `/model` and `/preset` save. That one is left to the prompt on
+purpose. settings.json decides what the next agent start runs: an
+`mcpServers` entry is a command, which `maybeLoadMcp` passes to the mcp
+package and `StdioClientTransport` spawns, and `loadSettings` sanitizes
+`capabilities` and `model.slots` but not that field. A rule approving
+that write would let text injected into one project write the agent a
+command to run, with the user asked at no step. The cost of leaving it
+out is one prompt when you change your model.
+
+Three more things in that same directory are the same kind of hole, so
+no `dir` rule covers the home either:
 
 - `policy.json` and `session-policy.json`. They *are* this policy. An
   agent that can rewrite them can grant itself anything it likes, and the
@@ -360,7 +365,7 @@ The save and review gates (`std::skills::save`, `std::skills::review`,
 `std::toolbox::save`, `std::toolbox::review`) have no rule in any
 built-in but `approve-all`. They prompt.
 
-All three read rules, and the write rule, are placeholders, not paths. `.` expands to the
+All three read rules, and the `std::mkdir` rule, are placeholders, not paths. `.` expands to the
 process cwd, `<agency>` to the directory the agency package is installed
 in (`AGENCY_INSTALL_DIR_PLACEHOLDER`, `expandAgencyInstallDir`,
 `getPackageRoot`), and `<agent-home>` to `AGENCY_AGENT_HOME` or

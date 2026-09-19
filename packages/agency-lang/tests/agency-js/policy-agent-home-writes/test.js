@@ -1,5 +1,5 @@
 import {
-  savesSettings,
+  doesNotSaveSettings,
   doesNotSavePolicy,
   doesNotWriteSkills,
   readsItsMemory,
@@ -22,14 +22,14 @@ process.env.AGENCY_AGENT_HOME = home;
 // a hang. A rejection asks twice: the menu, then "what should the agent
 // do instead", which "" declines.
 let inputCalls = 0;
-const answers = ["r", "", "r", "", "r", ""];
+const answers = ["r", "", "r", "", "r", "", "r", ""];
 globalThis.__agencyInputOverride = async () => {
   inputCalls += 1;
   return answers.shift() ?? "r";
 };
 
 try {
-  const settings = (await savesSettings({ policyFile, home })).data;
+  const settings = (await doesNotSaveSettings({ policyFile, home })).data;
   const policy = (await doesNotSavePolicy({ policyFile, home })).data;
   const skill = (await doesNotWriteSkills({ policyFile, home })).data;
   const memory = (await readsItsMemory({ policyFile, home })).data;
@@ -42,8 +42,8 @@ try {
     memory,
     settingsRead,
     sessions,
-    // Three of the six had to ask, two calls each. The rest drew nothing:
-    // no user was consulted at all.
+    // Four of the six had to ask, two calls each. The other two drew
+    // nothing: no user was consulted for them at all.
     inputCalls,
   }, null, 2));
 } finally {

@@ -190,8 +190,10 @@ export def saveSettings(settings: Settings) {
 
   @param settings - The Settings object to persist.
   """
-  // `with approve`: persisting a user preference must never block the
-  // agent on an approval prompt. The user opted in by changing the setting.
+  // `with approve`: this handler never objects to the agent persisting a
+  // preference the user just changed. A policy in the chain still gets
+  // its say. `recommended` leaves this write to the prompt, because
+  // settings.json decides what the next agent start runs.
   const result = writeSettingsFile(settings) with approve
   if (isFailure(result)) {
     print("Warning: could not save settings: ${result.error}")

@@ -1,3 +1,27 @@
+## Sep 19 2026 — v0.21.0
+
+### Agents
+
+-Initial work on getting the tool box and tool writing functionality hooked up to the agency agent. While it works, it is fairly slow and inefficient at the moment.
+
+- Bug fix: the code subagent's superpowers skills tool pointed at a folder that does not exist. Fixed now.
+
+### CLI
+
+- Support for **`agency.local.json`**, which takes precedence over `agency.json` if it exists.
+- Logs for the agency agent were hard to read because the system prompts for the agents are so long. The logs viewer now folds a message of 15 or more lines behind one header row.
+- `agency run` and `agency compile` warn when the `package.json` that Node will use says `"type": "commonjs"`, as the agency code won't run if Node is in CommonJS mode.
+
+### Runtime
+
+- **Breaking — one `usage` field on the run result.** `RunNodeResult.tokens` from `runNode`'s return value is gone. It is replaced by `usage`. Earlier, the cost information that was returned would not take the price of image generation into account. It now does.
+- Cost is part of a run's state: every checkpoint saves the usage meter and every restore sets it back, so `result.usage`, `getCost()`, `getTokens()` and `getModelCosts()` all agree after a resume or rewind. A result also now carries the `traceId`.
+
+### Standard Library
+
+- `speakLocal` can now write mp3 and m4a files, and takes a `speed` from 0.5 to 100.
+- **The toolbox raises its own effects** — `writeFile`, `createStaging`, `removeStaging`, `removeStagedFile` — instead of the nine generic file prompts.
+
 ## Sep 16 2026 — v0.20.0
 
 ### CLI

@@ -1,5 +1,5 @@
 {
   "interrupted": true,
   "unbudgeted": "done",
-  "budgetStoppedTheLeg": true
+  "stoppedBy": "AgencyAbort: time guard trip"
 }

@@ -566,13 +566,18 @@ node runToolRefusesCorruptMeta(): boolean {
 // was shown. Filled by runDesignSeeing.
 let _reviews: any[] = []
 
-def runDesignSeeing(name: string, answers: any[], request: string = "{ n: number }") {
+def runDesignSeeing(
+  name: string,
+  answers: any[],
+  request: string = "{ n: number }",
+  purpose: string = "Add one to a number.",
+) {
   _reviews = []
   let reviewCount = 0
   handle {
     return designTool(
       name: name,
-      purpose: "Add one to a number.",
+      purpose: purpose,
       request: request,
       dir: OUT,
       maxRounds: 3,
@@ -628,8 +633,9 @@ node cannotFixSkipsTheSecondReview(): boolean {
 }
 
 // The redraft that calls cannotFix does not assemble, so another draft is
-// written. The point the author could not fix still reaches the user.
-node cannotFixSurvivesABrokenRedraft(): boolean {
+// written. The open point goes back in the feedback, the author reports
+// it again, and it reaches the user with the draft that did assemble.
+node pointReportedAgainAfterABrokenRedraft(): boolean {
   cleanup("addStuckTwice")
   const result = runDesignSeeing("addStuckTwice", ["accept"])
   let told = false
@@ -638,6 +644,19 @@ node cannotFixSurvivesABrokenRedraft(): boolean {
   }
   cleanup("addStuckTwice")
   return result is success && told
+}
+
+// Same three rounds, except the draft that finally assembles reports
+// nothing. The author is taken at its word: the point is gone, so the
+// draft is reviewed like any other and reaches the user with nothing
+// open on it. The review queue holds a mock for that round, which an
+// unreviewed draft would leave undrawn.
+node redraftThatReportsNothingIsReviewedAgain(): boolean {
+  cleanup("addUnstuck")
+  const result = runDesignSeeing("addUnstuck", ["accept"])
+  const clean = _reviews.length == 1 && _reviews[0].unresolved.length == 0 && _reviews[0].blocking.length == 0
+  cleanup("addUnstuck")
+  return result is success && clean
 }
 
 // The reviewer blocks the redraft too, and the author reported nothing.
@@ -691,6 +710,19 @@ node unacceptedDraftIsOfferedAgain(): boolean {
   const saved = savedFiles("addLater")
   cleanup("addLater")
   return first is failure && firstWasNew && second is success && offeredAgain && saved
+}
+
+// The kept draft was written for another purpose, so it is not offered.
+// A rejected draft is kept for the session, and one that still matched a
+// purpose the user has since changed would be the only tool they could
+// ever get under that name.
+node draftForAnotherPurposeIsNotOfferedAgain(): boolean {
+  cleanup("addPurpose")
+  runDesignSeeing("addPurpose", [null])
+  const second = runDesignSeeing("addPurpose", ["accept"], "{ n: number }", "Subtract one from a number.")
+  const fresh = _reviews.length == 1 && _reviews[0].resumed == false
+  cleanup("addPurpose")
+  return second is success && fresh
 }
 
 // The kept draft was written for another request type, so it is not

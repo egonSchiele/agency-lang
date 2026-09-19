@@ -346,7 +346,7 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::review`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`, `std::toolbox::removeStagedFile`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1513))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1553))
 
 ### writeTool
 
@@ -398,7 +398,7 @@ in `designTool` ends by publishing through this same gate.
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1574))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1614))
 
 ### runTool
 
@@ -431,4 +431,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::toolbox::recordUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1626))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1666))

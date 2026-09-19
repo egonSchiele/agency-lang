@@ -706,6 +706,10 @@ def cannotFix(stagingDir: string, point: string, reason: string): string {
   @param reason - Why the code in this module cannot fix it
   """
   const soFar = _unresolved[stagingDir] ?? []
+  const already = filter(soFar, \item -> item.point.trim() == point.trim())
+  if (already.length > 0) {
+    return "Already noted. The user will be shown this point and your reason."
+  }
   _unresolved[stagingDir] = [...soFar, { point: point, reason: reason }]
   return "Noted. The user will be shown this point and your reason."
 }
@@ -726,6 +730,10 @@ def progress(settings: DraftSettings, message: string, points: string[] = []) {
 }
 
 def draftSource(settings: DraftSettings, feedback: string, fromReviewer: boolean): Result<string> {
+  // Every draft starts with nothing reported, so the points that skip
+  // the review, and the points the user reads, are always ones the
+  // author made about the draft in front of them.
+  clearUnresolved(settings.stagingDir)
   let extraTools: any[] = []
   if (fromReviewer) {
     extraTools = [cannotFix.partial(stagingDir: settings.stagingDir)]
@@ -1035,6 +1043,18 @@ def reviewDraft(source: string, settings: DraftSettings, fromReviewer: boolean):
   return reviewSource(source, settings)
 }
 
+// Feedback for a draft that failed its checks after the author reported
+// points it could not fix. The failure comes first, then the points, so
+// the author fixes the failure and says again which of them it still
+// cannot fix.
+def stillOpen(problem: string, unresolved: Unresolved[]): string {
+  let lines = [problem, "", "You also reported these points as ones this module cannot fix. They are still open. Report each one again with `cannotFix` if the new draft cannot fix it either."]
+  for (item in unresolved) {
+    lines.push("- ${item.point} (you said: ${item.reason})")
+  }
+  return lines.join("\n")
+}
+
 // Parse errors, typecheck errors, and failing tests go back to the author
 // without the user. So does the reviewer's first set of blocking
 // findings. When the reviewer blocks the redraft too, the draft goes to
@@ -1062,8 +1082,6 @@ def prepareDraft(
         "the reviewer found ${review.blocking.length} problems, writing another draft",
         review.blocking,
       )
-      // New findings: whatever the author said about the last set is moot.
-      clearUnresolved(settings.stagingDir)
       return failure(review.blocking.join("\n"), { retryable: true, fromReviewer: true })
     }
     progress(
@@ -1075,10 +1093,15 @@ def prepareDraft(
   const draft = testSource(source.value, settings, review)
   if (draft is failure(problem)) {
     // The draft did not assemble or its tests failed. The points the
-    // author could not fix are still true of the next draft, so they stay
-    // recorded, and the author keeps `cannotFix` for that draft.
+    // author could not fix are still open, so they go back with the
+    // failure and the author keeps `cannotFix`. It has to report again
+    // the ones the next draft still cannot fix: a draft nobody reported
+    // anything about is one the reviewer should see.
     if (draft.data.retryable == true && review.unresolved.length > 0) {
-      return failure(problem, { retryable: true, fromReviewer: true })
+      return failure(
+        stillOpen(problem, review.unresolved),
+        { retryable: true, fromReviewer: true },
+      )
     }
     return draft
   }
@@ -1203,6 +1226,7 @@ def saveTool(
 // review clears staging. A saved tool is forgotten.
 type Unfinished = {
   request: string;
+  purpose: string;
   source: string;
   review: Review
 }
@@ -1213,11 +1237,23 @@ def unfinishedKey(root: string, name: string): string {
   return "${root}/${name}"
 }
 
-// Only a draft written for the same request type is offered again. The
-// purpose is not compared: the caller rewords it from one call to the next.
-def unfinishedDraft(root: string, name: string, request: string): Unfinished | null {
+// Only a draft written for the same request type and the same purpose is
+// offered again. Both are compared because a draft nobody accepted stays
+// kept for the session: if a different purpose still matched, asking for
+// another tool of the same name and request shape would keep bringing
+// back the draft the user already turned down, and no model would ever
+// write the one they asked for.
+def unfinishedDraft(
+  root: string,
+  name: string,
+  request: string,
+  purpose: string,
+): Unfinished | null {
   const kept = _unfinished[unfinishedKey(root, name)]
   if (kept == null || kept.request.trim() != request.trim()) {
+    return null
+  }
+  if (kept.purpose.trim() != purpose.trim()) {
     return null
   }
   return kept
@@ -1231,7 +1267,7 @@ def resumeDraft(
   name: string,
   settings: DraftSettings,
 ): RoundOutcome | null {
-  const kept = unfinishedDraft(root, name, settings.request)
+  const kept = unfinishedDraft(root, name, settings.request, settings.purpose)
   if (kept == null) {
     return null
   }
@@ -1354,8 +1390,12 @@ def presentDraft(
   resumed: boolean,
 ): RoundOutcome {
   const key = unfinishedKey(root, name)
-  _unfinished[key] = { request: settings.request, source: draft.source, review: draft.review }
-  clearUnresolved(settings.stagingDir)
+  _unfinished[key] = {
+    request: settings.request,
+    purpose: settings.purpose,
+    source: draft.source,
+    review: draft.review,
+  }
   const answer = askUser(name, settings, draft, previous, resumed)
   if (answer is failure(rejected)) {
     return {

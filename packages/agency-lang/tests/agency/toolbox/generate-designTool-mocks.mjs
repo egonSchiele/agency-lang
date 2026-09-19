@@ -115,7 +115,6 @@ const unfixableRound = [draftRound(good, false, [finding(true, UNFIXABLE)])];
 const cannotFixBrokenRound = [
   draftRound(wrongExport, false, null, [{ point: UNFIXABLE, reason: REASON }]),
 ];
-const afterBrokenRound = [draftRound(good, true, null)];
 const cannotFixRound = [draftRound(good, true, null, [{ point: UNFIXABLE, reason: REASON }])];
 const modelTextRound = [draftRound(modelTextImpl, false)];
 const scopedMocks = (rounds) => {
@@ -174,15 +173,23 @@ const tests = [
   testCase("reviewerAdviceReachesTheUser", advisedRound),
   testCase("firstBlockIsFixedWithoutTheUser", [...blockedRound, ...pureRound]),
   testCase("cannotFixSkipsTheSecondReview", [...unfixableRound, ...cannotFixRound]),
-  testCase("cannotFixSurvivesABrokenRedraft", [
+  testCase("pointReportedAgainAfterABrokenRedraft", [
     ...unfixableRound,
     ...cannotFixBrokenRound,
-    ...afterBrokenRound,
+    ...cannotFixRound,
+  ]),
+  // The draft that assembles reports nothing, so it draws a review mock
+  // of its own: `cannotFix` is per draft, not per design.
+  testCase("redraftThatReportsNothingIsReviewedAgain", [
+    ...unfixableRound,
+    ...cannotFixBrokenRound,
+    ...pureRound,
   ]),
   testCase("secondBlockGoesToTheUser", [...blockedRound, ...blockedAgainRound]),
   testCase("unacceptedBlockedDraftNamesTheFindings", [...blockedRound, ...blockedAgainRound]),
   testCase("unresolvedPointsAreKeptPerStagingDir", []),
   testCase("unacceptedDraftIsOfferedAgain", pureRound),
+  testCase("draftForAnotherPurposeIsNotOfferedAgain", [...pureRound, ...pureRound]),
   testCase("draftForAnotherRequestIsNotOfferedAgain", [...pureRound, ...modelTextRound]),
   testCase("savedToolIsForgotten", [...pureRound, ...pureRound]),
 ];

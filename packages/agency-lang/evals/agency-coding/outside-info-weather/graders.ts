@@ -6,7 +6,8 @@ export default [
   outsideInfoJudge({
     signature: 'forecast(city: string, units: string = "celsius")',
     needs: "today's weather forecast for a city the caller names",
-    inputs: ["city", "units"],
+    inputs: ["city"],
+    shapes: ["units"],
     reference: `import { today } from "std::date"
 
 type Forecast = {

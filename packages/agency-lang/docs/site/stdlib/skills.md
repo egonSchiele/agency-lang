@@ -35,7 +35,7 @@ export type SkillEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L42))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L48))
 
 ### SkillGroup
 
@@ -51,7 +51,7 @@ export type SkillGroup = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L310))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L344))
 
 ## Effects
 
@@ -90,7 +90,7 @@ effect std::skills::skillsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L195))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L221))
 
 ### std::skills::commandsDir
 
@@ -101,7 +101,7 @@ effect std::skills::commandsDir {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L200))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L226))
 
 ### std::skills::save
 
@@ -114,7 +114,7 @@ effect std::skills::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L374))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L408))
 
 ### std::skills::review
 
@@ -127,7 +127,7 @@ effect std::skills::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L491))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L525))
 
 ## Constants
 
@@ -137,14 +137,19 @@ effect std::skills::review {
 export static const MAX_TOOL_NAME_LEN = 64
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L104))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L110))
 
 ## Functions
 
 ### skillsToolFromEntries
 
 ```ts
-skillsToolFromEntries(dir: string, entries: SkillEntry[], name: string = "")
+skillsToolFromEntries(
+  dir: string,
+  entries: SkillEntry[],
+  name: string = "",
+  brief: boolean = false,
+)
 ```
 
 Build the skills tool for `dir` from already-scanned entries.
@@ -152,6 +157,7 @@ Build the skills tool for `dir` from already-scanned entries.
   @param dir - The directory the entries were scanned from; the tool reads each entry's location relative to it. For scanSkillsSubdirs output, pass the group's own dir, not the root.
   @param entries - The skills to list in the tool description
   @param name - Optional explicit tool name. Sanitized to alphanumerics/underscores and capped at 64 characters; defaults to a name derived from `dir`.
+  @param brief - List each file as one `path - description` line, with no XML and no directory path. For a directory with so many files that the full listing is too long to send on every model call.
 
 The pure build half of a skills tool: no reads, no interrupts. A caller
 that already holds a directory's entries (a cached catalog, say) can
@@ -164,8 +170,9 @@ rebuild the tool without rescanning.
 | dir | `string` |  |
 | entries | `SkillEntry[]` |  |
 | name | `string` | "" |
+| brief | `boolean` | false |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L235))
 
 ### skillsDir
 
@@ -193,7 +200,7 @@ Build a skills tool for an LLM over a directory of skills.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L284))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L318))
 
 ### scanSkillsSubdirs
 
@@ -229,7 +236,7 @@ needs as its `dir`.
 
 **Throws:** `std::skills::skillsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L322))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L356))
 
 ### writeSkill
 
@@ -271,7 +278,7 @@ draft-revise-accept loop is `designSkill`, which ends by calling this.
 
 **Throws:** `std::skills::save`, `std::mkdir`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L431))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L465))
 
 ### designSkill
 
@@ -322,32 +329,74 @@ the write. This is the function to hand to a model as a tool.
 
 **Throws:** `std::skills::review`, `std::skills::save`, `std::mkdir`, `std::write`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L599))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L633))
 
-### docsSkill
+### docsEntries
 
 ```ts
-docsSkill(
-  section: 
-  | "guide"
-  | "cli"
-  | "diagnostics"
-  | "stdlib"
-  | "agent",
-)
+docsEntries(section: DocsSection): SkillEntry[]
 ```
 
-Build a docs tool for an LLM over the packaged Agency documentation.
+Scan one section of the packaged Agency documentation. Pass the result to
+  docsToolFromEntries to build the full and the brief tool from one scan.
 
-  @param section - Which documentation set to serve
+  @param section - Which documentation set to scan
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
-| section | `\| "guide" \| "cli" \| "diagnostics" \| "stdlib" \| "agent"` |  |
+| section | `DocsSection` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L644))
+**Returns:** `SkillEntry[]`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L680))
+
+### docsToolFromEntries
+
+```ts
+docsToolFromEntries(
+  section: DocsSection,
+  entries: SkillEntry[],
+  brief: boolean = false,
+)
+```
+
+Build a docs tool for an LLM from entries docsEntries returned.
+
+  @param section - The documentation set the entries were scanned from
+  @param entries - The pages to list in the tool description
+  @param brief - List each page as one `path - description` line
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| section | `DocsSection` |  |
+| entries | `SkillEntry[]` |  |
+| brief | `boolean` | false |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L693))
+
+### docsSkill
+
+```ts
+docsSkill(section: DocsSection, brief: boolean = false)
+```
+
+Build a docs tool for an LLM over the packaged Agency documentation.
+
+  @param section - Which documentation set to serve
+  @param brief - List each page as one `path - description` line
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| section | `DocsSection` |  |
+| brief | `boolean` | false |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L711))
 
 ### bundledDocsDir
 
@@ -360,7 +409,7 @@ The directory holding the Agency docs that ship inside the package. A
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L665))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L721))
 
 ### agentSkill
 
@@ -380,7 +429,28 @@ Build a skills tool over the skills shipped for one agent. The returned
 |---|---|---|
 | agent | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L673))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L729))
+
+### agentPrompt
+
+```ts
+agentPrompt(filename: string): Result<string>
+```
+
+Read one of the prompt files shipped for the stdlib agents. A failure
+  means the file did not ship or cannot be read.
+
+  @param filename - The file to read, as a path under the shipped prompts directory
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| filename | `string` |  |
+
+**Returns:** `Result<string>`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L749))
 
 ### commandsDir
 
@@ -433,7 +503,7 @@ root), pass an absolute path: `"${cwd()}/.claude/commands"`.
 
 **Throws:** `std::skills::commandsDir`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L761))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L829))
 
 ### expandSlash
 
@@ -472,4 +542,4 @@ agency agent`, yielding `"/foo\n"`) dispatch correctly.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L820))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/skills.agency#L888))

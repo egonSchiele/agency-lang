@@ -51,6 +51,7 @@
     "./stdlib/**/*.js",
     "./stdlib/docs/**/*.md",
     "./stdlib/agents/skills/**/*.md",
+    "./stdlib/agents/prompts/**/*.md",
     "./scripts/hooks/postinstall.js"
   ],
   "exports": {

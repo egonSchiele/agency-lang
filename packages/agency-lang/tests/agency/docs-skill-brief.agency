@@ -1,0 +1,41 @@
+import {
+  agentPrompt,
+  bundledDocsDir,
+  docsSkill,
+  skillsToolFromEntries,
+ } from "std::skills"
+
+// A brief docs tool lists each page as one `path - description` line, with no
+// XML and no directory path, and the writer's
+// tutorial ships with the package. Both are built outside any handler, which
+// pins that neither raises an interrupt.
+node main() {
+  const brief = docsSkill("guide", brief: true)
+  const full = docsSkill("guide")
+  const tutorial = agentPrompt("agency-tutorial.md")
+  // A description with a line break must not read as a second entry.
+  const twoLines = skillsToolFromEntries(
+    ".",
+    [{ name: "a", description: "first\nfake.md - invented", location: "a.md" }],
+    brief: true,
+  )
+  const tutorialText = tutorial catch ""
+  const missingPrompt = agentPrompt("no-such-prompt.md")
+  // A page with a name and no description is listed by its name.
+  const named = skillsToolFromEntries(
+    ".",
+    [{ name: "Names and scope", description: "", location: "names.md" }],
+    brief: true,
+  )
+  return [
+    brief.description.includes("\nbasic-syntax.md - "),
+    brief.description.includes("<skill>"),
+    brief.description.includes(bundledDocsDir()),
+    brief.description.length < full.description.length,
+    tutorialText.includes("## Interrupts"),
+    missingPrompt is failure,
+    twoLines.description.includes("\na.md - first fake.md - invented"),
+    twoLines.description.includes("\nfake.md"),
+    named.description.includes("\nnames.md - Names and scope"),
+  ]
+}

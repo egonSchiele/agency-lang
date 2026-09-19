@@ -248,10 +248,6 @@ def formatted(source: string): string {
   return format(source) catch source
 }
 
-// Said in the message the writer answers as well as in the system prompt.
-// The closing lines of a long system prompt are the ones a model skips.
-static const CHECK_FIRST = "Before you return the program, call the typecheck tool on it and fix every error it reports."
-
 def hasMainNode(source: string): boolean {
   return source =~ re/node\s+main\s*\(/
 }
@@ -363,9 +359,9 @@ def generateLoop(
   return revise(maxAttempts: maxAttempts, check: critiqueOf) as critique {
     // if/else, not a ternary: a ternary inside a block evaluates to null.
     // See tests/agency/agents/blockProbe.agency.
-    let prompt = "${critique}\n${CHECK_FIRST}"
+    let prompt = critique
     if (critique == "") {
-      prompt = "${opening}\n${CHECK_FIRST}"
+      prompt = opening
     }
     const generated: GeneratedCode = llm(
       prompt,

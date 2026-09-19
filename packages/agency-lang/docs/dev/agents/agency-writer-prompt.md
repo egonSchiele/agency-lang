@@ -2,8 +2,8 @@
 
 `agencyCodingAgent` (`stdlib/agents/agency/coding.agency`) writes Agency
 programs. This doc covers how it learns the language: a tutorial in its
-system prompt, docs tools with a short listing, and two jobs the harness
-does so the model does not have to remember them. Each choice was measured
+system prompt, docs tools with a short listing, and formatting, which the
+harness does so the model does not have to remember it. Each choice was measured
 on `evals/agency-coding`, and the numbers are at the end.
 
 ## The tutorial
@@ -84,19 +84,19 @@ the parse error. The writer has no `format` tool. When formatting was the
 model's job, a prompt with the tutorial in it produced 7 formatted drafts
 in 75.
 
-**The typecheck instruction.** The message the writer answers ends with
-`CHECK_FIRST`, on the first attempt and on every repair. The system prompt
-says the same thing in its closing lines, which sit below 30 KB of
-tutorial. With the instruction there only, the writer called `typecheck` 14
-times in 75 trials where it had called it 77 times before. This line is
-where the tutorial runs' extra cost comes from: a typecheck is a tool
-round, and it about doubles the model calls in a trial. The loop compiles
-every draft regardless, so the line buys catching an error one round
-sooner.
+**No typecheck instruction in the task message.** One was tried: the
+message the writer answers ended with "Before you return the program, call
+the typecheck tool on it and fix every error it reports." The system
+prompt says the same in its closing lines, which sit below 30 KB of
+tutorial, and there the writer mostly skips it: 14 `typecheck` calls in 75
+trials, where it made 77 before the tutorial. With the line in the task
+message it made about 95, and the cost of a run doubled, because a
+typecheck is a tool round and about doubles the model calls in a trial.
+The loop compiles every draft regardless, so the line only caught an error
+one round sooner. It was removed for the cost.
 
-Both follow `harness-and-model.md`: a step the harness can do
-deterministically does not belong in the prompt, and an instruction the
-model must follow goes where it answers.
+Formatting follows `harness-and-model.md`: a step the harness can do
+deterministically does not belong in the prompt.
 
 ## The measurements
 
@@ -110,8 +110,8 @@ noise at three trials: one failed draft moves a test by 0.3.
 | paths-only listing, no tutorial | 0.677 ± 0.006 | $1.24 | 502 | 57 |
 | brief listing, no tutorial | 0.775 ± 0.019 | $1.02 | 385 | 12 |
 | tutorial, paths-only listing | 0.787 ± 0.010 | $0.43 | 150 | 4 |
-| the same, plus harness formatting and `CHECK_FIRST` | 0.840 ± 0.014 | $0.94 | 353 | 4 |
-| tutorial, brief listing, formatting, `CHECK_FIRST` (what ships) | 0.822 ± 0.027 | $0.78 | 282 | 2 |
+| the same, plus harness formatting and the typecheck line | 0.840 ± 0.014 | $0.94 | 353 | 4 |
+| tutorial, brief listing, formatting, the typecheck line | 0.822 ± 0.027 | $0.78 | 282 | 2 |
 
 What the rows say:
 
@@ -122,8 +122,10 @@ What the rows say:
   over half the size.
 - With the tutorial, the listing format changes nothing measurable,
   because the writer almost never opens a page.
-- Harness formatting with no typecheck instruction was not run. It would
-  show how much of the last 0.05 formatting accounts for.
+- What ships is the last row without the typecheck line. That combination
+  has not been measured. Formatting is worth up to 0.09 on a test and 64
+  more drafts passed it, so most of the last 0.05 should remain, at about
+  the cost of the fourth row.
 
 To run it again:
 

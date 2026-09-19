@@ -93,6 +93,13 @@ def buildBrainContext(interactive: boolean, brainName: string): BrainContext {
   }
 }
 
+/** True when the session's approvals come from the saved policy file,
+  and false under --policy, --approve, or --reject, which run on a
+  per-session copy that is never written back to it. */
+export def usesSavedPolicy(): boolean {
+  return _policyArg == "" && _approveArg == "" && _rejectArg == ""
+}
+
 // Load (or initialize) the policy and return the installed CLI policy handler.
 def policyHandlerFor(interactive: boolean): any {
   const { policyFile, sessionPolicy } = getPolicyForAgent(_policyArg, _approveArg, _rejectArg, interactive)

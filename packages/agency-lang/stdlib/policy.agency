@@ -22,6 +22,8 @@ import {
   _escapeGlob,
   _alwaysScopeFor,
   _allAlwaysScopes,
+  _missingPolicyRules,
+  _appendPolicyRules,
  } from "agency-lang/stdlib-lib/policy.js"
 
 
@@ -616,6 +618,42 @@ def maybeFlush() {
 }
 
 /**
+ * A saved policy file is a copy of a built-in policy from the day it was
+ * created, plus the user's own "always" answers, so a rule added to the
+ * built-in later never reaches it. These two functions let a program
+ * show the user what their file lacks and add it when they say so.
+ * Neither runs on its own, and nothing is added without being asked for.
+ */
+export def missingPolicyRules(base: Policy): Policy {
+  """
+  The rules `base` has that the `cliPolicyHandler`'s active policy lacks, keyed by effect. An effect the active policy already decides with a rule that has no `match` is left out, because a rule added after it could never match.
+
+  @param base - The policy to compare against, such as `recommendedAutoApprovePolicy`.
+  """
+  maybeLoadPolicy()
+  return _missingPolicyRules(_policy ?? {}, base)
+}
+
+export def addPolicyRules(additions: Policy) {
+  """
+  Append rules to the `cliPolicyHandler`'s active policy and write the policy file now. When the write fails, the active policy is left as it was and the failure is returned. The rules go after the ones already there, and the first matching rule wins, so every rule the user has, a reject included, keeps deciding what it decided before.
+
+  @param additions - The rules to append, keyed by effect, such as the result of `missingPolicyRules`.
+  """
+  maybeLoadPolicy()
+  const merged = _appendPolicyRules(_policy ?? {}, additions)
+  _internalIo = "std::write"
+  const written = writePolicyFile(globalCliPolicyOpts.file, merged, []) with approve
+  _internalIo = ""
+  // Only a saved rule takes effect. Otherwise the session would approve
+  // under rules the user was just told could not be saved.
+  if (written is success) {
+    _policy = merged
+  }
+  return written
+}
+
+/**
  * Force-write the `cliPolicyHandler`'s in-memory policy to disk
  * now. Use between user turns when you want the **last** decision
  * of a session persisted. The handler's own auto-flush runs at the
@@ -714,6 +752,48 @@ def renderSourceDiff(
   return lines.join("\n")
 }
 
+/** The fields of a `std::toolbox::review` payload that say what the
+  reviewer and the author thought of the draft. All optional: a caller
+  may raise the effect without them. */
+type ReviewFindings = {
+  notes?: string[];
+  blocking?: string[];
+  unresolved?: { point: string; reason: string }[];
+  resumed?: boolean
+}
+
+// Printed under a tool draft's diff. The text is written by a model, so it
+// is stripped the way the source is.
+def renderReviewFindings(data: ReviewFindings): string {
+  let lines: string[] = []
+  if (data.resumed == true) {
+    lines.push(color.yellow("This is the draft from earlier in this session. It was checked again, and not reviewed again."))
+  }
+  const unresolved = data.unresolved ?? []
+  if (unresolved.length > 0) {
+    lines.push(color.yellow("The author could not fix ${unresolved.length} review points:"))
+    for (item in unresolved) {
+      lines.push("- Reviewer: ${stripControlChars(item.point)}")
+      lines.push("  Author: ${stripControlChars(item.reason)}")
+    }
+  }
+  const blocking = data.blocking ?? []
+  if (blocking.length > 0) {
+    lines.push(color.yellow("The reviewer still objects after a redraft:"))
+    for (point in blocking) {
+      lines.push("- ${stripControlChars(point)}")
+    }
+  }
+  const notes = data.notes ?? []
+  if (notes.length > 0) {
+    lines.push(color.yellow("The reviewer notes:"))
+    for (note in notes) {
+      lines.push("- ${stripControlChars(note)}")
+    }
+  }
+  return lines.join("\n")
+}
+
 // The diff for an interrupt that changes code, or "" for every other
 // effect. These interrupts carry the old and new source in their data,
 // and the change is what the user is being asked to judge, so the
@@ -734,12 +814,17 @@ def renderInterruptDiff(intr: any): string {
     )
   }
   if (intr.effect == "std::toolbox::review") {
-    return renderSourceDiff(
+    const changed = renderSourceDiff(
       "Tool: ${intr.data.name}",
       intr.data.previous,
       intr.data.source,
       "agency",
     )
+    const findings = renderReviewFindings(intr.data)
+    if (findings == "") {
+      return changed
+    }
+    return "${changed}\n\n${findings}"
   }
   return ""
 }
@@ -776,13 +861,14 @@ def prettyPrintInterruptData(data: any, effect: string = ""): string {
   // The source an edit or a tool review carries is printed above the
   // prompt as a diff, so the prompt's own body holds what is left: the
   // metadata that says which change this is. We drop the source itself
-  // (`before`/`after`, `source`/`previous`) and `edits`, the raw op list
-  // the diff already shows.
+  // (`before`/`after`, `source`/`previous`), `edits`, the raw op list
+  // the diff already shows, and a tool review's findings, which are
+  // printed under its diff.
   if (effect == "std::edit") {
     return renderObjAsTable(data, excludeKeys: ["before", "after", "edits"])
   }
   if (effect == "std::toolbox::review") {
-    return renderObjAsTable(data, excludeKeys: ["source", "previous"])
+    return renderObjAsTable(data, excludeKeys: ["source", "previous", "notes", "blocking", "unresolved", "resumed"])
   }
 
   // Arrays are `typeof == "object"` too, but `for (x in array)` yields

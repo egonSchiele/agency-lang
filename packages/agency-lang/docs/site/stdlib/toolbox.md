@@ -63,6 +63,22 @@ A tool is a directory holding two Agency files. `impl.agency` is the
 
 ## Types
 
+### Unresolved
+
+A review point the drafting agent could not fix, in the reviewer's
+  words, and the agent's reason.
+
+```ts
+/** A review point the drafting agent could not fix, in the reviewer's
+  words, and the agent's reason. */
+export type Unresolved = {
+  point: string;
+  reason: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L171))
+
 ### ModuleFacts
 
 What `describe` says about a tool's `run` function.
@@ -76,7 +92,7 @@ export type ModuleFacts = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L192))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L210))
 
 ### ToolMeta
 
@@ -102,7 +118,7 @@ export type ToolMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L202))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L220))
 
 ### ToolEntry
 
@@ -121,7 +137,7 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L215))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L233))
 
 ## Effects
 
@@ -214,11 +230,22 @@ effect std::toolbox::review {
     changed rather than the whole tool again. */
   previous: string;
   effects: string[];
-  tested: boolean
+  tested: boolean;
+  /** Reviewer findings that do not block the draft: advice to the user
+    who asked for the tool. */
+  notes: string[];
+  /** Reviewer findings the author was asked to fix and the reviewer
+    raised again. Empty unless the draft is here because of them. */
+  blocking: string[];
+  /** Review points the author reported it could not fix, with its reason. */
+  unresolved: Unresolved[];
+  /** True when this is a draft from earlier in the session that nobody
+    accepted, shown again instead of writing a new one. */
+  resumed: boolean
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L169))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L176))
 
 ### std::toolbox::save
 
@@ -232,7 +259,7 @@ effect std::toolbox::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L202))
 
 ## Functions
 
@@ -261,7 +288,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L400))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L418))
 
 ### designTool
 
@@ -319,7 +346,7 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::review`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`, `std::toolbox::removeStagedFile`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1249))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1553))
 
 ### writeTool
 
@@ -371,7 +398,7 @@ in `designTool` ends by publishing through this same gate.
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1310))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1614))
 
 ### runTool
 
@@ -404,4 +431,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::toolbox::recordUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1362))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1666))

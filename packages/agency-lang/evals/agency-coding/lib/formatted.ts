@@ -22,6 +22,6 @@ export function formatted(): Grader<CodingInput> {
       }
       return binary(false, `${outFile} is not formatted; running the formatter would change it`);
     },
-    { name: "formatted", weight: 0.2 },
+    { name: "formatted", weight: 0.1 },
   );
 }

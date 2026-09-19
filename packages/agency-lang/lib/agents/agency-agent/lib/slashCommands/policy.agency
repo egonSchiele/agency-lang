@@ -1,0 +1,55 @@
+/** @module
+  @summary The /policy command: add the rules of the built-in
+  `recommended` policy that the saved policy file does not have.
+*/
+import {
+  Policy,
+  addPolicyRules,
+  missingPolicyRules,
+  recommendedAutoApprovePolicy,
+ } from "std::policy"
+import { chooseOption } from "std::ui"
+import { pushMessage } from "std::ui/cli"
+
+import { POLICY_PATH } from "../config.agency"
+import { usesSavedPolicy } from "../turn.agency"
+
+// One line per rule, the way it sits in the policy file.
+export def policyRuleLines(rules: Policy): string[] {
+  return [["  ${effect}  ${JSON.stringify(rule)}" for rule in effectRules] for effect, effectRules in rules].flat()
+}
+
+export def policySlashCommand(): boolean {
+  if (!usesSavedPolicy()) {
+    pushMessage("This session runs on --policy, --approve, or --reject, not on your saved policy. Start the agent without them to update the saved one.")
+    return true
+  }
+  const missing = missingPolicyRules(recommendedAutoApprovePolicy)
+  const lines = policyRuleLines(missing)
+  if (lines.length == 0) {
+    pushMessage("Your policy already has every rule in the recommended policy.")
+    return true
+  }
+  pushMessage("These ${lines.length} rules are in the built-in `recommended` policy and not in yours. If you chose the minimal policy on purpose, adding them makes yours approve what `recommended` approves: reads under the current directory, web search, and the rest below.")
+  pushMessage("They go after your own rules, and the first matching rule wins, so a rule you already have keeps deciding what it decides now.")
+  for (line in lines) {
+    pushMessage(color.dim(line))
+  }
+  const choice = chooseOption(
+    "Policy",
+    "Add these `recommended` rules to ${POLICY_PATH}?",
+    [{ key: "add", label: "Add them" }, { key: "skip", label: "Leave my policy as it is" }],
+    allowCancel: true,
+  )
+  if (choice != "add") {
+    pushMessage("Policy left as it is.")
+    return true
+  }
+  const written = addPolicyRules(missing)
+  if (written is failure(reason)) {
+    pushMessage(color.red("Could not save the policy: ${reason}"))
+    return true
+  }
+  pushMessage("Added ${lines.length} rules.")
+  return true
+}

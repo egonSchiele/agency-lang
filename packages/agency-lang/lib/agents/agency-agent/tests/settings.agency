@@ -27,6 +27,9 @@ import {
 import { resolveBrainName } from "../lib/turn.agency"
 
 node roundTripsTheSearchBackend(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   saveSettings({
     search: {
       backend: "tavily"
@@ -41,6 +44,9 @@ node roundTripsTheSearchBackend(): string {
 }
 
 node missingFileLoadsAsEmpty(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   // Exercise the missing-file path: delete settings.json first.
   remove(SETTINGS_PATH) with approve
   const loaded = loadSettings() with approve
@@ -51,6 +57,9 @@ node missingFileLoadsAsEmpty(): string {
 }
 
 node corruptFileLoadsAsEmpty(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   // Write garbage and confirm the parse failure is swallowed.
   write(SETTINGS_FILE, "not json{{{", POLICY_DIR) with approve
   const loaded = loadSettings() with approve
@@ -86,6 +95,9 @@ node doesNotMutateInput(): string {
 }
 
 node roundTripsModelSlots(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   saveSettings(
     {
     model: {
@@ -101,6 +113,9 @@ node roundTripsModelSlots(): string {
 
 
 node roundTripsCapabilities(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   saveSettings({
     capabilities: {
       models: {
@@ -124,6 +139,9 @@ node roundTripsCapabilities(): string {
 }
 
 node capabilitiesSanitizedOnLoad(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   // Raw JSON, not a typed literal: unknown field + wrong-typed maxTokens,
   // exactly what a hand-edited settings.json can contain.
   write(
@@ -141,6 +159,9 @@ node capabilitiesSanitizedOnLoad(): string {
 }
 
 node missingCapabilitiesIsEmpty(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   saveSettings({
     search: {
       backend: "off"
@@ -155,6 +176,9 @@ node missingCapabilitiesIsEmpty(): string {
 }
 
 node nullEntryAndReservedKeySurviveLoad(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   // A hand-edited file with a null entry used to throw inside
   // loadSettings (sanitizePatch read .prompt off null); a __proto__ key
   // would reparent the record on assignment instead of storing. Both
@@ -209,6 +233,9 @@ node keepsPrefixedEmbeddingSlotValue(): string {
 }
 
 node roundTripsBrain(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   saveSettings({ brain: "flat" }) with approve
   const loaded = loadSettings() with approve
   return loaded.brain ?? ""
@@ -218,6 +245,9 @@ node roundTripsBrain(): string {
 // not become an unusable registry key merely because the static Settings type
 // says the field is a string.
 node invalidPersistedBrainFallsBack(): string {
+  if (usingDefaultAgentHome()) {
+    return "not sandboxed"
+  }
   write(SETTINGS_FILE, "{\"brain\":42}", POLICY_DIR) with approve
   const loaded = loadSettings() with approve
   return resolveBrainName(null, loaded)

@@ -545,6 +545,7 @@ async function runSingleTest(
       hasArgs,
       argsString: testCase.input ?? "",
       allowTestImports: true,
+      sandboxAgentHome: true,
       // The precompile pass in test() already compiled this source (with
       // allowTestImports enforcement); reuse the sibling .js instead of
       // recompiling for every test case.

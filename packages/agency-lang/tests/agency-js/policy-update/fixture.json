@@ -1,0 +1,9 @@
+{
+  "report": ["asked", "true", "false", "approved", "0"],
+  "inputCalls": 2,
+  "unsaved": ["write failed", "asked"],
+  "bashRules": [{ "action": "reject" }],
+  "firstReadRule": { "match": { "dir": "/mine" }, "action": "approve" },
+  "readRulesGrew": true,
+  "removeStagingOnDisk": true
+}

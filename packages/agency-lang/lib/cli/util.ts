@@ -176,6 +176,10 @@ type ExecuteNodeArgs = {
   // is true. The compiled module's imports template auto-activates
   // DeterministicClient when this env var is present.
   llmMocks?: LLMMock[] | ScopedLLMMocks;
+  // Run with a throwaway AGENCY_AGENT_HOME, deleted afterwards. The test
+  // runner sets this for every case. An eval or the optimizer leaves it
+  // off and keeps the agent home it was given.
+  sandboxAgentHome?: boolean;
   // Force the deterministic LLM provider for this run even when the
   // suite-level AGENCY_USE_TEST_LLM_PROVIDER env var is unset. Use for
   // tests whose assertions depend on the deterministic client's fixed
@@ -359,6 +363,7 @@ export async function executeNodeAsync({
   useTestLLMProvider,
   fetchMocks,
   fakeClock,
+  sandboxAgentHome,
   env: callerEnv,
   ...rest
 }: ExecuteNodeArgs): Promise<{ data: any; stdout: string; stderr: string; costUsd?: number }> {
@@ -376,12 +381,14 @@ export async function executeNodeAsync({
     env.AGENCY_FAKE_CLOCK = "1";
   }
 
-  // Sandbox the agent home per test case: the agent config derives every
+  // Sandbox the agent home: the agent config derives every
   // ~/.agency-agent path from AGENCY_AGENT_HOME when set, so tests can
   // never delete/corrupt the developer's real settings or race each other
-  // on the shared file (issue #469).
+  // on the shared file (issue #469). The test runner asks for this on
+  // every case, because a test needs no LLM call to write settings.json.
+  // Deterministic mode always gets one.
   let agentHomeCleanup: (() => void) | undefined;
-  if (useDeterministic) {
+  if (sandboxAgentHome || useDeterministic) {
     const agentHome = fs.mkdtempSync(path.join(os.tmpdir(), "agency-agent-home-"));
     env.AGENCY_AGENT_HOME = agentHome;
     agentHomeCleanup = () => {

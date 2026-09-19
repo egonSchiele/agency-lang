@@ -72,7 +72,7 @@ have no harness at all. Only `files/` is seeded into the writer's working
 directory.
 
 Every test also carries `formatted` from `lib/formatted.ts`, at weight
-0.2: the saved file must match what the Agency formatter would produce
+0.1: the saved file must match what the Agency formatter would produce
 from it. The writer has the stdlib `format` tool for this. A test that
 has only a harness gets a `graders.ts` holding just this grader; the
 harness graders are added alongside it.
@@ -135,6 +135,20 @@ else; tags are for choosing a subset to run.
 - `stdlib-knowledge` — group, distinct, count, and a number range over file
   entries. Judged: `groupBy`, `unique`, `count`, `range`, and `extname`
   from std::path instead of hand-written versions.
+- `outside-info-news`, `outside-info-release`, `outside-info-weather` —
+  programs whose answer changes every day: the latest news for a region,
+  the newest release of any software project, today's forecast for a city.
+  There is no fixed output to check, so `lib/outsideInfoJudge.ts` reads
+  the program for three things that hold whatever the subject is: the
+  information comes from a source that has it (a model call with a hosted
+  web search, a search followed by reading the results, a fetch of an API
+  that publishes it, or a connector for this exact data; a bare model
+  call is not one), every input reaches the lookup, and nothing is
+  declared and left unused.
+- `outside-info-connector` — the control for those three: the top Hacker
+  News stories, where `hnStories` is the right answer. A change that
+  sends every lookup through a web search lowers this score. Run the four
+  together with `--test 'outside-info-*'`.
 - `guards` — summarize documents with a slow stub, one of which must time
   out alone. The holdout checks the slow one yields "timed out" and the
   rest finish; the judge checks a per-call `guard(time: 500ms)` read with

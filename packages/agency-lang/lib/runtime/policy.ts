@@ -158,8 +158,9 @@ export function expandAgencyInstallDir(
 
 /** In a `dir` pattern, `<agent-home>` stands for the agent home directory
  *  (`AGENCY_AGENT_HOME`, or `~/.agency-agent`). The built-in read scope
- *  uses it for the learned skills and tools directories, so a saved policy
- *  keeps meaning "wherever the agent home is now". */
+ *  uses it for the home and everything under it, and the write scope for
+ *  the agent's own settings file, so a saved policy keeps meaning
+ *  "wherever the agent home is now". */
 export const AGENT_HOME_PLACEHOLDER = "<agent-home>";
 
 /** Expand `<agent-home>` at match time, like `<agency>`. The home is

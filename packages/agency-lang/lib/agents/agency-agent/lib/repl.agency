@@ -33,7 +33,9 @@ import {
   Session,
   switchModel,
   reactToSlotChange,
+  establishedProvider,
   modelChoiceItems,
+  scopedPickerNotes,
   parseModelsFilters,
   parsePresetName,
   switchPreset,
@@ -60,6 +62,7 @@ import {
   sessionTitle,
  } from "./resume.agency"
 import { renderReply, renderUserLine } from "./transcript.agency"
+import { policySlashCommand } from "./slashCommands/policy.agency"
 import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
@@ -151,7 +154,11 @@ def modelSlashCommand(command: string): boolean {
         pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
       }
     }
-    const items = modelChoiceItems({})
+    const established = establishedProvider(_session)
+    const items = modelChoiceItems({}, established)
+    for (line in scopedPickerNotes(established, items.length)) {
+      pushMessage(color.dim(line))
+    }
     const choice = chooseOption(
       "Model",
       "Pick a model, or type one (or slot=model, e.g. reasoning=claude-opus-4-8). Empty to cancel.",
@@ -217,7 +224,7 @@ def modelsSlashCommand(trimmed: string): boolean {
   }
   for (model in models) {
     pushMessage(
-      "  ${model.name}  (${model.provider}, $${model.inputCost}/1M in, ${model.contextWindow} ctx)",
+      "  ${model.name}  (${model.provider}, $${model.inputCost}/1M in, $${model.outputCost}/1M out, ${model.contextWindow} ctx)",
     )
   }
   return true
@@ -283,7 +290,7 @@ def _runTurn(msg: string): boolean {
     }
     "/help" => {
       pushMessage(
-        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /search, /settings, /mcp, /rename, /paste, /help",
+        "Commands: /exit, /clear, /clear-history, /cost, /model, /models, /local, /preset, /policy, /search, /settings, /mcp, /rename, /paste, /help",
       )
       return true
     }
@@ -299,6 +306,7 @@ def _runTurn(msg: string): boolean {
     "/models" => modelsSlashCommand(trimmed)
     "/local" => localSlashCommand()
     "/preset" => presetSlashCommand(trimmed)
+    "/policy" => policySlashCommand()
     "/rename" => renameSlashCommand("")
     _ => {
       if (trimmed.startsWith("/rename ")) {

@@ -1,4 +1,5 @@
 import { agencyReviewAgent } from "std::agents/agency/review"
+import test { judgePrompt } from "std::agents/agency/review"
 import { feedbackHasErrors } from "std::agents/lib/feedback"
 
 // task="" -> pure parse+typecheck feedback, no LLM call.
@@ -25,4 +26,12 @@ node parseError() {
 node withTask() {
   const fb = agencyReviewAgent("export node main() { return 1 }", task: "return the number two")
   return feedbackHasErrors(fb)
+}
+
+// The `context` argument reaches the model. It was accepted and dropped,
+// so designTool's guidance on what a reviewer may block never arrived.
+node contextReachesThePrompt() {
+  const withIt = judgePrompt("export node main() { return 1 }", "Return one.", "The author cannot change the task.")
+  const without = judgePrompt("export node main() { return 1 }", "Return one.", "")
+  return [withIt.includes("The author cannot change the task."), without.includes("<context>")]
 }

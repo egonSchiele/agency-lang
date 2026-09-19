@@ -1,0 +1,10 @@
+{
+  "description": "Latest news for a region, with an optional topic. Tests that a program needing today's information gets it from a source that has it, and that the region and the topic reach the lookup.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports `latestNews(region: string, topic: string = \"\", maxItems: number = 5)`. It returns the latest news headlines about that region, each with a one-sentence summary, as a list of `{ headline: string, summary: string }`. An empty topic means news on any subject; otherwise only news on that topic. The region can be any country, state, or city.",
+    "outFile": "solution.agency"
+  }
+}

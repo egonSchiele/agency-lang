@@ -1,0 +1,15 @@
+/*
+ * The /policy command's rule listing.
+ */
+import { policyRuleLines } from "../lib/slashCommands/policy.agency"
+
+node listsOneLinePerRule(): string[] {
+  return policyRuleLines({
+    "std::read": [{ match: { dir: "/a" }, action: "approve" }, { action: "reject" }],
+    "std::write": [{ action: "propagate" }]
+  })
+}
+
+node listsNothingForAnEmptyPolicy(): string[] {
+  return policyRuleLines({})
+}

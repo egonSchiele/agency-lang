@@ -1,0 +1,97 @@
+import { cliPolicyHandler, setPolicy, recommendedAutoApprovePolicy, ScopedRuleFields } from "std::policy"
+
+const FIELDS: ScopedRuleFields = {}
+
+def writeThere(dir: string, filename: string): string {
+  interrupt std::write("write it?", { dir: dir, filename: filename })
+  return "wrote it"
+}
+
+def readThere(dir: string, filename: string): string {
+  interrupt std::read("read it?", { dir: dir, filename: filename })
+  return "read it"
+}
+
+def outcomeOf(result: any): string {
+  if (result is failure) {
+    return "rejected"
+  }
+  return "approved"
+}
+
+// The write /model and /preset make. settings.json is executable
+// configuration -- an mcpServers entry is a command the next agent start
+// spawns -- so this write asks too, like every other one.
+node doesNotSaveSettings(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try writeThere(args.home, "settings.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// The policy file lives in that same directory. Approving writes to it
+// would let the agent grant itself anything, so it still asks.
+node doesNotSavePolicy(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try writeThere(args.home, "policy.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// A learned skill enters through its own review gate, so a plain write
+// into that subtree still asks too.
+node doesNotWriteSkills(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try writeThere("${args.home}/skills/greet", "SKILL.md")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// The agent's memory is its own, and reading it does not ask.
+node readsItsMemory(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try readThere("${args.home}/memory", "facts.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// Neither does reading the settings file it saves.
+node readsItsSettings(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try readThere(args.home, "settings.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}
+
+// Earlier conversations are in the same home, and often belong to other
+// projects. Reading them asks.
+node doesNotReadSessions(args: { policyFile: string, home: string }): string {
+  setPolicy(args.policyFile, recommendedAutoApprovePolicy)
+  const handler = cliPolicyHandler(file: args.policyFile, fields: FIELDS)
+  let outcome = ""
+  handle {
+    const result = try readThere("${args.home}/sessions", "last.json")
+    outcome = outcomeOf(result)
+  } with handler
+  return outcome
+}

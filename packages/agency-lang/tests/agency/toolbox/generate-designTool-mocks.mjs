@@ -54,12 +54,15 @@ const dateImpl = modelImpl
 const aliasImpl = dateImpl
   .replace('import { today } from "std::date"', 'import { now as clock } from "std::date"')
   .replace('return "${request.n} on ${today()}"', 'return "${request.n} at ${clock()}"');
+// The model tool again, for a request of `{ text: string }`.
+const modelTextImpl = modelImpl
+  .replace("export type Request = {\n  n: number\n}", "export type Request = {\n  text: string\n}")
+  .replace("Say hello to number ${request.n}", "Say hello to ${request.text}");
 const cases = [
   { request: { n: 41 }, expectedJson: "42" },
   { request: { n: 0 }, expectedJson: "1" },
 ];
 const codeMock = (source) => ({ return: { code: source } });
-const reviewOk = { return: [] };
 const casesMock = { return: cases };
 const testCase = (nodeName, rounds) => ({
   nodeName,
@@ -77,7 +80,21 @@ const testCase = (nodeName, rounds) => ({
 // program that runs in its own process under a random module id, so it
 // reads the "*" queue, from the start, every time. That is why the other
 // two calls need their own queues.
-const draftRound = (source, tested) => ({ source, tested });
+// `review` is what the review agent returns for the round, or null when
+// the round must not be reviewed at all: a redraft that answered the
+// reviewer with `cannotFix` goes to the user without a second review, and
+// a review call there would find its queue empty. `cannotFix` lists the
+// tool calls the coding agent makes before it returns the draft.
+const draftRound = (source, tested, review = [], cannotFix = []) => ({
+  source,
+  tested,
+  review,
+  cannotFix,
+});
+const finding = (error, feedback) => ({ error, feedback });
+const cannotFixCall = (point, reason) => ({
+  toolCall: { name: "cannotFix", args: { point, reason } },
+});
 const pureRound = [draftRound(good, true)];
 const modelRound = [draftRound(modelImpl, false)];
 const readRound = [draftRound(readImpl, false)];
@@ -86,13 +103,32 @@ const wrongRequestRound = [draftRound(wrongRequest, false)];
 const nodeImportRound = [draftRound(nodeImportImpl, false)];
 const dateRound = [draftRound(dateImpl, false)];
 const aliasRound = [draftRound(aliasImpl, false)];
+const ADVICE = "search() returns no dates, so publicationTime is a guess. Use a dated source or drop the field.";
+const PROBLEM = "run ignores request.n.";
+const UNFIXABLE = "The purpose asks for a publication time.";
+const REASON = "No std:: search function returns a date.";
+const advisedRound = [draftRound(good, true, [finding(false, ADVICE)])];
+const blockedRound = [draftRound(good, false, [finding(true, PROBLEM)])];
+const blockedAgainRound = [draftRound(good, true, [finding(true, PROBLEM)])];
+const unfixableRound = [draftRound(good, false, [finding(true, UNFIXABLE)])];
+// The redraft that reports the point also fails to assemble.
+const cannotFixBrokenRound = [
+  draftRound(wrongExport, false, null, [{ point: UNFIXABLE, reason: REASON }]),
+];
+const cannotFixRound = [draftRound(good, true, null, [{ point: UNFIXABLE, reason: REASON }])];
+const modelTextRound = [draftRound(modelTextImpl, false)];
 const scopedMocks = (rounds) => {
   if (rounds.length === 0) {
     return [];
   }
   const mocks = {
-    coding: rounds.map((round) => codeMock(round.source)),
-    review: rounds.map(() => reviewOk),
+    coding: rounds.flatMap((round) => [
+      ...round.cannotFix.map((call) => cannotFixCall(call.point, call.reason)),
+      codeMock(round.source),
+    ]),
+    review: rounds
+      .filter((round) => round.review !== null)
+      .map((round) => ({ return: round.review })),
   };
   if (rounds.some((round) => round.tested)) {
     mocks["*"] = [casesMock];
@@ -134,5 +170,27 @@ const tests = [
   testCase("runToolRefusesAMissingTool", []),
   testCase("runToolRefusesAPath", []),
   testCase("runToolRefusesCorruptMeta", []),
+  testCase("reviewerAdviceReachesTheUser", advisedRound),
+  testCase("firstBlockIsFixedWithoutTheUser", [...blockedRound, ...pureRound]),
+  testCase("cannotFixSkipsTheSecondReview", [...unfixableRound, ...cannotFixRound]),
+  testCase("pointReportedAgainAfterABrokenRedraft", [
+    ...unfixableRound,
+    ...cannotFixBrokenRound,
+    ...cannotFixRound,
+  ]),
+  // The draft that assembles reports nothing, so it draws a review mock
+  // of its own: `cannotFix` is per draft, not per design.
+  testCase("redraftThatReportsNothingIsReviewedAgain", [
+    ...unfixableRound,
+    ...cannotFixBrokenRound,
+    ...pureRound,
+  ]),
+  testCase("secondBlockGoesToTheUser", [...blockedRound, ...blockedAgainRound]),
+  testCase("unacceptedBlockedDraftNamesTheFindings", [...blockedRound, ...blockedAgainRound]),
+  testCase("unresolvedPointsAreKeptPerStagingDir", []),
+  testCase("unacceptedDraftIsOfferedAgain", pureRound),
+  testCase("draftForAnotherPurposeIsNotOfferedAgain", [...pureRound, ...pureRound]),
+  testCase("draftForAnotherRequestIsNotOfferedAgain", [...pureRound, ...modelTextRound]),
+  testCase("savedToolIsForgotten", [...pureRound, ...pureRound]),
 ];
 writeFileSync(join(here, "designTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");

@@ -53,7 +53,8 @@ node rejectedReviewSavesNothing(): boolean {
 }
 
 // designTool makes a staging directory before it drafts anything, so
-// rejecting that mkdir reaches its failure path without a model call.
+// rejecting that reaches its failure path without a model call. The
+// directory is made under the toolbox's own effect, not std::mkdir.
 node rejectedToolStagingSavesNothing(): boolean {
   if (!sandboxed("staging-rejected")) {
     return false
@@ -62,7 +63,7 @@ node rejectedToolStagingSavesNothing(): boolean {
   handle {
     reply = writeToolFor("hnTop", "Fetch the top stories", "{ maxItems: number }")
   } with (intr) {
-    if (intr.effect == "std::mkdir") {
+    if (intr.effect == "std::toolbox::createStaging") {
       return reject("no staging")
     }
     return approve()

@@ -1,0 +1,10 @@
+{
+  "description": "The newest stable release of any software project. Tests that the program looks the answer up somewhere that has it, for a project it cannot know in advance.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports `latestRelease(project: string)`. It returns the newest stable release of that software project and one sentence on what changed in it, as `{ version: string, changes: string }`. The project can be anything with public releases, such as \"PostgreSQL\", \"Blender\", or \"Rust\", and is not limited to one package registry.",
+    "outFile": "solution.agency"
+  }
+}

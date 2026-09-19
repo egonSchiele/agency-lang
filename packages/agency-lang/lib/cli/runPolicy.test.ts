@@ -4,6 +4,8 @@ import { tmpdir } from "os";
 import path from "path";
 import { resolveRunPolicy } from "./runPolicy.js";
 import { readScopeRules } from "../runtime/builtinPolicies.js";
+import { checkPolicy } from "../runtime/policy.js";
+import { agentHomeDir } from "../runtime/agentHome.js";
 
 describe("resolveRunPolicy", () => {
   it("returns null when no policy flags are set", () => {
@@ -13,7 +15,7 @@ describe("resolveRunPolicy", () => {
   it("resolves a built-in name", () => {
     const r = resolveRunPolicy({ policy: "recommended", cwd: "/x" });
     const p = JSON.parse(r!.policyJson);
-    expect(p["std::read"]).toEqual(readScopeRules());
+    expect(p["std::grep"]).toEqual(readScopeRules());
     expect(r!.interactive).toBe(false);
   });
 
@@ -64,7 +66,10 @@ describe("resolveRunPolicy", () => {
     });
     const p = JSON.parse(r!.policyJson);
     // reject rule prepended ahead of the built-in's approve rules
-    expect(p["std::read"]).toEqual([{ action: "reject" }, ...readScopeRules()]);
+    expect(p["std::read"].slice(0, 1 + readScopeRules().length)).toEqual([
+      { action: "reject" },
+      ...readScopeRules(),
+    ]);
   });
 
   it("rejects on overlap: reject rule sits ahead of approve", () => {
@@ -87,19 +92,33 @@ describe("resolveRunPolicy", () => {
   it("threads cwd into the 'with-writes' base scope", () => {
     const r = resolveRunPolicy({ policy: "with-writes", cwd: "/work" });
     const p = JSON.parse(r!.policyJson);
+    // The project scope this flag asked for, and nothing else:
+    // `recommended` underneath approves no write of its own.
     expect(p["std::write"]).toEqual([{ match: { dir: "{/work,/work/**}" }, action: "approve" }]);
   });
 
   it("leaves base rules for unaffected effects untouched", () => {
     const r = resolveRunPolicy({
       policy: "recommended",
-      reject: "std::write",
+      reject: "std::read",
       cwd: "/x",
     });
     const p = JSON.parse(r!.policyJson);
-    // std::read (in base, not in inline flags) keeps its built-in rules
-    expect(p["std::read"]).toEqual(readScopeRules());
-    expect(p["std::write"]).toEqual([{ action: "reject" }]);
+    // std::grep (in base, not in inline flags) keeps its built-in rules
+    expect(p["std::grep"]).toEqual(readScopeRules());
+    // The flag goes in front of the base rules rather than replacing
+    // them. Its catch-all reject matches first, so `--reject std::read`
+    // still rejects the settings read `recommended` approves on its own.
+    expect(p["std::read"][0]).toEqual({ action: "reject" });
+    expect(p["std::read"].length).toBe(readScopeRules().length + 2);
+    expect(
+      checkPolicy(p, {
+        effect: "std::read",
+        message: "read settings?",
+        data: { dir: agentHomeDir(), filename: "settings.json" },
+        origin: "test",
+      }),
+    ).toEqual({ type: "reject" });
   });
 
   it("exposes the parsed policy, matching its JSON, for in-process callers", () => {

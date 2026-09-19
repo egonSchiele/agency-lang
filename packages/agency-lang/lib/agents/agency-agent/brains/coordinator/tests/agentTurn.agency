@@ -11,10 +11,11 @@ import {
   reactToSlotChange,
   markMemoryEmbeddingsPinned,
   modelChoiceItems,
+  scopedPickerNotes,
   parseModelsFilters,
   Session,
  } from "../../../lib/session.agency"
-import { knownProviders, Resolved } from "../../../lib/models.agency"
+import { knownProviders, parseModelSpec, Resolved } from "../../../lib/models.agency"
 import {
   resolveAll,
   buildLayers,
@@ -23,7 +24,7 @@ import {
  } from "../../../lib/resolution.agency"
 import { saveSettings } from "../../../lib/settings.agency"
 import { setEnv } from "std::system"
-import { applyResolved, getResolvedSlots, promoteAll } from "../../../shared.agency"
+import { applyResolved, demoteProvider, getResolvedSlots, promoteAll } from "../../../shared.agency"
 
 // The grounding marker proves init reached the system prompt; the phrase
 // shared by main-large.md and main-small.md proves the bundled prompt itself
@@ -129,6 +130,15 @@ def slotModel(slots: Record<string, Resolved>, slot: string): string {
 node switchPinsAllSlots(): string {
   const out = switchModel(freshSession(), "gpt-5.5", SWITCH_CTX, SWITCH_BEFORE)
   return "${slotModel(out.resolved, "main")}|${slotModel(out.resolved, "reasoning")}"
+}
+// The key the /model picker hands over names its provider, so picking a
+// model of another provider moves the session to that provider.
+node switchWithAPickerKeyChangesProvider(): string {
+  saveSettings({}) with approve
+  const openaiKeys = filter(modelChoiceItems({ provider: "openai" }), \item -> item.key.startsWith("openai/"))
+  const out = switchModel(freshSession(), openaiKeys[0].key, SWITCH_CTX, SWITCH_BEFORE)
+  const main = out.resolved["main"]
+  return "${main.provider}|${"openai/${main.model}" == openaiKeys[0].key}"
 }
 // A slot=model spec sets only that slot in-session; main keeps its built-in
 // default (doesn't collapse routing). Clear settings for determinism.
@@ -243,11 +253,12 @@ node modelItemsFilterOnlyAnthropic(): boolean {
     return false
   }
   for (item in items) {
-    const info = hostedModelInfo(item.key)
+    const spec = parseModelSpec(item.key, false, knownProviders())
+    const info = hostedModelInfo(spec.model)
     if (info == null) {
       return false
     }
-    if (info.provider != "anthropic") {
+    if (spec.provider != "anthropic" || info.provider != "anthropic") {
       return false
     }
   }
@@ -259,11 +270,43 @@ node modelItemsFilterNarrows(): boolean {
   return modelChoiceItems({ provider: "anthropic" }).length < modelChoiceItems({}).length
 }
 
-// The item key is the model name (what switchModel receives); guards a
-// key/label swap. hostedModelInfo resolving it confirms it is a real name.
-node modelItemKeyIsModelName(): boolean {
-  const items = modelChoiceItems({ provider: "anthropic" })
-  return hostedModelInfo(items[0].key) != null
+// The item key is what switchModel receives, so it names the provider.
+// Every key must split into a provider switchModel recognizes and a real
+// model name.
+node modelItemKeysCarryTheirProvider(): boolean {
+  for (item in modelChoiceItems({})) {
+    const spec = parseModelSpec(item.key, false, knownProviders())
+    const info = hostedModelInfo(spec.model)
+    if (info == null || spec.provider != demoteProvider(info.provider)) {
+      return false
+    }
+  }
+  return true
+}
+
+// Under an established provider switchModel never splits the spec, so
+// the keys are bare names and only that provider's models are offered.
+node modelItemsUnderAnEstablishedProvider(): boolean {
+  const items = modelChoiceItems({}, "anthropic")
+  if (items.length == 0) {
+    return false
+  }
+  for (item in items) {
+    const info = hostedModelInfo(item.key)
+    if (info == null || info.provider != "anthropic") {
+      return false
+    }
+  }
+  return true
+}
+
+// An established provider narrows the picker, and the picker says so. A
+// provider the catalog does not list leaves it empty, and it says that.
+node pickerExplainsItsScope(): string {
+  const open = scopedPickerNotes("", 40).length
+  const scoped = scopedPickerNotes("anthropic", 12)
+  const empty = scopedPickerNotes("litellm", modelChoiceItems({}, "litellm").length)
+  return "${open}|${scoped.length}|${scoped[0].includes("anthropic models only")}|${empty.length}|${empty[1].includes("Type the model name")}"
 }
 
 // `/models` arg parsing (extracted so it is unit-testable, no magic offset).
@@ -436,4 +479,11 @@ node switchPerSlotFromPromotedOpenaiSession(): string {
     return "unresolved"
   }
   return "${main.model}/${reasoning.model}"
+}
+
+// A model's price is two numbers, and the output one is usually the
+// larger, so a picker row shows both.
+node modelItemLabelShowsBothPrices(): boolean {
+  const label = modelChoiceItems({ provider: "anthropic" })[0].label
+  return label.includes("/1M in") && label.includes("/1M out")
 }

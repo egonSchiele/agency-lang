@@ -1,0 +1,17 @@
+{
+  "sourceFile": "slashPolicy.agency",
+  "tests": [
+    {
+      "nodeName": "listsOneLinePerRule",
+      "input": "",
+      "expectedOutput": "[\"  std::read  {\\\"match\\\":{\\\"dir\\\":\\\"/a\\\"},\\\"action\\\":\\\"approve\\\"}\",\"  std::read  {\\\"action\\\":\\\"reject\\\"}\",\"  std::write  {\\\"action\\\":\\\"propagate\\\"}\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "listsNothingForAnEmptyPolicy",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

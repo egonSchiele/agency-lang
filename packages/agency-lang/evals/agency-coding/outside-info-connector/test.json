@@ -1,0 +1,10 @@
+{
+  "description": "The control for the outside-info tests: the standard library has a connector for exactly this data. Tests that the program uses it, so a change that sends every lookup through a web search shows up as a lower score here.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports `topStories(limit: number = 10)`. It returns the stories at the top of Hacker News right now, as a list of `{ title: string, url: string, score: number }`.",
+    "outFile": "solution.agency"
+  }
+}

@@ -135,6 +135,22 @@ else; tags are for choosing a subset to run.
 - `stdlib-knowledge` — group, distinct, count, and a number range over file
   entries. Judged: `groupBy`, `unique`, `count`, `range`, and `extname`
   from std::path instead of hand-written versions.
+- `outside-info-news`, `outside-info-release`, `outside-info-weather` —
+  programs whose answer changes every day: the latest news for a region,
+  the newest release of any software project, today's forecast for a city.
+  There is no fixed output to check, so `lib/outsideInfoJudge.ts` reads
+  the program for three things that hold whatever the subject is: the
+  information comes from a source that has it (a model call with a hosted
+  web search, a search followed by reading the results, a fetch of an API
+  that publishes it, or a connector for this exact data; a bare model
+  call is not one), every input reaches the lookup, and nothing is
+  declared and left unused. They came from a tool-writing run where the
+  writer asked for news from a search that returns no dates, was pushed
+  to GDELT, and wrote a prompt that never named the country.
+- `outside-info-connector` — the control for those three: the top Hacker
+  News stories, where `hnStories` is the right answer. A change that
+  sends every lookup through a web search lowers this score. Run the four
+  together with `--test 'outside-info-*'`.
 - `guards` — summarize documents with a slow stub, one of which must time
   out alone. The holdout checks the slow one yields "timed out" and the
   rest finish; the judge checks a per-call `guard(time: 500ms)` read with

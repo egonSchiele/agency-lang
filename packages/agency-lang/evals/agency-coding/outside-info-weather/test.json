@@ -1,0 +1,10 @@
+{
+  "description": "Today's forecast for a city, in the caller's units. Tests the same thing as the news test on a subject with no standard library connector.",
+  "tags": [
+    "easy"
+  ],
+  "input": {
+    "assignment": "Write a module that exports `forecast(city: string, units: string = \"celsius\")`. It returns today's weather forecast for that city as `{ high: number, low: number, conditions: string }`, with the temperatures in the units asked for, \"celsius\" or \"fahrenheit\". The city can be anywhere in the world.",
+    "outFile": "solution.agency"
+  }
+}

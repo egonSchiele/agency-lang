@@ -260,9 +260,7 @@ type Person = {
 
 Doc comments are wrapped in `/** ... */` and must be on their own line. They can be used to document types, functions, and variables. Doc comments support Markdown formatting.
 
-Note: comments must be on their own line, they cannot be at the end of a line containing code.
-
-Not allowed:
+A comment can also end a line of code:
 
 ```ts
 const x = 5 // this is a comment
@@ -670,7 +668,7 @@ const unsafeDelete = deleteEmail.partial(numEmails: 1000000).preapprove()
 Now they pass this `unsafeDelete` function to an LLM:
 
 ```ts
-const result = llm("delete some emails", { tools: [unsafeDelete] })
+const result = llm("delete some emails", tools: [unsafeDelete])
 ```
 
 Doesn't this negate the whole point of interrupts, because now the interrupt is pre-approved, and so the user can't stop the deletion? Not quite. 
@@ -682,7 +680,7 @@ You could wrap the LLM call in a second handler that rejects the interrupt:
 ```ts
 node main() {
  handle {
- const result = llm("delete some emails", { tools: [unsafeDelete] })
+ const result = llm("delete some emails", tools: [unsafeDelete])
  } with (data) {
  // emails never get deleted, because even though unsafeDelete pre-approved the interrupt,
  // this handler rejects it.
@@ -718,8 +716,8 @@ handle {
  doSomeWork()
 } with (intr) {
  return match (intr.effect) {
- "std::guard" -> reject() 
- _ -> pass()
+ "std::guard" => reject()
+ _ => pass()
  }
 }
 ```
@@ -799,7 +797,7 @@ read(filename: string, dir: string): Result
 Instead of calling this function, I can choose to just lock one of its parameters.
 
 ```ts
-const readFromTmp = readFile.partial(dir: "/tmp")
+const readFromTmp = read.partial(dir: "/tmp")
 ```
 
 `readFromTmp` is now a new function that only takes the `filename` parameter. The `dir` parameter is locked to `"/tmp"`, so it can only read files from `"/tmp"`. 
@@ -808,7 +806,7 @@ Now I can give this function to an LLM, and it will only be able read files from
 
 Things to note:
 - You use `.partial()` for PFAs.
-- You *have* to specify named args. You can't use positional args, like `readFile.partial("/tmp")`. You have to use `readFile.partial(dir: "/tmp")`.
+- You *have* to specify named args. You can't use positional args, like `read.partial("/tmp")`. You have to use `read.partial(dir: "/tmp")`.
 
 ## Error handling
 
@@ -840,18 +838,21 @@ def divide(a: number, b: number): Result {
 }
 ```
 
-Now, `divide` returns a Result type. You can unwrap it to see if it's a success or a failure:
+Now, `divide` returns a Result type. Unwrap it with pattern matching. `success` and `failure` work as patterns, and the name in the parentheses is bound to the unwrapped value:
 
 ```ts
 const result = divide(10, 0)
- if (isSuccess(result)) {
- return "The result is ${result.value}"
- } else {
- return "Error: ${result.error}"
- }
+if (result is success(value)) {
+ return "The result is ${value}"
+}
+if (result is failure(error)) {
+ return "Error: ${error}"
+}
 ```
 
-or more idiomatically as a match:
+`result is success` and `result is failure`, with no parentheses, are plain boolean tests. Do not read `result.value` or `result.error` directly.
+
+Or as a match:
 
 ```ts
 const result = divide(10, 0)

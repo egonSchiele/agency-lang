@@ -97,8 +97,8 @@ function pass() { return { type: "pass" as const }; }
 
 // Interrupt and rewind re-exports bound to this module's context
 export { interrupt, isInterrupt, hasInterrupts, isPaused, isDebugger };
-type __ResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal };
-export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+type __ResumeOptions = { overrides?: Record<string, unknown>; metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
+export const respondToInterrupts = (interrupts: Interrupt[], responses: InterruptResponse[], opts?: __ResumeOptions) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 type __ResumeFromCheckpointOptions = { metadata?: Record<string, any>; abortSignal?: AbortSignal; pauseSignal?: AbortSignal; invocation?: InvocationOptions };
 export const resumeFromCheckpoint = (paused: PausedCheckpoint, opts?: __ResumeFromCheckpointOptions) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 export const rewindFrom = (checkpoint: Checkpoint, overrides: Record<string, unknown>, opts?: { metadata?: Record<string, any> }) => _rewindFrom({ ctx: __globalCtx, checkpoint, overrides, metadata: opts?.metadata });

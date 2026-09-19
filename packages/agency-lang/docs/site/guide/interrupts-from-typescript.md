@@ -119,6 +119,15 @@ continue if the compiled program has changed since the pause. If you started
 the run with a policy in its options, pass the same `invocation` options when
 you resume.
 
+`respondToInterrupts` accepts the same `invocation` options. A budget or a
+policy you gave the run applies to the resumed leg only if you pass it again:
+
+```ts
+const resumed = await respondToInterrupts(result.data, responses, {
+  invocation: { config: { budget: { maxCost: 5 } } },
+});
+```
+
 `respondToInterrupts` accepts `pauseSignal` too, so you can pause a run after
 answering its interrupts. Pausing does not call your handlers. If you pass both
 `pauseSignal` and `abortSignal` and both fire, the run is cancelled.

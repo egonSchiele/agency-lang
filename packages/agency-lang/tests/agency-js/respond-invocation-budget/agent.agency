@@ -1,0 +1,7 @@
+effect test::gate { step: number }
+
+node main(): string {
+  raise test::gate("ok to continue?", { step: 1 })
+  sleep(400ms)
+  return "done"
+}

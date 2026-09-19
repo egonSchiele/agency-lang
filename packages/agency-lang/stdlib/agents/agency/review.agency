@@ -13,7 +13,7 @@ import { llmOptions, docsOnlyHandler, withContext } from "std::agents/lib/shared
 import { agencyDocTools, webTools } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
-import { systemMessage, threadIsNew } from "std::thread"
+import { ensureSystemMessage } from "std::thread"
 
 static const systemPrompt = """You review code written in the Agency language. Agency compiles to
 TypeScript and looks like JS/TS, but it is its own language with its own
@@ -164,9 +164,8 @@ def typecheckFeedback(source: string, dir: string): Result<Feedback[]> {
   return success(reportFeedback(result.value))
 }
 
-// `context` reaches the model inside the task block, the way the coding
-// agent folds its own in. The parameter existed and was dropped here, so
-// a caller's guidance never arrived.
+// `context` goes inside the task block, the way the coding agent folds
+// its own in.
 def judgePrompt(source: string, task: string, context: string): string {
   return """
 The code was written for this task:
@@ -190,9 +189,7 @@ def judgeAgainstTask(
   provider: string,
   extraTools: any[],
 ): Feedback[] {
-  if (threadIsNew()) {
-    systemMessage(systemPrompt)
-  }
+  ensureSystemMessage(systemPrompt)
   const prompt = judgePrompt(source, task, context)
   // Return position so a model saveDraft propagates as partial findings.
   return llm(

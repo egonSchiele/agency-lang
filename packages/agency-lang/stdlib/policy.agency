@@ -752,10 +752,19 @@ def renderSourceDiff(
   return lines.join("\n")
 }
 
-// What the reviewer and the author said about a tool draft, printed under
-// its diff. The text is written by a model, so it is stripped like the
-// source is. A payload from before these fields existed has none of them.
-def renderReviewFindings(data: any): string {
+/** The fields of a `std::toolbox::review` payload that say what the
+  reviewer and the author thought of the draft. All optional: a caller
+  may raise the effect without them. */
+type ReviewFindings = {
+  notes?: string[];
+  blocking?: string[];
+  unresolved?: { point: string; reason: string }[];
+  resumed?: boolean
+}
+
+// Printed under a tool draft's diff. The text is written by a model, so it
+// is stripped the way the source is.
+def renderReviewFindings(data: ReviewFindings): string {
   let lines: string[] = []
   if (data.resumed == true) {
     lines.push(color.yellow("This is the draft from earlier in this session. It was checked again, and not reviewed again."))

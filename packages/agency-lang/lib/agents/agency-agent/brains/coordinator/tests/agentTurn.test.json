@@ -335,6 +335,16 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "pickerExplainsItsScope",
+      "input": "",
+      "expectedOutput": "\"0|1|true|2|true\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

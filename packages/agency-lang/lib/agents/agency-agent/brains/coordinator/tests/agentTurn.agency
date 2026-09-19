@@ -11,6 +11,7 @@ import {
   reactToSlotChange,
   markMemoryEmbeddingsPinned,
   modelChoiceItems,
+  scopedPickerNotes,
   parseModelsFilters,
   Session,
  } from "../../../lib/session.agency"
@@ -299,6 +300,15 @@ node modelItemsUnderAnEstablishedProvider(): boolean {
     }
   }
   return true
+}
+
+// An established provider narrows the picker, and the picker says so. A
+// provider the catalog does not list leaves it empty, and it says that.
+node pickerExplainsItsScope(): string {
+  const open = scopedPickerNotes("", 40).length
+  const scoped = scopedPickerNotes("anthropic", 12)
+  const empty = scopedPickerNotes("litellm", modelChoiceItems({}, "litellm").length)
+  return "${open}|${scoped.length}|${scoped[0].includes("anthropic models only")}|${empty.length}|${empty[1].includes("Type the model name")}"
 }
 
 // `/models` arg parsing (extracted so it is unit-testable, no magic offset).

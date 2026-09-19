@@ -282,9 +282,9 @@ export def establishedProvider(choices: ModelChoices): string {
   return requestProvider(currentModelRequest(choices), _startupModelSettings)
 }
 
-// The key is what switchModel receives, so it carries the provider:
-// a bare `gpt-5.6-sol` picked in an anthropic session would be sent to
-// anthropic. Under an established provider a `provider/model` key is
+// The key is what switchModel receives, so it carries the provider: a
+// bare name would be sent to the session's current provider. Under an
+// established provider a `provider/model` key is
 // never split, so there the list narrows to that provider and the keys
 // stay bare. Providers are compared and written demoted, because the
 // catalog says `openai-responses` and the resolver only knows `openai`.
@@ -303,6 +303,22 @@ export def modelChoiceItems(filters: ModelFilters, established: string = ""): Ch
     })
   }
   return items
+}
+
+// What the /model picker says when the provider is established. The list
+// is that provider's only, and a `provider/model` spec is not split, so
+// /model cannot move the session to another provider. A provider with no
+// rows in the hosted catalog, such as a proxy or a local one, leaves the
+// list empty, and the model has to be typed.
+export def scopedPickerNotes(established: string, itemCount: number): string[] {
+  if (established == "") {
+    return []
+  }
+  const scope = "Listing ${established} models only. The provider is fixed by --provider, a preset, or settings.model.provider, and /model cannot change it; start without that setting to pick from every provider."
+  if (itemCount == 0) {
+    return [scope, "The catalog has no models for ${established}. Type the model name."]
+  }
+  return [scope]
 }
 
 // Parse a `/models [provider]` command line into filters. Bare `/models` (or a

@@ -13,7 +13,7 @@ export def builtinPalette(): Record<string, string> {
     "/models": "List / filter the hosted model catalog",
     "/local": "Switch to a local model",
     "/preset": "Switch to a saved preset (bare to list them)",
-    "/policy": "Add rules the recommended policy has gained since your policy file was saved",
+    "/policy": "Add the rules of the built-in recommended policy that your policy file lacks",
     "/search": "Choose the web search backend (hosted / Tavily / Brave / off)",
     "/settings": "View and change capability settings for the current model",
     "/mcp": "List configured MCP servers and their tools",

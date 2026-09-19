@@ -111,6 +111,11 @@ const advisedRound = [draftRound(good, true, [finding(false, ADVICE)])];
 const blockedRound = [draftRound(good, false, [finding(true, PROBLEM)])];
 const blockedAgainRound = [draftRound(good, true, [finding(true, PROBLEM)])];
 const unfixableRound = [draftRound(good, false, [finding(true, UNFIXABLE)])];
+// The redraft that reports the point also fails to assemble.
+const cannotFixBrokenRound = [
+  draftRound(wrongExport, false, null, [{ point: UNFIXABLE, reason: REASON }]),
+];
+const afterBrokenRound = [draftRound(good, true, null)];
 const cannotFixRound = [draftRound(good, true, null, [{ point: UNFIXABLE, reason: REASON }])];
 const modelTextRound = [draftRound(modelTextImpl, false)];
 const scopedMocks = (rounds) => {
@@ -169,6 +174,11 @@ const tests = [
   testCase("reviewerAdviceReachesTheUser", advisedRound),
   testCase("firstBlockIsFixedWithoutTheUser", [...blockedRound, ...pureRound]),
   testCase("cannotFixSkipsTheSecondReview", [...unfixableRound, ...cannotFixRound]),
+  testCase("cannotFixSurvivesABrokenRedraft", [
+    ...unfixableRound,
+    ...cannotFixBrokenRound,
+    ...afterBrokenRound,
+  ]),
   testCase("secondBlockGoesToTheUser", [...blockedRound, ...blockedAgainRound]),
   testCase("unacceptedBlockedDraftNamesTheFindings", [...blockedRound, ...blockedAgainRound]),
   testCase("unresolvedPointsAreKeptPerStagingDir", []),

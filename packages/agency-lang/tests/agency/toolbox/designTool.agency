@@ -1,7 +1,7 @@
 import { remove, mkdir } from "std::fs"
 import { exists, ls, exec } from "std::shell"
 import { designTool, listTools, runTool } from "std::toolbox"
-import test { cannotFix, takeUnresolved } from "std::toolbox"
+import test { cannotFix, unresolvedFor, clearUnresolved } from "std::toolbox"
 
 const OUT = __dirname + "/test-output"
 const TOOLS = __dirname + "/fixtures/tools"
@@ -627,6 +627,19 @@ node cannotFixSkipsTheSecondReview(): boolean {
   return result is success && told
 }
 
+// The redraft that calls cannotFix does not assemble, so another draft is
+// written. The point the author could not fix still reaches the user.
+node cannotFixSurvivesABrokenRedraft(): boolean {
+  cleanup("addStuckTwice")
+  const result = runDesignSeeing("addStuckTwice", ["accept"])
+  let told = false
+  if (_reviews.length == 1 && _reviews[0].unresolved.length == 1) {
+    told = _reviews[0].unresolved[0].point =~ re/publication time/ && !(_reviews[0].source =~ re/compute/)
+  }
+  cleanup("addStuckTwice")
+  return result is success && told
+}
+
 // The reviewer blocks the redraft too, and the author reported nothing.
 // The user is shown the draft with the findings instead of waiting
 // through a third round, and may accept it anyway.
@@ -658,9 +671,11 @@ node unresolvedPointsAreKeptPerStagingDir(): boolean {
   cannotFix("/staging/a-1", "point a", "reason a")
   cannotFix("/staging/b-2", "point b", "reason b")
   cannotFix("/staging/a-1", "point a2", "reason a2")
-  const forA = takeUnresolved("/staging/a-1")
-  const forB = takeUnresolved("/staging/b-2")
-  const again = takeUnresolved("/staging/a-1")
+  const forA = unresolvedFor("/staging/a-1")
+  const forB = unresolvedFor("/staging/b-2")
+  clearUnresolved("/staging/a-1")
+  const again = unresolvedFor("/staging/a-1")
+  clearUnresolved("/staging/b-2")
   return forA.length == 2 && forA[1].point == "point a2" && forB.length == 1 && forB[0].reason == "reason b" && again.length == 0
 }
 

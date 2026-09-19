@@ -5,12 +5,6 @@
 */
 import { localModelsSupported, listModelNames } from "std::agency/local"
 import { listHostedModels } from "std::llm"
-import {
-  Policy,
-  addPolicyRules,
-  missingPolicyRules,
-  recommendedAutoApprovePolicy,
- } from "std::policy"
 import { expandSlash } from "std::skills"
 import { getCost, getModelCosts } from "std::thread"
 import { chooseOption, ChoiceItem } from "std::ui"
@@ -22,7 +16,7 @@ import {
  } from "std::ui/cli"
 
 import { showCapabilities, editCapabilities } from "./capabilitiesUi.agency"
-import { HISTORY_PATH, POLICY_PATH } from "./config.agency"
+import { HISTORY_PATH } from "./config.agency"
 import { mcpSlashCommand } from "./mcp.agency"
 import { filterHostedModels } from "./modelFilters.agency"
 import { noModelChoices } from "./modelRequest.agency"
@@ -41,6 +35,7 @@ import {
   reactToSlotChange,
   establishedProvider,
   modelChoiceItems,
+  scopedPickerNotes,
   parseModelsFilters,
   parsePresetName,
   switchPreset,
@@ -67,7 +62,8 @@ import {
   sessionTitle,
  } from "./resume.agency"
 import { renderReply, renderUserLine } from "./transcript.agency"
-import { runTurn, usesSavedPolicy } from "./turn.agency"
+import { policySlashCommand } from "./slashCommands/policy.agency"
+import { runTurn } from "./turn.agency"
 import { parseModelSpec } from "./utils.agency"
 
 let _session: Session = noModelChoices()
@@ -158,7 +154,11 @@ def modelSlashCommand(command: string): boolean {
         pushMessage("  ${slot}: ${resolved.model} (${resolved.via})")
       }
     }
-    const items = modelChoiceItems({}, establishedProvider(_session))
+    const established = establishedProvider(_session)
+    const items = modelChoiceItems({}, established)
+    for (line in scopedPickerNotes(established, items.length)) {
+      pushMessage(color.dim(line))
+    }
     const choice = chooseOption(
       "Model",
       "Pick a model, or type one (or slot=model, e.g. reasoning=claude-opus-4-8). Empty to cancel.",
@@ -192,55 +192,6 @@ def pushResolvedSlots(heading: string, resolved: Record<string, Resolved>) {
       pushMessage(color.dim("  ${slot}: ${value.model} (${value.via})"))
     }
   }
-}
-
-// One line per rule, the way it sits in the policy file.
-export def policyRuleLines(rules: Policy): string[] {
-  let lines: string[] = []
-  for (effect in Object.keys(rules)) {
-    for (rule in rules[effect]) {
-      lines.push("  ${effect}  ${JSON.stringify(rule)}")
-    }
-  }
-  return lines
-}
-
-// A saved policy.json never receives the rules `recommended` gains after
-// the file was made. This shows them and adds them on a yes. It is a
-// command the user runs, not a startup step, so a policy never grows
-// without its owner asking.
-def policySlashCommand(): boolean {
-  if (!usesSavedPolicy()) {
-    pushMessage("This session runs on --policy, --approve, or --reject, not on your saved policy. Start the agent without them to update the saved one.")
-    return true
-  }
-  const missing = missingPolicyRules(recommendedAutoApprovePolicy)
-  const lines = policyRuleLines(missing)
-  if (lines.length == 0) {
-    pushMessage("Your policy already has every rule in the recommended policy.")
-    return true
-  }
-  pushMessage("The recommended policy has ${lines.length} rules your policy does not. They go after your own rules, so everything you already approve or reject stays decided the same way:")
-  for (line in lines) {
-    pushMessage(color.dim(line))
-  }
-  const choice = chooseOption(
-    "Policy",
-    "Add these rules to ${POLICY_PATH}?",
-    [{ key: "add", label: "Add them" }, { key: "skip", label: "Leave my policy as it is" }],
-    allowCancel: true,
-  )
-  if (choice != "add") {
-    pushMessage("Policy left as it is.")
-    return true
-  }
-  const written = addPolicyRules(missing)
-  if (written is failure(reason)) {
-    pushMessage(color.red("Could not save the policy: ${reason}"))
-    return true
-  }
-  pushMessage("Added ${lines.length} rules.")
-  return true
 }
 
 def presetSlashCommand(command: string): boolean {

@@ -1,6 +1,7 @@
 Agency is a language for building agents. Here are a couple short examples to help you get started, followed by a walkthrough of its main features.
 
 ## LLM Calls
+
 You can make an LLM call in agency using the built-in LLM function. Here's an example:
 
 ```
@@ -23,7 +24,7 @@ node main() {
 }
 ```
 
- The agency language is very similar to TypeScript, and it's type system is similar as well, but not as powerful.
+The agency language is very similar to TypeScript, and it's type system is similar as well, but not as powerful.
 
 You can also pass tools to the LLM prompt. Here is an example where I pass in the built-in read and write functions to the LLM:
 
@@ -70,9 +71,9 @@ A lot of Agency syntax is borrowed from TypeScript and Python. If you have used 
 You've got primitives: strings, numbers, booleans:
 
 ```ts
-const name: string = "Alice"
-const age: number = 30
-const isAgent: boolean = true
+const name: string = "Alice";
+const age: number = 30;
+const isAgent: boolean = true;
 ```
 
 You can define variables with `let` or `const`.
@@ -80,10 +81,10 @@ You can define variables with `let` or `const`.
 You can use double quotes, single quotes, or backticks for strings. All three allow string interpolation with `${...}`:
 
 ```ts
-const name = "Alice"
-const greeting1 = "Hello, ${name}!"
-const greeting2 = 'Hello, ${name}!'
-const greeting3 = `Hello, ${name}!`
+const name = "Alice";
+const greeting1 = "Hello, ${name}!";
+const greeting2 = "Hello, ${name}!";
+const greeting3 = `Hello, ${name}!`;
 ```
 
 To write a literal `${` without starting an interpolation, escape it as `\${`. This works in every string kind, including triple-quoted strings:
@@ -107,19 +108,19 @@ const block = """
 You can define arrays and objects:
 
 ```ts
-const names = ["Alice", "Bob", "Charlie"]
-const person = { name: "Alice", age: 30 }
+const names = ["Alice", "Bob", "Charlie"];
+const person = { name: "Alice", age: 30 };
 ```
 
 ## If statements
 
 ```ts
 if (age > 18) {
- print("You are an adult.")
+  print("You are an adult.");
 } else if (age == 18) {
- print("You are exactly 18 years old.")
+  print("You are exactly 18 years old.");
 } else {
- print("You are a minor.")
+  print("You are a minor.");
 }
 ```
 
@@ -167,9 +168,9 @@ match (request) {
 You can add type annotations, just like TypeScript.
 
 ```ts
-const name: string = "Alice"
-const age: number = 30
-const names: string[] = ["Alice", "Bob", "Charlie"]
+const name: string = "Alice";
+const age: number = 30;
+const names: string[] = ["Alice", "Bob", "Charlie"];
 ```
 
 Types are covered in more detail in the [section on types](/guide/types).
@@ -180,8 +181,8 @@ While loop:
 
 ```ts
 while (age < 100) {
- print(`You are ${age} years old.`)
- age = age + 1
+  print(`You are ${age} years old.`);
+  age = age + 1;
 }
 ```
 
@@ -220,11 +221,11 @@ For loops can also destructure arrays and objects:
 
 ```ts
 const people = [
- { name: "Alice", age: 30 },
- { name: "Bob", age: 25 },
-]
+  { name: "Alice", age: 30 },
+  { name: "Bob", age: 25 },
+];
 for ({ name, age } in people) {
- print(`${name} is ${age} years old.`)
+  print(`${name} is ${age} years old.`);
 }
 ```
 
@@ -253,9 +254,9 @@ Or doc comments for documentation generation:
 ```ts
 /** This is a doc comment for the Person type */
 type Person = {
- name: string
- age: number
-}
+  name: string;
+  age: number;
+};
 ```
 
 Doc comments are wrapped in `/** ... */` and must be on their own line. They can be used to document types, functions, and variables. Doc comments support Markdown formatting.
@@ -263,7 +264,7 @@ Doc comments are wrapped in `/** ... */` and must be on their own line. They can
 A comment can also end a line of code:
 
 ```ts
-const x = 5 // this is a comment
+const x = 5; // this is a comment
 ```
 
 ## Functions
@@ -352,7 +353,6 @@ def foo(block: () => any) {
  return block
 }
 ```
-
 
 ## Regexes
 
@@ -448,6 +448,7 @@ Pattern matching is covered in the [section on pattern matching](/guide/pattern-
 Variables and functions beginning with two underscores (`__name`) are reserved for the compiler and runtime, so you cannot use them in your code.
 
 ## JavaScript features that don't exist in Agency
+
 - Lambdas.
 - Async/await. Everything is awaited by default, and there are specific constructs for concurrency.
 - Classes.
@@ -460,32 +461,31 @@ Agency imports work just like JavaScript imports.
 
 ```ts
 // default import
-import foo from "./foo.agency"
+import foo from "./foo.agency";
 
 // named import
-import { foo } from "./foo.agency"
+import { foo } from "./foo.agency";
 
 // alias import
-import { foo as bar } from "./foo.agency"
+import { foo as bar } from "./foo.agency";
 
 // namespace import
-import * as foo from "./foo.agency"
+import * as foo from "./foo.agency";
 
 // mixed
-import foo, { bar } from "./foo.agency"
-import foo, * as bar from "./foo.agency"
-
+import foo, { bar } from "./foo.agency";
+import foo, * as bar from "./foo.agency";
 ```
 
 ## TypeScript imports
 
-You can import TypeScript and JavaScript code the same way. 
+You can import TypeScript and JavaScript code the same way.
 
 ```ts
-import foo from "./foo.js"
-import { foo } from "./foo.js"
-import { foo as bar } from "./foo.js"
-import * as foo from "./foo.js"
+import foo from "./foo.js";
+import { foo } from "./foo.js";
+import { foo as bar } from "./foo.js";
+import * as foo from "./foo.js";
 ```
 
 Always use the `.js` extension, even if you are importing TypeScript code.
@@ -495,7 +495,7 @@ Always use the `.js` extension, even if you are importing TypeScript code.
 Agency also has a standard library. You can import from the standard library using the `std::` prefix.
 
 ```ts
-import { bash } from "std::shell"
+import { bash } from "std::shell";
 ```
 
 You can export stuff using `export`. What you can export
@@ -510,14 +510,14 @@ You can export stuff using `export`. What you can export
 Use the `print` function to print stuff to the console:
 
 ```ts
-print("Hello, world!")
+print("Hello, world!");
 ```
 
 Use the `input` function to get user input:
 
 ```ts
-const name = input("What is your name?")
-print(`Hello, ${name}!`)
+const name = input("What is your name?");
+print(`Hello, ${name}!`);
 ```
 
 You can read and write files using the `read` and `write` functions. For example:
@@ -542,6 +542,7 @@ if (loaded is failure(error)) {
 These functions raise interrupts and so we have to approve them using with approve. Let's talk about interrupts next.
 
 ## Interrupts
+
 Interrupts are a core feature of agency.
 
 Interrupts let you pause your code and ask for user approval.
@@ -605,16 +606,17 @@ But suppose you passed the `read` and `write` functions to an LLM instead to use
 const result = llm("summarize README.md", tools: [read, write])
 ```
 
-You wouldn't want it to be able to read and write *any* file on your file system. With interrupts, it will need to ask you for permission before reading or writing any file.
+You wouldn't want it to be able to read and write _any_ file on your file system. With interrupts, it will need to ask you for permission before reading or writing any file.
 
 ## What happens when you approve or reject an interrupt?
 
 - When you approve, that function or node keeps executing as normal.
-- If you reject, that function or node halts execution immediately, and returns a failure. 
+- If you reject, that function or node halts execution immediately, and returns a failure.
 - If you reject an interrupt during a tool call, the tool halts execution immediately and we send a message to the LLM explaining that the tool call was rejected.
 - If you reject with a message, and the interrupt was raised by a tool call, then your message will get sent to the LLM along with the rejection.
 
 ## Handlers
+
 Handlers are how you can respond to an interrupt in agency code.
 
 ## Syntax
@@ -683,9 +685,9 @@ Now they pass this `unsafeDelete` function to an LLM:
 const result = llm("delete some emails", tools: [unsafeDelete])
 ```
 
-Doesn't this negate the whole point of interrupts, because now the interrupt is pre-approved, and so the user can't stop the deletion? Not quite. 
+Doesn't this negate the whole point of interrupts, because now the interrupt is pre-approved, and so the user can't stop the deletion? Not quite.
 
-Handlers are different from try/catch statements. With a try/catch, if an exception is raised, it bubbles up to the closest try/catch, and doesn't go any further. But with handlers, *every single handler up the chain gets executed*. And if *any* handler rejects, the interrupt is rejected.
+Handlers are different from try/catch statements. With a try/catch, if an exception is raised, it bubbles up to the closest try/catch, and doesn't go any further. But with handlers, _every single handler up the chain gets executed_. And if _any_ handler rejects, the interrupt is rejected.
 
 You could wrap the LLM call in a second handler that rejects the interrupt:
 
@@ -701,7 +703,7 @@ node main() {
 }
 ```
 
-This simple behavior is really important, because it means that *users will always have a chance to respond to interrupts*.
+This simple behavior is really important, because it means that _users will always have a chance to respond to interrupts_.
 
 Suppose you use someone else's agency code, but don't trust it. You can wrap their code in a handler that rejects all interrupts:
 
@@ -737,15 +739,18 @@ handle {
 ## The rules of handlers
 
 The rules of handlers are thus:
+
 1. If any handler rejects, the interrupt is rejected.
 2. Otherwise, if any handler propagates, the interrupt propagates to the user for a decision.
 3. Otherwise, if a handler approves, the interrupt is approved.
 4. A handler that passes does none of these. It steps aside and lets the rest of the chain decide.
 
-Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. A handler that never returns a verdict has passed, whether or not it said `pass()` out loud. And if *every* handler passes, nobody in the chain made a decision, so the interrupt propagates up to the user — the same safe default you get when there is no handler at all.
+Of course, a handler doesn't need to approve, reject, or propagate. It can simply choose to log the interrupt data, print out the lyrics to "A Day in the Life," or whatever. A handler that never returns a verdict has passed, whether or not it said `pass()` out loud. And if _every_ handler passes, nobody in the chain made a decision, so the interrupt propagates up to the user — the same safe default you get when there is no handler at all.
 
 ## Effects
+
 All interrupts contain three fields:
+
 - message
 - data
 - effect.
@@ -783,7 +788,7 @@ handle {
 
 ## Payload types
 
-You can also define the type for the `data` parameter for an effect. This is called the *payload type*, and you use `effect` to define it.
+You can also define the type for the `data` parameter for an effect. This is called the _payload type_, and you use `effect` to define it.
 
 ```
 effect std::read {
@@ -793,10 +798,9 @@ effect std::read {
 ```
 
 This does two things:
-- It enforces that any place that raises a `std::read` effect *must* specify a directory and filename.
+
+- It enforces that any place that raises a `std::read` effect _must_ specify a directory and filename.
 - Gives you better typing for the `data` object in the handler function (including auto-completion if you're using the Agency plugin!)
-
-
 
 ## Partial Function Application (PFA)
 
@@ -812,13 +816,14 @@ Instead of calling this function, I can choose to just lock one of its parameter
 const readFromTmp = read.partial(dir: "/tmp")
 ```
 
-`readFromTmp` is now a new function that only takes the `filename` parameter. The `dir` parameter is locked to `"/tmp"`, so it can only read files from `"/tmp"`. 
+`readFromTmp` is now a new function that only takes the `filename` parameter. The `dir` parameter is locked to `"/tmp"`, so it can only read files from `"/tmp"`.
 
-Now I can give this function to an LLM, and it will only be able read files from the `/tmp` directory! Partial application lets you make a new function where some of the arguments are already filled in. 
+Now I can give this function to an LLM, and it will only be able read files from the `/tmp` directory! Partial application lets you make a new function where some of the arguments are already filled in.
 
 Things to note:
+
 - You use `.partial()` for PFAs.
-- You *have* to specify named args. You can't use positional args, like `read.partial("/tmp")`. You have to use `read.partial(dir: "/tmp")`.
+- You _have_ to specify named args. You can't use positional args, like `read.partial("/tmp")`. You have to use `read.partial(dir: "/tmp")`.
 
 ## Error handling
 
@@ -917,14 +922,14 @@ This agent has a global variable, `log`. Now, suppose you're using this agent in
 import { main } from "./main.js";
 
 async function run() {
- const result = await main("Adit");
- console.log(result);
+  const result = await main("Adit");
+  console.log(result);
 }
 
 run();
 ```
 
-In a web server, you may have multiple requests concurrently calling this agent. Let's say you have *five* requests concurrently calling this agent, with these names:
+In a web server, you may have multiple requests concurrently calling this agent. Let's say you have _five_ requests concurrently calling this agent, with these names:
 
 ```
 Colin
@@ -937,39 +942,33 @@ Thom
 Five requests that call the `main` node, push an entry to `log`, and then return `log` as the return value. What return value is each request going to get? You may think each request is mutating the same array, so at least one request will get an array with all five values.
 
 ```ts
-[
- "Hello, Colin!",
- "Hello, Ed!",
- "Hello, Jonny!",
- "Hello, Phil!",
- "Hello, Thom!"
-]
+["Hello, Colin!", "Hello, Ed!", "Hello, Jonny!", "Hello, Phil!", "Hello, Thom!"];
 ```
 
 But that's not correct! Each request will get an array with a single value:
 
 ```ts
 // 1
-["Hello, Colin!"]
-
-// 2
-["Hello, Ed!"]
-
-// 3
-["Hello, Jonny!"]
-
-// 4
-["Hello, Phil!"]
-
-// 5
-["Hello, Thom!"]
+["Hello, Colin!"][
+  // 2
+  "Hello, Ed!"
+][
+  // 3
+  "Hello, Jonny!"
+][
+  // 4
+  "Hello, Phil!"
+][
+  // 5
+  "Hello, Thom!"
+];
 ```
 
-Every call to an Agency agent gets state isolation, so each run has its own copy of the global variables. This makes it much easier to reason about your agent, as you don't have to think about concurrency. 
+Every call to an Agency agent gets state isolation, so each run has its own copy of the global variables. This makes it much easier to reason about your agent, as you don't have to think about concurrency.
 
 ## Global vs Static Variables
 
-As you just learned, each run gets its own copy of any global variables. This also means that *each global variable is reinitialized for every run*. This is okay when initialization is cheap, like for an empty array.
+As you just learned, each run gets its own copy of any global variables. This also means that _each global variable is reinitialized for every run_. This is okay when initialization is cheap, like for an empty array.
 
 ```
 const log = []
@@ -993,6 +992,7 @@ static const prompt = read("prompt.txt") catch "" with approve
 ```
 
 Static variables:
+
 - Are initialized when when the module loads
 - Are **immutable** — you cannot reassign them or modify their contents. The static var is actually **deeply immutable**. For example, if your static variable is an array, you cannot add or remove values from that array.
 - Are **shared across all runs** — every call to the agent sees the same value.
@@ -1002,7 +1002,7 @@ Static variables:
 
 You cannot export a global variable. This is because global variables can lead to spaghetti code. If you want to access your global variables in other files, you can export functions that get and set those variables.
 
-You *can* export static variables.
+You _can_ export static variables.
 
 ## Global statements
 
@@ -1010,7 +1010,7 @@ Statements in the global scope also get run once per run (same as global variabl
 
 ```ts
 // runs every time the agent is called
-initTelemetry()
+initTelemetry();
 ```
 
 If you only want the statement to run once when the agent starts, mark it as `static`.
@@ -1030,13 +1030,14 @@ node main() {
 ```
 
 ## Message Threads
+
 By default, all LLM calls share a message history:
 
 ```ts
-const result1 = llm("Hi my name is Alice. What is your name?")
-const result2 = llm("Do you remember my name?")
-print(result1)
-print(result2)
+const result1 = llm("Hi my name is Alice. What is your name?");
+const result2 = llm("Do you remember my name?");
+print(result1);
+print(result2);
 ```
 
 Prints something like:
@@ -1099,6 +1100,7 @@ You can also nest threads and subthreads to create side conversations branching 
 Message threads work everywhere except module top-level code.
 
 ## systemMessage
+
 Use this to send a systemMessage:
 
 ```ts
@@ -1131,6 +1133,7 @@ node main() {
 ```
 
 Things to note:
+
 - You don't have access to all the variables inside the guard, only to the return value.
 - `result` is a `Result` type. On success, it has the return value. On failure, its message says which guard tripped and by how much, and its `data` holds the numbers:
 
@@ -1138,13 +1141,13 @@ Things to note:
 // "guardFailure" = cost, "timeoutFailure" = time.
 // Every field is always present; the ones that don't apply are null.
 type GuardFailureData = {
- type: "guardFailure" | "timeoutFailure"
- label: string | null
- maxCost: number | null
- actualCost: number | null
- maxTime: number | null
- actualTime: number | null
-}
+  type: "guardFailure" | "timeoutFailure";
+  label: string | null;
+  maxCost: number | null;
+  actualCost: number | null;
+  maxTime: number | null;
+  actualTime: number | null;
+};
 ```
 
 `guard` takes one or both of:
@@ -1161,12 +1164,7 @@ type GuardFailureData = {
 - Lists: `map`, `mapWithIndex`, `filter`, `exclude`, `find`, `findIndex`, `reduce`, `flatMap`, `flatten`, `every`, `some`, `count`, `sortBy`, `unique`, `groupBy`, `range`
 - Model calls: `llm`, `saveDraft`
 
-Before you write a loop that builds a list, counts, groups, or removes duplicates, check this list. The function already exists:
-
-```ts
-const byExt = groupBy(files, \f -> extname(f.path))
-const pages = range(1, total + 1)
-```
+Before you write a loop that builds a list, counts, groups, or removes duplicates, check this list, the function may already exist.
 
 ### Modules you import
 

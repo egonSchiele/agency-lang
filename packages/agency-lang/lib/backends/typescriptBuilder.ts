@@ -36,6 +36,7 @@ import { BlockArgument } from "@/types/blockArgument.js";
 import { DebuggerStatement } from "@/types/debuggerStatement.js";
 import { SchemaExpression } from "@/types/schemaExpression.js";
 import { TypeTestExpression } from "@/types/pattern.js";
+import { CastExpression } from "@/types/castExpression.js";
 import { CoarseKind } from "@/runtime/typeTest.js";
 import { expressionToString } from "@/utils/node.js";
 import { trimDocStringSegments } from "@/utils/docStringText.js";
@@ -749,6 +750,8 @@ export class TypeScriptBuilder {
         return this.processSchemaExpression(node);
       case "typeTestExpression":
         return this.processTypeTestExpression(node);
+      case "castExpression":
+        return this.processCastExpression(node);
       case "interruptStatement":
         return this.processInterruptStatement(node);
       case "regex":
@@ -1446,6 +1449,16 @@ export class TypeScriptBuilder {
    * other type reuses the bang's validation path via `validateExpr`, wrapped
    * in `isSuccess(...)` — shape AND `@validate` validators decide the match.
    */
+  /** An unchecked cast exists only for the type checker. A checked cast is
+   *  the same validation a `!` declaration runs. */
+  private processCastExpression(node: CastExpression): TsNode {
+    const value = this.processNode(node.expression);
+    if (!node.checked) {
+      return value;
+    }
+    return this.validateExpr(node.targetType, value);
+  }
+
   private processTypeTestExpression(node: TypeTestExpression): TsNode {
     const value = this.processNode(node.expression);
     const coarse = coarseKindFor(node.typeHint);

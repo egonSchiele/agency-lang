@@ -5623,7 +5623,7 @@ const cStyleForParser: Parser<never> = (input: string) => {
  * `let subject: string` with no `= value`. Without this the assignment parser
  * fails at the end of the line and the message lands on the next statement.
  */
-const declarationWithoutValueParser: Parser<never> = (input: string) => {
+export const declarationWithoutValueParser: Parser<never> = (input: string) => {
   const probe = seqC(
     oneOfStr(["let", "const"]),
     spaces,
@@ -5637,7 +5637,7 @@ const declarationWithoutValueParser: Parser<never> = (input: string) => {
       ),
     ),
     optionalSpaces,
-    or(oneOf(`\n;}${BLANK_LINE_SENTINEL}`), eof),
+    or(oneOf(`\n;}${BLANK_LINE_SENTINEL}`), str("//"), eof),
   );
   const probed = probe(input);
   if (!probed.success) return failure("", input);

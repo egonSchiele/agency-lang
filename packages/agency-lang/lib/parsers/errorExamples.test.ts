@@ -279,6 +279,11 @@ describe("a declaration with no value is refused", () => {
     ["a typed let", `def f(): string {\n  let s: string\n  s = "a"\n  return s\n}`],
     ["an untyped let", `def f(): string {\n  let s\n  s = "a"\n  return s\n}`],
     ["the last statement", `node main() {\n  let s: string\n}`],
+    ["a trailing comment", `node main() {\n  let s: string // set below\n  s = "a"\n}`],
+    [
+      "the top level of a file",
+      `import { a } from "./a.agency"\nconst subject: string\n\nnode main() {\n}`,
+    ],
   ])("catches %s on its own line", (_name, src) => {
     expect(failure(src)).toMatch(/^Line 2, col \d+: a `let` or `const` needs a value/);
   });

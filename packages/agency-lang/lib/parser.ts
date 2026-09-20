@@ -70,6 +70,7 @@ import {
   setTemplateOffset,
   registerProgramParserForLiterals,
   completeConstructEntry,
+  declarationWithoutValueParser,
   stripSentinels,
 } from "./parsers/parsers.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
@@ -104,6 +105,7 @@ const nodeParserInner = or(
   // baseAtom; this entry exists solely to stamp `position: "decl"`.
   topLevelSpliceParser,
   tagParser,
+  declarationWithoutValueParser,
   withModifierParser,
   modifiedAssignmentParser,
   staticStatementParser,

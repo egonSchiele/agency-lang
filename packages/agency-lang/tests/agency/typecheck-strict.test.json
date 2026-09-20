@@ -1,0 +1,59 @@
+{
+  "tests": [
+    {
+      "nodeName": "castIsSilentByDefault",
+      "description": "without strict, a TypeScript cast typechecks clean",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "strictReportsTheCast",
+      "description": "strict reports the bare name a cast turns into",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "strictRefusesAHostGlobal",
+      "description": "strict refuses a JavaScript global outside the sandbox allowlist",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "strictAcceptsCorrectCode",
+      "description": "strict accepts a value-position if and an allowed global",
+      "input": "",
+      "expectedOutput": "0",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "strictCompileRefusesTheCast",
+      "description": "compile(strict: true) fails where the default compile succeeds",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

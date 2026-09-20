@@ -156,8 +156,8 @@ def parseFeedback(source: string): Result<Feedback[]> {
   return success([])
 }
 
-def typecheckFeedback(source: string, dir: string): Result<Feedback[]> {
-  const result = typecheck(source, dir: dir)
+def typecheckFeedback(source: string, dir: string, strict: boolean): Result<Feedback[]> {
+  const result = typecheck(source, dir: dir, strict: strict)
   if (result is failure(err)) {
     return success([{ error: true, feedback: "Typecheck failed: ${err}" }])
   }
@@ -215,6 +215,7 @@ export def agencyReviewAgent(
   session: string = "",
   extraTools: any[] = [],
   dir: string = "",
+  strict: boolean = false,
 ): Result<Feedback[]> {
   """
   Review Agency source code and return findings. Always includes parse and
@@ -231,10 +232,11 @@ export def agencyReviewAgent(
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   @param dir - Directory the source's relative imports resolve against, or "" when it imports no local files
+  @param strict - Typecheck with the name checks a sandboxed compile uses; see `typecheck` in std::agency
   """
   let feedback: Result<Feedback[]> = success([])
   feedback = mergeFeedback(feedback, parseFeedback(source))
-  feedback = mergeFeedback(feedback, typecheckFeedback(source, dir))
+  feedback = mergeFeedback(feedback, typecheckFeedback(source, dir, strict))
   if (task == "") {
     return feedback
   }

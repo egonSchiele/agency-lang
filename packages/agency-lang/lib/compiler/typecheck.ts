@@ -150,7 +150,14 @@ function runCheckerPipeline<T>(
     });
     const lifted = liftCallbackBlocks(resolved);
     const info = buildCompilationUnit(lifted, symbolTable, syntheticPath, source);
-    const checkResult = typeCheck(lifted, { typechecker: { enabled: true } }, info);
+    // The caller's typechecker settings apply, so a strict check from
+    // std::agency reports what a sandboxed compile would. `enabled` is
+    // forced on: this pipeline exists to check.
+    const checkResult = typeCheck(
+      lifted,
+      { typechecker: { ...config.typechecker, enabled: true } },
+      info,
+    );
     return fn({ checkResult, symbolTable, syntheticPath });
   });
 }

@@ -102,14 +102,15 @@ export type TypeCheckReport = {
   warnings: TypeCheckDiagnostic[]
 }
 
-export idempotent def compile(source: string, dir: string = ""): Result {
+export idempotent def compile(source: string, dir: string = "", strict: boolean = false): Result {
   """
   Compile Agency source code. Returns a CompiledProgram on success, or a failure with compilation errors. Imports may name standard library (`std::`) modules and `.agency` files inside `dir`. TypeScript/JavaScript files, Node modules, `pkg::` packages, symlinks, and compile-time splices are refused anywhere in the import closure.
 
   @param source - Agency source code as a string
   @param dir - Directory relative imports resolve against, and the boundary they are confined to. Empty (the default) means local imports cannot resolve.
+  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
   """
-  return try _compile(source, dir)
+  return try _compile(source, dir, strict)
 }
 
 /** Runs agent-generated Agency code in a child process.
@@ -634,6 +635,7 @@ export idempotent def typecheck(
   source: string,
   ignoreCodes: string[] = [],
   dir: string = "",
+  strict: boolean = false,
 ): Result<TypeCheckReport> {
   """
   Type-check Agency source code given as a string. To check a file that is already on disk, call `typecheckFile` with its path instead of pasting its contents here.
@@ -641,8 +643,9 @@ export idempotent def typecheck(
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
   @param dir - Directory the source's relative imports resolve against. Empty (the default) means local imports cannot resolve.
+  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
   """
-  const report = try _typecheck(source, dir)
+  const report = try _typecheck(source, dir, strict)
   if (report is failure) {
     return report
   }

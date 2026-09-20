@@ -16,8 +16,9 @@ export type CompileSandboxedArgs = {
   entry: ClosureEntry;
   /** Confinement boundary for local imports. "" = no local imports possible. */
   dir: string;
-  /** Enforce the reviewed JS-globals allowlist. Only `--agency-only` sets this;
-   *  the trusted runtime fork path leaves it off. See compileValidatedClosure. */
+  /** Enforce the reviewed JS-globals allowlist. `--agency-only` sets this, and
+   *  so does `compile(strict: true)` from `std::agency`; the trusted runtime
+   *  fork path leaves it off. See compileValidatedClosure. */
   enforceJsGlobals?: boolean;
   fingerprintModuleIds?: boolean;
 };

@@ -134,3 +134,14 @@ node reviewerReadsGithubButCannotPost(): boolean {
 node explorerHasNoGithub(): boolean {
   return !hasTool(explorerTools(), "ghPrGet") && !hasTool(explorerTools(), "ghIssueGet")
 }
+
+// A tool author needs nothing from the caller's project, so designTool
+// asks for the writer without its file and git tools. The docs and the
+// typecheck stay.
+node agencyWriterCanLeaveTheProjectOut(): boolean {
+  const withProject = agencyCodingTools()
+  const without = agencyCodingTools(projectTools: false)
+  const dropped = !hasTool(without, "read") && !hasTool(without, "grep") && !hasTool(without, "gitLog")
+  const kept = hasTool(without, "typecheck") && hasTool(without, "agencyStdlib")
+  return hasTool(withProject, "grep") && dropped && kept
+}

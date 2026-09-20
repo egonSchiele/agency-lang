@@ -25,6 +25,7 @@ import { variableTypeToString } from "../backends/typescriptGenerator/typeToStri
 import { declaredName } from "../types/hole.js";
 import { deepCopy } from "../utils.js";
 import { compileSandboxed } from "../compiler/compileSandboxed.js";
+import { SANDBOX_NAME_CHECKS } from "../compiler/compileValidatedClosure.js";
 import { nanoid } from "nanoid";
 import { exactVerdictValue } from "../testFormat/verdict.js";
 import { parseTestFileSandbox, type ParsedInterrupt } from "../testFormat/schema.js";
@@ -101,11 +102,18 @@ type CompiledProgramValue = {
   entryPath?: string;
 };
 
-function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValue {
+function compileToProgram(
+  entry: ClosureEntry,
+  dir: string,
+  strict: boolean = false,
+): CompiledProgramValue {
   // Sandboxed compile: the closure validator enforces the pure-Agency
   // invariant (std:: + dir-local .agency; no TS/JS, node builtins, pkg::,
   // or splices) and compilation reads only the validated mirror.
-  const result = compileSandboxed({ entry, dir });
+  // `strict` adds the name checks `--agency-only` compiles with. The
+  // default leaves them off: a trusted caller's program may name a JS
+  // global outside the sandbox allowlist.
+  const result = compileSandboxed({ entry, dir, enforceJsGlobals: strict });
 
   if (!result.success) {
     throw new Error(result.errors.join("\n"));
@@ -124,8 +132,12 @@ function compileToProgram(entry: ClosureEntry, dir: string): CompiledProgramValu
   };
 }
 
-export function _compile(source: string, dir: string = ""): CompiledProgramValue {
-  return compileToProgram({ source }, dir);
+export function _compile(
+  source: string,
+  dir: string = "",
+  strict: boolean = false,
+): CompiledProgramValue {
+  return compileToProgram({ source }, dir, strict);
 }
 
 // Resolve `filename` against `dir`, the sandbox. An absolute filename, a
@@ -166,15 +178,20 @@ export function _subprocessDepth(): number {
   return getRuntimeContext().ctx.subprocessDepth ?? 0;
 }
 
-export function _typecheck(source: string, dir: string = ""): TypeCheckReport {
+export function _typecheck(
+  source: string,
+  dir: string = "",
+  strict: boolean = false,
+): TypeCheckReport {
+  const config = strict ? { typechecker: SANDBOX_NAME_CHECKS } : {};
   if (dir === "") {
-    return typeCheckSource(source);
+    return typeCheckSource(source, undefined, config);
   }
   // The draft is given a path inside dir, so its relative imports resolve
   // against dir's files (as typecheckFile's do), and its own text comes from
   // the override: nothing is written to dir.
   const draftPath = join(root(dir).real, `agency_draft_${nanoid()}.agency`);
-  return typeCheckSource(source, draftPath, {}, { [draftPath]: source });
+  return typeCheckSource(source, draftPath, config, { [draftPath]: source });
 }
 
 export function _getEffects(source: string): Record<string, string[]> {

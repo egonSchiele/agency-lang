@@ -35,7 +35,7 @@ export type WriteFailure = {
 ### buildTools
 
 ```ts
-buildTools(): any[]
+buildTools(strict: boolean = false, projectTools: boolean = true): any[]
 ```
 
 Return the Agency writer's tools: the bundled documentation, the source
@@ -43,6 +43,16 @@ Return the Agency writer's tools: the bundled documentation, the source
   writing for, and fetches for a named external resource. Not testFile: the
   writer returns source it has not saved, so there is nothing on disk for a
   harness to test yet.
+
+  @param strict - Offer a typecheck that reports what a sandboxed compile would, so the writer sees those errors on its own draft
+  @param projectTools - False leaves out the file and git tools, for a draft that depends on nothing in the project
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| strict | `boolean` | false |
+| projectTools | `boolean` | true |
 
 **Returns:** `any[]`
 
@@ -63,6 +73,8 @@ agencyCodingAgent(
   extraTools: any[] = [],
   requireMain: boolean = true,
   dir: string = "",
+  strict: boolean = false,
+  projectTools: boolean = true,
 ): Result<string, WriteFailure>
 ```
 
@@ -84,6 +96,11 @@ Write an Agency program for the task. Iterates until the source parses,
     when the deliverable is a library module whose exports the caller places.
   @param dir - Directory the draft's relative imports resolve against, so a
     draft that imports a sibling file typechecks. "" when it imports none.
+  @param strict - Check each draft the way a sandboxed (`--agency-only`)
+    compile would, and give the writer a typecheck that does the same. Pass
+    true when the deliverable will run sandboxed.
+  @param projectTools - False leaves out the writer's file and git tools.
+    Pass false when nothing in the caller's project bears on the task.
 
 **Parameters:**
 
@@ -100,9 +117,11 @@ Write an Agency program for the task. Iterates until the source parses,
 | extraTools | `any[]` | [] |
 | requireMain | `boolean` | true |
 | dir | `string` | "" |
+| strict | `boolean` | false |
+| projectTools | `boolean` | true |
 
 **Returns:** `Result<string, WriteFailure>`
 
 **Throws:** `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L386))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agents/agency/coding.agency#L403))

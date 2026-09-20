@@ -861,6 +861,11 @@ def draftSource(
     model: settings.model,
     provider: settings.provider,
     extraTools: extraTools,
+    // A saved tool runs sandboxed, so its drafts are checked that way.
+    strict: true,
+    // The task allows std:: imports only, so nothing in the caller's
+    // project can help the author.
+    projectTools: false,
   )
   if (written is failure(writeFailure)) {
     return draftProblem(writeFailure)
@@ -995,13 +1000,13 @@ def assembleTool(source: string, settings: DraftSettings): Result<ModuleFacts> {
   // draft cannot reach a raw primitive that raises no interrupt. It runs
   // first because a draft that exports the wrong name fails here, and
   // that is a problem the next draft can fix.
-  const compiled = compile(toSource(filled.value), settings.stagingDir)
+  const compiled = compile(toSource(filled.value), settings.stagingDir, strict: true)
   if (compiled is failure(compileErr)) {
     return draftProblem("${compileErr}")
   }
   // The compile does not report type errors; the typecheck does. It takes
   // the source the template just produced, so nothing is read back.
-  const report = typecheck(toolSource, dir: settings.stagingDir)
+  const report = typecheck(toolSource, dir: settings.stagingDir, strict: true)
   if (report is failure) {
     return report
   }

@@ -229,4 +229,37 @@ node main() { print(pick(0)) }
       ]);
     });
   });
+
+  describe("a statement that is only a name", () => {
+    const ERROR: AgencyConfig = { typechecker: { undefinedVariables: "error" } };
+    const AGENCY_ONLY: AgencyConfig = { typechecker: { jsGlobals: "sandbox" } };
+    const notDefined = (errors: { message: string }[]) =>
+      errors.filter((e) => e.message.includes("not defined")).map((e) => e.message);
+
+    // Agency has no `as` cast. This parses as `return n`, then `as`, then
+    // `Json`, each a statement directly in the function body.
+    const cast = `type Json = any
+def run(n: number): Json {
+  return n as Json
+}
+node main() { print(run(1)) }
+`;
+
+    it("reports an undefined name directly in a function body", () => {
+      // `Json` is a type, so as a value it is undefined too.
+      const both = [expect.stringContaining("'as'"), expect.stringContaining("'Json'")];
+      expect(notDefined(errorsFrom(cast, ERROR))).toEqual(both);
+      expect(notDefined(errorsFrom(cast, AGENCY_ONLY))).toEqual(both);
+    });
+
+    it("accepts a defined name used the same way", () => {
+      const defined = `def run(n: number): number {
+  n
+  return n
+}
+node main() { print(run(1)) }
+`;
+      expect(notDefined(errorsFrom(defined, ERROR))).toHaveLength(0);
+    });
+  });
 });

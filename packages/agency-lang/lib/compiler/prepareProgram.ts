@@ -8,14 +8,15 @@
 import type { AgencyConfig } from "@/config/config.js";
 import type { AgencyProgram } from "@/types.js";
 import type { ImportStatement } from "@/types/importStatement.js";
+import type { SourceLocation } from "@/types/base.js";
 import { buildCompilationUnit, type CompilationUnit } from "@/compilationUnit.js";
 import { formatImportResolutionError, ImportResolutionError } from "@/importResolutionError.js";
-import { resolveAgencyImportPath } from "@/importPaths.js";
+import { isNonTemplatedStdlib, resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency, type ParseAgencyErrorData } from "@/parser.js";
 import { PRELUDE_NAMES } from "@/prelude.js";
 import { expandSplices } from "@/preprocessors/expandSplices.js";
 import { resolveImports } from "@/preprocessors/importResolver.js";
-import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
+import { CallbackLiftError, liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
 import { prunePreludeShadows } from "@/preprocessors/prunePreludeShadows.js";
 import { resolveReExports } from "@/preprocessors/resolveReExports.js";
 import { SymbolTable } from "@/symbolTable.js";
@@ -37,7 +38,11 @@ export type SpliceFailure = { stage: "splice"; splice: SpliceDiagnostic };
  *  was thrown, which is not always an ImportResolutionError. */
 export type ImportFailure = { stage: "imports"; error: unknown };
 
-export type PipelineDiagnostic = ParseFailure | VetFailure | SpliceFailure | ImportFailure;
+/** A `callback("onX") { ... }` block the lifting pass refuses. */
+export type LiftFailure = { stage: "lift"; message: string; loc?: SourceLocation };
+
+export type PipelineDiagnostic =
+  ParseFailure | VetFailure | SpliceFailure | ImportFailure | LiftFailure;
 
 export type PrepareOptions = {
   /** Prepend the prelude import to the text before parsing. The editor
@@ -53,6 +58,11 @@ export type PrepareOptions = {
   keepGoing?: boolean;
   /** The editor uses a shorter limit than the build. */
   spliceWallClockMs?: number;
+  /** Leave a relative import alone instead of resolving it. For source
+   *  checked at a made-up path, where `./helper.agency` cannot resolve and
+   *  saying so would blame the user for the caller's own limitation.
+   *  Default false. */
+  ignoreRelativeImports?: boolean;
   /** A table the caller already built, for example one shared across files. */
   symbolTable?: SymbolTable;
   /** Reasons to refuse this program, or none. Runs on the program as written,
@@ -80,12 +90,17 @@ export type PrepareResult = PreparedProgram | PrepareFailure;
  *  PRELUDE_NAMES, so the editor and the compiler agree on what is in scope.
  *  Added next to any `std::index` import the user wrote, since theirs may
  *  name only a subset. Skipped when the table has no std::index loaded:
- *  every prelude name would then report as undefined. */
+ *  every prelude name would then report as undefined. Skipped too for the
+ *  two stdlib files the build itself leaves un-templated, which would
+ *  otherwise import the very names they declare. */
 function withPreludeImport(
   program: AgencyProgram,
   symbolTable: SymbolTable,
   filePath: string,
 ): AgencyProgram {
+  if (isNonTemplatedStdlib(filePath)) {
+    return program;
+  }
   let stdlibPath: string;
   try {
     stdlibPath = resolveAgencyImportPath("std::index", filePath);
@@ -114,6 +129,19 @@ function withOwnPreludeImports(program: AgencyProgram): AgencyProgram {
       : node,
   );
   return { ...program, nodes };
+}
+
+/** A bug in the pipeline, as opposed to a mistake in the program being
+ *  prepared. Import machinery raises a plain `Error` for plenty of real user
+ *  mistakes (an uninstalled `pkg::`, a re-export cycle), so the class is what
+ *  separates them: nothing here raises these deliberately. Reporting one as
+ *  an import error would hide the stack in the one case that needs it.
+ *  `SyntaxError` is left out on purpose — `JSON.parse` on a malformed
+ *  package.json raises one, and that is the user's file, not our bug. */
+function isInternalBug(error: unknown): boolean {
+  return (
+    error instanceof TypeError || error instanceof RangeError || error instanceof ReferenceError
+  );
 }
 
 export function prepareProgram(
@@ -152,6 +180,9 @@ export function prepareProgram(
   try {
     symbolTable = options.symbolTable ?? SymbolTable.build(filePath, config);
   } catch (error) {
+    if (isInternalBug(error)) {
+      throw error;
+    }
     return failed({ stage: "imports", error });
   }
 
@@ -186,6 +217,9 @@ export function prepareProgram(
   try {
     reExported = resolveReExports(pruned, symbolTable, filePath);
   } catch (error) {
+    if (isInternalBug(error)) {
+      throw error;
+    }
     // A bad re-export (a cycle, say) leaves no usable module graph, so this
     // stops even under keepGoing.
     return failed({ stage: "imports", error });
@@ -195,11 +229,15 @@ export function prepareProgram(
   try {
     resolved = resolveImports(reExported, symbolTable, filePath, {
       allowTestImports: options.allowTestImports ?? false,
+      ignoreRelativeImports: options.ignoreRelativeImports ?? false,
       onUnresolvable: keepGoing
         ? (error) => diagnostics.push({ stage: "imports", error })
         : undefined,
     });
   } catch (error) {
+    if (isInternalBug(error)) {
+      throw error;
+    }
     if (!keepGoing) {
       return failed({ stage: "imports", error });
     }
@@ -210,7 +248,22 @@ export function prepareProgram(
 
   // Lifting makes each `callback("onX") { ... }` body a top-level def, so it
   // lands in the compilation unit and is checked like any other function.
-  const program = liftCallbackBlocks(resolved);
+  // A refused block is reported like any other mistake: the editor runs this
+  // on every keystroke, and a half-typed callback must not take the server
+  // down. The unlifted program still checks, minus the lifted bodies.
+  let program = resolved;
+  try {
+    program = liftCallbackBlocks(resolved);
+  } catch (error) {
+    if (!(error instanceof CallbackLiftError)) {
+      throw error;
+    }
+    const failure: LiftFailure = { stage: "lift", message: error.message, loc: error.loc };
+    if (!keepGoing) {
+      return failed(failure);
+    }
+    diagnostics.push(failure);
+  }
   const info = buildCompilationUnit(program, symbolTable, filePath, source);
   return { ok: true, program, info, symbolTable, parsed, diagnostics };
 }

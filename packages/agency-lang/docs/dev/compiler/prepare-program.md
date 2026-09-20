@@ -13,11 +13,11 @@ In order:
 3. **Build the symbol table**, unless the caller passed one.
 4. **Expand splices.** A generator returns declarations, and they have to be in the program before anything looks names up in it.
 5. **Vet again.** A generator can emit import lines of its own, and those never went through step 2.
-6. **Add the prelude import**, only when the text was parsed without the template (see `applyTemplate` below).
+6. **Add the prelude import**, only when the text was parsed without the template (see `applyTemplate` below), and never for `index.agency` or `array.agency`, the two stdlib files the build itself leaves un-templated. They declare the very names the prelude imports.
 7. **Prune shadowed prelude names.** A file may declare its own `map`. The build drops `map` from the prelude import, so the checker must do the same or it reports a clash the build has already settled.
 8. **Resolve re-exports.**
 9. **Resolve imports.**
-10. **Lift callback blocks**, so each `callback("onX") { ... }` body becomes a top-level function.
+10. **Lift callback blocks**, so each `callback("onX") { ... }` body becomes a top-level function. The pass returns a new program: steps 1 through 9 hand out the pre-lift parse (the linter reads it, the parse cache keeps it), so rewriting a body in place would edit a program someone else is still holding.
 11. **Build the compilation unit.**
 
 ## The options
@@ -33,20 +33,23 @@ Each option is a difference between callers that someone chose. If a caller need
 | `spliceWallClockMs` | the editor | A runaway generator must not freeze a single-threaded language server. |
 | `symbolTable` | anyone who already has one | `agency tc` shares one table across every input file. |
 | `vet` | `compileSource` | The import policy. It refuses disallowed source before any generator runs. |
+| `ignoreRelativeImports: true` | `agency tc` on stdin | Source piped in is checked at a made-up path, where `./helper.agency` cannot resolve however the file is written. Step 9 leaves those statements alone rather than reporting them, and `agency tc` drops the checker's own AG4008/AG4009/AG4010 for a relative module too. Otherwise a file that passes `agency tc main.agency` fails when piped. |
 
 ## Failures are returned
 
-`prepareProgram` does not throw for a parse failure, a refused program, a splice failure, or a bad import. It returns them in `diagnostics`, each tagged with its `stage`. What to do with a failure is the part that differs between callers:
+`prepareProgram` does not throw for a parse failure, a refused program, a splice failure, a bad import, or a callback block it will not lift. It returns them in `diagnostics`, each tagged with its `stage`. What to do with a failure is the part that differs between callers:
 
 - `compileSource` returns them as `errors` strings, and rethrows a bad import the way it always did.
-- `typeCheckSource` throws for a parse failure, a bad import, and a refused splice. A throw from it means "could not check this".
+- `typeCheckSource` throws for a parse failure, a bad import, a refused splice, and a callback block that will not lift. A throw from it means "could not check this".
 - The editor turns each one into an editor diagnostic at its position.
 - `agency tc` prints each one and carries on to the next file.
 - `agency interrupts` analyzes what is there and returns the failures as `warnings`, which the command prints to stderr. A dropped import takes its call edges with it, so the list of sites is incomplete when there are warnings.
 
 `throwImportFailures` rethrows the original error for callers whose contract is that a bad import throws. `describeDiagnostic` renders any failure as one line that names its file.
 
-An `imports` failure holds whatever was thrown. It is usually an `ImportResolutionError`, but `SymbolTable.build` and `resolveReExports` also throw plain `Error`s, so do not assume the class.
+An `imports` failure holds whatever was thrown. It is usually an `ImportResolutionError`, but `SymbolTable.build` and `resolveReExports` also throw plain `Error`s, so do not assume the class. The one thing it is never is a bug in the pipeline itself: a `TypeError`, `RangeError`, or `ReferenceError` is rethrown, because reporting one as an import error would hide the stack in the one case that needs it. `SyntaxError` is not on that list on purpose: `JSON.parse` on a malformed package.json raises one, and that is the user's file.
+
+A `lift` failure is a `callback("onX") { ... }` block in a position the lifting pass refuses, such as a function argument. Under `keepGoing` the unlifted program is checked anyway, minus the lifted bodies — the editor runs this pipeline on every keystroke, and a half-typed callback must not take the language server down.
 
 Under `keepGoing`, the result can be `ok: true` and still carry diagnostics. Two failures stop the pipeline even then: a parse failure, and a bad re-export, which leaves no usable module graph.
 

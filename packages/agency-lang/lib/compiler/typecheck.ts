@@ -89,16 +89,17 @@ function toDiagnostic(err: TypeCheckErrorShape): TypeCheckDiagnostic {
 // that directory. Otherwise a fresh tempdir is used and relative imports
 // will not resolve.
 /** A throw from this pipeline means "could not check this": a parse
- *  failure, a bad import, or a splice the caller refused to run. A REFUSAL
- *  is not a splice that failed to expand. It is the caller saying "do not run
- *  this", and carrying on with the unexpanded program would report every
- *  generated name as undefined. Every other splice failure is tolerated. */
+ *  failure, a bad import, a callback block that cannot be lifted, or a splice
+ *  the caller refused to run. A REFUSAL is not a splice that failed to
+ *  expand. It is the caller saying "do not run this", and carrying on with
+ *  the unexpanded program would report every generated name as undefined.
+ *  Every other splice failure is tolerated. */
 function failIfNotCheckable(
   diagnostics: PipelineDiagnostic[],
   sourcePath: string | undefined,
 ): void {
   for (const diagnostic of diagnostics) {
-    if (diagnostic.stage === "parse") {
+    if (diagnostic.stage === "parse" || diagnostic.stage === "lift") {
       throw new Error(diagnostic.message);
     }
     if (diagnostic.stage === "splice" && diagnostic.splice.diagnostic === "spliceRefused") {

@@ -97,6 +97,7 @@ import { describeDiagnostic, prepareProgram } from "@/compiler/prepareProgram.js
 import { withSourcePath } from "@/compiler/typecheck.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
+import { importKind } from "@/importPaths.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError } from "@/vendor/commander/index.js";
 import * as fs from "fs";
@@ -1658,6 +1659,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
             symbolTable,
             keepGoing: true,
             allowTestImports: true,
+            // Nothing piped in can resolve `./helper.agency`, so reporting it
+            // would fail a file that passes when named on the command line.
+            ignoreRelativeImports: absPath === undefined,
           });
           // Stdin is checked at a temporary path. An import error carries
           // that path, and it means nothing to the reader.
@@ -1675,8 +1679,18 @@ export function createProgram(deps: CliDependencies = {}): Command {
         }
         const { program: parsedProgram, info } = prepared;
         const checked = typeCheck(parsedProgram, config, info).errors;
-        // Stdin was checked at a temporary path, which is gone by now.
-        const errors = absPath ? checked : checked.map((error) => ({ ...error, file: undefined }));
+        // Stdin was checked at a temporary path, which is gone by now, and
+        // which no relative import could ever resolve against. Reporting one
+        // would fail a file that passes when named on the command line.
+        const errors = absPath
+          ? checked
+          : checked
+              .filter(
+                (error) =>
+                  typeof error.params.module !== "string" ||
+                  importKind(error.params.module) !== "local",
+              )
+              .map((error) => ({ ...error, file: undefined }));
         if (errors.length > 0) {
           console.error(formatErrors(errors));
           const hint = formatDiagnosticsHint(errors);

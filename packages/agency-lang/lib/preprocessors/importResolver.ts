@@ -9,7 +9,12 @@ import { ImportResolutionError } from "../importResolutionError.js";
 import { DIAGNOSTICS, type DiagnosticName } from "../typeChecker/diagnostics.js";
 import * as fs from "fs";
 import type { SymbolTable, SymbolInfo, FileSymbols } from "../symbolTable.js";
-import { resolveAgencyImportPath, isAgencyImport, isPkgImport } from "../importPaths.js";
+import {
+  resolveAgencyImportPath,
+  isAgencyImport,
+  isPkgImport,
+  importKind,
+} from "../importPaths.js";
 
 export { ImportResolutionError } from "../importResolutionError.js";
 
@@ -84,10 +89,16 @@ export function resolveImports(
     // still resolves and the rest of the file still type-checks. The compile
     // path leaves this unset and hard-fails on the first bad import.
     onUnresolvable?: (err: ImportResolutionError) => void;
+    // Leave `./helper.agency` alone rather than resolve it. `currentFile` is
+    // a made-up path for some callers (source piped in on stdin), and there
+    // a relative import cannot resolve no matter what the user wrote.
+    // Unresolved Agency imports are fail-open, so the names stay usable.
+    ignoreRelativeImports?: boolean;
   } = {},
 ): AgencyProgram {
   const allowTestImports = opts.allowTestImports ?? false;
   const onUnresolvable = opts.onUnresolvable;
+  const ignoreRelativeImports = opts.ignoreRelativeImports ?? false;
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
@@ -96,6 +107,10 @@ export function resolveImports(
       continue;
     }
     try {
+      if (ignoreRelativeImports && importKind(node.modulePath) === "local") {
+        newNodes.push(node);
+        continue;
+      }
       newNodes.push(
         ...resolveImportStatement(node, symbolTable, currentFile, allowTestImports, onUnresolvable),
       );

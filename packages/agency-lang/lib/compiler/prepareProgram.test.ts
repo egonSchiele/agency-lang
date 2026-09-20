@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
+import { getStdlibDir } from "../importPaths.js";
 import { ImportResolutionError } from "../importResolutionError.js";
 import { safeDeleteDirectory } from "../utils.js";
 import { walkNodesArray } from "../utils/node.js";
@@ -191,6 +192,64 @@ describe("prepareProgram", () => {
     });
   });
 
+  describe("a callback block", () => {
+    const CALLBACK = `node main() {\n  callback("onNodeStart") as data {\n    print(data.nodeName)\n  }\n}\n`;
+    // An argument is not a statement position, which is the one place the
+    // lifting pass handles.
+    const REFUSED = `def outer(fn: any) {\n  print(fn)\n}\n\nnode main() {\n  outer(callback("onNodeStart") { print("hi") })\n}\n`;
+
+    it("stays in `parsed`, which lifting must not edit", () => {
+      const result = prepare("main.agency", CALLBACK);
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+      const blocks = walkNodesArray(result.parsed.nodes)
+        .map(({ node }) => node)
+        .filter((node) => node.type === "functionCall" && node.functionName === "callback");
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].type === "functionCall" && blocks[0].block).toBeTruthy();
+    });
+
+    it("is refused where it cannot be lifted, without throwing", () => {
+      const result = prepare("main.agency", REFUSED);
+      expect(result.ok).toBe(false);
+      expect(stages(result)).toEqual(["lift"]);
+    });
+
+    it("leaves the rest of the file checkable under keepGoing", () => {
+      const result = prepare("main.agency", REFUSED, { keepGoing: true });
+      expect(result.ok).toBe(true);
+      expect(stages(result)).toEqual(["lift"]);
+    });
+  });
+
+  describe("ignoreRelativeImports", () => {
+    const source = `import { helper } from "./helper.agency"\n\nnode main() {\n  print(helper())\n}\n`;
+
+    it("reports a module that is not there", () => {
+      const result = prepare("main.agency", source, { keepGoing: true });
+      expect(importCodes(result)).toEqual(["AG4009"]);
+    });
+
+    it("leaves the statement alone instead, so the names stay usable", () => {
+      const result = prepare("main.agency", source, {
+        keepGoing: true,
+        ignoreRelativeImports: true,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+      expect(result.diagnostics).toEqual([]);
+      expect(
+        result.program.nodes.some(
+          (node) => node.type === "importStatement" && node.modulePath === "./helper.agency",
+        ),
+      ).toBe(true);
+    });
+  });
+
   describe("applyTemplate: false", () => {
     const source = `import { map } from "std::index"\n\ndef map(): number {\n  return 1\n}\n\nnode main() {\n  print(map())\n}\n`;
 
@@ -219,6 +278,28 @@ describe("prepareProgram", () => {
           .flatMap((node) => (node.type === "importStatement" ? node.importedNames : []))
           .flatMap((spec) => (spec.type === "namedImport" ? spec.importedNames : []));
       expect(importedNames(result.parsed)).toContain("map");
+    });
+
+    it("adds no prelude to a stdlib file the build leaves un-templated", () => {
+      const indexPath = path.join(getStdlibDir(), "index.agency");
+      const result = prepareProgram(
+        fs.readFileSync(indexPath, "utf-8"),
+        indexPath,
+        {},
+        {
+          applyTemplate: false,
+          keepGoing: true,
+        },
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+      expect(
+        result.program.nodes.some(
+          (node) => node.type === "importStatement" && node.modulePath === "std::index",
+        ),
+      ).toBe(false);
     });
   });
 });

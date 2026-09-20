@@ -42,6 +42,9 @@ function failureRange(found: PipelineDiagnostic, doc: TextDocument): Range {
     const { start, end } = found.error.loc;
     return { start: doc.positionAt(start), end: doc.positionAt(end) };
   }
+  if (found.stage === "lift" && found.loc) {
+    return { start: doc.positionAt(found.loc.start), end: doc.positionAt(found.loc.end) };
+  }
   return START_OF_FILE;
 }
 

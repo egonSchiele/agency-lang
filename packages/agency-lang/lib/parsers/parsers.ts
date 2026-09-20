@@ -702,7 +702,9 @@ export const multiLineStringTextSegmentParser: Parser<TextSegment> =
 const ifInInterpolationParser: Parser<never> = (input: string) => {
   const probe = seqC(str("${"), optionalSpaces, optional(char("(")), str("if"), not(varNameChar));
   const probed = probe(input);
-  if (!probed.success) return failure("", input);
+  if (!probed.success) {
+    return failure("", input);
+  }
   const declined = committedFailure(IF_IN_INTERPOLATION_MESSAGE, input);
   // See bodyDeclarationParser for why the parse state is set by hand.
   getParseState().committedFailure = declined;
@@ -711,7 +713,9 @@ const ifInInterpolationParser: Parser<never> = (input: string) => {
 
 export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((input: string) => {
   const declined = ifInInterpolationParser(input);
-  if (isCommittedFailure(declined)) return declined;
+  if (isCommittedFailure(declined)) {
+    return declined;
+  }
 
   const parser = seqC(
     char("$"),

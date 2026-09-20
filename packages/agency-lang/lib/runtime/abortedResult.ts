@@ -153,7 +153,9 @@ export class AbortedResult {
     }
     // A finalize that only cleans up has no return, so it has no value to
     // win with. Keep the saved draft. (`return null` is null, not undefined.)
-    if (value === undefined) return this;
+    if (value === undefined) {
+      return this;
+    }
     return new AbortedResult(this.cause, { value }, this.unwindSpanId).logged(
       "carried",
       undefined,

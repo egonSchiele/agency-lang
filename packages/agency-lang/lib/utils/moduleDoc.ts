@@ -18,8 +18,10 @@ import type { AgencyMultiLineComment } from "../types.js";
 export function stripDocCommentMarkers(content: string): string {
   const lines = content.split("\n");
   const marked = lines.slice(1).filter((line) => line.trim() !== "");
-  if (marked.length === 0) return content;
-  if (!marked.every((line) => /^\s*\*/.test(line))) return content;
+  const isJsDocStyle = marked.length > 0 && marked.every((line) => /^\s*\*/.test(line));
+  if (!isJsDocStyle) {
+    return content;
+  }
   const [first, ...rest] = lines;
   return [first, ...rest.map((line) => line.replace(/^\s*\* ?/, ""))].join("\n");
 }

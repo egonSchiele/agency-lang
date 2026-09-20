@@ -409,7 +409,9 @@ export function walkScopeBody(nodes: AgencyNode[], scope: Scope, ctx: TypeChecke
       // `export { X } from "./m"` also declares X here. A real compile has
       // already lowered these away; a template body is checked unlowered.
       case "exportFromStatement":
-        if (node.body.kind !== "namedExport") break;
+        if (node.body.kind !== "namedExport") {
+          break;
+        }
         for (const name of getReExportedLocalNames(node.body)) {
           scope.declare(name, importedValueType(name, ctx));
         }

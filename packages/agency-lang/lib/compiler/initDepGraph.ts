@@ -940,9 +940,11 @@ function typeValueArgRefs(type: VariableType, aliases: Record<string, TypeAlias>
       const params = alias?.valueParams ?? [];
       const omitted = params.slice((inner.valueArgs ?? []).length);
       for (const param of omitted) {
-        if (!param.default) continue;
+        if (!param.default) {
+          continue;
+        }
         for (const ref of collectFreeIdentifiers(param.default)) {
-          if (ref.kind === "name" && params.some((p) => p.name === ref.name)) {
+          if (ref.kind === "name" && params.some((other) => other.name === ref.name)) {
             continue;
           }
           out.push(ref);

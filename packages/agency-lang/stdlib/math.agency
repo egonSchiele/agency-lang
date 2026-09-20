@@ -4,12 +4,13 @@ and a divide that returns a Result so you can handle division by zero.
 */
 import { _round } from "agency-lang/stdlib-lib/builtins.js"
 
-export def round(num: number, precision: number): number {
+export def round(num: number, precision: number = 0): number {
   """
-  Round a number to a given number of decimal places.
+  Round a number to a given number of decimal places. With no precision it
+  rounds to a whole number.
 
   @param num - The number to round
-  @param precision - The number of decimal places
+  @param precision - The number of decimal places. Defaults to 0.
   """
   return _round(num, precision)
 }

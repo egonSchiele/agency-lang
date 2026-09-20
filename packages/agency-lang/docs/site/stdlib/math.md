@@ -13,20 +13,21 @@ and a divide that returns a Result so you can handle division by zero.
 ### round
 
 ```ts
-round(num: number, precision: number): number
+round(num: number, precision: number = 0): number
 ```
 
-Round a number to a given number of decimal places.
+Round a number to a given number of decimal places. With no precision it
+  rounds to a whole number.
 
   @param num - The number to round
-  @param precision - The number of decimal places
+  @param precision - The number of decimal places. Defaults to 0.
 
 **Parameters:**
 
 | Name | Type | Default |
 |---|---|---|
 | num | `number` |  |
-| precision | `number` |  |
+| precision | `number` | 0 |
 
 **Returns:** `number`
 
@@ -49,7 +50,7 @@ Add two numbers.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L17))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L18))
 
 ### subtract
 
@@ -68,7 +69,7 @@ Subtract b from a.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L22))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L23))
 
 ### multiply
 
@@ -87,7 +88,7 @@ Multiply two numbers.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L27))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L28))
 
 ### divide
 
@@ -106,4 +107,4 @@ Divide a by b. Fails when b is zero.
 
 **Returns:** `Result<number>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/math.agency#L33))

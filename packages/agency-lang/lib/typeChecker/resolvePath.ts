@@ -5,8 +5,14 @@ import type { ScopeType } from "./scope.js";
 import { safeResolveType } from "./assignability.js";
 import type { PathSegment } from "./pathSegments.js";
 
-/** The declared type at the end of a member path, walked structurally from
- *  the base's type. `any` when a hop cannot be resolved. */
+/**
+ * Resolve successive path hops on a type — DIAGNOSTIC-FREE (unlike
+ * `synthValueAccess`, which emits strict-member-access errors). Returns "any" on
+ * any hop that can't be resolved (missing property, non-object/Record/array
+ * receiver), so path narrowing stays conservative. Handles property and
+ * literal-index hops (no tuple types exist, so an index resolves to the array
+ * element type regardless of the index value).
+ */
 export function resolvePath(
   baseType: ScopeType,
   chain: PathSegment[],
@@ -38,5 +44,3 @@ export function resolvePath(
   }
   return current;
 }
-
-/** The DECLARED (un-narrowed) type of a path, from the base var's scope type. */

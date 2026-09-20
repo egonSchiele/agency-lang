@@ -25,14 +25,7 @@ export {
   stablePrefix,
 } from "./pathSegments.js";
 
-/**
- * Resolve successive path hops on a type — DIAGNOSTIC-FREE (unlike
- * `synthValueAccess`, which emits strict-member-access errors). Returns "any" on
- * any hop that can't be resolved (missing property, non-object/Record/array
- * receiver), so path narrowing stays conservative. Handles property and
- * literal-index hops (no tuple types exist, so an index resolves to the array
- * element type regardless of the index value).
- */
+/** The DECLARED (un-narrowed) type of a path, from the base var's scope type. */
 export function declaredPathType(
   scope: Scope,
   ref: Reference,

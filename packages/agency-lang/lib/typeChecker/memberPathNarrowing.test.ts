@@ -601,6 +601,34 @@ def f(request: Request, other: Request): string {
     expect(errors).toHaveLength(1);
   });
 
+  it("SOUNDNESS: a branch that assigns the field is not narrowed", () => {
+    const errors = check(`${REQUEST}
+def f(request: Request): string {
+  if (request.subject != null) {
+    request.subject = null
+    const found = request.subject
+    const typed: string = found
+    return typed
+  }
+  return "Note"
+}`);
+    expect(errors).toHaveLength(1);
+  });
+
+  it("SOUNDNESS: an assignment after an early return ends the narrowing", () => {
+    const errors = check(`${REQUEST}
+def f(request: Request): string {
+  if (request.subject == null) {
+    return "Note"
+  }
+  request.subject = null
+  const found = request.subject
+  const typed: string = found
+  return typed
+}`);
+    expect(errors).toHaveLength(1);
+  });
+
   it("SOUNDNESS: a guard on one field does not narrow another", () => {
     const errors = check(`type Pair = { a?: string; b?: string }
 def f(pair: Pair): string {

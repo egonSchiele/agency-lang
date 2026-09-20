@@ -15,6 +15,7 @@ import {
   CATCH_ALL_NOT_LAST,
   DECL_NAME_SPACES_MESSAGE,
   DUPLICATE_ON_CLAUSE,
+  IF_IN_INTERPOLATION_MESSAGE,
   EMPTY_HANDLER_BLOCK,
   MALFORMED_ON_CLAUSE,
   HANDLER_BODY_MESSAGE,
@@ -698,7 +699,20 @@ export const multiLineStringTextSegmentParserFor = (delim: string): Parser<TextS
 export const multiLineStringTextSegmentParser: Parser<TextSegment> =
   multiLineStringTextSegmentParserFor('"""');
 
+const ifInInterpolationParser: Parser<never> = (input: string) => {
+  const probe = seqC(str("${"), optionalSpaces, optional(char("(")), str("if"), not(varNameChar));
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  const declined = committedFailure(IF_IN_INTERPOLATION_MESSAGE, input);
+  // See bodyDeclarationParser for why the parse state is set by hand.
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
 export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((input: string) => {
+  const declined = ifInInterpolationParser(input);
+  if (isCommittedFailure(declined)) return declined;
+
   const parser = seqC(
     char("$"),
     char("{"),

@@ -344,6 +344,7 @@ describe("AbortedResult.withFinalize", () => {
   it("a finalize that returns null replaces the draft with null", async () => {
     const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "code");
     const finalized = await aborted.withFinalize(async () => null, "code");
+    expect(finalized).not.toBe(aborted);
     expect(finalized.partialValueOrNull()).toBe(null);
   });
 

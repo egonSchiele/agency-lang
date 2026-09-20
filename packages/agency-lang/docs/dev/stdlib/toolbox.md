@@ -58,6 +58,37 @@ whatever `Request` the draft declares, so `assembleTool` compares the
 two through `describe`, which prints both the same way. A mismatch is a
 draft problem for the design loop and a plain failure for `writeTool`.
 
+The author's brief tells it to ask the user for a fact the task does not
+give, such as an address or an account. `draftSource` offers it a
+`question` tool on every round. That tool is `askAndRecord`, which calls
+`question` from `std::agent` and keeps each question and answer in
+`_answered` under the staging directory, the way `cannotFix` keeps its
+reports. Each round's author is a new thread, so `taskText` puts the
+answers in the next brief and tells the author not to ask again. A draft
+picked up from earlier in the session runs in a new staging directory, so
+its answers are not carried over.
+
+### The review agent is off by default
+
+`designTool(review: true)` has `agencyReviewAgent` read each draft before
+its checks. Blocking findings go back to the author once, and a second
+set reaches the user with the draft. The sections below on `fromReviewer`
+and `cannotFix` apply only to that mode.
+
+It is off because it did not pay for itself. On `evals/design-tool`, with
+gpt-5-mini and three trials, the score was 0.878 with the reviewer and
+0.890 without it. A tool took 187 seconds and $0.041 with it, and 85
+seconds and $0.014 without it. The user already reviews every draft at
+the `std::toolbox::review` prompt.
+
+Two rules hold when it is on. The reviewer gets its own task text,
+`reviewBrief`, which says the `Request` type is fixed and already
+verified. It reads the draft in the formatter's layout, where the type
+spans several lines, so it must not be asked whether the line was copied
+as is. `reviewBrief` also carries the user's answers and says the user
+wants those values in the module, so the reviewer does not report one as
+hard-coded.
+
 ## Two entry points, one save gate
 
 `designTool` is the design loop: the coding agent drafts, the review
@@ -92,10 +123,15 @@ raised.
 
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
 → `askUser` → `gateAndSave`, each a def with one job that returns a
-`Result`. `rounds` is the loop. It carries three things between rounds:
+`Result`. `rounds` is the loop. It carries four things between rounds:
 `feedback`, holding the last problem or the user's revision request,
 `fromReviewer`, which says whether that feedback is the reviewer's (see
-the next section), and `previous`, the draft the user last saw. `previous` rides along on the
+the next section), `drafted`, the draft that feedback is about, and
+`previous`, the draft the user last saw. `drafted` goes into the next
+author's brief, so a redraft starts from the code the feedback names
+and keeps what was right in it. The two differ when the reviewer blocks
+a draft: the user never saw it, but the next author must.
+`previous` rides along on the
 review interrupt so the approval prompt can diff this round's draft
 against it and show what changed rather than the whole tool again; on the
 first round it is `""` and the diff is all insertions. A round that

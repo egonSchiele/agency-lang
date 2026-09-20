@@ -21,4 +21,5 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/agents/reply-attachments.md` — How a tool hands images back to the model, given that most providers reject image parts in tool results.
 - `docs/dev/agents/promptRunner.md` — The control-flow helper behind `runPrompt`, and the rule that tool-loop decisions must be durable: made inside a step, persisted in `runnerState`.
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
+- `docs/dev/agents/why-the-agent-writes-tools.md` — What tools are for: what a tool gives that a skill cannot, tool sharpening, what each tool costs in context and how that squares with a minimal harness like Pi, and when a tool is not worth writing.
 - `docs/dev/agents/self-writing-agent.md` — Investigation notes from the experiment behind that argument.

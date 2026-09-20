@@ -547,6 +547,9 @@ type InterruptFooterInput = {
   body: string;
   items: { key: string; label: string }[];
   allowFreeText: boolean;
+  /** True when the raise wants a value, so typed text is the answer.
+   *  Otherwise typed text is a rejection reason. */
+  expectsValue?: boolean;
   state: InterruptState;
   columns: number;
 };
@@ -595,7 +598,8 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
     : input.items;
   packOptions(items, width - 1).forEach((row) => lines.push(` ${row}`));
   if (input.allowFreeText) {
-    lines.push(` ${DIM}or type a reason · Enter to submit${COLOR_RESET}`);
+    const hint = input.expectsValue ? "or type your answer" : "or type a reason";
+    lines.push(` ${DIM}${hint} · Enter to submit${COLOR_RESET}`);
   }
   if (input.state.notice !== "") {
     lines.push(` ${color.yellow(input.state.notice)}`);
@@ -614,6 +618,7 @@ type InterruptOpts = {
   items: { key: string; label: string }[];
   allowFreeText: boolean;
   allowCancel: boolean;
+  expectsValue?: boolean;
 };
 
 /** Stop the "Thinking" spinner if the REPL has one running (which also
@@ -669,6 +674,7 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
         body: opts.body,
         items: opts.items,
         allowFreeText: opts.allowFreeText,
+        expectsValue: opts.expectsValue,
         state,
         columns: process.stdout.columns || 80,
       }),
@@ -726,12 +732,13 @@ export async function _interruptChoice(
   items: { key: string; label: string }[],
   allowFreeText: boolean,
   allowCancel: boolean,
+  expectsValue: boolean = false,
 ): Promise<string> {
   const hook = (globalThis as any).__agencyInterruptPrompt;
   if (typeof hook !== "function") {
     throw new Error("_interruptChoice: no active line-mode REPL");
   }
-  return hook({ title, body, items, allowFreeText, allowCancel });
+  return hook({ title, body, items, allowFreeText, allowCancel, expectsValue });
 }
 
 /** True when a line-mode REPL is running AND both ends are real terminals,

@@ -59,6 +59,13 @@ describe("SANDBOX_JS_GLOBALS as a resolver registry", () => {
     }
   });
 
+  it("allows Infinity as a value and refuses it as a call", () => {
+    expect(resolveVariable("Infinity", { ...emptyVarInput, registry: sandbox }).kind).toBe(
+      "jsGlobal",
+    );
+    expect(resolveCall("Infinity", { ...emptyInput, registry: sandbox }).kind).toBe("unresolved");
+  });
+
   it("keeps default (JS_GLOBALS) behaviour when no registry is passed", () => {
     expect(resolveVariable("process", emptyVarInput).kind).toBe("jsGlobal");
     expect(resolveVariable("console", emptyVarInput).kind).toBe("jsGlobal");

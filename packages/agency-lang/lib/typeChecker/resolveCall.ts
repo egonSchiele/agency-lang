@@ -77,16 +77,19 @@ export const RESERVED_FUNCTION_NAMES = new Set<string>([
  *                         later enables type-checking)
  *   - kind: "namespace" — an object with named members, each of which
  *                         is itself a JsRegistryEntry
+ *   - kind: "value"     — a plain value such as `Infinity`: a name that
+ *                         resolves as a variable and cannot be called
  *
  * Phase 1 uses only the structure (existence checks). Phase 2 will
  * populate `sig` for entries we want type-checked; the typechecker
  * starts enforcing arity/types when `sig` is present.
  *
  * Names already supported natively by Agency (null, undefined) or rare
- * enough to defer (NaN, Infinity) are intentionally absent.
+ * enough to defer (NaN) are intentionally absent.
  */
 export type JsRegistryEntry =
   | { kind: "callable"; sig?: BuiltinSignature }
+  | { kind: "value" }
   | {
       kind: "namespace";
       members: Record<string, JsRegistryEntry>;
@@ -112,6 +115,9 @@ const namespace = (
 const numToNum: BuiltinSignature = { params: [NUMBER_T], returnType: NUMBER_T };
 
 export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
+  // --- Plain values ---
+  Infinity: { kind: "value" },
+
   // --- Flat callable globals ---
   // `parseInt` accepts an optional radix; we accept a 1-or-2-arg call against
   // (string|number, number) which covers the realistic cases without false
@@ -304,6 +310,8 @@ export const JS_GLOBALS: Record<string, JsRegistryEntry> = {
  * (prototype and descriptor access).
  */
 export const SANDBOX_JS_GLOBALS: Record<string, JsRegistryEntry> = {
+  // A numeric constant: the usual seed for a running minimum or maximum.
+  Infinity: JS_GLOBALS.Infinity,
   // Pure conversions.
   parseInt: JS_GLOBALS.parseInt,
   parseFloat: JS_GLOBALS.parseFloat,

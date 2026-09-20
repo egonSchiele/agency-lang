@@ -1,0 +1,16 @@
+{
+  "description": "The purpose names a webhook and gives no URL. The author has to ask for it, and the saved tool has to post to that URL.",
+  "tags": [
+    "asks",
+    "effectful"
+  ],
+  "input": {
+    "name": "notifyTeam",
+    "purpose": "Post a short message to my team's chat channel through its incoming webhook.",
+    "request": "{ message: string }",
+    "facts": {
+      "webhook URL": "https://hooks.example.com/services/T0001/B0002/abcDEF123",
+      "what the webhook expects": "a POST with a JSON body of the form { \"text\": \"the message\" }"
+    }
+  }
+}

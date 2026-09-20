@@ -1,0 +1,4 @@
+{
+  "description": "Asked for a tool that needs facts only the user knows, the agent asks for them before having the tool written. From a session where it called writeToolFor at once, described an address as \"configured\", and the author invented a USER_EMAIL variable.",
+  "input": "Please write a tool for emailing a note to myself."
+}

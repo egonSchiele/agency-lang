@@ -1,0 +1,41 @@
+{
+  "sourceFile": "split-bill-holdout.agency",
+  "tests": [
+    {
+      "nodeName": "evenSplit",
+      "expectedOutput": "\"20 120 30\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "roundsToCents",
+      "expectedOutput": "\"7.5 57.5 19.17\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "noTip",
+      "expectedOutput": "\"0 30 30\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nobody",
+      "expectedOutput": "\"error: people must be at least 1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

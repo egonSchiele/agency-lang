@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "nodeName": "reviewerIsNotToldToCompareTheRequestLine",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "redraftStartsFromThePreviousDraft",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "authorIsToldToAsk",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "answersReachLaterReaders",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

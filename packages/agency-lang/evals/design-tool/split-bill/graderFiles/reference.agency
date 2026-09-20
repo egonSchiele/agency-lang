@@ -1,0 +1,32 @@
+import { Json } from "std::validation"
+
+export type Request = {
+  total: number;
+  tipPercent: number;
+  people: number
+}
+
+def cents(amount: number): number {
+  return Math.round(amount * 100) / 100
+}
+
+export def run(request: Request): Json {
+  """
+  Splits a bill evenly and returns the tip, the total with tip, and each person's share.
+
+  @param request - The bill total, the tip percentage, and the number of people
+  """
+  if (request.people < 1) {
+    return {
+      error: "people must be at least 1"
+    }
+  }
+  const tip = request.total * request.tipPercent / 100
+  const totalWithTip = request.total + tip
+  return {
+    tip: cents(tip),
+    totalWithTip: cents(totalWithTip),
+    perPerson: cents(totalWithTip / request.people)
+  }
+}
+

@@ -1,0 +1,55 @@
+import { Json } from "std::validation"
+
+export type Request = {
+  csv: string;
+  column: string
+}
+
+export def run(request: Request): Json {
+  """
+  Returns the count, min, max, and mean of one numeric CSV column.
+
+  @param request - The CSV text and the name of the column to summarize
+  """
+  const lines = request.csv.split("\n")
+  const index = lines[0].split(",").indexOf(request.column)
+  if (index < 0) {
+    return {
+      error: "no such column"
+    }
+  }
+  let kept: number[] = []
+  for (line in lines.slice(1)) {
+    const field = (line.split(",")[index] ?? "").trim()
+    if (field != "" && !Number.isNaN(Number(field))) {
+      kept.push(Number(field))
+    }
+  }
+  if (kept.length == 0) {
+    return {
+      count: 0,
+      min: null,
+      max: null,
+      mean: null
+    }
+  }
+  let total = 0
+  let min = kept[0]
+  let max = kept[0]
+  for (value in kept) {
+    total = total + value
+    if (value < min) {
+      min = value
+    }
+    if (value > max) {
+      max = value
+    }
+  }
+  return {
+    count: kept.length,
+    min: min,
+    max: max,
+    mean: Math.round(total / kept.length * 100) / 100
+  }
+}
+

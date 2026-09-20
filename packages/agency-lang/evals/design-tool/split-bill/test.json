@@ -1,0 +1,12 @@
+{
+  "description": "Arithmetic with rounding. Nothing is missing from the purpose, so the author should ask nothing and the tool should be saved with passing tests.",
+  "tags": [
+    "pure"
+  ],
+  "input": {
+    "name": "splitBill",
+    "purpose": "Split a restaurant bill evenly. The tip is tipPercent percent of the total. Return an object `{ tip: number, totalWithTip: number, perPerson: number }`, each rounded to 2 decimal places, where perPerson is totalWithTip divided by people. When people is less than 1, return `{ error: \"people must be at least 1\" }`.",
+    "request": "{ total: number; tipPercent: number; people: number }",
+    "facts": {}
+  }
+}

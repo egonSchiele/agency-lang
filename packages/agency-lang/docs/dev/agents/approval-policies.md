@@ -145,9 +145,9 @@ yes — for `std::toolbox::review`, accepting a draft nobody looked at.
 That one refusal has to hold in three places, because a rule reaches such
 an interrupt by three routes:
 
-- `recordAnswer` saves nothing for one. The prompt takes free text, so a
-  user can type "aa" at a prompt that never offered it and
-  `choiceResult` will read the string rather than the menu.
+- `recordAnswer` saves nothing for one. `choiceResult` already reads a
+  key the menu did not offer as text, so an "always" action should not
+  arrive there. `recordAnswer` checks anyway.
 - The check under the lock skips one, so a rule a sibling saved in the
   same round cannot answer it.
 - `_handler`'s ordinary check approves one no longer either, since a rule
@@ -160,6 +160,15 @@ value-expecting effect without asking", and `approve-all` is no longer
 quite all — its description says so. For the effects that expect a value
 today (`std::question`, `std::skills::review`, `std::toolbox::review`), a
 silent empty answer was not a useful thing to be able to ask for.
+
+At the prompt, text typed at such a raise is its answer: `_handler`
+returns `approve(<the text>)`. `interruptChoice` takes `expectsValue`, and
+the footer then says "or type your answer".
+Typed at any other raise, text is a rejection reason. `typedValue` holds
+that rule. "a" approves with no value, which `std::toolbox::review` reads
+as accept, and "r" still rejects. `choiceResult` reads a key as a
+keystroke only when the menu offered it, so "aa" typed at a question is
+the user's answer.
 
 Headlessly such an interrupt is rejected, and the rejection says which of
 the two things happened. "The policy has no rule for this effect" is the

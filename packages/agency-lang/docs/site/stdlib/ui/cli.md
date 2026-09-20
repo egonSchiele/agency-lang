@@ -143,6 +143,7 @@ interruptChoice(
   items: any[],
   allowFreeText: boolean = false,
   allowCancel: boolean = false,
+  expectsValue: boolean = false,
 ): string
 ```
 
@@ -158,6 +159,7 @@ Approval prompt for line mode: renders a sticky footer pinned to the
   @param items - The {key, label} choices.
   @param allowFreeText - Accept a free-form rejection reason.
   @param allowCancel - When true, Escape cancels the whole request.
+  @param expectsValue - True when the interrupt wants a value back, so the text the user types is their answer. Otherwise typed text is a rejection reason.
 
 **Parameters:**
 
@@ -168,6 +170,7 @@ Approval prompt for line mode: renders a sticky footer pinned to the
 | items | `any[]` |  |
 | allowFreeText | `boolean` | false |
 | allowCancel | `boolean` | false |
+| expectsValue | `boolean` | false |
 
 **Returns:** `string`
 

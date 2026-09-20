@@ -1,0 +1,12 @@
+{
+  "description": "String cleanup with a length cap. Nothing is missing from the purpose.",
+  "tags": [
+    "pure"
+  ],
+  "input": {
+    "name": "slugifyTitle",
+    "purpose": "Turn a title into a URL slug and return it as a string. Lowercase it, replace every run of characters that are not a-z or 0-9 with a single hyphen, and strip hyphens from both ends. Then, when the slug is longer than maxLength, cut it to maxLength characters and strip any hyphen left at the end.",
+    "request": "{ title: string; maxLength: number }",
+    "facts": {}
+  }
+}

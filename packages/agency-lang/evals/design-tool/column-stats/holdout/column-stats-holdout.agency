@@ -1,0 +1,41 @@
+// Hidden test cases the author never sees. Imports the tool evalMain saved.
+import { run } from "./toolbox/columnStats/impl.agency"
+
+const SALES = "region,units,price\nnorth,10,2.5\nsouth,,3\neast,4,abc\nwest,7,1.25"
+
+def shown(request: any): string {
+  const result: any = run(request)
+  if (result.error != null) {
+    return "error: ${result.error}"
+  }
+  return "${result.count} ${result.min} ${result.max} ${result.mean}"
+}
+
+export node skipsEmpty(): string {
+  return shown({
+    csv: SALES,
+    column: "units"
+  })
+}
+
+export node skipsNonNumbers(): string {
+  return shown({
+    csv: SALES,
+    column: "price"
+  })
+}
+
+export node missingColumn(): string {
+  return shown({
+    csv: SALES,
+    column: "color"
+  })
+}
+
+export node nothingKept(): string {
+  return shown({
+    csv: "a,b\nx,y",
+    column: "b"
+  })
+}
+

@@ -1,0 +1,31 @@
+// Hidden test cases the author never sees. Imports the tool evalMain saved.
+import { run } from "./toolbox/slugifyTitle/impl.agency"
+
+export node plain(): any {
+  return run({
+    title: "Hello, World!",
+    maxLength: 50
+  })
+}
+
+export node runsOfPunctuation(): any {
+  return run({
+    title: "  What's new -- in 2026?  ",
+    maxLength: 50
+  })
+}
+
+export node cutAtTheCap(): any {
+  return run({
+    title: "one two three",
+    maxLength: 7
+  })
+}
+
+export node cutLeavesNoHyphen(): any {
+  return run({
+    title: "one two three",
+    maxLength: 8
+  })
+}
+

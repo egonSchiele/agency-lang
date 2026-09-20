@@ -11,6 +11,7 @@
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
  */
+import { question } from "std::agent"
 import { oracleAgent as stdOracleAgent } from "std::agents/oracle"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
@@ -56,6 +57,7 @@ export handoff def oracleAgent(
       maxTime: timeBudget(maxSeconds, 15m),
       model: getSlowModel(),
       provider: getSlowProvider(),
+      extraTools: [question],
     )
   }
 }

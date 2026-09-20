@@ -93,6 +93,9 @@ export function lookupBuiltinHover(name: string): string | null {
       const sigText = entry.sig ? formatSig(entry.sig) : "(any) => any";
       return ["```ts", `${name}: ${sigText}`, "```", "", "_JavaScript global._"].join("\n");
     }
+    if (entry.kind === "value") {
+      return ["```ts", name, "```", "", "_JavaScript global._"].join("\n");
+    }
     // namespace
     const memberNames = Object.keys(entry.members).sort();
     return [

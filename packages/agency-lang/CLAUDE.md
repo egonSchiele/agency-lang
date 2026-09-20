@@ -293,6 +293,7 @@ Other process docs:
 - `docs/dev/agents/subagent-budgets.md` — How a stated deadline reaches a subagent as a tool parameter, what happens when its guard trips, and why the harness no longer guards the whole turn.
 - `docs/dev/agents/tool-loop-guards.md` — The three refusals that stop a model wasting rounds: a repeated call, an argument that is really tool-call markup, and a call identical to one already rejected.
 - `docs/dev/agents/why-agents-write-code.md` — The argument for letting an agent write and run programs instead of giving it more tools.
+- `docs/dev/agents/why-the-agent-writes-tools.md` — What tools are for: what a tool gives that a skill cannot, tool sharpening, what each tool costs in context and how that squares with a minimal harness like Pi, and when a tool is not worth writing.
 - `docs/dev/agents/writing-rewrite-agent.md` — The rewrite agent over the writing reviewer: the passes loop, why a reviewer failure is not a clean pass, and how its eval suite shares the reviewer suite's files.
 
 ### Security

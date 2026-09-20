@@ -1,0 +1,12 @@
+{
+  "description": "A tool that needs today's information. Nothing is missing from the purpose, so the author should ask nothing. The answer changes daily, so a judge reads the code.",
+  "tags": [
+    "outside-info"
+  ],
+  "input": {
+    "name": "getNews",
+    "purpose": "Get today's news for a list of topics. Return a list of `{ topic: string, headline: string, summary: string }`, with at most maxItems entries per topic and a one-sentence summary for each. Use a web search to find the news.",
+    "request": "{ topics: string[]; maxItems: number }",
+    "facts": {}
+  }
+}

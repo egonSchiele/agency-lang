@@ -99,7 +99,10 @@ Return the current todo list.
 question(prompt: string): string
 ```
 
-Ask the user a question and wait for their reply.
+Ask the user a question and wait for their reply. Use it when the work
+  depends on a fact only the user knows, such as which address, account,
+  or service they mean. Do not use it for something you can look up, and
+  do not guess at a fact you could ask for.
 
   @param prompt - The question to show the user
 

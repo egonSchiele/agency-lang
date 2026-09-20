@@ -64,6 +64,17 @@ fraction. `holdout/` is never copied into the working directory. Each
 test's `graderFiles/reference.agency` is a tool that passes all of its
 cases; rerun the cases against it after changing them.
 
+`triage-tickets` (tag `model`) has hidden cases too, but its tool calls a
+model, so the cases measure how well the tool works and not only whether
+the code is right. Each case hands the saved tool one support message and
+compares the category, or the urgency, with the one the support team
+would give. Many of the messages turn on house rules that are in the
+test's facts and not in the purpose, so a tool whose prompt says only
+"sort this message" gets them wrong. The cases call `setModel` to run the
+tool on a small model: a tool is worth writing when the work a strong
+model put into it makes a weak model good. The cases make real model
+calls, about 30 per graded run.
+
 A tool with no fixed output (tags `effectful`, `outside-info`) uses
 `toolJudge` (`lib/toolJudge.ts`): a rubric judge with a reference solution.
 
@@ -95,3 +106,21 @@ cases cannot compile: a TypeScript `as` cast, which Agency reads as two
 undefined names, or a JavaScript global the sandbox does not allow.
 `designTool` accepts those tools because its own compile leaves the
 undefined-name check off.
+
+### triage-tickets
+
+Three trials each, 2026-09-19. The hidden cases ran on gpt-5-nano.
+
+| author | asked the user | hidden cases | score |
+| --- | --- | --- | --- |
+| gpt-5-mini | 0 of 3 | 0.667, 0.800, 0.867 | 0.593 ± 0.020 |
+| gpt-5.6-sol | 0 of 3 | 0.733, 0.767, 0.767 | 0.585 ± 0.004 |
+| `graderFiles/reference.agency` | | 0.933 | |
+
+Neither author asked a question, so both guessed the house rules. Every
+saved tool called a vague "it does not work" message a bug, and most rated
+a bug in one feature as urgency 3. The reference tool has the test's facts
+in its prompt and misses 2 of 30. The same authors do ask in `email-note`,
+where a fact such as an address is plainly missing. Here nothing looks
+missing, because a model can always make up a definition.
+

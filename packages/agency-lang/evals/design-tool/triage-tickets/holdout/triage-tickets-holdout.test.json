@@ -1,0 +1,275 @@
+{
+  "sourceFile": "triage-tickets-holdout.agency",
+  "tests": [
+    {
+      "nodeName": "invoiceCopy",
+      "expectedOutput": "\"billing\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "declinedRenewal",
+      "expectedOutput": "\"billing\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "planDifference",
+      "expectedOutput": "\"billing\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "plainRefund",
+      "expectedOutput": "\"refund\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "crashOnExport",
+      "expectedOutput": "\"bug\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "errorCode",
+      "expectedOutput": "\"bug\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "wrongTotals",
+      "expectedOutput": "\"bug\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "howToInvite",
+      "expectedOutput": "\"how-to\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "findDarkMode",
+      "expectedOutput": "\"how-to\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "featureIdea",
+      "expectedOutput": "\"other\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "salesPartner",
+      "expectedOutput": "\"other\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "spam",
+      "expectedOutput": "\"other\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cannotLogIn",
+      "expectedOutput": "\"bug\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chargedTwiceWantsBack",
+      "expectedOutput": "\"refund\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "chargedTwiceAsksWhy",
+      "expectedOutput": "\"billing\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cancelAndRefund",
+      "expectedOutput": "\"refund\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "bugWantsRefund",
+      "expectedOutput": "\"refund\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "doesNotWork",
+      "expectedOutput": "\"how-to\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cannotFindExport",
+      "expectedOutput": "\"how-to\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "importSilentlyDropsRows",
+      "expectedOutput": "\"bug\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "urgencyLockedOut",
+      "expectedOutput": "\"3\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "urgencyChargedTwice",
+      "expectedOutput": "\"3\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "urgencyQuestion",
+      "expectedOutput": "\"1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "urgencyWrongTotals",
+      "expectedOutput": "\"2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "calendarNotWorking",
+      "expectedOutput": "\"how-to\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "notificationsNotWorking",
+      "expectedOutput": "\"how-to\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cannotAddWorkspace",
+      "expectedOutput": "\"how-to\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "urgencyDroppedRows",
+      "expectedOutput": "\"2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "urgencyCrashOnExport",
+      "expectedOutput": "\"2\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "urgencyPlanQuestion",
+      "expectedOutput": "\"1\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

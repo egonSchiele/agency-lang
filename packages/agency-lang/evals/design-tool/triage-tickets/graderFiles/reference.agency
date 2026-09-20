@@ -1,0 +1,41 @@
+import { Json } from "std::validation"
+
+export type Request = { message: string }
+
+type Triage = {
+  category: "billing" | "refund" | "bug" | "how-to" | "other";
+  reason: string;
+  urgency: 1 | 2 | 3
+}
+
+static const RULES = """
+Sort one customer support message the way this support team does.
+
+Categories:
+- billing: a question or a problem about a charge, an invoice, a plan, or a payment method, where the customer is not asking for money back.
+- refund: the customer asks for money back, for any reason.
+- bug: the app did something wrong. The message reports an error message, a crash, or data that is wrong or missing.
+- how-to: the customer wants to know how to do something, or cannot find something, and nothing in the message shows the app misbehaving.
+- other: anything else, such as feedback, a sales question, or spam.
+
+When two categories fit:
+- Asking for money back always wins. A message that asks for a refund is refund, even when it also describes a wrong charge or a bug.
+- Between bug and how-to, it is bug ONLY when the message reports an error message, a crash, or wrong or missing data. "It does not work", "it won't let me", or "it isn't working" with nothing more is how-to.
+
+Urgency:
+- 3 when the customer cannot use the app at all, or money was taken that should not have been.
+- 1 when the message is a question and nothing is broken.
+- 2 for everything else, including a bug in one feature while the rest of the app works.
+
+reason is one sentence.
+"""
+
+export def run(request: Request): Json {
+  """
+  Sorts one support message into a category with a reason and an urgency, by the support team's rules.
+
+  @param request - The customer's message
+  """
+  const triage: Triage = llm("${RULES}\n<message>\n${request.message}\n</message>")
+  return triage
+}

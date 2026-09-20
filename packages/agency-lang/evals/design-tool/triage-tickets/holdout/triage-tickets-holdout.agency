@@ -1,0 +1,140 @@
+// Hidden messages the author never sees, each with the category the
+// support team would give it. Many sit on the two overlaps the
+// test's facts settle: billing against refund, and bug against how-to.
+//
+// The cases run on a small model on purpose. A tool is worth writing when
+// the work a strong model put into it makes a weak model good.
+import { run } from "./toolbox/triageTicket/impl.agency"
+import { setModel } from "std::llm"
+
+def categoryOf(message: string): string {
+  setModel("gpt-5-nano")
+  const result: any = run({ message: message })
+  return "${result.category}"
+}
+
+def urgencyOf(message: string): string {
+  setModel("gpt-5-nano")
+  const result: any = run({ message: message })
+  return "${result.urgency}"
+}
+
+export node invoiceCopy(): string {
+  return categoryOf("Can you send me a copy of my March invoice? I need it for my accountant.")
+}
+
+export node declinedRenewal(): string {
+  return categoryOf("My renewal payment was declined but my bank says the card is fine. Can you check the charge on your side?")
+}
+
+export node planDifference(): string {
+  return categoryOf("What is the difference in price between the Team plan and the Business plan?")
+}
+
+export node plainRefund(): string {
+  return categoryOf("I signed up yesterday and this is not for me. Please give me my money back.")
+}
+
+export node crashOnExport(): string {
+  return categoryOf("Every time I press Export the app closes itself. It has happened five times today.")
+}
+
+export node errorCode(): string {
+  return categoryOf("Saving a project shows 'Error 500: internal server error' and nothing is saved.")
+}
+
+export node wrongTotals(): string {
+  return categoryOf("The monthly report adds up my hours wrong. It shows 12 hours for a week where I logged 40.")
+}
+
+export node howToInvite(): string {
+  return categoryOf("How do I invite a teammate to my workspace?")
+}
+
+export node findDarkMode(): string {
+  return categoryOf("Where is the dark mode setting? I have looked through every menu.")
+}
+
+export node featureIdea(): string {
+  return categoryOf("Love the app. It would be great if you added a calendar view some day.")
+}
+
+export node salesPartner(): string {
+  return categoryOf("We are a reseller in Brazil and would like to talk about a partnership.")
+}
+
+export node spam(): string {
+  return categoryOf("Boost your SEO ranking today with our guaranteed backlink package!!!")
+}
+
+export node cannotLogIn(): string {
+  return categoryOf("I cannot log in at all. The login page says 'Error: account service unavailable'. My whole team is locked out.")
+}
+
+export node chargedTwiceWantsBack(): string {
+  return categoryOf("You charged me twice this month. Please return the second payment.")
+}
+
+export node chargedTwiceAsksWhy(): string {
+  return categoryOf("I see two charges from you this month. Why is that?")
+}
+
+export node cancelAndRefund(): string {
+  return categoryOf("I cancelled last week but was still billed for the year. I want that reversed and the money returned to my card.")
+}
+
+export node bugWantsRefund(): string {
+  return categoryOf("The sync has been broken with a 'token expired' error for two weeks, so I could not use what I paid for. I want a refund for this month.")
+}
+
+export node doesNotWork(): string {
+  return categoryOf("The sharing thing does not work. How is it supposed to go?")
+}
+
+export node cannotFindExport(): string {
+  return categoryOf("I can't get my data out as a CSV. Is there a way?")
+}
+
+export node importSilentlyDropsRows(): string {
+  return categoryOf("I imported a CSV with 200 rows and only 150 showed up. No message, the rest are just gone.")
+}
+
+export node urgencyLockedOut(): string {
+  return urgencyOf("I cannot log in at all. The login page says 'Error: account service unavailable'. My whole team is locked out.")
+}
+
+export node urgencyChargedTwice(): string {
+  return urgencyOf("You charged me twice this month. Please return the second payment.")
+}
+
+export node urgencyQuestion(): string {
+  return urgencyOf("How do I invite a teammate to my workspace?")
+}
+
+export node urgencyWrongTotals(): string {
+  return urgencyOf("The monthly report adds up my hours wrong. It shows 12 hours for a week where I logged 40.")
+}
+
+export node calendarNotWorking(): string {
+  return categoryOf("The calendar sync isn't working for me. What am I missing?")
+}
+
+export node notificationsNotWorking(): string {
+  return categoryOf("Notifications don't work on my phone.")
+}
+
+export node cannotAddWorkspace(): string {
+  return categoryOf("I tried to add a second workspace and it won't let me.")
+}
+
+export node urgencyDroppedRows(): string {
+  return urgencyOf("I imported a CSV with 200 rows and only 150 showed up. No message, the rest are just gone.")
+}
+
+export node urgencyCrashOnExport(): string {
+  return urgencyOf("Every time I press Export the app closes itself. It has happened five times today.")
+}
+
+export node urgencyPlanQuestion(): string {
+  return urgencyOf("What is the difference in price between the Team plan and the Business plan?")
+}

@@ -524,6 +524,17 @@ describe("AG8015: type names a template does define", () => {
     expect(codesOf(source)).not.toContain("AG8015");
   });
 
+  it("a type and a function the template re-exports", () => {
+    const source = withLiteral([
+      '    export { Request, run } from "./impl.agency"',
+      "",
+      "    export node main(request: Request): Request {",
+      "      return run(request)",
+      "    }",
+    ]);
+    expect(codesOf(source)).not.toContain("AG8015");
+  });
+
   it("a builtin generic", () => {
     const source = withLiteral([
       '    const r: Result<string> = success("a")',

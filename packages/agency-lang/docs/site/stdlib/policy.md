@@ -49,10 +49,10 @@ export type InterruptDataKey = string
 
 ### InterruptDataVal
 
-* Glob pattern used to match an interrupt-data value. Patterns are
- * picomatch globs. They support `*`, `**`, and brace-expansion like
- * `{a,b}` for unions. A literal string with no glob metacharacters
- * matches only that exact value.
+Glob pattern used to match an interrupt-data value. Patterns are
+picomatch globs. They support `*`, `**`, and brace-expansion like
+`{a,b}` for unions. A literal string with no glob metacharacters
+matches only that exact value.
 
 ```ts
 /**
@@ -68,8 +68,8 @@ export type InterruptDataVal = string
 
 ### InterruptEffect
 
-* Identifier for an interrupt's effect (e.g. `"std::read"`,
- * `"myapp::deploy"`).
+Identifier for an interrupt's effect (e.g. `"std::read"`,
+`"myapp::deploy"`).
 
 ```ts
 /**
@@ -83,16 +83,16 @@ export type InterruptEffect = string
 
 ### PolicyRule
 
-* One row of a `Policy`. A rule passes if every key in `match` is
- * present in the interrupt's `data` and its value matches the glob
- * pattern. Omit `match` (or set it to `{}`) for a catch-all that
- * applies to every interrupt of the parent effect.
- *
- * A reject rule may carry a `rejectMessage`: the message the rejection
- * hands back to whoever raised the interrupt. For a rejected tool call
- * this is what the model reads, so it can steer the next attempt — for
- * example, a rule rejecting `std::bash` with
- * `rejectMessage: "Use safeBash instead"`.
+One row of a `Policy`. A rule passes if every key in `match` is
+present in the interrupt's `data` and its value matches the glob
+pattern. Omit `match` (or set it to `{}`) for a catch-all that
+applies to every interrupt of the parent effect.
+
+A reject rule may carry a `rejectMessage`: the message the rejection
+hands back to whoever raised the interrupt. For a rejected tool call
+this is what the model reads, so it can steer the next attempt — for
+example, a rule rejecting `std::bash` with
+`rejectMessage: "Use safeBash instead"`.
 
 ```ts
 /**
@@ -118,10 +118,10 @@ export type PolicyRule = {
 
 ### Policy
 
-* A policy: ordered rules per interrupt effect. `checkPolicy` walks
- * the array for `intr.effect` in order and returns on the first
- * matching rule. If no rule for the effect exists, evaluation falls
- * through to `propagate` (i.e. ask the next handler in the chain).
+A policy: ordered rules per interrupt effect. `checkPolicy` walks
+the array for `intr.effect` in order and returns on the first
+matching rule. If no rule for the effect exists, evaluation falls
+through to `propagate` (i.e. ask the next handler in the chain).
 
 ```ts
 /**
@@ -137,14 +137,14 @@ export type Policy = Record<InterruptEffect, PolicyRule[]>
 
 ### Decision
 
-* The five answers `cliPolicyHandler`'s prompt accepts:
- * - `"approve"` / `"reject"` — one-off (a) / (r).
- * - `"approve-always"` / `"reject-always"` — (aa) / (rr). Records a
- *   catch-all rule for the effect, so future interrupts of this effect
- *   resolve without prompting.
- * - `"approve-always-here"` — (ap). Records a scoped rule pinned to
- *   whichever fields you listed in `ScopedRuleFields` for this effect.
- *   Only offered when the effect has an entry in the config.
+The five answers `cliPolicyHandler`'s prompt accepts:
+- `"approve"` / `"reject"` — one-off (a) / (r).
+- `"approve-always"` / `"reject-always"` — (aa) / (rr). Records a
+  catch-all rule for the effect, so future interrupts of this effect
+  resolve without prompting.
+- `"approve-always-here"` — (ap). Records a scoped rule pinned to
+  whichever fields you listed in `ScopedRuleFields` for this effect.
+  Only offered when the effect has an entry in the config.
 
 ```ts
 /**
@@ -169,15 +169,15 @@ export type Decision =
 
 ### ScopedField
 
-* One column in a `ScopedRuleFields` entry — names an interrupt-data
- * field that the "approve-always-here" rule should pin.
- *
- * - `field` — the key in `intr.data` to pin (e.g. `"dir"`).
- * - `matchSubpaths` — when `true`, brace-expand the value so the
- *   rule matches both the exact value AND any nested path under it.
- *   Pass `true` for directory-like fields (so approving `/tmp/x`
- *   also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
- *   identifiers (commands, IDs, env names) that shouldn't fan out.
+One column in a `ScopedRuleFields` entry — names an interrupt-data
+field that the "approve-always-here" rule should pin.
+
+- `field` — the key in `intr.data` to pin (e.g. `"dir"`).
+- `matchSubpaths` — when `true`, brace-expand the value so the
+  rule matches both the exact value AND any nested path under it.
+  Pass `true` for directory-like fields (so approving `/tmp/x`
+  also approves `/tmp/x/sub/file.txt`). Pass `false` for opaque
+  identifiers (commands, IDs, env names) that shouldn't fan out.
 
 ```ts
 /**
@@ -201,23 +201,23 @@ export type ScopedField = {
 
 ### ScopedRuleFields
 
-* Per-effect override consumed by `buildScopedMatch` and the
- * `cliPolicyHandler`. Maps an interrupt effect to the fields its
- * "approve-always-here" rule should pin. Effects not present in this
- * map fall back to the scope their `effect` declaration carries
- * (`@always` / `@alwaysUnder`); an empty list turns the (ap) option
- * off for that effect, so the user falls back to (a) / (r) / (aa) / (rr).
- *
- * Example:
- * ```ts
- * const FIELDS: ScopedRuleFields = {
- *   "std::read":  [{ field: "dir", matchSubpaths: true }],
- *   "std::exec":  [
- *     { field: "command",    matchSubpaths: false },
- *     { field: "subcommand", matchSubpaths: false },
- *   ],
- * }
- * ```
+Per-effect override consumed by `buildScopedMatch` and the
+`cliPolicyHandler`. Maps an interrupt effect to the fields its
+"approve-always-here" rule should pin. Effects not present in this
+map fall back to the scope their `effect` declaration carries
+(`@always` / `@alwaysUnder`); an empty list turns the (ap) option
+off for that effect, so the user falls back to (a) / (r) / (aa) / (rr).
+
+Example:
+```ts
+const FIELDS: ScopedRuleFields = {
+  "std::read":  [{ field: "dir", matchSubpaths: true }],
+  "std::exec":  [
+    { field: "command",    matchSubpaths: false },
+    { field: "subcommand", matchSubpaths: false },
+  ],
+}
+```
 
 ````ts
 /**
@@ -362,19 +362,19 @@ Evaluate a policy against an interrupt. Returns approve(), reject(), or propagat
   @param policy - Ordered rules keyed by interrupt effect; each rule has optional glob-pattern match fields, an action, and (on reject rules) an optional rejectMessage.
   @param interrupt - The interrupt to evaluate.
 
-* Evaluate a policy against a single interrupt. Returns the result
- * of `approve()`, `reject()`, or `propagate()` corresponding to the
- * first matching rule for `interrupt.effect`. If no rule matches
- * (no rules for the effect, or every rule's `match` failed), returns
- * `propagate()` so the next handler in the chain runs.
- *
- * A reject result carries the matched rule's `rejectMessage` (when the
- * rule set one) as `.message`, so a handler can pass it on with
- * `reject(decision.message)`. Returning the result directly from a
- * handler (`return checkPolicy(policy, intr)`) also carries the message.
- *
- * Designed for use inside a custom handler. The CLI sugar
- * (`cliPolicyHandler`) calls this for you.
+Evaluate a policy against a single interrupt. Returns the result
+of `approve()`, `reject()`, or `propagate()` corresponding to the
+first matching rule for `interrupt.effect`. If no rule matches
+(no rules for the effect, or every rule's `match` failed), returns
+`propagate()` so the next handler in the chain runs.
+
+A reject result carries the matched rule's `rejectMessage` (when the
+rule set one) as `.message`, so a handler can pass it on with
+`reject(decision.message)`. Returning the result directly from a
+handler (`return checkPolicy(policy, intr)`) also carries the message.
+
+Designed for use inside a custom handler. The CLI sugar
+(`cliPolicyHandler`) calls this for you.
 
 **Parameters:**
 
@@ -395,13 +395,13 @@ Validate that a policy object is well-formed. Returns { success: true } if valid
 
   @param policy - The policy object to validate.
 
-* Check that a `Policy` is structurally valid (every entry is an
- * array of `PolicyRule` with a recognised `action`, every `match`
- * is a flat string→string map, etc.). Returns
- * `{ success: true }` or `{ success: false, error: string }`.
- *
- * Call before persisting user-supplied or hand-edited policy data;
- * `writePolicyFile` calls this internally before writing.
+Check that a `Policy` is structurally valid (every entry is an
+array of `PolicyRule` with a recognised `action`, every `match`
+is a flat string→string map, etc.). Returns
+`{ success: true }` or `{ success: false, error: string }`.
+
+Call before persisting user-supplied or hand-edited policy data;
+`writePolicyFile` calls this internally before writing.
 
 **Parameters:**
 
@@ -459,34 +459,34 @@ Build a match object for an interrupt, pinned to its scoped fields. Values are e
   @param intr - The interrupt whose data fields to pin.
   @param fields - Per-effect override of which data fields to pin. Effects not listed use their declared `@always` scope.
 
-* Build the `match` map for a scoped rule by reading the scoped
- * fields out of `intr.data`. The returned object is shaped to plug
- * straight into a `PolicyRule.match`:
- *
- * ```ts
- * const match = buildScopedMatch(intr)
- * const rule: PolicyRule = { match: match, action: "approve" }
- * ```
- *
- * Which fields: the `fields` entry for `intr.effect` when the caller
- * passed one, otherwise the effect's declared `@always` scope.
- * For each `ScopedField`:
- * - The field's value is read from `intr.data` and escaped, so a value
- *   like `ls *.md` matches only that exact command, never a glob.
- * - If `matchSubpaths: true`, the value is wrapped as
- *   `"{value,value/**}"` so the resulting glob matches both the
- *   exact value and any subpath under it.
- * - If `matchSubpaths: false`, the escaped value is used as-is.
- *
- * If any scoped field is absent from `intr.data` (`null` / `undefined`)
- * the result is `{}`: a rule missing one of its pins would be wider than
- * the user was shown, and a rule with an empty match approves every
- * future interrupt of the effect. An effect with no scope returns `{}`.
- *
- * Most callers should use `recordScopedRule` instead, which calls
- * this internally. `buildScopedMatch` is exposed for callers
- * assembling rules by hand or implementing a custom UI that needs
- * to preview the match before recording.
+Build the `match` map for a scoped rule by reading the scoped
+fields out of `intr.data`. The returned object is shaped to plug
+straight into a `PolicyRule.match`:
+
+```ts
+const match = buildScopedMatch(intr)
+const rule: PolicyRule = { match: match, action: "approve" }
+```
+
+Which fields: the `fields` entry for `intr.effect` when the caller
+passed one, otherwise the effect's declared `@always` scope.
+For each `ScopedField`:
+- The field's value is read from `intr.data` and escaped, so a value
+  like `ls *.md` matches only that exact command, never a glob.
+- If `matchSubpaths: true`, the value is wrapped as
+  `"{value,value/**}"` so the resulting glob matches both the
+  exact value and any subpath under it.
+- If `matchSubpaths: false`, the escaped value is used as-is.
+
+If any scoped field is absent from `intr.data` (`null` / `undefined`)
+the result is `{}`: a rule missing one of its pins would be wider than
+the user was shown, and a rule with an empty match approves every
+future interrupt of the effect. An effect with no scope returns `{}`.
+
+Most callers should use `recordScopedRule` instead, which calls
+this internally. `buildScopedMatch` is exposed for callers
+assembling rules by hand or implementing a custom UI that needs
+to preview the match before recording.
 
 **Parameters:**
 
@@ -515,25 +515,25 @@ Return a new policy with a catch-all rule for an effect appended. A single bare 
   @param effect - The interrupt effect the rule applies to.
   @param action - Whether to approve or reject matching interrupts.
 
-* Return a new policy with a catch-all rule (`{ action }` with no
- * `match`) for `effect` appended. Pure — does not mutate the input.
- *
- * ## Precedence trap
- *
- * Evaluation is first-match-wins, so **append order matters**. A
- * second call for the same effect with a different action is dead
- * code:
- *
- * ```ts
- * let p = recordRule({}, "std::read", "reject")
- * p = recordRule(p, "std::read", "approve")  // never reached
- * ```
- *
- * If you're flipping a previously-recorded decision, decide
- * explicitly: either reset the effect's rules first
- * (`{ ...policy, "std::read": [] }` and re-record), or hand-edit
- * `policy[effect]` to replace the offending rule. This function does
- * not try to detect or warn about shadowing on your behalf.
+Return a new policy with a catch-all rule (`{ action }` with no
+`match`) for `effect` appended. Pure — does not mutate the input.
+
+## Precedence trap
+
+Evaluation is first-match-wins, so **append order matters**. A
+second call for the same effect with a different action is dead
+code:
+
+```ts
+let p = recordRule({}, "std::read", "reject")
+p = recordRule(p, "std::read", "approve")  // never reached
+```
+
+If you're flipping a previously-recorded decision, decide
+explicitly: either reset the effect's rules first
+(`{ ...policy, "std::read": [] }` and re-record), or hand-edit
+`policy[effect]` to replace the offending rule. This function does
+not try to detect or warn about shadowing on your behalf.
 
 **Parameters:**
 
@@ -563,19 +563,19 @@ Return a new policy with a scoped approve rule prepended for the interrupt's eff
   @param intr - The interrupt whose field values to pin.
   @param fields - Per-effect override of which data fields to pin. Effects not listed use their declared `@always` scope.
 
-* Return a new policy with a scoped approve rule prepended for
- * `intr.effect`. The rule's `match` is built by `buildScopedMatch`,
- * so it pins whichever fields are configured for the effect. Pure.
- *
- * Prepended (not appended) so the new, more-specific rule wins
- * over any pre-existing catch-all in first-match-wins order. This
- * makes scoped rules safe to add even if the effect already has a
- * broader rejection: the scoped approval applies first when it
- * matches, otherwise the catch-all takes over.
- *
- * The action is always `"approve"`, because the (ap) UI affordance
- * only makes sense in the affirmative direction. Build a scoped
- * reject by hand if you need one.
+Return a new policy with a scoped approve rule prepended for
+`intr.effect`. The rule's `match` is built by `buildScopedMatch`,
+so it pins whichever fields are configured for the effect. Pure.
+
+Prepended (not appended) so the new, more-specific rule wins
+over any pre-existing catch-all in first-match-wins order. This
+makes scoped rules safe to add even if the effect already has a
+broader rejection: the scoped approval applies first when it
+matches, otherwise the catch-all takes over.
+
+The action is always `"approve"`, because the (ap) UI affordance
+only makes sense in the affirmative direction. Build a scoped
+reject by hand if you need one.
 
 **Parameters:**
 
@@ -601,14 +601,14 @@ Read + parse + validate a policy file from disk. Returns {} on any
 
   @param path - The policy file path
 
-* Read + JSON-parse + validate a policy file from disk. Returns a
- * `Failure` naming the exact problem: a missing file, unreadable
- * permissions, malformed JSON, or a schema-validation error. It prints
- * nothing — callers decide how loudly to surface the failure.
- *
- * Raises `std::read` (so the caller's handler chain controls
- * whether the read is approved). The CLI handler auto-approves
- * this via `with approve`.
+Read + JSON-parse + validate a policy file from disk. Returns a
+`Failure` naming the exact problem: a missing file, unreadable
+permissions, malformed JSON, or a schema-validation error. It prints
+nothing — callers decide how loudly to surface the failure.
+
+Raises `std::read` (so the caller's handler chain controls
+whether the read is approved). The CLI handler auto-approves
+this via `with approve`.
 
 **Parameters:**
 
@@ -630,11 +630,11 @@ setPolicy(path: string, policy: Policy)
 
 Install `policy` as the active policy and persist it to `path`.
 
-* Set the policy to be used with the CLI handler
-  * returned by `cliPolicyHandler`. The handler's internal state
-  * is module-level, so this sets the policy for the handler
-  * to consult on every interrupt. Call this after loading a policy
-  * with `parsePolicyFile` or constructing one by hand.
+Set the policy to be used with the CLI handler
+returned by `cliPolicyHandler`. The handler's internal state
+is module-level, so this sets the policy for the handler
+to consult on every interrupt. Call this after loading a policy
+with `parsePolicyFile` or constructing one by hand.
 
 **Parameters:**
 
@@ -657,14 +657,14 @@ Validate and write a policy to a JSON file. Throws if the policy is invalid.
   @param policy - The policy to write.
   @param allowedPaths - Restrict writes to these path prefixes; empty allows any path.
 
-* Validate a `Policy` and write it as JSON to `path`. Throws (returns
- * `Failure`) if validation fails. Invalid policies are never
- * persisted.
- *
- * `allowedPaths` is a defense-in-depth allow-list passed straight
- * through to the underlying `write`. Pass `[]` (the default) only
- * when the path is trusted. Otherwise restrict it to a known
- * directory like `["/home/you/.myapp"]`.
+Validate a `Policy` and write it as JSON to `path`. Throws (returns
+`Failure`) if validation fails. Invalid policies are never
+persisted.
+
+`allowedPaths` is a defense-in-depth allow-list passed straight
+through to the underlying `write`. Pass `[]` (the default) only
+when the path is trusted. Otherwise restrict it to a known
+directory like `["/home/you/.myapp"]`.
 
 **Parameters:**
 
@@ -686,11 +686,11 @@ The rules `base` has that the `cliPolicyHandler`'s active policy lacks, keyed by
 
   @param base - The policy to compare against, such as `recommendedAutoApprovePolicy`.
 
-* A saved policy file is a copy of a built-in policy from the day it was
- * created, plus the user's own "always" answers, so a rule added to the
- * built-in later never reaches it. These two functions let a program
- * show the user what their file lacks and add it when they say so.
- * Neither runs on its own, and nothing is added without being asked for.
+A saved policy file is a copy of a built-in policy from the day it was
+created, plus the user's own "always" answers, so a rule added to the
+built-in later never reaches it. These two functions let a program
+show the user what their file lacks and add it when they say so.
+Neither runs on its own, and nothing is added without being asked for.
 
 **Parameters:**
 
@@ -732,15 +732,15 @@ flushPolicy()
 
 Write any pending always-rule additions to the policy file now.
 
-* Force-write the `cliPolicyHandler`'s in-memory policy to disk
- * now. Use between user turns when you want the **last** decision
- * of a session persisted. The handler's own auto-flush runs at the
- * top of the next interrupt, so a decision recorded on the final
- * interrupt of a turn won't survive a crash unless you call this.
- *
- * No-op when there are no pending changes. Auto-approves its own
- * `std::write` via `with approve` (you opted in by installing the
- * handler).
+Force-write the `cliPolicyHandler`'s in-memory policy to disk
+now. Use between user turns when you want the **last** decision
+of a session persisted. The handler's own auto-flush runs at the
+top of the next interrupt, so a decision recorded on the final
+interrupt of a turn won't survive a crash unless you call this.
+
+No-op when there are no pending changes. Auto-approves its own
+`std::write` via `with approve` (you opted in by installing the
+handler).
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/policy.agency#L667))
 
@@ -762,64 +762,64 @@ CLI sugar for an interactive policy handler. Loads and saves the policy file, pr
   @param policy - Optional in-memory policy to use directly instead of loading `file` on startup.
   @param interactive - Whether a user is at a terminal. When false, an interrupt the policy does not decide is rejected with a reason (surfaced to the raise site, and so to an LLM whose tool raised it) instead of prompting.
 
-* Drop-in policy handler for interactive CLI agents. Returns a
- * function ref you bind to a local variable and install on a `handle`
- * block:
- *
- * ```ts
- * const home = env("HOME") with approve
- * const handler = cliPolicyHandler(
- *   file: "${home}/.myapp/policy.json",
- *   fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
- * )
- * handle {
- *   // every interrupt raised here is filtered through the handler
- * } with handler
- * ```
- *
- * What the handler does:
- *
- * 1. **Loads** the policy file on first invocation. Missing /
- *    malformed files are treated as `{}` with a warning.
- * 2. **Consults the loaded policy** via `checkPolicy`. If a rule
- *    matches, approves or rejects without prompting.
- * 3. **Prompts the user** when no rule applies, showing
- *    (a)/(r)/(aa)/(ap)/(rr). The (ap) option appears only when
- *    `fields` has an entry for the interrupt's effect.
- * 4. **Records "always" decisions** in memory and flushes them to
- *    disk at the top of the next interrupt. Use `flushPolicy()` if
- *    you need the final decision of a session persisted before
- *    process exit.
- *
- * ## Singleton state
- *
- * Internal state (loaded policy, pending-save flag, options) is
- * module-level. Calling `cliPolicyHandler` more than once in the
- * same program silently overwrites the previous options. Only the
- * last `file` / `fields` win. For multi-policy agents, fork the
- * module or use the pure primitives directly.
- *
- * ## Bind-to-variable requirement
- *
- * The `with` clause only accepts an identifier (not a call
- * expression), so you MUST bind the return value to a `const`
- * before using it. This also bypasses the typechecker's
- * handler-raises-interrupt rule, which only resolves direct
- * functionRef names. The flip-flag-first pattern inside the handler
- * provides runtime safety.
- *
- * @param file - Path to the on-disk policy file. Created on first
- *   save. The containing directory must already exist.
- * @param fields - Per-effect override of which data fields the (ap)
- *   rule pins. Effects not listed use the scope their `effect`
- *   declaration carries; an empty list turns (ap) off for that effect.
- * @param policy - Optional in-memory policy to start from. When
- *   provided, the handler uses it directly and does NOT read `file` on
- *   startup (so there is no load-time `std::read` and no dependency on
- *   `file` existing). New "always" decisions still persist to `file`.
- *   Use for a per-run override that must not be seeded from — or written
- *   over — a saved policy on disk. Omit (null) for the normal
- *   load-from-`file` behavior.
+Drop-in policy handler for interactive CLI agents. Returns a
+function ref you bind to a local variable and install on a `handle`
+block:
+
+```ts
+const home = env("HOME") with approve
+const handler = cliPolicyHandler(
+  file: "${home}/.myapp/policy.json",
+  fields: { "std::read": [{ field: "dir", matchSubpaths: true }] },
+)
+handle {
+  // every interrupt raised here is filtered through the handler
+} with handler
+```
+
+What the handler does:
+
+1. **Loads** the policy file on first invocation. Missing /
+   malformed files are treated as `{}` with a warning.
+2. **Consults the loaded policy** via `checkPolicy`. If a rule
+   matches, approves or rejects without prompting.
+3. **Prompts the user** when no rule applies, showing
+   (a)/(r)/(aa)/(ap)/(rr). The (ap) option appears only when
+   `fields` has an entry for the interrupt's effect.
+4. **Records "always" decisions** in memory and flushes them to
+   disk at the top of the next interrupt. Use `flushPolicy()` if
+   you need the final decision of a session persisted before
+   process exit.
+
+## Singleton state
+
+Internal state (loaded policy, pending-save flag, options) is
+module-level. Calling `cliPolicyHandler` more than once in the
+same program silently overwrites the previous options. Only the
+last `file` / `fields` win. For multi-policy agents, fork the
+module or use the pure primitives directly.
+
+## Bind-to-variable requirement
+
+The `with` clause only accepts an identifier (not a call
+expression), so you MUST bind the return value to a `const`
+before using it. This also bypasses the typechecker's
+handler-raises-interrupt rule, which only resolves direct
+functionRef names. The flip-flag-first pattern inside the handler
+provides runtime safety.
+
+@param file - Path to the on-disk policy file. Created on first
+  save. The containing directory must already exist.
+@param fields - Per-effect override of which data fields the (ap)
+  rule pins. Effects not listed use the scope their `effect`
+  declaration carries; an empty list turns (ap) off for that effect.
+@param policy - Optional in-memory policy to start from. When
+  provided, the handler uses it directly and does NOT read `file` on
+  startup (so there is no load-time `std::read` and no dependency on
+  `file` existing). New "always" decisions still persist to `file`.
+  Use for a per-run override that must not be seeded from — or written
+  over — a saved policy on disk. Omit (null) for the normal
+  load-from-`file` behavior.
 
 **Parameters:**
 

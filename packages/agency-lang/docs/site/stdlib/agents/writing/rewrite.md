@@ -47,19 +47,19 @@ Review prose and return it rewritten with the findings applied. If
   @param model - Model override, or "" for the ambient model
   @param provider - Provider for the model override
 
-* Rewrites a piece of text according to the findings of a writing review.
- *
- * Quick note on the `passes` parameter: a single pass is usually enough.
- * Running the eval suite comparing one pass to two passes,
- * the accuracy went from 0.769 -> 0.795.
- *
- * Usage example:
- *
- * ```ts
- * const rewritten = writingRewriteAgent(
- *   text: "Original text",
- * )
- * ```
+Rewrites a piece of text according to the findings of a writing review.
+
+Quick note on the `passes` parameter: a single pass is usually enough.
+Running the eval suite comparing one pass to two passes,
+the accuracy went from 0.769 -> 0.795.
+
+Usage example:
+
+```ts
+const rewritten = writingRewriteAgent(
+  text: "Original text",
+)
+```
 
 **Parameters:**
 

@@ -391,10 +391,10 @@ Return the cumulative cost in USD of all LLM calls contributing to the
   current execution branch.
 
 Inside a fork/race branch this includes the parent's accumulated cost
- *  plus what this branch has spent so far. After branches join, the parent
- *  sees its own cost plus every branch's cost, including race losers.
- *  Their LLM calls really happened and cost real money. To measure a
- *  section, capture the value before and after and subtract.
+ plus what this branch has spent so far. After branches join, the parent
+ sees its own cost plus every branch's cost, including race losers.
+ Their LLM calls really happened and cost real money. To measure a
+ section, capture the value before and after and subtract.
 
 **Returns:** `number`
 
@@ -424,8 +424,8 @@ Push `msg` as a system message unless the active thread already holds it.
   @param msg - The system message
 
 For an agent's persona. An agent called twice from code on one thread
- *  keeps one persona; a handoff, whose system messages are removed when it
- *  hands back, pushes the persona fresh on every dispatch.
+ keeps one persona; a handoff, whose system messages are removed when it
+ hands back, pushes the persona fresh on every dispatch.
 
 **Parameters:**
 
@@ -459,8 +459,8 @@ Return what the run has spent since it began, one entry per kind
   usage entries.
 
 Unlike the per-branch cost/token accessors, this covers every branch of
- *  the run, so it attributes spend per model even for
- *  subagents and tool calls that run on a different model.
+ the run, so it attributes spend per model even for
+ subagents and tool calls that run on a different model.
 
 **Returns:** `ModelCost[]`
 
@@ -483,11 +483,11 @@ Return every thread in the current run, including the active one, as a
                          the thread's label (or `""`).
 
 Summary sourcing: threads opened with `thread(summarize: true)` are
- *  summarized eagerly when they close, so their summary is already cached
- *  here. Other closed threads are summarized on first read via one LLM
- *  round-trip, and the result is cached for later calls. The active thread
- *  is never summarized (the in-flight conversation should not be
- *  summarized mid-stream). A cached summary is reused without re-prompting.
+ summarized eagerly when they close, so their summary is already cached
+ here. Other closed threads are summarized on first read via one LLM
+ round-trip, and the result is cached for later calls. The active thread
+ is never summarized (the in-flight conversation should not be
+ summarized mid-stream). A cached summary is reused without re-prompting.
 
 **Parameters:**
 

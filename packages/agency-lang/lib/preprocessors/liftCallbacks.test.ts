@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "@/parser.js";
 import { liftCallbackBlocks } from "./liftCallbacks.js";
+import { TypescriptPreprocessor } from "./typescriptPreprocessor.js";
 import type { AgencyProgram, AgencyNode } from "@/types.js";
 import type { FunctionDefinition, FunctionCall } from "@/types/function.js";
 
@@ -38,6 +39,25 @@ function findCalls(nodes: AgencyNode[], fnName: string): FunctionCall[] {
 }
 
 describe("liftCallbackBlocks", () => {
+  it("keeps an @module doc comment ahead of the lifted defs", () => {
+    const program = lift(`/** @module
+  @summary test
+*/
+let on: boolean = false
+
+callback("onToolCallStart") as data {
+  if (on) {
+    print("hi")
+  }
+}
+`);
+    const kinds = program.nodes.filter((n) => n.type !== "newLine").map((n) => n.type);
+    expect(kinds.indexOf("multiLineComment")).toBeLessThan(kinds.indexOf("function"));
+
+    const preprocessor = new TypescriptPreprocessor(program, {});
+    expect(() => preprocessor.attachDocComments()).not.toThrow();
+  });
+
   it("lifts a top-level callback block to __cb_top_0", () => {
     const out = lift(`callback("onNodeStart") as data {\n  print(data.nodeName)\n}\n`);
     const lifted = findFn(out, "__cb_top_0");

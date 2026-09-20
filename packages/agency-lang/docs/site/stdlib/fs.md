@@ -118,10 +118,10 @@ Edit a single file by applying one or more text replacements atomically. Each ed
   @param dir - The directory to resolve the filename against
   @param useAgentCwd - When true, resolve a relative path against the agent working directory if one is set
 
-* The `std::edit` interrupt carries the full `before` and `after` file contents
- * in its data, so a handler can render a diff itself. A handler receives the
- * whole interrupt object, so the contents are at `data.data.before` /
- * `data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
+The `std::edit` interrupt carries the full `before` and `after` file contents
+in its data, so a handler can render a diff itself. A handler receives the
+whole interrupt object, so the contents are at `data.data.before` /
+`data.data.after` (e.g. `print(diff(data.data.before, data.data.after, color: true))`).
 
 **Parameters:**
 

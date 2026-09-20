@@ -54,10 +54,10 @@ Line-mode REPL with the same call signature as the std::ui TUI repl,
   @param historyMax - Trim history to this many most-recent entries
   @param paletteCommands - Map of /cmd -> description; null uses the palette from `setSlashPalette`
 
-* Line-mode sibling of the std::ui TUI repl. Current limitations:
- * `status` is accepted for signature parity but not yet rendered;
- * `paletteCommands` has no tab completion yet; there is no busy
- * spinner and no Ctrl+C cancel of an in-flight turn.
+Line-mode sibling of the std::ui TUI repl. Current limitations:
+`status` is accepted for signature parity but not yet rendered;
+`paletteCommands` has no tab completion yet; there is no busy
+spinner and no Ctrl+C cancel of an in-flight turn.
 
 **Parameters:**
 

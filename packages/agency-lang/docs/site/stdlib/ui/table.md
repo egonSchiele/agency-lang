@@ -41,9 +41,9 @@ Draws tables for terminal output. `table(...)` returns a layout node whose
 
 ### Cell
 
-* A table cell. Either a bare string (auto-coerced to a styled `text`
- * leaf at render time) or any pre-built LayoutNode (e.g.
- * `text("-50", fgColor: "red")`).
+A table cell. Either a bare string (auto-coerced to a styled `text`
+leaf at render time) or any pre-built LayoutNode (e.g.
+`text("-50", fgColor: "red")`).
 
 ```ts
 /**
@@ -66,16 +66,16 @@ export type CellRow = Cell[]
 
 ### ColumnSpec
 
-* Per-column configuration for a `table`. All fields are optional.
- * Omitted columns default to start-aligned with no minimum width.
- *
- * @param align - Horizontal alignment of every cell in this column
- * @param minWidth - Lower bound on column width; widens narrow columns
- * @param width - Optional per-column constraint. A number caps the
- *   column's content width in cells. `"X%"` takes a percentage of the
- *   table's remaining inner width. `"full"` counts as `"100%"`.
- * @param fgColor - Default foreground color for every cell in this
- *   column that doesn't carry its own `fgColor`.
+Per-column configuration for a `table`. All fields are optional.
+Omitted columns default to start-aligned with no minimum width.
+
+@param align - Horizontal alignment of every cell in this column
+@param minWidth - Lower bound on column width; widens narrow columns
+@param width - Optional per-column constraint. A number caps the
+  column's content width in cells. `"X%"` takes a percentage of the
+  table's remaining inner width. `"full"` counts as `"100%"`.
+@param fgColor - Default foreground color for every cell in this
+  column that doesn't carry its own `fgColor`.
 
 ```ts
 /**
@@ -102,9 +102,9 @@ export type ColumnSpec = {
 
 ### TableBuilder
 
-* Methods available inside a `table`'s trailing `as t { ... }` block.
- * `columns` / `caption` set top-level table attrs; `header` / `row` /
- * `footer` append cell arrays to the corresponding section.
+Methods available inside a `table`'s trailing `as t { ... }` block.
+`columns` / `caption` set top-level table attrs; `header` / `row` /
+`footer` append cell arrays to the corresponding section.
 
 ```ts
 /**

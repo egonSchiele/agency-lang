@@ -59,7 +59,14 @@ export function liftCallbackBlocks(program: AgencyProgram): AgencyProgram {
     newNodes.push(transformTopLevel(node, lifted, nextName));
   }
 
-  const result: AgencyProgram = { ...program, nodes: [...lifted, ...newNodes] };
+  // The lifted defs go first, but after an `@module` doc comment: that
+  // comment must come before any code, and a lifted def counts as code.
+  const afterModuleDoc =
+    newNodes.findIndex((node) => node.type === "multiLineComment" && node.isModuleDoc) + 1;
+  const result: AgencyProgram = {
+    ...program,
+    nodes: [...newNodes.slice(0, afterModuleDoc), ...lifted, ...newNodes.slice(afterModuleDoc)],
+  };
   assertNoUnliftedCallbackBlocks(result);
   return result;
 }

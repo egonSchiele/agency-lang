@@ -132,14 +132,14 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
   @param silenceTimeout - Silence before auto-stopping, in milliseconds; 0 disables silence detection so recording stops only on Enter
   @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
 
-* `silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
- * `record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
- *
- * Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
- * which surfaces as an AgencyCancelledError.
- *
- * An empty `outputFile` is auto-generated under the system temp directory and
- * is not subject to the `allowedPaths` allow-list.
+`silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
+`record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
+
+Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
+which surfaces as an AgencyCancelledError.
+
+An empty `outputFile` is auto-generated under the system temp directory and
+is not subject to the `allowedPaths` allow-list.
 
 **Parameters:**
 

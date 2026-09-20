@@ -62,8 +62,8 @@ Ask for a second opinion on a hard problem: whether a plan is sound,
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 Called from code, this runs on the caller's thread like any function:
- *  the system prompt, the reads, and the answer stay there. Wrap the call
- *  in `thread { ... }` for an isolated consult.
+ the system prompt, the reads, and the answer stay there. Wrap the call
+ in `thread { ... }` for an isolated consult.
 
 **Parameters:**
 

@@ -99,8 +99,8 @@ export type VariableWord = {
 ### InterpolatedVariableWord
 
 A word built from two or more adjacent parts: `$HOME.txt`, `"a"b`,
- * `"$HOME"/x`. These are ONE word in bash; split into separate words they
- * become separate arguments and the command means something else.
+`"$HOME"/x`. These are ONE word in bash; split into separate words they
+become separate arguments and the command means something else.
 
 ```ts
 /** A word built from two or more adjacent parts: `$HOME.txt`, `"a"b`,
@@ -137,9 +137,9 @@ export type Assignment = {
 ### Redirect
 
 A redirect like `> out.txt`, `>> log`, `2> err.txt` or `< in.txt`.
- * `fd` is the explicit file descriptor (`2` in `2>`), or undefined for the
- * default. Only `>`, `>>`, `<` and `&>` are recognized; `2>&1`, heredocs
- * and here-strings are rejected rather than parsed.
+`fd` is the explicit file descriptor (`2` in `2>`), or undefined for the
+default. Only `>`, `>>`, `<` and `&>` are recognized; `2>&1`, heredocs
+and here-strings are rejected rather than parsed.
 
 ```ts
 /** A redirect like `> out.txt`, `>> log`, `2> err.txt` or `< in.txt`.

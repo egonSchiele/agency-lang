@@ -15,6 +15,13 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "parseErrorReportedOnce",
+      "description": "source that does not parse gets one finding, not a second copy from the typechecker",
+      "input": "",
+      "expectedOutput": "1",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "withTask",
       "description": "review with a task merges LLM feedback into the findings",
       "input": "",

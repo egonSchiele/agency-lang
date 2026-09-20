@@ -19,6 +19,12 @@ node parseError() {
   return feedbackHasErrors(fb)
 }
 
+// The typechecker parses too. A parse error is one finding, not two.
+node parseErrorReportedOnce() {
+  const fb = agencyReviewAgent("node main() {{{")
+  return (fb catch []).length
+}
+
 // task!="" -> an LLM pass judges code-vs-task and merges its feedback
 // in. The mock returns an ERROR finding on otherwise-clean code, so the
 // only way this returns true is if the LLM item actually flowed through

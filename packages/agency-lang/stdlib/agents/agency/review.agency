@@ -7,7 +7,7 @@
   consult the bundled Agency documentation and the web to check a claim.
 */
 import { TypeCheckReport, typecheck, parseAST } from "std::agency"
-import { Feedback, mergeFeedback, failOpenFeedback } from "std::agents/lib/feedback"
+import { Feedback, mergeFeedback, failOpenFeedback, feedbackHasErrors } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, docsOnlyHandler, withContext } from "std::agents/lib/shared"
 import { agencyDocTools, webTools } from "std::agents/lib/toolkits"
@@ -235,8 +235,13 @@ export def agencyReviewAgent(
   @param strict - Typecheck with the name checks a sandboxed compile uses; see `typecheck` in std::agency
   """
   let feedback: Result<Feedback[]> = success([])
-  feedback = mergeFeedback(feedback, parseFeedback(source))
-  feedback = mergeFeedback(feedback, typecheckFeedback(source, dir, strict))
+  const parsed = parseFeedback(source)
+  feedback = mergeFeedback(feedback, parsed)
+  // The typechecker parses first, so on source that does not parse it
+  // reports the same error a second time and nothing else.
+  if (!feedbackHasErrors(parsed)) {
+    feedback = mergeFeedback(feedback, typecheckFeedback(source, dir, strict))
+  }
   if (task == "") {
     return feedback
   }

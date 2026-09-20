@@ -15,6 +15,7 @@ def runDesign(
   dir: string,
   answers: any[],
   request: string = "{ n: number }",
+  maxRounds: number = 3,
 ) {
   let reviewCount = 0
   handle {
@@ -24,7 +25,7 @@ def runDesign(
       request: request,
       dir: dir,
       review: true,
-      maxRounds: 3,
+      maxRounds: maxRounds,
     )
   } with (intr) {
     return match(intr.effect) {
@@ -168,6 +169,17 @@ node wrongExportGoesBackToTheCodingAgent(): boolean {
   }
   cleanup("addFour")
   return result is success && cleanSource
+}
+
+// Four drafts in a row fail the typechecker and the fifth is clean. Drafts
+// the checker sends back have a count of their own, so all five fit in the
+// one round allowed here.
+node checkerFailuresDoNotUseUpRounds(): boolean {
+  cleanup("addSix")
+  const result = runDesign("addSix", OUT, ["accept"], maxRounds: 1)
+  const saved = savedFiles("addSix")
+  cleanup("addSix")
+  return result is success && saved
 }
 
 // The first draft typechecks but declares a different Request than the

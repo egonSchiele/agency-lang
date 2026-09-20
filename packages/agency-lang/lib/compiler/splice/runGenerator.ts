@@ -40,11 +40,8 @@ export const MEMORY_MB = 512;
  */
 export const EDITOR_WALL_CLOCK_MS = 3_000;
 
-/**
- * The node name for the synthesized runner. The runner is Agency source, so it
- * cannot use a `__` name: the parser refuses those. It picks the first of
- * `runSplice`, `runSplice1`, … that is not one of the names the runner imports.
- */
+/** The runner's node name: the first of `runSplice`, `runSplice1`, … that the
+ *  runner does not import. The parser refuses a `__` name here too. */
 function runnerNodeName(importedNames: readonly string[]): string {
   const candidates = ["runSplice", ...importedNames.map((_, i) => `runSplice${i + 1}`)];
   return candidates.find((name) => !importedNames.includes(name)) as string;

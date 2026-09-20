@@ -18,7 +18,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/language/parallel-blocks.md` — The shipped design for `parallel` and `seq` blocks: what they lower to and what they refuse.
 - `docs/dev/language/parallel-blocks-v2-dataflow.md` — A spec for grouping parallel statements automatically by dataflow. Not implemented.
 - `docs/dev/language/pkg-imports.md` — Importing Agency code from npm packages with the `pkg::` prefix.
-- `docs/dev/language/reserved-names.md` — Names starting with `__` belong to the compiler: the one function that decides, the parser check and why it throws, the unchecked positions (object keys, properties), the fill and splice checks for code that is never parsed, and what to do when compiler-written Agency text trips the rule.
+- `docs/dev/language/reserved-names.md` — Names starting with `__` belong to the compiler: the one function that decides, the parser check and why it throws, the unchecked positions (object keys, properties, aliased imports), the fill check and the tree walk for code that is never parsed, and what to do when compiler-written Agency text trips the rule.
 - `docs/dev/language/result-failures.md` — The `Result` failure: why every failure carries a string message, what the second type parameter means, and the arity padding codegen depends on.
 - `docs/dev/language/splices.md` — Compile-time splices `$( ... )`, which run a generator during compilation and paste the code it returns into the file.
 - `docs/dev/language/template-agency.md` — How templates work under the hood: holes, `fill`, and hygiene.

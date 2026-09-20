@@ -9,76 +9,52 @@ node main() {
 }
 ```
 
-```
-Line 2, col 9: `__x` is not a legal name: names starting with two underscores are reserved for the compiler.
-```
+The rule stops a user's variable from colliding with a name the compiler makes. It also stops code that is not trusted from reading or writing the compiler's own variables. It applies to every Agency program, with or without `--agency-only`.
 
-The rule has two purposes. It stops a user's variable from colliding with a name the compiler makes. It also stops code that is not trusted from reading or writing the compiler's own variables.
-
-The rule applies to every Agency program, including ones compiled without `--agency-only`.
-
-## The one function
+## What counts as reserved
 
 `isReservedInternalName` in `lib/reservedNames.ts` decides. A name is reserved when it starts with `__`, with two exceptions:
 
-- `__dirname`. User code reads it to find files next to the current one. `lib/parsers/reservedNames.test.ts` checks that every `__` entry in `BUILTIN_VARIABLES` is an exception here, so adding a builtin there without adding it here fails a test.
-- A hygienic rename, which looks like `__hyg3_tmp`. Filling a template renames variables this way to avoid capture (`docs/dev/language/template-agency.md`). Generated code is printed to source and parsed again before it runs, so the parser has to accept these names.
+- `__dirname`, which user code reads to find files next to the current one. A test checks that every `__` entry in `BUILTIN_VARIABLES` is an exception, so a new builtin cannot be added there and forgotten here.
+- A hygienic rename such as `__hyg3_tmp`. Filling a template renames variables this way (`docs/dev/language/template-agency.md`). The filled code is printed, and often saved to a file that is compiled later, as `std::toolbox` does. So the parser has to accept these names in any file.
 
-## Where it is enforced
+## The parser check
 
-### The parser
+Lowering runs inside `parseAgency` and adds names such as `__matchval_1`. The check sits inside the parser because the parser sees only what the user typed.
 
-The parser is the main place, because the parser sees only what the user typed. Lowering runs inside `parseAgency`, straight after the parse, and it adds names such as `__matchval_1` and `__scrutinee_2`. A check on the finished tree would have to tell those apart from names the user wrote. A check inside the parser never sees them.
-
-Three parsers in `lib/parsers/parsers.ts` carry the check:
+Three parsers in `lib/parsers/parsers.ts` carry it:
 
 - `variableNameParser` reads a variable in an expression, an assignment target, or a pattern.
-- `userNameParser` reads every other name a user gives: the function in a call, a parameter, a type, a type parameter, an import, a loop variable, a block parameter.
+- `identifierParser` reads every other name: the function in a call, a parameter, a type, an import, a loop variable, a block parameter.
 - `declNameParserFor` reads the name after `def` or `node`.
 
-**When you add grammar that reads a user's name, use `userNameParser` or `variableNameParser`.** A bare `many1WithJoin(varNameChar)` skips the check.
+**When you add grammar that reads a name, use `identifierParser` or `variableNameParser`.** A bare `many1WithJoin(varNameChar)` skips the check.
 
-Some positions hold a name that is not a variable, and they stay unchecked:
+Some positions hold a string that is not a variable, and they stay unchecked:
 
 - an object key, `{ __typename: "User" }`
-- a property or method name after a dot, `user.__typename`. JSON from an outside service can carry such keys. GraphQL's `__typename` is one. `anyVariableNameParser` and `methodCallParser` exist for these two positions.
-- an object pattern key, `const { __typename: t } = user`
-- a property name in an object type
+- a property or method name after a dot, `user.__typename`. JSON from an outside service can carry such keys.
+- an object pattern key, and a property name in an object type
+- the exported name in `import { __malloc as alloc } from "./glue.ts"`. Only the alias is bound in Agency scope, and this is the way to reach a JS export with such a name.
 - a hole name, a tag name, a named-argument label, and an effect name
 
-### The refusal is a throw
+### The refusal throws
 
-`refuseReservedName` throws a `TarsecError`. Most refusals in the parser return a committed failure instead, and this one did at first. That broke one case. tarsec's expression builder treats a right operand that fails as the end of the expression, and it discards any committed failure recorded while reading that operand. So `1 + f(__ctx)` parsed as `1`, the rest of the line failed to parse, and the user saw "expected node body" with no position.
+`refuseReservedName` throws a `TarsecError`. It does not return a committed failure, as most refusals in the parser do. tarsec's expression builder treats a right operand that fails as the end of the expression, and discards any committed failure recorded while reading it. With a returned failure, `1 + f(__ctx)` reported "expected node body" with no position.
 
-A throw passes through the expression builder untouched. It is safe because no other reading of the text makes a reserved name legal, so there is no alternative worth trying. The function also records the failure in `getParseState().committedFailure`, which is where `parseAgency` takes the message and position from.
+Because it throws, a checked parser must not run as a guess at a position where a `__` name is legal. For example, a method name after a dot is read by `methodCallParser`, which does not check. If a new legal position fails with this error, look for a checked parser being tried there first. The "still accepts" cases in `reservedNames.test.ts` cover the legal positions.
 
-One consequence: a checked parser must not run speculatively at a position where a `__` name is legal. A method name after a dot went through `_functionCallParser` and threw on `o.__toJSON()`. That is why `methodCallParser` exists. The "still accepts" half of `reservedNames.test.ts` covers the legal positions.
+## Code the parser never sees
 
-### Template fills
+- **Template fills.** `fill(t, { name: "..." })` turns a string into a declaration name without parsing it. `identifierFillFor` in `lib/runtime/template/fill.ts` calls `isReservedInternalName`.
+- **Splices.** A splice pastes a `Code` tree into the file. `Code` is a plain record, so a generator can build one by hand. The graft in `lib/preprocessors/expandSplices.ts` refuses a reserved name as `AG8017`.
 
-`fill(t, { name: "..." })` turns a string into a declaration name without parsing it. `identifierFillFor` in `lib/runtime/template/fill.ts` calls `isReservedInternalName` itself.
+The splice check uses `findReservedName` in `lib/utils/findReservedName.ts`. It walks the whole tree and treats every string field as a name, except the fields listed in `DATA_FIELDS`, which are the unchecked positions above. A node kind added later is checked without anyone listing it. If the new kind holds data, the walk refuses a legal program, and the fix is one entry in `DATA_FIELDS`.
 
-### Splices
+The walk and the parser are tested against the same sources, in `lib/parsers/reservedNames.cases.ts`. Add a case there when you add a position.
 
-A splice pastes a `Code` tree into the file, and the tree is never parsed. Code from a `[| ... |]` literal or from `parseStatements` went through the parser when it was made. But `Code` is a plain record, and a generator can build one by hand:
+`runCode` needs no check. It prints the `Code` value and parses the text.
 
-```
-return {
-  type: "agencyProgram",
-  kind: "statements",
-  nodes: [{ type: "assignment", declKind: "const", variableName: "__self", value: { type: "number", value: "1" } }]
-}
-```
+## Agency text the compiler writes
 
-`checkNoReservedName` in `lib/preprocessors/expandSplices.ts` refuses this as `AG8017`. It looks at the names the fragment binds, declares, imports, reads, and calls. It collects them with the same helpers the capture check uses, so it shares their limits: a name bound by a `match` arm pattern or by `is success(v)` is not collected.
-
-`runCode` needs no check of its own. It prints the `Code` value to source and parses that.
-
-## The compiler's own Agency text
-
-Some compiler code writes Agency source and parses it, and that source goes through the same parser as user code. It cannot use a `__` name either. Two places did:
-
-- The splice runner named its node `__splice` so that it could not collide with an imported generator. `runnerNodeName` in `lib/compiler/splice/runGenerator.ts` now picks `runSplice`, or `runSplice1` and so on if the runner imports that name.
-- The type checker builds the `Code` type by parsing a type alias, and named it `__CodeLiteralValue`. The alias name is discarded, so it is now `CodeLiteralValue`.
-
-If a new piece of compiler code fails with this error, give its generated text an ordinary name. Do not add a way to switch the check off, because code that is not trusted could then reach the switch too.
+Some compiler code writes Agency source and parses it, such as the splice runner in `lib/compiler/splice/runGenerator.ts`. That text goes through the same parser, so it cannot use a `__` name. Give it an ordinary name. Do not add a way to switch the check off, because code that is not trusted could then reach the switch too.

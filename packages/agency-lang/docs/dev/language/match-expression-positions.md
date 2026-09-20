@@ -87,8 +87,8 @@ there every `const x = if a then b else c` failed with AG4007 (#1081).
 
 The skip is safe under `--agency-only`, whose name check keeps a program from
 naming a JavaScript global (`docs/dev/compiler/agency-only-bound-names.md`).
-A user cannot write `__matchval_7` by hand, because the parser refuses every
-name that starts with two underscores (`docs/dev/language/reserved-names.md`).
+A user cannot write `__matchval_7` by hand, because the parser refuses names
+that start with two underscores (`docs/dev/language/reserved-names.md`).
 So the only `__matchval_<id>` references this pass sees are the ones lowering
 made, and the builder turns each into a read of the frame-local of that name.
 

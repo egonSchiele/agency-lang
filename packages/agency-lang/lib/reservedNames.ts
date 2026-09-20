@@ -7,8 +7,8 @@
 /** The prefix template hygiene gives a renamed variable: `__hyg3_tmp`. */
 export const HYGIENE_PREFIX = "__hyg";
 
-// A hygienic rename is printed to source and parsed again when generated code
-// runs, so the parser has to accept it.
+// Filled template code is printed and may be saved to a file that is compiled
+// later, so the parser has to accept a hygienic rename in any file.
 const HYGIENE_NAME = new RegExp(`^${HYGIENE_PREFIX}\\d+_`);
 
 /** Internal names a user program is meant to read. */

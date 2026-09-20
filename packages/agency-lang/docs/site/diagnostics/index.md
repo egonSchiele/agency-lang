@@ -26,6 +26,12 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1011](types-aliases.md#ag1011) | &#123;alias&#125; expects at most &#123;max&#125; type &#123;argumentWord&#125;, got &#123;count&#125; (referenced in '&#123;context&#125;'). |
 | [AG1012](types-aliases.md#ag1012) | &#123;alias&#125; requires at least &#123;min&#125; type &#123;argumentWord&#125; (referenced in '&#123;context&#125;'). |
 | [AG1013](types-aliases.md#ag1013) | `&#123;name&#125;` is not a type; &#123;hint&#125; |
+| [AG1014](types-aliases.md#ag1014) | Cannot cast `&#123;from&#125;` to `&#123;to&#125;` because neither type fits the other. If this is intentional, write `&#123;expr&#125; as unknown as &#123;to&#125;`. |
+| [AG1015](types-aliases.md#ag1015) | A checked cast validates the value at runtime, and `&#123;type&#125;` has no schema to validate against. Remove the `!` to cast without checking. |
+| [AG1016](types-aliases.md#ag1016) | A cast is not allowed in this position. Add parentheses: `(&#123;left&#125; &#123;op&#125; &#123;right&#125;) as &#123;type&#125;` or `&#123;left&#125; &#123;op&#125; (&#123;right&#125; as &#123;type&#125;)`. |
+| [AG1017](types-aliases.md#ag1017) | This checked cast runs validators that can pause the program, and it cannot be resumed safely in this position. Move it to its own line: `const value = &#123;cast&#125;`. |
+| [AG1018](types-aliases.md#ag1018) | `&#123;expr&#125;` is a `&#123;from&#125;`. A cast does not unwrap it. Unwrap the Result first, with `match` or `catch`, then cast the value if you still need to. |
+| [AG1019](types-aliases.md#ag1019) | `&#123;cast&#125;` runs validators that can pause the program, and a module-level initializer or a parameter default cannot pause. Do the cast inside a node or a def. |
 
 ## Assignability and checking
 
@@ -176,6 +182,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG8014](templates.md#ag8014) | The generator `&#123;name&#125;` returned &#123;kind&#125;, which cannot sit at the top level of a file. Top-level code runs at initialization, which cannot branch, loop, or wait. |
 | [AG8015](templates.md#ag8015) | `&#123;name&#125;` is not defined in this template. A template can only use names it declares or imports itself, because a hole hides whatever fills it. Move the code that defines `&#123;name&#125;` into this template, or move the code that uses it into the fragment that defines it. |
 | [AG8016](templates.md#ag8016) | `&#123;file&#125;` contains a splice, and generator execution was declined for this check, so `&#123;name&#125;` was not run. |
+| [AG8017](templates.md#ag8017) | Generated code from `&#123;generator&#125;` uses the name `&#123;name&#125;`. Names starting with two underscores are reserved for the compiler. |
 
 ## Lint
 

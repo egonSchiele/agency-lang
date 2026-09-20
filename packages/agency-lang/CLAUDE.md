@@ -229,6 +229,7 @@ Other process docs:
 - `docs/dev/language/splices.md` — Compile-time splices `$( ... )`, which run a generator during compilation and paste the code it returns into the file.
 - `docs/dev/language/template-agency.md` — How templates work under the hood: holes, `fill`, and hygiene.
 - `docs/dev/language/triple-quoted-string-escapes.md` — The two escapes a raw `"""` string honours, `\${` and `\"""`, and the three places (parser, generator, optimizer) that must agree on them.
+- `docs/dev/language/type-casts.md` — `expr as Type` and `expr as Type!`: how a cast is told from an `as` block, the positions refused because Agency and TypeScript would group them differently, and why a checked cast is hoisted like a call.
 - `docs/dev/language/validation-annotations.md` — How `@validate` and `@jsonSchema` are compiled, and how the runtime walks a validated value.
 - `docs/dev/language/with-approve.md` — The `with approve/reject/propagate` shorthand for wrapping a single statement in a handler.
 

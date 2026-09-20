@@ -120,7 +120,9 @@ export const MATCH_CASES_MESSAGE = `expected match cases of the form \`value => 
     }
   }
 
-An arm is \`pattern => expression\`, with an optional \`if (...)\` guard before the arrow. Use a block when an arm needs several statements. \`_\` is the catch-all, and an open type such as \`string\` requires one.`;
+An arm is \`pattern => expression\`, with an optional \`if (...)\` guard before the arrow. Use a block when an arm needs several statements. \`_\` is the catch-all, and an open type such as \`string\` requires one.
+
+An object as an arm's value needs parentheses, \`ok => ({ done: true })\`, because a bare \`{\` opens a block.`;
 
 export const HANDLER_BODY_MESSAGE = `expected \`{\` to open handler body:
 

@@ -163,6 +163,26 @@ match (request) {
 }
 ```
 
+An arm whose value is an object needs parentheses around it. Without them, the `{` opens a block:
+
+```ts
+const reply = match (result) {
+  success(value) => ({ ok: true, value: value })
+  failure(error) => ({ ok: false, error: error })
+}
+```
+
+A `return` inside an arm gives the arm its value. It does not return from the function. To return what a match produces, put `return` in front of the match:
+
+```ts
+def describe(result: Result<number, string>): string {
+  return match (result) {
+    success(value) => "got ${value}"
+    failure(error) => "failed: ${error}"
+  }
+}
+```
+
 ## Type annotations
 
 You can add type annotations, just like TypeScript.
@@ -292,7 +312,7 @@ greet(name: "Adit")
 Functions can have default arguments:
 
 ```ts
-def round(num: number, decimals: number = 2): number
+def round(num: number, precision: number = 0): number
 ```
 
 Optional arguments:

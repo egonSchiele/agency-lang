@@ -11,6 +11,7 @@ import {
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
   C_STYLE_FOR_MESSAGE,
+  DECLARATION_WITHOUT_VALUE_MESSAGE,
   CATCH_ALL_NOT_LAST,
   DECL_NAME_SPACES_MESSAGE,
   DUPLICATE_ON_CLAUSE,
@@ -44,6 +45,7 @@ import {
   char,
   count,
   digit,
+  eof,
   exactly,
   fail,
   failure,
@@ -5683,6 +5685,33 @@ const cStyleForParser: Parser<never> = (input: string) => {
 };
 
 /**
+ * `let subject: string` with no `= value`. Without this the assignment parser
+ * fails at the end of the line and the message lands on the next statement.
+ */
+export const declarationWithoutValueParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    oneOfStr(["let", "const"]),
+    spaces,
+    many1WithJoin(varNameChar),
+    optionalSpaces,
+    optional(
+      seqC(
+        char(":"),
+        optionalSpaces,
+        lazy(() => variableTypeParser),
+      ),
+    ),
+    optionalSpaces,
+    or(oneOf(`\n;}${BLANK_LINE_SENTINEL}`), str("//"), eof),
+  );
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  const declined = committedFailure(DECLARATION_WITHOUT_VALUE_MESSAGE, input);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
+/**
  * `const double = (n) => n * 2`. Blocks in Agency are arguments, not values,
  * so this is not a gap in `arrowBlockParser` — the canonical `\\n -> n * 2`
  * fails in the same position for the same reason. What was missing is the
@@ -5908,6 +5937,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
     // report a missing `(` that is plainly present.
     switchStatementParser,
     cStyleForParser,
+    declarationWithoutValueParser,
     blockAsValueParser,
     // `let res = handle (expr) with H` — expression-position handle (#926).
     // Ahead of withModifierParser/assignmentParser: `handle (…)` is not a valid

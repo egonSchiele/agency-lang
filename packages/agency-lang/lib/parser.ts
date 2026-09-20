@@ -70,6 +70,8 @@ import {
   setTemplateOffset,
   registerProgramParserForLiterals,
   completeConstructEntry,
+  declarationWithoutValueParser,
+  stripSentinels,
 } from "./parsers/parsers.js";
 import { AgencyNode, AgencyProgram } from "./types.js";
 
@@ -103,6 +105,7 @@ const nodeParserInner = or(
   // baseAtom; this entry exists solely to stamp `position: "decl"`.
   topLevelSpliceParser,
   tagParser,
+  declarationWithoutValueParser,
   withModifierParser,
   modifiedAssignmentParser,
   staticStatementParser,
@@ -262,7 +265,10 @@ function buildErrorData(
   prettyMessage: string,
 ): ParseAgencyErrorData {
   if (rightmostPos != null) {
-    const pos = offsetToPosition(buildLineTable(input), rightmostPos);
+    // Callers that keep blank lines (`replaceBlankLines`) hand in text where a
+    // blank line's newline is a sentinel. Same length, so the offset holds,
+    // but the lines only count right with the newlines back.
+    const pos = offsetToPosition(buildLineTable(stripSentinels(input)), rightmostPos);
     return {
       line: pos.line - offset,
       column: pos.column,

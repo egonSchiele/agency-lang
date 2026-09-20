@@ -97,6 +97,12 @@ export const JS_REGEX_MESSAGE = `Agency writes a regex literal as \`re/.../\`, n
 export const UNREADABLE_STATEMENT_MESSAGE =
   "cannot read the statement that starts here. If the block is finished, close it with `}`";
 
+export const DECLARATION_WITHOUT_VALUE_MESSAGE = `a \`let\` or \`const\` needs a value. Agency has no declaration without one:
+
+  let subject: string = ""
+
+To set it in an \`if\`, give it a starting value first, or use an \`if ... then ... else\` expression as the value.`;
+
 export const IF_EXPRESSION_MESSAGE = `an \`if ... then ... else\` expression requires an \`else\` branch:
 
   const label = if isProd then "Production" else "Local"

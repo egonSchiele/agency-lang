@@ -25,7 +25,7 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 
 ## Where it runs
 
-`TypescriptPreprocessor.preprocess()`, between `collectSkills()` and `addAwaitPendingCalls()`. Guards and parallel blocks are already desugared by then; the await pass and scope resolution see the temps like hand-written statements. The pass lives in `lib/preprocessors/hoistCalls.ts`. **Positions and evaluation modes are data, not code in the pass.** `lib/utils/expressionSlots.ts` is the source of truth. It is the expression twin of `bodySlots`, it is completeness-checked against `EXPRESSION_NODE_TYPES`, and each position carries an eval mode: `once`, `perIteration`, `conditional`, or `opaque`. The pass keeps only hoist POLICY: which nodes become temps, the statement-tail rule, chain unit-hoisting, the while restructure, per-frame counters. An expression kind missing from the table makes the pass THROW by name rather than silently skip. Statement kinds have no type mirror, so the statement dispatch is corpus-checked instead. The statement-position test in `lib/utils/expressionSlots.test.ts` walks every statement position across stdlib and the generator fixtures and fails by name on a statement kind that has no recorded ruling in `hoistCalls.ts` (extracted, own-case, deliberately not extracted, or skipped). Summary of what the modes produce:
+`TypescriptPreprocessor.preprocess()`, between `collectSkills()` and `addAwaitPendingCalls()`. Guards and parallel blocks are already desugared by then; the await pass and scope resolution see the temps like hand-written statements. The pass lives in `lib/preprocessors/hoistCalls.ts`. **Positions and evaluation modes are data, not code in the pass.** `lib/utils/expressionSlots.ts` is the source of truth. It is the expression twin of `bodySlots`, it is completeness-checked against `EXPRESSION_NODE_TYPES`, and each position carries an eval mode: `once`, `perIteration`, `conditional`, or `opaque`. The pass keeps only hoist POLICY: which nodes become temps (calls, checked casts, and access chains that still contain a method call), the statement-tail rule, chain unit-hoisting, the while restructure, per-frame counters. An expression kind missing from the table makes the pass THROW by name rather than silently skip. Statement kinds have no type mirror, so the statement dispatch is corpus-checked instead. The statement-position test in `lib/utils/expressionSlots.test.ts` walks every statement position across stdlib and the generator fixtures and fails by name on a statement kind that has no recorded ruling in `hoistCalls.ts` (extracted, own-case, deliberately not extracted, or skipped). Summary of what the modes produce:
 
 | Position | Ruling | Why |
 |---|---|---|
@@ -34,13 +34,17 @@ The full position analysis lives in the header comment of `lib/utils/expressionS
 | `if` conditions, `for` iterables, `match` scrutinees | hoist before the statement | single evaluation either way |
 | `while` conditions with calls | loop rewritten: `while (true) { temps; if (cond) { body } else { break } }` | conditions re-evaluate per iteration; pre-pass they re-ran once per completed iteration on resume |
 | `try` operands, `catch` expressions | opaque | the whole expression compiles into a runtime thunk; moving code out moves the error boundary |
-| short-circuit right sides, if-expression branches | opaque | may never execute |
+| short-circuit right sides | opaque | may never execute |
+| if-expression branches | hoisted within, never across | an if-expression lowers to an `ifElse` whose branches are statement bodies, so a temp lands inside the branch it belongs to. `hoistPositions.test.ts` pins this against the pass |
+| a checked cast, `x as T!` | becomes a temp, under the same rules as a call | a `@validate` validator is an Agency function and can pause |
 | pipe stages | opaque | already memoized per step and failure-gated |
 | pipe input | hoist | evaluated inline at statement level, outside the memoization |
 | `with`/`static` wrapped statements | opaque | hoisting out would cross the approval region; the slot holds exactly one statement |
 | handler (`with (data)`) bodies | never touched | compile to plain JS, cannot pause, safety infrastructure |
 | lifted block bodies (comprehensions, fork branches, `as x { }` blocks) | hoisted within, never across | they own their frame; a temp crossing out would change per-item evaluation to once |
 | module-level initializers | never touched | init-topsort owns them; they cannot pause |
+
+The type checker refuses a checked cast to a tagged type wherever the pass does not lift it. `lib/preprocessors/hoistPositions.ts` models the three layers that decide this — which top-level nodes the pass enters, which statement kinds it extracts from, and which slots it skips — and its test runs the real pass on the same programs and asserts the two agree. So the residuals listed below for calls do not exist for casts: a cast in one of those positions is AG1017 (there is a line to move it to) or AG1019 (a module-level initializer or a parameter default, where there is not). Handler bodies are the exception. The pass never touches one, and whether a validator may pause there is an open question that also applies to any Agency function call in a handler body, so the check says nothing about them.
 
 Accepted behavior change: `for (x in async getItems())` used to be rejected by `validateNoAsyncInLoops`; hoisting moves the call above the loop, so it now compiles. A relaxation, not a breakage.
 

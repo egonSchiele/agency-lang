@@ -176,6 +176,11 @@ export const EXTRACTING_STATEMENT_KINDS: readonly string[] = [
  *  is the statement-side half of the anti-drift guarantee (the
  *  expression side is type-checked against EXPRESSION_NODE_TYPES). */
 export const NON_EXTRACTED_STATEMENT_KINDS = [
+  // A bare cast statement. The body parser reads `x as T` at statement
+  // position as bare names, exactly as it does `x is T`, so this kind
+  // reaches the pass only from a hand-built tree. Ruled like a bare
+  // expression statement: its own step, nothing extracted from it.
+  "castExpression",
   // A bare expression statement (`print(...) + greet` parses as one
   // binOp). The pre-slots pass never touched these — recorded hole,
   // tripwire-covered.
@@ -292,7 +297,7 @@ function rewriteStatement(stmt: any, counter: Counter): AgencyNode[] {
           TAIL_VALUE_KINDS.includes(stmt.type) &&
           i === slots.length - 1 &&
           (slot.expr as any).type !== undefined &&
-          ["functionCall", "valueAccess"].includes((slot.expr as any).type);
+          ["functionCall", "valueAccess", "castExpression"].includes((slot.expr as any).type);
         const walked = walk(slot.expr, counter, !isTail);
         temps.push(...walked.temps);
         out = slot.write(out, walked.expr);
@@ -328,23 +333,35 @@ function recurseSlots(stmt: any, counter: Counter): AgencyNode {
   return out;
 }
 
+/** Walk every slot of `node`, folding the results back in. `hoistChild`
+ *  says whether the expression in a slot may itself become a temp. */
+function walkSlots(
+  node: any,
+  counter: Counter,
+  hoistChild: (slot: ExpressionSlot) => boolean,
+): Extraction {
+  return expressionSlots(node).reduce<Extraction>(
+    (soFar, slot) => {
+      const inner = walk(slot.expr, counter, hoistChild(slot));
+      return { temps: [...soFar.temps, ...inner.temps], expr: slot.write(soFar.expr, inner.expr) };
+    },
+    { temps: [], expr: node },
+  );
+}
+
 /** The expression walker. Returns fresh nodes; never mutates.
  *  `hoistSelf` is true everywhere except the single statement-tail
  *  node, which the statement dispatcher withholds. Structure comes from
  *  expressionSlots; the policy that stays HERE: which nodes become
- *  temps (calls, and access chains that still contain a method call),
- *  and the chain unit-hoist decision. */
+ *  temps (calls, checked casts, and access chains that still contain a
+ *  method call), and the chain unit-hoist decision. */
 function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
   if (!node || typeof node !== "object") return { temps: [], expr: node };
 
   if (node.type === "functionCall" || node.type === "interruptStatement") {
-    const temps: AgencyNode[] = [];
-    let call: any = node;
-    for (const slot of expressionSlots(node)) {
-      const inner = walk(slot.expr, counter, true);
-      temps.push(...inner.temps);
-      call = slot.write(call, inner.expr);
-    }
+    const walked = walkSlots(node, counter, () => true);
+    const temps = walked.temps;
+    let call: any = walked.expr;
     if (node.block) {
       // The block body is a new frame-owning scope; its temps stay
       // inside it.
@@ -371,16 +388,22 @@ function walk(node: any, counter: Counter, hoistSelf: boolean): Extraction {
     const methodCalls = (node.chain ?? [])
       .filter((en: any) => en?.kind === "methodCall" && en.functionCall)
       .map((en: any) => en.functionCall);
-    const temps: AgencyNode[] = [];
-    let out: any = node;
-    for (const slot of expressionSlots(node)) {
-      const isMethodCall = methodCalls.includes(slot.expr);
-      const inner = walk(slot.expr, counter, !isMethodCall);
-      temps.push(...inner.temps);
-      out = slot.write(out, inner.expr);
-    }
+    const { temps, expr: out } = walkSlots(
+      node,
+      counter,
+      (slot) => !methodCalls.includes(slot.expr),
+    );
     if (!hoistSelf || methodCalls.length === 0) return { temps, expr: out };
     return { temps, expr: makeTemp(out, temps, counter) };
+  }
+
+  if (node.type === "castExpression" && node.checked) {
+    // A checked cast can run validators that pause, so it is lifted like a call.
+    const inner = walkSlots(node, counter, () => true);
+    if (!hoistSelf) {
+      return inner;
+    }
+    return { temps: inner.temps, expr: makeTemp(inner.expr, inner.temps, counter) };
   }
 
   // Statement-bearing constructs in EXPRESSION position (a thread block

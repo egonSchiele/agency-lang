@@ -395,6 +395,17 @@ describe("async/sync function calls via valueAccessParser", () => {
     }
   });
 
+  it("locates 'async bar()' at the keyword and its name at the callee", () => {
+    const result = valueAccessParser("async bar()");
+    expect(result.success).toBe(true);
+    // Positions from a bare sub-parser are not absolute, so compare the two.
+    if (result.success && result.result.type === "functionCall") {
+      const { loc, nameLoc } = result.result;
+      expect(nameLoc!.col - loc!.col).toBe("async ".length);
+      expect(nameLoc!.start - loc!.start).toBe("async ".length);
+    }
+  });
+
   it("should parse 'sync bar()' with async: false", () => {
     const result = valueAccessParser("sync bar()");
     expect(result.success).toBe(true);

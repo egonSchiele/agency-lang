@@ -531,4 +531,4 @@ Agent crashed: ${__error.message}`)
   }
 }
 export default graph
-export const __sourceMap = {"asyncUnassigned.agency:append":{"1":{"line":1,"col":2}},"asyncUnassigned.agency:main":{"1":{"line":5,"col":8},"2":{"line":6,"col":8},"3":{"line":7,"col":2}}};
+export const __sourceMap = {"asyncUnassigned.agency:append":{"1":{"line":1,"col":2}},"asyncUnassigned.agency:main":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2}}};

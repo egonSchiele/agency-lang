@@ -700,7 +700,13 @@ export const multiLineStringTextSegmentParser: Parser<TextSegment> =
   multiLineStringTextSegmentParserFor('"""');
 
 const ifInInterpolationParser: Parser<never> = (input: string) => {
-  const probe = seqC(str("${"), optionalSpaces, optional(char("(")), str("if"), not(varNameChar));
+  const probe = seqC(
+    str("${"),
+    optionalSpaces,
+    optional(seqC(char("("), optionalSpaces)),
+    str("if"),
+    not(varNameChar),
+  );
   const probed = probe(input);
   if (!probed.success) {
     return failure("", input);
@@ -3594,9 +3600,19 @@ export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | Val
   },
 );
 
-// The loc belongs to the access itself, not to a leading `async`, `sync` or
-// `await` keyword, so the editor can color the callee of `async foo()`.
+// `async foo()` is one node whose loc starts at the keyword, because a bare
+// `async foo()` statement is located by that node. The callee's own position
+// goes in `nameLoc`, which is what lets the editor color `foo`.
 const locatedValueAccessParser = withLoc(_valueAccessParser);
+
+type LocatedAccess = (FunctionCall | ValueAccess | VariableNameLiteral) & { loc: SourceLocation };
+
+function withNameLoc(access: LocatedAccess): FunctionCall | ValueAccess | VariableNameLiteral {
+  if (access.type !== "functionCall") {
+    return access;
+  }
+  return { ...access, nameLoc: access.loc };
+}
 
 export const asyncValueAccessParser = (
   input: string,
@@ -3605,7 +3621,7 @@ export const asyncValueAccessParser = (
   const result = parser(input);
   if (!result.success) return failure("expected async keyword", input);
 
-  return success({ ...result.result.access, async: true }, result.rest);
+  return success({ ...withNameLoc(result.result.access), async: true }, result.rest);
 };
 
 export const syncValueAccessParser = (
@@ -3619,13 +3635,13 @@ export const syncValueAccessParser = (
   const result = parser(input);
   if (!result.success) return failure("expected sync/await keyword", input);
 
-  return success({ ...result.result.access, async: false }, result.rest);
+  return success({ ...withNameLoc(result.result.access), async: false }, result.rest);
 };
 
 export function valueAccessParser(
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> {
-  const parser = or(asyncValueAccessParser, syncValueAccessParser, locatedValueAccessParser);
+  const parser = withLoc(or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser));
   return parser(input);
 }
 

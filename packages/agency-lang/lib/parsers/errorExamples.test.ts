@@ -312,6 +312,7 @@ describe("an if-expression inside a string interpolation is refused", () => {
   it.each([
     ["bare", `if x > 3 then "big" else "small"`],
     ["parenthesized", `(if x > 3 then "big" else "small")`],
+    ["parenthesized with a space", `( if x > 3 then "big" else "small")`],
   ])("catches it %s, on the line of the string", (_name, hole) => {
     const message = failure(source(hole));
     expect(message).toContain(IF_IN_INTERPOLATION_MESSAGE);

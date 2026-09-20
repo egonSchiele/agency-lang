@@ -1,16 +1,8 @@
 let cleanups = 0
 
-def spin(n: number): number {
-  let i = 0
-  while (i < n) {
-    i = i + 1
-  }
-  return i
-}
-
 def worker(): string {
   saveDraft("worker-draft")
-  const s = spin(30000000)
+  sleep(2000)
   return "worker-done"
 
   finalize {
@@ -20,7 +12,7 @@ def worker(): string {
 
 node main(): string {
   handle {
-    const r = guard(time: 5ms, label: "outer") {
+    const r = guard(time: 200ms, label: "outer") {
       return worker()
     }
     if (isFailure(r)) {

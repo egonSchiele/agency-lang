@@ -7,7 +7,7 @@ import {
   ScopeType,
   VariableType,
 } from "../types.js";
-import { BaseNode } from "./base.js";
+import { BaseNode, SourceLocation } from "./base.js";
 import { Hole } from "./hole.js";
 import { BlockArgument } from "./blockArgument.js";
 import { AgencyArray, AgencyObject, NamedArgument, SplatExpression } from "./dataStructures.js";
@@ -113,6 +113,9 @@ export type FunctionCall = BaseNode & {
   argumentTrivia?: ListTrivia[];
   block?: BlockArgument;
   async?: boolean;
+  /** Where the callee's name starts, when that is not where the node starts:
+   *  in `async foo()` the node's `loc` starts at `async`. */
+  nameLoc?: SourceLocation;
   tags?: Tag[];
   /** Set by pattern lowering on a call it synthesizes rather than one the user
    *  wrote (`__objectRest`). Such a call has no declaration to resolve — the

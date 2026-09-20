@@ -11,14 +11,17 @@ import type { AgencyMultiLineComment } from "../types.js";
  * Remove the `*` that JSDoc style puts at the start of each line, so
  * " * First line." renders as "First line.".
  *
- * Only a comment where EVERY line after the opening one starts with `*` is
- * treated as JSDoc style. Otherwise a `* item` line is a Markdown bullet
- * and must stay.
+ * Only a comment where EVERY line after the opening one is indented and
+ * starts with `*` is treated as JSDoc style. A `* item` line at the margin
+ * is a Markdown bullet and must stay.
+ *
+ * Call it once per comment. A second pass would read the comment's own
+ * `* item` bullets as markers.
  */
 export function stripDocCommentMarkers(content: string): string {
   const lines = content.split("\n");
   const marked = lines.slice(1).filter((line) => line.trim() !== "");
-  const isJsDocStyle = marked.length > 0 && marked.every((line) => /^\s*\*/.test(line));
+  const isJsDocStyle = marked.length > 0 && marked.every((line) => /^\s+\*/.test(line));
   if (!isJsDocStyle) {
     return content;
   }

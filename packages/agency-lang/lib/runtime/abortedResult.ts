@@ -40,6 +40,10 @@ export function previewForLog(value: unknown): string {
  */
 export class AbortedResult {
   readonly __type = "abortedResult" as const;
+  /** What a `__finalize` closure resolves to when its body ran to the end
+   *  without a `return`. It cannot be `undefined`: a finalize that returns
+   *  a JS helper's `undefined` did return a value. */
+  static readonly FINALIZE_DID_NOT_RETURN: unique symbol = Symbol("finalizeDidNotReturn");
   /** Why the run stopped (guard trip, cancel, kill, ...). This is the
    *  SAME object the abort signal carries, so its `delivered` flag keeps
    *  working across both delivery paths. */
@@ -151,9 +155,8 @@ export class AbortedResult {
       this.logFinalizeFailure(scopeName, value);
       return this;
     }
-    // A finalize that only cleans up has no return, so it has no value to
-    // win with. Keep the saved draft. (`return null` is null, not undefined.)
-    if (value === undefined) {
+    // A cleanup-only finalize has no value to replace the draft with.
+    if (value === AbortedResult.FINALIZE_DID_NOT_RETURN) {
       return this;
     }
     return new AbortedResult(this.cause, { value }, this.unwindSpanId).logged(

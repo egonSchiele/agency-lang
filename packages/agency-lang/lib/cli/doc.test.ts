@@ -30,6 +30,11 @@ describe("stripDocCommentMarkers", () => {
     );
   });
 
+  it("keeps a comment that is nothing but Markdown bullets", () => {
+    const content = "\n* one\n* two\n";
+    expect(stripDocCommentMarkers(content)).toBe(content);
+  });
+
   it("keeps Markdown bullets in a comment that is not JSDoc style", () => {
     const content = "\nThe options:\n\n* one\n* two\n";
     expect(stripDocCommentMarkers(content)).toBe(content);
@@ -161,6 +166,29 @@ function captureStderr(run: () => void): string[] {
 }
 
 describe("generateDoc", () => {
+  it("keeps a bullet list written inside a JSDoc-style module comment", () => {
+    const inputDir = path.join(tmpDir, "input-jsdoc-bullets");
+    const outputDir = path.join(tmpDir, "output-jsdoc-bullets");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "modes.agency"),
+      `/** @module
+ * Modes:
+ * * fast
+ * * slow
+ */
+export def run(): string {
+  return "x"
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "modes.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "modes.md"), "utf-8");
+
+    expect(output).toContain("Modes:\n* fast\n* slow");
+  });
+
   it("renders a JSDoc-style doc comment without its * markers", () => {
     const inputDir = path.join(tmpDir, "input-jsdoc-markers");
     const outputDir = path.join(tmpDir, "output-jsdoc-markers");

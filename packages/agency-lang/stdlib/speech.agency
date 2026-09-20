@@ -54,6 +54,7 @@ effect std::synthesizeSpeech {
   requestedProvider: string,
   configuredModel: string,
   textLength: number,
+  instructions: string,
 }
 // Local text-to-speech with an MLX model on this machine. A DISTINCT effect
 // from cloud `std::synthesizeSpeech`: approving one never approves the other.
@@ -234,6 +235,7 @@ export def speak(
     requestedProvider: provider,
     configuredModel: model,
     textLength: text.length,
+    instructions: instructions,
     outputFile: out
   })
 

@@ -443,7 +443,7 @@ function generateDocForFile(
 
   if (program.docComment) {
     const { body } = extractSummaryOverride(stripDocCommentMarkers(program.docComment.content));
-    sections.push(formatDocComment({ ...program.docComment, content: body }));
+    sections.push(body.trim());
   }
 
   const typeSection = generateTypeSection(typeAliases, ctx);

@@ -1,3 +1,4 @@
+import { isReservedInternalName } from "../reservedNames.js";
 import path from "node:path";
 import { walkNodesArray } from "../utils/node.js";
 import { generateExpression } from "../backends/agencyGenerator.js";
@@ -420,6 +421,32 @@ function checkNoCapture(
 }
 
 /**
+ * Generated code may not use a name reserved for the compiler. The parser
+ * enforces this for written code, but a `Code` value can be built by hand and
+ * reach here without ever being parsed.
+ */
+function checkNoReservedName(
+  splice: Splice,
+  code: Code,
+  generatorName: string,
+): SpliceDiagnostic | null {
+  const reserved = [
+    ...bindersOf(code),
+    ...declaredNamesIn({ type: "agencyProgram", nodes: code.nodes }),
+    ...importedNamesIn(code.nodes),
+    ...freeNamesOf(code),
+    ...calledNamesIn(code.nodes),
+  ].find(isReservedInternalName);
+  return reserved === undefined
+    ? null
+    : {
+        diagnostic: "spliceUsesReservedName",
+        params: { name: reserved, generator: generatorName },
+        loc: splice.loc ?? ORIGIN_UNKNOWN,
+      };
+}
+
+/**
  * Names a fragment calls.
  *
  * `freeNamesOf` sees `variableName` nodes only, and a call holds its
@@ -561,6 +588,10 @@ function graft(splice: Splice, code: Code, generatorName: string): SpliceResult<
   const exported = checkNoGeneratedExport(splice, code, generatorName);
   if (exported !== null) {
     return { ok: false, diagnostic: exported };
+  }
+  const reserved = checkNoReservedName(splice, code, generatorName);
+  if (reserved !== null) {
+    return { ok: false, diagnostic: reserved };
   }
   const captured = checkNoCapture(splice, code, generatorName);
   if (captured !== null) {

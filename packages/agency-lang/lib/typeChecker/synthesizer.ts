@@ -32,8 +32,10 @@ import { typeAliasParser } from "../parsers/parsers.js";
  *  elsewhere (review finding). ESM import hoisting guarantees
  *  typeAliasParser is initialized before this module-init runs. */
 function parseCodeLiteralType(): VariableType {
+  // The alias name is discarded. It cannot start with `__`: this text goes
+  // through the same parser as user code, which refuses such names.
   const source = [
-    "type __CodeLiteralValue = {",
+    "type CodeLiteralValue = {",
     '  type: "agencyProgram";',
     '  kind?: "program" | "statements" | "expr";',
     "  nodes: any[];",

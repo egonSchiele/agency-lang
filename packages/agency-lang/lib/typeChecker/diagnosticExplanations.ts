@@ -669,6 +669,12 @@ Pasting code into a file puts it next to whatever names are already there, so a 
 
 **How to fix:** have the generator declare or import everything it uses, or pass the value in as a splice argument.`,
 
+  spliceUsesReservedName: `Generated code declares, reads, or calls a name that starts with two underscores.
+
+Those names belong to the compiler and runtime: \`__ctx\`, \`__self\`, \`__matchval_1\`. The parser refuses them in code you write. A generator can build a \`Code\` value by hand, which the parser never sees, so the same rule is applied again when the code is pasted in.
+
+**How to fix:** rename it to something that does not start with two underscores.`,
+
   spliceArgumentNotAvailable: `A splice passed an argument that is declared in the file being compiled.
 
 The generator runs while that file is still being compiled, so nothing declared in it exists yet. Only values that already exist can be passed in.

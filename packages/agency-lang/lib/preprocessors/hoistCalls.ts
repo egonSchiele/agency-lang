@@ -44,9 +44,9 @@
  * pushes one), so block bodies restart at 0. Finalize bodies run on
  * the CONTAINER's frame (bodySlots documents this) and therefore share
  * the container's counter. Seeding scans the scope for existing
- * `__hoist_N` names and starts above the max — this seeding is the
- * collision protection; there is deliberately no lint rule (no other
- * compiler-reserved prefix has one).
+ * `__hoist_N` names and starts above the max, which makes the pass
+ * idempotent. A user cannot declare such a name: the parser refuses
+ * every `__` name (`lib/reservedNames.ts`).
  *
  * Known residuals (tripwire territory, not silent corruption): calls
  * nested inside opaque positions (short-circuit right sides, catch
@@ -104,8 +104,7 @@ export function hoistCallsInScope(body: AgencyNode[], counter?: Counter): Agency
 }
 
 /** Start numbering above any __hoist_N DECLARED in the scope's subtree
- *  (user-declared or from an earlier run of the pass). This scan is the
- *  collision protection; it also makes the pass idempotent. Walks the
+ *  by an earlier run of the pass, which makes the pass idempotent. Walks the
  *  tree for assignment declarations rather than regexing serialized
  *  JSON, so a string literal containing "__hoist_5" cannot bump the
  *  counter and the cost stays one linear visit per scope. */

@@ -112,14 +112,16 @@ def f(): number {
     expect(unique.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("numbering skips user-declared __hoist names (seeding is the guard; no lint rule exists)", () => {
-    const body = hoistCallsInScope(
-      bodyOf(`
+  it("numbering starts above a __hoist name an earlier run of the pass left in the scope", () => {
+    // A user cannot write `__hoist_0`: the parser refuses it. So the earlier
+    // run is imitated by renaming a parsed declaration.
+    const parsed = bodyOf(`
 def f(): string {
-  const __hoist_0 = "user owned"
+  const earlier = "from a previous run"
   return outer(inner(1))
-}`),
-    );
+}`);
+    (parsed[0] as any).variableName = "__hoist_0";
+    const body = hoistCallsInScope(parsed);
     const temp = (stmts(body) as any[]).find((n) => n.value?.functionName === "inner");
     expect(temp.variableName).toBe("__hoist_1");
   });

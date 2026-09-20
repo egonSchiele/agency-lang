@@ -40,9 +40,15 @@ export const MEMORY_MB = 512;
  */
 export const EDITOR_WALL_CLOCK_MS = 3_000;
 
-/** Node named in the synthesized runner. Underscored so it cannot collide
- *  with anything the generator module exports. */
-const RUNNER_NODE = "__splice";
+/**
+ * The node name for the synthesized runner. The runner is Agency source, so it
+ * cannot use a `__` name: the parser refuses those. It picks the first of
+ * `runSplice`, `runSplice1`, … that is not one of the names the runner imports.
+ */
+function runnerNodeName(importedNames: readonly string[]): string {
+  const candidates = ["runSplice", ...importedNames.map((_, i) => `runSplice${i + 1}`)];
+  return candidates.find((name) => !importedNames.includes(name)) as string;
+}
 
 /**
  * The only environment variables the child gets.
@@ -127,9 +133,14 @@ function runInTempDir(
   options: RunGeneratorOptions,
 ): SpliceResult<Code> {
   const runnerPath = path.join(tempDir, "runner.agency");
+  const argumentSources = options.argumentSources ?? [];
+  const nodeName = runnerNodeName([
+    localName(splice, generator.exportedName),
+    ...argumentSources.map((source) => source.localName),
+  ]);
   fs.writeFileSync(
     runnerPath,
-    runnerSource(splice, generator, tempDir, options.argumentSources ?? []),
+    runnerSource(splice, generator, tempDir, argumentSources, nodeName),
     "utf-8",
   );
 
@@ -142,7 +153,7 @@ function runInTempDir(
   const scriptPath = path.join(tempDir, "run.mjs");
   fs.writeFileSync(
     scriptPath,
-    childScript(importSpecifier(tempDir, compiled.value), resultsPath),
+    childScript(importSpecifier(tempDir, compiled.value), resultsPath, nodeName),
     "utf-8",
   );
 
@@ -163,7 +174,7 @@ function runInTempDir(
  *
  *     import { makeGreeter } from "../../greeter.agency"
  *
- *     export node __splice() {
+ *     export node runSplice() {
  *       return makeGreeter()
  *     }
  *
@@ -180,6 +191,7 @@ function runnerSource(
   generator: { modulePath: string; exportedName: string },
   tempDir: string,
   argumentSources: ImportSource[],
+  nodeName: string,
 ): string {
   const local = localName(splice, generator.exportedName);
   const binding =
@@ -191,7 +203,7 @@ function runnerSource(
     `import { ${binding} } from "${specifier}"`,
     ...argumentSources.map((source) => argumentImportLine(source, tempDir)),
     "",
-    `export node ${RUNNER_NODE}() {`,
+    `export node ${nodeName}() {`,
     `  return ${generateExpression(splice.expression)}`,
     "}",
     "",
@@ -271,12 +283,12 @@ function compileRunner(
 
 /** The child writes to a file, not stdout: a generator may print, and that
  *  would corrupt the payload. */
-function childScript(moduleSpecifier: string, resultsPath: string): string {
+function childScript(moduleSpecifier: string, resultsPath: string, nodeName: string): string {
   return [
-    `import { ${RUNNER_NODE} } from ${JSON.stringify(moduleSpecifier)};`,
+    `import { ${nodeName} } from ${JSON.stringify(moduleSpecifier)};`,
     `import { writeFileSync } from "node:fs";`,
     ``,
-    `const result = await ${RUNNER_NODE}();`,
+    `const result = await ${nodeName}();`,
     `writeFileSync(${JSON.stringify(resultsPath)}, JSON.stringify(result));`,
     ``,
   ].join("\n");

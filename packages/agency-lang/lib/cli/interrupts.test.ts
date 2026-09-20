@@ -5,6 +5,7 @@ import type { AnalysisResult } from "@/analysis/interrupts.js";
 describe("renderInterrupts", () => {
   it("renders a site with no handlers as (none) under the standard header", () => {
     const r: AnalysisResult = {
+      warnings: [],
       sites: [
         {
           site: { file: "/x/a.agency", line: 5, effect: "std::read" },
@@ -20,6 +21,7 @@ describe("renderInterrupts", () => {
 
   it("omits the effect clause when effect is unknown", () => {
     const r: AnalysisResult = {
+      warnings: [],
       sites: [
         {
           site: { file: "/x/a.agency", line: 5, effect: "unknown" },
@@ -34,6 +36,7 @@ describe("renderInterrupts", () => {
 
   it("renders inline and functionRef handlers in the right format", () => {
     const r: AnalysisResult = {
+      warnings: [],
       sites: [
         {
           site: { file: "/x/a.agency", line: 5, effect: "std::read" },
@@ -51,6 +54,7 @@ describe("renderInterrupts", () => {
 
   it("emits one block per site, separated by blank lines", () => {
     const r: AnalysisResult = {
+      warnings: [],
       sites: [
         { site: { file: "/x/a.agency", line: 1, effect: "std::read" }, handlers: [] },
         { site: { file: "/x/a.agency", line: 5, effect: "std::write" }, handlers: [] },
@@ -63,6 +67,7 @@ describe("renderInterrupts", () => {
 
   it("ends the output with a single trailing newline", () => {
     const r: AnalysisResult = {
+      warnings: [],
       sites: [
         {
           site: { file: "/x/a.agency", line: 5, effect: "std::read" },
@@ -76,7 +81,7 @@ describe("renderInterrupts", () => {
   });
 
   it("returns an empty-ish (newline-only) string for no sites", () => {
-    const out = renderInterrupts({ sites: [] });
+    const out = renderInterrupts({ sites: [], warnings: [] });
     expect(out).toBe("\n");
   });
 });

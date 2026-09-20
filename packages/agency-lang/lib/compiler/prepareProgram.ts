@@ -9,6 +9,7 @@ import type { AgencyConfig } from "@/config/config.js";
 import type { AgencyProgram } from "@/types.js";
 import type { ImportStatement } from "@/types/importStatement.js";
 import { buildCompilationUnit, type CompilationUnit } from "@/compilationUnit.js";
+import { formatImportResolutionError, ImportResolutionError } from "@/importResolutionError.js";
 import { resolveAgencyImportPath } from "@/importPaths.js";
 import { parseAgency, type ParseAgencyErrorData } from "@/parser.js";
 import { PRELUDE_NAMES } from "@/prelude.js";
@@ -32,8 +33,8 @@ export type VetFailure = { stage: "vet"; message: string };
 
 export type SpliceFailure = { stage: "splice"; splice: SpliceDiagnostic };
 
-/** A failed symbol table build, re-export, or import. `error` is the value
- *  that was thrown, so a caller that wants the old throw can rethrow it. */
+/** A failed symbol table build, re-export, or import. `error` is whatever
+ *  was thrown, which is not always an ImportResolutionError. */
 export type ImportFailure = { stage: "imports"; error: unknown };
 
 export type PipelineDiagnostic = ParseFailure | VetFailure | SpliceFailure | ImportFailure;
@@ -224,13 +225,23 @@ export function throwImportFailures(diagnostics: PipelineDiagnostic[]): void {
   }
 }
 
-/** One failure as a line of text, for callers that report errors as strings. */
-export function describeDiagnostic(found: PipelineDiagnostic, filePath: string): string {
+/** One failure as a line of text that names its file, for callers that
+ *  report errors as strings. Leave `filePath` out when the path means nothing
+ *  to the reader, such as a temporary file. */
+export function describeDiagnostic(found: PipelineDiagnostic, filePath?: string): string {
   if (found.stage === "splice") {
     return formatSpliceDiagnostic(found.splice, filePath);
   }
   if (found.stage === "imports") {
-    return found.error instanceof Error ? found.error.message : String(found.error);
+    const error = asImportResolutionError(found.error);
+    return formatImportResolutionError(error, filePath);
   }
-  return found.message;
+  return filePath === undefined ? found.message : `${filePath} - error: ${found.message}`;
+}
+
+function asImportResolutionError(error: unknown): ImportResolutionError {
+  if (error instanceof ImportResolutionError) {
+    return error;
+  }
+  return new ImportResolutionError(error instanceof Error ? error.message : String(error));
 }

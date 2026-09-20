@@ -163,7 +163,8 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
       throwImportFailures(prepared.diagnostics);
       return {
         success: false,
-        errors: prepared.diagnostics.map((found) => describeDiagnostic(found, syntheticPath)),
+        // Name the caller's file. A temporary path means nothing to the reader.
+        errors: prepared.diagnostics.map((found) => describeDiagnostic(found, config.sourcePath)),
       };
     }
     const { program: liftedProgram, info } = prepared;

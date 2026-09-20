@@ -2,11 +2,7 @@
 
 `prepareProgram` in `lib/compiler/prepareProgram.ts` turns Agency source text into a `CompilationUnit`. Every path that looks names up in a program goes through it.
 
-## Why it exists
-
-Six places used to write this sequence out by hand, and they drifted apart. When splices were added (#679), the new step reached four of the six. `agency tc` was missed, and it reported `Function 'greet' is not defined` for a function a splice had just generated. Issue #692 has the full table of who skipped what.
-
-A new step now goes in one function.
+Add a new step there, once. Before this function existed the sequence was written out by hand in six places, and a step added to four of them left `agency tc` reporting a splice-generated function as undefined (#692).
 
 ## The steps
 
@@ -32,7 +28,7 @@ Each option is a difference between callers that someone chose. If a caller need
 | --- | --- | --- |
 | `applyTemplate: false` | the editor | Positions must match the buffer, so the prelude import cannot be prepended to the text. Step 6 adds it to the parsed program instead. |
 | `applyTemplate: !isNonTemplatedStdlib(path)` | `agency interrupts` | It checks every file in the closure, including the stdlib files that are parsed without the template. |
-| `allowTestImports: true` | the editor, `agency interrupts` | They never run the program, so honoring `import test` is safe and keeps test files checkable. Anything that compiles code to run it leaves this false. |
+| `allowTestImports: true` | the editor, `agency tc`, `agency interrupts` | They never run the program, so honoring `import test` is safe and keeps test files checkable. Anything that compiles code to run it leaves this false. |
 | `keepGoing: true` | the editor, `agency tc`, `agency interrupts`, `typeCheckSource` | Report a broken splice or import and check the rest of the file. A build stops at the first one. |
 | `spliceWallClockMs` | the editor | A runaway generator must not freeze a single-threaded language server. |
 | `symbolTable` | anyone who already has one | `agency tc` shares one table across every input file. |
@@ -46,19 +42,21 @@ Each option is a difference between callers that someone chose. If a caller need
 - `typeCheckSource` throws for a parse failure, a bad import, and a refused splice. A throw from it means "could not check this".
 - The editor turns each one into an editor diagnostic at its position.
 - `agency tc` prints each one and carries on to the next file.
-- `agency interrupts` ignores splice and import failures and analyzes what is there.
+- `agency interrupts` analyzes what is there and returns the failures as `warnings`, which the command prints to stderr. A dropped import takes its call edges with it, so the list of sites is incomplete when there are warnings.
 
-`throwImportFailures` rethrows the original error for callers whose contract is that a bad import throws. `describeDiagnostic` renders any failure as one line.
+`throwImportFailures` rethrows the original error for callers whose contract is that a bad import throws. `describeDiagnostic` renders any failure as one line that names its file.
+
+An `imports` failure holds whatever was thrown. It is usually an `ImportResolutionError`, but `SymbolTable.build` and `resolveReExports` also throw plain `Error`s, so do not assume the class.
 
 Under `keepGoing`, the result can be `ok: true` and still carry diagnostics. Two failures stop the pipeline even then: a parse failure, and a bad re-export, which leaves no usable module graph.
 
 ## Bad imports and AG codes
 
-The type checker has its own diagnostics for a bad import: AG4008 (name not found), AG4009 (module not found), and AG4010 (name not exported). They exist because `agency tc` used to skip import resolution, so the checker was the only thing that could report them.
+The type checker has its own diagnostics for a bad import: AG4008 (name not found), AG4009 (module not found), and AG4010 (name not exported). Under `keepGoing` the resolver drops a bad name before the checker sees it, so the checker never reports them on this pipeline.
 
-`agency tc` now resolves imports, and under `keepGoing` the resolver drops a bad name before the checker sees it. To keep the codes, the resolver's matching errors carry the checker's code in `ImportResolutionError.code`, and `formatImportResolutionError` prints it. `agency explain AG4008` works on either report. The resolver also reports a missing module file as AG4009. It used to report every name in that statement as "not defined in" a file that was not there.
+To keep the codes in the output, the resolver's matching errors carry the checker's code in `ImportResolutionError.code`, and `formatImportResolutionError` prints it. `tests/integration/cli-main` pins `AG4008` in the output of `agency tc`.
 
 ## Who is not on it
 
-- `lib/compiler/buildSession.ts` still has its own copy. It also carries the incremental-build manifest and reads through the parse cache, so it moves in its own PR. Step 7 mutates import nodes, which the parse cache shares between callers. That needs care when it moves.
+- `lib/compiler/buildSession.ts` has its own copy of the sequence. It also carries the incremental-build manifest and reads through the parse cache, and it has not been moved yet.
 - `lib/cli/doc.ts`, `lib/cli/policy.ts`, `lib/serve/metadata.ts`, and `lib/optimize/targets.ts` call `buildCompilationUnit` to read metadata. They deliberately do not expand splices, because expanding means running generator code. Keep them off this pipeline.

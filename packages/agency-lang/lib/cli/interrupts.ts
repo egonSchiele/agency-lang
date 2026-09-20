@@ -14,6 +14,12 @@ export function interruptsCmd(config: AgencyConfig, file: string): void {
   }
   try {
     const result = analyzeInterrupts(file, config);
+    for (const warning of result.warnings) {
+      console.error(`warning: ${warning}`);
+    }
+    if (result.warnings.length > 0) {
+      console.error("warning: the list below may be missing interrupt sites.");
+    }
     process.stdout.write(renderInterrupts(result));
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));

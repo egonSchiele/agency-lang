@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { writeFileSync, mkdtempSync, rmSync } from "fs";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 import path from "path";
 import os from "os";
 import { analyzeInterrupts } from "./interrupts.js";
@@ -345,6 +346,39 @@ node main() {
       expect(result.sites[0].handlers[0].file).toBe(path.resolve(mainFile));
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("warns when an import does not resolve, since the sites behind it go missing", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "agency-int-"));
+    try {
+      writeFileSync(
+        path.join(dir, "helper.agency"),
+        `
+def helper() {
+  interrupt std::read("hi")
+}
+`,
+      );
+      const mainFile = path.join(dir, "main.agency");
+      writeFileSync(
+        mainFile,
+        `
+import { helper } from "./helper.agency"
+
+node main() {
+  handle {
+    helper()
+  } with approve
+}
+`,
+      );
+      const result = analyzeInterrupts(mainFile, {});
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("AG4010");
+      expect(result.warnings[0]).toContain(mainFile);
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
     }
   });
 

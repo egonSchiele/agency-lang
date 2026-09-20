@@ -5,7 +5,12 @@ import { nanoid } from "nanoid";
 import { ImportResolutionError } from "../importResolutionError.js";
 import { safeDeleteDirectory } from "../utils.js";
 import { walkNodesArray } from "../utils/node.js";
-import { prepareProgram, throwImportFailures, type PrepareOptions } from "./prepareProgram.js";
+import {
+  describeDiagnostic,
+  prepareProgram,
+  throwImportFailures,
+  type PrepareOptions,
+} from "./prepareProgram.js";
 
 let dir: string;
 
@@ -74,6 +79,19 @@ describe("prepareProgram", () => {
     const result = prepare("main.agency", `node main( {\n`);
     expect(result.ok).toBe(false);
     expect(stages(result)).toEqual(["parse"]);
+  });
+
+  describe("describeDiagnostic", () => {
+    it("names the file for a parse failure", () => {
+      const result = prepare("main.agency", `node main( {\n`);
+      const line = describeDiagnostic(result.diagnostics[0], "main.agency");
+      expect(line.startsWith("main.agency - error: ")).toBe(true);
+    });
+
+    it("renders a thrown value that is not an ImportResolutionError", () => {
+      const line = describeDiagnostic({ stage: "imports", error: new Error("boom") }, "a.agency");
+      expect(line).toBe("a.agency - error: boom");
+    });
   });
 
   describe("a bad import", () => {

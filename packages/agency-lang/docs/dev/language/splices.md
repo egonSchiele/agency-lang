@@ -7,10 +7,10 @@ User-facing documentation is in `docs/site/guide/splices.md`. This file covers t
 ## The pipeline, and where expansion sits
 
 ```
-parse → expandSplices → SymbolTable.build / buildCompilationUnit → typecheck → codegen
+parse → SymbolTable.build → expandSplices → buildCompilationUnit → typecheck → codegen
 ```
 
-Expansion happens immediately after parsing and before anything reads what the file declares, so a generated name resolves like any other.
+Expansion happens before `buildCompilationUnit` inventories what the file declares, so a generated name resolves like any other. The symbol table is built first and handed to expansion, which uses it to check the generator's effects.
 
 **`SymbolTable.build` deliberately does not expand.** That crawl records what each file exports so other files can resolve against it, and expanding there is what would make a generated declaration importable. It would also put generator execution behind every one of its callers, including `agency doc`, `pack`, `bundle`, `serve`, the MCP tools, and the editor's symbol table. There are around eighteen of them.
 

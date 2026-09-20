@@ -142,6 +142,24 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Type alias '{alias}' is not defined (referenced in '{context}').",
   },
+  castUnrelatedTypes: {
+    code: "AG1014",
+    severity: "error",
+    message:
+      "Cannot cast `{from}` to `{to}` because neither type fits the other. If this is intentional, write `{expr} as unknown as {to}`.",
+  },
+  castResultNotUnwrapped: {
+    code: "AG1018",
+    severity: "error",
+    message:
+      "`{expr}` is a `{from}`. A cast does not unwrap it. Unwrap the Result first, with `match` or `catch`, then cast the value if you still need to.",
+  },
+  castNoSchema: {
+    code: "AG1015",
+    severity: "error",
+    message:
+      "A checked cast validates the value at runtime, and `{type}` has no schema to validate against. Remove the `!` to cast without checking.",
+  },
   typePatternUnknownType: {
     code: "AG1013",
     severity: "error",

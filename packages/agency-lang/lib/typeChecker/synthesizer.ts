@@ -3,6 +3,7 @@ import { isDataShaped } from "./dataShape.js";
 import { diagnostic } from "./diagnostics.js";
 import { AgencyNode, Expression, VariableType, ValueAccess, formatUnitLiteral } from "../types.js";
 import type { TypeTestExpression } from "../types/pattern.js";
+import type { CastExpression } from "../types/castExpression.js";
 import { visitTypes } from "./typeWalker.js";
 import { parseMatchValId } from "../matchVal.js";
 import { typeAliasParser } from "../parsers/parsers.js";
@@ -83,7 +84,7 @@ import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
 import { literalToType } from "./literalType.js";
 import { typeKey } from "./typeKey.js";
 import { resultTypeForValidation } from "./validation.js";
-import { TypeCheckerContext } from "./types.js";
+import { TypeCheckerContext, type TypeCheckError } from "./types.js";
 import { Scope } from "./scope.js";
 import { ANY_T, BOOLEAN_T, NEVER_T, NUMBER_T, REGEX_T, STRING_T } from "./primitives.js";
 import {
@@ -94,7 +95,7 @@ import {
   type ArrayCallbackKind,
 } from "./primitiveMembers.js";
 import type { BuiltinSignature } from "./types.js";
-import { walkNodes } from "../utils/node.js";
+import { expressionToString, walkNodes } from "../utils/node.js";
 import { unionTypes } from "./inference.js";
 import { uniqBy } from "../utils.js";
 import type { BlockArgument } from "../types/blockArgument.js";
@@ -468,6 +469,8 @@ export function synthType(expr: AgencyNode, scope: Scope, ctx: TypeCheckerContex
       return { type: "schemaType", inner: expr.typeArg };
     case "typeTestExpression":
       return synthTypeTestExpression(expr, scope, ctx);
+    case "castExpression":
+      return synthCastExpression(expr, scope, ctx);
     case "hole":
       // A template hole's type is its inline annotation when present.
       // Without one it synthesizes as `any`; positions that supply no
@@ -528,6 +531,55 @@ function synthTypeTestExpression(
     }
   });
   return BOOLEAN_T;
+}
+
+/** Types a runtime schema check cannot be built from. */
+const TYPES_WITHOUT_SCHEMA: readonly string[] = ["blockType", "functionRefType"];
+
+const hasNoSchema = (type: VariableType): boolean =>
+  visitTypes(type, (nested) => TYPES_WITHOUT_SCHEMA.includes(nested.type));
+
+function synthCastExpression(
+  expr: CastExpression,
+  scope: Scope,
+  ctx: TypeCheckerContext,
+): VariableType {
+  const source = synthType(expr.expression, scope, ctx);
+  const diagnostics = expr.checked
+    ? checkedCastDiagnostics(expr)
+    : uncheckedCastDiagnostics(expr, source, ctx.getTypeAliases());
+  ctx.errors.push(...diagnostics);
+  return resultTypeForValidation(expr.targetType, expr.checked);
+}
+
+/** The runtime validation decides a checked cast, so the only static rule
+ *  is that the target has a schema to validate against. */
+function checkedCastDiagnostics(expr: CastExpression): TypeCheckError[] {
+  if (!hasNoSchema(expr.targetType)) {
+    return [];
+  }
+  return [diagnostic("castNoSchema", { type: formatTypeHint(expr.targetType) }, expr.loc ?? null)];
+}
+
+function uncheckedCastDiagnostics(
+  expr: CastExpression,
+  source: VariableType,
+  aliases: Record<string, TypeAliasEntry>,
+): TypeCheckError[] {
+  const target = expr.targetType;
+  const fitsEitherWay = (candidate: VariableType): boolean =>
+    isAssignable(candidate, target, aliases) || isAssignable(target, candidate, aliases);
+
+  if (fitsEitherWay(source)) {
+    return [];
+  }
+  const text = expressionToString(expr.expression);
+  const from = formatTypeHint(source);
+  if (source.type === "resultType" && fitsEitherWay(source.successType)) {
+    return [diagnostic("castResultNotUnwrapped", { expr: text, from }, expr.loc ?? null)];
+  }
+  const to = formatTypeHint(target);
+  return [diagnostic("castUnrelatedTypes", { expr: text, from, to }, expr.loc ?? null)];
 }
 
 function synthTryExpression(

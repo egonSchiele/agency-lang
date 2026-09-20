@@ -55,6 +55,18 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** if you meant a type, declare or import it. If you meant to bind the value, write \`const name = x\` instead. For JavaScript classes, use \`is object\` or a helper function — type patterns only test Agency types.`,
 
+  castUnrelatedTypes: `A cast \`x as T\` is allowed when the type of \`x\` fits \`T\`, or \`T\` fits the type of \`x\`. A cast between two unrelated types, like \`5 as string\`, is almost always a mistake, so it is refused. A cast changes only what the type checker believes. It does not convert the value.
+
+**How to fix:** if you mean it, go through \`unknown\`: \`x as unknown as T\`.`,
+
+  castResultNotUnwrapped: `A cast changes only what the type checker believes. It does not change the value, so casting a \`Result<Person>\` to \`Person\` would leave a \`Result\` in a variable typed as \`Person\`. Writing \`as unknown as Person\` would compile and be wrong at runtime.
+
+**How to fix:** unwrap the Result first: \`match\` on it, or use \`catch\` to supply a fallback.`,
+
+  castNoSchema: `\`x as T!\` checks the value against the schema of \`T\` at runtime and gives a \`Result\`. Function types have no schema, so they cannot be checked.
+
+**How to fix:** use the unchecked form, \`x as T\`.`,
+
   genericRequiresTypeArgs: `This is a generic type — it is parameterized by other types (like the element type of a list) — and it cannot be used bare. The type arguments are required.
 
 **How to fix:** supply the type arguments in angle brackets, e.g. write the element type the generic wraps.`,

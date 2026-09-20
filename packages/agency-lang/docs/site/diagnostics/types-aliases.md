@@ -133,3 +133,73 @@ A generic type requires at least some minimum number of type arguments, and you 
 A type pattern (`x is T`, or a match arm `p: T`) named something that is not a type. After `is`, a bare identifier is always read as a type reference — the old always-true binder form was retired — so a variable name or a JavaScript class name (like `Date`) in that position is an error rather than a silent match-anything.
 
 **How to fix:** if you meant a type, declare or import it. If you meant to bind the value, write `const name = x` instead. For JavaScript classes, use `is object` or a helper function — type patterns only test Agency types.
+
+<a id="ag1014"></a>
+
+## AG1014 — Cannot cast `&#123;from&#125;` to `&#123;to&#125;` because neither type fits the other. If this is intentional, write `&#123;expr&#125; as unknown as &#123;to&#125;`.
+
+*Default severity: error.*
+
+A cast `x as T` is allowed when the type of `x` fits `T`, or `T` fits the type of `x`. A cast between two unrelated types, like `5 as string`, is almost always a mistake, so it is refused. A cast changes only what the type checker believes. It does not convert the value.
+
+**How to fix:** if you mean it, go through `unknown`: `x as unknown as T`.
+
+<a id="ag1015"></a>
+
+## AG1015 — A checked cast validates the value at runtime, and `&#123;type&#125;` has no schema to validate against. Remove the `!` to cast without checking.
+
+*Default severity: error.*
+
+`x as T!` checks the value against the schema of `T` at runtime and gives a `Result`. Function types have no schema, so they cannot be checked.
+
+**How to fix:** use the unchecked form, `x as T`.
+
+<a id="ag1016"></a>
+
+## AG1016 — A cast is not allowed in this position. Add parentheses: `(&#123;left&#125; &#123;op&#125; &#123;right&#125;) as &#123;type&#125;` or `&#123;left&#125; &#123;op&#125; (&#123;right&#125; as &#123;type&#125;)`.
+
+*Default severity: error.*
+
+In TypeScript, `as` binds looser than arithmetic and comparison: `a + b as T` means `(a + b) as T`. In Agency today a cast binds tighter, so the same text would mean `a + (b as T)`. To keep the two from silently disagreeing, Agency refuses a cast on the right of `**`, `*`, `/`, `%`, `+`, `-`, `<`, `>`, `<=`, `>=`, `in`, and `instanceof`.
+
+**How to fix:** add parentheses to say which grouping you mean. Issue #1088 tracks removing this rule.
+
+<a id="ag1017"></a>
+
+## AG1017 — This checked cast runs validators that can pause the program, and it cannot be resumed safely in this position. Move it to its own line: `const value = &#123;cast&#125;`.
+
+*Default severity: error.*
+
+A checked cast to a type with `@validate` tags runs validator functions, and a validator can raise an interrupt that pauses the program. When a paused program resumes, the statement it paused in runs again, so Agency lifts anything that can pause onto its own line first. It cannot lift out of the right side of `&&`, `||` or `??`, a `catch` or `try` expression, an if-expression branch, a pipe stage, or a statement under `with` or `static`. A checked cast to a type with no `@validate` tags cannot pause and is allowed in these positions.
+
+**How to fix:** write the cast on its own line and use the variable.
+
+<a id="ag1018"></a>
+
+## AG1018 — `&#123;expr&#125;` is a `&#123;from&#125;`. A cast does not unwrap it. Unwrap the Result first, with `match` or `catch`, then cast the value if you still need to.
+
+*Default severity: error.*
+
+A cast changes only what the type checker believes. It does not change the value, so casting a `Result<Person>` to `Person` would leave a `Result` in a variable typed as `Person`. Writing `as unknown as Person` would compile and be wrong at runtime.
+
+**How to fix:** unwrap the Result first: `match` on it, or use `catch` to supply a fallback.
+
+<a id="ag1019"></a>
+
+## AG1019 — `&#123;cast&#125;` runs validators that can pause the program, and a module-level initializer or a parameter default cannot pause. Do the cast inside a node or a def.
+
+*Default severity: error.*
+
+A checked cast to a type with `@validate` tags runs validator functions, and a validator can raise an interrupt that pauses the program. Code at the top level of a file, and a parameter's default value, run where the program cannot pause and resume. There is no line to move the cast to. A checked cast to a type with no `@validate` tags is allowed here.
+
+**How to fix:** do the cast inside a node or a def, and pass the result in.
+
+<a id="ag1020"></a>
+
+## AG1020 — `&#123;cast&#125;` runs validators that can pause the program, and a handler body cannot pause. Do the cast before the `handle` block and use the value here.
+
+*Default severity: error.*
+
+A checked cast to a type with `@validate` tags runs validator functions, and a validator can raise an interrupt that pauses the program. A handler body compiles to plain JavaScript with no steps, so it cannot pause, and the hoist pass never rewrites one. Moving the cast to its own line inside the handler does not help. Handlers are how a user rejects an action, so a cast that would pause there is refused rather than compiled. A checked cast to a type with no `@validate` tags is allowed here.
+
+**How to fix:** do the cast before the `handle` block and use the value inside the handler.

@@ -1,0 +1,4 @@
+{
+  "surfacedEffects": ["test::check"],
+  "finalData": [1, 2]
+}

@@ -126,6 +126,7 @@ export const HANDLED_KINDS: readonly string[] = [
   "newExpression",
   "isExpression",
   "typeTestExpression",
+  "castExpression",
 ];
 
 /** True when `type` is known to this enumeration — either it has slots
@@ -433,6 +434,9 @@ export function expressionSlots(node: AgencyNode): ExpressionSlot[] {
       // so calls are unreachable in these positions today. The slots
       // exist so the enumeration is complete and the ruling visible,
       // not because hoisting has work to do.
+      return [slot(n.expression, "once", (o, e) => ({ ...o, expression: e }) as AgencyNode)];
+    case "castExpression":
+      // `foo() as T` is legal, so unlike `is` this slot has calls to hoist.
       return [slot(n.expression, "once", (o, e) => ({ ...o, expression: e }) as AgencyNode)];
     default:
       return [];

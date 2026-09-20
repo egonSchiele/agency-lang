@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "@/parser.js";
 import {
-  AS_CAST_MESSAGE,
   CATCH_ALL_NOT_LAST,
   C_STYLE_FOR_MESSAGE,
   DUPLICATE_ON_CLAUSE,
@@ -200,23 +199,18 @@ describe("a statement the parser cannot read is reported where it starts", () =>
   });
 });
 
-describe("an `as` cast is refused", () => {
+// `x as Type` is a real cast now; see lib/parsers/cast.test.ts.
+describe("an `as` cast parses", () => {
   it.each([
     ["a return value", `def f(r: number): number {\n  return (r as number)\n}`],
     ["a const value", `def f(r: number): number {\n  const n = r as number\n  return n\n}`],
     ["an object", `def f(): Json {\n  return ({ ok: true } as Json)\n}`],
-  ])("catches it as %s", (_name, src) => {
-    expect(failure(src)).toMatch(/^Line 2, col \d+: Agency has no `as` cast/);
-  });
-
-  it("leaves a trailing block alone", () => {
-    expect(
-      parses(`def f(xs: number[]): number[] {\n  return map(xs) as x {\n    return x + 1\n  }\n}`),
-    ).toBe(true);
-  });
-
-  it("gives an example that parses", () => {
-    expect(parses(`def f(parsed: number) {\n${exampleFrom(AS_CAST_MESSAGE)}\n}`)).toBe(true);
+    [
+      "a trailing block",
+      `def f(xs: number[]): number[] {\n  return map(xs) as x {\n    return x + 1\n  }\n}`,
+    ],
+  ])("as %s", (_name, src) => {
+    expect(parses(src)).toBe(true);
   });
 });
 

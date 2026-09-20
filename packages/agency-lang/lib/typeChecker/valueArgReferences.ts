@@ -200,6 +200,8 @@ function sitesOf(node: AgencyNode): TypeSite[] {
       return [plainSite(node.typeArg, node.loc)];
     case "typeTestExpression":
       return [plainSite(node.typeHint, node.loc)];
+    case "castExpression":
+      return [plainSite(node.targetType, node.loc)];
     case "handleBlock":
       return node.handler.kind === "inline" && node.handler.param.typeHint
         ? [plainSite(node.handler.param.typeHint, node.loc)]

@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "nodeName": "unchecked",
+      "input": "",
+      "expectedOutput": "\"Ada\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "An unchecked cast passes the value through untouched"
+    },
+    {
+      "nodeName": "checkedOk",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A checked cast of a matching value gives a success Result"
+    },
+    {
+      "nodeName": "checkedBad",
+      "input": "",
+      "expectedOutput": "\"failed\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A checked cast of a mismatched value gives a failure Result"
+    },
+    {
+      "nodeName": "failurePassesThrough",
+      "input": "",
+      "expectedOutput": "\"earlier problem\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A failure passes through a checked cast with its message unchanged"
+    },
+    {
+      "nodeName": "withFallback",
+      "input": "",
+      "expectedOutput": "\"fallback\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "catch supplies the fallback when a checked cast fails"
+    }
+  ]
+}

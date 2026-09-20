@@ -48,6 +48,17 @@ export function buildValidationDescriptor(
  * intact for codegen-by-name purposes, so we have to look them up
  * here to decide if the alias body carries `@validate`.
  */
+/** True when validating a value of this type runs `@validate` validators,
+ *  which are Agency functions and can pause the program. Asked by the
+ *  builder, to pick the emit path, and by the type checker, to refuse a
+ *  checked cast the hoist pass cannot lift. Both must get one answer. */
+export function typeRunsValidators(
+  type: VariableType,
+  aliasesFull: Record<string, TypeAliasEntry>,
+): boolean {
+  return hasAnyValidateTag(resolveTypeDeep(type, aliasesFull), aliasesFull);
+}
+
 export function hasAnyValidateTag(
   t: VariableType,
   aliasesFull?: Record<string, TypeAliasEntry>,

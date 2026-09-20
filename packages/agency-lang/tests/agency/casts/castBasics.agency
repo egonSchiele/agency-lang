@@ -1,0 +1,43 @@
+type Person = { name: string }
+
+def greet(p: Person): string {
+  return p.name
+}
+
+node unchecked() {
+  const raw: any = { name: "Ada" }
+  return greet(raw as Person)
+}
+
+node checkedOk() {
+  const raw: any = { name: "Ada" }
+  const p = raw as Person!
+  if (isSuccess(p)) {
+    return "ok"
+  }
+  return "failed"
+}
+
+node checkedBad() {
+  const raw: any = { name: 5 }
+  const p = raw as Person!
+  if (isFailure(p)) {
+    return "failed"
+  }
+  return "ok"
+}
+
+node failurePassesThrough() {
+  const raw: any = failure("earlier problem")
+  const p = raw as Person!
+  if (isFailure(p)) {
+    return p.error
+  }
+  return "validated"
+}
+
+node withFallback() {
+  const raw: any = 5
+  const p = raw as Person! catch { name: "fallback" }
+  return p.name
+}

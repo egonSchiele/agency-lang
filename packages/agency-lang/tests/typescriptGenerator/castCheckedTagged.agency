@@ -1,0 +1,22 @@
+def isPositive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("must be positive")
+}
+
+@validate(isPositive)
+type Positive = number
+
+def neighbor(): number {
+  return 1
+}
+
+def both(first: any, second: number): number {
+  return second
+}
+
+node main() {
+  const raw: any = 5
+  return both(raw as Positive!, neighbor())
+}

@@ -46,7 +46,7 @@ The precedence-climbing algorithm handles all of these cases.
 
 Within a level, multi-character operators come first so that `*=` is not mis-read as `*` followed by `=`, and `<=` is not mis-read as `<`.
 
-The atom is `atomWithIs` (a value, optionally followed by `is <pattern>`), and the paren parser is a custom `parenParser` rather than tarsec's default.
+The atom is `atomWithIs` (a value, optionally followed by `is <pattern>`), and the paren parser is a custom `parenParser` rather than tarsec's default. Both are wrapped in `castable(...)`, which attaches any `as Type` suffixes that follow — see `docs/dev/language/type-casts.md`.
 
 ## How `buildExpressionParser` works
 

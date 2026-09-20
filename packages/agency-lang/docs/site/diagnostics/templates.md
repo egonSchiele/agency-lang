@@ -208,3 +208,15 @@ Compiling a `$( ... )` runs its generator, so compiling a file you have not read
 The generator was never compiled or run. Its file may still have been read, because building the symbol table crawls imports first.
 
 **How to fix:** compile again without `--refuse-splices`. Sandboxed compilation (`--agency-only`, `std::agency compile`) refuses splices with no flag to drop.
+
+<a id="ag8017"></a>
+
+## AG8017 — Generated code from `&#123;generator&#125;` uses the name `&#123;name&#125;`. Names starting with two underscores are reserved for the compiler.
+
+*Default severity: error.*
+
+Generated code declares, reads, or calls a name that starts with two underscores.
+
+Those names belong to the compiler and runtime: `__ctx`, `__self`, `__matchval_1`. The parser refuses them in code you write. A generator can build a `Code` value by hand, which the parser never sees, so the same rule is applied again when the code is pasted in.
+
+**How to fix:** rename it to something that does not start with two underscores.

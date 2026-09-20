@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { parseAgency } from "../parser.js";
 import { hoistCallsInScope } from "./hoistCalls.js";
-import type { AgencyNode } from "../types.js";
+import { AgencyGenerator } from "../backends/agencyGenerator.js";
+import type { AgencyNode, AgencyProgram } from "../types.js";
 
 function bodyOf(src: string): AgencyNode[] {
   const parsed = parseAgency(src, {}, true);
@@ -476,5 +477,54 @@ describe("fixture shape pins (S6): the flagship fixtures exercise hoisted shapes
     const llmStmt = (stmts(out) as any[]).find((n) => n.value?.functionName === "llm");
     const optionsArg = llmStmt.value.arguments[1];
     expect(optionsArg).toMatchObject({ type: "variableName", value: t[0].variableName });
+  });
+});
+
+describe("checked casts", () => {
+  /** The hoisted body of the one function in `src`, printed back as Agency. */
+  const hoisted = (src: string): string =>
+    new AgencyGenerator().generate({
+      type: "agencyProgram",
+      nodes: hoistCallsInScope(bodyOf(src)),
+    } as unknown as AgencyProgram).output;
+
+  it("lifts a checked cast out of a call argument, before the call beside it", () => {
+    const out = hoisted(`node main() {\n  const r = greet(x as Asked!, fetchThing())\n}`);
+    expect(out).toContain("const __hoist_0 = x as Asked!");
+    expect(out).toContain("const __hoist_1 = fetchThing()");
+    expect(out).toContain("greet(__hoist_0, __hoist_1)");
+  });
+
+  it("leaves a checked cast that is the whole value of a declaration", () => {
+    const out = hoisted(`node main() {\n  const p = x as Asked!\n}`);
+    expect(out).not.toContain("__hoist_");
+  });
+
+  it("lifts the call inside a cast, and the checked cast around it", () => {
+    const out = hoisted(`node main() {\n  const r = use(foo() as Asked!)\n}`);
+    expect(out).toContain("const __hoist_0 = foo()");
+    expect(out).toContain("const __hoist_1 = __hoist_0 as Asked!");
+  });
+
+  it("does not lift an unchecked cast, and still lifts the call inside it", () => {
+    const out = hoisted(`node main() {\n  const r = use(foo() as Asked)\n}`);
+    expect(out).toContain("const __hoist_0 = foo()");
+    expect(out).toContain("use(__hoist_0 as Asked)");
+  });
+
+  it("rewrites a while loop whose condition holds a checked cast", () => {
+    const out = hoisted(`node main() {\n  while (isSuccess(x as Asked!)) {\n    step()\n  }\n}`);
+    expect(out).toContain("while (true)");
+    expect(out).toContain("x as Asked!");
+    expect(out).toContain("break");
+  });
+
+  it("keeps a lifted cast inside its handle block", () => {
+    const out = hoisted(
+      `node main() {\n  handle {\n    const r = use(x as Asked!)\n  } with approve\n}`,
+    );
+    const handleStart = out.indexOf("handle {");
+    expect(handleStart).toBeGreaterThan(-1);
+    expect(out.indexOf("__hoist_0 = x as Asked!")).toBeGreaterThan(handleStart);
   });
 });

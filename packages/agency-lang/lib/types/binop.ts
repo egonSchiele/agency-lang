@@ -82,6 +82,15 @@ export const PRECEDENCE: Record<string, number> = {
   void: 8,
 };
 
+/** TypeScript gives `as` the precedence of the relational operators. */
+const CAST_LEVEL = PRECEDENCE["<"];
+
+/** True when `op` binds tighter than a cast would in TypeScript, so
+ *  `a op b as T` must not be read as `a op (b as T)`. */
+export function bindsTighterThanCast(op: Operator): boolean {
+  return PRECEDENCE[op] >= CAST_LEVEL;
+}
+
 /** The prefix operators the parser desugars to `{ op, left: true, right }`. */
 export const PREFIX_OPS: Operator[] = ["!", "unary-", "typeof", "void"];
 

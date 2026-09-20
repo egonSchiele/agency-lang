@@ -186,6 +186,8 @@ export function expressionToString(expr: Expression): string {
       return `schema(${variableTypeToString(expr.typeArg, {})})`;
     case "typeTestExpression":
       return `${expressionToString(expr.expression)} is ${variableTypeToString(expr.typeHint, {})}`;
+    case "castExpression":
+      return `${expressionToString(expr.expression)} as ${variableTypeToString(expr.targetType, {})}${expr.checked ? "!" : ""}`;
     case "interruptStatement": {
       const args = expr.arguments.map(callArgToString).join(", ");
       return `interrupt ${expr.effect}(${args})`;
@@ -425,6 +427,8 @@ export function* walkNodes(
         }
       }
     } else if (node.type === "typeTestExpression") {
+      yield* walkNodes([node.expression], [...ancestors, node], scopes);
+    } else if (node.type === "castExpression") {
       yield* walkNodes([node.expression], [...ancestors, node], scopes);
     } else if (node.type === "isExpression") {
       // Symmetric with typeTestExpression above. Found missing by the

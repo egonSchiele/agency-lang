@@ -77,7 +77,14 @@ import { AgencyConfig, BUILTIN_VARIABLES } from "@/config/config.js";
 import { mergeConfig } from "@/config/merge.js";
 import { MessageThread } from "@/types/messageThread.js";
 import { Skill } from "@/types/skill.js";
-import { BinOpArgument, BinOpExpression, Operator, PRECEDENCE, PREFIX_OPS } from "@/types/binop.js";
+import {
+  BinOpArgument,
+  BinOpExpression,
+  Operator,
+  PRECEDENCE,
+  PREFIX_OPS,
+  bindsTighterThanCast,
+} from "@/types/binop.js";
 import { expressionToString } from "@/utils/node.js";
 import { Keyword } from "@/types/keyword.js";
 import { HandleBlock } from "@/types/handleBlock.js";
@@ -599,6 +606,11 @@ export class AgencyGenerator {
         return this.formatPattern(node);
       case "isExpression":
         return `${this.processNode(node.expression).trim()} is ${this.formatIsRhs(node.pattern)}`;
+      case "castExpression": {
+        const inner = this.processNode(node.expression).trim();
+        const operand = node.expression.type === "binOpExpression" ? `(${inner})` : inner;
+        return `${operand} as ${this.renderTypeSource(node.targetType)}${node.checked ? "!" : ""}`;
+      }
       case "parallelBlock":
         return this.processParallelBlock(node);
       case "seqBlock":
@@ -646,7 +658,12 @@ export class AgencyGenerator {
   }
 
   protected needsParensRight(child: BinOpArgument, parentOp: Operator): boolean {
-    if (child.type !== "binOpExpression") return false;
+    if (child.type === "castExpression") {
+      return bindsTighterThanCast(parentOp);
+    }
+    if (child.type !== "binOpExpression") {
+      return false;
+    }
     return PRECEDENCE[child.operator] <= PRECEDENCE[parentOp];
   }
 

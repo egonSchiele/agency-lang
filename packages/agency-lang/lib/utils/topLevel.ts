@@ -93,6 +93,7 @@ const LEGAL_AT_TOP_LEVEL: Record<AgencyNode["type"], boolean> = {
   schemaExpression: false,
   isExpression: false,
   typeTestExpression: false,
+  castExpression: false,
   blockArgument: false,
   awaitPending: false,
   markDestructiveRan: false,

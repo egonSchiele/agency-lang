@@ -185,6 +185,7 @@ const REGISTRY: { [K in AgencyNode["type"]]: SlotExtractor<K> } = {
   interruptStatement: none,
   isExpression: none,
   typeTestExpression: none,
+  castExpression: none,
 
   // Import statements name symbols, but as strings with no per-name
   // loc — there is no position to emit.

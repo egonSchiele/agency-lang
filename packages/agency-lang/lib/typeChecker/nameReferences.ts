@@ -33,6 +33,11 @@ export function hasFunctionOrNodeAncestor(ancestors: readonly unknown[]): boolea
  * is a binding the typechecker's `Scope` does not track at all, so
  * resolving it would always fail.
  *
+ * A name with no ancestors is a statement that is only a name, directly in
+ * a function or node body. It is a read like any other. A TypeScript cast,
+ * `return x as Json`, parses as `return x` followed by the names `as` and
+ * `Json`, so this is where that mistake is reported.
+ *
  * Names under a `valueAccess` are all real reads. A property name is not
  * a lookup, but `walkNodes` never yields one as a standalone name; what
  * it does yield with the access as parent is the base and the index and
@@ -42,10 +47,6 @@ export function isResolvableVariableReference(
   ref: VariableNameLiteral,
   ancestors: readonly WalkAncestor[],
 ): boolean {
-  const parent = ancestors[ancestors.length - 1] as AgencyNode | undefined;
-  if (!parent) {
-    return false;
-  }
   if (isNullLiteral(ref)) {
     return false;
   }

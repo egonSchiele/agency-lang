@@ -19,9 +19,19 @@ import { safeDeleteDirectoryWithin } from "../utils.js";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
 
+/** The typechecker settings `--agency-only` compiles with: unqualified
+ *  names resolve against the reviewed SANDBOX_JS_GLOBALS allowlist, and a
+ *  name that resolves to nothing is an error. */
+export const SANDBOX_NAME_CHECKS = {
+  jsGlobals: "sandbox" as const,
+  undefinedFunctions: "error" as const,
+  undefinedVariables: "error" as const,
+};
+
 export type CompileValidatedClosureOptions = {
-  /** Enforce the reviewed JS-globals allowlist (jsGlobals:"sandbox"). Only the
-   *  `--agency-only` entry point sets this. The runtime fork path
+  /** Enforce the reviewed JS-globals allowlist (jsGlobals:"sandbox"). The
+   *  `--agency-only` entry point sets this, and so does a `compile` from
+   *  `std::agency` called with `strict: true`. The runtime fork path
    *  (`std::agency.run`) shares this compile but is trusted-context code that
    *  may name JS globals, so it leaves this off. */
   enforceJsGlobals?: boolean;
@@ -64,13 +74,7 @@ export function compileValidatedClosure(
     // runtime fork path (`std::agency.run`) shares this compile but may name JS
     // globals and relies on scope-visibility cases the undefined-name passes do
     // not fully cover, so it leaves all of this off (matching prior behavior).
-    const jsGlobalsCheck = options.enforceJsGlobals
-      ? {
-          jsGlobals: "sandbox" as const,
-          undefinedFunctions: "error" as const,
-          undefinedVariables: "error" as const,
-        }
-      : {};
+    const jsGlobalsCheck = options.enforceJsGlobals ? SANDBOX_NAME_CHECKS : {};
     const sandboxOptions = {
       typechecker: { enabled: true, ...jsGlobalsCheck },
       // Belt on top of validation: the mirror contains only validated

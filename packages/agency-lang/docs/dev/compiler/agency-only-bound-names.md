@@ -15,11 +15,21 @@ and its layers are in `docs/dev/security/roadmap.md` (item A1) and
 
 ## What it does
 
-When `typechecker.jsGlobals` is `"sandbox"` (set by `--agency-only` in
-`compileValidatedClosure.ts`, alongside `undefinedFunctions`/
-`undefinedVariables: "error"`), an unqualified name must resolve to an
+When `typechecker.jsGlobals` is `"sandbox"`, an unqualified name must resolve to an
 Agency declaration, an import, a builtin, or the reviewed allowlist
 `SANDBOX_JS_GLOBALS`. Anything else is a compile error.
+
+`SANDBOX_NAME_CHECKS` in `compileValidatedClosure.ts` holds that setting
+together with `undefinedFunctions` and `undefinedVariables: "error"`. Two
+callers use it. `--agency-only` compiles with it. `compile` and
+`typecheck` from `std::agency` use it when called with `strict: true`,
+which is how `designTool` checks a draft that will later run sandboxed.
+Their default leaves it off, because a trusted caller's program may name
+a JavaScript global outside the allowlist.
+
+The registry has three kinds of entry: `callable`, `namespace`, and
+`value`. A `value`, such as `Infinity`, resolves as a variable and is
+refused as a call.
 
 `SANDBOX_JS_GLOBALS` (`lib/typeChecker/resolveCall.ts`) is a **separate,
 reviewed** allowlist, not a filter over the interop registry `JS_GLOBALS`.
@@ -79,6 +89,12 @@ values). Two design choices bound that risk:
   complete than a `walkNodes` extension would be. Each collected expression
   is then descended with `walkNodes`, so the traversal of the expression
   itself is still shared, not reimplemented.
+
+A statement that is only a name, directly in a function or node body, has
+no ancestors in the walk. `isResolvableVariableReference` treats it as a
+read like any other. This is where a TypeScript cast is reported:
+`return x as Json` parses as `return x` followed by the names `as` and
+`Json`, and both are undefined.
 
 If a new capability position turns up, the fix is to feed it to the same
 resolver, not to write a second rule. The security guarantee still does not

@@ -59,6 +59,7 @@ agencyReviewAgent(
   session: string = "",
   extraTools: any[] = [],
   dir: string = "",
+  strict: boolean = false,
 ): Result<Feedback[]>
 ```
 
@@ -76,6 +77,7 @@ Review Agency source code and return findings. Always includes parse and
   @param session - Session name to share a thread across calls, or "" for isolated
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
   @param dir - Directory the source's relative imports resolve against, or "" when it imports no local files
+  @param strict - Typecheck with the name checks a sandboxed compile uses; see `typecheck` in std::agency
 
 **Parameters:**
 
@@ -91,6 +93,7 @@ Review Agency source code and return findings. Always includes parse and
 | session | `string` | "" |
 | extraTools | `any[]` | [] |
 | dir | `string` | "" |
+| strict | `boolean` | false |
 
 **Returns:** `Result<Feedback[]>`
 

@@ -1,0 +1,63 @@
+import { typecheck, compile } from "std::agency"
+
+// Agency has no `as` cast. The parser reads this as `return n`, then the
+// bare names `as` and `Json`, which only the name checks report.
+static const castSource = """
+import { Json } from "std::validation"
+
+export def run(n: number): Json {
+  return n as Json
+}
+"""
+
+static const hostGlobalSource = """
+export def run(): any {
+  return process.env
+}
+"""
+
+// A match used as a value and an allowed global: both are correct code.
+static const cleanSource = """
+export def run(n: number): number {
+  const floor = if n < 0 then 0 else n
+  return Math.min(floor, Infinity)
+}
+"""
+
+def errorCount(source: string, strict: boolean): number {
+  const report = typecheck(source, strict: strict)
+  if (report is failure) {
+    return -1
+  }
+  return report.value.errors.length
+}
+
+node castIsSilentByDefault(): number {
+  return errorCount(castSource, false)
+}
+
+node strictReportsTheCast(): boolean {
+  const report = typecheck(castSource, strict: true)
+  if (report is failure) {
+    return false
+  }
+  const messages = [diag.message for diag in report.value.errors]
+  return messages.join("\n").includes("'as' is not defined")
+}
+
+node strictRefusesAHostGlobal(): boolean {
+  return errorCount(hostGlobalSource, false) == 0 && errorCount(hostGlobalSource, true) > 0
+}
+
+node strictAcceptsCorrectCode(): number {
+  return errorCount(cleanSource, true)
+}
+
+node strictCompileRefusesTheCast(): boolean {
+  const loose = compile(castSource)
+  const strict = compile(castSource, strict: true)
+  if (loose is failure) {
+    return false
+  }
+  return strict is failure
+}

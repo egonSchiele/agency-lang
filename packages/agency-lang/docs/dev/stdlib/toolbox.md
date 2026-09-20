@@ -68,6 +68,31 @@ answers in the next brief and tells the author not to ask again. A draft
 picked up from earlier in the session runs in a new staging directory, so
 its answers are not carried over.
 
+### Drafts are checked the way a saved tool runs
+
+A saved tool runs sandboxed, so `designTool` checks each draft with the
+name checks a sandboxed compile uses. `assembleTool` calls `compile` and
+`typecheck` from `std::agency` with `strict: true`, and `draftSource`
+passes `strict: true` to `agencyCodingAgent`, which checks each attempt
+the same way and gives the author a `typecheck` tool that does too. The
+author then sees these errors on its own draft:
+
+```
+return built as Json
+```
+
+Agency has no `as` cast. This parses as `return built`, then the names
+`as` and `Json`, and strict mode reports both as undefined. Without it
+the draft typechecks, its generated tests pass because the two names sit
+after a `return`, and the tool is saved in a state that a sandboxed
+compile refuses.
+
+`draftSource` also passes `projectTools: false`, which leaves out the
+author's file and git tools. The brief allows `std::` imports only, so
+nothing in the caller's project bears on the task, and an author that has
+those tools spends minutes searching the project for facts it should ask
+the user for.
+
 ### The review agent is off by default
 
 `designTool(review: true)` has `agencyReviewAgent` read each draft before

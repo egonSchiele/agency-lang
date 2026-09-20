@@ -207,20 +207,30 @@ Return only the complete program in the code field."""
 // retrieves a page the caller already named.
 static const skills = agentSkill("agency/coding")
 
-export def buildTools(): any[] {
+export def buildTools(strict: boolean = false, projectTools: boolean = true): any[] {
   """
   Return the Agency writer's tools: the bundled documentation, the source
   inspectors it checks drafts with, read-only access to the project it is
   writing for, and fetches for a named external resource. Not testFile: the
   writer returns source it has not saved, so there is nothing on disk for a
   harness to test yet.
+
+  @param strict - Offer a typecheck that reports what a sandboxed compile would, so the writer sees those errors on its own draft
+  @param projectTools - False leaves out the file and git tools, for a draft that depends on nothing in the project
   """
+  let checker: any = typecheck
+  if (strict) {
+    checker = typecheck.partial(strict: true)
+  }
+  let project: any[] = []
+  if (projectTools) {
+    project = [...readOnlyFileTools(), ...readOnlyGitTools()]
+  }
   return [
     ...agencyDocToolsBrief(),
-    typecheck,
+    checker,
     parseAST,
-    ...readOnlyFileTools(),
-    ...readOnlyGitTools(),
+    ...project,
     fetch,
     fetchJSON,
     fetchMarkdown,
@@ -232,12 +242,12 @@ export def buildTools(): any[] {
 // the model wrote, so the line numbers in a critique match what it sees.
 // The formatted text is compiled once more, and the draft goes out as
 // written when that fails, so a formatter bug cannot change what ships.
-def formatted(source: string, dir: string): string {
+def formatted(source: string, dir: string, strict: boolean): string {
   const pretty = format(source) catch source
   if (pretty == source) {
     return source
   }
-  const recompiled = compile(pretty, dir)
+  const recompiled = compile(pretty, dir, strict: strict)
   if (recompiled is failure) {
     return source
   }
@@ -281,8 +291,8 @@ def outcomeToResult(outcome: WriteOutcome): Result<string, WriteFailure> {
 // Judge one generated program. The critique it returns becomes the repair
 // instruction the next attempt receives, so what the checker found and what
 // the writer is told to fix can never drift apart.
-def checkSource(source: string, requireMain: boolean, dir: string): Critique {
-  const reviewed = agencyReviewAgent(source: source, dir: dir)
+def checkSource(source: string, requireMain: boolean, dir: string, strict: boolean): Critique {
+  const reviewed = agencyReviewAgent(source: source, dir: dir, strict: strict)
   if (feedbackHasErrors(reviewed)) {
     const findings = renderFeedback(reviewed)
     return {
@@ -290,7 +300,7 @@ def checkSource(source: string, requireMain: boolean, dir: string): Critique {
       feedback: "That code has problems:\n${findings}\nReturn a corrected complete program."
     }
   }
-  const compiled = compile(source, dir)
+  const compiled = compile(source, dir, strict: strict)
   if (compiled is failure(compileErr)) {
     return {
       accepted: false,
@@ -312,12 +322,12 @@ def checkSource(source: string, requireMain: boolean, dir: string): Critique {
 // The critique doubles as the record of what was wrong with the attempt, so
 // an exhausted run reports it alongside the source it belongs to. Each
 // attempt is checked once here, and `revise` reads the verdict back out.
-def outcomeFor(source: string, requireMain: boolean, dir: string): WriteOutcome {
-  const critique = checkSource(source, requireMain: requireMain, dir: dir)
+def outcomeFor(source: string, requireMain: boolean, dir: string, strict: boolean): WriteOutcome {
+  const critique = checkSource(source, requireMain: requireMain, dir: dir, strict: strict)
   if (critique.accepted) {
     return {
       valid: true,
-      source: formatted(source, dir),
+      source: formatted(source, dir, strict),
       problems: []
     }
   }
@@ -350,6 +360,8 @@ def generateLoop(
   extraTools: any[],
   requireMain: boolean,
   dir: string,
+  strict: boolean,
+  projectTools: boolean,
 ): WriteOutcome {
   if (threadIsNew()) {
     systemMessage(systemPrompt)
@@ -368,7 +380,7 @@ def generateLoop(
     if (critique == "") {
       prompt = opening
     }
-    const writerTools = buildTools()
+    const writerTools = buildTools(strict: strict, projectTools: projectTools)
     const generated: GeneratedCode = llm(
       prompt,
       llmOptions(
@@ -377,7 +389,12 @@ def generateLoop(
         tools: writerTools.concat(withoutNamesOf(extraTools, writerTools)),
       ),
     )
-    const outcome = outcomeFor(source: generated.code, requireMain: requireMain, dir: dir)
+    const outcome = outcomeFor(
+      source: generated.code,
+      requireMain: requireMain,
+      dir: dir,
+      strict: strict,
+    )
     saveDraft(outcome)
     return outcome
   }
@@ -395,6 +412,8 @@ export def agencyCodingAgent(
   extraTools: any[] = [],
   requireMain: boolean = true,
   dir: string = "",
+  strict: boolean = false,
+  projectTools: boolean = true,
 ): Result<string, WriteFailure> {
   """
   Write an Agency program for the task. Iterates until the source parses,
@@ -415,6 +434,11 @@ export def agencyCodingAgent(
     when the deliverable is a library module whose exports the caller places.
   @param dir - Directory the draft's relative imports resolve against, so a
     draft that imports a sibling file typechecks. "" when it imports none.
+  @param strict - Check each draft the way a sandboxed (`--agency-only`)
+    compile would, and give the writer a typecheck that does the same. Pass
+    true when the deliverable will run sandboxed.
+  @param projectTools - False leaves out the writer's file and git tools.
+    Pass false when nothing in the caller's project bears on the task.
   """
   if (tutorial is failure(missing)) {
     const problem = "agencyCodingAgent could not read its language tutorial: ${missing}"
@@ -439,6 +463,8 @@ export def agencyCodingAgent(
         extraTools: extraTools,
         requireMain: requireMain,
         dir: dir,
+        strict: strict,
+        projectTools: projectTools,
       )
     }
     return outcome

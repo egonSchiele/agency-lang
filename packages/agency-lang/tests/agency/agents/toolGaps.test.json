@@ -131,6 +131,17 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "agencyWriterCanLeaveTheProjectOut",
+      "description": "projectTools: false drops the writer's file and git tools and keeps the docs and typecheck",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
     }
   ]
 }

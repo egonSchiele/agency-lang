@@ -90,6 +90,7 @@ import {
 import {
   buildValidationDescriptor,
   hasAnyValidateTag,
+  typeRunsValidators,
   hasAliasValidate,
 } from "./typescriptGenerator/validationDescriptor.js";
 import { tagArgToTs } from "./typescriptGenerator/tagArgToTs.js";
@@ -1019,7 +1020,7 @@ export class TypeScriptBuilder {
     const aliasesFull = this.scopes.visibleTypeAliasesFull();
     const resolved = resolveTypeDeep(t, aliasesFull);
     const aliases = this.scopes.visibleTypeAliases();
-    if (!hasAnyValidateTag(resolved, aliasesFull)) {
+    if (!typeRunsValidators(t, aliasesFull)) {
       const zodSchema = mapTypeToValidationSchema(resolved, aliases, aliasesFull);
       return ts.validateType(value, ts.raw(zodSchema));
     }

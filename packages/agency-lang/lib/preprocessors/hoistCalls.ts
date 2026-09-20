@@ -160,6 +160,16 @@ export const STATEMENT_CASE_KINDS = [
   "staticStatement",
 ];
 
+/** Statement kinds whose own expression positions the pass lifts from:
+ *  the slot-driven kinds, plus the three with a dedicated extracting case.
+ *  Read by hoistPositions.ts, which models where the pass can lift. */
+export const EXTRACTING_STATEMENT_KINDS: readonly string[] = [
+  ...EXTRACTED_STATEMENT_KINDS,
+  "functionCall",
+  "interruptStatement",
+  "whileLoop",
+];
+
 /** Statement kinds the pass deliberately does NOT extract from. Each
  *  entry is a recorded ruling, not an oversight — a new statement kind
  *  is absent from every list and fails the corpus test by name, which

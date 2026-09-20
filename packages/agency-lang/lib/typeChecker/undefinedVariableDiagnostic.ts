@@ -9,6 +9,7 @@ import { resolveVariable } from "./resolveVariable.js";
 import { JS_GLOBALS, SANDBOX_JS_GLOBALS, type JsRegistryEntry } from "./resolveCall.js";
 import { hasFunctionOrNodeAncestor, isResolvableVariableReference } from "./nameReferences.js";
 import { collectProgramShadowing } from "./shadowing.js";
+import { isMatchValName } from "../matchVal.js";
 
 /**
  * Emit a diagnostic for every variable reference that doesn't resolve
@@ -36,6 +37,9 @@ import { collectProgramShadowing } from "./shadowing.js";
  *   - The `name` of a `namedArgument` is a parameter name, not a variable.
  *   - Object literal keys (`{ key: value }`) are field names, not
  *     variable refs.
+ *   - `__matchval_<id>`, the temp a value-position `match` lowers to. No
+ *     scope declares it, and codegen always reads it from the frame, so it
+ *     can never reach a JS global.
  */
 export function checkUndefinedVariables(scopes: ScopeInfo[], ctx: TypeCheckerContext): void {
   // --agency-only sets jsGlobals:"sandbox": resolve against the reviewed
@@ -64,6 +68,7 @@ export function checkUndefinedVariables(scopes: ScopeInfo[], ctx: TypeCheckerCon
         if (isTopLevel && hasFunctionOrNodeAncestor(ancestors)) continue;
         if (node.type !== "variableName") continue;
         if (holeNameSet.includes(node.value)) continue;
+        if (isMatchValName(node.value)) continue;
         if (isResolvableVariableReference(node, ancestors)) {
           checkVariableRef(node, ancestors, info.scope, ctx, mode, importedNodeNames, registry);
         }

@@ -88,6 +88,10 @@ whether it throws, resolves to interrupts, or resolves to an aborted
 result of its own. The abort continues with the saved draft, or with
 nothing, and the failure is logged as a `finalizeError`.
 
+A finalize with no `return` is cleanup only. It resolves to `undefined`,
+and `withFinalize` then keeps the saved draft instead of replacing it. An
+explicit `return null` is a real value and does replace the draft.
+
 The `__finalize` closure runs a fresh Runner on the SAME frame as its
 container, so locals resolve without any passing. Two non-obvious
 consequences:

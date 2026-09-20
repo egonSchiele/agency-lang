@@ -334,6 +334,19 @@ describe("withFinalize passes the draft (finalize as draft)", () => {
 });
 
 describe("AbortedResult.withFinalize", () => {
+  it("a finalize with no return keeps the saved draft", async () => {
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "code");
+    const finalized = await aborted.withFinalize(async () => undefined, "code");
+    expect(finalized).toBe(aborted);
+    expect(finalized.partialValueOrNull()).toBe("draft");
+  });
+
+  it("a finalize that returns null replaces the draft with null", async () => {
+    const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft"), "code");
+    const finalized = await aborted.withFinalize(async () => null, "code");
+    expect(finalized.partialValueOrNull()).toBe(null);
+  });
+
   it("replaces the partial with the finalize's return, cause by identity", async () => {
     const cause = tripCause();
     const aborted = AbortedResult.fromError(abortError(cause), frameWithDraft("draft"), "code");

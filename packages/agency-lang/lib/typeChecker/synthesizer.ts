@@ -79,7 +79,7 @@ import {
   BUILTIN_VARIABLE_TYPES,
 } from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
-import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
+import { typeAt, flowHasNarrowFor, stablePrefix, referenceKey } from "./flow.js";
 import { literalToType } from "./literalType.js";
 import { typeKey } from "./typeKey.js";
 import { resultTypeForValidation } from "./validation.js";
@@ -1100,12 +1100,24 @@ function validateAgencyFunctionMethod(
  */
 function narrowedPathPrefix(
   expr: ValueAccess,
+  scope: Scope,
   ctx: TypeCheckerContext,
 ): { type: VariableType; consumed: number } | null {
-  if (!ctx.flowEnv || expr.base.type !== "variableName") return null;
+  if (expr.base.type !== "variableName") return null;
+  const stable = stablePrefix(expr.chain);
+  if (!ctx.flowEnv) {
+    // Scope building runs before the flow graph exists, and it is where a
+    // declaration with no annotation gets its type. The paths a guard
+    // narrowed are on the scope (applyNarrowing).
+    for (let len = stable.length; len >= 1; len--) {
+      const ref = { variable: expr.base.value, chain: stable.slice(0, len) };
+      const narrowed = scope.lookupPath(ref.variable, referenceKey(ref));
+      if (narrowed !== undefined) return { type: narrowed, consumed: len };
+    }
+    return null;
+  }
   const flow = ctx.flowEnv.flowOf.get(expr);
   if (!flow) return null;
-  const stable = stablePrefix(expr.chain);
   const env = { ...ctx.flowEnv, typeAliases: ctx.getTypeAliases() };
   for (let len = stable.length; len >= 1; len--) {
     const ref = { variable: expr.base.value, chain: stable.slice(0, len) };
@@ -1138,7 +1150,7 @@ export function synthValueAccess(
 
   // When a narrowed stable prefix applies, start the structural walk from its
   // type at the next hop; otherwise resolve the base and walk the whole chain.
-  const narrowedPrefix = narrowedPathPrefix(expr, ctx);
+  const narrowedPrefix = narrowedPathPrefix(expr, scope, ctx);
   let currentType =
     narrowedPrefix === null ? synthType(expr.base, scope, ctx) : narrowedPrefix.type;
   const chainStart = narrowedPrefix === null ? 0 : narrowedPrefix.consumed;

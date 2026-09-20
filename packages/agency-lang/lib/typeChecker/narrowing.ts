@@ -16,7 +16,8 @@ import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 // Import the path-segment core from its own module (NOT flow.ts) — flow.ts
 // value-imports narrowByRefine from here, so a value import back from flow.ts
 // would form a runtime cycle. See pathSegments.ts.
-import { chainToSegments } from "./pathSegments.js";
+import { chainToSegments, referenceKey } from "./pathSegments.js";
+import { resolvePath } from "./resolvePath.js";
 import type { Reference } from "./pathSegments.js";
 
 /**
@@ -432,14 +433,20 @@ export function applyNarrowing(
   typeAliases: Record<string, TypeAliasEntry>,
 ): void {
   for (const cand of candidates) {
-    // The legacy child-scope path narrows a bare variable (declareLocal by name).
-    // Member-path candidates (chain.length > 0) are handled only by the flow
-    // path (typeAt); skip them here — declaring a local named "obj.r" is
-    // meaningless. Inference is bare-variable-only; path narrowing is Phase-B.
-    if (cand.ref.chain.length !== 0) continue;
     const name = cand.ref.variable;
-    const current = childScope.lookup(name);
-    if (!current || isAnyType(current)) continue;
+    const declared = childScope.lookup(name);
+    if (!declared || isAnyType(declared)) continue;
+    // A member path (`request.subject`) narrows the type at the end of the
+    // path. It is stored beside the variables, keyed by the whole path, and
+    // read back by `synthValueAccess` when a declaration's type is inferred.
+    // One pattern can yield several facts about the same path. Each builds on
+    // the last, as `lookup` makes them do for a bare variable.
+    const isPath = cand.ref.chain.length > 0;
+    const current = isPath
+      ? (childScope.lookupPath(name, referenceKey(cand.ref)) ??
+        resolvePath(declared, cand.ref.chain, typeAliases))
+      : declared;
+    if (isAnyType(current)) continue;
     // "what to narrow to" is delegated to narrowByRefine (the same dispatcher
     // the flow path uses). It resolves through type-alias variables itself
     // (mirrors synthValueAccess) so alias-typed scrutinees still narrow; null
@@ -451,7 +458,11 @@ export function applyNarrowing(
     // Soundness gate: a branch that reassigns the variable may change its type
     // mid-branch, so don't narrow it (whole-body scan, conservative).
     if (isReassignedIn(branchBody, name)) continue;
-    childScope.declareLocal(name, narrowed);
+    if (isPath) {
+      childScope.declareLocalPath(referenceKey(cand.ref), narrowed);
+    } else {
+      childScope.declareLocal(name, narrowed);
+    }
   }
 }
 

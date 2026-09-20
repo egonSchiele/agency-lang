@@ -521,3 +521,96 @@ def f(b: Box): void {
     ).toEqual([]);
   });
 });
+
+// A declaration with no annotation gets its type during scope building, before
+// the flow graph exists. An `if ... then ... else` value lowers to exactly
+// that: each branch is bound to an unannotated temp.
+describe("a declaration inferred from a narrowed member path", () => {
+  const REQUEST = `type Request = { subject?: string; body: string }`;
+
+  it("an if-expression over an optional field gives the non-null type", () => {
+    expect(
+      check(`${REQUEST}
+def f(request: Request): string {
+  const subject: string = if (request.subject != null) then request.subject else "Note"
+  return subject
+}`),
+    ).toEqual([]);
+  });
+
+  it("an unannotated const inside the guard is narrowed", () => {
+    expect(
+      check(`${REQUEST}
+def f(request: Request): string {
+  if (request.subject != null) {
+    const found = request.subject
+    const typed: string = found
+    return typed
+  }
+  return "Note"
+}`),
+    ).toEqual([]);
+  });
+
+  it("narrows after an early return", () => {
+    expect(
+      check(`${REQUEST}
+def f(request: Request): string {
+  if (request.subject == null) {
+    return "Note"
+  }
+  const found = request.subject
+  const typed: string = found
+  return typed
+}`),
+    ).toEqual([]);
+  });
+
+  it("the else branch keeps null", () => {
+    const errors = check(`${REQUEST}
+def f(request: Request): string {
+  const subject: string = if (request.subject == null) then request.subject else "Note"
+  return subject
+}`);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("not assignable to type 'string'");
+  });
+
+  it("SOUNDNESS: no guard, no narrowing", () => {
+    const errors = check(`${REQUEST}
+def f(request: Request): string {
+  const found = request.subject
+  const typed: string = found
+  return typed
+}`);
+    expect(errors).toHaveLength(1);
+  });
+
+  it("SOUNDNESS: a branch that reassigns the base is not narrowed", () => {
+    const errors = check(`${REQUEST}
+def f(request: Request, other: Request): string {
+  let current = request
+  if (current.subject != null) {
+    current = other
+    const found = current.subject
+    const typed: string = found
+    return typed
+  }
+  return "Note"
+}`);
+    expect(errors).toHaveLength(1);
+  });
+
+  it("SOUNDNESS: a guard on one field does not narrow another", () => {
+    const errors = check(`type Pair = { a?: string; b?: string }
+def f(pair: Pair): string {
+  if (pair.a != null) {
+    const found = pair.b
+    const typed: string = found
+    return typed
+  }
+  return "x"
+}`);
+    expect(errors).toHaveLength(1);
+  });
+});

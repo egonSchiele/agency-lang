@@ -3576,10 +3576,14 @@ export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | Val
   },
 );
 
+// The loc belongs to the access itself, not to a leading `async`, `sync` or
+// `await` keyword, so the editor can color the callee of `async foo()`.
+const locatedValueAccessParser = withLoc(_valueAccessParser);
+
 export const asyncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(str("async"), spaces, capture(_valueAccessParser, "access"));
+  const parser = seqC(str("async"), spaces, capture(locatedValueAccessParser, "access"));
   const result = parser(input);
   if (!result.success) return failure("expected async keyword", input);
 
@@ -3589,7 +3593,11 @@ export const asyncValueAccessParser = (
 export const syncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(oneOfStr(["sync", "await"]), spaces, capture(_valueAccessParser, "access"));
+  const parser = seqC(
+    oneOfStr(["sync", "await"]),
+    spaces,
+    capture(locatedValueAccessParser, "access"),
+  );
   const result = parser(input);
   if (!result.success) return failure("expected sync/await keyword", input);
 
@@ -3599,7 +3607,7 @@ export const syncValueAccessParser = (
 export function valueAccessParser(
   input: string,
 ): ParserResult<VariableNameLiteral | FunctionCall | ValueAccess> {
-  const parser = withLoc(or(asyncValueAccessParser, syncValueAccessParser, _valueAccessParser));
+  const parser = or(asyncValueAccessParser, syncValueAccessParser, locatedValueAccessParser);
   return parser(input);
 }
 

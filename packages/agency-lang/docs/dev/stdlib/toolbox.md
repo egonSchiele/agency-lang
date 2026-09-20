@@ -419,6 +419,27 @@ a declined interrupt or a failed write leaves the count where it was and
 its own, and what the recommended policy does with it, is in
 `docs/dev/agents/approval-policies.md`.
 
+## Two counts: checker attempts and rounds
+
+A draft can be sent back for two kinds of reason, and each has its own
+limit.
+
+- **The checker sent it back.** The draft does not parse, typecheck, or
+  compile. This happens inside `agencyCodingAgent`, in one conversation,
+  so the author sees its own draft and the error. `draftSource` allows
+  `CHECK_ATTEMPTS` (6) of these. They are cheap and say nothing about
+  whether the tool is right, and a small model needs several.
+- **The draft was wrong.** Its tests failed, the reviewer blocked it, or
+  the user asked for a change. Each of these is a round, and `maxRounds`
+  (3) limits them.
+
+An author that uses up its checker attempts does end the round. The
+failure carries the last draft as `drafted`, so the next round's author
+continues from it and not from the older draft the round started with.
+
+The review agent reports a parse error once. The typechecker parses too,
+so `agencyReviewAgent` skips it when the parse already failed.
+
 ## Model calls and mocks
 
 Per round: one call in the coding agent (its internal review has no

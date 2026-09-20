@@ -117,6 +117,10 @@ const cannotFixBrokenRound = [
 ];
 const cannotFixRound = [draftRound(good, true, null, [{ point: UNFIXABLE, reason: REASON }])];
 const modelTextRound = [draftRound(modelTextImpl, false)];
+// Calls a function that does not exist, so the coding agent's own check sends
+// it back. The draft never leaves the coding agent, so nothing reviews it.
+const uncheckable = good.replace("return request.n + 1", "return addOne(request.n)");
+const sentBackByTheChecker = draftRound(uncheckable, false, null);
 const scopedMocks = (rounds) => {
   if (rounds.length === 0) {
     return [];
@@ -143,6 +147,13 @@ const tests = [
   testCase("reviseRunsASecondRound", [...pureRound, ...pureRound]),
   testCase("wrongExportGoesBackToTheCodingAgent", [...wrongRound, ...pureRound]),
   testCase("wrongRequestGoesBackToTheCodingAgent", [...wrongRequestRound, ...pureRound]),
+  testCase("checkerFailuresDoNotUseUpRounds", [
+    sentBackByTheChecker,
+    sentBackByTheChecker,
+    sentBackByTheChecker,
+    sentBackByTheChecker,
+    ...pureRound,
+  ]),
   testCase("refusesAnExistingName", []),
   testCase("refusesALongName", []),
   testCase("refusesAnEmptyDir", []),

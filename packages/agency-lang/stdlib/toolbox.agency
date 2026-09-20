@@ -840,6 +840,12 @@ def progress(settings: DraftSettings, message: string, points: string[] = []) {
   }
 }
 
+// Every attempt the coding agent makes is one the parser, typechecker, or
+// compiler sent back. Those are cheap to fix and say nothing about whether
+// the tool is right, so they get a count of their own, larger than the
+// rounds, which are for failed tests and the user's feedback.
+static const CHECK_ATTEMPTS = 6
+
 def draftSource(
   settings: DraftSettings,
   feedback: string,
@@ -861,6 +867,7 @@ def draftSource(
     model: settings.model,
     provider: settings.provider,
     extraTools: extraTools,
+    maxAttempts: CHECK_ATTEMPTS,
     // A saved tool runs sandboxed, so its drafts are checked that way.
     strict: true,
     // The task allows std:: imports only, so nothing in the caller's
@@ -868,7 +875,13 @@ def draftSource(
     projectTools: false,
   )
   if (written is failure(writeFailure)) {
-    return draftProblem(writeFailure)
+    const attempted = written.data.source
+    if (attempted == "") {
+      return draftProblem(writeFailure)
+    }
+    // The next round's author continues from the draft that failed, and
+    // not from the older one this round started with.
+    return failure(writeFailure, { retryable: true, drafted: attempted })
   }
   return written
 }

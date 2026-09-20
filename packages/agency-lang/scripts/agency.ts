@@ -93,10 +93,11 @@ import { parseAgency } from "@/parser.js";
 import { parseTarget } from "@/agentTarget.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
-import { expandSplices } from "@/preprocessors/expandSplices.js";
-import { formatSpliceDiagnostic } from "@/compiler/splice/report.js";
+import { describeDiagnostic, prepareProgram } from "@/compiler/prepareProgram.js";
+import { withSourcePath } from "@/compiler/typecheck.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
+import { importKind } from "@/importPaths.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
 import { Command, InvalidArgumentError } from "@/vendor/commander/index.js";
 import * as fs from "fs";
@@ -1637,22 +1638,59 @@ export function createProgram(deps: CliDependencies = {}): Command {
         refuseSplices: opts.refuseSplices,
       });
       let hasErrors = false;
+      // Files that reach the same bad import repeat its error.
+      const printed: string[] = [];
+      const reportOnce = (line: string): void => {
+        if (!printed.includes(line)) {
+          console.error(line);
+        }
+        printed.push(line);
+        hasErrors = true;
+      };
       const runTypeCheck = (contents: string, filePath?: string, symbolTable?: SymbolTable) => {
-        const parsed = parse(contents, config);
+        // Stdin has no path, so it is checked at a temporary one. Its
+        // relative imports cannot resolve there; std:: imports can.
         const absPath = filePath ? path.resolve(filePath) : undefined;
-        // Expand `$( ... )` first, or every name a splice generates checks
-        // as undefined. This command has its own pipeline and does not go
-        // through runCheckerPipeline. Stdin has no path to resolve a
-        // generator against, so splices are left alone there.
-        const expanded = absPath === undefined ? null : expandSplices(parsed, absPath, config);
-        if (expanded !== null && !expanded.ok) {
-          console.error(formatSpliceDiagnostic(expanded.diagnostic, absPath));
-          hasErrors = true;
+        // `keepGoing`: a bad import is reported and the rest of the file is
+        // still checked. Nothing here runs the program, so `import test` is
+        // honored the way the editor honors it.
+        const { prepared, problems } = withSourcePath(contents, absPath, (sourcePath) => {
+          const prepared = prepareProgram(contents, sourcePath, config, {
+            symbolTable,
+            keepGoing: true,
+            allowTestImports: true,
+            // Nothing piped in can resolve `./helper.agency`, so reporting it
+            // would fail a file that passes when named on the command line.
+            ignoreRelativeImports: absPath === undefined,
+          });
+          // Stdin is checked at a temporary path. An import error carries
+          // that path, and it means nothing to the reader.
+          const problems = prepared.diagnostics
+            .map((found) => describeDiagnostic(found, absPath))
+            .map((line) => (absPath ? line : line.replaceAll(sourcePath, "<stdin>")));
+          return { prepared, problems };
+        });
+        problems.forEach(reportOnce);
+        // Checking past a splice that did not expand would report every name
+        // it was going to generate as undefined.
+        const spliceFailed = prepared.diagnostics.some((found) => found.stage === "splice");
+        if (!prepared.ok || spliceFailed) {
           return;
         }
-        const parsedProgram = expanded?.ok ? expanded.value : parsed;
-        const info = buildCompilationUnit(parsedProgram, symbolTable, absPath, contents);
-        const { errors } = typeCheck(parsedProgram, config, info);
+        const { program: parsedProgram, info } = prepared;
+        const checked = typeCheck(parsedProgram, config, info).errors;
+        // Stdin was checked at a temporary path, which is gone by now, and
+        // which no relative import could ever resolve against. Reporting one
+        // would fail a file that passes when named on the command line.
+        const errors = absPath
+          ? checked
+          : checked
+              .filter(
+                (error) =>
+                  typeof error.params.module !== "string" ||
+                  importKind(error.params.module) !== "local",
+              )
+              .map((error) => ({ ...error, file: undefined }));
         if (errors.length > 0) {
           console.error(formatErrors(errors));
           const hint = formatDiagnosticsHint(errors);
@@ -1681,15 +1719,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
       const filePaths = sources.filter((s) => s.kind === "file").map((s) => path.resolve(s.path));
       // A bad import (a re-export of a name the source lacks, an uninstalled
       // pkg::) is a user error: print its message once, not a stack trace.
-      const printed: string[] = [];
       const reportImportError = (error: unknown, file?: string): void => {
         if (!(error instanceof ImportResolutionError)) throw error;
-        const line = formatImportResolutionError(error, file);
-        if (!printed.includes(line)) {
-          console.error(line);
-        }
-        printed.push(line);
-        hasErrors = true;
+        reportOnce(formatImportResolutionError(error, file));
       };
       // One shared table for every file. When an input file's own imports
       // break the build, that file is reported and dropped, and the table is

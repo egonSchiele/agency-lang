@@ -2,20 +2,14 @@
  * Pure type-checking entry point for Agency source strings.
  * Returns diagnostics as data — never calls process.exit() or console.log().
  */
-import { AgencyProgram } from "@/index.js";
-import { resolveImports } from "@/preprocessors/importResolver.js";
-import { resolveReExports } from "@/preprocessors/resolveReExports.js";
-import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
-import { expandSplices } from "@/preprocessors/expandSplices.js";
 import type { AgencyConfig } from "@/config/config.js";
 import { toTypeCheckError } from "./splice/report.js";
-import { buildCompilationUnit } from "@/compilationUnit.js";
+import { prepareProgram, throwImportFailures, type PipelineDiagnostic } from "./prepareProgram.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { typeCheck } from "@/typeChecker/index.js";
 import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
-import { parseAgency } from "@/parser.js";
 import { makeAgencyTempDir } from "@/utils/agencyTempDir.js";
 import { safeDeleteDirectory } from "../utils.js";
 
@@ -53,9 +47,9 @@ type TypeCheckErrorShape = {
 // Provide a path the symbol table can use to resolve relative imports.
 // If `sourcePath` is supplied we use it directly; otherwise we synthesize
 // one in a tempdir that's cleaned up after `fn` returns. Used by
-// typeCheckSource — separates "where does this source live on disk" from
-// "what do we do once it's there."
-function withSourcePath<T>(
+// typeCheckSource and `agency tc` on stdin — separates "where does this source
+// live on disk" from "what do we do once it's there."
+export function withSourcePath<T>(
   source: string,
   sourcePath: string | undefined,
   fn: (syntheticPath: string) => T,
@@ -94,7 +88,29 @@ function toDiagnostic(err: TypeCheckErrorShape): TypeCheckDiagnostic {
 // symbol table sees — letting relative imports in `source` resolve against
 // that directory. Otherwise a fresh tempdir is used and relative imports
 // will not resolve.
-/** Shared parse→symbols→resolve→lift→build→check pipeline. Both
+/** A throw from this pipeline means "could not check this": a parse
+ *  failure, a bad import, a callback block that cannot be lifted, or a splice
+ *  the caller refused to run. A REFUSAL is not a splice that failed to
+ *  expand. It is the caller saying "do not run this", and carrying on with
+ *  the unexpanded program would report every generated name as undefined.
+ *  Every other splice failure is tolerated. */
+function failIfNotCheckable(
+  diagnostics: PipelineDiagnostic[],
+  sourcePath: string | undefined,
+): void {
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.stage === "parse" || diagnostic.stage === "lift") {
+      throw new Error(diagnostic.message);
+    }
+    if (diagnostic.stage === "splice" && diagnostic.splice.diagnostic === "spliceRefused") {
+      const error = toTypeCheckError(diagnostic.splice, sourcePath);
+      throw new Error(`${error.code}: ${error.message}`);
+    }
+  }
+  throwImportFailures(diagnostics);
+}
+
+/** Shared prepareProgram→check pipeline. Both
  * typeCheckSource and getEffectsFromSource consume this; keep the
  * security-relevant allowTestImports: false decision HERE, once. */
 function runCheckerPipeline<T>(
@@ -108,48 +124,29 @@ function runCheckerPipeline<T>(
   }) => T,
   overrides: Record<string, string> = {},
 ): T {
-  const parseResult = parseAgency(source, {}, true);
-  if (!parseResult.success) {
-    throw new Error(parseResult.message ?? "Failed to parse Agency source");
-  }
-  const program: AgencyProgram = parseResult.result;
-
   return withSourcePath(source, sourcePath, (syntheticPath) => {
-    const symbolTable = SymbolTable.build(syntheticPath, {}, overrides);
-    // A splice that cannot expand is left in place rather than reported.
-    // This pipeline answers what the code checks as; the compile paths
-    // report splice failures with a position.
-    // Hand over the table we just built: the generator effect check would
-    // otherwise crawl and parse every reachable file again, once per splice.
-    // Config reaches here so a caller can decline generator execution. This
-    // pipeline RUNS generators: `sourcePath` is a real path for
+    // `keepGoing` for the splices: a splice that cannot expand is left in
+    // place rather than reported. This pipeline answers what the code checks
+    // as; the compile paths report splice failures with a position.
+    //
+    // This pipeline RUNS generators: `sourcePath` is a real path for
     // std::agency typecheckFile, so a splice resolves its generator against
     // that directory and executes it. "Type checking is read-only" holds
-    // only for files without splices.
-    const spliced = expandSplices(program, syntheticPath, config, { symbolTable });
-    // A REFUSAL is not a splice that failed to expand — it is the caller
-    // saying "do not run this." Continuing with the unexpanded program would
-    // answer as though the file had no splice, reporting every generated name
-    // as undefined. So it throws, joining parse and import failures under
-    // this pipeline's existing rule: a throw means "could not check this",
-    // which the Result-returning stdlib entry points surface as a failure.
-    // Every OTHER splice failure keeps the tolerant behavior above.
-    if (!spliced.ok && spliced.diagnostic.diagnostic === "spliceRefused") {
-      const error = toTypeCheckError(spliced.diagnostic, sourcePath);
-      throw new Error(`${error.code}: ${error.message}`);
-    }
-    const expanded = spliced.ok ? spliced.value : program;
-    const reExported = resolveReExports(expanded, symbolTable, syntheticPath);
-    // This pipeline is agent-reachable (std::agency typecheck/getEffects),
-    // not just an editor path — so it must agree with execution: code that
-    // run()/compileSource would reject should not check as valid. Deny
-    // `import test` here; the LSP (lib/lsp/diagnostics.ts) independently
-    // allows it for editor support.
-    const resolved = resolveImports(reExported, symbolTable, syntheticPath, {
-      allowTestImports: false,
+    // only for files without splices. `config` reaches here so a caller can
+    // decline that.
+    //
+    // It is also agent-reachable (std::agency typecheck/getEffects), so it
+    // must agree with execution: `import test` stays denied, which is
+    // prepareProgram's default.
+    const prepared = prepareProgram(source, syntheticPath, config, {
+      keepGoing: true,
+      symbolTable: SymbolTable.build(syntheticPath, {}, overrides),
     });
-    const lifted = liftCallbackBlocks(resolved);
-    const info = buildCompilationUnit(lifted, symbolTable, syntheticPath, source);
+    failIfNotCheckable(prepared.diagnostics, sourcePath);
+    if (!prepared.ok) {
+      throw new Error("Failed to prepare Agency source");
+    }
+    const { program: lifted, info, symbolTable } = prepared;
     // The caller's typechecker settings apply, so a strict check from
     // std::agency reports what a sandboxed compile would. `enabled` is
     // forced on: this pipeline exists to check.

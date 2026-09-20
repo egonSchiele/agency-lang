@@ -1,12 +1,9 @@
 import { readFileSync } from "fs";
 import path from "path";
-import { parseAgency } from "@/parser.js";
 import { SymbolTable } from "@/symbolTable.js";
-import { buildCompilationUnit } from "@/compilationUnit.js";
-import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
-import { expandSplices } from "@/preprocessors/expandSplices.js";
+import { describeDiagnostic, prepareProgram } from "@/compiler/prepareProgram.js";
 import { typeCheck } from "@/typeChecker/index.js";
-import { getStdlibDir } from "@/importPaths.js";
+import { getStdlibDir, isNonTemplatedStdlib } from "@/importPaths.js";
 import type { AgencyConfig } from "@/config/config.js";
 import type {
   InterruptCallGraph,
@@ -53,6 +50,10 @@ export type SiteResult = {
 export type AnalysisResult = {
   /** Sorted by `site.file`, then `site.line`. */
   sites: SiteResult[];
+  /** Splices that did not expand and imports that did not resolve. Each one
+   *  can hide interrupt sites, so `sites` is incomplete when this is not
+   *  empty. */
+  warnings: string[];
 };
 
 // -- Top-level entry point --
@@ -61,11 +62,11 @@ export type AnalysisResult = {
 // Each phase is a named helper; this function is the "what".
 
 export function analyzeInterrupts(rootFile: string, config: AgencyConfig): AnalysisResult {
-  const cg = loadCallGraph(rootFile, config);
+  const { callGraph: cg, warnings } = loadCallGraph(rootFile, config);
   const sites = collectAllSites(cg);
   const reachableHandlers = propagateHandlers(cg);
   const perSite = unionAcrossEntries(reachableHandlers, collectEntries(cg));
-  return buildResult(sites, perSite);
+  return { sites: buildSites(sites, perSite), warnings };
 }
 
 // -- Phase 1: Load --
@@ -80,34 +81,42 @@ export function analyzeInterrupts(rootFile: string, config: AgencyConfig): Analy
 // distinct entries and `Object.assign` cannot accidentally overwrite
 // one with the other.
 
-function loadCallGraph(rootFile: string, config: AgencyConfig): InterruptCallGraph {
+type LoadedFile = { callGraph: InterruptCallGraph; warnings: string[] };
+
+function loadCallGraph(rootFile: string, config: AgencyConfig): LoadedFile {
   const absPath = path.resolve(rootFile);
   const symbolTable = SymbolTable.build(absPath, config);
-  const merged: InterruptCallGraph = {};
-  for (const filePath of symbolTable.filePaths()) {
-    const cg = analyzeOneFile(filePath, symbolTable, config);
-    Object.assign(merged, cg);
-  }
-  return merged;
+  const loaded = symbolTable
+    .filePaths()
+    .map((filePath) => analyzeOneFile(filePath, symbolTable, config));
+  return {
+    callGraph: Object.assign({}, ...loaded.map((file) => file.callGraph)),
+    warnings: loaded.flatMap((file) => file.warnings),
+  };
 }
 
 function analyzeOneFile(
   filePath: string,
   symbolTable: SymbolTable,
   config: AgencyConfig,
-): InterruptCallGraph {
+): LoadedFile {
   const source = readFileSync(filePath, "utf-8");
-  const parseResult = parseAgency(source, config);
-  if (!parseResult.success) {
-    throw new Error(`Failed to parse ${filePath}`);
+  // Nothing here runs the program, so `import test` is honored the way the
+  // editor honors it.
+  const prepared = prepareProgram(source, filePath, config, {
+    applyTemplate: !isNonTemplatedStdlib(filePath),
+    allowTestImports: true,
+    keepGoing: true,
+    symbolTable,
+  });
+  const problems = prepared.diagnostics.map((found) => describeDiagnostic(found, filePath));
+  if (!prepared.ok) {
+    throw new Error(`Failed to parse ${filePath}: ${problems.join("; ")}`);
   }
-  // Best-effort, matching this analysis. The compile paths report a splice
-  // that will not expand; refusing to analyze interrupts over it would be
-  // worse than analyzing what is there.
-  const spliced = expandSplices(parseResult.result, filePath, config);
-  const lifted = liftCallbackBlocks(spliced.ok ? spliced.value : parseResult.result);
-  const info = buildCompilationUnit(lifted, symbolTable, filePath, source);
-  return typeCheck(lifted, config, info).interruptCallGraph;
+  // A dropped import takes its call edges with it, so the sites behind it go
+  // missing. The caller has to be told the list is short.
+  const { interruptCallGraph } = typeCheck(prepared.program, config, prepared.info);
+  return { callGraph: interruptCallGraph, warnings: problems };
 }
 
 // -- Phase 2: Site collection --
@@ -256,14 +265,13 @@ function toDisplayLine(line: number | undefined): number {
   return (line ?? -1) + 1;
 }
 
-function buildResult(
+function buildSites(
   sitesById: Map<SiteId, SiteRecord>,
   perSite: Map<SiteId, HandlerSet>,
-): AnalysisResult {
-  const sites = Array.from(perSite.entries())
+): SiteResult[] {
+  return Array.from(perSite.entries())
     .map(([sid, hSet]) => buildSiteResult(sitesById.get(sid)!, hSet))
     .sort(compareSites);
-  return { sites };
 }
 
 function buildSiteResult(rec: SiteRecord, handlers: HandlerSet): SiteResult {

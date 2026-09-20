@@ -397,3 +397,51 @@ it("CLI and LSP agree on AL0003 when a prelude name is shadowed", () => {
   expect(lintFindings.map((f) => f.code)).toEqual(cliFindings);
   expect(cliFindings).toContain("AL0003");
 });
+
+describe("runDiagnostics — a callback block", () => {
+  // Lifting moves a callback body into a top-level def. It must leave the
+  // parse the linter reads alone: if the body disappears from that copy, the
+  // import it uses reads as unused and remove-on-save deletes a line the
+  // file needs.
+  it("keeps an import used only inside it out of the unused list", () => {
+    const source = [
+      `import { now } from "std::date"`,
+      `node main() {`,
+      `  callback("onNodeStart") {`,
+      `    print(now())`,
+      `  }`,
+      `}`,
+      ``,
+    ].join("\n");
+    const doc = makeDoc(source);
+    const { lintFindings, lintBatchEdits } = runDiagnostics(
+      doc,
+      "/test.agency",
+      {},
+      emptySymbolTable,
+    );
+    expect(lintFindings.some((f) => /'now'/.test(f.message))).toBe(false);
+    expect(lintBatchEdits).toEqual([]);
+  });
+
+  // The user is mid-edit on every keystroke, and updateDocument runs in a
+  // bare debounce callback: a block in a position lifting refuses must be a
+  // diagnostic, never a throw that takes the server down.
+  it("is reported, not thrown, where it cannot be lifted", () => {
+    const source = [
+      `def outer(fn: any) {`,
+      `  print(fn)`,
+      `}`,
+      `node main() {`,
+      `  outer(callback("onNodeStart") { print("hi") })`,
+      `}`,
+      ``,
+    ].join("\n");
+    const doc = makeDoc(source);
+    const { diagnostics, program } = runDiagnostics(doc, "/test.agency", {}, emptySymbolTable);
+    expect(program).not.toBeNull();
+    expect(diagnostics.some((d) => /only supported at statement position/.test(d.message))).toBe(
+      true,
+    );
+  });
+});

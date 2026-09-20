@@ -6,8 +6,15 @@ import type {
 } from "../types/importStatement.js";
 import type { SourceLocation } from "../types/base.js";
 import { ImportResolutionError } from "../importResolutionError.js";
+import { DIAGNOSTICS, type DiagnosticName } from "../typeChecker/diagnostics.js";
+import * as fs from "fs";
 import type { SymbolTable, SymbolInfo, FileSymbols } from "../symbolTable.js";
-import { resolveAgencyImportPath, isAgencyImport, isPkgImport } from "../importPaths.js";
+import {
+  resolveAgencyImportPath,
+  isAgencyImport,
+  isPkgImport,
+  importKind,
+} from "../importPaths.js";
 
 export { ImportResolutionError } from "../importResolutionError.js";
 
@@ -20,6 +27,18 @@ export { ImportResolutionError } from "../importResolutionError.js";
  * (.agency files, std:: imports, or pkg:: imports).
  * Leaves import node / import tool statements and non-Agency imports untouched.
  */
+
+/** An error the type checker also reports, carrying the checker's code for
+ *  it so `agency explain` works on either report. */
+function codedError(
+  name: DiagnosticName,
+  message: string,
+  loc: SourceLocation | undefined,
+): ImportResolutionError {
+  const error = new ImportResolutionError(message, loc);
+  error.code = DIAGNOSTICS[name].code;
+  return error;
+}
 
 /**
  * May this import see this symbol? A test-only import (`import test { … }`,
@@ -39,7 +58,8 @@ function assertImportable(
     return;
   }
   if (!exported) {
-    throw new ImportResolutionError(
+    throw codedError(
+      "importNameNotExported",
       `${symbolKind} '${name}' in '${modulePath}' is not exported. Add the 'export' keyword to its definition.`,
       loc,
     );
@@ -69,10 +89,16 @@ export function resolveImports(
     // still resolves and the rest of the file still type-checks. The compile
     // path leaves this unset and hard-fails on the first bad import.
     onUnresolvable?: (err: ImportResolutionError) => void;
+    // Leave `./helper.agency` alone rather than resolve it. `currentFile` is
+    // a made-up path for some callers (source piped in on stdin), and there
+    // a relative import cannot resolve no matter what the user wrote.
+    // Unresolved Agency imports are fail-open, so the names stay usable.
+    ignoreRelativeImports?: boolean;
   } = {},
 ): AgencyProgram {
   const allowTestImports = opts.allowTestImports ?? false;
   const onUnresolvable = opts.onUnresolvable;
+  const ignoreRelativeImports = opts.ignoreRelativeImports ?? false;
   const newNodes: AgencyNode[] = [];
 
   for (const node of program.nodes) {
@@ -81,6 +107,10 @@ export function resolveImports(
       continue;
     }
     try {
+      if (ignoreRelativeImports && importKind(node.modulePath) === "local") {
+        newNodes.push(node);
+        continue;
+      }
       newNodes.push(
         ...resolveImportStatement(node, symbolTable, currentFile, allowTestImports, onUnresolvable),
       );
@@ -212,7 +242,18 @@ function resolveImportStatement(
     if (node.importedNames.some((n) => n.type !== "namedImport")) return [node];
     // May throw a plain Error for a pkg:: that isn't installed; the caller's
     // `onUnresolvable` path coerces it so it stays skippable, not fatal.
-    fileSymbols = symbolTable.getFile(resolveAgencyImportPath(node.modulePath, currentFile)) ?? {};
+    const modulePath = resolveAgencyImportPath(node.modulePath, currentFile);
+    const loaded = symbolTable.getFile(modulePath);
+    if (loaded === undefined && !fs.existsSync(modulePath)) {
+      // Without this, every name in the statement reports as "not defined
+      // in" a file that is not there.
+      throw codedError(
+        "importModuleNotFound",
+        `Cannot find module '${node.modulePath}'.`,
+        node.loc,
+      );
+    }
+    fileSymbols = loaded ?? {};
   } catch (err) {
     // A statement-level failure (bad `import test`, unresolvable module path)
     // means nothing in this statement resolves — drop it whole and report.
@@ -244,7 +285,8 @@ function resolveImportStatement(
       try {
         const symbol = fileSymbols[name];
         if (!symbol) {
-          throw new ImportResolutionError(
+          throw codedError(
+            "importNameNotFound",
             `Symbol '${name}' is not defined in '${node.modulePath}'`,
             node.loc,
           );

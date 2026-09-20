@@ -12,6 +12,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/compiler/binop-parser.md` — How binary expressions parse, including the operator precedence and associativity table.
 - `docs/dev/compiler/locations.md` — How source positions flow through the parser, and what to check when a reported location is wrong.
 - `docs/dev/compiler/trailing-comments.md` — How `agency fmt` keeps an end-of-line `//` comment where the author wrote it.
+- `docs/dev/compiler/prepare-program.md` — `prepareProgram`, the one pipeline from source text to a `CompilationUnit`: the steps in order, the option each caller sets and why, how failures are returned, why resolver errors carry AG codes, and which callers are deliberately not on it.
 - `docs/dev/compiler/rewriting-imports.md` — How imports in generated output are rewritten, and why compile mode and run mode differ.
 - `docs/dev/compiler/codegen-als-accessors.md` — How generated code reads runtime values out of the active async-context frame.
 - `docs/dev/compiler/hoist-calls.md` — Why helper calls are hoisted into their own statements, so resuming never re-runs a call that already finished.

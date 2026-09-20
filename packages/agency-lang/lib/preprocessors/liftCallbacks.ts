@@ -2,6 +2,7 @@ import { declaredName } from "../types/hole.js";
 import type { AgencyNode, AgencyProgram, Expression } from "@/types.js";
 import type { FunctionCall, FunctionDefinition } from "@/types/function.js";
 import type { VariableNameLiteral } from "@/types/literals.js";
+import type { SourceLocation } from "@/types/base.js";
 import { walkNodes } from "@/utils/node.js";
 import { LIFTED_CALLBACK_PREFIX } from "@/runtime/blockNames.js";
 
@@ -48,16 +49,33 @@ function makeNameGen(): NameGen {
   return (scope: string) => `${NAME_PREFIX}_${scope}_${counter++}`;
 }
 
+/**
+ * A callback block this pass refuses to lift. A separate class so a caller
+ * can tell this refusal — a mistake in the user's program — from a genuine
+ * bug in the pass, whose stack it must not swallow.
+ */
+export class CallbackLiftError extends Error {
+  loc?: SourceLocation;
+  constructor(message: string, loc?: SourceLocation) {
+    super(message);
+    this.name = "CallbackLiftError";
+    this.loc = loc;
+  }
+}
+
+/**
+ * Returns a new program and leaves `program` exactly as it was. Callers
+ * hand out the pre-lift parse (the linter reads it, the parse cache keeps
+ * it), so rewriting a body in place would edit a program someone else is
+ * still holding.
+ */
 export function liftCallbackBlocks(program: AgencyProgram): AgencyProgram {
   const nextName = makeNameGen();
   const lifted: FunctionDefinition[] = [];
-  const newNodes: AgencyNode[] = [];
 
   assertNoWrappedTopLevelCallbacks(program);
 
-  for (const node of program.nodes) {
-    newNodes.push(transformTopLevel(node, lifted, nextName));
-  }
+  const newNodes = program.nodes.map((node) => transformTopLevel(node, lifted, nextName));
 
   // The lifted defs go first, but after an `@module` doc comment: that
   // comment must come before any code, and a lifted def counts as code.
@@ -95,11 +113,12 @@ function assertNoWrappedTopLevelCallbacks(program: AgencyProgram): void {
       const loc = node.statement.loc
         ? ` at line ${node.statement.loc.line}, col ${node.statement.loc.col}`
         : "";
-      throw new Error(
+      throw new CallbackLiftError(
         `Top-level callback registration cannot be wrapped in \`with ${node.handlerName}\`${loc}. ` +
           `The handler would only wrap the synchronous registration call (which never fails) ` +
           `and the wrapped form does not survive interrupt + resume. ` +
           `Remove the \`with ${node.handlerName}\` modifier, or move the registration into a node body.`,
+        node.statement.loc,
       );
     }
   }
@@ -121,10 +140,11 @@ function assertNoUnliftedCallbackBlocks(program: AgencyProgram): void {
   for (const { node } of walkNodes(program.nodes)) {
     if (node.type === "functionCall" && node.functionName === "callback" && node.block) {
       const loc = node.loc ? ` at line ${node.loc.line}, col ${node.loc.col}` : "";
-      throw new Error(
+      throw new CallbackLiftError(
         `callback("...") { ... } block is only supported at statement ` +
           `position${loc}. Bind to a let/const first, or use the named-function ` +
           `form: callback("...", myFn).`,
+        node.loc,
       );
     }
   }
@@ -133,8 +153,6 @@ function assertNoUnliftedCallbackBlocks(program: AgencyProgram): void {
 /**
  * Walk a top-level node. For `function` / `graphNode` bodies we descend with
  * the enclosing-scope name; everything else uses `"top"` as the scope name.
- *
- * Mutates `node` in place (matches `parallelDesugar`'s pattern).
  */
 function transformTopLevel(
   node: AgencyNode,
@@ -142,12 +160,12 @@ function transformTopLevel(
   nextName: NameGen,
 ): AgencyNode {
   if (node.type === "function") {
-    node.body = transformBody(node.body, declaredName(node.functionName), lifted, nextName);
-    return node;
+    const body = transformBody(node.body, declaredName(node.functionName), lifted, nextName);
+    return { ...node, body };
   }
   if (node.type === "graphNode") {
-    node.body = transformBody(node.body, declaredName(node.nodeName), lifted, nextName);
-    return node;
+    const body = transformBody(node.body, declaredName(node.nodeName), lifted, nextName);
+    return { ...node, body };
   }
   // Statements at module top level (assignments, top-level callback calls).
   return transformStatement(node, "top", lifted, nextName);
@@ -174,60 +192,53 @@ function transformStatement(
   lifted: FunctionDefinition[],
   nextName: NameGen,
 ): AgencyNode {
+  const descend = (body: AgencyNode[]): AgencyNode[] =>
+    transformBody(body, scopeName, lifted, nextName);
   switch (node.type) {
     case "functionCall":
       return transformFunctionCall(node, scopeName, lifted, nextName);
     case "ifElse":
-      node.thenBody = transformBody(node.thenBody, scopeName, lifted, nextName);
-      if (node.elseBody) node.elseBody = transformBody(node.elseBody, scopeName, lifted, nextName);
-      return node;
+      return {
+        ...node,
+        thenBody: descend(node.thenBody),
+        elseBody: node.elseBody ? descend(node.elseBody) : node.elseBody,
+      };
     case "forLoop":
     case "whileLoop":
     case "messageThread":
-      node.body = transformBody(node.body, scopeName, lifted, nextName);
-      return node;
     case "finalizeBlock":
-      node.body = transformBody(node.body, scopeName, lifted, nextName);
-      return node;
-    case "handleBlock":
-      node.body = transformBody(node.body, scopeName, lifted, nextName);
-      if (node.handler.kind === "inline") {
-        node.handler.body = transformBody(node.handler.body, scopeName, lifted, nextName);
-      }
-      return node;
-    case "matchBlock":
-      for (const c of node.cases) {
-        if (c.type === "comment") continue;
-        if (c.type === "newLine") continue;
-        c.body = transformBody(c.body, scopeName, lifted, nextName);
-      }
-      return node;
-    case "withModifier":
-      node.statement = transformBody([node.statement as any], scopeName, lifted, nextName)[0];
-      return node;
     case "parallelBlock":
     case "seqBlock":
-      node.body = transformBody(node.body, scopeName, lifted, nextName);
-      return node;
+      return { ...node, body: descend(node.body) };
+    case "handleBlock":
+      return {
+        ...node,
+        body: descend(node.body),
+        handler:
+          node.handler.kind === "inline"
+            ? { ...node.handler, body: descend(node.handler.body) }
+            : node.handler,
+      };
+    case "matchBlock":
+      return {
+        ...node,
+        cases: node.cases.map((c) =>
+          c.type === "comment" || c.type === "newLine" ? c : { ...c, body: descend(c.body) },
+        ),
+      };
+    case "withModifier":
+      return { ...node, statement: descend([node.statement as any])[0] as any };
+    // An RHS may itself be a function call with a block (`let x = foo() { ... }`).
     case "assignment":
-      // RHS may itself be a function call with a block (e.g. `let x = foo() { ... }`).
-      if (node.value && (node.value as AgencyNode).type === "functionCall") {
-        node.value = transformFunctionCall(
-          node.value as FunctionCall,
-          scopeName,
-          lifted,
-          nextName,
-        ) as any;
-      }
-      return node;
     case "returnStatement":
       if (node.value && (node.value as AgencyNode).type === "functionCall") {
-        node.value = transformFunctionCall(
+        const value = transformFunctionCall(
           node.value as FunctionCall,
           scopeName,
           lifted,
           nextName,
-        ) as any;
+        );
+        return { ...node, value: value as any };
       }
       return node;
     default:
@@ -248,8 +259,8 @@ function transformFunctionCall(
   // Recurse into a non-callback block body first so nested callback blocks
   // inside e.g. `xs.map()` get lifted too.
   if (call.block && call.functionName !== "callback") {
-    call.block.body = transformBody(call.block.body, scopeName, lifted, nextName);
-    return call;
+    const body = transformBody(call.block.body, scopeName, lifted, nextName);
+    return { ...call, block: { ...call.block, body } };
   }
 
   if (call.functionName !== "callback" || !call.block) {
@@ -261,7 +272,7 @@ function transformFunctionCall(
   // is lifted before we lift the outer one. Lifted ordering doesn't matter
   // (all lifted defs go to module top), but recursion preserves source
   // ordering within `lifted`, which makes test output predictable.
-  block.body = transformBody(block.body, scopeName, lifted, nextName);
+  const body = transformBody(block.body, scopeName, lifted, nextName);
 
   const name = nextName(scopeName);
   // Runtime hook dispatch always invokes the callback's AgencyFunction
@@ -293,7 +304,7 @@ function transformFunctionCall(
     type: "function",
     functionName: name,
     parameters,
-    body: block.body,
+    body,
     returnType: null,
     loc: block.loc ?? call.loc,
   };

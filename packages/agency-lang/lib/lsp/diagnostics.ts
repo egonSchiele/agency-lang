@@ -1,12 +1,13 @@
-import { Diagnostic, DiagnosticSeverity, DiagnosticTag } from "vscode-languageserver-protocol";
+import {
+  Diagnostic,
+  DiagnosticSeverity,
+  DiagnosticTag,
+  Range,
+} from "vscode-languageserver-protocol";
 import { runLinter } from "../linter/registry.js";
 import { unusedImportsBatchEdits } from "../linter/rules/unusedImports.js";
 import type { LintEdit, LintFinding } from "../linter/types.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { parseAgency } from "../parser.js";
-import { resolveImports } from "../preprocessors/importResolver.js";
-import { resolveReExports } from "../preprocessors/resolveReExports.js";
-import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "../typeChecker/index.js";
 import { AgencyConfig } from "../config/config.js";
 import { SymbolTable } from "../symbolTable.js";
@@ -14,68 +15,59 @@ import { AgencyProgram } from "../types.js";
 import { CompilationUnit } from "../compilationUnit.js";
 import { buildSemanticIndex, type SemanticIndex } from "./semantics.js";
 import type { ScopeInfo } from "../typeChecker/types.js";
-import { ImportStatement } from "../types/importStatement.js";
-import { resolveAgencyImportPath } from "../importPaths.js";
-import { PRELUDE_NAMES } from "../prelude.js";
-import { prunePreludeShadows } from "../preprocessors/prunePreludeShadows.js";
-import { expandSplices } from "../preprocessors/expandSplices.js";
 import { EDITOR_WALL_CLOCK_MS } from "../compiler/splice/runGenerator.js";
+import { prepareProgram, type PipelineDiagnostic } from "../compiler/prepareProgram.js";
+import { ImportResolutionError } from "../importResolutionError.js";
 import { toTypeCheckError } from "../compiler/splice/report.js";
 
-/**
- * Inject a synthetic `import { ... } from "std::index"` so the LSP sees the
- * same auto-imports the CLI parser template prepends. Both render the same
- * PRELUDE_NAMES (lib/prelude.ts) so the editor and the compiler cannot
- * disagree about what is in scope. The synthetic is added
- * unconditionally (alongside any user `import … from "std::index"`) so a
- * user who imports a *subset* like `import { range } from "std::index"`
- * still gets `print`, `read`, etc. from the auto-imports — matching CLI
- * behavior where the template prepends a separate fixed import line.
- *
- * Skipped when the SymbolTable doesn't have std::index loaded — that's
- * the test-with-empty-SymbolTable case and synthesizing here would just
- * produce downstream "Symbol 'print' is not defined" noise.
- */
-function ensureStdlibImport(
-  program: AgencyProgram,
-  symbolTable: SymbolTable,
-  fsPath: string,
-): AgencyProgram {
-  let stdlibPath: string;
-  try {
-    stdlibPath = resolveAgencyImportPath("std::index", fsPath);
-  } catch {
-    return program;
+const START_OF_FILE: Range = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
+
+function failureRange(found: PipelineDiagnostic, doc: TextDocument): Range {
+  if (found.stage === "parse" && found.errorData) {
+    const { line, column, length } = found.errorData;
+    return {
+      start: { line, character: column },
+      end: { line, character: column + (length || 1) },
+    };
   }
-  if (!symbolTable.has(stdlibPath)) return program;
-  const synthetic: ImportStatement = {
-    type: "importStatement",
-    importedNames: [
-      {
-        type: "namedImport",
-        importedNames: [...PRELUDE_NAMES],
-        aliases: {},
-      },
-    ],
-    modulePath: "std::index",
-    isAgencyImport: true,
-  };
-  return { ...program, nodes: [synthetic, ...program.nodes] };
+  if (found.stage === "splice") {
+    const { line, col } = found.splice.loc;
+    return { start: { line, character: col }, end: { line, character: col + 1 } };
+  }
+  if (
+    found.stage === "imports" &&
+    found.error instanceof ImportResolutionError &&
+    found.error.loc
+  ) {
+    const { start, end } = found.error.loc;
+    return { start: doc.positionAt(start), end: doc.positionAt(end) };
+  }
+  if (found.stage === "lift" && found.loc) {
+    return { start: doc.positionAt(found.loc.start), end: doc.positionAt(found.loc.end) };
+  }
+  return START_OF_FILE;
 }
 
-/** The lint snapshot must be the parse as written. prunePreludeShadows
- *  (below) mutates std::index import statements IN PLACE — including
- *  user-written ones — so those few nodes are deep-copied. Everything
- *  else is shared: no other pass mutates nodes before runLinter today,
- *  and the CLI/LSP agreement test is the tripwire if one starts. */
-function cloneForLint(program: AgencyProgram): AgencyProgram {
+function failureMessage(found: PipelineDiagnostic): string {
+  if (found.stage === "parse" && found.errorData) {
+    return found.errorData.message;
+  }
+  if (found.stage === "splice") {
+    const error = toTypeCheckError(found.splice);
+    return `${error.code}: ${error.message}`;
+  }
+  if (found.stage === "imports") {
+    return found.error instanceof Error ? found.error.message : String(found.error);
+  }
+  return found.message;
+}
+
+function toEditorDiagnostic(found: PipelineDiagnostic, doc: TextDocument): Diagnostic {
   return {
-    ...program,
-    nodes: program.nodes.map((node) =>
-      node.type === "importStatement" && node.modulePath === "std::index"
-        ? structuredClone(node)
-        : node,
-    ),
+    severity: DiagnosticSeverity.Error,
+    range: failureRange(found, doc),
+    message: failureMessage(found),
+    source: "agency",
   };
 }
 
@@ -97,147 +89,39 @@ export function runDiagnostics(
   symbolTable: SymbolTable,
 ): DiagnosticsResult {
   const source = doc.getText();
-  const diagnostics: Diagnostic[] = [];
-
-  const parseResult = parseAgency(source, config, false);
-  if (!parseResult.success) {
-    const ed = parseResult.errorData;
-    if (ed) {
-      diagnostics.push({
-        severity: DiagnosticSeverity.Error,
-        range: {
-          start: { line: ed.line, character: ed.column },
-          end: { line: ed.line, character: ed.column + (ed.length || 1) },
-        },
-        message: ed.message,
-        source: "agency",
-      });
-    } else {
-      diagnostics.push({
-        severity: DiagnosticSeverity.Error,
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-        message: parseResult.message ?? "Parse error",
-        source: "agency",
-      });
-    }
-    return {
-      diagnostics,
-      program: null,
-      info: null,
-      semanticIndex: {},
-      scopes: [],
-      lintFindings: [],
-      lintBatchEdits: [],
-    };
-  }
-
-  let program = parseResult.result;
-
-  // Expand `$( ... )` before anything reads the program. Without this a
-  // splice node survives into the editor's typecheck, and the user sees
-  // downstream noise from code that has not been generated yet.
-  //
-  // A failure is reported rather than dropped. This is the only path where
-  // the user is looking at the file while the generator is broken, so it
-  // is the path where AG8003 through AG8012 matter most.
-  const expanded = expandSplices(program, fsPath, config, {
-    wallClockMs: EDITOR_WALL_CLOCK_MS,
-  });
-  if (expanded.ok) {
-    program = expanded.value;
-  } else {
-    const loc = expanded.diagnostic.loc;
-    const error = toTypeCheckError(expanded.diagnostic);
-    diagnostics.push({
-      severity: DiagnosticSeverity.Error,
-      range: {
-        start: { line: loc.line, character: loc.col },
-        end: { line: loc.line, character: loc.col + 1 },
-      },
-      message: `${error.code}: ${error.message}`,
-      source: "agency",
-    });
-  }
-
-  // The linter needs the parse as written. Later passes (resolveReExports,
-  // resolveImports) return rewritten programs, which reassigning `program`
-  // handles — but prunePreludeShadows mutates std::index import statements
-  // IN PLACE, so cloneForLint deep-copies those few nodes. Parsed with
-  // applyTemplate=false, so finding offsets index straight into `source`.
-  const lintProgram = cloneForLint(parseResult.result);
-
-  // The CLI parses source through a template that auto-injects an
-  // `import { ... } from "std::index"` statement. The LSP path uses
-  // `applyTemplate: false` so editor positions match the user's source —
-  // but that means stdlib calls (`print`, `read`, …) would resolve as
-  // undefined here. Synthesize the same import so they resolve through
-  // `importedFunctions` like in the CLI flow.
-  program = ensureStdlibImport(program, symbolTable, fsPath);
-  // Agency treats the prelude as overridable, and the compile path realizes
-  // that by dropping a shadowed name from the injected import
-  // (typescriptPreprocessor.ts). The LSP has to run the same pass or it
-  // warns about shadows the compiler already resolved. Pure AST mutation,
-  // no codegen dependency, so it is safe on this analysis-only path.
-  prunePreludeShadows(program);
-
-  try {
-    program = resolveReExports(program, symbolTable, fsPath);
-  } catch (err) {
-    // A re-export failure (e.g. a cycle) leaves the module graph unusable, so
-    // there is nothing meaningful left to type-check. Report and stop.
-    diagnostics.push({
-      severity: DiagnosticSeverity.Error,
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-      message: err instanceof Error ? err.message : String(err),
-      source: "agency",
-    });
-    return {
-      diagnostics,
-      program: null,
-      info: null,
-      semanticIndex: {},
-      scopes: [],
-      lintFindings: [],
-      lintBatchEdits: [],
-    };
-  }
 
   // Analysis-only path (the LSP never executes anything):
+  //  - `applyTemplate: false` keeps positions in the buffer's own coordinates.
   //  - `allowTestImports` honors `import test` so migrated test files keep full
   //    editor support instead of dying on a single 0:0 error.
-  //  - `onUnresolvable` drops any import that can't be resolved (instead of
-  //    aborting the whole rewrite) and reports it at its own location, so every
-  //    *other* import and the rest of the file still type-check.
-  try {
-    program = resolveImports(program, symbolTable, fsPath, {
-      allowTestImports: true,
-      onUnresolvable: (err) => {
-        const loc = err.loc;
-        const range = loc
-          ? { start: doc.positionAt(loc.start), end: doc.positionAt(loc.end) }
-          : { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
-        diagnostics.push({
-          severity: DiagnosticSeverity.Error,
-          range,
-          message: err.message,
-          source: "agency",
-        });
-      },
-    });
-  } catch (err) {
-    // Defensive: `onUnresolvable` absorbs every expected import failure, so a
-    // throw here is unexpected. Report it but keep the (unrewritten) program so
-    // the type checker still runs — a single import must never blank the file
-    // or crash the server (updateDocument runs in a bare debounce callback).
-    diagnostics.push({
-      severity: DiagnosticSeverity.Error,
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-      message: err instanceof Error ? err.message : String(err),
-      source: "agency",
-    });
+  //  - `keepGoing` reports a broken splice or import and still checks the rest.
+  //    This is the only path where the user is looking at the file while the
+  //    generator is broken, so it is where AG8003 through AG8012 matter most.
+  //    And a single import must never blank the file or crash the server
+  //    (updateDocument runs in a bare debounce callback).
+  const prepared = prepareProgram(source, fsPath, config, {
+    applyTemplate: false,
+    allowTestImports: true,
+    keepGoing: true,
+    spliceWallClockMs: EDITOR_WALL_CLOCK_MS,
+    symbolTable,
+  });
+  const diagnostics = prepared.diagnostics.map((found) => toEditorDiagnostic(found, doc));
+  if (!prepared.ok) {
+    return {
+      diagnostics,
+      program: null,
+      info: null,
+      semanticIndex: {},
+      scopes: [],
+      lintFindings: [],
+      lintBatchEdits: [],
+    };
   }
+  // `parsed` is the parse as written, and with applyTemplate=false its
+  // offsets index straight into `source`. That is what the linter needs.
+  const { program, info, parsed: lintProgram } = prepared;
 
-  const info = buildCompilationUnit(program, symbolTable, fsPath, source);
   const { errors, scopes, interruptEffectsByFunction } = typeCheck(program, config, info);
 
   for (const err of errors) {

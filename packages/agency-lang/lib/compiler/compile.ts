@@ -5,13 +5,7 @@
 import { AgencyConfig } from "@/config/config.js";
 import { AgencyProgram, generateTypeScript } from "@/index.js";
 import { initPlanForModule, type InitPlanForModule } from "@/backends/typescriptGenerator.js";
-import { resolveImports } from "@/preprocessors/importResolver.js";
-import { resolveReExports } from "@/preprocessors/resolveReExports.js";
-import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
-import { expandSplices } from "@/preprocessors/expandSplices.js";
-import { formatSpliceDiagnostic } from "./splice/report.js";
-import { buildCompilationUnit } from "@/compilationUnit.js";
-import { SymbolTable } from "@/symbolTable.js";
+import { describeDiagnostic, prepareProgram, throwImportFailures } from "./prepareProgram.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { buildCompiledClosure, CompileClosureError } from "./compileClosure.js";
 import { transformSync } from "esbuild";
@@ -19,7 +13,6 @@ import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { parseAgency } from "@/parser.js";
 import { ImportPolicy, isImportAllowed, isStdlibImport, isPkgImport } from "../importPaths.js";
 import { CompileStrategy } from "../importStrategy.js";
 import { getAllImports } from "@/analysis/imports.js";
@@ -104,8 +97,7 @@ export type CompileSourceOptions = AgencyConfig & {
 };
 
 // Walk every import in the program and reject anything that fails the
-// policy. Returns null if all imports pass, or a CompileFailure listing
-// every violating import (not just the first).
+// policy. Returns one message per violating import (not just the first).
 //
 // IMPORTANT: uses getAllImports (NOT getImports) so we see EVERY import,
 // including raw npm/Node modules. getImports filters those out and would
@@ -116,19 +108,17 @@ export type CompileSourceOptions = AgencyConfig & {
 // getAllImports — but to the policy that's a "local" import because it
 // always references another .agency file. Classify it that way so a
 // `allowKinds: ["stdlib"]` policy still rejects it (the legacy behavior).
-function checkImportPolicy(program: AgencyProgram, policy: ImportPolicy): CompileFailure | null {
-  const violations: string[] = [];
+function importPolicyViolations(program: AgencyProgram, policy: ImportPolicy): string[] {
   // getAllImports surfaces both `importStatement` and the deprecated
   // `import nodes { ... }` form. importKind() already classifies any
   // path ending in `.agency` as "local", so we can pass paths through
   // unchanged regardless of which import form they came from.
-  for (const { path: importPath } of getAllImports(program)) {
-    if (!isImportAllowed(importPath, policy)) {
-      violations.push(`Import '${importPath}' is not allowed under the configured import policy.`);
-    }
-  }
-  if (violations.length === 0) return null;
-  return { success: false, errors: violations };
+  return getAllImports(program)
+    .filter(({ path: importPath }) => !isImportAllowed(importPath, policy))
+    .map(
+      ({ path: importPath }) =>
+        `Import '${importPath}' is not allowed under the configured import policy.`,
+    );
 }
 
 export { typeCheckSource, getEffectsFromSource } from "./typecheck.js";
@@ -160,61 +150,24 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
   const compiledSource = config.sourcePath ? fs.readFileSync(syntheticPath, "utf-8") : source;
 
   try {
-    // 1. Parse
-    const parseResult = parseAgency(compiledSource, config, true);
-    if (!parseResult.success) {
-      return {
-        success: false,
-        errors: [parseResult.message ?? "Failed to parse Agency source"],
-      };
-    }
-    const parsedProgram: AgencyProgram = parseResult.result;
-
-    // 2. Check imports against policy.
-    if (config.imports) {
-      const failure = checkImportPolicy(parsedProgram, config.imports);
-      if (failure) return failure;
-    }
-
-    // 2b. Expand compile-time splices. After the policy check, since the
-    // policy judges what the author wrote. Before everything else, since
-    // generated declarations must reach the symbol table.
-    const expanded = expandSplices(parsedProgram, syntheticPath, config);
-    if (!expanded.ok) {
-      return {
-        success: false,
-        errors: [formatSpliceDiagnostic(expanded.diagnostic, syntheticPath)],
-      };
-    }
-    const program = expanded.value;
-
-    // 2c. Re-check the policy against the EXPANDED program. A generator can
-    // emit its own import lines, and those never went through the check
-    // above. Checking twice is deliberate: the first pass refuses
-    // disallowed source without running a generator at all, and this one
-    // covers what the generator added.
-    if (config.imports) {
-      const failure = checkImportPolicy(program, config.imports);
-      if (failure) return failure;
-    }
-
-    // 3. Build symbol table and resolve imports
-    const symbolTable = SymbolTable.build(syntheticPath, config);
-    const reExportedProgram = resolveReExports(program, symbolTable, syntheticPath);
-    // Sandbox trust boundary: compileSource compiles agent-authored source
-    // for the run() subprocess sandbox and must NEVER honor `import test`.
-    const resolvedProgram = resolveImports(reExportedProgram, symbolTable, syntheticPath, {
-      allowTestImports: false,
+    // 1-4. Parse, expand splices, resolve imports, build the compilation
+    // unit. The import policy is `vet`, so it judges the source as the author
+    // wrote it before any generator runs, and again after splices expand.
+    // `import test` stays denied (the default): this compiles agent-authored
+    // source for the run() subprocess sandbox.
+    const policy = config.imports;
+    const prepared = prepareProgram(compiledSource, syntheticPath, config, {
+      vet: policy ? (program) => importPolicyViolations(program, policy) : undefined,
     });
-
-    // 3a. Lift `callback("onX") { ... }` block bodies to top-level defs.
-    // Must run BEFORE buildCompilationUnit (so lifted defs appear in
-    // functionDefinitions) and BEFORE typecheck (so undefined-variable
-    // diagnostics catch captures of enclosing locals).
-    const liftedProgram = liftCallbackBlocks(resolvedProgram);
-
-    // 4. Build compilation unit
-    const info = buildCompilationUnit(liftedProgram, symbolTable, syntheticPath, compiledSource);
+    if (!prepared.ok) {
+      throwImportFailures(prepared.diagnostics);
+      return {
+        success: false,
+        // Name the caller's file. A temporary path means nothing to the reader.
+        errors: prepared.diagnostics.map((found) => describeDiagnostic(found, config.sourcePath)),
+      };
+    }
+    const { program: liftedProgram, info } = prepared;
 
     // 5. Type check
     if (config.typechecker?.enabled || config.typechecker?.strict) {

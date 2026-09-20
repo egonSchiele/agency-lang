@@ -82,11 +82,11 @@ The consumer of a value-position match reads `__matchval_<id>`, and no scope
 declares that name. A pass that reports unresolved names will report this one
 unless it skips it. `checkUndefinedVariables` does so with `isMatchValName`.
 Its default mode is `"silent"`, so a missed skip shows up only under
-`undefinedVariables: "error"` or the sandbox, where every
-`const x = if a then b else c` failed with AG4007 (#1081).
+`undefinedVariables: "error"`. The `--agency-only` compile mode sets that, so
+there every `const x = if a then b else c` failed with AG4007 (#1081).
 
-The skip is safe under the sandbox, whose job is to keep a program from naming
-a JavaScript global. The builder turns an unresolved `__matchval_<id>` into a
+The skip is safe under `--agency-only`, whose name check keeps a program from
+naming a JavaScript global (`docs/dev/compiler/agency-only-bound-names.md`). The builder turns an unresolved `__matchval_<id>` into a
 read of the frame-local of that name (see the `isMatchValName` branch in
 `typescriptBuilder.ts`), so even a hand-written `__matchval_7` reads `null`,
 never a global.

@@ -182,7 +182,8 @@ node main() { wrap() }
   // stores its result in a compiler-made `__matchval_<id>` temp. See #1081.
   describe("compiler-made match result temps", () => {
     const ERROR: AgencyConfig = { typechecker: { undefinedVariables: "error" } };
-    const SANDBOX: AgencyConfig = { typechecker: { jsGlobals: "sandbox" } };
+    // What `--agency-only` sets.
+    const AGENCY_ONLY: AgencyConfig = { typechecker: { jsGlobals: "sandbox" } };
     const notDefined = (errors: TypeCheckError[]) =>
       errors.filter((e) => e.message.includes("not defined"));
 
@@ -203,12 +204,12 @@ node main() { print(pick(0)) }
 
     it("accepts an if-expression used as a value", () => {
       expect(notDefined(errorsFrom(ifExpr, ERROR))).toHaveLength(0);
-      expect(notDefined(errorsFrom(ifExpr, SANDBOX))).toHaveLength(0);
+      expect(notDefined(errorsFrom(ifExpr, AGENCY_ONLY))).toHaveLength(0);
     });
 
     it("accepts a match used as a value", () => {
       expect(notDefined(errorsFrom(matchExpr, ERROR))).toHaveLength(0);
-      expect(notDefined(errorsFrom(matchExpr, SANDBOX))).toHaveLength(0);
+      expect(notDefined(errorsFrom(matchExpr, AGENCY_ONLY))).toHaveLength(0);
     });
 
     it("still reports an undefined name inside a match arm", () => {

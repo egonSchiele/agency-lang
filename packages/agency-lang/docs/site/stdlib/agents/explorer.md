@@ -61,8 +61,8 @@ Survey a codebase or a body of documentation and return an organized
   @param extraTools - Extra tools to offer the LLM, appended to the built-in set
 
 Called from code, this runs on the caller's thread like any function:
- *  the system prompt, the reads, and the answer stay there. Wrap the call
- *  in `thread { ... }` for an isolated survey.
+ the system prompt, the reads, and the answer stay there. Wrap the call
+ in `thread { ... }` for an isolated survey.
 
 **Parameters:**
 

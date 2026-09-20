@@ -443,6 +443,7 @@ export async function _synthesizeSpeech(
   speed: number,
   allowedPaths: string[],
   apiKey: string,
+  instructions: string = "",
 ): Promise<string> {
   // Normalize + validate before any work: an unsupported format or out-of-range
   // speed must never reach dispatch or publish a mislabeled artifact, even for a
@@ -467,6 +468,7 @@ export async function _synthesizeSpeech(
   };
   if (provider) config.provider = provider;
   if (apiKey) config.apiKey = { openAi: apiKey };
+  if (instructions !== "") config.instructions = instructions;
 
   return synthesizeToFile({
     name: "speak",

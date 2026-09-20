@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 
 /**
- * Recursively strip `loc` fields, `delimiter` fields, and newline nodes
+ * Recursively strip `loc` and `nameLoc` fields, `delimiter` fields, and newline nodes
  * from an object.
  * - `loc` fields are stripped because source location tracking adds them
  *   to all AST nodes, but existing test expectations don't include them.
@@ -36,7 +36,7 @@ function normalize(obj: unknown): unknown {
   }
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (key === "loc") continue;
+    if (key === "loc" || key === "nameLoc") continue;
     if (key === "delimiter") continue;
     result[key] = normalize(value);
   }

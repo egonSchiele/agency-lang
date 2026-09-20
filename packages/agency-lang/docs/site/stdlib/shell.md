@@ -23,9 +23,9 @@ Run commands and inspect the filesystem. `exec` and `bash` run programs and
 ### ExecResult
 
 What a shell command produced. Exported so `std::safeBash` can declare the
- *  same return type on both its paths — a fast-path result and a real
- *  `bash()` result have to be the same shape by construction, not by
- *  coincidence.
+ same return type on both its paths — a fast-path result and a real
+ `bash()` result have to be the same shape by construction, not by
+ coincidence.
 
 ```ts
 /** What a shell command produced. Exported so `std::safeBash` can declare the
@@ -191,9 +191,9 @@ Run a shell command string via sh -c and return its stdout, stderr, and exit cod
   @param allowedPaths - Only allow cwd values under these path prefixes
   @param useAgentCwd - When true, a relative or empty cwd is resolved against the agent working directory if one is set; an absolute cwd is left unchanged
 
-* `allowedPaths` restricts `cwd`, but bash cannot meaningfully restrict the
- * shell command string itself, so prefer running an executable directly with
- * structured arguments when capability narrowing matters.
+`allowedPaths` restricts `cwd`, but bash cannot meaningfully restrict the
+shell command string itself, so prefer running an executable directly with
+structured arguments when capability narrowing matters.
 
 **Parameters:**
 

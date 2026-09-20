@@ -113,14 +113,16 @@ const functionCallSlots: SlotExtractor<"functionCall"> = (node) => {
   if (typeof node.functionName !== "string") return [];
   if (!located(node)) return [];
   // A functionCall's loc.col points at the first character of the
-  // callee, which is what we want; its loc.end points past the closing
-  // paren, which is why length comes from the name instead.
+  // callee, except behind a keyword (`async foo()`), where `nameLoc` does.
+  // Its loc.end points past the closing paren, which is why length comes
+  // from the name instead.
+  const nameLoc = node.nameLoc ?? node.loc;
   return [
     {
       name: node.functionName,
-      line: node.loc.line,
-      col: node.loc.col,
-      scopeOffset: node.loc.start,
+      line: nameLoc.line,
+      col: nameLoc.col,
+      scopeOffset: nameLoc.start,
       isCall: true,
     },
   ];

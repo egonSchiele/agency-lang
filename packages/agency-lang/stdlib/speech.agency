@@ -54,6 +54,7 @@ effect std::synthesizeSpeech {
   requestedProvider: string,
   configuredModel: string,
   textLength: number,
+  instructions: string,
 }
 // Local text-to-speech with an MLX model on this machine. A DISTINCT effect
 // from cloud `std::synthesizeSpeech`: approving one never approves the other.
@@ -203,6 +204,7 @@ export def speak(
   speed: number = 1,
   allowedPaths: string[] = [],
   apiKey: string = "",
+  instructions: string = "",
 ): string {
   """
   Synthesize speech from text using a cloud text-to-speech provider (OpenAI
@@ -218,6 +220,7 @@ export def speak(
   @param speed - Speaking speed (0.25 to 4.0)
   @param allowedPaths - Only allow writing a non-empty outputFile under these path prefixes
   @param apiKey - Override the API key
+  @param instructions - How the speech should sound, in plain words: "Calm and slow." Needs a model that reads it, such as gpt-4o-mini-tts; tts-1 and tts-1-hd ignore it
   """
   if (model == "") {
     throw("speak model cannot be empty")
@@ -232,6 +235,7 @@ export def speak(
     requestedProvider: provider,
     configuredModel: model,
     textLength: text.length,
+    instructions: instructions,
     outputFile: out
   })
 
@@ -245,6 +249,7 @@ export def speak(
     speed,
     allowedPaths,
     apiKey,
+    instructions,
   )
 }
 

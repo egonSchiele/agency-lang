@@ -905,7 +905,8 @@ function topLevelTypeAliases(nodes: AgencyNode[]): Record<string, TypeAlias> {
 /**
  * The free references inside the value arguments of a type, followed
  * through the module's own aliases: `Age` with `type Age = GreaterThan(minAge)`
- * yields `minAge`. An alias from another module is not followed; the
+ * yields `minAge`, and so does the default of a value parameter the use
+ * leaves out. An alias from another module is not followed; the
  * runtime read-before-init trap covers that case, as it does depth-2
  * function calls.
  */
@@ -931,6 +932,24 @@ function typeValueArgRefs(type: VariableType, aliases: Record<string, TypeAlias>
       }
       const name = inner.type === "typeAliasVariable" ? inner.aliasName : inner.name;
       const alias = aliases[name];
+      // A value parameter this use leaves out takes its default, and the
+      // default is evaluated like an argument: `type AtLeast(min = minAge)`
+      // used as `AtLeast` reads `minAge`. A default naming an earlier
+      // parameter names nothing at top level. Collected per use, not per
+      // alias, because two uses can leave out different parameters.
+      const params = alias?.valueParams ?? [];
+      const omitted = params.slice((inner.valueArgs ?? []).length);
+      for (const param of omitted) {
+        if (!param.default) {
+          continue;
+        }
+        for (const ref of collectFreeIdentifiers(param.default)) {
+          if (ref.kind === "name" && params.some((other) => other.name === ref.name)) {
+            continue;
+          }
+          out.push(ref);
+        }
+      }
       if (alias && !followed.includes(name)) {
         followed.push(name);
         visit(

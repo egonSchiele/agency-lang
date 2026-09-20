@@ -31,8 +31,8 @@ Build terminal output as a tree of boxes, rows, and columns, then render
 
 ### LayoutNode
 
-* Every layout node has the same shape. Containers carry their
- * content in `children`; leaves have `children: []`.
+Every layout node has the same shape. Containers carry their
+content in `children`; leaves have `children: []`.
 
 ```ts
 /**
@@ -50,9 +50,9 @@ export type LayoutNode = {
 
 ### LayoutBuilder
 
-* Methods inside a container's trailing `as name { ... }` block. Each
- * method constructs a leaf or container and pushes it onto the
- * surrounding container's `children` array.
+Methods inside a container's trailing `as name { ... }` block. Each
+method constructs a leaf or container and pushes it onto the
+surrounding container's `children` array.
 
 ```ts
 /**

@@ -15,6 +15,7 @@ import {
   CATCH_ALL_NOT_LAST,
   DECL_NAME_SPACES_MESSAGE,
   DUPLICATE_ON_CLAUSE,
+  IF_IN_INTERPOLATION_MESSAGE,
   EMPTY_HANDLER_BLOCK,
   MALFORMED_ON_CLAUSE,
   HANDLER_BODY_MESSAGE,
@@ -698,7 +699,30 @@ export const multiLineStringTextSegmentParserFor = (delim: string): Parser<TextS
 export const multiLineStringTextSegmentParser: Parser<TextSegment> =
   multiLineStringTextSegmentParserFor('"""');
 
+const ifInInterpolationParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    str("${"),
+    optionalSpaces,
+    optional(seqC(char("("), optionalSpaces)),
+    str("if"),
+    not(varNameChar),
+  );
+  const probed = probe(input);
+  if (!probed.success) {
+    return failure("", input);
+  }
+  const declined = committedFailure(IF_IN_INTERPOLATION_MESSAGE, input);
+  // See bodyDeclarationParser for why the parse state is set by hand.
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
 export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((input: string) => {
+  const declined = ifInInterpolationParser(input);
+  if (isCommittedFailure(declined)) {
+    return declined;
+  }
+
   const parser = seqC(
     char("$"),
     char("{"),
@@ -3576,24 +3600,42 @@ export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | Val
   },
 );
 
+// `async foo()` is one node whose loc starts at the keyword, because a bare
+// `async foo()` statement is located by that node. The callee's own position
+// goes in `nameLoc`, which is what lets the editor color `foo`.
+const locatedValueAccessParser = withLoc(_valueAccessParser);
+
+type LocatedAccess = (FunctionCall | ValueAccess | VariableNameLiteral) & { loc: SourceLocation };
+
+function withNameLoc(access: LocatedAccess): FunctionCall | ValueAccess | VariableNameLiteral {
+  if (access.type !== "functionCall") {
+    return access;
+  }
+  return { ...access, nameLoc: access.loc };
+}
+
 export const asyncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(str("async"), spaces, capture(_valueAccessParser, "access"));
+  const parser = seqC(str("async"), spaces, capture(locatedValueAccessParser, "access"));
   const result = parser(input);
   if (!result.success) return failure("expected async keyword", input);
 
-  return success({ ...result.result.access, async: true }, result.rest);
+  return success({ ...withNameLoc(result.result.access), async: true }, result.rest);
 };
 
 export const syncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(oneOfStr(["sync", "await"]), spaces, capture(_valueAccessParser, "access"));
+  const parser = seqC(
+    oneOfStr(["sync", "await"]),
+    spaces,
+    capture(locatedValueAccessParser, "access"),
+  );
   const result = parser(input);
   if (!result.success) return failure("expected sync/await keyword", input);
 
-  return success({ ...result.result.access, async: false }, result.rest);
+  return success({ ...withNameLoc(result.result.access), async: false }, result.rest);
 };
 
 export function valueAccessParser(

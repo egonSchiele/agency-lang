@@ -7,6 +7,7 @@ import {
   sanitizeDescription,
   moduleDescription,
 } from "./doc.js";
+import { stripDocCommentMarkers } from "../utils/moduleDoc.js";
 import type { AgencyMultiLineComment } from "@/types.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -21,6 +22,24 @@ function moduleComment(content: string): AgencyMultiLineComment {
     isModuleDoc: true,
   } as AgencyMultiLineComment;
 }
+
+describe("stripDocCommentMarkers", () => {
+  it("removes the leading * from every line of a JSDoc-style comment", () => {
+    expect(stripDocCommentMarkers("\n * First line.\n *\n * Second line.\n ")).toBe(
+      "\nFirst line.\n\nSecond line.\n ",
+    );
+  });
+
+  it("keeps a comment that is nothing but Markdown bullets", () => {
+    const content = "\n* one\n* two\n";
+    expect(stripDocCommentMarkers(content)).toBe(content);
+  });
+
+  it("keeps Markdown bullets in a comment that is not JSDoc style", () => {
+    const content = "\nThe options:\n\n* one\n* two\n";
+    expect(stripDocCommentMarkers(content)).toBe(content);
+  });
+});
 
 describe("firstParagraph", () => {
   it("takes the leading prose and stops at a blank line", () => {
@@ -147,6 +166,53 @@ function captureStderr(run: () => void): string[] {
 }
 
 describe("generateDoc", () => {
+  it("keeps a bullet list written inside a JSDoc-style module comment", () => {
+    const inputDir = path.join(tmpDir, "input-jsdoc-bullets");
+    const outputDir = path.join(tmpDir, "output-jsdoc-bullets");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "modes.agency"),
+      `/** @module
+ * Modes:
+ * * fast
+ * * slow
+ */
+export def run(): string {
+  return "x"
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "modes.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "modes.md"), "utf-8");
+
+    expect(output).toContain("Modes:\n* fast\n* slow");
+  });
+
+  it("renders a JSDoc-style doc comment without its * markers", () => {
+    const inputDir = path.join(tmpDir, "input-jsdoc-markers");
+    const outputDir = path.join(tmpDir, "output-jsdoc-markers");
+    fs.mkdirSync(inputDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(inputDir, "jsdoc.agency"),
+      `/**
+ * Discover commands under dir. Each file
+ * becomes one command record.
+ */
+export def discover(dir: string): string {
+  return dir
+}
+`,
+    );
+
+    generateDoc({}, path.join(inputDir, "jsdoc.agency"), outputDir);
+    const output = fs.readFileSync(path.join(outputDir, "jsdoc.md"), "utf-8");
+
+    expect(output).toContain("Discover commands under dir. Each file\nbecomes one command record.");
+    expect(output).not.toContain("* Discover");
+    expect(output).not.toContain("* becomes");
+  });
+
   it("keeps alias source trivia but omits function signature trivia", () => {
     const inputDir = path.join(tmpDir, "input-display-types");
     const outputDir = path.join(tmpDir, "output-display-types");

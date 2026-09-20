@@ -103,8 +103,8 @@ Return `true` when memory is on for the current branch and reads and
   enabled, was turned off, or the call is outside any runtime frame.
 
 Useful for branching in user code (`if (isMemoryActive()) { ... }`)
- *  and for tests that verify memory is on without inspecting internal
- *  state.
+ and for tests that verify memory is on without inspecting internal
+ state.
 
 **Returns:** `boolean`
 
@@ -124,10 +124,10 @@ Set the memory scope for this agent run, so reads and writes target a
   @param id - A unique identifier for the memory scope (e.g. user ID)
 
 The id is independent of which memory configuration is active. It
- *  persists as memory is turned on and off. Re-set it explicitly when
- *  switching stores. Branch-scoped: a fork/race branch inherits the id
- *  active at fork time, and a change inside a branch stays local to that
- *  branch.
+ persists as memory is turned on and off. Re-set it explicitly when
+ switching stores. Branch-scoped: a fork/race branch inherits the id
+ active at fork time, and a change inside a branch stays local to that
+ branch.
 
 **Parameters:**
 
@@ -165,19 +165,19 @@ Turn memory on for the current execution branch using `config`. The
   @param config - Memory configuration with `dir` required
 
 Storage is shared process-wide by absolute directory, so calls
- *  (across runs, forks, or modules) that point at the same dir share one
- *  store. Enabling the same dir again is a no-op, so declaring
- *  `static const _ = enableMemory({...})` AND calling it from `main()` is
- *  safe. Enabling a different dir stacks on top. Turn it off with
- *  `disableMemory()` or use the block form for lexical scoping.
- *
- *  `config.dir` is resolved against `process.cwd()`, not the module dir.
- *  This deliberately mirrors how `agency.json`'s `memory.dir` resolves, so
- *  the same string in JSON and in code points at the same place.
- *
- *  Branch-scoped: a fork/race branch inherits the config active at fork
- *  time, and enabling/disabling inside a branch stays local to that
- *  branch.
+ (across runs, forks, or modules) that point at the same dir share one
+ store. Enabling the same dir again is a no-op, so declaring
+ `static const _ = enableMemory({...})` AND calling it from `main()` is
+ safe. Enabling a different dir stacks on top. Turn it off with
+ `disableMemory()` or use the block form for lexical scoping.
+
+ `config.dir` is resolved against `process.cwd()`, not the module dir.
+ This deliberately mirrors how `agency.json`'s `memory.dir` resolves, so
+ the same string in JSON and in code points at the same place.
+
+ Branch-scoped: a fork/race branch inherits the config active at fork
+ time, and enabling/disabling inside a branch stays local to that
+ branch.
 
 **Parameters:**
 
@@ -199,11 +199,11 @@ Turn off memory for the current branch by removing the most recently
   enabled memory configuration.
 
 Removes whatever memory configuration is on top, including a bottom
- *  frame seeded from `agency.json`. Library authors should not call this
- *  casually. It shadows the caller's configured memory. Prefer the block
- *  form `memory({...}) as { ... }`, which restores the previous
- *  configuration on exit. Branch-scoped: a call inside a fork branch stays
- *  local to that branch.
+ frame seeded from `agency.json`. Library authors should not call this
+ casually. It shadows the caller's configured memory. Prefer the block
+ form `memory({...}) as { ... }`, which restores the previous
+ configuration on exit. Branch-scoped: a call inside a fork branch stays
+ local to that branch.
 
 **Throws:** `std::memory::disableMemory`
 

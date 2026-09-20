@@ -7,7 +7,6 @@
 // --- tarsec imports (combined from all parser files) ---
 import { TarsecError, getDiagnostics } from "tarsec";
 import {
-  AS_CAST_MESSAGE,
   BLOCK_AS_VALUE_MESSAGE,
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
@@ -108,6 +107,7 @@ import {
   AgencyNode,
   Assignment,
   BooleanLiteral,
+  CastExpression,
   Expression,
   FunctionCall,
   FunctionDefinition,
@@ -3228,6 +3228,8 @@ const functionCallParserFor = (memoKey: string, nameParser: Parser<string>): Par
       optional(
         captureCaptures(
           seqC(
+            // A cast starts here, so there is no block.
+            not(lazy(() => castStart)),
             capture(
               lazy(() => blockArgumentParser),
               "block",
@@ -4162,7 +4164,7 @@ function makeBinOp(op: string): (left: Expression, right: Expression) => Express
 // `(arr)[0]`, and `(new Foo()).method()` work as expected.
 // eslint-disable-next-line prefer-const -- reassigned at the bottom of this file to break a circular dependency
 let _exprParser: Parser<Expression>;
-const parenParser: Parser<Expression> = (input: string) => {
+const parenParserBase: Parser<Expression> = (input: string) => {
   const openResult = char("(")(input);
   if (!openResult.success) return openResult;
   const ws1 = optionalSpaces(openResult.rest);
@@ -4188,6 +4190,13 @@ const parenParser: Parser<Expression> = (input: string) => {
   }
   return success(exprResult.result, closeResult.rest);
 };
+
+/** A cast that parentheses directly wrap is exempt from the refused-position
+ *  check, so the parser records the parentheses the type checker cannot see. */
+const markParenthesized = (expr: Expression): Expression =>
+  expr.type === "castExpression" ? { ...expr, parenthesized: true } : expr;
+
+const parenParser: Parser<Expression> = map(parenParserBase, markParenthesized);
 
 // Wrap atom to handle `<atom> is <pattern>` as an IsExpression.
 // The check requires whitespace before `is` and a non-identifier char after,
@@ -4223,12 +4232,83 @@ const atomWithIs: Parser<Expression> = (input: string) => {
 // Multi-char operators must come before their single-char prefixes
 // (e.g., *= before *, <= before <).
 
+// --- Type casts: `expr as Type`, `expr as Type!` ---
+// No leading-whitespace requirement: _functionCallParser has already
+// consumed the space after `foo()`. `as` is reserved, and an atom ending
+// in an identifier has consumed every identifier character, so the word
+// boundary after `as` is enough.
+// Newlines are allowed before `as`: no statement can start with it, and
+// after a call the newline is already gone, so same-line-only could not be
+// enforced consistently.
+const asKeyword = seqC(optionalSpacesOrNewline, str("as"), not(varNameChar), optionalSpaces);
+
+// `{ key:` opens an object type. `{}` and `{ name }` do not match, so
+// they stay blocks.
+const objectTypeStart = seqC(
+  char("{"),
+  optionalSpacesOrNewline,
+  many(triviaEntry),
+  or(char("@"), seqC(many1WithJoin(varNameChar), optionalSpaces, optional(char("?")), char(":"))),
+);
+
+// blockParamsParser accepts zero params, one, or `(a, b)`, so this covers
+// `as {`, `as x {`, and `as (a, b) {`. The brace must be on the same line.
+const blockOpening = seqC(
+  not(objectTypeStart),
+  lazy(() => blockParamsParser),
+  optionalSpaces,
+  char("{"),
+);
+
+/** `as` that starts a cast, not a block. */
+const castStart = seqC(asKeyword, not(blockOpening));
+
+// `!=` and `!~` are operators, so their `!` is not a bang.
+const castBang = map(optional(seqC(char("!"), not(oneOf("=~")))), (bang) => bang != null);
+
+// parseError throws. A returned failure here would be dropped by
+// buildExpressionParser and resurface as "expected node body".
+//
+// The message names both readings because blockOpening requires the `{` on
+// the same line as the params. A block argument whose parameter list spans
+// lines therefore arrives here, and "expected a type" alone would send the
+// author looking for a type they never meant to write.
+const castSuffixParser = memo(
+  "castSuffixParser",
+  seqC(
+    castStart,
+    captureCaptures(
+      parseError(
+        "expected a type after `as`, or block parameters followed by `{` on this line",
+        capture(variableTypeParser, "targetType"),
+        capture(castBang, "checked"),
+      ),
+    ),
+  ),
+);
+
+type CastSuffix = { targetType: VariableType; checked: boolean };
+
+const makeCast = (expression: Expression, suffix: CastSuffix): Expression =>
+  ({
+    type: "castExpression",
+    expression,
+    targetType: suffix.targetType,
+    checked: suffix.checked,
+  }) as CastExpression;
+
+/** `inner` followed by zero or more cast suffixes, folded left to right. */
+const castable = (inner: Parser<Expression>): Parser<Expression> =>
+  map(seqC(capture(inner, "base"), capture(many(castSuffixParser), "casts")), ({ base, casts }) =>
+    (casts as CastSuffix[]).reduce(makeCast, base as Expression),
+  );
+
 const _exprParserBase: Parser<Expression> = label(
   "an expression",
   memo(
     "exprParser",
     buildExpressionParser<Expression>(
-      atomWithIs,
+      castable(atomWithIs),
       [
         // Precedence 7: exponentiation
         [{ op: wsOp("**"), assoc: "right" as const, apply: makeBinOp("**") }],
@@ -4282,7 +4362,7 @@ const _exprParserBase: Parser<Expression> = label(
         // Precedence -1 (lowest): pipe
         [{ op: wsOp("|>"), assoc: "left" as const, apply: makeBinOp("|>") }],
       ],
-      parenParser,
+      castable(parenParser),
     ),
   ),
 );
@@ -4317,21 +4397,6 @@ const ternaryRefusal = (rest: string): ParserFailure | null => {
   return committedFailure(TERNARY_MESSAGE, tail.rest);
 };
 
-/** `x as Type`. A trailing block's `as` is read by the call parser and its
- *  parameters are followed by `{`, so an `as` left over after an expression,
- *  followed by a name and no `{`, can only be a cast. */
-const asCastMarker = seqC(
-  spaces,
-  str("as"),
-  spaces,
-  many1(varNameChar),
-  optionalSpaces,
-  not(oneOf("{,")),
-);
-
-const asCastRefusal = (rest: string): ParserFailure | null =>
-  asCastMarker(rest).success ? committedFailure(AS_CAST_MESSAGE, rest) : null;
-
 /** `/.../` where a value should start. Nothing in Agency begins a value with
  *  `/`, so this is a JavaScript regex unless it opens a comment. */
 const jsRegexMarker = seqC(char("/"), not(oneOf("/* \n")), many1(noneOf("/\n")), char("/"));
@@ -4347,7 +4412,7 @@ export const exprParser: Parser<Expression> = (input: string) => {
   }
   const result = _exprParserBase(input);
   if (!result.success) return result;
-  const refused = ternaryRefusal(result.rest) ?? asCastRefusal(result.rest);
+  const refused = ternaryRefusal(result.rest);
   if (!refused) return result;
   // The enclosing node body is wrapped in a `parseError` that would otherwise
   // win the reporting contest, so record the commit in the parse state too.

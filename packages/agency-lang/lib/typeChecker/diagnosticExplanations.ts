@@ -55,6 +55,34 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** if you meant a type, declare or import it. If you meant to bind the value, write \`const name = x\` instead. For JavaScript classes, use \`is object\` or a helper function — type patterns only test Agency types.`,
 
+  castUnrelatedTypes: `A cast \`x as T\` is allowed when the type of \`x\` fits \`T\`, or \`T\` fits the type of \`x\`. A cast between two unrelated types, like \`5 as string\`, is almost always a mistake, so it is refused. A cast changes only what the type checker believes. It does not convert the value.
+
+**How to fix:** if you mean it, go through \`unknown\`: \`x as unknown as T\`.`,
+
+  castResultNotUnwrapped: `A cast changes only what the type checker believes. It does not change the value, so casting a \`Result<Person>\` to \`Person\` would leave a \`Result\` in a variable typed as \`Person\`. Writing \`as unknown as Person\` would compile and be wrong at runtime.
+
+**How to fix:** unwrap the Result first: \`match\` on it, or use \`catch\` to supply a fallback.`,
+
+  castNoSchema: `\`x as T!\` checks the value against the schema of \`T\` at runtime and gives a \`Result\`. Function types have no schema, so they cannot be checked.
+
+**How to fix:** use the unchecked form, \`x as T\`.`,
+
+  castRefusedPosition: `In TypeScript, \`as\` binds looser than arithmetic and comparison: \`a + b as T\` means \`(a + b) as T\`. In Agency today a cast binds tighter, so the same text would mean \`a + (b as T)\`. To keep the two from silently disagreeing, Agency refuses a cast on the right of \`**\`, \`*\`, \`/\`, \`%\`, \`+\`, \`-\`, \`<\`, \`>\`, \`<=\`, \`>=\`, \`in\`, and \`instanceof\`.
+
+**How to fix:** add parentheses to say which grouping you mean. Issue #1088 tracks removing this rule.`,
+
+  castCanPauseInOpaquePosition: `A checked cast to a type with \`@validate\` tags runs validator functions, and a validator can raise an interrupt that pauses the program. When a paused program resumes, the statement it paused in runs again, so Agency lifts anything that can pause onto its own line first. It cannot lift out of the right side of \`&&\`, \`||\` or \`??\`, a \`catch\` or \`try\` expression, an if-expression branch, a pipe stage, or a statement under \`with\` or \`static\`. A checked cast to a type with no \`@validate\` tags cannot pause and is allowed in these positions.
+
+**How to fix:** write the cast on its own line and use the variable.`,
+
+  castCanPauseInHandlerBody: `A checked cast to a type with \`@validate\` tags runs validator functions, and a validator can raise an interrupt that pauses the program. A handler body compiles to plain JavaScript with no steps, so it cannot pause, and the hoist pass never rewrites one. Moving the cast to its own line inside the handler does not help. Handlers are how a user rejects an action, so a cast that would pause there is refused rather than compiled. A checked cast to a type with no \`@validate\` tags is allowed here.
+
+**How to fix:** do the cast before the \`handle\` block and use the value inside the handler.`,
+
+  castCanPauseOutsideBody: `A checked cast to a type with \`@validate\` tags runs validator functions, and a validator can raise an interrupt that pauses the program. Code at the top level of a file, and a parameter's default value, run where the program cannot pause and resume. There is no line to move the cast to. A checked cast to a type with no \`@validate\` tags is allowed here.
+
+**How to fix:** do the cast inside a node or a def, and pass the result in.`,
+
   genericRequiresTypeArgs: `This is a generic type — it is parameterized by other types (like the element type of a list) — and it cannot be used bare. The type arguments are required.
 
 **How to fix:** supply the type arguments in angle brackets, e.g. write the element type the generic wraps.`,

@@ -34,6 +34,7 @@ import { TryExpression } from "./types/tryExpression.js";
 import { NewExpression } from "./types/newExpression.js";
 import { InterruptStatement } from "./types/interruptStatement.js";
 import { SchemaExpression } from "./types/schemaExpression.js";
+import { CastExpression } from "./types/castExpression.js";
 import { BlockArgument } from "./types/blockArgument.js";
 import { Hole } from "./types/hole.js";
 import { CodeLiteral } from "./types/codeLiteral.js";
@@ -87,6 +88,7 @@ export type { TryExpression } from "./types/tryExpression.js";
 export * from "./types/newExpression.js";
 export * from "./types/interruptStatement.js";
 export * from "./types/schemaExpression.js";
+export * from "./types/castExpression.js";
 
 export type Expression =
   | ValueAccess
@@ -103,6 +105,7 @@ export type Expression =
   | BlockArgument
   | IsExpression
   | TypeTestExpression
+  | CastExpression
   | MatchBlock
   // Pre-lowering only: comprehensionDesugar rewrites every Comprehension
   // into map/filter/fork calls inside parseAgency's `lower` block, so
@@ -154,6 +157,7 @@ export const EXPRESSION_NODE_TYPES: readonly string[] = [
   "blockArgument",
   "isExpression",
   "typeTestExpression",
+  "castExpression",
   "matchBlock",
   "comprehension",
 ];
@@ -370,6 +374,7 @@ export type AgencyNode =
   | BlockArgument
   | IsExpression
   | TypeTestExpression
+  | CastExpression
   | ObjectPattern
   | ArrayPattern
   | RestPattern

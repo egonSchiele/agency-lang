@@ -1,0 +1,7 @@
+type Person = { name: string }
+
+node main() {
+  const raw: any = { name: "Ada" }
+  const p = raw as Person!
+  return p
+}

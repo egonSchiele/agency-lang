@@ -1,0 +1,11 @@
+type Person = { name: string }
+
+def greet(p: Person): string {
+  return p.name
+}
+
+node main() {
+  const raw: any = { name: "Ada" }
+  const p = raw as Person
+  return greet(raw as Person)
+}

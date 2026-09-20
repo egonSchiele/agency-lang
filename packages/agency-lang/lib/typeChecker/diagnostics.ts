@@ -142,6 +142,48 @@ export const DIAGNOSTICS = {
     severity: "error",
     message: "Type alias '{alias}' is not defined (referenced in '{context}').",
   },
+  castUnrelatedTypes: {
+    code: "AG1014",
+    severity: "error",
+    message:
+      "Cannot cast `{from}` to `{to}` because neither type fits the other. If this is intentional, write `{expr} as unknown as {to}`.",
+  },
+  castResultNotUnwrapped: {
+    code: "AG1018",
+    severity: "error",
+    message:
+      "`{expr}` is a `{from}`. A cast does not unwrap it. Unwrap the Result first, with `match` or `catch`, then cast the value if you still need to.",
+  },
+  castNoSchema: {
+    code: "AG1015",
+    severity: "error",
+    message:
+      "A checked cast validates the value at runtime, and `{type}` has no schema to validate against. Remove the `!` to cast without checking.",
+  },
+  castRefusedPosition: {
+    code: "AG1016",
+    severity: "error",
+    message:
+      "A cast is not allowed in this position. Add parentheses: `({left} {op} {right}) as {type}` or `{left} {op} ({right} as {type})`.",
+  },
+  castCanPauseInOpaquePosition: {
+    code: "AG1017",
+    severity: "error",
+    message:
+      "This checked cast runs validators that can pause the program, and it cannot be resumed safely in this position. Move it to its own line: `const value = {cast}`.",
+  },
+  castCanPauseInHandlerBody: {
+    code: "AG1020",
+    severity: "error",
+    message:
+      "`{cast}` runs validators that can pause the program, and a handler body cannot pause. Do the cast before the `handle` block and use the value here.",
+  },
+  castCanPauseOutsideBody: {
+    code: "AG1019",
+    severity: "error",
+    message:
+      "`{cast}` runs validators that can pause the program, and a module-level initializer or a parameter default cannot pause. Do the cast inside a node or a def.",
+  },
   typePatternUnknownType: {
     code: "AG1013",
     severity: "error",

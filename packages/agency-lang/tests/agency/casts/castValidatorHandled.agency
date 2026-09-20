@@ -1,0 +1,39 @@
+effect test::check { n: number }
+
+def askFirst(value: number): Result<number> {
+  interrupt test::check("ok to validate?", { n: value })
+  return success(value)
+}
+
+@validate(askFirst)
+type Asked = number
+
+def use(r: any): string {
+  if (isSuccess(r)) {
+    return "validated"
+  }
+  return "rejected"
+}
+
+node approved() {
+  handle {
+    return use(6 as Asked!)
+  } with approve
+}
+
+node rejected() {
+  handle {
+    return use(6 as Asked!)
+  } with reject
+}
+
+node decidedByData() {
+  handle {
+    return use(6 as Asked!)
+  } with (intr) {
+    if (intr.data.n == 6) {
+      return reject()
+    }
+    return approve()
+  }
+}

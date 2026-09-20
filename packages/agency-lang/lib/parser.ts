@@ -333,11 +333,12 @@ export function parseAgency(
         cleanMessage,
         result.message,
       );
+      const message = withLocation(result.message, errorData);
       return {
         success: false,
-        message: withLocation(result.message, errorData),
+        message,
         rest: input,
-        errorData,
+        errorData: { ...errorData, prettyMessage: message },
       };
     }
     return { success: false, message: result.message, rest: result.rest };
@@ -364,11 +365,12 @@ export function parseAgency(
             committedMessage.replace(LOCATION_PREFIX, ""),
             committedMessage,
           );
+          const message = withLocation(committedMessage, errorData);
           return {
             success: false,
-            message: withLocation(committedMessage, errorData),
+            message,
             rest: input,
-            errorData,
+            errorData: { ...errorData, prettyMessage: message },
           };
         }
       }

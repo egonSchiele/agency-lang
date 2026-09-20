@@ -189,18 +189,17 @@ A failed `parseAgency` returns the place twice: as numbers in `errorData`
 Line 2, col 13: cannot read the statement that starts here. ...
 ```
 
-The text matters because an agent that gets a parse error back sees only
-the message. `withLocation` in `lib/parser.ts` writes the prefix on all
-three failure paths, from `errorData`, so both always name the same line.
-tarsec writes a prefix of its own on some messages, but it counts the
-template lines, so `withLocation` replaces it.
+An agent that gets a parse error back sees only the text. `withLocation`
+in `lib/parser.ts` writes the prefix on all three failure paths, from
+`errorData`, so both always name the same line. tarsec writes a prefix of
+its own on some messages, but it counts the template lines, so
+`withLocation` replaces it.
 
 A block (`def`, `node`, `if`, `for`, `while`, `handle`, `seq`, `parallel`)
 wraps `{ body }` in one `parseError`, whose message is "expected `{` to
 open ...". The body parser stops at the first statement it cannot read, so
 the block's closing `}` is `closeBlock`, which throws "cannot read the
-statement that starts here" instead. Without it, a bad statement anywhere
-in the body was reported as a missing `{`.
+statement that starts here" at that statement.
 
 ## Pinned by tests
 

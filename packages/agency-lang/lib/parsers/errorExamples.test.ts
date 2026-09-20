@@ -172,8 +172,8 @@ node main(shape: Shape) {
 });
 
 describe("a statement the parser cannot read is reported where it starts", () => {
-  // Each block used to report "expected `{`" for any bad statement inside it,
-  // with no position, though the `{` was there.
+  // The enclosing block's own "expected `{`" message must not win: the `{`
+  // is there.
   it.each([
     ["a function", `def f(lines: string[]): number {\n  const n = +lines\n  return 1\n}`, 2],
     [
@@ -241,8 +241,8 @@ describe("a JavaScript regex literal is refused", () => {
 });
 
 describe("the line in a message is the user's line", () => {
-  // Every file is parsed behind a two-line template. The refusal messages used
-  // to count those lines, so a ternary on line 2 was reported on line 4.
+  // Every file is parsed behind a two-line template, which the line in a
+  // message must not count.
   it.each([
     ["a refusal", `def f(a: number): number {\n  const x = a > 1 ? 2 : 3\n  return x\n}`],
     ["a thrown error", `def f(a: number): number {\n  const x = +a\n  return x\n}`],
@@ -252,5 +252,6 @@ describe("the line in a message is the user's line", () => {
     if (parsed.success) return;
     expect(parsed.message).toMatch(/^Line 2, col /);
     expect(parsed.errorData?.line).toBe(1);
+    expect(parsed.errorData?.prettyMessage).not.toMatch(/^Line [^2]/);
   });
 });

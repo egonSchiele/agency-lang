@@ -207,8 +207,8 @@ describe("keyword-as-variable statements still parse", () => {
     { input: "node in items", firstType: "binOpExpression" },
   ];
 
-  // Used to parse as three bare names. It is an `as` cast, which the
-  // expression parser now refuses whatever the name on the left is.
+  // An `as` cast, which the expression parser refuses whatever the name on
+  // the left is.
   it("refuses `node as Foo` as a cast", () => {
     expect(bodyParser("node as Foo").success).toBe(false);
   });

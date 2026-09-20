@@ -75,6 +75,10 @@ export const DIAGNOSTIC_EXPLANATIONS: Record<DiagnosticName, string> = {
 
 **How to fix:** write the cast on its own line and use the variable.`,
 
+  castCanPauseInHandlerBody: `A checked cast to a type with \`@validate\` tags runs validator functions, and a validator can raise an interrupt that pauses the program. A handler body compiles to plain JavaScript with no steps, so it cannot pause, and the hoist pass never rewrites one. Moving the cast to its own line inside the handler does not help. Handlers are how a user rejects an action, so a cast that would pause there is refused rather than compiled. A checked cast to a type with no \`@validate\` tags is allowed here.
+
+**How to fix:** do the cast before the \`handle\` block and use the value inside the handler.`,
+
   castCanPauseOutsideBody: `A checked cast to a type with \`@validate\` tags runs validator functions, and a validator can raise an interrupt that pauses the program. Code at the top level of a file, and a parameter's default value, run where the program cannot pause and resume. There is no line to move the cast to. A checked cast to a type with no \`@validate\` tags is allowed here.
 
 **How to fix:** do the cast inside a node or a def, and pass the result in.`,

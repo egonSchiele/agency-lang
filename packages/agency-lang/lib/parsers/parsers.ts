@@ -4196,7 +4196,6 @@ const parenParserBase: Parser<Expression> = (input: string) => {
 const markParenthesized = (expr: Expression): Expression =>
   expr.type === "castExpression" ? { ...expr, parenthesized: true } : expr;
 
-// Every user of parenParser, including unaryOperand, gets the mark.
 const parenParser: Parser<Expression> = map(parenParserBase, markParenthesized);
 
 // Wrap atom to handle `<atom> is <pattern>` as an IsExpression.
@@ -4269,13 +4268,18 @@ const castBang = map(optional(seqC(char("!"), not(oneOf("=~")))), (bang) => bang
 
 // parseError throws. A returned failure here would be dropped by
 // buildExpressionParser and resurface as "expected node body".
+//
+// The message names both readings because blockOpening requires the `{` on
+// the same line as the params. A block argument whose parameter list spans
+// lines therefore arrives here, and "expected a type" alone would send the
+// author looking for a type they never meant to write.
 const castSuffixParser = memo(
   "castSuffixParser",
   seqC(
     castStart,
     captureCaptures(
       parseError(
-        "expected a type after `as`",
+        "expected a type after `as`, or block parameters followed by `{` on this line",
         capture(variableTypeParser, "targetType"),
         capture(castBang, "checked"),
       ),

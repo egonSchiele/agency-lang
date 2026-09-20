@@ -28,8 +28,6 @@ export function checkCastPositions(ctx: TypeCheckerContext): void {
     .filter(isBinOp)
     .filter(hasMisgroupedCast);
 
-  // "handlerBody" is left out on purpose: whether a validator may pause
-  // there is an open question. AG1016 above still covers handler bodies.
   const castsThatCanPause = (status: HoistStatus): CastExpression[] =>
     positions
       .filter((position) => position.status === status)
@@ -41,6 +39,7 @@ export function checkCastPositions(ctx: TypeCheckerContext): void {
     ...misgrouped.map(refusedPositionDiagnostic),
     ...castsThatCanPause("stuck").map(moveToOwnLineDiagnostic),
     ...castsThatCanPause("outsideBodies").map(cannotRunHereDiagnostic),
+    ...castsThatCanPause("handlerBody").map(cannotPauseInHandlerDiagnostic),
   );
 }
 
@@ -58,6 +57,19 @@ function refusedPositionDiagnostic(node: BinOpExpression) {
 function moveToOwnLineDiagnostic(cast: CastExpression) {
   return diagnostic(
     "castCanPauseInOpaquePosition",
+    { cast: expressionToString(cast) },
+    cast.loc ?? null,
+  );
+}
+
+/** A handler body never pauses and the pass never rewrites one, so moving
+ *  the cast to its own line inside the handler would not help. The broader
+ *  question of what any pausing Agency call does in a handler body stays
+ *  open; a cast is refused because a `@validate` tag on a type declared
+ *  elsewhere hides the interrupt that a call shows in the source. */
+function cannotPauseInHandlerDiagnostic(cast: CastExpression) {
+  return diagnostic(
+    "castCanPauseInHandlerBody",
     { cast: expressionToString(cast) },
     cast.loc ?? null,
   );

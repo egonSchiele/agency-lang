@@ -29,7 +29,7 @@ const ENTERED_TOP_LEVEL_KINDS: readonly string[] = ["function", "graphNode"];
  * What "liftable" means. The pass MAY lift from this position. The last value
  * of an assignment, return, or match yield is liftable and still not lifted,
  * because it is already the statement's own step (the tail rule in
- * hoistCalls.ts). That is safe, and it is not drift.
+ * hoistCalls.ts).
  *
  * What is never examined. `hole` and `codeLiteral` are leaves in
  * expressionSlots, so a cast inside quoted code is not listed here. It is
@@ -74,7 +74,6 @@ function statementPositions(statement: AgencyNode, status: HoistStatus): HoistPo
   ];
 }
 
-/** A node in expression position. */
 function expressionPositions(expression: AgencyNode, status: HoistStatus): HoistPosition[] {
   return [
     { node: expression, status },

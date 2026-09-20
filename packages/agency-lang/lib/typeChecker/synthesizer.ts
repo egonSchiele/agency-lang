@@ -80,6 +80,7 @@ import {
   BUILTIN_VARIABLE_TYPES,
 } from "./builtins.js";
 import { isAssignable, isNever, safeResolveType } from "./assignability.js";
+import { validateTypeReferences } from "./validate.js";
 import { typeAt, flowHasNarrowFor, stablePrefix } from "./flow.js";
 import { literalToType } from "./literalType.js";
 import { typeKey } from "./typeKey.js";
@@ -536,8 +537,30 @@ function synthTypeTestExpression(
 /** Types a runtime schema check cannot be built from. */
 const TYPES_WITHOUT_SCHEMA: readonly string[] = ["blockType", "functionRefType"];
 
-const hasNoSchema = (type: VariableType): boolean =>
-  visitTypes(type, (nested) => TYPES_WITHOUT_SCHEMA.includes(nested.type));
+/** True when no runtime schema can be built for this type.
+ *
+ *  Aliases are resolved as the walk goes. `type Handler = (n: number) =>
+ *  string` has to be refused for the same reason the written function type
+ *  is, and neither `visitTypes` nor `resolveTypeDeep` expands a plain alias:
+ *  resolveTypeDeep leaves one intact on purpose, so codegen can emit the
+ *  already-declared schema constant by name. Without this the alias reached
+ *  `validateExpr`, `typeToZodSchema` fell through to its default, and the
+ *  cast was validated against a string schema. */
+function hasNoSchema(
+  type: VariableType,
+  aliases: Record<string, TypeAliasEntry>,
+  seen: string[] = [],
+): boolean {
+  return visitTypes(type, (nested) => {
+    if (TYPES_WITHOUT_SCHEMA.includes(nested.type)) {
+      return true;
+    }
+    if (nested.type !== "typeAliasVariable" || seen.includes(nested.aliasName)) {
+      return false;
+    }
+    return hasNoSchema(safeResolveType(nested, aliases), aliases, [...seen, nested.aliasName]);
+  });
+}
 
 function synthCastExpression(
   expr: CastExpression,
@@ -545,17 +568,24 @@ function synthCastExpression(
   ctx: TypeCheckerContext,
 ): VariableType {
   const source = synthType(expr.expression, scope, ctx);
+  const aliases = ctx.getTypeAliases();
+  // A cast target is a type-writing position like an annotation, so an
+  // undefined or misused alias earns the same diagnostics there.
+  validateTypeReferences(expr.targetType, "a cast", aliases, ctx.errors, expr.loc);
   const diagnostics = expr.checked
-    ? checkedCastDiagnostics(expr)
-    : uncheckedCastDiagnostics(expr, source, ctx.getTypeAliases());
+    ? checkedCastDiagnostics(expr, aliases)
+    : uncheckedCastDiagnostics(expr, source, aliases);
   ctx.errors.push(...diagnostics);
   return resultTypeForValidation(expr.targetType, expr.checked);
 }
 
 /** The runtime validation decides a checked cast, so the only static rule
  *  is that the target has a schema to validate against. */
-function checkedCastDiagnostics(expr: CastExpression): TypeCheckError[] {
-  if (!hasNoSchema(expr.targetType)) {
+function checkedCastDiagnostics(
+  expr: CastExpression,
+  aliases: Record<string, TypeAliasEntry>,
+): TypeCheckError[] {
+  if (!hasNoSchema(expr.targetType, aliases)) {
     return [];
   }
   return [diagnostic("castNoSchema", { type: formatTypeHint(expr.targetType) }, expr.loc ?? null)];

@@ -162,10 +162,23 @@ describe("AG1017: a checked cast that can pause, where it cannot be lifted out",
     expect(found).toContain("AG1016");
   });
 
-  it("says nothing about a tagged cast in a handler body, and still reports AG1016 there", () => {
+  // A handler body never pauses and the pass never rewrites one, so AG1017's
+  // advice would be wrong there. AG1020 says what does help.
+  it("AG1020: refuses a tagged cast in a handler body, and still reports AG1016 there", () => {
     const body = `  handle {\n    use(a)\n  } with (intr) {\n    const v = a as Positive!\n    const w = a + b as number\n    return approve()\n  }`;
+    expect(count(body, "AG1020")).toBe(1);
     expect(count(body, "AG1017")).toBe(0);
     expect(count(body, "AG1016")).toBe(1);
+  });
+
+  it("AG1020: refuses it even on its own line, where moving it cannot help", () => {
+    const body = `  handle {\n    use(a)\n  } with (intr) {\n    const v = a as Positive!\n    return approve()\n  }`;
+    expect(count(body, "AG1020")).toBe(1);
+  });
+
+  it("allows an untagged checked cast in a handler body", () => {
+    const body = `  handle {\n    use(a)\n  } with (intr) {\n    const v = a as Person!\n    return approve()\n  }`;
+    expect(count(body, "AG1020")).toBe(0);
   });
 
   it("allows a tagged cast in the body of an if statement", () => {

@@ -89,4 +89,41 @@ describe("AG1015: checked casts need a schema", () => {
   it("allows an unchecked cast to a function type", () => {
     expect(codes(`  const f: any = 1\n  const g = f as (n: number) => string`)).toEqual([]);
   });
+
+  // The written function type was refused from the start; an alias to one
+  // was not, and the cast reached the schema mapper, whose default emitted
+  // a string schema. Each row names an alias the walk has to resolve
+  // through, and the last one is the shape that would hang a naive walk.
+  it.each([
+    ["a plain alias", "Handler"],
+    ["an alias of an alias", "Wrapped"],
+    ["an array of an alias", "Handler[]"],
+    ["a Result of an alias", "Result<Handler>"],
+  ])("refuses a checked cast to a function type reached through %s", (_name, type) => {
+    const prelude = `type Handler = (n: number) => string\ntype Wrapped = Handler\n`;
+    const source = `${prelude}node main() {\n  const f: any = 1\n  const g = f as ${type}!\n}\n`;
+    expect(allCodes(source)).toContain("AG1015");
+  });
+
+  it("does not loop on a recursive alias", () => {
+    const source = `type Loop = { next: Loop | null }\nnode main() {\n  const n: any = 1\n  const r = n as Loop!\n}\n`;
+    expect(allCodes(source)).toEqual([]);
+  });
+});
+
+describe("AG1006: a cast target is a type-writing position", () => {
+  // Before this, a typo'd type name in a cast drew nothing at all: the
+  // checked form compiled to a reference to an undeclared identifier, and
+  // the unchecked form silently retyped the expression to an alias nobody
+  // defined.
+  it.each([
+    ["a checked cast", "n as Missing!"],
+    ["an unchecked cast", "n as Missing"],
+  ])("reports an undefined type name in %s", (_name, expr) => {
+    expect(codes(`  const n: any = 5\n  const s = ${expr}`)).toContain("AG1006");
+  });
+
+  it("says nothing about a type that is defined", () => {
+    expect(codes(`  const n: any = 5\n  const s = n as Person!`)).toEqual([]);
+  });
 });

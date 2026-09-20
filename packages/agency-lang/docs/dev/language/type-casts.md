@@ -1,9 +1,7 @@
 # Type casts: `expr as Type` and `expr as Type!`
 
-Agents that write Agency keep writing TypeScript-style casts. Before this
-existed, `const r = foo() as Person` parsed as the assignment `const r =
-foo()` followed by two stray statements, `as` and `Person`, and the author
-saw `AG4007 Variable 'as' is not defined`.
+Agents that write Agency keep writing TypeScript-style casts, so Agency
+parses them.
 
 ## The two forms
 
@@ -172,7 +170,8 @@ program compiles.
 The check is then a filter over that list. A `stuck` cast gets AG1017, which
 says to move it to its own line. A cast in a module-level initializer or a
 parameter default is `outsideBodies` and gets AG1019, which says to do the
-cast inside a node or a def, because there is no line to move to.
+cast inside a node or a def, because there is no line to move to. A cast in
+a handler body is `handlerBody` and gets AG1020, below.
 
 `typeRunsValidators` in `validationDescriptor.ts` is the one answer to "does
 validating this type run validators?". The builder's `validateExpr` asks it
@@ -184,21 +183,45 @@ The refusal covers tagged casts only. The most common use of a checked cast
 is `raw as Person! catch fallback`, and the left side of `catch` is opaque.
 With no tags that cast is a synchronous check, so it stays legal.
 
+## The target type is a type-writing position
+
+`synthCastExpression` runs `validateTypeReferences` on the target, so a
+cast gets the same diagnostics an annotation does: AG1006 for a name with no
+`type` declaration, and the generic and value-parameter checks. Both forms
+need it. The checked form compiled a typo into a reference to an undeclared
+identifier, which threw a `ReferenceError` at runtime; the unchecked form
+silently retyped the expression to an alias nobody defined, which disabled
+checking on everything downstream.
+
+`hasNoSchema`, which decides AG1015, resolves each alias as it walks.
+`visitTypes` descends without resolving, and `resolveTypeDeep` leaves a
+plain non-generic alias intact on purpose so codegen can emit the
+already-declared schema constant by name. So `type Handler = (n: number) =>
+string` used to slip past the refusal that `(n: number) => string` earned
+directly, reach `validateExpr`, and be validated against `typeToZodSchema`'s
+default string schema.
+
 ## An unchecked cast runs no validator
 
 `x as Asked`, where `Asked` carries `@validate` tags, runs nothing. That
 matches TypeScript and is intended.
 
-## Open question: validators in handler bodies
+### Handler bodies, AG1020
 
 The pass never touches a handler body, because it compiles to plain
-JavaScript that cannot pause. `const b: Asked! = 6` inside a handler body,
-where `Asked` has an interrupting validator, compiles today with no
-diagnostic to an awaited `__validateChainRecursive` call inside
-`runner.handle`. The same question applies to any Agency function call in a
-handler body, so it is not specific to casts. A tagged cast in a handler
-body follows whatever the declaration bang does, and AG1017 says nothing
-about handler bodies. AG1016 still applies there.
+JavaScript with no steps and cannot pause. A tagged cast there is refused
+with its own code, because AG1017's advice would be wrong: moving the cast
+to its own line inside the handler changes nothing. AG1020 says to do the
+cast before the `handle` block instead.
+
+A cast is refused here while a plain Agency call in the same position is
+not. The difference is visibility: a call shows its interrupt in the source,
+while `6 as Asked!` reads like a coercion and hides the interrupt behind a
+`@validate` tag on a type declared elsewhere. Handlers are how a user
+rejects an action, so the quiet case is the one worth refusing. What any
+pausing Agency call should do in a handler body is still open. `const b:
+Asked! = 6` there compiles today to an awaited `__validateChainRecursive`
+inside `runner.handle` with no diagnostic.
 
 ## Files
 

@@ -172,6 +172,12 @@ export const DIAGNOSTICS = {
     message:
       "This checked cast runs validators that can pause the program, and it cannot be resumed safely in this position. Move it to its own line: `const value = {cast}`.",
   },
+  castCanPauseInHandlerBody: {
+    code: "AG1020",
+    severity: "error",
+    message:
+      "`{cast}` runs validators that can pause the program, and a handler body cannot pause. Do the cast before the `handle` block and use the value here.",
+  },
   castCanPauseOutsideBody: {
     code: "AG1019",
     severity: "error",

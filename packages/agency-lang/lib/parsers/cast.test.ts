@@ -262,6 +262,15 @@ describe("is and as together", () => {
 });
 
 describe("errors", () => {
+  // blockOpening requires the `{` on the same line as the params, so a block
+  // whose parameter list spans lines reaches the cast parser. The message has
+  // to name that reading too.
+  it("names both readings when a block parameter list spans lines", () => {
+    const parsed = parseValue("[1, 2].map() as (\n    x\n  ) {\n    return x + 1\n  }") as any;
+    expect(parsed.success).toBe(false);
+    expect(parsed.message).toContain("`{` on this line");
+  });
+
   it("a missing type is reported with a position, not as 'expected node body'", () => {
     const parsed = parseAgency("node main() {\n  const r = 1 + f(x as)\n}\n", {}, false) as any;
     expect(parsed.success).toBe(false);

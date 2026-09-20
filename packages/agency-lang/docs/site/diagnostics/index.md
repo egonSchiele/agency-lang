@@ -32,6 +32,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG1017](types-aliases.md#ag1017) | This checked cast runs validators that can pause the program, and it cannot be resumed safely in this position. Move it to its own line: `const value = &#123;cast&#125;`. |
 | [AG1018](types-aliases.md#ag1018) | `&#123;expr&#125;` is a `&#123;from&#125;`. A cast does not unwrap it. Unwrap the Result first, with `match` or `catch`, then cast the value if you still need to. |
 | [AG1019](types-aliases.md#ag1019) | `&#123;cast&#125;` runs validators that can pause the program, and a module-level initializer or a parameter default cannot pause. Do the cast inside a node or a def. |
+| [AG1020](types-aliases.md#ag1020) | `&#123;cast&#125;` runs validators that can pause the program, and a handler body cannot pause. Do the cast before the `handle` block and use the value here. |
 
 ## Assignability and checking
 

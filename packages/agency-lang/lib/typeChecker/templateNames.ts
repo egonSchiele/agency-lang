@@ -1,5 +1,6 @@
 import { buildCompilationUnit, GLOBAL_SCOPE_KEY } from "../compilationUnit.js";
 import { PRELUDE_NAMES } from "../prelude.js";
+import { getReExportedLocalNames } from "../types/exportFromStatement.js";
 import { declaredName } from "../types/hole.js";
 import { holeNames } from "../utils/holes.js";
 import { walkNodes, walkNodesArray } from "../utils/node.js";
@@ -218,7 +219,8 @@ function templateNameScopes(nodes: AgencyNode[], context: TypeCheckerContext): T
 }
 
 /**
- * Every name the template's own imports bring in, as a resolvable alias.
+ * Every name the template's own imports and re-exports bring in, as a
+ * resolvable alias.
  *
  * A template that imports `Person` may annotate with it, and no file gets
  * read to prove that, exactly as an imported function is accepted without
@@ -231,6 +233,12 @@ function templateNameScopes(nodes: AgencyNode[], context: TypeCheckerContext): T
 function importedTypeStubs(nodes: AgencyNode[]): Record<string, TypeAliasEntry> {
   const stubs: Record<string, TypeAliasEntry> = Object.create(null);
   for (const node of nodes) {
+    if (node.type === "exportFromStatement" && node.body.kind === "namedExport") {
+      for (const local of getReExportedLocalNames(node.body)) {
+        stubs[local] = { body: ANY_T };
+      }
+      continue;
+    }
     if (node.type !== "importStatement") continue;
     for (const entry of node.importedNames) {
       if (entry.type !== "namedImport") continue;

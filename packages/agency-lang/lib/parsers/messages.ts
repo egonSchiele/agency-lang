@@ -16,6 +16,13 @@
 export const BODY_DECLARATION_MESSAGE =
   "`node`, `def` and `function` declarations are only legal at the top level of a file.";
 
+/** `"${if a then b else c}"`. Without this check the parse fails somewhere
+ *  far from the string, with a message about the enclosing block. */
+export const IF_IN_INTERPOLATION_MESSAGE = `an \`if ... then ... else\` expression cannot go inside \`\${...}\`. Give it a name first:
+
+  const size = if count > 3 then "big" else "small"
+  const label = "value: \${size}"`;
+
 export const BODY_RESERVED_MODIFIER_MESSAGE =
   "`static` and `export` declarations are only supported at module top level. " +
   "Inside function and node bodies, use `optimize const ...` for optimizable local declarations or ordinary `const`/`let` declarations.";
@@ -96,6 +103,12 @@ export const JS_REGEX_MESSAGE = `Agency writes a regex literal as \`re/.../\`, n
 
 export const UNREADABLE_STATEMENT_MESSAGE =
   "cannot read the statement that starts here. If the block is finished, close it with `}`";
+
+export const DECLARATION_WITHOUT_VALUE_MESSAGE = `a \`let\` or \`const\` needs a value. Agency has no declaration without one:
+
+  let subject: string = ""
+
+To set it in an \`if\`, give it a starting value first, or use an \`if ... then ... else\` expression as the value.`;
 
 export const IF_EXPRESSION_MESSAGE = `an \`if ... then ... else\` expression requires an \`else\` branch:
 

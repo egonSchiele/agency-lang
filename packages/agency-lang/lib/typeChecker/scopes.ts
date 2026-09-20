@@ -11,6 +11,7 @@ import {
 import type { SourceLocation } from "../types/base.js";
 import { GLOBAL_SCOPE_KEY, scopeKey } from "../compilationUnit.js";
 import { getImportedNames } from "../types/importStatement.js";
+import { getReExportedLocalNames } from "../types/exportFromStatement.js";
 import { isAssignable, widenType } from "./assignability.js";
 import { synthType, synthValueAccess } from "./synthesizer.js";
 import type { AccessChainElement, ValueAccess } from "../types/access.js";
@@ -403,6 +404,16 @@ export function walkScopeBody(nodes: AgencyNode[], scope: Scope, ctx: TypeChecke
           for (const name of getImportedNames(importName)) {
             scope.declare(name, importedValueType(name, ctx));
           }
+        }
+        break;
+      // `export { X } from "./m"` also declares X here. A real compile has
+      // already lowered these away; a template body is checked unlowered.
+      case "exportFromStatement":
+        if (node.body.kind !== "namedExport") {
+          break;
+        }
+        for (const name of getReExportedLocalNames(node.body)) {
+          scope.declare(name, importedValueType(name, ctx));
         }
         break;
       case "forLoop": {

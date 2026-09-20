@@ -33,9 +33,9 @@ Builds interactive terminal UIs for CLI agents. Assemble a screen from
 
 ### Element
 
-* Opaque tree node. The builder functions below produce it. Only
- * `runLoop` and `renderOnce` consume it. Users do not construct one
- * directly.
+Opaque tree node. The builder functions below produce it. Only
+`runLoop` and `renderOnce` consume it. Users do not construct one
+directly.
 
 ```ts
 /**
@@ -58,15 +58,15 @@ export type Element = {
 
 ### KeyEvent
 
-* Keystroke delivered to `handleKey` blocks.
- *
- * `key` is either a named special key — `"up"`, `"down"`, `"left"`,
- * `"right"`, `"enter"`, `"escape"`, `"backspace"`, `"tab"`,
- * `"home"`, `"end"`, `"pageup"`, `"pagedown"`, `"delete"`,
- * `"insert"` — or a single printable character (e.g. `"q"`, `"/"`,
- * `" "`). Mirrors the encoding in `lib/tui/input/terminal.ts`.
- *
- * `shift` / `ctrl` indicate held modifier keys at keypress time.
+Keystroke delivered to `handleKey` blocks.
+
+`key` is either a named special key — `"up"`, `"down"`, `"left"`,
+`"right"`, `"enter"`, `"escape"`, `"backspace"`, `"tab"`,
+`"home"`, `"end"`, `"pageup"`, `"pagedown"`, `"delete"`,
+`"insert"` — or a single printable character (e.g. `"q"`, `"/"`,
+`" "`). Mirrors the encoding in `lib/tui/input/terminal.ts`.
+
+`shift` / `ctrl` indicate held modifier keys at keypress time.
 
 ```ts
 /**
@@ -92,16 +92,16 @@ export type KeyEvent = {
 
 ### Builder
 
-* Builder receiver passed to every container block. Method calls
- * append child elements to the enclosing parent in source order.
- *
- * Container methods (`row`, `column`, `box`) take a trailing block
- * that receives a fresh Builder for the new child's contents. Leaf
- * methods (`line`, `text`, `list`, `textInput`) don't.
- *
- * The methods are typed `any` because each one accepts a different
- * named-arg signature. The top-level builders (`column`, `row`, etc.)
- * document the full signatures.
+Builder receiver passed to every container block. Method calls
+append child elements to the enclosing parent in source order.
+
+Container methods (`row`, `column`, `box`) take a trailing block
+that receives a fresh Builder for the new child's contents. Leaf
+methods (`line`, `text`, `list`, `textInput`) don't.
+
+The methods are typed `any` because each one accepts a different
+named-arg signature. The top-level builders (`column`, `row`, etc.)
+document the full signatures.
 
 ```ts
 /**
@@ -131,9 +131,9 @@ export type Builder = {
 
 ### ChoiceItem
 
-* One option in a `chooseOption()` modal. `key` is the value the
- * Promise resolves to when the user picks this row; `label` is the
- * human-readable text rendered in the modal.
+One option in a `chooseOption()` modal. `key` is the value the
+Promise resolves to when the user picks this row; `label` is the
+human-readable text rendered in the modal.
 
 ```ts
 /**
@@ -162,11 +162,11 @@ Build a plain text element. It carries no layout sizing of its own,
 
   @param content - The text to render
 
-* A plain text element. It carries no layout sizing, so embed it
- * inside a `box` or `column` for layout. Prefer `line` when you want a
- * single-row height-1 element.
- *
- * @param content - The text to render
+A plain text element. It carries no layout sizing, so embed it
+inside a `box` or `column` for layout. Prefer `line` when you want a
+single-row height-1 element.
+
+@param content - The text to render
 
 **Parameters:**
 
@@ -210,11 +210,11 @@ Build a single-line text element (height 1) so it does not stretch
   @param bold - Render the text bold
   @param fill - Character used to pad unused cells (default: space)
 
-* A single-line text element with `height: 1`. The default keeps it
- * from stretching via flex when placed inside a `column`. Caller-
- * provided style merges on top.
- *
- * @param content - The text to render
+A single-line text element with `height: 1`. The default keeps it
+from stretching via flex when placed inside a `column`. Caller-
+provided style merges on top.
+
+@param content - The text to render
 
 **Parameters:**
 
@@ -262,11 +262,11 @@ Build a scrollable selectable list. `selectedIndex` highlights one
   @param borderColor - Color name or hex for the border
   @param visible - Set false to render the element as zero-height
 
-* A scrollable selectable list. `selectedIndex` highlights one row.
- * The renderer clamps out-of-range values.
- *
- * @param items - The strings to display, one per row
- * @param selectedIndex - 0-based row to highlight (default 0)
+A scrollable selectable list. `selectedIndex` highlights one row.
+The renderer clamps out-of-range values.
+
+@param items - The strings to display, one per row
+@param selectedIndex - 0-based row to highlight (default 0)
 
 **Parameters:**
 
@@ -309,11 +309,11 @@ Build a single-line text input. The renderer displays `value` with
   @param fg - Foreground color (named or hex)
   @param bg - Background color (named or hex)
 
-* A single-line text input. The renderer displays `value` with a
- * cursor. The caller owns key handling; use `runLoop`'s `handleKey`
- * to append characters and handle backspace.
- *
- * @param value - Current contents of the buffer
+A single-line text input. The renderer displays `value` with a
+cursor. The caller owns key handling; use `runLoop`'s `handleKey`
+to append characters and handle backspace.
+
+@param value - Current contents of the buffer
 
 **Parameters:**
 
@@ -364,11 +364,11 @@ Build a vertical container; children stack top-to-bottom. Pass a
   @param visible - Set false to render as zero-height
   @param block - Builder callback; appended children populate the column
 
-* A vertical container. Children stack top-to-bottom. The trailing
- * block receives a fresh `Builder` to populate the column.
- *
- * Always pass at least one named arg: `column() as col { ... }` parses
- * positionally, which lands the block in `flex`.
+A vertical container. Children stack top-to-bottom. The trailing
+block receives a fresh `Builder` to populate the column.
+
+Always pass at least one named arg: `column() as col { ... }` parses
+positionally, which lands the block in `flex`.
 
 **Parameters:**
 
@@ -424,8 +424,8 @@ Build a horizontal container; children stack left-to-right. Pass a
   @param visible - Set false to render as zero-height
   @param block - Builder callback; appended children populate the row
 
-* A horizontal container. Children stack left-to-right. The trailing
- * block receives a fresh `Builder` to populate the row.
+A horizontal container. Children stack left-to-right. The trailing
+block receives a fresh `Builder` to populate the row.
 
 **Parameters:**
 
@@ -481,8 +481,8 @@ Build a direction-neutral container. Use it to apply styling
   @param visible - Set false to render as zero-height
   @param block - Builder callback; appended children populate the box
 
-* A direction-neutral container. Use when you want to apply styling
- * (border, padding, background) without setting `flexDirection`.
+A direction-neutral container. Use when you want to apply styling
+(border, padding, background) without setting `flexDirection`.
 
 **Parameters:**
 
@@ -515,9 +515,9 @@ Render a single Element tree to the screen and return immediately.
 
   @param tree - The element tree to render
 
-* Render a single Element tree to the screen and return immediately.
- * For static UI or first-paint scenarios. For interactive UI, use
- * `runLoop`.
+Render a single Element tree to the screen and return immediately.
+For static UI or first-paint scenarios. For interactive UI, use
+`runLoop`.
 
 **Parameters:**
 
@@ -537,9 +537,9 @@ Read one key from the terminal, blocking until a key is pressed.
   Returns a `KeyEvent` whose `key` field is either a named special key
   (`"up"`, `"enter"`, `"escape"`, ...) or a single printable character.
 
-* Read one key from the terminal. Blocks until a key is pressed.
- * Use sparingly; prefer `runLoop` for anything beyond a single
- * blocking prompt.
+Read one key from the terminal. Blocks until a key is pressed.
+Use sparingly; prefer `runLoop` for anything beyond a single
+blocking prompt.
 
 **Returns:** [KeyEvent](#keyevent)
 
@@ -573,21 +573,21 @@ Elm/Ink-style state machine driver. Renders `initialState`, waits
   @param isDone - Pure (state) -> boolean; loop exits when true
   @param tickMs - Milliseconds between forced re-renders (omit for event-driven only)
 
-* Elm/Ink-style state machine driver. Renders the initial state,
- * waits for each `KeyEvent`, runs `handleKey` to produce the next
- * state, re-renders, exits when `isDone` returns `true`. Returns
- * the final state.
- *
- * When `tickMs` is set, the loop also re-renders periodically even
- * if no key is pressed. This is what makes a live status line tick.
- * `handleKey` does NOT fire on ticks. Only `render` does,
- * re-evaluating any impure state your view reads.
- *
- * @param initialState - The opening state record
- * @param render       - Pure (state) -> Element. Re-runs every tick / key.
- * @param handleKey    - Pure (state, key) -> state. Runs only on real keys.
- * @param isDone       - Pure (state) -> boolean. Loop exits when true.
- * @param tickMs       - Milliseconds between forced re-renders (omit for event-driven only)
+Elm/Ink-style state machine driver. Renders the initial state,
+waits for each `KeyEvent`, runs `handleKey` to produce the next
+state, re-renders, exits when `isDone` returns `true`. Returns
+the final state.
+
+When `tickMs` is set, the loop also re-renders periodically even
+if no key is pressed. This is what makes a live status line tick.
+`handleKey` does NOT fire on ticks. Only `render` does,
+re-evaluating any impure state your view reads.
+
+@param initialState - The opening state record
+@param render       - Pure (state) -> Element. Re-runs every tick / key.
+@param handleKey    - Pure (state, key) -> state. Runs only on real keys.
+@param isDone       - Pure (state) -> boolean. Loop exits when true.
+@param tickMs       - Milliseconds between forced re-renders (omit for event-driven only)
 
 **Parameters:**
 
@@ -658,9 +658,9 @@ Ask the user to pick from a list with arrow keys (no type-to-filter).
   @param allowFreeText - Append a free-text entry row
   @param hint - Dim hint shown after the message
 
-* Raises if a `repl()` owns the screen, or if stdout is not a TTY.
- * When a `repl()` owns the screen, use an in-TUI modal prompt instead.
- * Non-TTY output has no fallback, so the caller must script around it.
+Raises if a `repl()` owns the screen, or if stdout is not a TTY.
+When a `repl()` owns the screen, use an in-TUI modal prompt instead.
+Non-TTY output has no fallback, so the caller must script around it.
 
 **Parameters:**
 
@@ -702,7 +702,7 @@ Ask the user to pick from a list, filtering by typed text. Returns
     unwinds the current run instead of returning `failure("cancelled")`.
     Use it where Escape should abort the whole request rather than re-ask
 
-* Raises if a `repl()` owns the screen or if stdout is not a TTY.
+Raises if a `repl()` owns the screen or if stdout is not a TTY.
 
 **Parameters:**
 
@@ -740,12 +740,12 @@ Ask the user for a line of free-form text. Returns `success(typed)`
   @param hint - Dim hint shown after the message
   @param validate - Optional `(value) => true | "error message"` validator
 
-* Named `prompt` rather than `text` to avoid colliding with the Layer 1
- * `text` element builder. Raises if a `repl()` owns the screen or if
- * stdout is not a TTY.
- *
- * Bind `validate` via `.partial()` before handing `prompt` to an LLM as
- * a tool so the LLM cannot override the constraint.
+Named `prompt` rather than `text` to avoid colliding with the Layer 1
+`text` element builder. Raises if a `repl()` owns the screen or if
+stdout is not a TTY.
+
+Bind `validate` via `.partial()` before handing `prompt` to an LLM as
+a tool so the LLM cannot override the constraint.
 
 **Parameters:**
 
@@ -773,7 +773,7 @@ Ask the user a yes/no question. Returns `success(true)`,
   @param message - The question shown to the user
   @param initial - Default position (false = "no")
 
-* Raises if a `repl()` owns the screen or if stdout is not a TTY.
+Raises if a `repl()` owns the screen or if stdout is not a TTY.
 
 **Parameters:**
 
@@ -813,10 +813,10 @@ Show a modal choice prompt and block until the user picks one. Returns
     raising a cancellation that unwinds the run, instead of re-prompting.
     The default of false enforces a "must answer" contract
 
-* When no `repl()` is running, falls back to a plain print + input
- * loop that re-asks until the user answers. std::policy uses it to
- * surface its approve/reject menus through the active REPL without
- * fighting the input bar.
+When no `repl()` is running, falls back to a plain print + input
+loop that re-asks until the user answers. std::policy uses it to
+surface its approve/reject menus through the active REPL without
+fighting the input bar.
 
 **Parameters:**
 
@@ -864,9 +864,9 @@ Drop-in REPL widget for interactive CLI agents. Bundles a scrollable
   @param paletteCommands - Map of /cmd -> description, iterated in order
   @param tickMs - Render cadence in ms; null (default) is event-driven
 
-* A positive `tickMs` enables live status / spinner updates between
- * keys but currently leaks one pinned runtime checkpoint per render,
- * so prefer the event-driven default.
+A positive `tickMs` enables live status / spinner updates between
+keys but currently leaks one pinned runtime checkpoint per render,
+so prefer the event-driven default.
 
 **Parameters:**
 

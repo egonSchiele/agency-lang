@@ -298,16 +298,10 @@ describe("getSemanticTokens known gaps", () => {
     expect(helperTokens[0].line).toBe(5);
   });
 
-  it("TRIPWIRE: cannot color the callee of an `async` call", () => {
-    // An `async foo()` call node takes its loc.col from the `async`
-    // keyword, not from `foo`. The token would paint `async ` — the
-    // keyword and a space — so paintsItsOwnName drops it and the call
-    // gets no semantic color. The TextMate grammar still colors it.
-    //
-    // WHEN THIS TEST FAILS: someone fixed the loc. That is the good
-    // outcome. Delete this test.
+  it("colors the callee of an `async` call", () => {
     const source = `def helper(): number {\n  return 1\n}\n\nnode main() {\n  const a = async helper()\n  print(a)\n}`;
-    expect(textsFor(source).filter((t) => t === "helper")).toEqual([]);
+    const onAsyncLine = tokensFor(source).filter((t) => t.text === "helper" && t.line === 5);
+    expect(onAsyncLine.length).toBe(1);
   });
 
   it.skip("block-scope shadowing is not resolved", () => {

@@ -39,9 +39,9 @@ export type Style = "bold" | "italic" | "underline" | "dim"
 
 ### TokenStyle
 
-* The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
- * termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
- * bold / italic / underline / dim.
+The style for one token class. `color` is a hex string (e.g. "#569CD6") or a
+termcolors named color (e.g. "red", "brightGreen"). `styles` optionally adds
+bold / italic / underline / dim.
 
 ```ts
 /**
@@ -59,10 +59,10 @@ export type TokenStyle = {
 
 ### ColorScheme
 
-* A custom color scheme. Each field is a highlight.js token class. The
- * non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
- * `metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
- * "vscode-dark" scheme.
+A custom color scheme. Each field is a highlight.js token class. The
+non-identifier classes use camelCase names (e.g. `builtIn` -> `built_in`,
+`metaKeyword` -> `meta-keyword`). All fields are optional and merge over the
+"vscode-dark" scheme.
 
 ```ts
 /**
@@ -121,9 +121,9 @@ export type ColorScheme = {
 
 ### ThemeName
 
-* The name of a built-in color scheme. Naming each one instead of taking a
- * plain `string` keeps the tool schema small and tells a model which values
- * are actually accepted.
+The name of a built-in color scheme. Naming each one instead of taking a
+plain `string` keeps the tool schema small and tells a model which values
+are actually accepted.
 
 ```ts
 /**
@@ -199,8 +199,8 @@ Syntax-highlight a code snippet and return the highlighted string.
   @param mode - Output format: "shell" for terminal output, "web" for web output
   @param theme - A named color scheme ("vscode-dark", "github-dark", "monokai", "dracula", "nord", "github", "a11y-dark", "a11y-light")
 
-* When `language` is "markdown", fenced code blocks use the default palette
- * regardless of `theme`.
+When `language` is "markdown", fenced code blocks use the default palette
+regardless of `theme`.
 
 **Parameters:**
 

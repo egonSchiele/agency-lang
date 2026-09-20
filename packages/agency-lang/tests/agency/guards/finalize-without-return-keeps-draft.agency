@@ -1,0 +1,28 @@
+let cleanups = 0
+
+def worker(): string {
+  saveDraft("worker-draft")
+  sleep(2000)
+  return "worker-done"
+
+  finalize {
+    cleanups = cleanups + 1
+  }
+}
+
+node main(): string {
+  handle {
+    const r = guard(time: 200ms, label: "outer") {
+      return worker()
+    }
+    if (isFailure(r)) {
+      return "failure:${r.error}|cleanups:${cleanups}"
+    }
+    return "value:${r.value}|cleanups:${cleanups}"
+  } with (intr) {
+    if (intr.effect == "std::guard" && intr.data.label == "outer") {
+      return reject("budget")
+    }
+    return pass()
+  }
+}

@@ -28,9 +28,9 @@ node main() {
 ### LlmDefaults
 
 Default options for `llm()` calls. Every field is optional; only the
- *  fields you pass are changed. `provider` is normally derived from the
- *  model name. Set it only when the name doesn't imply a provider (e.g.
- *  a custom or local model).
+ fields you pass are changed. `provider` is normally derived from the
+ model name. Set it only when the name doesn't imply a provider (e.g.
+ a custom or local model).
 
 ```ts
 /** Default options for `llm()` calls. Every field is optional; only the

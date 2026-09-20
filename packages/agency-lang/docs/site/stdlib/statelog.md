@@ -97,11 +97,11 @@ Set a stable display name for this agent, used to group its runs.
 
   @param name - The agent name, e.g. "gcode-v2".
 
-* Names this agent in the statelog. Cross-run tools (the runs explorer,
- * statelog's eval pages) group runs under this identity instead of the
- * launch command. Call it once, early; the last call in a trace wins. The
- * name is also a URL path segment on statelog, so an invalid one throws
- * rather than producing a trace that cannot be grouped.
+Names this agent in the statelog. Cross-run tools (the runs explorer,
+statelog's eval pages) group runs under this identity instead of the
+launch command. Call it once, early; the last call in a trace wins. The
+name is also a URL path segment on statelog, so an invalid one throws
+rather than producing a trace that cannot be grouped.
 
 **Parameters:**
 
@@ -139,15 +139,15 @@ Record a value as the agent's user-facing response. May be called multiple times
 
   @param value - The value to record. Any JSON-serializable type is accepted.
 
-* Records the value in the statelog as an `evalOutputRecorded` event, which
- * `agency eval extract` surfaces on the `evalOutputs[]` field. When no eval
- * annotation exists in a trace, `eval extract` falls back to a heuristic
- * (last LLM completion on the top-level thread) and emits a warning.
- * Annotating explicitly is preferred, since the heuristic does not account
- * for post-LLM processing the agent applies before showing a response. The
- * consuming eval / judge / task definition decides what to do with multiple
- * firings (e.g. a pairwise judge can use the last firing). Same
- * serialization rules as `evalValue`.
+Records the value in the statelog as an `evalOutputRecorded` event, which
+`agency eval extract` surfaces on the `evalOutputs[]` field. When no eval
+annotation exists in a trace, `eval extract` falls back to a heuristic
+(last LLM completion on the top-level thread) and emits a warning.
+Annotating explicitly is preferred, since the heuristic does not account
+for post-LLM processing the agent applies before showing a response. The
+consuming eval / judge / task definition decides what to do with multiple
+firings (e.g. a pairwise judge can use the last firing). Same
+serialization rules as `evalValue`.
 
 **Parameters:**
 

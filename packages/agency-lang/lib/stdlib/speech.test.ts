@@ -273,6 +273,41 @@ describe("_synthesizeSpeech", () => {
     });
   });
 
+  it("passes instructions to the client, and leaves the key out when empty", async () => {
+    const configs: any[] = [];
+    const speak: SpeakImpl = async (_text, config) => {
+      configs.push(config);
+      return speakOk();
+    };
+    await withClient({ speak }, async () => {
+      await _synthesizeSpeech(
+        "hi",
+        path.join(root, "calm.mp3"),
+        "alloy",
+        "gpt-4o-mini-tts",
+        "",
+        "mp3",
+        1,
+        [root],
+        "",
+        "Calm and slow.",
+      );
+      await _synthesizeSpeech(
+        "hi",
+        path.join(root, "plain.mp3"),
+        "alloy",
+        "tts-1",
+        "",
+        "mp3",
+        1,
+        [root],
+        "",
+      );
+    });
+    expect(configs[0].instructions).toBe("Calm and slow.");
+    expect(configs[1]).not.toHaveProperty("instructions");
+  });
+
   it("refuses to overwrite an existing file, before any paid dispatch", async () => {
     const out = path.join(root, "exists.mp3");
     await writeFile(out, Buffer.from([0]));

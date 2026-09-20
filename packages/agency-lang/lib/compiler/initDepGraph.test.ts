@@ -7,6 +7,7 @@ import { parseAgency } from "../parser.js";
 import { SymbolTable } from "../symbolTable.js";
 import { buildInitDepGraphs, makeKey, StaticReferencesGlobalError } from "./initDepGraph.js";
 import { resolveReExports } from "../preprocessors/resolveReExports.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 
 function parse(source: string): AgencyProgram {
   const result = parseAgency(source, {}, false);
@@ -108,6 +109,28 @@ describe("buildInitDepGraphs", () => {
       expect(staticGraph.edges[keyAge]).toEqual([keyMin]);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds an edge for a static read through the default of an omitted value parameter", () => {
+    const { dir, programs, symbolTable, abs } = writeFixture({
+      "entry.agency":
+        `def gt(minValue: number, value: number): Result<number> { return success(value) }\n` +
+        `@validate(gt.partial(minValue: min))\n` +
+        `type AtLeast(min: number = minAge) = number\n` +
+        `static const age: AtLeast! = 10\n` +
+        `static const explicit: AtLeast(1)! = 10\n` +
+        `static const minAge: number = 5\n` +
+        `node main() { return age }\n`,
+    });
+    try {
+      const { staticGraph } = buildInitDepGraphs(programs, symbolTable, abs("entry.agency"));
+      const keyMin = makeKey(abs("entry.agency"), "minAge");
+      expect(staticGraph.edges[makeKey(abs("entry.agency"), "age")]).toEqual([keyMin]);
+      // Supplying the argument means the default is never evaluated.
+      expect(staticGraph.edges[makeKey(abs("entry.agency"), "explicit")]).toEqual([]);
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
     }
   });
 

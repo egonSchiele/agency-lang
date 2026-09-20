@@ -11,9 +11,11 @@ import {
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
   C_STYLE_FOR_MESSAGE,
+  DECLARATION_WITHOUT_VALUE_MESSAGE,
   CATCH_ALL_NOT_LAST,
   DECL_NAME_SPACES_MESSAGE,
   DUPLICATE_ON_CLAUSE,
+  IF_IN_INTERPOLATION_MESSAGE,
   EMPTY_HANDLER_BLOCK,
   MALFORMED_ON_CLAUSE,
   HANDLER_BODY_MESSAGE,
@@ -44,6 +46,7 @@ import {
   char,
   count,
   digit,
+  eof,
   exactly,
   fail,
   failure,
@@ -696,7 +699,30 @@ export const multiLineStringTextSegmentParserFor = (delim: string): Parser<TextS
 export const multiLineStringTextSegmentParser: Parser<TextSegment> =
   multiLineStringTextSegmentParserFor('"""');
 
+const ifInInterpolationParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    str("${"),
+    optionalSpaces,
+    optional(seqC(char("("), optionalSpaces)),
+    str("if"),
+    not(varNameChar),
+  );
+  const probed = probe(input);
+  if (!probed.success) {
+    return failure("", input);
+  }
+  const declined = committedFailure(IF_IN_INTERPOLATION_MESSAGE, input);
+  // See bodyDeclarationParser for why the parse state is set by hand.
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
 export const interpolationSegmentParser: Parser<InterpolationSegment> = withLoc((input: string) => {
+  const declined = ifInInterpolationParser(input);
+  if (isCommittedFailure(declined)) {
+    return declined;
+  }
+
   const parser = seqC(
     char("$"),
     char("{"),
@@ -3574,24 +3600,42 @@ export const _valueAccessParser: Parser<VariableNameLiteral | FunctionCall | Val
   },
 );
 
+// `async foo()` is one node whose loc starts at the keyword, because a bare
+// `async foo()` statement is located by that node. The callee's own position
+// goes in `nameLoc`, which is what lets the editor color `foo`.
+const locatedValueAccessParser = withLoc(_valueAccessParser);
+
+type LocatedAccess = (FunctionCall | ValueAccess | VariableNameLiteral) & { loc: SourceLocation };
+
+function withNameLoc(access: LocatedAccess): FunctionCall | ValueAccess | VariableNameLiteral {
+  if (access.type !== "functionCall") {
+    return access;
+  }
+  return { ...access, nameLoc: access.loc };
+}
+
 export const asyncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(str("async"), spaces, capture(_valueAccessParser, "access"));
+  const parser = seqC(str("async"), spaces, capture(locatedValueAccessParser, "access"));
   const result = parser(input);
   if (!result.success) return failure("expected async keyword", input);
 
-  return success({ ...result.result.access, async: true }, result.rest);
+  return success({ ...withNameLoc(result.result.access), async: true }, result.rest);
 };
 
 export const syncValueAccessParser = (
   input: string,
 ): ParserResult<FunctionCall | ValueAccess | VariableNameLiteral> => {
-  const parser = seqC(oneOfStr(["sync", "await"]), spaces, capture(_valueAccessParser, "access"));
+  const parser = seqC(
+    oneOfStr(["sync", "await"]),
+    spaces,
+    capture(locatedValueAccessParser, "access"),
+  );
   const result = parser(input);
   if (!result.success) return failure("expected sync/await keyword", input);
 
-  return success({ ...result.result.access, async: false }, result.rest);
+  return success({ ...withNameLoc(result.result.access), async: false }, result.rest);
 };
 
 export function valueAccessParser(
@@ -5683,6 +5727,33 @@ const cStyleForParser: Parser<never> = (input: string) => {
 };
 
 /**
+ * `let subject: string` with no `= value`. Without this the assignment parser
+ * fails at the end of the line and the message lands on the next statement.
+ */
+export const declarationWithoutValueParser: Parser<never> = (input: string) => {
+  const probe = seqC(
+    oneOfStr(["let", "const"]),
+    spaces,
+    many1WithJoin(varNameChar),
+    optionalSpaces,
+    optional(
+      seqC(
+        char(":"),
+        optionalSpaces,
+        lazy(() => variableTypeParser),
+      ),
+    ),
+    optionalSpaces,
+    or(oneOf(`\n;}${BLANK_LINE_SENTINEL}`), str("//"), eof),
+  );
+  const probed = probe(input);
+  if (!probed.success) return failure("", input);
+  const declined = committedFailure(DECLARATION_WITHOUT_VALUE_MESSAGE, input);
+  getParseState().committedFailure = declined;
+  return declined as ParserResult<never>;
+};
+
+/**
  * `const double = (n) => n * 2`. Blocks in Agency are arguments, not values,
  * so this is not a gap in `arrowBlockParser` — the canonical `\\n -> n * 2`
  * fails in the same position for the same reason. What was missing is the
@@ -5908,6 +5979,7 @@ const _bodyNodeParser: Parser<AgencyNode> = memo(
     // report a missing `(` that is plainly present.
     switchStatementParser,
     cStyleForParser,
+    declarationWithoutValueParser,
     blockAsValueParser,
     // `let res = handle (expr) with H` — expression-position handle (#926).
     // Ahead of withModifierParser/assignmentParser: `handle (…)` is not a valid

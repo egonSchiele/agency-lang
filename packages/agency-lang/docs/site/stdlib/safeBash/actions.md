@@ -22,10 +22,10 @@ What safeBash decides, and the three ways it can carry that out.
 ### Effect
 
 One interrupt a command needs raised before it may run.
- *
- * A discriminated union rather than a bag of `any`: the effect set is
- * closed, so each payload can be typed, and typing them is what makes the
- * raise sites check that every payload satisfies its effect's contract.
+
+A discriminated union rather than a bag of `any`: the effect set is
+closed, so each payload can be typed, and typing them is what makes the
+raise sites check that every payload satisfies its effect's contract.
 
 ```ts
 /** One interrupt a command needs raised before it may run.
@@ -73,11 +73,11 @@ export type GitDiffPayload = {
 ### Execution
 
 What happens if every effect in the plan is approved.
- *
- * One variant per way a plan can be carried out, each carrying only the
- * fields that way needs. The dispatch in `safeBash` matches over this
- * union exhaustively, so adding a variant is a type error at the dispatch
- * rather than a silent fall-through.
+
+One variant per way a plan can be carried out, each carrying only the
+fields that way needs. The dispatch in `safeBash` matches over this
+union exhaustively, so adding a variant is a type error at the dispatch
+rather than a silent fall-through.
 
 ```ts
 /** What happens if every effect in the plan is approved.

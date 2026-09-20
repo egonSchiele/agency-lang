@@ -19,6 +19,12 @@ is applied during scope building in `lib/typeChecker/scopes.ts`.
 > `buildScopes`, which runs before the flow graph exists. Both models share
 > fact production (`analyzeCondition`) and fact application
 > (`narrowByRefine`), so a new narrowing form lands in both automatically.
+> Both narrow member paths too. The scope chain keeps a narrowed path on the
+> branch's child scope (`Scope.declareLocalPath`, written by
+> `applyNarrowing`), and `synthValueAccess` reads it back when there is no
+> flow graph yet. That is what types `const found = request.subject` inside
+> `if (request.subject != null)`, and so an `if ... then ... else` value over
+> a field, which lowers to an unannotated temp per branch.
 > Fusing the walks and deleting the scope-chain path was assessed and
 > deliberately deferred (issue #471): the duplication is inert and the
 > precision delta was not worth the rebuild. The original design spec is no

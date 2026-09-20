@@ -1,13 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { parseAgency } from "@/parser.js";
+import { parseAgency, replaceBlankLines } from "@/parser.js";
 import {
   CATCH_ALL_NOT_LAST,
   C_STYLE_FOR_MESSAGE,
+  DECLARATION_WITHOUT_VALUE_MESSAGE,
   DUPLICATE_ON_CLAUSE,
   EMPTY_HANDLER_BLOCK,
   MALFORMED_ON_CLAUSE,
   HANDLER_BODY_MESSAGE,
   IF_EXPRESSION_MESSAGE,
+  IF_IN_INTERPOLATION_MESSAGE,
   JS_REGEX_MESSAGE,
   MATCH_CASES_MESSAGE,
   SWITCH_MESSAGE,
@@ -146,6 +148,11 @@ node main(shape: Shape) {
 }`,
     ],
     ["if-then-else", IF_EXPRESSION_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
+    [
+      "if inside an interpolation",
+      IF_IN_INTERPOLATION_MESSAGE,
+      `node main(count: number) {\n  %s\n}`,
+    ],
     ["ternary replacement", TERNARY_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
     ["handler", HANDLER_BODY_MESSAGE, `node main() {\n  %s\n}`],
     ["empty handler block", EMPTY_HANDLER_BLOCK, `node main() {\n  %s\n}`],
@@ -247,5 +254,72 @@ describe("the line in a message is the user's line", () => {
     expect(parsed.message).toMatch(/^Line 2, col /);
     expect(parsed.errorData?.line).toBe(1);
     expect(parsed.errorData?.prettyMessage).not.toMatch(/^Line [^2]/);
+  });
+});
+
+describe("blank lines do not shift the line in a message", () => {
+  // The formatter, `agency ast`, and `parseAST` in std::agency keep blank
+  // lines by turning each one's newline into a sentinel before parsing.
+  const src = `def f(): number {\n\n\n  const a = 1\n\n  const b = +a\n  return b\n}\n`;
+
+  it.each([
+    ["as written", src],
+    ["with blank lines kept", replaceBlankLines(src)],
+  ])("%s", (_name, input) => {
+    const parsed = parseAgency(input, {}, false, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/^Line 6, col /);
+    expect(parsed.errorData?.line).toBe(5);
+  });
+});
+
+describe("a declaration with no value is refused", () => {
+  it.each([
+    ["a typed let", `def f(): string {\n  let s: string\n  s = "a"\n  return s\n}`],
+    ["an untyped let", `def f(): string {\n  let s\n  s = "a"\n  return s\n}`],
+    ["the last statement", `node main() {\n  let s: string\n}`],
+    ["a trailing comment", `node main() {\n  let s: string // set below\n  s = "a"\n}`],
+    [
+      "the top level of a file",
+      `import { a } from "./a.agency"\nconst subject: string\n\nnode main() {\n}`,
+    ],
+  ])("catches %s on its own line", (_name, src) => {
+    expect(failure(src)).toMatch(/^Line 2, col \d+: a `let` or `const` needs a value/);
+  });
+
+  it.each([
+    [
+      "a typed declaration with a value",
+      `def f(): number[] {\n  let xs: number[] = []\n  return xs\n}`,
+    ],
+    ["a name that starts with let", `def f(letter: string): string {\n  return letter\n}`],
+  ])("leaves %s alone", (_name, src) => {
+    expect(parses(src)).toBe(true);
+  });
+
+  it("gives an example that parses", () => {
+    expect(parses(`node main() {\n${exampleFrom(DECLARATION_WITHOUT_VALUE_MESSAGE)}\n}`)).toBe(
+      true,
+    );
+  });
+});
+
+describe("an if-expression inside a string interpolation is refused", () => {
+  const source = (hole: string) =>
+    `node main(): string {\n  const x = 5\n  const s = "value: \${${hole}}"\n  return s\n}`;
+
+  it.each([
+    ["bare", `if x > 3 then "big" else "small"`],
+    ["parenthesized", `(if x > 3 then "big" else "small")`],
+    ["parenthesized with a space", `( if x > 3 then "big" else "small")`],
+  ])("catches it %s, on the line of the string", (_name, hole) => {
+    const message = failure(source(hole));
+    expect(message).toContain(IF_IN_INTERPOLATION_MESSAGE);
+    expect(message).toMatch(/^Line 3, /);
+  });
+
+  it("leaves a name that only starts with `if` alone", () => {
+    expect(parses(source("ifCount"))).toBe(true);
   });
 });

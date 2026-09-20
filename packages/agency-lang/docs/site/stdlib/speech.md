@@ -58,7 +58,8 @@ effect std::transcribe {
 effect std::synthesizeSpeech {
   requestedProvider: string;
   configuredModel: string;
-  textLength: number
+  textLength: number;
+  instructions: string
 }
 ```
 
@@ -76,7 +77,7 @@ effect std::localSpeech {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L62))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L63))
 
 ## Functions
 
@@ -114,7 +115,7 @@ Speak text aloud locally using the operating system's text-to-speech
 
 **Throws:** `std::say`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L88))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L89))
 
 ### record
 
@@ -132,14 +133,14 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
   @param silenceTimeout - Silence before auto-stopping, in milliseconds; 0 disables silence detection so recording stops only on Enter
   @param allowedPaths - Only allow saving a non-empty outputFile under these path prefixes
 
-* `silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
- * `record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
- *
- * Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
- * which surfaces as an AgencyCancelledError.
- *
- * An empty `outputFile` is auto-generated under the system temp directory and
- * is not subject to the `allowedPaths` allow-list.
+`silenceTimeout` is in milliseconds, so you can pass Agency's unit literals:
+`record(silenceTimeout: 3s)`, `record(silenceTimeout: 500ms)`.
+
+Ctrl-C, a race loss, or a time-guard abort stops an in-progress recording,
+which surfaces as an AgencyCancelledError.
+
+An empty `outputFile` is auto-generated under the system temp directory and
+is not subject to the `allowedPaths` allow-list.
 
 **Parameters:**
 
@@ -153,7 +154,7 @@ Record audio from the microphone. Recording stops when the user presses Enter, o
 
 **Throws:** `std::record`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L125))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L126))
 
 ### transcribe
 
@@ -202,7 +203,7 @@ time-guard abort. Cost, spend guards, and statelog apply.
 
 **Throws:** `std::transcribe`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L143))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L144))
 
 ### speak
 
@@ -217,6 +218,7 @@ speak(
   speed: number = 1,
   allowedPaths: string[] = [],
   apiKey: string = "",
+  instructions: string = "",
 ): string
 ```
 
@@ -233,6 +235,7 @@ Synthesize speech from text using a cloud text-to-speech provider (OpenAI
   @param speed - Speaking speed (0.25 to 4.0)
   @param allowedPaths - Only allow writing a non-empty outputFile under these path prefixes
   @param apiKey - Override the API key
+  @param instructions - How the speech should sound, in plain words: "Calm and slow." Needs a model that reads it, such as gpt-4o-mini-tts; tts-1 and tts-1-hd ignore it
 
 A cloud synthesis request tears down on Ctrl-C, race-loser, or time-guard
 abort; a cancelled request never writes its output file. Cost, spend guards,
@@ -251,12 +254,13 @@ and statelog apply.
 | speed | `number` | 1 |
 | allowedPaths | `string[]` | [] |
 | apiKey | `string` | "" |
+| instructions | `string` | "" |
 
 **Returns:** `string`
 
 **Throws:** `std::synthesizeSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L196))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L197))
 
 ### speakLocal
 
@@ -312,4 +316,4 @@ Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
 
 **Throws:** `std::localSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L261))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L266))

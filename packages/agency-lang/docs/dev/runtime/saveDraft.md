@@ -88,6 +88,11 @@ whether it throws, resolves to interrupts, or resolves to an aborted
 result of its own. The abort continues with the saved draft, or with
 nothing, and the failure is logged as a `finalizeError`.
 
+A finalize with no `return` is cleanup only, so the saved draft survives
+it. Any returned value replaces the draft, including `null` and a JS
+helper's `undefined`. Only running off the end of the body keeps it; the
+closure reports that with `AbortedResult.FINALIZE_DID_NOT_RETURN`.
+
 The `__finalize` closure runs a fresh Runner on the SAME frame as its
 container, so locals resolve without any passing. Two non-obvious
 consequences:

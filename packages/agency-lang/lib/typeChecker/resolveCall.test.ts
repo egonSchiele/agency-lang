@@ -87,7 +87,10 @@ describe("JS_GLOBALS", () => {
   it("does not include native Agency literals", () => {
     expect(JS_GLOBALS.undefined).toBeUndefined();
     expect(JS_GLOBALS.NaN).toBeUndefined();
-    expect(JS_GLOBALS.Infinity).toBeUndefined();
+  });
+
+  it("lists Infinity as a value, not a callable", () => {
+    expect(JS_GLOBALS.Infinity).toEqual({ kind: "value" });
   });
 });
 

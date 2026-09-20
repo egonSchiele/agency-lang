@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "nodeName": "once",
+      "input": "",
+      "expectedOutput": "[1,1]",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The validator and the call beside it each run once"
+    },
+    {
+      "nodeName": "perIteration",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A cast in a while condition runs its validator once per check"
+    }
+  ]
+}

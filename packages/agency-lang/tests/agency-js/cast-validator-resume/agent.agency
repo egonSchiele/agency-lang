@@ -1,0 +1,28 @@
+effect test::check { n: number }
+
+let validatorRuns = 0
+let neighborRuns = 0
+
+def askFirst(value: number): Result<number> {
+  validatorRuns += 1
+  interrupt test::check("ok?", { n: value })
+  return success(value)
+}
+
+@validate(askFirst)
+type Asked = number
+
+def neighbor(): number {
+  neighborRuns += 1
+  return 1
+}
+
+def both(a: any, b: number): number {
+  return b
+}
+
+node main() {
+  const r = both(neighbor(), 1)
+  const s = both(6 as Asked!, neighbor())
+  return [validatorRuns, neighborRuns]
+}

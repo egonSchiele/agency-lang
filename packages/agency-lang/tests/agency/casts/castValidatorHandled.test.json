@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "approved",
+      "input": "",
+      "expectedOutput": "\"validated\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "An enclosing handler answers the interrupt a cast's validator raises"
+    },
+    {
+      "nodeName": "rejected",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "A rejecting handler makes the checked cast fail"
+    },
+    {
+      "nodeName": "decidedByData",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "description": "The handler sees this cast's interrupt data and decides from it"
+    }
+  ]
+}

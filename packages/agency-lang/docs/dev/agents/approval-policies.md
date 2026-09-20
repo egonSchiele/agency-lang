@@ -161,6 +161,14 @@ quite all — its description says so. For the effects that expect a value
 today (`std::question`, `std::skills::review`, `std::toolbox::review`), a
 silent empty answer was not a useful thing to be able to ask for.
 
+At the prompt, text typed at such a raise is its answer: `_handler`
+returns `approve(<the text>)`, and the footer says "or type your answer".
+Typed at any other raise, text is a rejection reason. `typedValue` holds
+that rule. "a" approves with no value, which `std::toolbox::review` reads
+as accept, and "r" still rejects. Before this, typed text always
+rejected, so the agent had no way to answer `question` from `std::agent`,
+and feedback typed at a tool review ended the draft.
+
 Headlessly such an interrupt is rejected, and the rejection says which of
 the two things happened. "The policy has no rule for this effect" is the
 message for no rule; a rule that approves but could not be used gets its

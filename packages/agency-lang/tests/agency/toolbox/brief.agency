@@ -1,0 +1,83 @@
+import test { brief, reviewBrief, askAndRecord } from "std::toolbox"
+
+const SETTINGS = {
+  purpose: "Add one to a number.",
+  request: "{ n: number }",
+  name: "addOne",
+  root: "/nowhere",
+  stagingDir: "/nowhere/staging/addOne",
+  maxTime: 60000,
+  maxCost: 1,
+  model: "",
+  provider: ""
+}
+
+// The reviewer reads the draft in the formatter's layout, so it must not
+// be told the Request line is copied as is. The author must be.
+node reviewerIsNotToldToCompareTheRequestLine(): string {
+  if (!brief(SETTINGS, "").includes("copy this line as is")) {
+    return "FAIL the author is not told to copy the Request line"
+  }
+  const forReviewer = reviewBrief(SETTINGS)
+  if (forReviewer.includes("copy this line as is")) {
+    return "FAIL the reviewer is told the Request line is copied as is"
+  }
+  if (!forReviewer.includes("Do not review it")) {
+    return "FAIL the reviewer is not told to leave the Request type alone"
+  }
+  if (forReviewer.includes("`question` tool")) {
+    return "FAIL the reviewer is given the author's rule about asking"
+  }
+  return "pass"
+}
+
+node redraftStartsFromThePreviousDraft(): string {
+  const first = brief(SETTINGS, "")
+  if (first.includes("## The previous draft") || first.includes("## Feedback")) {
+    return "FAIL a first draft has no previous draft and no feedback"
+  }
+  const redraft = brief(SETTINGS, "Declare the effects.", true, "export def run() { SENTINEL }")
+  if (!redraft.includes("SENTINEL")) {
+    return "FAIL the previous draft is missing"
+  }
+  if (!redraft.includes("Declare the effects.") || !redraft.includes("cannotFix")) {
+    return "FAIL the reviewer's feedback is missing"
+  }
+  return "pass"
+}
+
+node authorIsToldToAsk(): string {
+  if (!brief(SETTINGS, "").includes("`question` tool")) {
+    return "FAIL the author is not told to ask the user"
+  }
+  return "pass"
+}
+
+// Each round's author and the reviewer are new threads, so an answer has
+// to reach them through the task text.
+node answersReachLaterReaders(): string {
+  const asking = { ...SETTINGS, stagingDir: "/nowhere/staging/asking" }
+  if (brief(asking, "").includes("## What the user has said")) {
+    return "FAIL answers are shown before anyone asked"
+  }
+  handle {
+    askAndRecord(asking.stagingDir, "Which address?")
+  } with (intr) {
+    return approve("me@example.com")
+  }
+  const forAuthor = brief(asking, "")
+  if (!forAuthor.includes("Which address?") || !forAuthor.includes("me@example.com")) {
+    return "FAIL the next author is not shown the answer"
+  }
+  if (!forAuthor.includes("Do not ask for something they already cover")) {
+    return "FAIL the next author is not told to stop asking"
+  }
+  const forReviewer = reviewBrief(asking)
+  if (!forReviewer.includes("me@example.com") || !forReviewer.includes("hard-coded")) {
+    return "FAIL the reviewer is not told the value came from the user"
+  }
+  if (brief(SETTINGS, "").includes("me@example.com")) {
+    return "FAIL an answer leaked into another draft's task"
+  }
+  return "pass"
+}

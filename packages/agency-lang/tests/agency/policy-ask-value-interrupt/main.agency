@@ -1,5 +1,6 @@
 import { map } from "std::array"
 import { askUserChoices } from "std::policy"
+import test { typedValue } from "std::policy"
 
 @always(name)
 effect app::env { name: string }
@@ -21,5 +22,12 @@ node main(): string {
   const noScope = { effect: "app::plain", data: {}, expectsValue: false }
   const keys3 = map(askUserChoices(noScope), \item -> item.key)
   if (keys3.join(",") != "a,r,aa,rr") { return "FAIL no scope: ${keys3.join(",")}" }
+
+  // Text typed at a question is its answer. Typed at a permission, it is
+  // a rejection reason, and a picked key is never a value.
+  const typed = { action: "reject", reason: "me@example.com" }
+  if (typedValue(question, typed) != "me@example.com") { return "FAIL typed answer" }
+  if (typedValue(permission, typed) != null) { return "FAIL typed reason" }
+  if (typedValue(question, { action: "approve", reason: null }) != null) { return "FAIL picked key" }
   return "pass"
 }

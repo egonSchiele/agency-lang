@@ -10,6 +10,7 @@
  * (`setAgentCwd`/`getAgentCwd`), which `agent.agency` pins to the user's
  * cwd at startup.
  */
+import { question } from "std::agent"
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
 import { filter } from "std::array"
 import { agencyCodingAgent } from "std::agents/agency/coding"
@@ -121,6 +122,7 @@ export static const codeTools: any[] = [
   // actual diff and build output, and its reads stay in the coder's
   // history.
   oracleAgent,
+  question,
 ]
 
 // Appended to the system prompt only when a web-search backend is active
@@ -203,6 +205,7 @@ def consultExpert(task: string, agencyTask: boolean): Result<ExpertGuidance> {
       maxTime: 5m,
       model: getSlowModel(),
       provider: getSlowProvider(),
+      extraTools: [question],
     )
   }
   return expertAgent(
@@ -211,6 +214,7 @@ def consultExpert(task: string, agencyTask: boolean): Result<ExpertGuidance> {
     maxTime: 5m,
     model: getSlowModel(),
     provider: getSlowProvider(),
+    extraTools: [question],
   )
 }
 
@@ -260,6 +264,7 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
       requireMain: target == "",
       maxCost: ESCALATE_MAX_COST,
       maxTime: ESCALATE_MAX_TIME,
+      extraTools: [question],
     )
     if (isFailure(written)) {
       return failure("could not write valid Agency code: ${written.error}")
@@ -280,6 +285,7 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
     context: context,
     maxCost: ESCALATE_MAX_COST,
     maxTime: ESCALATE_MAX_TIME,
+    extraTools: [question],
   )
 }
 
@@ -370,6 +376,7 @@ def supervisedPlan(task: string, reason: string, plan: string): Result<string> {
       plan: plan,
       maxCost: ESCALATE_MAX_COST,
       maxTime: ESCALATE_MAX_TIME,
+      extraTools: [question],
     ),
   )
 }

@@ -58,6 +58,28 @@ whatever `Request` the draft declares, so `assembleTool` compares the
 two through `describe`, which prints both the same way. A mismatch is a
 draft problem for the design loop and a plain failure for `writeTool`.
 
+The reviewer gets its own task text, `reviewBrief`, which says the type
+is fixed and already verified. The reviewer reads the draft in the
+formatter's layout, where `{ subject?: string; body: string }` spans
+four lines. Told that the line is "copied as is", it reported the
+formatter's line breaks as a blocking finding that no draft could clear.
+
+The author's brief also tells it to ask the user for a fact the task does
+not give. `draftSource` offers it a `question` tool on every round. That
+tool is `askAndRecord`, which calls `question` from `std::agent` and keeps
+each question and answer in `_answered` under the staging directory, the
+way `cannotFix` keeps its reports.
+
+The record exists because every reader after the first is a new thread.
+`taskText` adds the answers to the next author's brief, with an
+instruction not to ask again. Without them, each round's author asked
+the same question. `reviewBrief` adds them too, and tells the reviewer
+that the user wants those values in the module. Without that, the
+reviewer blocked a draft for hard-coding the user's own email address and
+asked for an invented `USER_EMAIL` variable. A draft picked up from
+earlier in the session runs in a new staging directory, so its answers
+are not carried over.
+
 ## Two entry points, one save gate
 
 `designTool` is the design loop: the coding agent drafts, the review
@@ -92,10 +114,15 @@ raised.
 
 `draftSource` → `reviewSource` → `testSource` (together `prepareDraft`)
 → `askUser` → `gateAndSave`, each a def with one job that returns a
-`Result`. `rounds` is the loop. It carries three things between rounds:
+`Result`. `rounds` is the loop. It carries four things between rounds:
 `feedback`, holding the last problem or the user's revision request,
 `fromReviewer`, which says whether that feedback is the reviewer's (see
-the next section), and `previous`, the draft the user last saw. `previous` rides along on the
+the next section), `drafted`, the draft that feedback is about, and
+`previous`, the draft the user last saw. `drafted` goes into the next
+author's brief, so a redraft starts from the code the feedback names
+and keeps what was right in it. The two differ when the reviewer blocks
+a draft: the user never saw it, but the next author must.
+`previous` rides along on the
 review interrupt so the approval prompt can diff this round's draft
 against it and show what changed rather than the whole tool again; on the
 first round it is `""` and the diff is all insertions. A round that

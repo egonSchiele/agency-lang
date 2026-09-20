@@ -1,0 +1,12 @@
+{
+  "description": "Parsing text and summarizing a column. Nothing is missing from the purpose.",
+  "tags": [
+    "pure"
+  ],
+  "input": {
+    "name": "columnStats",
+    "purpose": "Summarize one numeric column of CSV text. The first line of csv is the header, fields are separated by commas, and there is no quoting. Skip rows where the column is empty or is not a number. Return `{ count: number, min: number, max: number, mean: number }` over the rows that were kept, with mean rounded to 2 decimal places. When the header has no such column, return `{ error: \"no such column\" }`. When no row was kept, return `{ count: 0, min: null, max: null, mean: null }`.",
+    "request": "{ csv: string; column: string }",
+    "facts": {}
+  }
+}

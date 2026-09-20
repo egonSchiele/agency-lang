@@ -1,0 +1,26 @@
+// Hidden test cases the author never sees. Imports the tool evalMain saved.
+import { run } from "./toolbox/splitBill/impl.agency"
+
+def shown(request: any): string {
+  const result: any = run(request)
+  if (result.error != null) {
+    return "error: ${result.error}"
+  }
+  return "${result.tip} ${result.totalWithTip} ${result.perPerson}"
+}
+
+export node evenSplit(): string {
+  return shown({ total: 100, tipPercent: 20, people: 4 })
+}
+
+export node roundsToCents(): string {
+  return shown({ total: 50, tipPercent: 15, people: 3 })
+}
+
+export node noTip(): string {
+  return shown({ total: 30, tipPercent: 0, people: 1 })
+}
+
+export node nobody(): string {
+  return shown({ total: 30, tipPercent: 10, people: 0 })
+}

@@ -1004,7 +1004,15 @@ def askUser(intr: any): AskUserResult {
     // diff and the prompt it belongs to reach the terminal together even
     // when other branches are interrupting too.
     printInterruptDiff(intr)
-    const choice = interruptChoice(title, body, items, allowFreeText: true, allowCancel: true)
+    const freeTextHint = if intr.expectsValue == true then "or type your answer" else ""
+    const choice = interruptChoice(
+      title,
+      body,
+      items,
+      allowFreeText: true,
+      allowCancel: true,
+      freeTextHint: freeTextHint,
+    )
     const result = choiceResult(choice)
     // Recorded before the lock is released, so the interrupt waiting
     // behind this one finds the rule the moment its turn comes. Recording
@@ -1104,6 +1112,16 @@ def oneLineData(data: any): string {
   return " (" + parts.join(", ") + ")"
 }
 
+// A raise that expects a value is a question, so text typed at its
+// prompt is the answer to it, not a reason to reject. "r" still rejects.
+// Null when the text is a rejection reason or there is none.
+def typedValue(intr: any, answer: any): string | null {
+  if (intr.expectsValue == true && answer.reason != null) {
+    return answer.reason
+  }
+  return null
+}
+
 /**
  * Internal — the actual handler function returned by
  * `cliPolicyHandler`. Do not call directly; use `cliPolicyHandler`
@@ -1197,6 +1215,11 @@ def _handler(intr: any): any {
   }
   if (answer.action == "approve") {
     return approve()
+  }
+
+  const typed = typedValue(intr, answer)
+  if (typed != null) {
+    return approve(typed)
   }
 
   // Free-text path: the user typed a rejection reason at the choice

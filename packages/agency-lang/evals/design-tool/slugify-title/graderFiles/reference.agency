@@ -1,0 +1,20 @@
+import { Json } from "std::validation"
+
+export type Request = { title: string; maxLength: number }
+
+def trimHyphens(text: string): string {
+  return text.replace(re/^-+|-+$/g, "")
+}
+
+export def run(request: Request): Json {
+  """
+  Returns the title as a URL slug no longer than maxLength.
+
+  @param request - The title and the longest slug allowed
+  """
+  const slug = trimHyphens(request.title.toLowerCase().replace(re/[^a-z0-9]+/g, "-"))
+  if (slug.length <= request.maxLength) {
+    return slug
+  }
+  return trimHyphens(slug.slice(0, request.maxLength))
+}

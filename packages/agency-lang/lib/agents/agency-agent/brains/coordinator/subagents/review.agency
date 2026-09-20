@@ -1,3 +1,4 @@
+import { question } from "std::agent"
 import { agencyReviewAgent } from "std::agents/agency/review"
 import { reviewAgent as generalReviewAgent } from "std::agents/review"
 import { Feedback, mergeFeedback, renderFeedback } from "std::agents/lib/feedback"
@@ -28,7 +29,7 @@ export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
   """
   announce("review", userMsg)
   if (!agencyTask) {
-    const general = generalReviewAgent(work: userMsg, task: "Review this code.")
+    const general = generalReviewAgent(work: userMsg, task: "Review this code.", extraTools: [question])
     return renderFeedback(general)
   }
   return renderFeedback(review(userMsg))
@@ -45,7 +46,7 @@ export def review(userMsg: string): Result<Feedback[]> {
     let feedback: Result<Feedback[]> = success([])
 
     for (codeSnippet in snippets) {
-      feedback = mergeFeedback(feedback, agencyReviewAgent(codeSnippet.code))
+      feedback = mergeFeedback(feedback, agencyReviewAgent(codeSnippet.code, extraTools: [question]))
     }
   }
   return feedback

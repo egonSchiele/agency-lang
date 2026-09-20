@@ -11,6 +11,7 @@
  * The docstring below is what the coordinator reads when deciding whether to
  * call this, so it is written for routing, not for the agent's own behavior.
  */
+import { question } from "std::agent"
 import { explorerAgent as stdExplorerAgent } from "std::agents/explorer"
 
 import { getSlowModel, getSlowProvider } from "../../../shared.agency"
@@ -51,6 +52,7 @@ export handoff def explorerAgent(
       maxTime: timeBudget(maxSeconds, 15m),
       model: getSlowModel(),
       provider: getSlowProvider(),
+      extraTools: [question],
     )
   }
 }

@@ -1,0 +1,17 @@
+{
+  "description": "The purpose leaves out which address, which provider, and which sender. The author has to ask, and the saved tool has to use the answers. This is the request that produced an invented USER_EMAIL variable before the author could ask.",
+  "tags": [
+    "asks",
+    "effectful"
+  ],
+  "input": {
+    "name": "emailNoteToSelf",
+    "purpose": "Email a note to myself, with a subject and a message body.",
+    "request": "{ subject?: string; body: string }",
+    "facts": {
+      "my email address": "adit@example.com",
+      "email provider": "Resend. The API key is already in the RESEND_API_KEY environment variable.",
+      "address to send from": "notes@mail.example.com, which is verified with Resend"
+    }
+  }
+}

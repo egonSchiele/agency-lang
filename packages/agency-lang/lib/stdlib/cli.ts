@@ -547,6 +547,8 @@ type InterruptFooterInput = {
   body: string;
   items: { key: string; label: string }[];
   allowFreeText: boolean;
+  /** What typed text means at this prompt. Absent means a rejection reason. */
+  freeTextHint?: string;
   state: InterruptState;
   columns: number;
 };
@@ -595,7 +597,8 @@ function renderInterruptFooter(input: InterruptFooterInput): string[] {
     : input.items;
   packOptions(items, width - 1).forEach((row) => lines.push(` ${row}`));
   if (input.allowFreeText) {
-    lines.push(` ${DIM}or type a reason · Enter to submit${COLOR_RESET}`);
+    const hint = input.freeTextHint || "or type a reason";
+    lines.push(` ${DIM}${hint} · Enter to submit${COLOR_RESET}`);
   }
   if (input.state.notice !== "") {
     lines.push(` ${color.yellow(input.state.notice)}`);
@@ -614,6 +617,7 @@ type InterruptOpts = {
   items: { key: string; label: string }[];
   allowFreeText: boolean;
   allowCancel: boolean;
+  freeTextHint?: string;
 };
 
 /** Stop the "Thinking" spinner if the REPL has one running (which also
@@ -669,6 +673,7 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
         body: opts.body,
         items: opts.items,
         allowFreeText: opts.allowFreeText,
+        freeTextHint: opts.freeTextHint,
         state,
         columns: process.stdout.columns || 80,
       }),
@@ -726,12 +731,13 @@ export async function _interruptChoice(
   items: { key: string; label: string }[],
   allowFreeText: boolean,
   allowCancel: boolean,
+  freeTextHint: string = "",
 ): Promise<string> {
   const hook = (globalThis as any).__agencyInterruptPrompt;
   if (typeof hook !== "function") {
     throw new Error("_interruptChoice: no active line-mode REPL");
   }
-  return hook({ title, body, items, allowFreeText, allowCancel });
+  return hook({ title, body, items, allowFreeText, allowCancel, freeTextHint });
 }
 
 /** True when a line-mode REPL is running AND both ends are real terminals,

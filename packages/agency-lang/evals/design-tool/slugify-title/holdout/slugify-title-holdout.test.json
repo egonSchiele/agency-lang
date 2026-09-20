@@ -1,0 +1,41 @@
+{
+  "sourceFile": "slugify-title-holdout.agency",
+  "tests": [
+    {
+      "nodeName": "plain",
+      "expectedOutput": "\"hello-world\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "runsOfPunctuation",
+      "expectedOutput": "\"what-s-new-in-2026\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cutAtTheCap",
+      "expectedOutput": "\"one-two\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "cutLeavesNoHyphen",
+      "expectedOutput": "\"one-two\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

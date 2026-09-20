@@ -1,0 +1,41 @@
+{
+  "sourceFile": "column-stats-holdout.agency",
+  "tests": [
+    {
+      "nodeName": "skipsEmpty",
+      "expectedOutput": "\"3 4 10 7\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "skipsNonNumbers",
+      "expectedOutput": "\"3 1.25 3 2.25\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "missingColumn",
+      "expectedOutput": "\"error: no such column\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "nothingKept",
+      "expectedOutput": "\"0 null null null\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

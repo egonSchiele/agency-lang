@@ -1,9 +1,10 @@
+import { findReservedName } from "../utils/findReservedName.js";
 import path from "node:path";
 import { walkNodesArray } from "../utils/node.js";
 import { generateExpression } from "../backends/agencyGenerator.js";
 import { declaredName } from "../types/hole.js";
 import { getImportedNames } from "../types/importStatement.js";
-import { bindersOf, freeNamesOf } from "../runtime/template/hygiene.js";
+import { bindersOf, freeNamesOf, patternBinders } from "../runtime/template/hygiene.js";
 import { BUILTIN_VARIABLES } from "../config/config.js";
 import { PRELUDE_NAMES } from "../prelude.js";
 import { BUILTIN_FUNCTION_TYPES } from "../typeChecker/builtins.js";
@@ -370,6 +371,10 @@ function declaredNamesIn(program: AgencyProgram): string[] {
   return program.nodes.flatMap((node) => {
     if (node.type === "function") return [declaredName(node.functionName)];
     if (node.type === "graphNode") return [declaredName(node.nodeName)];
+    // A destructuring declaration holds a placeholder in `variableName`.
+    if (node.type === "assignment" && node.pattern !== undefined) {
+      return patternBinders(node.pattern);
+    }
     if (node.type === "assignment") return [node.variableName];
     if (node.type === "typeAlias") return [node.aliasName];
     return [];
@@ -417,6 +422,27 @@ function checkNoCapture(
         params: { name: reached, generator: generatorName },
         loc: splice.loc ?? ORIGIN_UNKNOWN,
       };
+}
+
+/**
+ * Generated code may not use a name reserved for the compiler. The parser
+ * enforces this for written code, but a `Code` value can be built by hand and
+ * reach here without ever being parsed.
+ */
+function checkNoReservedName(
+  splice: Splice,
+  code: Code,
+  generatorName: string,
+): SpliceDiagnostic | null {
+  const reserved = findReservedName(code.nodes);
+  if (reserved === null) {
+    return null;
+  }
+  return {
+    diagnostic: "spliceUsesReservedName",
+    params: { name: reserved, generator: generatorName },
+    loc: splice.loc ?? ORIGIN_UNKNOWN,
+  };
 }
 
 /**
@@ -561,6 +587,10 @@ function graft(splice: Splice, code: Code, generatorName: string): SpliceResult<
   const exported = checkNoGeneratedExport(splice, code, generatorName);
   if (exported !== null) {
     return { ok: false, diagnostic: exported };
+  }
+  const reserved = checkNoReservedName(splice, code, generatorName);
+  if (reserved !== null) {
+    return { ok: false, diagnostic: reserved };
   }
   const captured = checkNoCapture(splice, code, generatorName);
   if (captured !== null) {

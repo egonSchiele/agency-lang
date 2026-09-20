@@ -12,6 +12,7 @@ import { explainMismatch } from "./explainMismatch.js";
 import { Code, isCode, kindOf } from "./code.js";
 import { kindFitsSort, stampOrigin } from "./origin.js";
 import { liftValue } from "./lift.js";
+import { isReservedInternalName, reservedInternalNameMessage } from "../../reservedNames.js";
 import { RESERVED_PREFIX, applyRenames, applyScopedRenames, computeRenames } from "./hygiene.js";
 
 /** Attribution for errors that anchor to a node carried in by a graft:
@@ -353,6 +354,13 @@ function identifierFillFor(hole: Hole, value: unknown): string {
   if (value.startsWith(RESERVED_PREFIX)) {
     throw new Error(
       `\`${value}\` uses the reserved prefix \`${RESERVED_PREFIX}\`, so it cannot fill \`#${hole.name}\`${originSuffix(hole.loc)}.`,
+    );
+  }
+  // The filled name is never parsed, so the parser's refusal has to be
+  // repeated here.
+  if (isReservedInternalName(value)) {
+    throw new Error(
+      `${reservedInternalNameMessage(value)} It cannot fill \`#${hole.name}\`${originSuffix(hole.loc)}.`,
     );
   }
   return value;

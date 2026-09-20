@@ -723,6 +723,12 @@ export const DIAGNOSTICS = {
     message:
       "Generated code refers to `{name}`, which it neither declares nor imports. Generated code may use only names it declares itself and names it imports.",
   },
+  spliceUsesReservedName: {
+    code: "AG8017",
+    severity: "error",
+    message:
+      "Generated code from `{generator}` uses the name `{name}`. Names starting with two underscores are reserved for the compiler.",
+  },
   spliceGeneratedExport: {
     code: "AG8013",
     severity: "error",

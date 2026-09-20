@@ -5,7 +5,7 @@
 // =============================================================================
 
 // --- tarsec imports (combined from all parser files) ---
-import { TarsecError } from "tarsec";
+import { TarsecError, getDiagnostics } from "tarsec";
 import {
   BLOCK_AS_VALUE_MESSAGE,
   BODY_DECLARATION_MESSAGE,
@@ -169,6 +169,7 @@ import { ReturnStatement } from "../types/returnStatement.js";
 import { GotoStatement } from "../types/gotoStatement.js";
 import { DebuggerStatement } from "../types/debuggerStatement.js";
 import { isAgencyImport } from "../importPaths.js";
+import { isReservedInternalName, reservedInternalNameMessage } from "../reservedNames.js";
 import { Keyword, keywords, createKeyword } from "@/types/keyword.js";
 import { Skill } from "@/types/skill.js";
 import {
@@ -1113,9 +1114,43 @@ const undefinedAliasParser: Parser<VariableNameLiteral> = map(
   () => ({ type: "variableName" as const, value: "null" }),
 );
 
-export const variableNameParser: Parser<VariableNameLiteral> = label(
+/**
+ * Refuses a name reserved for the compiler (`lib/reservedNames.ts`), and
+ * returns null for any other name.
+ *
+ * It throws, because the expression builder discards a failure returned while
+ * reading a right operand, and `1 + f(__ctx)` then reports "expected node
+ * body". So do not try a parser that calls this at a position where a `__` name
+ * is legal. `parseAgency` takes the message and position from the slot.
+ */
+function refuseReservedName(name: string, input: string): null {
+  if (!isReservedInternalName(name)) {
+    return null;
+  }
+  const declined = committedFailure(reservedInternalNameMessage(name), input);
+  getParseState().committedFailure = declined;
+  throw new TarsecError(getDiagnostics(declined, input, declined.message));
+}
+
+/**
+ * A name other than a variable in an expression: a function, type, parameter,
+ * import, or loop variable. Use this, not a bare `many1WithJoin(varNameChar)`.
+ * Object keys and property names after a dot are not variables and stay
+ * unchecked.
+ */
+export const identifierParser: Parser<string> = (input: string) => {
+  const result = many1WithJoin(varNameChar)(input);
+  if (!result.success) {
+    return result;
+  }
+  return refuseReservedName(result.result, input) ?? result;
+};
+
+/** An identifier with no reserved-name check: a property name after a dot, or
+ *  a hole name. Everything else reads a name through `variableNameParser`. */
+export const anyVariableNameParser: Parser<VariableNameLiteral> = label(
   "an identifier",
-  memo("variableNameParser", (input: string) => {
+  memo("anyVariableNameParser", (input: string) => {
     const parser = seq(
       [
         set("type", "variableName"),
@@ -1133,6 +1168,14 @@ export const variableNameParser: Parser<VariableNameLiteral> = label(
     return parser(input);
   }),
 );
+
+export const variableNameParser: Parser<VariableNameLiteral> = (input: string) => {
+  const result = anyVariableNameParser(input);
+  if (!result.success) {
+    return result;
+  }
+  return refuseReservedName(result.result.value, input) ?? result;
+};
 
 /** A quoted hole name (`#"field-name"`): any characters except whitespace
  *  and the quote. The quotes are around the NAME only — quoting changes
@@ -1157,7 +1200,7 @@ export const holeParser: Parser<Hole> = label(
         capture(
           or(
             quotedHoleNameParser,
-            map(variableNameParser, (name) => name.value),
+            map(anyVariableNameParser, (name) => name.value),
           ),
           "name",
         ),
@@ -1323,7 +1366,7 @@ const declNameParserFor = (
     const name = raw.result.trimEnd();
     const words = name.split(/\s+/);
     if (words.length === 1) {
-      return { ...raw, result: name };
+      return refuseReservedName(name, input) ?? { ...raw, result: name };
     }
     // Only `def handoff foo(` earns the reorder hint. With three or more
     // words the suggested line would itself still hold a spaced name.
@@ -1493,7 +1536,7 @@ export const typeAliasVariableParser: Parser<TypeAliasVariable> = memo(
   (input: string): ParserResult<TypeAliasVariable> => {
     const parser = seqC(
       set("type", "typeAliasVariable"),
-      capture(many1WithJoin(varNameChar), "aliasName"),
+      capture(identifierParser, "aliasName"),
       optionalValueArgsParser,
     );
     return parser(input);
@@ -2419,7 +2462,7 @@ export const genericTypeParser: Parser<GenericType> = memo(
   "genericTypeParser",
   seqC(
     set("type", "genericType"),
-    capture(many1WithJoin(varNameChar), "name"),
+    capture(identifierParser, "name"),
     char("<"),
     optionalSpaces,
     capture(
@@ -2469,7 +2512,7 @@ export const variableTypeParser: Parser<VariableType> = memo(
 export const typeParamParser: Parser<TypeParam> = memo(
   "typeParamParser",
   seqC(
-    capture(many1WithJoin(varNameChar), "name"),
+    capture(identifierParser, "name"),
     optional(
       captureCaptures(
         seqC(
@@ -2497,7 +2540,7 @@ export const typeParamParser: Parser<TypeParam> = memo(
 export const valueParamParser: Parser<ValueParam> = memo(
   "valueParamParser",
   seqC(
-    capture(many1WithJoin(varNameChar), "name"),
+    capture(identifierParser, "name"),
     optionalSpaces,
     char(":"),
     optionalSpaces,
@@ -2541,7 +2584,7 @@ const baseTypeAliasParserFor = (keyword: string, separator: Parser<unknown>) =>
         captureCaptures(
           parseError(
             "expected a statement of the form `type Foo = X' where X can be a union, array, object, type alias, or primitive type`",
-            capture(many1WithJoin(varNameChar), "aliasName"),
+            capture(identifierParser, "aliasName"),
             // Optional `<T, U = Default, ...>`. When absent, no `typeParams`
             // capture is set, so non-generic aliases keep their existing shape.
             optional(
@@ -2650,7 +2693,7 @@ const baseEffectSetDeclParser: Parser<TypeAlias> = withLoc(
       set("isEffectSet", true),
       str("effectSet"),
       spaces,
-      capture(many1WithJoin(varNameChar), "aliasName"),
+      capture(identifierParser, "aliasName"),
       optionalSpaces,
       str("="),
       optionalSpaces,
@@ -3172,12 +3215,11 @@ type FunctionCallWithBlock = Omit<FunctionCall, "arguments"> & {
   arguments: ArgWithBlock[];
 };
 
-export const _functionCallParser: Parser<FunctionCall> = memo(
-  "_functionCallParser",
-  (input: string) => {
+const functionCallParserFor = (memoKey: string, nameParser: Parser<string>): Parser<FunctionCall> =>
+  memo(memoKey, (input: string) => {
     const parser: Parser<FunctionCallWithBlock> = seqC(
       set("type", "functionCall"),
-      capture(many1WithJoin(varNameChar), "functionName"),
+      capture(nameParser, "functionName"),
       captureCaptures(argumentListParser),
       optionalSpaces,
       optional(
@@ -3214,8 +3256,13 @@ export const _functionCallParser: Parser<FunctionCall> = memo(
     }
 
     return result as ParserResult<FunctionCall>;
-  },
-);
+  });
+
+export const _functionCallParser = functionCallParserFor("_functionCallParser", identifierParser);
+
+/** A method call after a dot. The method name is a property name, so it is
+ *  not checked against the reserved names. */
+const methodCallParser = functionCallParserFor("methodCallParser", many1WithJoin(varNameChar));
 
 // functionCallParser is now just _functionCallParser (no async/sync wrappers - handled by valueAccessParser)
 export const functionCallParser: Parser<FunctionCall> = label(
@@ -3241,7 +3288,7 @@ const dotMethodCallParser = (input: string): ParserResult<AccessChainElement> =>
   const afterDot = dotResult.rest;
 
   // First try: functionCall (name + parens)
-  const fcResult = _functionCallParser(afterDot);
+  const fcResult = methodCallParser(afterDot);
   if (fcResult.success) {
     return success(
       {
@@ -3254,7 +3301,7 @@ const dotMethodCallParser = (input: string): ParserResult<AccessChainElement> =>
   }
 
   // Second try: just a property name
-  const nameResult = variableNameParser(afterDot);
+  const nameResult = anyVariableNameParser(afterDot);
   if (nameResult.success) {
     return success(
       {
@@ -3654,7 +3701,7 @@ export const newExpressionParser: Parser<NewExpression> = (input: string) => {
     set("type", "newExpression"),
     str("new"),
     spaces,
-    capture(many1WithJoin(varNameChar), "className"),
+    capture(identifierParser, "className"),
     char("("),
     optionalSpaces,
     capture(
@@ -4502,7 +4549,7 @@ const blockParamParser: Parser<FunctionParameter> = memo(
   "blockParamParser",
   seqC(
     set("type", "functionParameter"),
-    capture(many1WithJoin(varNameChar), "name"),
+    capture(identifierParser, "name"),
     optional(
       captureCaptures(
         seqC(optionalSpaces, char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
@@ -4965,7 +5012,7 @@ export const importNodeStatmentParser: Parser<ImportNodeStatement> = withLoc(
           optionalSpacesOrNewline,
           captureCaptures(
             commaDelimitedListCaptures(
-              many1WithJoin(varNameChar),
+              identifierParser,
               IMPORT_NODE_LIST,
               "importedNodes",
               "nodeTrivia",
@@ -4997,15 +5044,17 @@ const nameWithOptionalAlias: Parser<{ name: string | Hole; alias: string | undef
   ),
   map(
     seqC(
+      // The exported name is not bound in Agency scope, only the alias is, so
+      // `import { __wbindgen_malloc as alloc }` can reach a JS export.
       capture(many1WithJoin(varNameChar), "name"),
       spaces,
       str("as"),
       spaces,
-      capture(many1WithJoin(varNameChar), "alias"),
+      capture(identifierParser, "alias"),
     ),
     (r) => ({ name: r.name as string | Hole, alias: r.alias as string }),
   ),
-  map(seqC(capture(many1WithJoin(varNameChar), "name")), (r) => ({
+  map(seqC(capture(identifierParser, "name")), (r) => ({
     name: r.name as string | Hole,
     alias: undefined as string | undefined,
   })),
@@ -5093,14 +5142,14 @@ const namespaceImportParser: Parser<NamespaceImport> = memo(
     spaces,
     str("as"),
     spaces,
-    capture(many1WithJoin(varNameChar), "importedNames"),
+    capture(identifierParser, "importedNames"),
     set("type", "namespaceImport"),
   ),
 );
 
 const defaultImportParser: Parser<DefaultImport> = memo(
   "defaultImportParser",
-  seqC(capture(many1WithJoin(varNameChar), "importedNames"), set("type", "defaultImport")),
+  seqC(capture(identifierParser, "importedNames"), set("type", "defaultImport")),
 );
 
 const importNameTypeParser: Parser<ImportNameType[]> = sepBy(
@@ -6015,7 +6064,7 @@ const inlineHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
 const functionRefHandlerParser: Parser<HandleBlock["handler"]> = (input) => {
   const parser = seqC(
     set("kind", "functionRef"),
-    capture(many1WithJoin(varNameChar), "functionName"),
+    capture(identifierParser, "functionName"),
     optionalSpacesOrNewline,
   );
   return parser(input);
@@ -6729,18 +6778,13 @@ const iterationBinderFragment: Parser<any>[] = [
     or(
       lazy(() => arrayBindingPatternParser),
       lazy(() => objectBindingPatternParser),
-      many1WithJoin(varNameChar),
+      identifierParser,
     ),
     "itemVar",
   ),
   optional(
     captureCaptures(
-      seqC(
-        optionalSpaces,
-        char(","),
-        optionalSpaces,
-        capture(many1WithJoin(varNameChar), "indexVar"),
-      ),
+      seqC(optionalSpaces, char(","), optionalSpaces, capture(identifierParser, "indexVar")),
     ),
   ),
 ];
@@ -6933,7 +6977,7 @@ export const functionParameterParser: Parser<FunctionParameter> = memo(
   map(
     seqC(
       set("type", "functionParameter"),
-      capture(many1WithJoin(varNameChar), "name"),
+      capture(identifierParser, "name"),
       capture(optional(char("?")), "__optional"),
       optional(
         captureCaptures(
@@ -6992,7 +7036,7 @@ export const variadicParameterParser: Parser<FunctionParameter> = memo(
     seqC(
       set("type", "functionParameter"),
       str("..."),
-      capture(many1WithJoin(varNameChar), "name"),
+      capture(identifierParser, "name"),
       optional(
         captureCaptures(
           seqC(optionalSpaces, char(":"), optionalSpaces, capture(variableTypeParser, "typeHint")),
@@ -7289,9 +7333,7 @@ export const wildcardPatternParser: Parser<WildcardPattern> = label(
 
 export const restPatternParser: Parser<RestPattern> = label(
   "a rest pattern",
-  withLoc(
-    seqC(set("type", "restPattern"), str("..."), capture(many1WithJoin(varNameChar), "identifier")),
-  ),
+  withLoc(seqC(set("type", "restPattern"), str("..."), capture(identifierParser, "identifier"))),
 );
 
 // ---- helpers shared by binding and match array parsers ----

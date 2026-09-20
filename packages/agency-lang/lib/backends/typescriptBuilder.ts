@@ -1119,11 +1119,8 @@ export class TypeScriptBuilder {
           // would otherwise compile to a bare, undeclared JS identifier.
           // Resolve it to the same frame-local accessor `exitMatch` writes to
           // so the consumer (`const x = match(...)` / `return match(...)`)
-          // sees the value. Applies ONLY here, in the unresolved-scope branch:
-          // a USER variable that happens to be named `__matchval_<n>` arrives
-          // with a resolved scope (local/block/blockArgs/...) or as a loop
-          // var / builtin / agency import, and must resolve through the
-          // normal paths untouched.
+          // sees the value. A user cannot declare a variable by this name:
+          // the parser refuses every `__` name (`lib/reservedNames.ts`).
           if (!isBuiltinVar && !isLoopVar && isMatchValName(literal.value)) {
             // A `match` expression with no matching arm (and no `_`) never
             // writes `__matchval_<id>`, so the read is `undefined`. Normalize

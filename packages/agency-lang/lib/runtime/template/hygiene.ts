@@ -2,6 +2,7 @@ import { AgencyNode, BindingPattern, Hole, Scope } from "../../types.js";
 import { declaredName } from "../../types/hole.js";
 import { walkNodesArray } from "../../utils/node.js";
 import { Code, isCode } from "./code.js";
+import { HYGIENE_PREFIX } from "../../reservedNames.js";
 
 /** Reserved identifier prefix for hygienic renames. ASCII on purpose:
  *  renamed names get printed to source and re-parsed by a subprocess, so
@@ -9,8 +10,9 @@ import { Code, isCode } from "./code.js";
  *  Collisions with renamed names are impossible by construction because
  *  the fresh-name counter seeds ABOVE every `__hyg<n>` already present in
  *  the template and the fillers (see maxHygieneIndex) — which is also what
- *  lets previously renamed output be filled again. */
-export const RESERVED_PREFIX = "__hyg";
+ *  lets previously renamed output be filled again. The parser reserves every
+ *  other `__` name and lets this one through (`lib/reservedNames.ts`). */
+export const RESERVED_PREFIX = HYGIENE_PREFIX;
 
 /** A rename that applies only within one scope of the template. The scope
  *  key comes from the walk's scope chain (`fn:name` / `node:name` /

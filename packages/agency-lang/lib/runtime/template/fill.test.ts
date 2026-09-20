@@ -320,6 +320,11 @@ describe("fillHoles: identifier holes", () => {
     expect(() => fillHoles(load(template), { tool: 42 })).toThrow(/not a legal identifier/);
   });
 
+  it("rejects a name reserved for the compiler", () => {
+    // The filled name is never parsed, so the parser's refusal does not run.
+    expect(() => fillHoles(load(template), { tool: "__ctx" })).toThrow(/reserved for the compiler/);
+  });
+
   it("rejects a reserved word", () => {
     expect(() => fillHoles(load(template), { tool: "if" })).toThrow(/reserved word/);
   });

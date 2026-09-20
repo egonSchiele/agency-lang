@@ -19,7 +19,7 @@ const STR: VariableType = { type: "primitiveType", value: "string" };
 // Wrap snippets in a function so `return` is valid and we exercise a real
 // per-scope body. Tests hand-build the Scope, so the wrapper's emptiness is fine.
 function parseBody(src: string): AgencyNode[] {
-  const r = parseAgency(`def __f() {\n${src}\n}`);
+  const r = parseAgency(`def flowTestBody() {\n${src}\n}`);
   if (!r.success) {
     throw new Error(`parse failed: ${r.message}`);
   }

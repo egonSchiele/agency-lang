@@ -1,12 +1,11 @@
 import { typecheck, compile } from "std::agency"
 
-// Agency has no `as` cast. The parser reads this as `return n`, then the
-// bare names `as` and `Json`, which only the name checks report.
-static const castSource = """
-import { Json } from "std::validation"
-
-export def run(n: number): Json {
-  return n as Json
+// A statement that is only a name. Nothing reads it, so only the name
+// checks notice that it is not defined.
+static const bareNameSource = """
+export def run(n: number): number {
+  missing
+  return n
 }
 """
 
@@ -32,17 +31,17 @@ def errorCount(source: string, strict: boolean): number {
   return report.value.errors.length
 }
 
-node castIsSilentByDefault(): number {
-  return errorCount(castSource, false)
+node bareNameIsSilentByDefault(): number {
+  return errorCount(bareNameSource, false)
 }
 
-node strictReportsTheCast(): boolean {
-  const report = typecheck(castSource, strict: true)
+node strictReportsTheBareName(): boolean {
+  const report = typecheck(bareNameSource, strict: true)
   if (report is failure) {
     return false
   }
   const messages = [diag.message for diag in report.value.errors]
-  return messages.join("\n").includes("'as' is not defined")
+  return messages.join("\n").includes("'missing' is not defined")
 }
 
 node strictRefusesAHostGlobal(): boolean {
@@ -53,9 +52,9 @@ node strictAcceptsCorrectCode(): number {
   return errorCount(cleanSource, true)
 }
 
-node strictCompileRefusesTheCast(): boolean {
-  const loose = compile(castSource)
-  const strict = compile(castSource, strict: true)
+node strictCompileRefusesTheBareName(): boolean {
+  const loose = compile(bareNameSource)
+  const strict = compile(bareNameSource, strict: true)
   if (loose is failure) {
     return false
   }

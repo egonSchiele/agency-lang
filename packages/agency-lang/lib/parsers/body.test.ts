@@ -197,16 +197,21 @@ describe("keyword-as-variable statements still parse", () => {
     { input: "debugger", firstType: "variableName" },
     { input: "nodeCount()", firstType: "functionCall" },
     // Keyword followed by a word is the reason the probe requires a name
-    // AND a `(`. All three parse today, and a probe that stopped at
+    // AND a `(`. Both parse today, and a probe that stopped at
     // "keyword, space, identifier" would decline them — which, being a
     // committed failure, turns something that parses into a hard error.
     // `node is string` is three bare-name statements, not an `is`
     // expression; it is junk, but it is junk that parses, and this change
     // is not the place to start rejecting it.
     { input: "node is string", firstType: "variableName" },
-    { input: "node as Foo", firstType: "variableName" },
     { input: "node in items", firstType: "binOpExpression" },
   ];
+
+  // An `as` cast, which the expression parser refuses whatever the name on
+  // the left is.
+  it("refuses `node as Foo` as a cast", () => {
+    expect(bodyParser("node as Foo").success).toBe(false);
+  });
 
   for (const { input, firstType } of cases) {
     it(`parses \`${input}\` as before`, () => {

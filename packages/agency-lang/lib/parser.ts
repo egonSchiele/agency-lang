@@ -232,6 +232,15 @@ export type ParseAgencyResult =
   | { success: true; result: AgencyProgram; rest: string }
   | { success: false; message?: string; rest: string; errorData?: ParseAgencyErrorData };
 
+const LOCATION_PREFIX = /^Line \d+, col \d+: /;
+
+/** Put the error's place at the front of its message, in the user's own line
+ *  numbers. tarsec writes a prefix of its own, but it counts the template
+ *  lines prepended to every file, so that prefix is replaced. */
+function withLocation(message: string, data: ParseAgencyErrorData): string {
+  return `Line ${data.line + 1}, col ${data.column + 1}: ${message.replace(LOCATION_PREFIX, "")}`;
+}
+
 /**
  * Build a structured `ParseAgencyErrorData` from a tarsec
  * rightmost-failure offset (or a fallback `{line, column, length}` if
@@ -315,19 +324,21 @@ export function parseAgency(
       // Strip the "Line X, col Y: " prefix that getErrorMessage prepends
       // so the LSP / CLI can render the location separately without
       // duplicating it inside the message body.
-      const cleanMessage = result.message.replace(/^Line \d+, col \d+: /, "");
+      const cleanMessage = result.message.replace(LOCATION_PREFIX, "");
+      const errorData = buildErrorData(
+        input,
+        rightmostPos,
+        offset,
+        { line: 0, column: 0, length: 1 },
+        cleanMessage,
+        result.message,
+      );
+      const message = withLocation(result.message, errorData);
       return {
         success: false,
-        message: result.message,
+        message,
         rest: input,
-        errorData: buildErrorData(
-          input,
-          rightmostPos,
-          offset,
-          { line: 0, column: 0, length: 1 },
-          cleanMessage,
-          result.message,
-        ),
+        errorData: { ...errorData, prettyMessage: message },
       };
     }
     return { success: false, message: result.message, rest: result.rest };
@@ -346,38 +357,43 @@ export function parseAgency(
           // Position from the COMMITTED failure, not the rightmost
           // record — the record is the misleading one here, and the LSP
           // squiggle must land where the message points (review finding).
+          const errorData = buildErrorData(
+            input,
+            getInputStr().length - committedCaught.rest.length,
+            offset,
+            { line: 0, column: 0, length: 1 },
+            committedMessage.replace(LOCATION_PREFIX, ""),
+            committedMessage,
+          );
+          const message = withLocation(committedMessage, errorData);
           return {
             success: false,
-            message: committedMessage,
+            message,
             rest: input,
-            errorData: buildErrorData(
-              input,
-              getInputStr().length - committedCaught.rest.length,
-              offset,
-              { line: 0, column: 0, length: 1 },
-              committedMessage,
-              committedMessage,
-            ),
+            errorData: { ...errorData, prettyMessage: message },
           };
         }
       }
       const rightmost = getRightmostFailure();
+      const errorData = buildErrorData(
+        input,
+        rightmost ? rightmost.pos : null,
+        offset,
+        // Fallback line is already in templated coordinates; subtract
+        // the template offset here so the user sees user-source lines
+        // either way (the rightmost-offset path subtracts inside the
+        // helper).
+        { line: error.data.line - offset, column: error.data.column, length: error.data.length },
+        error.data.message,
+        error.data.prettyMessage,
+      );
+      // A thrown message carries no place of its own, and the text is all an
+      // agent sees.
       return {
         success: false,
-        message: error.message,
+        message: withLocation(error.message, errorData),
         rest: input,
-        errorData: buildErrorData(
-          input,
-          rightmost ? rightmost.pos : null,
-          offset,
-          // Fallback line is already in templated coordinates; subtract
-          // the template offset here so the user sees user-source lines
-          // either way (the rightmost-offset path subtracts inside the
-          // helper).
-          { line: error.data.line - offset, column: error.data.column, length: error.data.length },
-          error.data.message,
-          error.data.prettyMessage,
-        ),
+        errorData,
       };
     } else if (error instanceof PatternLoweringError) {
       // Compile-time error from the lowering pass (e.g. shorthand binder in

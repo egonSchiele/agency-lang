@@ -34,6 +34,17 @@
       "description": "Should use round without explicit import (implicit stdlib)"
     },
     {
+      "nodeName": "testRoundDefaultPrecision",
+      "input": "",
+      "expectedOutput": "3",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "description": "round with no precision rounds to a whole number"
+    },
+    {
       "nodeName": "testRoundAsTool",
       "input": "",
       "expectedOutput": "2.718",
@@ -44,7 +55,9 @@
       ],
       "description": "round should work as a tool via uses without explicit import",
       "llmMocks": [
-        { "return": 2.718 }
+        {
+          "return": 2.718
+        }
       ]
     }
   ]

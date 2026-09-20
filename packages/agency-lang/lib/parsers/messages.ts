@@ -90,6 +90,19 @@ export const TERNARY_MESSAGE = `Agency has no ternary (\`? :\`). Use an \`if ...
 
 The \`else\` is required. The expression is only allowed as a \`const\`/\`let\` value or a \`return\` — for anything more involved, use \`match\`.`;
 
+export const AS_CAST_MESSAGE = `Agency has no \`as\` cast. Give the value a type where it is declared:
+
+  const total: number = parsed
+
+A function's return type already applies to what it returns, so \`return { ok: true }\` needs no cast.`;
+
+export const JS_REGEX_MESSAGE = `Agency writes a regex literal as \`re/.../\`, not \`/.../\`:
+
+  const lines = text.split(re/,\\s*/)`;
+
+export const UNREADABLE_STATEMENT_MESSAGE =
+  "cannot read the statement that starts here. If the block is finished, close it with `}`";
+
 export const IF_EXPRESSION_MESSAGE = `an \`if ... then ... else\` expression requires an \`else\` branch:
 
   const label = if isProd then "Production" else "Local"
@@ -107,7 +120,9 @@ export const MATCH_CASES_MESSAGE = `expected match cases of the form \`value => 
     }
   }
 
-An arm is \`pattern => expression\`, with an optional \`if (...)\` guard before the arrow. Use a block when an arm needs several statements. \`_\` is the catch-all, and an open type such as \`string\` requires one.`;
+An arm is \`pattern => expression\`, with an optional \`if (...)\` guard before the arrow. Use a block when an arm needs several statements. \`_\` is the catch-all, and an open type such as \`string\` requires one.
+
+An object as an arm's value needs parentheses, \`ok => ({ done: true })\`, because a bare \`{\` opens a block.`;
 
 export const HANDLER_BODY_MESSAGE = `expected \`{\` to open handler body:
 

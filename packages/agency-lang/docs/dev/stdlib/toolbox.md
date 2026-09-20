@@ -78,14 +78,12 @@ the same way and gives the author a `typecheck` tool that does too. The
 author then sees these errors on its own draft:
 
 ```
-return built as Json
+const home = process.env.HOME
 ```
 
-Agency has no `as` cast. This parses as `return built`, then the names
-`as` and `Json`, and strict mode reports both as undefined. Without it
-the draft typechecks, its generated tests pass because the two names sit
-after a `return`, and the tool is saved in a state that a sandboxed
-compile refuses.
+`process` is a host global the sandbox does not allow, and strict mode
+reports it. Without it the draft typechecks, and the tool is saved in a
+state that a sandboxed compile refuses.
 
 `draftSource` also passes `projectTools: false`, which leaves out the
 author's file and git tools. The brief allows `std::` imports only, so

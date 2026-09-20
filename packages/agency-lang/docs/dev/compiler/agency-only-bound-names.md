@@ -92,9 +92,8 @@ values). Two design choices bound that risk:
 
 A statement that is only a name, directly in a function or node body, has
 no ancestors in the walk. `isResolvableVariableReference` treats it as a
-read like any other. This is where a TypeScript cast is reported:
-`return x as Json` parses as `return x` followed by the names `as` and
-`Json`, and both are undefined.
+read like any other, so a stray undefined name on a line of its own is
+reported.
 
 If a new capability position turns up, the fix is to feed it to the same
 resolver, not to write a second rule. The security guarantee still does not

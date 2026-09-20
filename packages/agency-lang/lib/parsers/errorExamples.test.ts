@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseAgency } from "@/parser.js";
 import {
+  AS_CAST_MESSAGE,
   CATCH_ALL_NOT_LAST,
   C_STYLE_FOR_MESSAGE,
   DUPLICATE_ON_CLAUSE,
@@ -8,6 +9,7 @@ import {
   MALFORMED_ON_CLAUSE,
   HANDLER_BODY_MESSAGE,
   IF_EXPRESSION_MESSAGE,
+  JS_REGEX_MESSAGE,
   MATCH_CASES_MESSAGE,
   SWITCH_MESSAGE,
   TERNARY_MESSAGE,
@@ -166,5 +168,89 @@ node main(shape: Shape) {
     if (!parses(source)) {
       throw new Error(`example does not parse:\n${source}`);
     }
+  });
+});
+
+describe("a statement the parser cannot read is reported where it starts", () => {
+  // Each block used to report "expected `{`" for any bad statement inside it,
+  // with no position, though the `{` was there.
+  it.each([
+    ["a function", `def f(lines: string[]): number {\n  const n = +lines\n  return 1\n}`, 2],
+    [
+      "an if block",
+      `def f(n: number): number {\n  if (n > 1) {\n    const m = +n\n  }\n  return 1\n}`,
+      3,
+    ],
+    [
+      "a for loop",
+      `def f(xs: number[]): number {\n  for (x in xs) {\n    const m = +x\n  }\n  return 1\n}`,
+      3,
+    ],
+    ["a node", `node main() {\n  const m = +1\n}`, 2],
+  ])("inside %s", (_name, src, line) => {
+    const message = failure(src);
+    expect(message).toMatch(new RegExp(`^Line ${line}, col \\d+: cannot read the statement`));
+    expect(message).not.toMatch(/to open|function body|node body/);
+  });
+
+  it("still reports a missing `{`", () => {
+    expect(
+      failure(`def f(n: number): number {\n  if (n > 1)\n    return 2\n  return 1\n}`),
+    ).toMatch(/expected `\{` to open if block body/);
+  });
+});
+
+describe("an `as` cast is refused", () => {
+  it.each([
+    ["a return value", `def f(r: number): number {\n  return (r as number)\n}`],
+    ["a const value", `def f(r: number): number {\n  const n = r as number\n  return n\n}`],
+    ["an object", `def f(): Json {\n  return ({ ok: true } as Json)\n}`],
+  ])("catches it as %s", (_name, src) => {
+    expect(failure(src)).toMatch(/^Line 2, col \d+: Agency has no `as` cast/);
+  });
+
+  it("leaves a trailing block alone", () => {
+    expect(
+      parses(`def f(xs: number[]): number[] {\n  return map(xs) as x {\n    return x + 1\n  }\n}`),
+    ).toBe(true);
+  });
+
+  it("gives an example that parses", () => {
+    expect(parses(`def f(parsed: number) {\n${exampleFrom(AS_CAST_MESSAGE)}\n}`)).toBe(true);
+  });
+});
+
+describe("a JavaScript regex literal is refused", () => {
+  it("catches it as a call argument", () => {
+    expect(failure(`def f(t: string): string[] {\n  return t.split(/\\r?\\n/)\n}`)).toMatch(
+      /^Line 2, col \d+: Agency writes a regex literal as `re\/...\/`/,
+    );
+  });
+
+  it.each([
+    ["division", `def f(a: number, b: number): number {\n  return a / b / 2\n}`],
+    ["a comment after a value", `def f(a: number): number {\n  return a // half / done\n}`],
+    ["an Agency regex", `def f(t: string): string[] {\n  return t.split(re/,/)\n}`],
+  ])("leaves %s alone", (_name, src) => {
+    expect(parses(src)).toBe(true);
+  });
+
+  it("gives an example that parses", () => {
+    expect(parses(`def f(text: string) {\n${exampleFrom(JS_REGEX_MESSAGE)}\n}`)).toBe(true);
+  });
+});
+
+describe("the line in a message is the user's line", () => {
+  // Every file is parsed behind a two-line template. The refusal messages used
+  // to count those lines, so a ternary on line 2 was reported on line 4.
+  it.each([
+    ["a refusal", `def f(a: number): number {\n  const x = a > 1 ? 2 : 3\n  return x\n}`],
+    ["a thrown error", `def f(a: number): number {\n  const x = +a\n  return x\n}`],
+  ])("for %s", (_name, src) => {
+    const parsed = parseAgency(src, {}, true);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/^Line 2, col /);
+    expect(parsed.errorData?.line).toBe(1);
   });
 });

@@ -7,6 +7,7 @@
 // --- tarsec imports (combined from all parser files) ---
 import { TarsecError, getDiagnostics } from "tarsec";
 import {
+  AS_CAST_MESSAGE,
   BLOCK_AS_VALUE_MESSAGE,
   BODY_DECLARATION_MESSAGE,
   BODY_RESERVED_MODIFIER_MESSAGE,
@@ -19,6 +20,7 @@ import {
   HANDLER_BODY_MESSAGE,
   IF_EXPRESSION_MESSAGE,
   INTERFACE_EXTENDS_MESSAGE,
+  JS_REGEX_MESSAGE,
   MATCH_CASES_MESSAGE,
   MODIFIER_AFTER_KEYWORD_MESSAGE,
   RESERVED_CLASS_MESSAGE,
@@ -27,6 +29,7 @@ import {
   STATIC_LET_MESSAGE,
   SWITCH_MESSAGE,
   TERNARY_MESSAGE,
+  UNREADABLE_STATEMENT_MESSAGE,
 } from "./messages.js";
 import {
   buildOnClauseHandler,
@@ -4314,10 +4317,37 @@ const ternaryRefusal = (rest: string): ParserFailure | null => {
   return committedFailure(TERNARY_MESSAGE, tail.rest);
 };
 
+/** `x as Type`. A trailing block's `as` is read by the call parser and its
+ *  parameters are followed by `{`, so an `as` left over after an expression,
+ *  followed by a name and no `{`, can only be a cast. */
+const asCastMarker = seqC(
+  spaces,
+  str("as"),
+  spaces,
+  many1(varNameChar),
+  optionalSpaces,
+  not(oneOf("{,")),
+);
+
+const asCastRefusal = (rest: string): ParserFailure | null =>
+  asCastMarker(rest).success ? committedFailure(AS_CAST_MESSAGE, rest) : null;
+
+/** `/.../` where a value should start. Nothing in Agency begins a value with
+ *  `/`, so this is a JavaScript regex unless it opens a comment. */
+const jsRegexMarker = seqC(char("/"), not(oneOf("/* \n")), many1(noneOf("/\n")), char("/"));
+
+const jsRegexRefusal = (input: string): ParserFailure | null =>
+  jsRegexMarker(input).success ? committedFailure(JS_REGEX_MESSAGE, input) : null;
+
 export const exprParser: Parser<Expression> = (input: string) => {
+  const notAValue = jsRegexRefusal(input);
+  if (notAValue) {
+    getParseState().committedFailure = notAValue;
+    return notAValue as ParserResult<Expression>;
+  }
   const result = _exprParserBase(input);
   if (!result.success) return result;
-  const refused = ternaryRefusal(result.rest);
+  const refused = ternaryRefusal(result.rest) ?? asCastRefusal(result.rest);
   if (!refused) return result;
   // The enclosing node body is wrapped in a `parseError` that would otherwise
   // win the reporting contest, so record the commit in the parse state too.
@@ -5876,6 +5906,13 @@ export const bodyParser = (input: string): ParserResult<AgencyNode[]> => {
   return _bodyParserImpl(input);
 };
 
+/** The `}` that ends a block. The body parser stops at the first statement it
+ *  cannot read, so a missing `}` almost always means a bad statement, and the
+ *  enclosing "expected `{`" message would blame the wrong thing. */
+function closeBlock(input: string): ParserResult<"}"> {
+  return parseError(UNREADABLE_STATEMENT_MESSAGE, char("}"))(input) as ParserResult<"}">;
+}
+
 /** Parse optional `(label: ..., summarize: ..., continue: ..., session: ...)`
  *  before the `{` of a `thread` / `subthread` block. Accepts zero args
  *  via `()` as well as no parens at all. Unknown keys produce a parse
@@ -6298,7 +6335,7 @@ export const handleBlockParser: Parser<HandleBlock> = withLoc(
           optionalSpacesOrNewline,
           capture(bodyParser, "body"),
           optionalSpacesOrNewline,
-          char("}"),
+          closeBlock,
         ),
       ),
       optionalSpacesOrNewline,
@@ -6506,7 +6543,7 @@ const _ifParserInnerFor =
             optionalSpacesOrNewline,
             capture(bodyParser, "thenBody"),
             optionalSpacesOrNewline,
-            char("}"),
+            closeBlock,
             optionalSpacesOrNewline,
           ),
         ),
@@ -6616,7 +6653,7 @@ export const whileLoopParser: Parser<WhileLoop> = label(
             optionalSpacesOrNewline,
             capture(bodyParser, "body"),
             optionalSpacesOrNewline,
-            char("}"),
+            closeBlock,
             optionalSpacesOrNewline,
           ),
         ),
@@ -6692,7 +6729,7 @@ export const parallelBlockParser: Parser<ParallelBlock> = label(
               optionalSpacesOrNewline,
               capture(bodyParser, "body"),
               optionalSpacesOrNewline,
-              char("}"),
+              closeBlock,
             ),
           ),
         ),
@@ -6729,7 +6766,7 @@ export const seqBlockParser: Parser<SeqBlock> = label(
             optionalSpacesOrNewline,
             capture(bodyParser, "body"),
             optionalSpacesOrNewline,
-            char("}"),
+            closeBlock,
           ),
         ),
       ),
@@ -6962,7 +6999,7 @@ export const forLoopParser: Parser<ForLoop> = label(
             optionalSpacesOrNewline,
             capture(bodyParser, "body"),
             optionalSpacesOrNewline,
-            char("}"),
+            closeBlock,
             optionalSpacesOrNewline,
           ),
         ),
@@ -7113,7 +7150,7 @@ const _baseFunctionParser: Parser<any> = memo(
         optionalSpacesOrNewline,
         capture(bodyParser, "body"),
         optionalSpacesOrNewline,
-        char("}"),
+        closeBlock,
         optionalSemicolon,
       ),
     ),
@@ -7267,7 +7304,7 @@ export const graphNodeParser: Parser<GraphNodeDefinition> = label(
               optionalSpacesOrNewline,
               capture(bodyParser, "body"),
               optionalSpacesOrNewline,
-              char("}"),
+              closeBlock,
               optionalSemicolon,
             ),
           ),

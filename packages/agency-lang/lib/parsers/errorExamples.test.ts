@@ -148,7 +148,11 @@ node main(shape: Shape) {
 }`,
     ],
     ["if-then-else", IF_EXPRESSION_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
-    ["if inside an interpolation", IF_IN_INTERPOLATION_MESSAGE, `node main(count: number) {\n  %s\n}`],
+    [
+      "if inside an interpolation",
+      IF_IN_INTERPOLATION_MESSAGE,
+      `node main(count: number) {\n  %s\n}`,
+    ],
     ["ternary replacement", TERNARY_MESSAGE, `node main(isProd: boolean) {\n  %s\n}`],
     ["handler", HANDLER_BODY_MESSAGE, `node main() {\n  %s\n}`],
     ["empty handler block", EMPTY_HANDLER_BLOCK, `node main() {\n  %s\n}`],

@@ -1,0 +1,21 @@
+{
+  "description": "A tool that calls a model, graded by how well it works and not only by whether it is correct code. The purpose names five categories, two pairs of which overlap, and an urgency scale it never defines. The definitions and the rules for breaking ties are facts the author has to ask for. A tool that only says \"classify this message\" compiles and saves, and gets the overlapping messages wrong.",
+  "tags": [
+    "asks",
+    "model"
+  ],
+  "input": {
+    "name": "triageTicket",
+    "purpose": "Sort a customer support message for my app the way my support team does. Use a model. Return an object `{ category: string, reason: string, urgency: number }`. category is exactly one of these five words: billing, refund, bug, how-to, other. reason is one sentence. urgency is 1, 2, or 3.",
+    "request": "{ message: string }",
+    "facts": {
+      "billing": "A question or a problem about a charge, an invoice, a plan, or a payment method, where the customer is not asking for money back.",
+      "refund": "The customer asks for money back, for any reason.",
+      "bug": "The app did something wrong: the message reports an error message, a crash, or data that is wrong or missing.",
+      "how-to": "The customer wants to know how to do something, or cannot find something, and nothing in the message shows the app misbehaving.",
+      "other": "Anything else, such as feedback, a sales question, or spam.",
+      "when two categories fit": "Asking for money back always wins: a message that asks for a refund is refund, even when it also describes a wrong charge or a bug. Between bug and how-to, it is bug only when the message reports an error message, a crash, or wrong data. 'It does not work' with nothing more is how-to.",
+      "urgency": "3 when the customer cannot use the app at all, or money was taken that should not have been. 1 when it is a question and nothing is broken. 2 for everything else."
+    }
+  }
+}

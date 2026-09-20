@@ -90,12 +90,6 @@ export const TERNARY_MESSAGE = `Agency has no ternary (\`? :\`). Use an \`if ...
 
 The \`else\` is required. The expression is only allowed as a \`const\`/\`let\` value or a \`return\` — for anything more involved, use \`match\`.`;
 
-export const AS_CAST_MESSAGE = `Agency has no \`as\` cast. Give the value a type where it is declared:
-
-  const total: number = parsed
-
-A function's return type already applies to what it returns, so \`return { ok: true }\` needs no cast.`;
-
 export const JS_REGEX_MESSAGE = `Agency writes a regex literal as \`re/.../\`, not \`/.../\`:
 
   const lines = text.split(re/,\\s*/)`;

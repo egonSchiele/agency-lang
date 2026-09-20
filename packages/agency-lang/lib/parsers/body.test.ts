@@ -204,14 +204,12 @@ describe("keyword-as-variable statements still parse", () => {
     // expression; it is junk, but it is junk that parses, and this change
     // is not the place to start rejecting it.
     { input: "node is string", firstType: "variableName" },
+    // An `as` cast in a value position is a castExpression, but a bare one
+    // in statement position reads as three bare names, exactly like the
+    // `is` row above. Both are junk that parses.
+    { input: "node as Foo", firstType: "variableName" },
     { input: "node in items", firstType: "binOpExpression" },
   ];
-
-  // An `as` cast, which the expression parser refuses whatever the name on
-  // the left is.
-  it("refuses `node as Foo` as a cast", () => {
-    expect(bodyParser("node as Foo").success).toBe(false);
-  });
 
   for (const { input, firstType } of cases) {
     it(`parses \`${input}\` as before`, () => {

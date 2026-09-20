@@ -442,7 +442,7 @@ function generateDocForFile(
   }
 
   if (program.docComment) {
-    const { body } = extractSummaryOverride(program.docComment.content);
+    const { body } = extractSummaryOverride(stripDocCommentMarkers(program.docComment.content));
     sections.push(formatDocComment({ ...program.docComment, content: body }));
   }
 
@@ -550,7 +550,7 @@ function generateParamTable(params: FunctionParameter[], ctx: DocContext): strin
 }
 
 function formatDocComment(comment: AgencyMultiLineComment): string {
-  return comment.content.trim();
+  return stripDocCommentMarkers(comment.content).trim();
 }
 
 // Moved to lib/utils/moduleDoc.ts so std::agency's describe() shares the
@@ -562,7 +562,11 @@ export {
   sanitizeDescription,
   moduleDescription,
 } from "../utils/moduleDoc.js";
-import { extractSummaryOverride, moduleDescription } from "../utils/moduleDoc.js";
+import {
+  extractSummaryOverride,
+  moduleDescription,
+  stripDocCommentMarkers,
+} from "../utils/moduleDoc.js";
 
 function formatTypeAlias(alias: TypeAlias, ctx: DocContext): string {
   const code = generateAgency(

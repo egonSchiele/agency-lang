@@ -7,6 +7,23 @@ import type { AgencyMultiLineComment } from "../types.js";
  * everywhere it appears.
  */
 
+/**
+ * Remove the `*` that JSDoc style puts at the start of each line, so
+ * " * First line." renders as "First line.".
+ *
+ * Only a comment where EVERY line after the opening one starts with `*` is
+ * treated as JSDoc style. Otherwise a `* item` line is a Markdown bullet
+ * and must stay.
+ */
+export function stripDocCommentMarkers(content: string): string {
+  const lines = content.split("\n");
+  const marked = lines.slice(1).filter((line) => line.trim() !== "");
+  if (marked.length === 0) return content;
+  if (!marked.every((line) => /^\s*\*/.test(line))) return content;
+  const [first, ...rest] = lines;
+  return [first, ...rest.map((line) => line.replace(/^\s*\* ?/, ""))].join("\n");
+}
+
 /** Split an `@summary` override line off a module doc comment's content. */
 export function extractSummaryOverride(content: string): {
   override: string | null;
@@ -54,7 +71,7 @@ export function sanitizeDescription(raw: string): string {
  *  else the first sentence of the first paragraph, sanitized. */
 export function moduleDescription(comment: AgencyMultiLineComment | undefined): string | null {
   if (!comment) return null;
-  const { override, body } = extractSummaryOverride(comment.content);
+  const { override, body } = extractSummaryOverride(stripDocCommentMarkers(comment.content));
   const raw = override ?? firstSentence(firstParagraph(body));
   if (!raw) return null;
   const value = sanitizeDescription(raw);

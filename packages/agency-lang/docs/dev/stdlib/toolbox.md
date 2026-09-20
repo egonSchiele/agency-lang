@@ -430,8 +430,7 @@ limit.
   compile. This happens inside `agencyCodingAgent`, in one conversation,
   so the author sees its own draft and the error. `draftSource` allows
   `CHECK_ATTEMPTS` (6) of these. They are cheap and say nothing about
-  whether the tool is right, and a small model needs several: on
-  gpt-5-mini half of all tool requests had at least one.
+  whether the tool is right, and a small model needs several.
 - **The draft was wrong.** Its tests failed, the reviewer blocked it, or
   the user asked for a change. Each of these is a round, and `maxRounds`
   (3) limits them.

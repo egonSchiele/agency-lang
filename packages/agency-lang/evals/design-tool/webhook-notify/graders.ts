@@ -5,7 +5,9 @@ import { toolJudge } from "../lib/toolJudge.js";
 export default [
   saved(),
   asked({ expected: true }),
-  usesAnswers(["https://hooks.example.com/services/T0001/B0002/abcDEF123"]),
+  // The HTTP functions take a base URL and a path, so a correct tool may
+  // never hold the whole URL in one string.
+  usesAnswers(["hooks.example.com", "services/T0001/B0002/abcDEF123"]),
   toolJudge({
     name: "posts-the-message",
     standard: `

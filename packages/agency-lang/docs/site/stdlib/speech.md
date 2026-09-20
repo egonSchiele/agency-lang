@@ -217,6 +217,7 @@ speak(
   speed: number = 1,
   allowedPaths: string[] = [],
   apiKey: string = "",
+  instructions: string = "",
 ): string
 ```
 
@@ -233,6 +234,7 @@ Synthesize speech from text using a cloud text-to-speech provider (OpenAI
   @param speed - Speaking speed (0.25 to 4.0)
   @param allowedPaths - Only allow writing a non-empty outputFile under these path prefixes
   @param apiKey - Override the API key
+  @param instructions - How the speech should sound, in plain words: "Calm and slow." Needs a model that reads it, such as gpt-4o-mini-tts; tts-1 and tts-1-hd ignore it
 
 A cloud synthesis request tears down on Ctrl-C, race-loser, or time-guard
 abort; a cancelled request never writes its output file. Cost, spend guards,
@@ -251,6 +253,7 @@ and statelog apply.
 | speed | `number` | 1 |
 | allowedPaths | `string[]` | [] |
 | apiKey | `string` | "" |
+| instructions | `string` | "" |
 
 **Returns:** `string`
 
@@ -312,4 +315,4 @@ Writing mp3 or m4a, or a speed other than 1, needs `ffmpeg` on the PATH.
 
 **Throws:** `std::localSpeech`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L261))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/speech.agency#L264))

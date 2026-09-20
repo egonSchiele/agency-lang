@@ -320,7 +320,7 @@ def foo() {
       writeFileSync(
         helperFile,
         `
-def helper() {
+export def helper() {
   interrupt std::read("hi")
 }
 `,
@@ -359,7 +359,7 @@ node main() {
       writeFileSync(
         helperFile,
         `
-def helper() {
+export def helper() {
   interrupt std::read("hi")
 }
 `,

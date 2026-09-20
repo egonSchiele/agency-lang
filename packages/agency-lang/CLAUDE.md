@@ -269,6 +269,7 @@ Other process docs:
 - `docs/dev/compiler/init.md` — Design history for running a file's top-level code before any node executes.
 - `docs/dev/compiler/interrupts-command.md` — `agency interrupts`, which statically prints which handlers could enclose each interrupt.
 - `docs/dev/compiler/locations.md` — How source positions flow through the parser, and what to check when a reported location is wrong.
+- `docs/dev/compiler/prepare-program.md` — `prepareProgram`, the one pipeline from source text to a `CompilationUnit`: the steps in order, the option each caller sets and why, how failures are returned, why resolver errors carry AG codes, and which callers are deliberately not on it.
 - `docs/dev/compiler/rewriting-imports.md` — How imports in generated output are rewritten, and why compile mode and run mode differ.
 - `docs/dev/compiler/trailing-comments.md` — How `agency fmt` keeps an end-of-line `//` comment where the author wrote it.
 - `docs/dev/compiler/ts-ir-readability-backlog.md` — A backlog of pain points in the TypeScript builder. Nothing here is actioned yet.

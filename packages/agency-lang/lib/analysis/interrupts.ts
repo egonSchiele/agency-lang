@@ -1,12 +1,9 @@
 import { readFileSync } from "fs";
 import path from "path";
-import { parseAgency } from "@/parser.js";
 import { SymbolTable } from "@/symbolTable.js";
-import { buildCompilationUnit } from "@/compilationUnit.js";
-import { liftCallbackBlocks } from "@/preprocessors/liftCallbacks.js";
-import { expandSplices } from "@/preprocessors/expandSplices.js";
+import { describeDiagnostic, prepareProgram } from "@/compiler/prepareProgram.js";
 import { typeCheck } from "@/typeChecker/index.js";
-import { getStdlibDir } from "@/importPaths.js";
+import { getStdlibDir, isNonTemplatedStdlib } from "@/importPaths.js";
 import type { AgencyConfig } from "@/config/config.js";
 import type {
   InterruptCallGraph,
@@ -97,17 +94,22 @@ function analyzeOneFile(
   config: AgencyConfig,
 ): InterruptCallGraph {
   const source = readFileSync(filePath, "utf-8");
-  const parseResult = parseAgency(source, config);
-  if (!parseResult.success) {
-    throw new Error(`Failed to parse ${filePath}`);
+  // Best-effort, matching this analysis: `keepGoing` carries on past a
+  // splice that will not expand or an import that will not resolve. The
+  // compile paths report those; refusing to analyze interrupts over the file
+  // would be worse than analyzing what is there. Nothing here runs the
+  // program, so `import test` is honored the way the editor honors it.
+  const prepared = prepareProgram(source, filePath, config, {
+    applyTemplate: !isNonTemplatedStdlib(filePath),
+    allowTestImports: true,
+    keepGoing: true,
+    symbolTable,
+  });
+  if (!prepared.ok) {
+    const reasons = prepared.diagnostics.map((found) => describeDiagnostic(found, filePath));
+    throw new Error(`Failed to parse ${filePath}: ${reasons.join("; ")}`);
   }
-  // Best-effort, matching this analysis. The compile paths report a splice
-  // that will not expand; refusing to analyze interrupts over it would be
-  // worse than analyzing what is there.
-  const spliced = expandSplices(parseResult.result, filePath, config);
-  const lifted = liftCallbackBlocks(spliced.ok ? spliced.value : parseResult.result);
-  const info = buildCompilationUnit(lifted, symbolTable, filePath, source);
-  return typeCheck(lifted, config, info).interruptCallGraph;
+  return typeCheck(prepared.program, config, prepared.info).interruptCallGraph;
 }
 
 // -- Phase 2: Site collection --

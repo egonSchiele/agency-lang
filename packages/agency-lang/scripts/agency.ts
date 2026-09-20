@@ -93,8 +93,8 @@ import { parseAgency } from "@/parser.js";
 import { parseTarget } from "@/agentTarget.js";
 import { TypescriptPreprocessor } from "@/preprocessors/typescriptPreprocessor.js";
 import { buildCompilationUnit } from "@/compilationUnit.js";
-import { expandSplices } from "@/preprocessors/expandSplices.js";
-import { formatSpliceDiagnostic } from "@/compiler/splice/report.js";
+import { describeDiagnostic, prepareProgram } from "@/compiler/prepareProgram.js";
+import { withSourcePath } from "@/compiler/typecheck.js";
 import { SymbolTable } from "@/symbolTable.js";
 import { ImportResolutionError, formatImportResolutionError } from "@/importResolutionError.js";
 import { formatErrors, formatDiagnosticsHint, typeCheck } from "@/typeChecker/index.js";
@@ -1638,20 +1638,29 @@ export function createProgram(deps: CliDependencies = {}): Command {
       });
       let hasErrors = false;
       const runTypeCheck = (contents: string, filePath?: string, symbolTable?: SymbolTable) => {
-        const parsed = parse(contents, config);
+        // Stdin has no path, so it is checked at a temporary one. Its
+        // relative imports cannot resolve there; std:: imports can.
         const absPath = filePath ? path.resolve(filePath) : undefined;
-        // Expand `$( ... )` first, or every name a splice generates checks
-        // as undefined. This command has its own pipeline and does not go
-        // through runCheckerPipeline. Stdin has no path to resolve a
-        // generator against, so splices are left alone there.
-        const expanded = absPath === undefined ? null : expandSplices(parsed, absPath, config);
-        if (expanded !== null && !expanded.ok) {
-          console.error(formatSpliceDiagnostic(expanded.diagnostic, absPath));
-          hasErrors = true;
+        // `keepGoing`: a bad import is reported and the rest of the file is
+        // still checked, the way this command has always worked.
+        const prepared = withSourcePath(contents, absPath, (sourcePath) =>
+          prepareProgram(contents, sourcePath, config, { symbolTable, keepGoing: true }),
+        );
+        for (const found of prepared.diagnostics) {
+          if (found.stage === "imports") {
+            reportImportError(found.error, absPath);
+          } else {
+            console.error(describeDiagnostic(found, absPath ?? "<stdin>"));
+            hasErrors = true;
+          }
+        }
+        // Checking past a splice that did not expand would report every name
+        // it was going to generate as undefined.
+        const spliceFailed = prepared.diagnostics.some((found) => found.stage === "splice");
+        if (!prepared.ok || spliceFailed) {
           return;
         }
-        const parsedProgram = expanded?.ok ? expanded.value : parsed;
-        const info = buildCompilationUnit(parsedProgram, symbolTable, absPath, contents);
+        const { program: parsedProgram, info } = prepared;
         const { errors } = typeCheck(parsedProgram, config, info);
         if (errors.length > 0) {
           console.error(formatErrors(errors));

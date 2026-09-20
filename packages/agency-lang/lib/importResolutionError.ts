@@ -14,6 +14,9 @@ export class ImportResolutionError extends Error {
   loc?: SourceLocation;
   /** The file holding the offending statement, when the thrower knows it. */
   file?: string;
+  /** The type checker's AG#### code for the same mistake, when it has one,
+   *  so `agency explain` works on either report. */
+  code?: string;
   constructor(message: string, loc?: SourceLocation, file?: string) {
     super(message);
     this.name = "ImportResolutionError";
@@ -27,7 +30,8 @@ export class ImportResolutionError extends Error {
  *  error carries none. */
 export function formatImportResolutionError(err: ImportResolutionError, file?: string): string {
   const at = err.file ?? file;
-  if (at === undefined) return `error: ${err.message}`;
-  if (err.loc === undefined) return `${at} - error: ${err.message}`;
-  return `${at}:${err.loc.line + 1}:${err.loc.col + 1} - error: ${err.message}`;
+  const label = err.code === undefined ? "error" : `error ${err.code}`;
+  if (at === undefined) return `${label}: ${err.message}`;
+  if (err.loc === undefined) return `${at} - ${label}: ${err.message}`;
+  return `${at}:${err.loc.line + 1}:${err.loc.col + 1} - ${label}: ${err.message}`;
 }

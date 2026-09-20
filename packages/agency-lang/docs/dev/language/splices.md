@@ -37,13 +37,11 @@ Two consequences worth keeping in mind when changing this code. The cache is wha
 
 ## Every path that must expand
 
-Six, and missing one is the failure mode to worry about. It produces a file that works through one entry point and misbehaves through another.
+Missing one is the failure mode to worry about. It produces a file that works through one entry point and misbehaves through another. `agency tc` was missed when splices shipped, and it reported a generated function as undefined.
 
-The list below was originally found by searching for another preprocessing step, `liftCallbackBlocks`, on the assumption that anything running one should run the other. `agency tc` runs neither, so it was missed, and `agency tc` on a file with a splice reported the generated function as undefined.
+Expansion is now a step of `prepareProgram`, which five of the six paths call. See `docs/dev/compiler/prepare-program.md`. `lib/compiler/buildSession.ts` still expands on its own, in `expandSplicesOrExit`.
 
-Search instead for callers of `buildCompilationUnit`. That is the step which inventories what a file declares, so it is the one that needs the splice already expanded. Most of the call sites it returns only want metadata, and "Blast radius" below lists them as deliberately not expanding.
-
-That six copies of this sequence exist at all is the real problem, and it is filed as #692.
+To find every path, search for callers of `buildCompilationUnit`. That is the step which inventories what a file declares, so it is the one that needs the splice already expanded. Most of the call sites it returns only want metadata, and "Blast radius" below lists them as deliberately not expanding.
 
 | Where | On failure |
 | --- | --- |
@@ -51,10 +49,8 @@ That six copies of this sequence exist at all is the real problem, and it is fil
 | `lib/compiler/compile.ts` (`compileSource`) | Return a `CompileFailure`. This module returns errors as data and never exits. |
 | `lib/compiler/typecheck.ts` (`runCheckerPipeline`) | Keep the unexpanded program. This pipeline answers "what does this check as"; reporting belongs to the compile paths. The one exception is a refusal (`AG8016`), which throws — see "Declining generator execution". |
 | `lib/analysis/interrupts.ts` (`analyzeOneFile`) | Keep the unexpanded program. Refusing to analyze interrupts because a splice failed would be worse than analyzing what is there. |
-| `lib/lsp/diagnostics.ts` (`computeDiagnostics`) | Report it as an editor diagnostic. This is the only path where the user is looking at the file while the generator is broken. |
-| `scripts/agency.ts` (the `typecheck`/`tc` command) | Print and mark the run failed. Has its own pipeline and reaches none of the shared ones. Skipped for stdin, which has no path to resolve a generator against. |
-
-Four of these six also run `liftCallbackBlocks`: `buildSession.ts`, `compile.ts`, `typecheck.ts`, and `interrupts.ts`. The editor and the `typecheck` command run expansion only. If a seventh path appears, check whether it needs both.
+| `lib/lsp/diagnostics.ts` (`runDiagnostics`) | Report it as an editor diagnostic. This is the only path where the user is looking at the file while the generator is broken. |
+| `scripts/agency.ts` (the `typecheck`/`tc` command) | Print, mark the run failed, and skip type checking that file. Stdin is checked at a temporary path, so a generator imported by relative path does not resolve there. |
 
 `TypeScriptBuilder.build` has a tripwire for this. A splice reaching code generation means expansion did not run. Without the tripwire the symptom is a raw `Unhandled Agency node type` stack trace that says nothing about the actual mistake. It lives in `TypeScriptBuilder.build` in `lib/backends/typescriptBuilder.ts`, and its comment still says seven paths must expand rather than six.
 

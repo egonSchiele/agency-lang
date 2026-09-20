@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseAgency } from "@/parser.js";
+import { parseAgency, replaceBlankLines } from "@/parser.js";
 import {
   AS_CAST_MESSAGE,
   CATCH_ALL_NOT_LAST,
   C_STYLE_FOR_MESSAGE,
+  DECLARATION_WITHOUT_VALUE_MESSAGE,
   DUPLICATE_ON_CLAUSE,
   EMPTY_HANDLER_BLOCK,
   MALFORMED_ON_CLAUSE,
@@ -253,5 +254,48 @@ describe("the line in a message is the user's line", () => {
     expect(parsed.message).toMatch(/^Line 2, col /);
     expect(parsed.errorData?.line).toBe(1);
     expect(parsed.errorData?.prettyMessage).not.toMatch(/^Line [^2]/);
+  });
+});
+
+describe("blank lines do not shift the line in a message", () => {
+  // The formatter, `agency ast`, and `parseAST` in std::agency keep blank
+  // lines by turning each one's newline into a sentinel before parsing.
+  const src = `def f(): number {\n\n\n  const a = 1\n\n  const b = +a\n  return b\n}\n`;
+
+  it.each([
+    ["as written", src],
+    ["with blank lines kept", replaceBlankLines(src)],
+  ])("%s", (_name, input) => {
+    const parsed = parseAgency(input, {}, false, false);
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.message).toMatch(/^Line 6, col /);
+    expect(parsed.errorData?.line).toBe(5);
+  });
+});
+
+describe("a declaration with no value is refused", () => {
+  it.each([
+    ["a typed let", `def f(): string {\n  let s: string\n  s = "a"\n  return s\n}`],
+    ["an untyped let", `def f(): string {\n  let s\n  s = "a"\n  return s\n}`],
+    ["the last statement", `node main() {\n  let s: string\n}`],
+  ])("catches %s on its own line", (_name, src) => {
+    expect(failure(src)).toMatch(/^Line 2, col \d+: a `let` or `const` needs a value/);
+  });
+
+  it.each([
+    [
+      "a typed declaration with a value",
+      `def f(): number[] {\n  let xs: number[] = []\n  return xs\n}`,
+    ],
+    ["a name that starts with let", `def f(letter: string): string {\n  return letter\n}`],
+  ])("leaves %s alone", (_name, src) => {
+    expect(parses(src)).toBe(true);
+  });
+
+  it("gives an example that parses", () => {
+    expect(parses(`node main() {\n${exampleFrom(DECLARATION_WITHOUT_VALUE_MESSAGE)}\n}`)).toBe(
+      true,
+    );
   });
 });

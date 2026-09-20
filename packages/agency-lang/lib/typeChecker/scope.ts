@@ -19,6 +19,8 @@ export class Scope {
   // (losing the binding and mutating the map) instead of storing an entry.
   private readonly vars: Record<string, ScopeType> = Object.create(null);
   private readonly consts: Record<string, boolean> = Object.create(null);
+  /** Narrowed member paths (`request.subject`), keyed by `referenceKey`. */
+  private readonly paths: Record<string, ScopeType> = Object.create(null);
   private readonly isFunctionBoundary: boolean;
   /**
    * Tree-wide mutation counter, stored on the ROOT scope only. typeAt
@@ -83,6 +85,28 @@ export class Scope {
     if (!this.detached) {
       this.bumpGeneration();
     }
+  }
+
+  /** The member-path twin of `declareLocal`: a narrowing that lives and dies
+   *  with this scope. */
+  declareLocalPath(key: string, type: ScopeType): void {
+    this.paths[key] = type;
+    if (!this.detached) {
+      this.bumpGeneration();
+    }
+  }
+
+  /** A narrowed type for the path, or undefined. A scope that binds the base
+   *  variable itself ends the search: paths narrowed further out were about
+   *  a different binding, or about the base before it was narrowed. */
+  lookupPath(variable: string, key: string): ScopeType | undefined {
+    if (Object.prototype.hasOwnProperty.call(this.paths, key)) {
+      return this.paths[key];
+    }
+    if (Object.prototype.hasOwnProperty.call(this.vars, variable)) {
+      return undefined;
+    }
+    return this.parent?.lookupPath(variable, key);
   }
 
   lookup(name: string): ScopeType | undefined {

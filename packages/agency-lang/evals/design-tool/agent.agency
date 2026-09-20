@@ -1,0 +1,94 @@
+/** The entry node for the `evals/design-tool` suite:
+
+      agency eval run evals/design-tool/agent.agency:main --suite evals/design-tool
+
+  It calls `designTool` and plays the user. It answers every question with
+  all of the test's facts, accepts the first draft it is shown, approves
+  the toolbox's own effects, the run of a draft's generated tests, and
+  reads of the packaged docs, and rejects everything else. The tool is
+  saved under `toolbox/` in the working directory, where the suite's
+  hidden test cases import it. The node's output is a `DesignLog`. */
+import { keys } from "std::object"
+import { bundledDocsDir } from "std::skills"
+import { evalValue } from "std::statelog"
+import { designTool, ToolEntry } from "std::toolbox"
+
+/** What a test hands this node: the three things a caller passes
+  `designTool`, and what the pretend user knows. */
+type DesignInput = {
+  name: string;
+  purpose: string;
+  request: string;
+  /** What the pretend user can tell an author that asks, keyed by a few
+    words naming each fact. Empty when the purpose already says it all. */
+  facts: Record<string, string>
+}
+
+/** What one run did. The graders read it as the run's output. */
+type DesignLog = {
+  saved: boolean;
+  error: string;
+  /** Every `std::question` the run raised, in order. */
+  questions: string[];
+  /** The last draft the user was shown, or "" when none got that far. */
+  lastDraft: string;
+  /** Effects this node refused. */
+  rejected: string[]
+}
+
+const TOOLBOX = "toolbox"
+
+// The pretend user cannot tell which fact a question is after, so every
+// question gets all of them. No model is involved, so the same question
+// always gets the same answer.
+def factsAnswer(facts: Record<string, string>): string {
+  let lines: string[] = []
+  for (name in keys(facts)) {
+    lines.push("${name}: ${facts[name]}")
+  }
+  if (lines.length == 0) {
+    return "I have nothing to add. Use your judgment."
+  }
+  return "Here is what I can tell you.\n${lines.join("\n")}\nFor anything else, use your judgment."
+}
+
+node main(input: DesignInput): DesignLog {
+  evalValue(input)
+  let questions: string[] = []
+  let rejected: string[] = []
+  let lastDraft = ""
+  let outcome: Result<ToolEntry> = failure("designTool never ran")
+  handle {
+    outcome = designTool(input.name, input.purpose, input.request, dir: TOOLBOX)
+  } with (intr) {
+    return match(intr.effect) {
+      "std::question" => {
+        questions.push(intr.data.prompt)
+        return approve(factsAnswer(input.facts))
+      }
+      "std::toolbox::review" => {
+        lastDraft = intr.data.source
+        return approve("accept")
+      }
+      "std::run" => approve()
+      "std::read" if (intr.data.dir.startsWith(bundledDocsDir())) => approve()
+      effect if (effect.startsWith("std::toolbox::")) => approve()
+      _ => {
+        rejected.push(intr.effect)
+        return reject("not available in this eval")
+      }
+    }
+  }
+  let error = ""
+  if (outcome is failure(reason)) {
+    error = "${reason}"
+  }
+  return {
+    saved: outcome is success,
+    error: error,
+    questions: questions,
+    lastDraft: lastDraft,
+    rejected: rejected
+  }
+}
+

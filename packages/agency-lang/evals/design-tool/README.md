@@ -1,16 +1,16 @@
 # design-tool: an eval suite for `designTool`
 
-`designTool` in `std::toolbox` has a coding agent draft a tool, a reviewer
-read the draft, generated tests run against it, and the user accept it.
+`designTool` in `std::toolbox` has a coding agent draft a tool, runs
+generated tests against the draft, and has the user accept it.
 This suite scores that whole loop on a fixed set of tool requests, so a
-change to the brief, the reviewer, or the loop can be measured instead of
+change to the brief, the checks, or the loop can be measured instead of
 tried once by hand.
 
 ## Run it
 
 ```bash
 pnpm run agency eval run \
-  stdlib/toolbox.agency:evalMain \
+  evals/design-tool/agent.agency:main \
   --suite evals/design-tool \
   --out runs/design-tool
 
@@ -22,44 +22,34 @@ A run stores a copy of its graders. After changing a grader, add
 
 Add `--trials 3` for means with error bars, and `--test email-note` to run
 one test. A test costs about as much as one real `designTool` call, around
-a dollar, so the whole suite is a few dollars per trial.
+two cents on gpt-5-mini.
 
 ## The contract
 
 A test's input is what a caller passes `designTool`, plus what the pretend
-user knows (`DesignToolEvalInput` in `stdlib/toolbox.agency`):
+user knows (`DesignInput` in `agent.agency`):
 
 ```
 { "name": string, "purpose": string, "request": string, "facts": { [name]: string } }
 ```
 
-`evalMain` plays the user. It answers every `std::question` with all of the
-test's facts, because it cannot tell which fact a question is after, and no
-model is involved in the answer. It accepts the first draft it is shown. It
-approves the toolbox's own effects, the run of a draft's generated tests,
-and reads of the packaged docs, and it rejects everything else, so an
-author that goes looking through the file system finds nothing.
+`main` in `agent.agency` plays the user. It answers every `std::question`
+with all of the test's facts, because it cannot tell which fact a question
+is after, and no model is involved in the answer. It accepts the first
+draft it is shown. It approves the toolbox's own effects, the run of a
+draft's generated tests, and reads of the packaged docs. It rejects
+everything else, so an author that goes looking through the file system
+finds nothing.
 
-The run's working directory ends up with:
-
-- `toolbox/<name>/impl.agency`, the saved tool, when one was saved.
-- `design-log.json`: whether the tool was saved and the error if not, every
-  question asked, the reviewer's findings on each draft the user saw, and
-  the effects `evalMain` refused.
-- `last-draft.agency`, the last draft the user saw, so a judge has
-  something to read when nothing was saved.
+The saved tool lands in `toolbox/<name>/impl.agency` in the run's working
+directory. The node's output is a `DesignLog`: whether the tool was saved
+and the error if not, every question asked, the last draft the user saw,
+and the effects `main` refused.
 
 ## Grading
 
-Every test carries two graders:
-
-- `saved` (`lib/saved.ts`): a run that saves nothing has failed.
-- `reviewer-findings-are-real` (`lib/reviewerFindings.ts`): a judge reads
-  each blocking finding the reviewer raised against the draft it was about
-  and scores the share that are real problems. This is the number that
-  catches a reviewer blocking a draft over the layout of the `Request`
-  type, which is the failure that started this suite. It passes when no
-  blocking finding reached the user.
+Every test carries `saved` (`lib/saved.ts`): a run that saves nothing has
+failed.
 
 A test about asking uses `asked` and `usesAnswers` (`lib/asked.ts`). When
 the purpose leaves out a fact (tag `asks`), the author must ask at least
@@ -82,21 +72,26 @@ scored.
 
 ## Baseline
 
-Three trials on gpt-5-mini, 2026-09-19, $0.73 for the run and $0.02 to
-grade it:
+Three trials on gpt-5-mini, 2026-09-19. The first column is `designTool`
+as it ships. The second has its review agent on (`review: true`). Both
+were graded with a grader for the reviewer's findings that has since been
+removed. It passed every run in the first column.
 
-| test | score |
-| --- | --- |
-| column-stats | 0.905 ± 0.095 |
-| email-note | 0.556 ± 0.222 |
-| slugify-title | 0.810 ± 0.095 |
-| split-bill | 1.000 ± 0.000 |
-| topic-news | 1.000 ± 0.000 |
-| webhook-notify | 1.000 ± 0.000 |
-| all | 0.878 ± 0.019 |
+| test | score | with the review agent |
+| --- | --- | --- |
+| column-stats | 0.905 ± 0.095 | 0.905 ± 0.095 |
+| email-note | 0.556 ± 0.222 | 0.556 ± 0.222 |
+| slugify-title | 0.905 ± 0.095 | 0.810 ± 0.095 |
+| split-bill | 1.000 ± 0.000 | 1.000 ± 0.000 |
+| topic-news | 1.000 ± 0.000 | 1.000 ± 0.000 |
+| webhook-notify | 0.975 ± 0.025 | 1.000 ± 0.000 |
+| all | 0.890 ± 0.029 | 0.878 ± 0.019 |
+| time per tool | 85s | 187s |
+| cost per tool | $0.014 | $0.041 |
 
-Two email runs saved nothing: the author gave up after three rounds of
-parse errors, one on an `if` body and one on a `match` arm. Two slug runs
-saved a tool that the hidden cases could not compile, with
-`AG4007: Variable 'as' is not defined`. `designTool` accepted those tools,
-so its own checks are looser than the sandboxed compile the cases use.
+The failures are the same kind in both columns. An author gives up after
+three rounds of parse or type errors, or saves a tool that the hidden
+cases cannot compile: a TypeScript `as` cast, which Agency reads as two
+undefined names, or a JavaScript global the sandbox does not allow.
+`designTool` accepts those tools because its own compile leaves the
+undefined-name check off.

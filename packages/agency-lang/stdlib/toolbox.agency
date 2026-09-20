@@ -20,10 +20,8 @@ import { agencyReviewAgent } from "std::agents/agency/review"
 import { llmOptions } from "std::agents/lib/shared"
 import { now, format } from "std::date"
 import { mkdir, remove, move } from "std::fs"
-import { keys } from "std::object"
 import { ls, exists } from "std::shell"
-import { MAX_TOOL_NAME_LEN, bundledDocsDir } from "std::skills"
-import { evalValue } from "std::statelog"
+import { MAX_TOOL_NAME_LEN } from "std::skills"
 import { Json } from "std::validation"
 
 import { _read, _write } from "agency-lang/stdlib-lib/builtins.js"
@@ -42,7 +40,7 @@ import { _mkdir, _move, _remove } from "agency-lang/stdlib-lib/fs.js"
   - `listTools` reads a toolbox directory into a catalog. It raises a
     `std::toolbox::scan` interrupt, then `std::ls` for the listing.
   - `designTool` has the coding agent draft a new tool. `designTool` then
-    reviews and tests the draft, shows it to the user through a
+    checks and tests the draft, shows it to the user through a
     `std::toolbox::review` interrupt that can ask for a revision, and
     saves it through the same save gate `writeTool` uses.
   - `writeTool` saves a tool whose `run` function is already written. It
@@ -491,7 +489,10 @@ type DraftSettings = {
   maxTime: number;
   maxCost: number;
   model: string;
-  provider: string
+  provider: string;
+  /** False skips the review agent, so a draft goes from the author
+    straight to its checks and the user. */
+  review: boolean
 }
 
 /** A draft that typechecked, passed review, and (for a pure tool) its
@@ -1154,6 +1155,9 @@ def reviewDraft(source: string, settings: DraftSettings, fromReviewer: boolean):
     )
     return success({ notes: [], blocking: [], unresolved: unresolved })
   }
+  if (!settings.review) {
+    return success({ notes: [], blocking: [], unresolved: [] })
+  }
   progress(settings, "the draft is written, reviewing it")
   return reviewSource(source, settings)
 }
@@ -1628,6 +1632,7 @@ def stage(
   maxCost: number,
   model: string,
   provider: string,
+  review: boolean = false,
 ): Result<Staged> {
   // Expanded once here: the sandboxed testFile resolves paths without
   // expanding `~`, unlike the file primitives.
@@ -1667,7 +1672,8 @@ def stage(
       maxTime: maxTime,
       maxCost: maxCost,
       model: model,
-      provider: provider
+      provider: provider,
+      review: review
     }
   })
 }
@@ -1709,13 +1715,14 @@ export def designTool(
   maxCost: number = $1.00,
   model: string = "",
   provider: string = "",
+  review: boolean = false,
 ): Result<ToolEntry> {
   """
   Design a reusable tool with the user and save it into a toolbox
   directory. The coding agent drafts the tool's `run` function against
-  the request type. The draft is reviewed, typechecked, tested when it is
-  pure computation, and shown to the user, who accepts it or gives
-  feedback for another draft.
+  the request type. The draft is typechecked, tested when it is pure
+  computation, and shown to the user, who accepts it or gives feedback
+  for another draft.
 
   @param name - The tool's name; also its directory under dir
   @param purpose - What the tool should do, in plain language
@@ -1726,8 +1733,9 @@ export def designTool(
   @param maxCost - Cost limit baked into the tool's guard
   @param model - Model override for the coding and review agents, or ""
   @param provider - Provider for the model override
+  @param review - True has a review agent read each draft before its checks, and sends its blocking findings back to the author once. Off by default: on the `evals/design-tool` suite it doubled the time and tripled the cost of a tool and did not change the score
   """
-  const staged = stage(name, purpose, request, dir, maxTime, maxCost, model, provider)
+  const staged = stage(name, purpose, request, dir, maxTime, maxCost, model, provider, review)
   if (staged is failure) {
     return staged
   }
@@ -1865,114 +1873,4 @@ export def runTool(
   // Best-effort: the tool has already run.
   recordUse(root.value, name, meta.value)
   return result
-}
-
-/** What an eval hands `designTool`: the three things a caller passes, and
-  what the pretend user knows. The shape the `evals/design-tool` suite uses
-  as its input. */
-@hidden
-export type DesignToolEvalInput = {
-  name: string;
-  purpose: string;
-  request: string;
-  /** What the pretend user can tell an author that asks, keyed by a few
-    words naming each fact. Empty when the purpose already says it all. */
-  facts: Record<string, string>
-}
-
-/** What one eval run did, saved as `design-log.json` for the graders. */
-type DesignToolEvalLog = {
-  saved: boolean;
-  error: string;
-  /** Every `std::question` the run raised, in order. */
-  questions: string[];
-  /** One entry per draft that reached the user. */
-  reviews: ReviewFindings[];
-  /** Effects this entry node refused. */
-  rejected: string[]
-}
-
-type ReviewFindings = {
-  notes: string[];
-  blocking: string[];
-  unresolved: Unresolved[]
-}
-
-const EVAL_TOOLBOX = "toolbox"
-const EVAL_LOG = "design-log.json"
-const EVAL_LAST_DRAFT = "last-draft.agency"
-
-// The pretend user cannot tell which fact a question is after, so every
-// question gets all of them. No model is involved, so the same question
-// always gets the same answer.
-def factsAnswer(facts: Record<string, string>): string {
-  let lines: string[] = []
-  for (name in keys(facts)) {
-    lines.push("${name}: ${facts[name]}")
-  }
-  if (lines.length == 0) {
-    return "I have nothing to add. Use your judgment."
-  }
-  return "Here is what I can tell you.\n${lines.join("\n")}\nFor anything else, use your judgment."
-}
-
-/** Eval entry point: `agency eval run stdlib/toolbox.agency:evalMain
-  --suite evals/design-tool`. The handler plays the user: it answers every
-  question from the test's facts, accepts the first draft it is shown, and
-  approves the toolbox's own effects, the run of a draft's generated
-  tests, and reads of the packaged docs. It rejects everything else, so an
-  author that goes looking through the file system finds nothing. The
-  tool is saved under `toolbox/` in the working directory, where the
-  suite's hidden test cases import it. */
-node evalMain(input: DesignToolEvalInput): string {
-  evalValue(input)
-  let questions: string[] = []
-  let reviews: ReviewFindings[] = []
-  let rejected: string[] = []
-  let lastDraft = ""
-  let outcome: Result<ToolEntry> = failure("designTool never ran")
-  handle {
-    outcome = designTool(input.name, input.purpose, input.request, dir: EVAL_TOOLBOX)
-  } with (intr) {
-    if (intr.effect == "std::question") {
-      questions.push(intr.data.prompt)
-      return approve(factsAnswer(input.facts))
-    }
-    if (intr.effect == "std::toolbox::review") {
-      reviews.push({
-        notes: intr.data.notes,
-        blocking: intr.data.blocking,
-        unresolved: intr.data.unresolved
-      })
-      lastDraft = intr.data.source
-      return approve(ACCEPT)
-    }
-    if (intr.effect.startsWith("std::toolbox::") || intr.effect == "std::run") {
-      return approve()
-    }
-    if (intr.effect == "std::read" && intr.data.dir.startsWith(bundledDocsDir())) {
-      return approve()
-    }
-    rejected.push(intr.effect)
-    return reject("not available in this eval")
-  }
-  let error = ""
-  if (outcome is failure(reason)) {
-    error = "${reason}"
-  }
-  const log: DesignToolEvalLog = {
-    saved: outcome is success,
-    error: error,
-    questions: questions,
-    reviews: reviews,
-    rejected: rejected
-  }
-  write(EVAL_LOG, JSON.stringify(log, null, 2)) with approve
-  if (lastDraft != "") {
-    write(EVAL_LAST_DRAFT, lastDraft) with approve
-  }
-  if (error != "") {
-    return "not saved: ${error}"
-  }
-  return lastDraft
 }

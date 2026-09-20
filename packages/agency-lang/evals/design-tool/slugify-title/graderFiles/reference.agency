@@ -1,6 +1,9 @@
 import { Json } from "std::validation"
 
-export type Request = { title: string; maxLength: number }
+export type Request = {
+  title: string;
+  maxLength: number
+}
 
 def trimHyphens(text: string): string {
   return text.replace(re/^-+|-+$/g, "")
@@ -18,3 +21,4 @@ export def run(request: Request): Json {
   }
   return trimHyphens(slug.slice(0, request.maxLength))
 }
+

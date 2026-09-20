@@ -10,17 +10,34 @@ def shown(request: any): string {
 }
 
 export node evenSplit(): string {
-  return shown({ total: 100, tipPercent: 20, people: 4 })
+  return shown({
+    total: 100,
+    tipPercent: 20,
+    people: 4
+  })
 }
 
 export node roundsToCents(): string {
-  return shown({ total: 50, tipPercent: 15, people: 3 })
+  return shown({
+    total: 50,
+    tipPercent: 15,
+    people: 3
+  })
 }
 
 export node noTip(): string {
-  return shown({ total: 30, tipPercent: 0, people: 1 })
+  return shown({
+    total: 30,
+    tipPercent: 0,
+    people: 1
+  })
 }
 
 export node nobody(): string {
-  return shown({ total: 30, tipPercent: 10, people: 0 })
+  return shown({
+    total: 30,
+    tipPercent: 10,
+    people: 0
+  })
 }
+

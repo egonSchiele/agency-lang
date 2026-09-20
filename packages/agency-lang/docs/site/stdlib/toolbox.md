@@ -15,7 +15,7 @@ A tool is a directory holding two Agency files. `impl.agency` is the
   - `listTools` reads a toolbox directory into a catalog. It raises a
     `std::toolbox::scan` interrupt, then `std::ls` for the listing.
   - `designTool` has the coding agent draft a new tool. `designTool` then
-    reviews and tests the draft, shows it to the user through a
+    checks and tests the draft, shows it to the user through a
     `std::toolbox::review` interrupt that can ask for a revision, and
     saves it through the same save gate `writeTool` uses.
   - `writeTool` saves a tool whose `run` function is already written. It
@@ -77,7 +77,7 @@ export type Unresolved = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L174))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L172))
 
 ### ModuleFacts
 
@@ -92,7 +92,7 @@ export type ModuleFacts = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L213))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L211))
 
 ### ToolMeta
 
@@ -118,7 +118,7 @@ export type ToolMeta = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L221))
 
 ### ToolEntry
 
@@ -137,7 +137,7 @@ export type ToolEntry = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L236))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L234))
 
 ## Effects
 
@@ -150,7 +150,7 @@ effect std::toolbox::scan {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L116))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L114))
 
 ### std::toolbox::recordUse
 
@@ -162,7 +162,7 @@ effect std::toolbox::recordUse {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L124))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L122))
 
 ### std::toolbox::writeFile
 
@@ -176,7 +176,7 @@ effect std::toolbox::writeFile {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L137))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L135))
 
 ### std::toolbox::createStaging
 
@@ -189,7 +189,7 @@ effect std::toolbox::createStaging {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L147))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L145))
 
 ### std::toolbox::removeStaging
 
@@ -202,7 +202,7 @@ effect std::toolbox::removeStaging {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L156))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L154))
 
 ### std::toolbox::removeStagedFile
 
@@ -216,7 +216,7 @@ effect std::toolbox::removeStagedFile {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L163))
 
 ### std::toolbox::review
 
@@ -245,7 +245,7 @@ effect std::toolbox::review {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L179))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L177))
 
 ### std::toolbox::save
 
@@ -259,7 +259,7 @@ effect std::toolbox::save {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L205))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L203))
 
 ## Functions
 
@@ -288,7 +288,7 @@ List the tools in a toolbox directory. Raises a `std::toolbox::scan`
 
 **Throws:** `std::toolbox::scan`, `std::ls`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L421))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L419))
 
 ### designTool
 
@@ -303,14 +303,15 @@ designTool(
   maxCost: number = $1.00,
   model: string = "",
   provider: string = "",
+  review: boolean = false,
 ): Result<ToolEntry>
 ```
 
 Design a reusable tool with the user and save it into a toolbox
   directory. The coding agent drafts the tool's `run` function against
-  the request type. The draft is reviewed, typechecked, tested when it is
-  pure computation, and shown to the user, who accepts it or gives
-  feedback for another draft.
+  the request type. The draft is typechecked, tested when it is pure
+  computation, and shown to the user, who accepts it or gives feedback
+  for another draft.
 
   @param name - The tool's name; also its directory under dir
   @param purpose - What the tool should do, in plain language
@@ -321,6 +322,7 @@ Design a reusable tool with the user and save it into a toolbox
   @param maxCost - Cost limit baked into the tool's guard
   @param model - Model override for the coding and review agents, or ""
   @param provider - Provider for the model override
+  @param review - True has a review agent read each draft before its checks, and sends its blocking findings back to the author once. Off by default: on the `evals/design-tool` suite it doubled the time and tripled the cost of a tool and did not change the score
 
 The design loop: the coding agent drafts the tool, the review agent and
 the typecheck vet the draft, a pure tool gets generated tests, and the
@@ -341,12 +343,13 @@ published through the same `std::toolbox::save` gate `writeTool` uses.
 | maxCost | `number` | $1.00 |
 | model | `string` | "" |
 | provider | `string` | "" |
+| review | `boolean` | false |
 
 **Returns:** `Result<ToolEntry>`
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::review`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`, `std::toolbox::removeStagedFile`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1702))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1708))
 
 ### writeTool
 
@@ -398,7 +401,7 @@ in `designTool` ends by publishing through this same gate.
 
 **Throws:** `std::toolbox::removeStaging`, `std::toolbox::createStaging`, `std::toolbox::save`, `std::toolbox::scan`, `std::toolbox::writeFile`, `std::run`, `std::guard`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1763))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1771))
 
 ### runTool
 
@@ -431,4 +434,4 @@ Run a saved tool's `main` node in a subprocess and return what it
 
 **Throws:** `std::toolbox::scan`, `std::run`, `std::guard`, `std::toolbox::recordUse`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1815))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/toolbox.agency#L1823))

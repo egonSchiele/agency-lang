@@ -1,12 +1,10 @@
 import { asked } from "../lib/asked.js";
-import { reviewerFindings } from "../lib/reviewerFindings.js";
 import { saved } from "../lib/saved.js";
 import { toolJudge } from "../lib/toolJudge.js";
 
 export default [
   saved(),
   asked({ expected: false }),
-  reviewerFindings(),
   toolJudge({
     name: "gets-the-news-from-a-source-that-has-it",
     standard: `

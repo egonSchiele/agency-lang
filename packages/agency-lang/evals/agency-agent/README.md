@@ -44,7 +44,10 @@ agent spent seven minutes and $2.50 surveying the codebase before
 answering an architecture question: it asks the same question over a
 small seeded repo and grades both the answer (position taken, grounded
 in the repo, readable) and the research spent reaching it (LLM calls,
-wall time, cost). An unfiltered run covers all ten; to run only the
+wall time, cost). A fourth, `ask-before-tool`, asks for a tool that emails
+a note to the user and says nothing about the address or the provider. It
+passes when the reply asks for them and `writeToolFor` was never called.
+An unfiltered run covers all eleven; to run only the
 terminal-bench-shaped tests, pass `--test` for each of the four below.
 
 | test                | pattern from the benchmark                                                                    | must pass                                    |

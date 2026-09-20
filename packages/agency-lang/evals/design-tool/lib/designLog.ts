@@ -1,8 +1,8 @@
-// What `evalMain` in stdlib/toolbox.agency saves for the graders, and where
-// the saved tool's code ends up.
+// What `main` in evals/design-tool/agent.agency returns, and where the
+// saved tool's code ends up.
 import { type GraderContext } from "agency-lang/eval";
 
-/** Mirrors `DesignToolEvalInput` in stdlib/toolbox.agency. */
+/** Mirrors `DesignInput` in agent.agency. */
 export type DesignInput = {
   name: string;
   purpose: string;
@@ -10,25 +10,22 @@ export type DesignInput = {
   facts: Record<string, string>;
 };
 
-/** Mirrors `DesignToolEvalLog` in stdlib/toolbox.agency. */
+/** Mirrors `DesignLog` in agent.agency. */
 export type DesignLog = {
   saved: boolean;
   error: string;
   questions: string[];
-  reviews: {
-    notes: string[];
-    blocking: string[];
-    unresolved: { point: string; reason: string }[];
-  }[];
+  lastDraft: string;
   rejected: string[];
 };
 
+/** The run's output, or null when the run ended before the node returned. */
 export function readLog(ctx: GraderContext<DesignInput>): DesignLog | null {
-  const text = ctx.workdirFile("design-log.json");
-  if (text === "") {
+  const output = ctx.output as Partial<DesignLog> | null;
+  if (output === null || typeof output !== "object" || typeof output.saved !== "boolean") {
     return null;
   }
-  return JSON.parse(text) as DesignLog;
+  return output as DesignLog;
 }
 
 /** The saved tool's code, or "" when nothing was saved. */
@@ -41,5 +38,5 @@ export function savedSource(ctx: GraderContext<DesignInput>): string {
  *  so a judge can still say what was wrong with it. */
 export function bestSource(ctx: GraderContext<DesignInput>): string {
   const saved = savedSource(ctx);
-  return saved === "" ? ctx.workdirFile("last-draft.agency") : saved;
+  return saved === "" ? (readLog(ctx)?.lastDraft ?? "") : saved;
 }

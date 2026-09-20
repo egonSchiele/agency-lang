@@ -9,7 +9,8 @@ const SETTINGS = {
   maxTime: 60000,
   maxCost: 1,
   model: "",
-  provider: ""
+  provider: "",
+  review: true
 }
 
 // The reviewer reads the draft in the formatter's layout, so it must not

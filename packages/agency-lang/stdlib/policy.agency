@@ -1004,16 +1004,15 @@ def askUser(intr: any): AskUserResult {
     // diff and the prompt it belongs to reach the terminal together even
     // when other branches are interrupting too.
     printInterruptDiff(intr)
-    const freeTextHint = if intr.expectsValue == true then "or type your answer" else ""
     const choice = interruptChoice(
       title,
       body,
       items,
       allowFreeText: true,
       allowCancel: true,
-      freeTextHint: freeTextHint,
+      expectsValue: intr.expectsValue == true,
     )
-    const result = choiceResult(choice)
+    const result = choiceResult(choice, askUserChoices(intr))
     // Recorded before the lock is released, so the interrupt waiting
     // behind this one finds the rule the moment its turn comes. Recording
     // it after would lose the race to that interrupt's check.
@@ -1026,10 +1025,10 @@ def askUser(intr: any): AskUserResult {
 // An "always" answer becomes a rule now, in memory; maybeFlush writes it.
 //
 // Nothing is recorded for a raise that expects a value. `askUserChoices`
-// offers it only "once" answers, but the prompt takes free text too, so
-// a user who types "aa" at one reaches this with an "always" action the
-// menu never offered. Saving an effect-wide rule from that would answer
-// every later raise of the effect, each of which wants its own answer.
+// offers it only "once" answers and `choiceResult` reads any other key as
+// text, so no "always" action should arrive here. This check keeps that
+// true if either changes: an effect-wide rule would answer every later
+// raise of the effect, each of which wants its own answer.
 def recordAnswer(intr: any, answer: AskUserResult) {
   const rules = _policy
   if (rules == null || intr.expectsValue == true) {
@@ -1049,8 +1048,14 @@ def recordAnswer(intr: any, answer: AskUserResult) {
   }
 }
 
-// The user's keystroke, or their typed reason, as a decision.
-def choiceResult(answer: string): AskUserResult {
+// The user's keystroke, or the text they typed, as a decision. Only a key
+// the menu offered is a keystroke. A question offers "a" and "r" alone,
+// so "aa" typed at one is the user's answer.
+def choiceResult(answer: string, offered: ChoiceItem[]): AskUserResult {
+  const isOffered = filter(offered, \item -> item.key == answer).length > 0
+  if (!isOffered) {
+    return { action: "reject", reason: answer }
+  }
   return match(answer) {
     "a" => ({
       action: "approve",

@@ -58,27 +58,36 @@ whatever `Request` the draft declares, so `assembleTool` compares the
 two through `describe`, which prints both the same way. A mismatch is a
 draft problem for the design loop and a plain failure for `writeTool`.
 
-The reviewer gets its own task text, `reviewBrief`, which says the type
-is fixed and already verified. The reviewer reads the draft in the
-formatter's layout, where `{ subject?: string; body: string }` spans
-four lines. Told that the line is "copied as is", it reported the
-formatter's line breaks as a blocking finding that no draft could clear.
+The author's brief tells it to ask the user for a fact the task does not
+give, such as an address or an account. `draftSource` offers it a
+`question` tool on every round. That tool is `askAndRecord`, which calls
+`question` from `std::agent` and keeps each question and answer in
+`_answered` under the staging directory, the way `cannotFix` keeps its
+reports. Each round's author is a new thread, so `taskText` puts the
+answers in the next brief and tells the author not to ask again. A draft
+picked up from earlier in the session runs in a new staging directory, so
+its answers are not carried over.
 
-The author's brief also tells it to ask the user for a fact the task does
-not give. `draftSource` offers it a `question` tool on every round. That
-tool is `askAndRecord`, which calls `question` from `std::agent` and keeps
-each question and answer in `_answered` under the staging directory, the
-way `cannotFix` keeps its reports.
+### The review agent is off by default
 
-The record exists because every reader after the first is a new thread.
-`taskText` adds the answers to the next author's brief, with an
-instruction not to ask again. Without them, each round's author asked
-the same question. `reviewBrief` adds them too, and tells the reviewer
-that the user wants those values in the module. Without that, the
-reviewer blocked a draft for hard-coding the user's own email address and
-asked for an invented `USER_EMAIL` variable. A draft picked up from
-earlier in the session runs in a new staging directory, so its answers
-are not carried over.
+`designTool(review: true)` has `agencyReviewAgent` read each draft before
+its checks. Blocking findings go back to the author once, and a second
+set reaches the user with the draft. The sections below on `fromReviewer`
+and `cannotFix` apply only to that mode.
+
+It is off because it did not pay for itself. On `evals/design-tool`, with
+gpt-5-mini and three trials, the score was 0.878 with the reviewer and
+0.890 without it. A tool took 187 seconds and $0.041 with it, and 85
+seconds and $0.014 without it. The user already reviews every draft at
+the `std::toolbox::review` prompt.
+
+Two rules hold when it is on. The reviewer gets its own task text,
+`reviewBrief`, which says the `Request` type is fixed and already
+verified. It reads the draft in the formatter's layout, where the type
+spans several lines, so it must not be asked whether the line was copied
+as is. `reviewBrief` also carries the user's answers and says the user
+wants those values in the module, so the reviewer does not report one as
+hard-coded.
 
 ## Two entry points, one save gate
 

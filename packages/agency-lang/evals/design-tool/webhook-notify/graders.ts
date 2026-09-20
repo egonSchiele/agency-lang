@@ -1,5 +1,4 @@
 import { asked, usesAnswers } from "../lib/asked.js";
-import { reviewerFindings } from "../lib/reviewerFindings.js";
 import { saved } from "../lib/saved.js";
 import { toolJudge } from "../lib/toolJudge.js";
 
@@ -7,7 +6,6 @@ export default [
   saved(),
   asked({ expected: true }),
   usesAnswers(["https://hooks.example.com/services/T0001/B0002/abcDEF123"]),
-  reviewerFindings(),
   toolJudge({
     name: "posts-the-message",
     standard: `

@@ -12,17 +12,30 @@ def shown(request: any): string {
 }
 
 export node skipsEmpty(): string {
-  return shown({ csv: SALES, column: "units" })
+  return shown({
+    csv: SALES,
+    column: "units"
+  })
 }
 
 export node skipsNonNumbers(): string {
-  return shown({ csv: SALES, column: "price" })
+  return shown({
+    csv: SALES,
+    column: "price"
+  })
 }
 
 export node missingColumn(): string {
-  return shown({ csv: SALES, column: "color" })
+  return shown({
+    csv: SALES,
+    column: "color"
+  })
 }
 
 export node nothingKept(): string {
-  return shown({ csv: "a,b\nx,y", column: "b" })
+  return shown({
+    csv: "a,b\nx,y",
+    column: "b"
+  })
 }
+

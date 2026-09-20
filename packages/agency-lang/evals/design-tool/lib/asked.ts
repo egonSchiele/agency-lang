@@ -10,7 +10,7 @@ export function asked(args: { expected: boolean }): Grader<DesignInput> {
     (ctx) => {
       const log = readLog(ctx);
       if (log === null) {
-        return binary(false, "no design-log.json");
+        return binary(false, "the run has no output");
       }
       const count = log.questions.length;
       if (args.expected) {

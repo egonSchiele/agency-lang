@@ -23,6 +23,7 @@ def runDesign(
       purpose: "Add one to a number.",
       request: request,
       dir: dir,
+      review: true,
       maxRounds: 3,
     )
   } with (intr) {
@@ -86,6 +87,7 @@ node acceptRaisesTheSaveGate(): boolean {
       purpose: "Add one to a number.",
       request: REQUEST,
       dir: OUT,
+      review: true,
     )
   } with (intr) {
     return match(intr.effect) {
@@ -116,6 +118,7 @@ node rejectAtSaveWritesNothing(): boolean {
       purpose: "Add one to a number.",
       request: REQUEST,
       dir: OUT,
+      review: true,
     )
   } with (intr) {
     return match(intr.effect) {
@@ -450,6 +453,7 @@ node draftRaisesOnlyToolboxEffects(): boolean {
       purpose: "Add one to a number.",
       request: REQUEST,
       dir: OUT,
+      review: true,
     )
   } with (intr) {
     if (intr.effect == "std::toolbox::writeFile") {
@@ -483,6 +487,7 @@ node refusedWriteStopsTheRounds(): boolean {
       purpose: "Add one.",
       request: "{ n: number }",
       dir: OUT,
+      review: true,
       maxRounds: 3,
     )
   } with (intr) {
@@ -516,6 +521,7 @@ node refusesATimeLimitOverAnHour(): boolean {
     purpose: "Wait.",
     request: "{ n: number }",
     dir: OUT,
+    review: true,
     maxTime: 2h,
   ) with approve
   return result is failure && "${result.error}" =~ re/maxTime/
@@ -580,6 +586,7 @@ def runDesignSeeing(
       purpose: purpose,
       request: request,
       dir: OUT,
+      review: true,
       maxRounds: 3,
     )
   } with (intr) {

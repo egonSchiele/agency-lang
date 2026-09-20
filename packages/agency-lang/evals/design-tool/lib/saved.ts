@@ -8,10 +8,7 @@ export function saved(): Grader<DesignInput> {
     (ctx) => {
       const log = readLog(ctx);
       if (log === null) {
-        return binary(
-          false,
-          "the run left no design-log.json, so it ended before designTool returned",
-        );
+        return binary(false, "the run has no output, so it ended before designTool returned");
       }
       if (!log.saved) {
         return binary(false, `not saved: ${log.error}`);

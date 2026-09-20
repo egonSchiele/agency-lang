@@ -13,16 +13,16 @@ def fetchC(): string {
 }
 
 node main() {
-  let results = fork(["arm_0", "arm_1", "arm_2"]) as __arm {
-    if (__arm == "arm_0") {
+  let results = fork(["arm_0", "arm_1", "arm_2"]) as arm {
+    if (arm == "arm_0") {
       let a = fetchA()
       return { a: a }
     }
-    if (__arm == "arm_1") {
+    if (arm == "arm_1") {
       let b = fetchB()
       return { b: b }
     }
-    if (__arm == "arm_2") {
+    if (arm == "arm_2") {
       let c = fetchC()
       return { c: c }
     }

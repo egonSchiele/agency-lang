@@ -23,6 +23,7 @@ const SPLICE_DIAGNOSTIC_PARAMS: Record<string, Record<string, string>> = {
   spliceGeneratorFailed: { name: "makeGetters", reason: "timed out after 30s" },
   spliceNested: {},
   spliceReferencesOuterName: { name: "tmp" },
+  spliceUsesReservedName: { name: "__ctx", generator: "makeGetters" },
   spliceGeneratedExport: { name: "makeGetters", declared: "greet" },
   spliceRedeclaresHostName: { name: "makeGetters", declared: "config" },
   spliceArgumentNotAvailable: { name: "SOME_CONST" },
@@ -62,6 +63,7 @@ describe("splice diagnostics", () => {
       "AG8013",
       "AG8014",
       "AG8016",
+      "AG8017",
     ]);
   });
 

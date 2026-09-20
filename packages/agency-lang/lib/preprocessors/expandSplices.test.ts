@@ -258,6 +258,34 @@ describe("expandSplices", () => {
     expect(result.diagnostic.params.name).toBe("tmp");
   }, 60_000);
 
+  it("refuses generated code that declares a name reserved for the compiler", () => {
+    // A Code value built by hand never goes through the parser, which is
+    // where written code is refused.
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return {\n    type: "agencyProgram",\n    kind: "statements",\n    nodes: [{ type: "assignment", declKind: "const", variableName: "__self", value: { type: "number", value: "1" } }]\n  }\n}\n`,
+    );
+    const result = expand(`import { g } from "./gen.agency"\n\n$( g() )\n`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostic.diagnostic).toBe("spliceUsesReservedName");
+    expect(result.diagnostic.params.name).toBe("__self");
+  }, 60_000);
+
+  it("allows generated code that opens with a destructuring declaration", () => {
+    // Such a declaration stores the placeholder `__destructured` as its
+    // variable name, which must not be read as a reserved name or as a
+    // redeclaration of the host's own destructuring.
+    write(
+      "gen.agency",
+      `import { Code } from "std::agency"\n\nexport def g(): Code {\n  return [|\n    const { a, b } = { a: 1, b: 2 }\n  |]\n}\n`,
+    );
+    const result = expand(
+      `import { g } from "./gen.agency"\n\nconst { c, d } = { c: 1, d: 2 }\n\n$( g() )\n`,
+    );
+    expect(result.ok).toBe(true);
+  }, 60_000);
+
   it("allows generated code that references a name it declares itself", () => {
     write(
       "gen.agency",

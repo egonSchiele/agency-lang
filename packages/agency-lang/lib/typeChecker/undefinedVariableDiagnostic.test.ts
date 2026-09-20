@@ -177,4 +177,56 @@ node main() { wrap() }
     expect(undef.length).toBeGreaterThanOrEqual(1);
     expect(undef[0].severity).toBe("warning");
   });
+
+  // A value-position `match` (and `if … then … else`, which lowers to one)
+  // stores its result in a compiler-made `__matchval_<id>` temp. See #1081.
+  describe("compiler-made match result temps", () => {
+    const ERROR: AgencyConfig = { typechecker: { undefinedVariables: "error" } };
+    // What `--agency-only` sets.
+    const AGENCY_ONLY: AgencyConfig = { typechecker: { jsGlobals: "sandbox" } };
+    const notDefined = (errors: TypeCheckError[]) =>
+      errors.filter((e) => e.message.includes("not defined"));
+
+    const ifExpr = `def clamp(offset: number): number {
+  const start = if offset < 0 then 0 else offset
+  return start
+}
+node main() { print(clamp(-3)) }
+`;
+    const matchExpr = `def pick(offset: number): number {
+  return match (offset) {
+    0 => 1
+    _ => offset
+  }
+}
+node main() { print(pick(0)) }
+`;
+
+    it("accepts an if-expression used as a value", () => {
+      expect(notDefined(errorsFrom(ifExpr, ERROR))).toHaveLength(0);
+      expect(notDefined(errorsFrom(ifExpr, AGENCY_ONLY))).toHaveLength(0);
+    });
+
+    it("accepts a match used as a value", () => {
+      expect(notDefined(errorsFrom(matchExpr, ERROR))).toHaveLength(0);
+      expect(notDefined(errorsFrom(matchExpr, AGENCY_ONLY))).toHaveLength(0);
+    });
+
+    it("still reports an undefined name inside a match arm", () => {
+      const errors = errorsFrom(
+        `def pick(offset: number): number {
+  return match (offset) {
+    0 => missingThing
+    _ => offset
+  }
+}
+node main() { print(pick(0)) }
+`,
+        ERROR,
+      );
+      expect(notDefined(errors).map((e) => e.message)).toEqual([
+        expect.stringContaining("missingThing"),
+      ]);
+    });
+  });
 });

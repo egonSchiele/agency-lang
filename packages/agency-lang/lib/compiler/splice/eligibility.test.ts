@@ -136,12 +136,20 @@ describe("checkImportGraph", () => {
   });
 
   it("accepts the same generator once it has a file of its own", () => {
-    // The fix the error message suggests.
+    // The fix the error message suggests, done the way a real split goes:
+    // the zod-importing code stays in helpers.agency, the generator moves to
+    // gen.agency, and both still use shared.agency. Only what the generator
+    // imports counts, so the shared file does not carry zod back to it.
+    write("shared.agency", `export def s(): number {\n  return 1\n}\n`);
     write(
       "helpers.agency",
-      `import { z } from "zod"\n\nexport def unused(): number {\n  return 1\n}\n`,
+      `import { z } from "zod"\nimport { s } from "./shared.agency"\n\n` +
+        `export def unused(): number {\n  return s()\n}\n`,
     );
-    const generator = write("gen.agency", `export def g(): number {\n  return 2\n}\n`);
+    const generator = write(
+      "gen.agency",
+      `import { s } from "./shared.agency"\n\nexport def g(): number {\n  return s()\n}\n`,
+    );
     expect(checkImportGraph(generator, "g")).toBeNull();
   });
 

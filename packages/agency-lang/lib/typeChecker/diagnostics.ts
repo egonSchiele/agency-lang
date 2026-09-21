@@ -728,7 +728,7 @@ export const DIAGNOSTICS = {
     code: "AG8006",
     severity: "error",
     message:
-      "The generator `{name}` reaches non-Agency code through `{importPath}`. Running a generator loads its file and every file that one imports, and loading a JavaScript module runs it, even when the generator calls nothing from it. JavaScript raises no interrupts and cannot be checked. Move `{name}` into a file that imports only `std::` modules and relative `.agency` files. If the generator itself needs the JavaScript, set `allowNonAgencyGenerators` in your config, which switches this check off for every generator.",
+      "The generator `{name}` reaches non-Agency code through `{importPath}`. Running a generator loads its file and every file that one imports, and loading a JavaScript module runs it, even when the generator calls nothing from it. JavaScript raises no interrupts and cannot be checked. Move `{name}` into a file that imports only `std::` modules and relative `.agency` files, and check what those files import in turn: one of them importing a JavaScript package is the same problem one step down. If the generator itself needs the JavaScript, set `allowNonAgencyGenerators` in your config, which switches this check off for every generator.",
   },
   templateNameNotDefined: {
     code: "AG8015",

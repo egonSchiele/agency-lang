@@ -73,7 +73,7 @@ The generator has to be compiled before the file that splices it can be compiled
 
 <a id="ag8006"></a>
 
-## AG8006 — The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Running a generator loads its file and every file that one imports, and loading a JavaScript module runs it, even when the generator calls nothing from it. JavaScript raises no interrupts and cannot be checked. Move `&#123;name&#125;` into a file that imports only `std::` modules and relative `.agency` files. If the generator itself needs the JavaScript, set `allowNonAgencyGenerators` in your config, which switches this check off for every generator.
+## AG8006 — The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Running a generator loads its file and every file that one imports, and loading a JavaScript module runs it, even when the generator calls nothing from it. JavaScript raises no interrupts and cannot be checked. Move `&#123;name&#125;` into a file that imports only `std::` modules and relative `.agency` files, and check what those files import in turn: one of them importing a JavaScript package is the same problem one step down. If the generator itself needs the JavaScript, set `allowNonAgencyGenerators` in your config, which switches this check off for every generator.
 
 *Default severity: error.*
 

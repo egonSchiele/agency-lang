@@ -44,16 +44,32 @@ export function toolNameOf(ev: EventEnvelope): string {
   return String(ev.data.toolName ?? "");
 }
 
-/** Input-token count from a promptCompletion's `data.usage`. Returns
- *  0 if absent. The key name is locked here — if the runtime starts
- *  using a different shape (`prompt_tokens`, `input_tokens`, …),
- *  update this one site rather than chasing every consumer. */
+/** Fresh input tokens: what the model was sent that did not come from
+ *  the prompt cache. See `contextTokens` for the full input. */
 export function tokensIn(ev: EventEnvelope): number {
   return Number(ev.data.usage?.inputTokens ?? 0);
 }
 
 export function tokensOut(ev: EventEnvelope): number {
   return Number(ev.data.usage?.outputTokens ?? 0);
+}
+
+/** Input tokens served from the provider's prompt cache. They are absent
+ *  from `inputTokens`, and they still occupy the context window. */
+export function tokensCached(ev: EventEnvelope): number {
+  return Number(ev.data.usage?.cachedInputTokens ?? 0);
+}
+
+/** Input tokens written to the prompt cache on this call. The model read
+ *  them fresh, so screens count them with `tokensIn`. */
+export function tokensCacheWrite(ev: EventEnvelope): number {
+  return Number(ev.data.usage?.cacheCreationInputTokens ?? 0);
+}
+
+/** Everything the model was sent: fresh, cached and cache-write input.
+ *  This is the number to compare against a context window. */
+export function contextTokens(ev: EventEnvelope): number {
+  return tokensIn(ev) + tokensCached(ev) + tokensCacheWrite(ev);
 }
 
 /** USD cost on a promptCompletion. Reads `cost.totalCost` (TokenCost

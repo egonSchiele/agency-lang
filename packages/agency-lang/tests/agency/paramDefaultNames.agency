@@ -1,0 +1,26 @@
+// A parameter default may name a global or a static inside an array, an
+// object or a string. These used to be emitted as bare names and crashed
+// with "LIMIT is not defined" (issue #668).
+let LIMIT = 5
+static const BASE = 10
+
+def withGlobal(xs: number[] = [LIMIT, LIMIT + 1]): number[] {
+  return xs
+}
+
+def withStatic(label: string = "base ${BASE}"): string {
+  return label
+}
+
+def withObject(opts: { max: number } = { max: LIMIT }): number {
+  return opts.max
+}
+
+node main() {
+  return {
+    global: withGlobal(),
+    staticValue: withStatic(),
+    object: withObject(),
+    passed: withGlobal([1])
+  }
+}

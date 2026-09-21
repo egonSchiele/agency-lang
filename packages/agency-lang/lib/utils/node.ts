@@ -528,6 +528,20 @@ export function* walkNodes(
     if (node.type === "graphNode" && typeof node.nodeName !== "string") {
       yield* walkNodes([node.nodeName], [...ancestors, node], scopes);
     }
+    // Parameter defaults. A default is a literal, array or object, so a name
+    // can appear inside one (`xs = [LIMIT]`, `s = "up to ${LIMIT}"`). It is
+    // evaluated inside the callable, so it is walked under the callable's own
+    // scope, where the parameters before it are visible.
+    if (node.type === "function" || node.type === "graphNode") {
+      const ownScope =
+        node.type === "function"
+          ? functionScope(declaredName(node.functionName))
+          : nodeScope(declaredName(node.nodeName));
+      const defaults = node.parameters
+        .map((param) => param.defaultValue)
+        .filter((value) => value !== undefined);
+      yield* walkNodes(defaults as AgencyNode[], [...ancestors, node], [...scopes, ownScope]);
+    }
     // Generic statement-body descent, driven by the shared `bodySlots`
     // table. Function/node definitions push their own scope; a
     // functionCall's inline `block:` pushes the block onto `ancestors` so

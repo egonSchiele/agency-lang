@@ -410,7 +410,6 @@ const WALKER_EXCLUDED_TYPES: Record<string, string> = {
 // visits — which is exactly why the fix is a compiler change that gets
 // its own PR and review.
 const KNOWN_WALKER_GAPS: Record<string, string> = {
-  "functionParameter.defaultValue": "#668: parameter default expressions are never walked",
   "function.docString":
     "#668: docstring interpolations are evaluated by the builder " +
     "(hasDocStringInterpolation) but the segments are never walked",

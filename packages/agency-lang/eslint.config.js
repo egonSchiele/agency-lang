@@ -98,6 +98,24 @@ export default [
       ],
     },
   },
+  {
+    files: ["lib/logsViewer/**/*.ts", "lib/eval/**/*.ts", "lib/runsExplorer/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression",
+          message: "Dynamic imports are not allowed. Use static import statements.",
+        },
+        {
+          selector: "MemberExpression[property.name='usage']",
+          message:
+            "Read token counts through lib/statelog/wireAccessors.ts (tokensIn, tokensCached, contextTokens, tokensOut). Reading data.usage directly is how the viewer and the eval records drifted apart (issue #1097).",
+        },
+      ],
+    },
+  },
   // ----- Per-file overrides for existing code -----
   // These files predate the structural lint rules. New files should comply.
   // TODO: Gradually fix these and remove overrides.

@@ -337,7 +337,7 @@ Other process docs:
 - `docs/dev/cli/debugger.md` — The interactive debugger: stepping, inspecting variables, and rewinding.
 - `docs/dev/cli/doc-cache.md` — The incremental cache behind `agency doc`, and how it decides a page is stale.
 - `docs/dev/cli/effects-command.md` — `agency effects`, which lists the capability sets and built-in policies the approval flags accept, and where its data comes from.
-- `docs/dev/cli/logs-viewer.md` — The interactive viewer for a single statelog trace, including the timeline.
+- `docs/dev/cli/logs-viewer.md` — The logs viewer: screens, the timeline kernel, and follow mode.
 - `docs/dev/cli/runs-explorer.md` — The cross-run table `agency logs` opens when pointed at several paths.
 - `docs/dev/cli/test-cli-sandbox.md` — The flag combination that makes it safe to run Agency code you do not trust.
 - `docs/dev/cli/tui.md` — The terminal UI toolkit the debugger, the viewer, and `std::ui` are built on.

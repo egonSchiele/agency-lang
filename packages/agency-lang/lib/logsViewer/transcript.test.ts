@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { event, sampleRunForest } from "./storyFixture.js";
 import { buildForest } from "./tree.js";
 import { completionMessageOf } from "../statelog/wireAccessors.js";
-import { consumeRepresented, transcriptBlocks } from "./transcript.js";
+import { consumeRepresented, transcriptBlocks, transcriptText } from "./transcript.js";
 import type { WireMessage } from "./messageDelta.js";
 const system = { role: "system", content: "write code" };
 const user = { role: "user", content: "a module" };
@@ -248,4 +248,21 @@ it("does not suppress equal text with a different name, ID or tool arguments", (
     { ...reply, name: "other" },
   ]);
   expect(transcriptBlocks(trace).filter((block) => block.kind === "history")).toHaveLength(3);
+});
+
+it("includes owned terminal errors and shared status text in tool search and copy", () => {
+  const trace = buildForest([
+    event("promptCompletion", 100, "L"),
+    event("toolCallStart", 101, "write", "L", { toolName: "write", args: { path: "a" } }),
+    event("toolCallStart", 102, "nested", "write", { toolName: "nested" }),
+    event("error", 103, "nested", "write", {
+      message: "nested failure only",
+      destructiveRan: true,
+    }),
+    event("error", 104, "write", "L", { message: "disk quota exceeded", destructiveRan: true }),
+  ])[0];
+  const block = transcriptBlocks(trace).find((block) => block.id === "write")!;
+  expect(transcriptText(block)).toContain("disk quota exceeded");
+  expect(transcriptText(block)).toContain("tool failed; work occurred before it stopped");
+  expect(transcriptText(block)).not.toContain("nested failure only");
 });

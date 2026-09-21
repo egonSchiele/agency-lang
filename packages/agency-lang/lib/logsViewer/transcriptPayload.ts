@@ -55,11 +55,10 @@ export function transcriptPayload(block: TranscriptBlock, expanded: boolean): Pa
         block.row.durationMs === undefined
           ? "duration not recorded"
           : fmtDuration(block.row.durationMs);
-      const interrupts: PayloadLine[] = block.interrupts.map((interrupt) => ({
-        kind: "heading",
-        tone: "interrupt",
-        text: `⚠ ${interrupt.effect}  ${interrupt.outcome}`,
-      }));
+      const interrupts: PayloadLine[] = block.interrupts.flatMap((interrupt): PayloadLine[] => [
+        { kind: "heading", tone: "interrupt", text: `⚠ ${interrupt.effect}  ${interrupt.outcome}` },
+        ...(expanded && interrupt.message ? valuePayload(interrupt.message) : []),
+      ]);
       return [
         {
           kind: "heading",

@@ -242,3 +242,65 @@ it("keeps a searched tool visible when collapsing its long result", () => {
   expect(text(screen)).toContain("→ agencyGuide(handlers.md)");
   expect(screen.focusId()).toBe("guide");
 });
+
+it("finds and copies an owned final tool error without a later prompt snapshot", () => {
+  const roots = buildForest([
+    event("promptCompletion", 100, "L"),
+    event("toolCallStart", 101, "write", "L", { toolName: "write", args: { path: "a" } }),
+    event("error", 102, "write", "L", { message: "disk quota exceeded", destructiveRan: true }),
+  ]);
+  const screen = make(roots);
+  screen.applySearch("disk quota exceeded");
+  expect(screen.focusId()).toBe("write");
+  expect(text(screen)).toContain("│disk quota exceeded");
+  expect(press(screen, "y")).toMatchObject({
+    kind: "copy",
+    text: expect.stringContaining("disk quota exceeded"),
+  });
+});
+
+it.each([
+  {
+    type: "error",
+    data: { message: "disk quota exceeded", destructiveRan: true },
+    status: "tool failed; work occurred before it stopped",
+  },
+  { type: "toolCallStart", data: { toolName: "write" }, status: "completion not recorded" },
+  {
+    type: "interruptThrown",
+    data: { interruptId: "write", interrupt: { effect: "std::write" } },
+    status: "awaiting interrupt response",
+  },
+])("searches and copies the visible tool status: $status", ({ type, data, status }) => {
+  const screen = make(
+    buildForest([
+      event("promptCompletion", 100, "L"),
+      event("toolCallStart", 101, "write", "L", { toolName: "write", args: { path: "a" } }),
+      event(type, 102, "write", "L", data),
+    ]),
+  );
+  screen.applySearch(status);
+  expect(screen.focusId()).toBe("write");
+  expect(text(screen)).toContain("1 matches");
+  expect(press(screen, "y")).toMatchObject({ kind: "copy", text: expect.stringContaining(status) });
+});
+
+it("reveals an interrupt message found inside a collapsed tool", () => {
+  const screen = make(
+    buildForest([
+      event("promptCompletion", 100, "L"),
+      event("toolCallStart", 101, "write", "L", { toolName: "write", args: { path: "a" } }),
+      event("interruptThrown", 102, "write", "L", {
+        interruptId: "write",
+        interrupt: { effect: "std::write", message: "Approve replacing the archived notes?" },
+      }),
+    ]),
+  );
+  screen.applySearch("Approve replacing the archived notes?");
+  expect(screen.focusId()).toBe("write");
+  expect(text(screen)).toContain("│Approve replacing the archived notes?");
+  expect(press(screen, "y")).toMatchObject({
+    kind: "copy",
+    text: expect.stringContaining("Approve replacing the archived notes?"),
+  });
+});

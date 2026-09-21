@@ -4,7 +4,7 @@ import {
   toolReplyContent,
   type ToolCallRequest,
 } from "../statelog/wireAccessors.js";
-import { walkNodes } from "./forest.js";
+import { buildTreeIndex, walkNodes } from "./forest.js";
 import {
   messageKey,
   messagesOf,
@@ -13,7 +13,14 @@ import {
   type WireMessage,
 } from "./messageDelta.js";
 import { childEvent } from "./spanText.js";
-import { storyOutline, type StoryRow, type ToolStoryRow, type Interrupt } from "./story.js";
+import {
+  ownedToolNodes,
+  storyOutline,
+  toolStatusText,
+  type StoryRow,
+  type ToolStoryRow,
+  type Interrupt,
+} from "./story.js";
 import { decodeStructured } from "./structured.js";
 import { roundsOf, type Round, type ThreadKey } from "./timeline/rounds.js";
 import type { TreeNode } from "./types.js";
@@ -211,6 +218,10 @@ export function transcriptText(block: TranscriptBlock): string {
     case "tool":
       return [
         block.row.name,
+        toolStatusText(block.row),
+        ...ownedToolNodes(block.row.node, buildTreeIndex(block.row.node))
+          .filter((node) => node.event?.data.type === "error")
+          .map((node) => String(node.event!.data.message ?? "error")),
         JSON.stringify(
           (childEvent(block.row.node, "toolCallStart") ?? childEvent(block.row.node, "toolCall"))
             ?.data.args,

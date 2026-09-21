@@ -1,3 +1,4 @@
+import type { ScreenName } from "../screens/screen.js";
 // The one interface every top-level view implements, and the stack the
 // shell keeps them on. handleKey is synchronous; anything a view cannot
 // do alone comes back as a ViewAction (this replaces the old reducer's
@@ -9,11 +10,10 @@ import type { TreeNode } from "../types.js";
 export type Viewport = { rows: number; cols: number };
 
 export type ViewAction =
-  | { kind: "open"; view: "tree" | "flame" | "byName" }
-  | { kind: "openFlameAt"; spanId: string }
+  | { kind: "openScreen"; screen: ScreenName; focusId?: string }
+  | { kind: "selectTrace"; traceId: string; query?: string }
   | { kind: "openOccurrences"; groupKey: string }
-  | { kind: "openDetail"; spanId: string }
-  | { kind: "focusInTree"; spanId: string }
+  | { kind: "openDetail"; rowId: string }
   | { kind: "back" }
   | { kind: "promptLine"; label: string; onResult: (text: string) => void }
   | { kind: "copy"; text: string }
@@ -24,7 +24,7 @@ export type ViewAction =
   | { kind: "none" };
 
 export type View = {
-  viewName: "tree" | "flame" | "byName" | "occurrences" | "detail";
+  viewName: "tree" | "tracePicker" | "byName" | "occurrences" | "detail";
   /** Synchronous. Viewport is a parameter so views own their paging keys
    *  (Ctrl-F/B/D/U are viewport arithmetic — the old shell kept them out
    *  of the reducer for exactly that reason). */
@@ -39,22 +39,24 @@ export type View = {
   notify(message: string): void;
   /** Follow mode is shell-owned; views only display it (status bar / header). */
   setFollowIndicator(on: boolean): void;
+  escape?(): boolean;
+  capturesText?(): boolean;
 };
 
 export type ViewStack = {
-  active(): View;
+  active(): View | undefined;
   all(): View[];
   push(view: View): void;
   /** `open` semantics: pop back to an existing instance of `name` if one
    *  is on the stack (true), else report absent (false) so the shell
    *  constructs and pushes one. */
   popTo(name: View["viewName"]): boolean;
-  /** Never pops the bottom (the tree view). */
+  /** Remove the top overlay, if present. */
   pop(): void;
 };
 
-export function makeViewStack(bottom: View): ViewStack {
-  const stack: View[] = [bottom];
+export function makeViewStack(): ViewStack {
+  const stack: View[] = [];
   return {
     active: () => stack[stack.length - 1],
     all: () => [...stack],
@@ -68,7 +70,7 @@ export function makeViewStack(bottom: View): ViewStack {
       return true;
     },
     pop: () => {
-      if (stack.length > 1) {
+      if (stack.length > 0) {
         stack.pop();
       }
     },

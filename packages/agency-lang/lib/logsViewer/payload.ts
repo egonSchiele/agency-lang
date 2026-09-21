@@ -11,6 +11,7 @@ import {
   type RoundStoryRow,
   type ToolStoryRow,
   type InterruptStoryRow,
+  type ErrorStoryRow,
 } from "./story.js";
 export type PayloadLine =
   | {
@@ -32,10 +33,7 @@ const PAYLOADS: PayloadMakers = {
   user: (row) => [{ kind: "heading", text: "USER", tone: "user" }, ...valuePayload(row.text)],
   tool: toolPayload,
   interrupt: interruptPayload,
-  error: (row) => [
-    { kind: "heading", text: "ERROR", tone: "error" },
-    { kind: "text", text: row.message, indent: 0, role: "error" },
-  ],
+  error: errorPayload,
   subagent: (row) => [
     { kind: "heading", text: `SUBAGENT · ${row.label}`, tone: "assistant" },
     ...rawPayload(row),
@@ -105,10 +103,37 @@ function toolPayload(row: ToolStoryRow): PayloadLine[] {
   if (finished !== undefined) {
     output.push(
       { kind: "heading", text: "Output", tone: "chrome" },
+      { kind: "meta", text: `result: ${resultLineCount(finished.data.output)} lines` },
       ...valuePayload(finished.data.output),
     );
   }
   return output;
+}
+function resultLineCount(output: unknown): number {
+  const result = output as { __type?: string; success?: boolean; value?: unknown } | null;
+  const value = result?.__type === "resultType" && result.success === true ? result.value : output;
+  const text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? "");
+  return text.length === 0 ? 0 : text.split("\n").length;
+}
+function errorPayload(row: ErrorStoryRow): PayloadLine[] {
+  const event = row.node.event;
+  const data = event?.data;
+  const lines: PayloadLine[] = [
+    { kind: "heading", text: "ERROR", tone: "error" },
+    { kind: "text", text: row.message, indent: 0, role: "error" },
+  ];
+  if (typeof data?.functionName === "string") {
+    lines.push({ kind: "meta", text: `function: ${data.functionName}` });
+  }
+  if (event?.span_id) {
+    lines.push({ kind: "meta", text: `span: ${event.span_id}` });
+  }
+  const source = data?.sourceLocation;
+  if (typeof source?.moduleId === "string") {
+    const suffix = typeof source.line === "number" ? `:${source.line}` : "";
+    lines.push({ kind: "meta", text: `source: ${source.moduleId}${suffix}` });
+  }
+  return lines;
 }
 function interruptPayload(row: InterruptStoryRow): PayloadLine[] {
   const interrupt = row.interrupt;

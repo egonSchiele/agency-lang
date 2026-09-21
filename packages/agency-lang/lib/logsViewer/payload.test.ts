@@ -91,3 +91,32 @@ describe("payloads", () => {
     expect(text).not.toContain('"toolCallStart"');
   });
 });
+
+it("reports result line counts and recorded error origin", () => {
+  const trace = buildForest([
+    event("toolCallStart", 0, "tool", null, { toolName: "write" }),
+    event("toolCall", 1, "tool", null, {
+      toolName: "write",
+      output: { __type: "resultType", success: true, value: "one\ntwo\nthree" },
+    }),
+    event("error", 2, "tool", null, {
+      message: "disk full",
+      functionName: "write",
+      sourceLocation: { moduleId: "disk.agency", line: 12 },
+    }),
+  ])[0];
+  const rows = outlineRows(trace, { machinery: false, admin: false });
+  expect(
+    payloadFor(
+      rows.find((row) => row.kind === "tool")!,
+      options,
+    ),
+  ).toContainEqual({ kind: "meta", text: "result: 3 lines" });
+  const error = payloadFor(
+    rows.find((row) => row.kind === "error")!,
+    options,
+  );
+  expect(error).toContainEqual({ kind: "meta", text: "function: write" });
+  expect(error).toContainEqual({ kind: "meta", text: "span: tool" });
+  expect(error).toContainEqual({ kind: "meta", text: "source: disk.agency:12" });
+});

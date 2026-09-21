@@ -410,12 +410,10 @@ export function* walkNodes(
             yield* walkNodes([accessElement.index], [...ancestors, node], scopes);
           } else if (accessElement.kind === "slice") {
             // `arr[a:b] = x`. Same as the read side under valueAccess.
-            if (accessElement.start) {
-              yield* walkNodes([accessElement.start], [...ancestors, node], scopes);
-            }
-            if (accessElement.end) {
-              yield* walkNodes([accessElement.end], [...ancestors, node], scopes);
-            }
+            const bounds = [accessElement.start, accessElement.end].filter(
+              (bound) => bound !== undefined,
+            );
+            yield* walkNodes(bounds as AgencyNode[], [...ancestors, node], scopes);
           } else if (accessElement.kind === "methodCall") {
             yield* walkNodes([accessElement.functionCall], [...ancestors, node], scopes);
           }

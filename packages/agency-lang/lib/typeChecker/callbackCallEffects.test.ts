@@ -33,6 +33,29 @@ describe("a callback call contributes to the caller's inferred effects", () => {
   });
 });
 
+// Issue #605: the callback is never called here, only handed on as a tool.
+describe("a callback passed as an argument contributes its declared effects", () => {
+  it("inline function type in a tools list", () => {
+    const src = `def f(cb: () -> string raises <std::read>) raises <> { const r: string = llm("pick", tools: [cb]) }`;
+    expect(exceeds(src)).toBe(true);
+  });
+
+  it("alias-typed callback in a tools list", () => {
+    const src = `type Cb = () -> string raises <std::read>\ndef f(cb: Cb) raises <> { const r: string = llm("pick", tools: [cb]) }`;
+    expect(exceeds(src)).toBe(true);
+  });
+
+  it("positive: the declared clause covers the passed callback", () => {
+    const src = `def f(cb: () -> string raises <std::read>) raises <std::read> { const r: string = llm("pick", tools: [cb]) }`;
+    expect(exceeds(src)).toBe(false);
+  });
+
+  it("a recursive alias among the arguments terminates", () => {
+    const src = `type Tree = { kids: Tree[] }\ndef f(t: Tree) raises <> { print(t) }`;
+    expect(exceeds(src)).toBe(false);
+  });
+});
+
 // The "handler body calls a raising callback" cases asserted AG3010,
 // which is retired: handler bodies may raise, so there is no handler
 // diagnostic for a raising callback to trip. Callback effect propagation

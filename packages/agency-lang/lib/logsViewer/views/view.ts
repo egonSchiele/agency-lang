@@ -64,8 +64,10 @@ export function makeViewStack(): ViewStack {
       stack.push(view);
     },
     popTo: (name) => {
-      const at = stack.map((v) => v.viewName).lastIndexOf(name);
-      if (at === -1) return false;
+      const at = stack.map((view) => view.viewName).lastIndexOf(name);
+      if (at === -1) {
+        return false;
+      }
       stack.length = at + 1;
       return true;
     },

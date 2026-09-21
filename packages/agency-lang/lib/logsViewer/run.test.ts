@@ -43,7 +43,7 @@ describe("runViewer", () => {
       jsonl: sample,
       input: new ScriptedInput(["j", "Enter", "q"]),
       output: out,
-      viewport: { rows: 10, cols: 80 },
+      viewport: { rows: 10, cols: 100 },
     });
     expect(out.frames.length).toBeGreaterThan(0);
     expect(out.lastText()).toMatch(/agentRun/);
@@ -130,7 +130,7 @@ describe("runViewer", () => {
       jsonl: sample,
       input: new ScriptedInput(["x", "q"]),
       output: out,
-      viewport: { rows: 12, cols: 80 },
+      viewport: { rows: 12, cols: 100 },
     });
     expect(out.lastText()).not.toMatch(/Wrote/);
   });
@@ -166,7 +166,7 @@ describe("runViewer", () => {
       jsonl,
       input: new ScriptedInput(keys),
       output: out,
-      viewport: { rows: 5, cols: 80 },
+      viewport: { rows: 5, cols: 100 },
     });
     const last = out.lastText();
     // After collapsing, the trace + s1 should still be visible — the
@@ -183,7 +183,7 @@ describe("runViewer", () => {
       // to first child leaf, agentStart) Enter (inline its JSON) q.
       input: new ScriptedInput(["Enter", "Enter", "j", "Enter", "q"]),
       output: out,
-      viewport: { rows: 20, cols: 80 },
+      viewport: { rows: 20, cols: 100 },
     });
     const last = out.lastText();
     // The inlined JSON includes the full EventEnvelope shape: keys
@@ -197,7 +197,7 @@ describe("runViewer", () => {
       jsonl: sample,
       input: new ScriptedInput(["Enter", "Enter", "j", "Enter", "h", "q"]),
       output: out2,
-      viewport: { rows: 20, cols: 80 },
+      viewport: { rows: 20, cols: 100 },
     });
     expect(out2.lastText()).not.toMatch(/"data":/);
   });
@@ -212,7 +212,7 @@ describe("runViewer", () => {
       jsonl: sample,
       input: scripted,
       output: out,
-      viewport: { rows: 10, cols: 80 },
+      viewport: { rows: 10, cols: 100 },
     });
     const last = out.lastText();
     // Status bar should show the match indicator. The query also
@@ -229,7 +229,7 @@ describe("runViewer", () => {
       jsonl: sample,
       input: new ScriptedInput(["?", "j", "q"]),
       output: out,
-      viewport: { rows: 20, cols: 80 },
+      viewport: { rows: 20, cols: 100 },
     });
     // At least one frame should show the help heading.
     const anyHelp = out.frames.some((_, i) => out.textAt(i).includes("Keybindings"));
@@ -245,7 +245,7 @@ describe("runViewer", () => {
       jsonl: bad,
       input: new ScriptedInput(["q"]),
       output: out,
-      viewport: { rows: 10, cols: 80 },
+      viewport: { rows: 10, cols: 100 },
     });
     expect(out.textAt(0)).toMatch(/1 parse error/);
   });

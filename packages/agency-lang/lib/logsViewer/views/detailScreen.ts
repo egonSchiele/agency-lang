@@ -1,9 +1,17 @@
+import {
+  cursorBindings,
+  helpFrom,
+  hintsFrom,
+  runViewerKey,
+  type ViewerBinding,
+} from "../keymap.js";
+import { paint, paintAnsi, paintedLine } from "../../tui/paint.js";
 // Full information for one call, as a scrollable page: metrics plus the
 // complete prompt transcript (llm) or the complete call payload (tools).
 // A viewer-level screen — reachable from the tree as well as the timeline
 // views — and the one place the one-line-per-row invariant is deliberately
 // broken: lines wrap, and scrolling clamps against the POST-wrap count.
-import { column, line } from "../../tui/builders.js";
+import { column } from "../../tui/builders.js";
 import type { Element } from "../../tui/elements.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { formatKey } from "../../tui/input/format.js";
@@ -14,7 +22,8 @@ import {
   tokensOut,
 } from "../../statelog/wireAccessors.js";
 import { formatConversation } from "../conversation.js";
-import { findNode } from "../forest.js";
+import { walkNodes } from "../forest.js";
+import { resolveDetailNode } from "../detailTarget.js";
 import { fmtDuration, stripQuotes } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { spanExtent, timelineSpans } from "../timeline/spans.js";
@@ -27,35 +36,51 @@ export class DetailScreen implements View {
   private node: TreeNode | undefined;
   private scroll = 0;
   private message = "";
+  private pageRows = 1;
+  private totalRows = 0;
 
   constructor(
     roots: TreeNode[],
-    private readonly spanId: string,
+    private readonly rowId: string,
     private readonly thresholds: ViewerThresholds,
   ) {
-    this.node = findNode(roots, spanId);
+    this.node = resolveDetailNode(roots, rowId);
   }
 
-  handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
+  private bindings(): ViewerBinding[] {
+    const move = (delta: number): void => {
+      this.scroll = Math.max(
+        0,
+        Math.min(this.scroll + delta, Math.max(0, this.totalRows - this.pageRows)),
+      );
+    };
+    return [
+      ...cursorBindings<ViewAction>({
+        by: move,
+        toTop: () => {
+          this.scroll = 0;
+        },
+        toBottom: () => move(Infinity),
+        page: () => this.pageRows,
+        halfPage: () => Math.max(1, Math.floor(this.pageRows / 2)),
+      }),
+      { keys: ["Left", "h"], help: "back", hint: "← back", run: () => ({ kind: "back" }) },
+      {
+        keys: ["y"],
+        help: "copy the whole page",
+        hint: "y copy",
+        run: () => ({ kind: "copy", text: this.allLines(10000).join("\n") }),
+      },
+    ];
+  }
+  handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     if (this.node === undefined) {
       return { kind: "back" };
     }
-    const total = this.allLines(viewport.cols).length;
-    const page = Math.max(1, viewport.rows - 3);
-    const clamp = (v: number) => Math.max(0, Math.min(v, Math.max(0, total - page)));
-    const fmt = formatKey(ev);
-    if (fmt === "Escape" || fmt === "Left" || fmt === "h") return { kind: "back" };
-    if (fmt === "t") return { kind: "open", view: "tree" };
-    if (fmt === "y") return { kind: "copy", text: this.allLines(10_000).join("\n") };
-    if (fmt === "Up" || fmt === "k") this.scroll = clamp(this.scroll - 1);
-    if (fmt === "Down" || fmt === "j") this.scroll = clamp(this.scroll + 1);
-    if (fmt === "g") this.scroll = 0;
-    if (fmt === "G") this.scroll = clamp(total);
-    if (fmt === "Ctrl+F" || fmt === "Ctrl+D") this.scroll = clamp(this.scroll + page);
-    if (fmt === "Ctrl+B" || fmt === "Ctrl+U") this.scroll = clamp(this.scroll - page);
-    return { kind: "none" };
+    this.totalRows = this.allLines(viewport.cols).length;
+    this.pageRows = Math.max(1, viewport.rows - 3);
+    return runViewerKey(this.bindings(), formatKey(event));
   }
-
   render(viewport: Viewport): Element {
     const all = this.allLines(viewport.cols);
     const page = Math.max(1, viewport.rows - 3);
@@ -64,34 +89,30 @@ export class DetailScreen implements View {
     const shownTo = Math.min(all.length, this.scroll + page);
     return column(
       { justifyContent: "flex-start" },
-      line(`DETAIL  ${this.node?.summary ?? "(span no longer in the log)"}`, {
-        fg: "bright-white",
-      }),
-      ...visible.map((text) => line(text)),
-      line(
-        bottomHints(
-          `↑↓ scroll (${Math.min(this.scroll + 1, all.length)}–${shownTo} of ${all.length})  y copy  ←/Esc back` +
-            (this.message ? `  ${this.message}` : ""),
-          "detail",
-          viewport.cols,
+      paintedLine(
+        paint(`DETAIL  ${this.node?.summary ?? "(span no longer in the log)"}`, { fg: "#cdd6f4" }),
+      ),
+      ...visible.map((text) => paintedLine(paintAnsi(text))),
+      paintedLine(
+        paint(
+          bottomHints(
+            `(${Math.min(this.scroll + 1, all.length)}–${shownTo} of ${all.length}) ${hintsFrom(this.bindings())}` +
+              (this.message ? `  ${this.message}` : ""),
+            "detail",
+            viewport.cols,
+          ),
+          { fg: "#7f849c" },
         ),
-        { fg: "gray" },
       ),
     );
   }
 
   setData(roots: TreeNode[]): void {
-    this.node = findNode(roots, this.spanId);
+    this.node = resolveDetailNode(roots, this.rowId);
   }
 
   helpLines(): string[] {
-    return [
-      "↑↓ / j k — scroll",
-      "g / G — top / bottom",
-      "Ctrl+F/B/D/U — page",
-      "y — copy the whole page",
-      "← / Esc — back",
-    ];
+    return helpFrom(this.bindings());
   }
 
   notify(message: string): void {
@@ -152,13 +173,7 @@ export class DetailScreen implements View {
 }
 
 function firstDescendantEvent(node: TreeNode, type: string): TreeNode | undefined {
-  const stack: TreeNode[] = [node];
-  while (stack.length > 0) {
-    const n = stack.shift()!;
-    if (n.event?.data.type === type) return n;
-    stack.push(...n.children);
-  }
-  return undefined;
+  return walkNodes(node).find((entry) => entry.event?.data.type === type);
 }
 
 function wrap(text: string, width: number): string[] {

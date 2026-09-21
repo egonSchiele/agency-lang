@@ -75,6 +75,25 @@ describe("follow mode", () => {
     });
   }
 
+  it("a new trace arriving under follow does not open the boot picker", async () => {
+    const input = new ScriptedInput([]);
+    const out = new FrameRecorder();
+    const done = start(input, out);
+    input.feedKey({ key: "f" });
+    fs.appendFileSync(
+      file,
+      toolLines("new-trace-tool", "arrived", 1000).replaceAll(
+        '"trace_id":"abc"',
+        '"trace_id":"second"',
+      ),
+    );
+    await until(() => out.frames.length > 0 && out.lastText().includes("trace 1/2"));
+    input.feedKey({ key: "q" });
+    await done;
+    expect(out.lastText()).toContain("trace 1/2");
+    expect(out.lastText()).not.toContain("TRACES");
+  });
+
   it("an appended span appears while following", async () => {
     const input = new ScriptedInput([]);
     const out = new FrameRecorder();

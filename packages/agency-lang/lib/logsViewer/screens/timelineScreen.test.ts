@@ -1,3 +1,7 @@
+import { buildTreeIndex } from "../forest.js";
+import { layout } from "../../tui/layout.js";
+import { render } from "../../tui/render/renderer.js";
+import { FrameRecorder } from "../../tui/output/recorder.js";
 import { parseStyledText } from "../../tui/styleParser.js";
 import { describe, expect, it } from "vitest";
 
@@ -214,7 +218,11 @@ function loopForest(): TreeNode[] {
       span(
         "llmCall",
         [
-          leaf("promptCompletion", 1000, { timeTaken: 100 }),
+          leaf("promptCompletion", 1000, {
+            timeTaken: 100,
+            usage: { inputTokens: 123, cachedInputTokens: 18000, outputTokens: 45 },
+            cost: { totalCost: 0.0015 },
+          }),
           span(
             "toolExecution",
             [
@@ -289,4 +297,54 @@ describe("timeline screen rows and focus", () => {
     view.handleKey({ key: "f", ctrl: true }, viewport);
     expect(view.focusId()).toBe("tool20");
   });
+});
+
+it("lays bars on consecutive lines across the real 140-column frame", () => {
+  const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
+  const recorder = new FrameRecorder();
+  recorder.write(render(layout(view.render({ rows: 12, cols: 140 }), 140, 12)));
+  const lines = recorder.lastText().split("\n");
+  expect(lines[2].lastIndexOf("█")).toBeGreaterThan(110);
+  expect(lines.slice(2, 7).every((line) => line.trim().length > 0)).toBe(true);
+});
+it.each([100, 130, 200])("renders a timeline golden at %i columns", (cols) => {
+  const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
+  const recorder = new FrameRecorder();
+  recorder.write(render(layout(view.render({ rows: 12, cols }), cols, 12)));
+  expect(recorder.lastText()).toMatchSnapshot();
+  recorder.writeHTML(`/tmp/pr4-timeline-${cols}.html`);
+});
+it("help derives a table with no duplicate key ownership", () => {
+  const screen = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
+  const keys = screen.helpLines().flatMap((line) => line.split(" — ")[0].split(" / "));
+  expect(keys.filter((key, position) => keys.indexOf(key) !== position)).toEqual([]);
+});
+
+it("drilling a multi-round call draws each round once", () => {
+  const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
+  view.handleKey({ key: "enter" }, viewport);
+  expect(frame(view).match(/round 1/g)).toHaveLength(1);
+  expect(frame(view).match(/round 2/g)).toHaveLength(1);
+});
+it("drilling a single-round call keeps the duplicate round bar suppressed", () => {
+  const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+  view.setFocus("llm1");
+  view.handleKey({ key: "enter" }, viewport);
+  expect(frame(view)).not.toContain("round 1");
+});
+it("drilling never imports unrelated rounds from the trace root", () => {
+  const roots = loopForest();
+  roots[0].children.push(leaf("promptCompletion", 4000, { timeTaken: 100 }));
+  const view = new TimelineScreen(roots, "T", DEFAULT_THRESHOLDS);
+  view.handleKey({ key: "enter" }, viewport);
+  expect(frame(view)).not.toContain("round 4");
+});
+it("falls back to a surviving parent when follow removes the selected child", () => {
+  const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+  view.setFocus("bash1");
+  const roots = fixtureForest();
+  const index = buildTreeIndex(roots[0]);
+  index.byId.llm1.children = index.byId.llm1.children.filter((child) => child.id !== "bash1");
+  view.setData(roots);
+  expect(view.focusId()).toBe("llm1");
 });

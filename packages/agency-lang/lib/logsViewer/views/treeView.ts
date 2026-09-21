@@ -11,7 +11,7 @@ import type { KeyEvent } from "../../tui/input/types.js";
 import { clampScroll, followCursor } from "../../tui/scroll.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { detectClipboard } from "../clipboard.js";
-import { findNode } from "../forest.js";
+import { findNode, buildTreeIndex, ancestorsOf } from "../forest.js";
 import { helpLines as treeHelpLines } from "../help.js";
 import { handleKeyEx } from "./treeReducer.js";
 import { colorFor, flattenVisibleRows, renderRowText, VisibleRow } from "../treeRows.js";
@@ -64,15 +64,9 @@ export class TreeView implements View {
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
     const fmt = formatKey(ev);
-    if (fmt === "t") {
-      return { kind: "open", view: "flame" };
-    }
-    if (fmt === "T") {
-      return { kind: "open", view: "byName" };
-    }
     if (fmt === "d") {
       const id = this.cursorRealId();
-      if (id !== undefined) return { kind: "openDetail", spanId: id };
+      if (id !== undefined) return { kind: "openDetail", rowId: id };
     }
     // `x` extracts the focused trace when the source is a local file. Only fire
     // with a real trace id — an empty forest (an empty file under --follow) has
@@ -157,7 +151,6 @@ export class TreeView implements View {
 
   helpLines(): string[] {
     return [
-      "t — timeline views (flame → by-name)",
       "d — full details of the focused span",
       "y — copy focused node as JSON; Y — copy the whole trace as JSONL",
       ...(this.extractEnabled ? ["x — extract this trace to a file"] : []),
@@ -183,6 +176,26 @@ export class TreeView implements View {
     return node?.traceId ?? this.state.roots[0]?.traceId ?? "";
   }
 
+  cursorSpanId(): string | undefined {
+    const node = findNode(this.state.roots, this.cursorRealId() ?? "");
+    const root = this.state.roots.find((root) => root.traceId === node?.traceId);
+    if (node === undefined || root === undefined) {
+      return undefined;
+    }
+    return [node, ...ancestorsOf(node, buildTreeIndex(root))].find(
+      (entry) => entry.nodeKind === "span" || entry.nodeKind === "trace",
+    )?.id;
+  }
+  search(query: string, traceId?: string): void {
+    this.state = this.applySearch(query, this.viewport, traceId);
+  }
+  clearSearch(): boolean {
+    if (!this.hasActiveSearch()) {
+      return false;
+    }
+    this.state = handleKeyEx(this.state, { key: "escape" }).state;
+    return true;
+  }
   setFollowIndicator(on: boolean): void {
     this.state = { ...this.state, followOn: on };
   }
@@ -240,13 +253,15 @@ export class TreeView implements View {
     return scrollTop === state.scrollTop ? state : { ...state, scrollTop };
   }
 
-  private applySearch(query: string, viewport: Viewport): ViewerState {
+  private applySearch(query: string, viewport: Viewport, traceId?: string): ViewerState {
     const state = this.state;
     const trimmed = query.trim();
     if (trimmed.length === 0) {
       return { ...state, query: undefined, matches: undefined, matchIdx: undefined };
     }
-    const matches = findMatches(state.roots, trimmed, state.viewportCols);
+    const roots =
+      traceId === undefined ? state.roots : state.roots.filter((root) => root.traceId === traceId);
+    const matches = findMatches(roots, trimmed, state.viewportCols);
     if (matches.length === 0) {
       return {
         ...state,

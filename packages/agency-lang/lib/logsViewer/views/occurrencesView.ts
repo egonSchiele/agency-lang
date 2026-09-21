@@ -73,16 +73,16 @@ export class OccurrencesView implements View {
       if (sel === undefined) return { kind: "none" };
       const hasChildren = sel.node.children.some((c) => c.nodeKind === "span");
       return hasChildren
-        ? { kind: "openFlameAt", spanId: sel.span.id }
-        : { kind: "openDetail", spanId: sel.span.id };
+        ? { kind: "none" } /* reachable again in the overview PR */
+        : { kind: "openDetail", rowId: sel.span.id };
     } else if (fmt === "Left" || fmt === "h" || fmt === "Escape") return { kind: "back" };
     else if (fmt === "t") return { kind: "back" };
     else if (fmt === "d") {
       const sel = this.occ[this.cursor];
-      if (sel !== undefined) return { kind: "openDetail", spanId: sel.span.id };
+      if (sel !== undefined) return { kind: "openDetail", rowId: sel.span.id };
     } else if (fmt === "o") {
       const sel = this.occ[this.cursor];
-      if (sel !== undefined) return { kind: "focusInTree", spanId: sel.span.id };
+      if (sel !== undefined) return { kind: "none" }; /* reachable again in the overview PR */
     }
     return { kind: "none" };
   }

@@ -112,7 +112,7 @@ export class TracePicker implements View {
   }
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     this.pageRows = Math.max(1, viewport.rows - LAYOUT.chromeRows);
-    if (this.editing && event.key.length === 1 && !event.ctrl && !event.alt) {
+    if (this.editing && event.key.length === 1 && !event.ctrl) {
       this.appendToQuery(event.key);
       return { kind: "none" };
     }

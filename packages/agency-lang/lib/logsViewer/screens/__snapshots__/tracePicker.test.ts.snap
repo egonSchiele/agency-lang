@@ -4,8 +4,8 @@ exports[`renders the searched picker at 120 columns 1`] = `
 "TRACES · 2 of 3 match "archiveNotes"
 / archiveNotes▏
    started   duration rounds context     cost hits what
-   00:00:00  4.0s          1      35             1 ask for A
-   00:00:00  4.0s          1      35             2 ask for B
+   00:00:00  4.0s          1      35  $0.010!    1 ask for A
+   00:00:00  4.0s          1      35  $0.010!    2 ask for B
 
 
 

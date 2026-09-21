@@ -67,14 +67,15 @@ export class ByNameView implements View {
     else if (fmt === "Enter" || fmt === "Right" || fmt === "l") {
       const sel = this.selected();
       if (sel !== undefined) return { kind: "openOccurrences", groupKey: sel.group.key };
-    } else if (fmt === "t" || fmt === "Escape") return { kind: "open", view: "tree" };
-    else if (fmt === "T") return { kind: "open", view: "flame" };
+    } else if (fmt === "t" || fmt === "Escape")
+      return { kind: "none" }; /* reachable again in the overview PR */
+    else if (fmt === "T") return { kind: "none" }; /* reachable again in the overview PR */
     else if (fmt === "d") {
       const longest = this.longestOf(this.selected());
-      if (longest !== undefined) return { kind: "openDetail", spanId: longest.id };
+      if (longest !== undefined) return { kind: "openDetail", rowId: longest.id };
     } else if (fmt === "o") {
       const longest = this.longestOf(this.selected());
-      if (longest !== undefined) return { kind: "focusInTree", spanId: longest.id };
+      if (longest !== undefined) return { kind: "none" }; /* reachable again in the overview PR */
     } else if (fmt === "a") {
       this.hideAdmin = !this.hideAdmin;
       this.derive();

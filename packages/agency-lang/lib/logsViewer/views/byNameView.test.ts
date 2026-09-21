@@ -61,7 +61,7 @@ describe("ByNameView", () => {
 
   it("d opens the detail of the group's LONGEST call", () => {
     const view = new ByNameView(forest(), "T", DEFAULT_THRESHOLDS);
-    expect(view.handleKey({ key: "d" }, viewport)).toEqual({ kind: "openDetail", spanId: "a" }); // 29s beats 10s
+    expect(view.handleKey({ key: "d" }, viewport)).toEqual({ kind: "openDetail", rowId: "a" }); // 29s beats 10s
   });
 
   it("the footer names the model mix", () => {

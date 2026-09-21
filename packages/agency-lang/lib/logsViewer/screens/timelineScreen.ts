@@ -47,11 +47,8 @@ import {
   BarComponent,
   SelectionFooter,
   TimelineHeader,
-  clipCell,
   fmtOffset,
-  padCell,
   splitWidth,
-  bottomHints,
 } from "../views/shared.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
@@ -197,8 +194,12 @@ export class TimelineScreen implements Screen {
     const widths = splitWidth("timeline", viewport.cols);
     const window = this.window();
     const bodyRows = Math.max(1, viewport.rows - CHROME_ROWS);
-    if (this.cursor < this.scrollTop) this.scrollTop = this.cursor;
-    if (this.cursor >= this.scrollTop + bodyRows) this.scrollTop = this.cursor - bodyRows + 1;
+    if (this.cursor < this.scrollTop) {
+      this.scrollTop = this.cursor;
+    }
+    if (this.cursor >= this.scrollTop + bodyRows) {
+      this.scrollTop = this.cursor - bodyRows + 1;
+    }
     const { element: body } = scrollList<FlameRow>({
       items: this.rows,
       cursorIdx: this.cursor,
@@ -312,12 +313,18 @@ export class TimelineScreen implements Screen {
   }
 
   private derive(): void {
-    const trace = this.roots.find((r) => r.traceId === this.traceId) ?? this.roots[0];
+    const trace = this.roots.find((root) => root.traceId === this.traceId) ?? this.roots[0];
     if (trace === undefined) {
       this.rows = [];
       return;
     }
-    const cursorId = this.selected()?.row.id;
+    const selected = this.selected();
+    const previousAncestors =
+      selected === undefined || this.index === undefined
+        ? []
+        : ancestorsOf(selected.node, this.index);
+    const focusCandidates =
+      selected === undefined ? [] : [selected.row.id, ...previousAncestors.map((node) => node.id)];
     const index = buildTreeIndex(trace);
     this.index = index;
     this.drillPath = this.drillPath.filter((id) => index.byId[id] !== undefined);
@@ -328,15 +335,21 @@ export class TimelineScreen implements Screen {
     const groups = groupSpans(spans, trace, index);
     const colorByKey = rankColors(groups);
     const keyBySpanId: Record<string, string> = Object.create(null);
-    for (const g of groups) {
-      for (const id of g.spanIds) keyBySpanId[id] = g.key;
+    for (const group of groups) {
+      for (const id of group.spanIds) {
+        keyBySpanId[id] = group.key;
+      }
     }
-    this.rows = timelineRows(spans, this.rounds, rootNode.id).map((row) => ({
+    this.rows = timelineRows(
+      spans,
+      this.rounds,
+      rootNode.nodeKind === "trace" ? rootNode.id : undefined,
+    ).map((row) => ({
       row,
       node: row.kind === "round" ? row.round.node : index.byId[row.id],
       color: row.kind === "round" ? THEME.kind.assistant : colorByKey[keyBySpanId[row.id] ?? ""],
     }));
-    const target = cursorId === undefined ? undefined : this.drawnIdFor(cursorId);
+    const target = focusCandidates.map((id) => this.drawnIdFor(id)).find((id) => id !== undefined);
     const restored = this.rows.findIndex((item) => item.row.id === target);
     this.cursor = restored !== -1 ? restored : 0;
   }
@@ -347,7 +360,9 @@ export class TimelineScreen implements Screen {
 
   private drillOrOpen(): ViewAction {
     const sel = this.selected();
-    if (sel === undefined) return { kind: "none" };
+    if (sel === undefined) {
+      return { kind: "none" };
+    }
     if (sel.row.kind === "round") {
       return { kind: "openScreen", screen: "trace", focusId: sel.row.id };
     }
@@ -367,7 +382,9 @@ export class TimelineScreen implements Screen {
   }
 
   private drillOut(): void {
-    if (this.drillPath.length === 0) return;
+    if (this.drillPath.length === 0) {
+      return;
+    }
     this.drillPath = this.drillPath.slice(0, -1);
     this.zoom = undefined;
     this.cursor = 0;
@@ -376,10 +393,12 @@ export class TimelineScreen implements Screen {
   }
 
   private viewExtent(): Interval {
-    if (this.rows.length === 0) return { start: 0, end: 1 };
+    if (this.rows.length === 0) {
+      return { start: 0, end: 1 };
+    }
     return {
-      start: Math.min(...this.rows.map((r) => extentOf(r.row).start)),
-      end: Math.max(...this.rows.map((r) => extentOf(r.row).end)),
+      start: Math.min(...this.rows.map((item) => extentOf(item.row).start)),
+      end: Math.max(...this.rows.map((item) => extentOf(item.row).end)),
     };
   }
 
@@ -418,7 +437,9 @@ export class TimelineScreen implements Screen {
   }
 
   private pan(fraction: number): void {
-    if (this.zoom === undefined) return;
+    if (this.zoom === undefined) {
+      return;
+    }
     const full = this.viewExtent();
     const span = this.zoom.end - this.zoom.start;
     let start = this.zoom.start + span * fraction;
@@ -429,17 +450,21 @@ export class TimelineScreen implements Screen {
   private applySearchText(text: string): void {
     const query = text.trim().toLowerCase();
     this.query = query.length > 0 ? query : undefined;
-    if (this.query === undefined) return;
+    if (this.query === undefined) {
+      return;
+    }
     if (!this.jumpMatch(1, true)) {
       this.message = `no matches for "${text.trim()}"`;
     }
   }
 
   private jumpMatch(direction: 1 | -1, includeCurrent = false): boolean {
-    if (this.query === undefined || this.rows.length === 0) return false;
-    const n = this.rows.length;
-    for (let step = includeCurrent ? 0 : 1; step <= n; step++) {
-      const at = (this.cursor + direction * step + n * (step + 1)) % n;
+    if (this.query === undefined || this.rows.length === 0) {
+      return false;
+    }
+    const count = this.rows.length;
+    for (let step = includeCurrent ? 0 : 1; step <= count; step++) {
+      const at = (this.cursor + direction * step + count * (step + 1)) % count;
       if (this.rowText(this.rows[at]).toLowerCase().includes(this.query)) {
         this.cursor = at;
         return true;
@@ -452,8 +477,8 @@ export class TimelineScreen implements Screen {
     const full = this.viewExtent();
     const crumbs = this.drillPath
       .map((id) => this.index?.byId[id])
-      .filter((n): n is TreeNode => n !== undefined)
-      .map((n) => spanDisplayName(n));
+      .filter((node): node is TreeNode => node !== undefined)
+      .map((node) => spanDisplayName(node));
     return new TimelineHeader().computeText({
       view: "timeline",
       title: this.traceId.slice(0, 8),
@@ -468,7 +493,9 @@ export class TimelineScreen implements Screen {
 
   private footerText(): string {
     const sel = this.selected();
-    if (sel === undefined) return this.message;
+    if (sel === undefined) {
+      return this.message;
+    }
     const base =
       `${sel.node.summary}  ·  start +${fmtOffset(extentOf(sel.row).start - this.viewStart())}` +
       `  self ${fmtDuration(sel.row.kind === "span" ? sel.row.span.selfMs : sel.row.round.durationMs, { minutes: true })}`;
@@ -478,7 +505,13 @@ export class TimelineScreen implements Screen {
   private rowText(item: FlameRow): string {
     if (item.row.kind === "round") {
       const round = item.row.round;
-      return `round ${round.index + 1} · ${fmtTokens(round.contextTokens)} ctx · ${fmtUsd(round.costUsd)}`;
+      return [
+        `round ${round.index + 1}`,
+        `${fmtTokens(round.contextTokens)} ctx`,
+        fmtUsd(round.costUsd),
+      ]
+        .filter((part) => part.length > 0)
+        .join(" · ");
     }
     return new RowLabel(item.node).computeText();
   }
@@ -553,8 +586,12 @@ export class RowLabel {
 
   private llmCost(): string {
     const parts: string[] = [];
-    if (this.node.tokens !== undefined) parts.push(`${fmtTokens(this.node.tokens)} tok`);
-    if (this.node.cost !== undefined) parts.push(fmtUsd(this.node.cost));
+    if (this.node.tokens !== undefined) {
+      parts.push(`${fmtTokens(this.node.tokens)} tok`);
+    }
+    if (this.node.cost !== undefined) {
+      parts.push(fmtUsd(this.node.cost));
+    }
     return parts.join(" ");
   }
 
@@ -586,10 +623,10 @@ export class DurationCell {
 export function rankColors(
   groups: { key: string; totalSelfMs: number }[],
 ): Record<string, string | undefined> {
-  const ranked = [...groups].sort((a, b) => b.totalSelfMs - a.totalSelfMs);
+  const ranked = [...groups].sort((first, second) => second.totalSelfMs - first.totalSelfMs);
   const colors: Record<string, string | undefined> = Object.create(null);
-  ranked.forEach((group, i) => {
-    colors[group.key] = GROUP_PALETTE[i] ?? THEME.muted;
+  ranked.forEach((group, position) => {
+    colors[group.key] = GROUP_PALETTE[position] ?? THEME.muted;
   });
   return colors;
 }

@@ -10,7 +10,7 @@ export function traceEvents(traceId: string, contents: TraceContents): EventEnve
       messages: [{ role: "user", content: contents.ask ?? `ask for ${traceId}` }],
       completion: { output: contents.answer },
       usage: { inputTokens: 10, cachedInputTokens: 20, outputTokens: 5 },
-      cost: 0.01,
+      cost: { totalCost: 0.01 },
     },
     { type: "toolCallStart", toolName: "read" },
     { type: "toolCall", toolName: "read", output: contents.toolOutput },

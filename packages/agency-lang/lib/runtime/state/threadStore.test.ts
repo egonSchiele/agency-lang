@@ -3,6 +3,17 @@ import { ThreadStore } from "./threadStore.js";
 import { MessageThread } from "./messageThread.js";
 
 describe("ThreadStore parentId tracking", () => {
+  it("fresh stores reuse local 0 but have distinct message-thread identities", () => {
+    const parent = new ThreadStore();
+    const child = new ThreadStore();
+    const parentLocalId = parent.create();
+    const childLocalId = child.create();
+    expect(parentLocalId).toBe(childLocalId);
+    expect(parent.get(parentLocalId).id).not.toBe(child.get(childLocalId).id);
+    const restored = ThreadStore.fromJSON(parent.toJSON());
+    expect(restored.get(parentLocalId).id).toBe(parent.get(parentLocalId).id);
+  });
+
   it("create() returns a top-level thread with parentId null", () => {
     const store = new ThreadStore();
     const id = store.create();
@@ -112,6 +123,13 @@ describe("ThreadStore.openSession", () => {
 });
 
 describe("ThreadStore.viewWithActive", () => {
+  it("keeps the caller identity in a handoff view", () => {
+    const store = new ThreadStore();
+    const caller = store.getOrCreateActive();
+    const view = store.viewWithActive(caller);
+    expect(view.active()?.id).toBe(caller.id);
+  });
+
   it("makes the thread active in the view and leaves the store's own stack alone", () => {
     const store = new ThreadStore();
     const main = store.getOrCreateActive();

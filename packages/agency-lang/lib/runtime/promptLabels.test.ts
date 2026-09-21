@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import * as smoltalk from "smoltalk";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
 import { agency } from "./agency.js";
@@ -76,12 +76,17 @@ class RecordingClient implements LLMClient {
   }
 }
 
-async function runLabeled(label: string | undefined) {
+async function runLabeled(
+  label: string | undefined,
+  threadLabel: string | null = null,
+  thread: MessageThread = new MessageThread(),
+) {
   const ctx = makeCtx();
   const client = new RecordingClient();
   ctx.setLLMClient(client);
   const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-  const thread = new MessageThread();
+  thread.label = threadLabel;
+  const completion = vi.spyOn(ctx.statelogClient, "promptCompletion").mockResolvedValue();
   await inFrame(ctx, threads, () =>
     runPrompt({
       prompt: "go",
@@ -89,7 +94,7 @@ async function runLabeled(label: string | undefined) {
       clientConfig: (label === undefined ? {} : { label }) as any,
     }),
   );
-  return { client, thread };
+  return { client, completion, thread };
 }
 
 describe("llm() debug label", () => {
@@ -128,6 +133,22 @@ describe("llm() debug label", () => {
 });
 
 describe("withMessageLabels (the promptCompletion dump)", () => {
+  it("records the request thread's identity and label", async () => {
+    const { completion, thread } = await runLabeled("verifier", "worker");
+    const payload = completion.mock.calls[0][0];
+    expect(payload.threadIdentity).toBe(thread.id);
+    expect(payload.threadLabel).toBe("worker");
+  });
+
+  it("records an async subthread's identity instead of the ambient registry id", async () => {
+    const parent = new MessageThread();
+    const child = parent.newSubthreadChild("0");
+    const { completion } = await runLabeled(undefined, null, child);
+    const payload = completion.mock.calls[0][0];
+    expect(payload.threadIdentity).toBe(child.id);
+    expect(payload.threadIdentity).not.toBe(parent.id);
+  });
+
   it("attaches each message's label by index, leaving unlabeled ones alone", () => {
     const t = new MessageThread();
     t.push(smoltalk.systemMessage("sys"));

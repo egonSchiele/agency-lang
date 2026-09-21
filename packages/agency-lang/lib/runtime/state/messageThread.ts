@@ -9,6 +9,7 @@ import { nanoid } from "nanoid";
 const cloneQueue = (q: QueuedMessage[]): QueuedMessage[] => JSON.parse(JSON.stringify(q));
 
 export type MessageThreadJSON = {
+  id?: string;
   messages: smoltalk.MessageJSON[];
   messageLabels?: (string | null)[];
   messageScopes?: (string | null)[];
@@ -330,6 +331,7 @@ export class MessageThread {
 
   toJSON(): MessageThreadJSON {
     const json: MessageThreadJSON = {
+      id: this.id,
       messages: this.messages.map((m) => m.toJSON()),
       parentId: this.parentId,
       hidden: this.hidden,
@@ -370,6 +372,9 @@ export class MessageThread {
   ): MessageThread {
     if (json instanceof MessageThread) return json;
     const thread = new MessageThread();
+    if (!Array.isArray(json) && typeof json.id === "string" && json.id.length > 0) {
+      thread.id = json.id;
+    }
 
     let _messages: any[] = [];
     let _messageLabels: (string | null)[] | undefined = undefined;

@@ -162,6 +162,14 @@ Esc / timeout — deliberately not an error). Pairing is by span + order: the
 nth start in an `llmCall` span pairs with the nth terminator; an unpaired start
 is a hung/killed-mid-call run.
 
+A completion records three related thread fields. `threadId` is the local
+registry number and can restart in a fresh store. `threadIdentity` is the
+stable `MessageThread.id` and survives checkpoint serialization; it identifies
+the conversation even when a handoff continues it across spans. `threadLabel`
+is the optional user-facing thread label. Older logs lack the latter two
+fields, so consumers use a conservative fallback rather than treating equal
+local numbers as equal conversations.
+
 Tools: `toolCallStart` → `toolCall` (share the `toolExecution` span; OTEL
 start+end mergeable).
 

@@ -9,6 +9,8 @@ import {
   groupByType,
   modelOf,
   threadIdOf,
+  threadIdentityOf,
+  threadLabelOf,
   timestampMs,
   toolNameOf,
   toolsOf,
@@ -65,6 +67,20 @@ describe("threadIdOf", () => {
 
   it("returns null when not a string", () => {
     expect(threadIdOf(ev({ type: "x", threadId: 123 }))).toBeNull();
+  });
+});
+
+describe("recorded thread metadata", () => {
+  it("reads non-empty identity and label strings", () => {
+    const event = ev({ type: "promptCompletion", threadIdentity: "stable", threadLabel: "worker" });
+    expect(threadIdentityOf(event)).toBe("stable");
+    expect(threadLabelOf(event)).toBe("worker");
+  });
+
+  it("returns null for missing, empty, or non-string values", () => {
+    expect(threadIdentityOf(ev({ type: "promptCompletion" }))).toBeNull();
+    expect(threadIdentityOf(ev({ type: "promptCompletion", threadIdentity: "" }))).toBeNull();
+    expect(threadLabelOf(ev({ type: "promptCompletion", threadLabel: 7 }))).toBeNull();
   });
 });
 

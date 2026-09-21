@@ -5,6 +5,7 @@ import { z } from "zod";
 // not name, so a field missing here is dropped when a checkpoint is read
 // back from JSON.
 export const messageThreadJSONSchema = z.object({
+  id: z.string().optional(),
   messages: z.array(z.any()),
   messageLabels: z.array(z.string().nullable()).optional(),
   messageScopes: z.array(z.string().nullable()).optional(),

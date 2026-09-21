@@ -1,5 +1,5 @@
 // Group keys and aggregation. In the kernel — not on a view component —
-// because by-name (display) and occurrences (membership) must agree, and
+// because the overview's time panel and occurrences must agree, and
 // follow-mode re-parses can legitimately re-group a call (a threadCreated
 // can arrive after the llm call it names). One computation, two readers.
 import { childEvent, spanDetail, stripQuotes } from "../spanText.js";

@@ -38,7 +38,7 @@ The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay als
 
 A pure module computes plain records. One painter per screen draws those records and owns the TUI imports. The bar components in `views/shared.ts` predate this rule and keep their existing compute/render organization.
 
-The legacy tree fills slot 2 through `LegacyTraceScreen` until the new trace screen arrives. Slots 1 and 3 currently show placeholders. During this stage the viewer starts on the usable trace screen; once the overview arrives it becomes the starting screen. The old by-name and occurrences views are unreachable during this stage.
+The overview fills slot 1 and is the starting screen. The legacy tree fills slot 2 through `LegacyTraceScreen` until the new trace screen arrives. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
 
 ## Key tables
 
@@ -76,11 +76,11 @@ cross-run analysis project can reuse without a TUI:
   terminus, and `promptCancelled` counts as a terminus. The admin spans listed in
   `ADMIN_KINDS` (`handlerChain` and `threadEndHooks`) are filtered presentationally: rows
   disappear and depths close up, while extents and self-time stay untouched.
-- `groups.ts` — the by-name grouping, via `groupSpans(spans, root, index?)`. LLM calls group by **thread label** (from
+- `groups.ts` — the overview time-panel grouping, via `groupSpans(spans, root, index?)`. LLM calls group by **thread label** (from
   `threadCreated` events, scoped to the nearest enclosing `subprocessRun` span because
   thread ids restart per process), else the **enclosing function**, else the model;
   everything else groups by its display name. Grouping lives in the kernel because two
-  views consume it (by-name displays groups, occurrences resolves a key back to members)
+  consumers use it (the overview displays groups, occurrences resolves a key back to members)
   and a follow-mode re-parse can legitimately re-group a call — one computation, two
   readers. A group's share is of wall clock and may exceed 100% for parallel work; that is
   real compute time, not the nesting bug self-time fixes.

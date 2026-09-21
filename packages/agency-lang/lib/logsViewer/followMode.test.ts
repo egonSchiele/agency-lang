@@ -65,6 +65,7 @@ describe("follow mode", () => {
   });
 
   function start(input: ScriptedInput, out: FrameRecorder) {
+    input.feedKey({ key: "2" });
     return runViewer({
       jsonl: fs.readFileSync(file, "utf8"),
       followPath: file,

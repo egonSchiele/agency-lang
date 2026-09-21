@@ -5,27 +5,27 @@
 // argument. Membership comes from the kernel's grouping — re-resolved on
 // every setData, because a follow-mode re-parse can legitimately re-group
 // a call; a vanished key backs out rather than showing stale rows.
-import { column, line, row } from "../../tui/builders.js";
+import { column } from "../../tui/builders.js";
 import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
+import { joinPainted, paint, paintedLine, segment } from "../../tui/paint.js";
 import { buildTreeIndex, type TreeIndex } from "../forest.js";
+import {
+  cursorBindings,
+  helpFrom,
+  hintsFrom,
+  runViewerKey,
+  type ViewerBinding,
+} from "../keymap.js";
 import { fmtDuration } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { groupSpans, spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
 import { DurationCell, RowLabel } from "../screens/timelineScreen.js";
-import {
-  AxisHeader,
-  BarComponent,
-  SelectionFooter,
-  clipCell,
-  padCell,
-  splitWidth,
-  bottomHints,
-} from "./shared.js";
+import { AxisHeader, BarComponent, SelectionFooter, splitWidth, bottomHints } from "./shared.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
 
@@ -41,6 +41,20 @@ export class OccurrencesView implements View {
   private stale = false;
   private occ: Occurrence[] = [];
   private sharedPrefix = "";
+  private pageRows = 1;
+  private moves = {
+    by: (delta: number): void => {
+      this.cursor = Math.max(0, Math.min(this.occ.length - 1, this.cursor + delta));
+    },
+    toTop: (): void => {
+      this.cursor = 0;
+    },
+    toBottom: (): void => {
+      this.cursor = Math.max(0, this.occ.length - 1);
+    },
+    page: (): number => this.pageRows,
+    halfPage: (): number => Math.max(1, Math.floor(this.pageRows / 2)),
+  };
 
   constructor(
     roots: TreeNode[],
@@ -57,34 +71,32 @@ export class OccurrencesView implements View {
       return { kind: "back" };
     }
     this.message = ""; // transient, like the tree's message bar
-    const fmt = formatKey(ev);
-    const move = (delta: number) => {
-      this.cursor = Math.max(0, Math.min(this.occ.length - 1, this.cursor + delta));
-    };
-    const page = Math.max(1, viewport.rows - 4);
-    if (fmt === "Up" || fmt === "k") move(-1);
-    else if (fmt === "Down" || fmt === "j") move(1);
-    else if (fmt === "g") this.cursor = 0;
-    else if (fmt === "G") this.cursor = Math.max(0, this.occ.length - 1);
-    else if (fmt === "Ctrl+F" || fmt === "Ctrl+D") move(page);
-    else if (fmt === "Ctrl+B" || fmt === "Ctrl+U") move(-page);
-    else if (fmt === "Enter" || fmt === "Right" || fmt === "l") {
-      const sel = this.occ[this.cursor];
-      if (sel === undefined) return { kind: "none" };
-      const hasChildren = sel.node.children.some((c) => c.nodeKind === "span");
-      return hasChildren
-        ? { kind: "none" } /* reachable again in the overview PR */
-        : { kind: "openDetail", rowId: sel.span.id };
-    } else if (fmt === "Left" || fmt === "h" || fmt === "Escape") return { kind: "back" };
-    else if (fmt === "t") return { kind: "back" };
-    else if (fmt === "d") {
-      const sel = this.occ[this.cursor];
-      if (sel !== undefined) return { kind: "openDetail", rowId: sel.span.id };
-    } else if (fmt === "o") {
-      const sel = this.occ[this.cursor];
-      if (sel !== undefined) return { kind: "none" }; /* reachable again in the overview PR */
-    }
-    return { kind: "none" };
+    this.pageRows = Math.max(1, viewport.rows - 4);
+    return runViewerKey(this.bindings(), formatKey(ev));
+  }
+
+  private bindings(): ViewerBinding[] {
+    return [
+      ...cursorBindings<ViewAction>(this.moves),
+      {
+        keys: ["Enter", "Right", "l"],
+        help: "open the selected occurrence in the timeline",
+        hint: "⏎ timeline",
+        run: () => this.openTimeline(),
+      },
+      {
+        keys: ["d"],
+        help: "full details of the selected occurrence",
+        hint: "d detail",
+        run: () => this.openDetail(),
+      },
+      {
+        keys: ["Left", "h", "Escape"],
+        help: "return to the overview",
+        hint: "← back",
+        run: () => ({ kind: "back" }),
+      },
+    ];
   }
 
   render(viewport: Viewport): Element {
@@ -104,24 +116,34 @@ export class OccurrencesView implements View {
       this.sharedPrefix !== "" ? `  (all under ${this.sharedPrefix.replace(/ » $/, "")})` : "";
     return column(
       { justifyContent: "flex-start" },
-      line(
-        `TIMELINE [occurrences]  ${this.groupKey} — ${this.occ.length} call(s)${under}` +
-          (this.following ? "  [following]" : "") +
-          (this.stale ? "  [group no longer exists — press any key]" : ""),
-        { fg: "bright-white" },
-      ),
-      line(new AxisHeader(widths.gutter).computeText(window, window.start, widths.bar), {
-        fg: "gray",
-      }),
-      body,
-      line(new SelectionFooter().computeText(this.footerText(window)), { fg: "bright-white" }),
-      line(
-        bottomHints(
-          "↑↓ select  Enter/→ drill or detail  d detail  o tree  ←/Esc back to by-name",
-          "occurrences",
+      paintedLine(
+        segment(
+          `OCCURRENCES  ${this.groupKey} — ${this.occ.length} call(s)${under}` +
+            (this.following ? "  [following]" : "") +
+            (this.stale ? "  [group no longer exists — press any key]" : ""),
           viewport.cols,
+          { style: { fg: "bright-white" } },
         ),
-        { fg: "gray" },
+      ),
+      paintedLine(
+        segment(
+          new AxisHeader(widths.gutter).computeText(window, window.start, widths.bar),
+          viewport.cols,
+          { style: { fg: "gray" } },
+        ),
+      ),
+      body,
+      paintedLine(
+        segment(new SelectionFooter().computeText(this.footerText(window)), viewport.cols, {
+          style: { fg: "bright-white" },
+        }),
+      ),
+      paintedLine(
+        segment(
+          bottomHints(hintsFrom(this.bindings()), "occurrences", viewport.cols),
+          viewport.cols,
+          { style: { fg: "gray" } },
+        ),
       ),
     );
   }
@@ -140,12 +162,7 @@ export class OccurrencesView implements View {
   }
 
   helpLines(): string[] {
-    return [
-      "↑↓ / j k, g / G, Ctrl+F/B/D/U — move",
-      "Enter / → — drill into the call (leaf: details)",
-      "d — details   o — open in tree",
-      "← / Esc — back to by-name",
-    ];
+    return helpFrom(this.bindings());
   }
 
   notify(message: string): void {
@@ -218,19 +235,36 @@ export class OccurrencesView implements View {
   ): Element {
     const detail = new RowLabel(item.node).computeText();
     const text = `#${String(item.rowNumber).padStart(2)} ${item.contextTail} · ${detail}`;
-    const label = padCell(
-      clipCell(`${isCursor ? "▶ " : "  "}${text}`, widths.gutter - 1),
-      widths.gutter,
-    );
     const bar = new BarComponent([item.span.extent], { running: item.span.running }).computeCells(
       window,
       widths.bar,
     );
     const stats = new DurationCell(this.thresholds).computeText(item.span, widths.stats);
-    return row(
-      line(label + bar, { fg: isCursor ? "bright-white" : undefined }),
-      line(stats.text, stats.color !== undefined ? { fg: stats.color } : undefined),
+    return paintedLine(
+      joinPainted(
+        segment(`${isCursor ? "▶ " : "  "}${text}`, widths.gutter, {
+          style: { fg: isCursor ? "bright-white" : undefined },
+        }),
+        segment(bar, widths.bar, { style: { fg: isCursor ? "bright-white" : undefined } }),
+        segment(stats.text, widths.stats, {
+          style: stats.color !== undefined ? { fg: stats.color } : undefined,
+        }),
+      ),
     );
+  }
+
+  private openTimeline(): ViewAction {
+    const selected = this.occ[this.cursor];
+    return selected === undefined
+      ? { kind: "none" }
+      : { kind: "openScreen", screen: "timeline", focusId: selected.span.id };
+  }
+
+  private openDetail(): ViewAction {
+    const selected = this.occ[this.cursor];
+    return selected === undefined
+      ? { kind: "none" }
+      : { kind: "openDetail", rowId: selected.span.id };
   }
 }
 

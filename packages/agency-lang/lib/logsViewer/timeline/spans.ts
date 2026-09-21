@@ -26,7 +26,7 @@ export const ADMIN_KINDS = ["handlerChain", "threadEndHooks"];
 // Cancellation counts as an end: summary.ts renders "⏳ … never completed"
 // on the same judgment, and a cancelled call must not read running forever.
 const ENDS_BY_START: Record<string, string[]> = {
-  toolCallStart: ["toolCall"],
+  toolCallStart: ["toolCall", "error"],
   promptStart: ["promptCompletion", "promptCancelled"],
   subprocessStarted: ["subprocessEnd"],
 };
@@ -110,19 +110,27 @@ export function spanExtent(node: TreeNode): Interval | undefined {
 }
 
 export function hasRunningWork(node: TreeNode): boolean {
-  const types = walkNodes(node)
+  return walkNodes(node).some((owner) => ownerHasRunningWork(owner));
+}
+
+function ownerHasRunningWork(owner: TreeNode): boolean {
+  const types = owner.children
     .flatMap((child) => (child.event === undefined ? [] : [child.event]))
     .sort((first, second) => Date.parse(first.data.timestamp) - Date.parse(second.data.timestamp))
     .map((event) => event.data.type);
-  return Object.entries(ENDS_BY_START).some(([startType, endTypes]) => {
-    let open = 0;
-    for (const type of types) {
-      if (type === startType) {
-        open += 1;
-      } else if (endTypes.includes(type) && open > 0) {
-        open -= 1;
-      }
+  return Object.entries(ENDS_BY_START).some(([startType, endTypes]) =>
+    hasUnmatchedStart(types, startType, endTypes),
+  );
+}
+
+function hasUnmatchedStart(types: string[], startType: string, endTypes: string[]): boolean {
+  let open = 0;
+  for (const type of types) {
+    if (type === startType) {
+      open += 1;
+    } else if (endTypes.includes(type) && open > 0) {
+      open -= 1;
     }
-    return open > 0;
-  });
+  }
+  return open > 0;
 }

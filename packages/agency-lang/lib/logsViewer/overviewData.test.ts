@@ -89,14 +89,29 @@ describe("overviewData", () => {
     const roots = buildForest(parseStatelogJsonl(jsonl).events);
     expect(overviewData(roots[0], () => undefined).running).toBe(true);
   });
+
+  it("does not let another span's completion close a pending prompt", () => {
+    const jsonl = [
+      event("promptStart", 0, {}, "A"),
+      event("promptStart", 50, {}, "B"),
+      event("promptCompletion", 100, { timeTaken: 100 }, "A"),
+    ].join("\n");
+    const roots = buildForest(parseStatelogJsonl(jsonl).events);
+    expect(overviewData(roots[0], () => undefined).running).toBe(true);
+  });
 });
 
-function event(type: string, at: number, extra: Record<string, unknown> = {}): string {
+function event(
+  type: string,
+  at: number,
+  extra: Record<string, unknown> = {},
+  spanId: string | null = null,
+): string {
   return JSON.stringify({
     format_version: 1,
     trace_id: "T",
     project_id: "p",
-    span_id: null,
+    span_id: spanId,
     parent_span_id: null,
     data: { type, timestamp: new Date(at).toISOString(), ...extra },
   });

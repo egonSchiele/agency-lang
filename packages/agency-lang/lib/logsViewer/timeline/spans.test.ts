@@ -39,6 +39,16 @@ describe("hasRunningWork", () => {
     const root = trace([leaf("promptCompletion", 1_000), leaf("promptStart", 2_000)]);
     expect(hasRunningWork(root)).toBe(true);
   });
+
+  it("treats tool errors, including after rejection, as finished", () => {
+    const failed = span("toolExecution", [leaf("toolCallStart", 0), leaf("error", 10)]);
+    const rejected = span("toolExecution", [
+      leaf("toolCallStart", 20),
+      leaf("interruptResolved", 30, { outcome: "rejected" }),
+      leaf("error", 40, { errorType: "toolError" }),
+    ]);
+    expect(hasRunningWork(trace([failed, rejected]))).toBe(false);
+  });
 });
 
 describe("timelineSpans", () => {

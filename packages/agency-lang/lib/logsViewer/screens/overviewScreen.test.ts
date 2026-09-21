@@ -57,6 +57,18 @@ function fixture(threadLabel = "main") {
   ];
 }
 
+function manyRounds() {
+  const rounds = Array.from({ length: 24 }, (_unused, position) =>
+    leaf("promptCompletion", (position + 1) * 1_000, {
+      model: '"m1"',
+      timeTaken: 100,
+      usage: { inputTokens: position + 1, outputTokens: 1 },
+      cost: { totalCost: (position + 1) / 10_000 },
+    }),
+  );
+  return [trace([span("llmCall", rounds, { id: "L" })])];
+}
+
 function flat(element: Element): string[] {
   if (element.type === "text") {
     return [
@@ -89,6 +101,26 @@ describe("OverviewScreen", () => {
     const withoutWindow = new OverviewScreen(fixture(), "T", DEFAULT_THRESHOLDS, () => undefined);
     expect(flat(withoutWindow.render({ rows: 30, cols: 130 })).join("\n")).not.toContain("┄");
     expect(render()).toContain("┄");
+  });
+
+  it("keeps recorded usage visible when it exceeds the model window", () => {
+    const text = render(130, 10_000);
+    const chartRows = text.split("\n").slice(2, 10).join("\n");
+    expect(chartRows).toContain("░");
+    expect(chartRows).toContain("┄");
+  });
+
+  it("draws fractional cost heights with eighth blocks", () => {
+    expect(render()).toMatch(/[▁▂▃▄▅▆▇]/);
+  });
+
+  it("uses the same focused round window in both charts", () => {
+    const screen = new OverviewScreen(manyRounds(), "T", DEFAULT_THRESHOLDS, () => undefined);
+    screen.setFocus("round:L:10");
+    const rows = flat(screen.render({ rows: 30, cols: 100 }));
+    const tickRows = rows.filter((row) => (row.match(/r\d+/g) ?? []).length > 2);
+    expect(tickRows).toHaveLength(2);
+    expect(tickRows[0].match(/r\d+/g)).toEqual(tickRows[1].match(/r\d+/g));
   });
 
   it("opens a callout in the trace", () => {
@@ -125,6 +157,6 @@ describe("OverviewScreen", () => {
   });
 
   it.each([100, 130, 200])("renders the golden frame at %d columns", (cols) => {
-    expect(render(cols)).toMatchSnapshot();
+    expect(render(cols).replace(/ +$/gm, "")).toMatchSnapshot();
   });
 });

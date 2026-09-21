@@ -176,6 +176,13 @@ describe("the viewer shell", () => {
     expect(out.lastText()).toContain("[1 overview]");
   });
 
+  it("a time bar opens its occurrences, and Esc returns to the overview", async () => {
+    const out = await drive([enter, esc]);
+    const frames = texts(out);
+    expect(frames[frames.length - 2]).toContain("OCCURRENCES");
+    expect(out.lastText()).toContain("[1 overview]");
+  });
+
   it("a trace asked for by id opens on it, with no picker in the way", async () => {
     const out = new FrameRecorder();
     await runViewer({

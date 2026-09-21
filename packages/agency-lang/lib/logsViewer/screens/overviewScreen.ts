@@ -121,13 +121,16 @@ export class OverviewScreen implements Screen {
       LAYOUT.minChartRows,
       Math.min(LAYOUT.maxChartRows, Math.floor((viewport.rows - LAYOUT.fixedRows) / 2)),
     );
+    const chartWidth = Math.min(leftWidth, rightWidth);
+    const shownRounds = roundWindow(data.rounds, chartWidth, this.pendingFocus);
+    const columnWidth = chartColumnWidth(chartWidth, shownRounds.length);
     const left = [
       ...this.timePanel(data, leftWidth),
       paint(""),
-      ...this.costPanel(data, leftWidth, chartHeight),
+      ...this.costPanel(shownRounds, columnWidth, leftWidth, chartHeight),
     ];
     const right = [
-      ...this.contextPanel(data, rightWidth, chartHeight),
+      ...this.contextPanel(data, shownRounds, columnWidth, rightWidth, chartHeight),
       paint(""),
       ...this.factsPanel(data, rightWidth),
     ];
@@ -245,7 +248,17 @@ export class OverviewScreen implements Screen {
     const model = data.models.join(", ") || "unknown model";
     const state = data.running ? "● running" : "done";
     const following = this.following ? " · following" : "";
-    return `${model} · ${state} · ${fmtDuration(data.elapsedMs, { minutes: true })} · ${data.rounds.length} rounds · ${fmtUsd(data.costUsd)}${following}`;
+    const parts = [
+      model,
+      state,
+      fmtDuration(data.elapsedMs, { minutes: true }),
+      `${data.rounds.length} rounds`,
+    ];
+    const cost = fmtUsd(data.costUsd);
+    if (cost !== "") {
+      parts.push(cost);
+    }
+    return `${parts.join(" · ")}${following}`;
   }
 
   private timePanel(data: OverviewData, width: number): Painted[] {
@@ -282,18 +295,22 @@ export class OverviewScreen implements Screen {
     return lines;
   }
 
-  private contextPanel(data: OverviewData, width: number, height: number): Painted[] {
-    const columns = visibleRounds(data.rounds, width, this.pendingFocus);
-    const tallest = Math.max(
-      ...columns.rounds.map((round) => round.contextTokens + round.outputTokens),
-      1,
-    );
+  private contextPanel(
+    data: OverviewData,
+    rounds: Round[],
+    columnWidth: number,
+    width: number,
+    height: number,
+  ): Painted[] {
+    const tallest = Math.max(...rounds.map((round) => round.contextTokens + round.outputTokens), 1);
     const ceiling = data.contextWindow;
     const scaleMax =
-      ceiling !== undefined && ceiling <= tallest * LAYOUT.ceilingScaleLimit ? ceiling : tallest;
+      ceiling !== undefined && ceiling > tallest && ceiling <= tallest * LAYOUT.ceilingScaleLimit
+        ? ceiling
+        : tallest;
     const ceilingAt = ceiling === undefined ? undefined : ceilingRow(ceiling, scaleMax, height);
     const threadKeys = data.threads.map(threadKey);
-    const cells = columns.rounds.map((round) =>
+    const cells = rounds.map((round) =>
       stackedColumn([round.cachedTokens, round.freshTokens, round.outputTokens], scaleMax, height),
     );
     const rows: Painted[] = [sectionTitle("CONTEXT PER ROUND", width)];
@@ -304,17 +321,17 @@ export class OverviewScreen implements Screen {
       ];
       cells.forEach((columnCells, columnPosition) => {
         const band = columnCells[rowPosition];
-        const round = columns.rounds[columnPosition];
+        const round = rounds[columnPosition];
         pieces.push(
           band === EMPTY_CELL && ceilingAt === rowPosition
-            ? { text: "┄".repeat(columns.columnWidth), style: { fg: THEME.chrome } }
-            : contextPiece(band, columns.columnWidth, round, threadKeys),
+            ? { text: "┄".repeat(columnWidth), style: { fg: THEME.chrome } }
+            : contextPiece(band, columnWidth, round, threadKeys),
         );
         pieces.push({ text: ceilingAt === rowPosition ? "┄" : " " });
       });
       rows.push(segment(pieces, width));
     }
-    rows.push(contextTicks(columns.rounds, columns.columnWidth, width));
+    rows.push(contextTicks(rounds, columnWidth, width));
     rows.push(
       segment(
         [
@@ -331,10 +348,14 @@ export class OverviewScreen implements Screen {
     return rows;
   }
 
-  private costPanel(data: OverviewData, width: number, height: number): Painted[] {
-    const columns = visibleRounds(data.rounds, width, this.pendingFocus);
-    const highest = Math.max(...columns.rounds.map((round) => round.costUsd), 0.000001);
-    const cells = columns.rounds.map((round) => stackedColumn([round.costUsd], highest, height));
+  private costPanel(
+    rounds: Round[],
+    columnWidth: number,
+    width: number,
+    height: number,
+  ): Painted[] {
+    const highest = Math.max(...rounds.map((round) => round.costUsd), 0.000001);
+    const cells = rounds.map((round) => verticalColumn(round.costUsd, highest, height));
     const rows: Painted[] = [sectionTitle("COST PER ROUND", width)];
     for (let rowPosition = 0; rowPosition < height; rowPosition += 1) {
       const axis = rowPosition === 0 ? fmtUsd(highest) : rowPosition === height - 1 ? "$0" : "";
@@ -342,16 +363,16 @@ export class OverviewScreen implements Screen {
         { text: axis.padStart(LAYOUT.axisLabelWidth - 1) + " ", style: { fg: THEME.chrome } },
       ];
       cells.forEach((columnCells) => {
-        const filled = columnCells[rowPosition] !== EMPTY_CELL;
+        const glyph = columnCells[rowPosition];
         pieces.push({
-          text: (filled ? "█" : " ").repeat(columns.columnWidth),
+          text: glyph.repeat(columnWidth),
           style: { fg: THEME.kind.interrupt },
         });
         pieces.push({ text: " " });
       });
       rows.push(segment(pieces, width));
     }
-    rows.push(contextTicks(columns.rounds, columns.columnWidth, width));
+    rows.push(contextTicks(rounds, columnWidth, width));
     return rows;
   }
 
@@ -418,17 +439,39 @@ function contextPiece(band: number, width: number, round: Round, threadKeys: str
   return { text: "█".repeat(width), style: { fg: THEME.kind.assistant } };
 }
 
-function visibleRounds(rounds: Round[], width: number, focusId: string | undefined) {
+function roundWindow(rounds: Round[], width: number, focusId: string | undefined): Round[] {
   const available = Math.max(1, width - LAYOUT.axisLabelWidth);
-  const room = Math.max(1, Math.floor(available / LAYOUT.minColumnCells));
+  const room = Math.max(1, Math.floor(available / (LAYOUT.minColumnCells + 1)));
   const focusAt = rounds.findIndex((round) => round.id === focusId);
   const window = columnWindow(rounds.length, room, focusAt === -1 ? undefined : focusAt);
-  const shown = rounds.slice(window.from, window.to);
+  return rounds.slice(window.from, window.to);
+}
+
+function chartColumnWidth(width: number, count: number): number {
+  const available = Math.max(1, width - LAYOUT.axisLabelWidth);
   const slot = Math.max(
     LAYOUT.minColumnCells,
-    Math.min(LAYOUT.maxColumnCells, Math.floor(available / Math.max(1, shown.length))),
+    Math.min(LAYOUT.maxColumnCells, Math.floor(available / Math.max(1, count))),
   );
-  return { rounds: shown, columnWidth: Math.max(1, slot - 1) };
+  return Math.max(1, slot - 1);
+}
+
+const VERTICAL_EIGHTHS = ["", "▁", "▂", "▃", "▄", "▅", "▆", "▇"];
+
+function verticalColumn(value: number, max: number, height: number): string[] {
+  const cells = Math.max(0, Math.min(height, (value / max) * height));
+  const fullCells = Math.floor(cells);
+  const eighths = Math.round((cells - fullCells) * VERTICAL_EIGHTHS.length);
+  const partial = VERTICAL_EIGHTHS[Math.min(eighths, VERTICAL_EIGHTHS.length - 1)];
+  const sliver = value > 0 && fullCells === 0 && partial === "" ? "▁" : partial;
+  const bottomUp = [
+    ...Array.from({ length: fullCells }, () => "█"),
+    ...(sliver === "" ? [] : [sliver]),
+  ].slice(0, height);
+  return [
+    ...Array.from({ length: Math.max(0, height - bottomUp.length) }, () => " "),
+    ...bottomUp.reverse(),
+  ];
 }
 
 function contextTicks(rounds: Round[], columnWidth: number, width: number): Painted {

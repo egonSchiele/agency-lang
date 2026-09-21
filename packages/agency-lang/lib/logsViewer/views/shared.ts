@@ -1,4 +1,4 @@
-// Components shared by the three bar views (flame, by-name, occurrences):
+// Components shared by the timeline and occurrences views:
 // the bar itself, the axis, the header line, the selection footer, and the
 // width budget. One implementation of shading and layout, used three times.
 import { fmtDuration } from "../spanText.js";
@@ -11,26 +11,22 @@ import { clipText } from "../../tui/paint.js";
  *  drops below minBarCells. */
 export const LAYOUT = {
   flameGutter: 48,
-  byNameGutter: 28,
   occurrenceGutterMax: 64,
   occurrenceGutterShare: 0.55,
   flameStats: 16,
-  byNameStats: 20,
   minBarCells: 10,
 };
 
 export type WidthSplit = { gutter: number; bar: number; stats: number };
 
-export function splitWidth(view: "timeline" | "byName" | "occurrences", cols: number): WidthSplit {
+export function splitWidth(view: "timeline" | "occurrences", cols: number): WidthSplit {
   let gutter: number;
   if (view === "timeline") {
     gutter = LAYOUT.flameGutter;
-  } else if (view === "byName") {
-    gutter = LAYOUT.byNameGutter;
   } else {
     gutter = Math.min(LAYOUT.occurrenceGutterMax, Math.floor(cols * LAYOUT.occurrenceGutterShare));
   }
-  let stats = view === "byName" ? LAYOUT.byNameStats : LAYOUT.flameStats;
+  let stats = LAYOUT.flameStats;
   let bar = cols - gutter - stats;
   if (bar < LAYOUT.minBarCells) {
     gutter = Math.max(20, cols - stats - LAYOUT.minBarCells);

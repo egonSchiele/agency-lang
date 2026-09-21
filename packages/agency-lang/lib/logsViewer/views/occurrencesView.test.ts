@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Element } from "../../tui/elements.js";
+import { parseStyledText } from "../../tui/styleParser.js";
 import { DEFAULT_THRESHOLDS } from "../thresholds.js";
 import { leaf, span, trace } from "../timeline/fixture.js";
 import { OccurrencesView } from "./occurrencesView.js";
@@ -9,7 +10,13 @@ import type { TreeNode } from "../types.js";
 const viewport = { rows: 20, cols: 120 };
 
 function flat(el: Element): string[] {
-  if (el.type === "text") return [el.content ?? ""];
+  if (el.type === "text") {
+    return [
+      parseStyledText(el.content ?? "")
+        .map((part) => part.text)
+        .join(""),
+    ];
+  }
   return (el.children ?? []).flatMap(flat);
 }
 
@@ -55,18 +62,26 @@ describe("OccurrencesView", () => {
     expect(text).toContain("ls -la");
   });
 
-  it("Enter on a leaf opens detail", () => {
+  it("Enter opens the occurrence in the timeline", () => {
     const view = new OccurrencesView(forest(), "T", "bash", DEFAULT_THRESHOLDS);
     expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
-      kind: "openDetail",
-      rowId: "b1",
+      kind: "openScreen",
+      screen: "timeline",
+      focusId: "b1",
     });
   });
 
-  it("escape and left go back to by-name", () => {
+  it("escape and left return to the overview", () => {
     const view = new OccurrencesView(forest(), "T", "bash", DEFAULT_THRESHOLDS);
     expect(view.handleKey({ key: "escape" }, viewport)).toEqual({ kind: "back" });
     expect(view.handleKey({ key: "left" }, viewport)).toEqual({ kind: "back" });
+  });
+
+  it("draws each occurrence as one full-width row", () => {
+    const view = new OccurrencesView(forest(), "T", "bash", DEFAULT_THRESHOLDS);
+    const rows = flat(view.render(viewport));
+    expect(rows.filter((row) => row.includes("# 1") || row.includes("# 2"))).toHaveLength(2);
+    expect(Math.max(...rows.map((row) => row.length))).toBeLessThanOrEqual(viewport.cols);
   });
 
   it("the prefix cut lands on a segment boundary, never mid-name", () => {

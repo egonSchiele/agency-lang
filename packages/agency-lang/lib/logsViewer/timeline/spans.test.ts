@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { benchForest, leaf, span, trace } from "./fixture.js";
-import { ADMIN_KINDS, spanExtent, timelineSpans } from "./spans.js";
+import { ADMIN_KINDS, hasRunningWork, spanExtent, timelineSpans } from "./spans.js";
 
 const opts = { hideKinds: [] as string[] };
 
@@ -31,6 +31,13 @@ describe("spanExtent", () => {
 
     expect(spanExtent(root)).toEqual({ start: 750, end: 1_000 });
     expect(timelineSpans(trace([root]), opts)[0].extent).toEqual({ start: 750, end: 1_000 });
+  });
+});
+
+describe("hasRunningWork", () => {
+  it("does not let an earlier completion close a later prompt start", () => {
+    const root = trace([leaf("promptCompletion", 1_000), leaf("promptStart", 2_000)]);
+    expect(hasRunningWork(root)).toBe(true);
   });
 });
 

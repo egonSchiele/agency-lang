@@ -79,7 +79,7 @@ function makeSpan(node: TreeNode, depth: number): TimelineSpan | undefined {
     kind: node.label,
     depth,
     extent,
-    running: isRunning(node),
+    running: hasRunningWork(node),
     selfIntervals,
     selfMs: totalMs(selfIntervals),
   };
@@ -109,14 +109,20 @@ export function spanExtent(node: TreeNode): Interval | undefined {
   return { start, end: Math.max(end, start) };
 }
 
-function isRunning(node: TreeNode): boolean {
-  const counts: Record<string, number> = {};
-  for (const leafNode of walkNodes(node).filter((child) => child.event !== undefined)) {
-    const type = leafNode.event!.data.type;
-    counts[type] = (counts[type] ?? 0) + 1;
-  }
+export function hasRunningWork(node: TreeNode): boolean {
+  const types = walkNodes(node)
+    .flatMap((child) => (child.event === undefined ? [] : [child.event]))
+    .sort((first, second) => Date.parse(first.data.timestamp) - Date.parse(second.data.timestamp))
+    .map((event) => event.data.type);
   return Object.entries(ENDS_BY_START).some(([startType, endTypes]) => {
-    const ends = endTypes.reduce((sum, t) => sum + (counts[t] ?? 0), 0);
-    return (counts[startType] ?? 0) > ends;
+    let open = 0;
+    for (const type of types) {
+      if (type === startType) {
+        open += 1;
+      } else if (endTypes.includes(type) && open > 0) {
+        open -= 1;
+      }
+    }
+    return open > 0;
   });
 }

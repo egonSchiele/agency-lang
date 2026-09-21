@@ -16,6 +16,7 @@ import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 import { buildForest } from "./tree.js";
 import { DetailScreen } from "./views/detailScreen.js";
 import { TimelineScreen } from "./screens/timelineScreen.js";
+import { OverviewScreen } from "./screens/overviewScreen.js";
 import { LegacyTraceScreen } from "./screens/legacyTraceScreen.js";
 import { PlaceholderScreen } from "./screens/placeholderScreen.js";
 import { TracePicker } from "./screens/tracePicker.js";
@@ -61,6 +62,7 @@ export type RunViewerOpts = {
   traceAnnotations?: Record<string, string>;
   // Start with the cursor on this trace (the explorer drilling into a test).
   focusTraceId?: string;
+  contextWindowOf?: (model: string) => number | undefined;
 };
 
 export type ViewerResolution = "quit" | "back";
@@ -308,9 +310,11 @@ function createHost(
   });
   const host = new ScreenHost(
     {
-      overview: new PlaceholderScreen(
-        "overview",
-        "The overview lands in the next release. Press 2 for the trace.",
+      overview: new OverviewScreen(
+        roots,
+        bootTraceId,
+        thresholds,
+        opts.contextWindowOf ?? (() => undefined),
       ),
       trace: new LegacyTraceScreen(treeView, roots, bootTraceId),
       transcript: new PlaceholderScreen(
@@ -319,7 +323,7 @@ function createHost(
       ),
       timeline: new TimelineScreen(roots, bootTraceId, thresholds),
     },
-    "trace", // "overview" once PR 5 lands
+    "overview",
     bootTraceId,
   );
   if (opts.focusTraceId === undefined && roots.length > 1) {

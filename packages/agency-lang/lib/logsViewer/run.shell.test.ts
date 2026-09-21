@@ -166,12 +166,14 @@ describe("the viewer shell", () => {
   it("dismissing the picker leaves the most recent trace showing", async () => {
     const out = await driveJsonl(twoTraceSample, [esc]);
     expect(out.lastText()).not.toContain("TRACES");
+    expect(out.lastText()).toContain("[1 overview]");
     expect(out.lastText()).toContain("trace 2/2 · t traces");
   });
 
-  it("a log with one trace opens on the trace itself", async () => {
+  it("a log with one trace opens on its overview", async () => {
     const out = await drive([]);
     expect(out.lastText()).not.toContain("TRACES");
+    expect(out.lastText()).toContain("[1 overview]");
   });
 
   it("a trace asked for by id opens on it, with no picker in the way", async () => {
@@ -184,6 +186,7 @@ describe("the viewer shell", () => {
       focusTraceId: "abc",
     });
     expect(out.lastText()).not.toContain("TRACES");
+    expect(out.lastText()).toContain("[1 overview]");
     expect(out.lastText()).toContain("trace 1/2");
   });
 
@@ -329,7 +332,7 @@ it("the shell table gives each command one owner", () => {
   ).toEqual([]);
 });
 it("legacy trace navigation stays in the trace named by the header", async () => {
-  const out = await driveJsonl(twoTraceSample, [esc, "g"]);
+  const out = await driveJsonl(twoTraceSample, [esc, "2", "g"]);
   expect(out.lastText()).toContain("trace 2/2");
   expect(cursorLine(out.lastText())).toContain("[def]");
   expect(out.lastText()).not.toContain("[abc]");

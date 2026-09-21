@@ -1,0 +1,6 @@
+def describe(): string {
+  """home is ${process.env.HOME}"""
+  return "x"
+}
+
+node main() { print(describe()) }

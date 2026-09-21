@@ -121,6 +121,10 @@ export type NormalizedLlmEvent = NormalizedEventBase & {
   durationMs: number | null;
   costUsd: number | null;
   tokensIn: number | null;
+  /** Fresh, cached and cache-write input together: what the model was
+   *  sent. `tokensIn` is the fresh part only. Absent on records written
+   *  before this field existed. */
+  contextTokens?: number | null;
   tokensOut: number | null;
 };
 
@@ -198,9 +202,12 @@ export type Metrics = {
   /** Distinct model strings observed, deduped and sorted ascending
    *  for diff-friendly snapshots. */
   models: string[];
-  /** Sum of input tokens across all `promptCompletion` events,
+  /** Sum of fresh input tokens across all `promptCompletion` events,
    *  reading `data.usage.inputTokens` (zero if absent). */
   tokensInTotal: number;
+  /** Sum of `contextTokens` across all promptCompletion events. Absent
+   *  on records written before this field existed. */
+  contextTokensTotal?: number;
   /** Sum of `data.usage.outputTokens` across all promptCompletion
    *  events (zero if absent). */
   tokensOutTotal: number;

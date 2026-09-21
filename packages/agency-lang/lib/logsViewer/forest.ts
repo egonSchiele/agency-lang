@@ -49,3 +49,17 @@ export function nearestAncestor(
 export function rootOf(node: TreeNode, index: TreeIndex): TreeNode {
   return ancestorsOf(node, index).at(-1) ?? node;
 }
+
+export type PlacedNode = { node: TreeNode; parent: TreeNode; depth: number };
+/** Descendants in forest order, omitting a skipped node and its subtree. */
+export function walkWithDepth(
+  root: TreeNode,
+  skip: (node: TreeNode) => boolean = () => false,
+): PlacedNode[] {
+  function visit(parent: TreeNode, depth: number): PlacedNode[] {
+    return parent.children
+      .filter((node) => !skip(node))
+      .flatMap((node) => [{ node, parent, depth }, ...visit(node, depth + 1)]);
+  }
+  return visit(root, 0);
+}

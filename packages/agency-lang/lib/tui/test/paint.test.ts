@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { joinPainted, paint, paintAnsi, visibleWidth } from "../paint.js";
+import {
+  clipPainted,
+  joinPainted,
+  paint,
+  paintAnsi,
+  paintedLine,
+  segment,
+  visibleWidth,
+} from "../paint.js";
 import { parseStyledText } from "../styleParser.js";
 
 const drawn = (content: string) =>
@@ -63,5 +71,74 @@ describe("visibleWidth", () => {
   it("ignores tags and counts an escaped brace once", () => {
     expect(visibleWidth(paint("{}", { fg: "#ff0000" }))).toBe(2);
     expect(visibleWidth(paintAnsi("\x1b[34mab\x1b[0m"))).toBe(2);
+  });
+});
+
+describe("segment", () => {
+  it("is exactly the asked width, short or long, braces or not", () => {
+    for (const text of ["ab", "a very long label indeed", "{}{}{}{}{}{}", ""]) {
+      expect(visibleWidth(segment(text, 8))).toBe(8);
+    }
+  });
+
+  it("clips with an ellipsis and keeps the head", () => {
+    expect(drawn(segment("abcdefghij", 5))).toBe("abcd…");
+  });
+
+  it("right-aligns", () => {
+    expect(drawn(segment("42", 5, { align: "right" }))).toBe("   42");
+  });
+
+  it("replaces line breaks without collapsing ordinary spaces", () => {
+    expect(drawn(segment("a\n  b", 6))).toBe("a   b ");
+  });
+
+  it("preserves nesting in strings and in separate indentation pieces", () => {
+    for (const depth of [0, 1, 2, 3]) {
+      const indent = " ".repeat(depth * 2);
+      expect(drawn(segment(`  ${indent}child`, 20))).toBe(`  ${indent}child`.padEnd(20));
+      expect(drawn(segment([{ text: indent }, { text: "child" }], 20))).toBe(
+        `${indent}child`.padEnd(20),
+      );
+    }
+  });
+
+  it("clips across pieces and keeps each piece's color", () => {
+    const output = segment(
+      [
+        { text: "round 4 ", style: { fg: "#00ff00" } },
+        { text: "→ grep for a thing", style: { fg: "#ffffff" } },
+      ],
+      14,
+    );
+    expect(drawn(output)).toBe("round 4 → gre…");
+    const spans = parseStyledText(output);
+    expect(spans[0].fg).toBe("#00ff00");
+    expect(spans[1].fg).toBe("#ffffff");
+  });
+
+  it("marks the cut when a piece ends exactly at the limit and more follows", () => {
+    const output = segment([{ text: "abcd" }, { text: "efgh" }], 4);
+    expect(drawn(output)).toBe("abc…");
+  });
+
+  it("width zero draws nothing", () => {
+    expect(segment("abc", 0)).toBe("");
+  });
+});
+
+describe("clipPainted", () => {
+  it("clips highlighted code by what is visible and keeps its colors", () => {
+    const code = paintAnsi("\x1b[34mdef\x1b[0m archiveNotes(count) { }");
+    const output = clipPainted(code, 10);
+    expect(drawn(output)).toBe("def archi…");
+    expect(parseStyledText(output)[0].fg).toBe("blue");
+  });
+});
+
+describe("paintedLine", () => {
+  it("is a one-row text element", () => {
+    const element = paintedLine(paint("hi"), { width: 10 });
+    expect(element).toEqual({ type: "text", content: "hi", style: { height: 1, width: 10 } });
   });
 });

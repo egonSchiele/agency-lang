@@ -121,6 +121,17 @@ const isAllowedEdge = (specifier: string): boolean =>
  * imports can pull in `zod` one level down while the generator itself
  * looks spotless.
  *
+ * Scoped to the FILE closure on purpose, while checkGeneratorEffects beside
+ * it is scoped to the call graph. The two look like the same question and
+ * are not (issue #731). An effect happens when a function is called, so what
+ * the generator calls is the right scope for effects. An import happens when
+ * a module loads: running a generator loads its module, which loads every
+ * import in the closure and runs each one's top-level code, whether or not
+ * the generator calls anything from it. `import { x } from "./tool.js"` next
+ * to a generator that never uses `x` still runs all of tool.js during
+ * compilation. Narrowing this check to what the generator calls would let
+ * any JavaScript run at compile time.
+ *
  * Users who need a generator to reach JavaScript can turn this off with
  * `allowNonAgencyGenerators` in their config.
  */

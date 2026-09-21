@@ -123,6 +123,28 @@ describe("checkImportGraph", () => {
     expect(checkImportGraph(generator, "g")?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
   });
 
+  it("refuses a generator whose file imports npm for another function", () => {
+    // Issue #731 asked for this to pass, on the grounds that `g` never
+    // touches zod. It must not: running `g` loads gen.agency, and loading it
+    // runs the import's top-level code whether or not anything calls it.
+    const generator = write(
+      "gen.agency",
+      `import { z } from "zod"\n\nexport def unused(): number {\n  return 1\n}\n\n` +
+        `export def g(): number {\n  return 2\n}\n`,
+    );
+    expect(checkImportGraph(generator, "g")?.diagnostic).toBe("spliceGeneratorReachesNonAgency");
+  });
+
+  it("accepts the same generator once it has a file of its own", () => {
+    // The fix the error message suggests.
+    write(
+      "helpers.agency",
+      `import { z } from "zod"\n\nexport def unused(): number {\n  return 1\n}\n`,
+    );
+    const generator = write("gen.agency", `export def g(): number {\n  return 2\n}\n`);
+    expect(checkImportGraph(generator, "g")).toBeNull();
+  });
+
   it("refuses an `export from` that leaves Agency", () => {
     // An import-only scan would miss this, which is why the shared
     // agencyImportTarget extractor is used rather than a local scan.

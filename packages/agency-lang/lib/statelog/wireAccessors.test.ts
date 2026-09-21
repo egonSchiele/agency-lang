@@ -13,6 +13,7 @@ import {
   threadLabelOf,
   timestampMs,
   toolNameOf,
+  toolReplyContent,
   toolsOf,
   tokensIn,
   tokensCached,
@@ -254,4 +255,18 @@ describe("completionOf", () => {
   it("returns null when no completion", () => {
     expect(completionOf(ev({ type: "promptCompletion" }))).toBeNull();
   });
+});
+
+it("keeps model reply values and unwraps only the producer's outer successful Result", () => {
+  const object = { errors: [], warnings: [] };
+  const nested = { __type: "resultType", success: true, value: 42 };
+  const outputEvent = (output: unknown) => ev({ type: "toolCall", output });
+  expect(toolReplyContent(outputEvent(object))).toEqual(object);
+  expect(toolReplyContent(outputEvent(42))).toBe(42);
+  expect(
+    toolReplyContent(outputEvent({ __type: "resultType", success: true, value: nested })),
+  ).toEqual(nested);
+  expect(
+    toolReplyContent(outputEvent({ __type: "resultType", success: false, message: "failed" })),
+  ).toBeUndefined();
 });

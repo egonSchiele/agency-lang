@@ -7,6 +7,12 @@ import { column, line } from "../../tui/builders.js";
 import type { Element } from "../../tui/elements.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { formatKey } from "../../tui/input/format.js";
+import {
+  contextTokens,
+  cost as costOf,
+  tokensCached,
+  tokensOut,
+} from "../../statelog/wireAccessors.js";
 import { formatConversation } from "../conversation.js";
 import { fmtDuration, stripQuotes } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
@@ -119,10 +125,10 @@ export class DetailScreen implements View {
     if (prompt !== undefined) {
       const d = prompt.event!.data;
       out.push(`model: ${stripQuotes(typeof d.model === "string" ? d.model : undefined)}`);
-      const usage = d.usage ?? {};
+      const event = prompt.event!;
       out.push(
-        `tokens: ${usage.inputTokens ?? "?"} in / ${usage.outputTokens ?? "?"} out` +
-          `   cost: $${(d.cost?.totalCost ?? 0).toFixed(4)}`,
+        `tokens: ${contextTokens(event)} context (${tokensCached(event)} cached) / ${tokensOut(event)} out` +
+          `   cost: $${costOf(event).toFixed(4)}`,
       );
       out.push("", "── transcript ──");
       const messages = Array.isArray(d.messages) ? d.messages : [];

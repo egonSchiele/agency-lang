@@ -285,14 +285,6 @@ function displayFunctionName(name: string): string {
   return name === "_guard" ? "guard" : name;
 }
 
-export function isInsideHandler(ancestors: WalkAncestor[]): boolean {
-  return ancestors.some((a) => {
-    if (a.type === "handleBlock") return true;
-    if (a.type === "withModifier" && a.handlerName !== "propagate") return true;
-    return false;
-  });
-}
-
 function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeCheckerContext): void {
   // A splat can expand to any number of positional args, so skip arity
   // checking when one is present. The splat element-type check still runs.

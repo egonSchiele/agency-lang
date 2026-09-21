@@ -14,7 +14,13 @@ import type {
 } from "./types.js";
 import type { ImportNodeStatement, ImportStatement } from "./types/importStatement.js";
 import { getImportedNames } from "./types/importStatement.js";
-import type { SymbolTable, InterruptEffect } from "./symbolTable.js";
+import type {
+  FunctionSymbol,
+  InterruptEffect,
+  NodeSymbol,
+  SymbolInfo,
+  SymbolTable,
+} from "./symbolTable.js";
 import { collectTypeAliasTags } from "./symbolTable.js";
 import { walkNodes } from "./utils/node.js";
 import { functionContainsDestructiveBlock } from "./backends/functionContainsDestructiveBlock.js";
@@ -133,6 +139,8 @@ export type CompilationUnit = {
   sourceText?: string;
   /** Transitive interrupt effects per function/node, populated from the symbol table. */
   interruptEffectsByFunction?: Record<string, InterruptEffect[]>;
+  /** Same keys, but only the effects nothing inside the callable answers. */
+  unansweredEffectsByFunction?: Record<string, InterruptEffect[]>;
   /** Symbol table used to build this unit. Forwarded so downstream
    *  consumers (e.g. the typechecker) can use it for cross-file lookups
    *  like resolving the file a function/node lives in. Optional because
@@ -331,33 +339,9 @@ export function buildCompilationUnit(
     // was never imported.
     pullTransitiveAliases(unit, symbolTable, aliasSeeds);
 
-    const interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
-    const fileSymbols = symbolTable.getFile(fromFile);
-    if (fileSymbols) {
-      for (const [name, sym] of Object.entries(fileSymbols)) {
-        if ((sym.kind === "function" || sym.kind === "node") && sym.interruptEffects) {
-          interruptEffectsByFunction[name] = sym.interruptEffects;
-        }
-      }
-    }
-    for (const stmt of unit.importStatements) {
-      for (const r of symbolTable.resolveImport(stmt, fromFile)) {
-        if (
-          (r.symbol.kind === "function" || r.symbol.kind === "node") &&
-          r.symbol.interruptEffects
-        ) {
-          interruptEffectsByFunction[r.localName] = r.symbol.interruptEffects;
-        }
-      }
-    }
-    for (const stmt of unit.importedNodes) {
-      for (const r of symbolTable.resolveImportedNodes(stmt, fromFile)) {
-        if (r.symbol.kind === "node" && r.symbol.interruptEffects) {
-          interruptEffectsByFunction[r.localName] = r.symbol.interruptEffects;
-        }
-      }
-    }
-    unit.interruptEffectsByFunction = interruptEffectsByFunction;
+    const callables = callablesVisibleFrom(unit, symbolTable, fromFile);
+    unit.interruptEffectsByFunction = effectTable(callables, "interruptEffects");
+    unit.unansweredEffectsByFunction = effectTable(callables, "unansweredEffects");
     unit.symbolTable = symbolTable;
   }
 
@@ -469,4 +453,44 @@ function collectAliasNames(t: VariableType, out: string[]): void {
   visitTypes(t, (n) => {
     if (n.type === "typeAliasVariable") out.push(n.aliasName);
   });
+}
+
+type VisibleCallable = { localName: string; symbol: FunctionSymbol | NodeSymbol };
+
+const isCallableSymbol = (symbol: SymbolInfo): symbol is FunctionSymbol | NodeSymbol =>
+  symbol.kind === "function" || symbol.kind === "node";
+
+/** Every function and node a file can call by name: its own, then its imports. */
+function callablesVisibleFrom(
+  unit: CompilationUnit,
+  symbolTable: SymbolTable,
+  fromFile: string,
+): VisibleCallable[] {
+  const own = Object.entries(symbolTable.getFile(fromFile) ?? {}).map(([localName, symbol]) => ({
+    localName,
+    symbol,
+  }));
+  const imported = unit.importStatements.flatMap((stmt) =>
+    symbolTable.resolveImport(stmt, fromFile),
+  );
+  const importedNodes = unit.importedNodes
+    .flatMap((stmt) => symbolTable.resolveImportedNodes(stmt, fromFile))
+    .filter((resolved) => resolved.symbol.kind === "node");
+  return [...own, ...imported, ...importedNodes]
+    .filter((entry): entry is VisibleCallable => isCallableSymbol(entry.symbol))
+    .map((entry) => ({ localName: entry.localName, symbol: entry.symbol }));
+}
+
+function effectTable(
+  callables: VisibleCallable[],
+  field: "interruptEffects" | "unansweredEffects",
+): Record<string, InterruptEffect[]> {
+  const table: Record<string, InterruptEffect[]> = {};
+  for (const { localName, symbol } of callables) {
+    const effects = symbol[field];
+    if (effects) {
+      table[localName] = effects;
+    }
+  }
+  return table;
 }

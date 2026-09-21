@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseAgencyFileCached } from "./parseCache.js";
 import { propagateEffects } from "./analysis/effects.js";
+import { collectUnansweredFacts, unique } from "./analysis/bodyFacts.js";
 import { parseAgency } from "./parser.js";
 import type { AgencyConfig } from "./config/config.js";
 import type {
@@ -47,6 +48,9 @@ export type FunctionSymbol = {
   returnType: VariableType | null;
   returnTypeValidated?: boolean;
   interruptEffects?: InterruptEffect[];
+  /** The subset of `interruptEffects` that nothing inside the callable answers
+   *  with a handler. See `collectUnansweredFacts`. */
+  unansweredEffects?: InterruptEffect[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -59,6 +63,9 @@ export type NodeSymbol = {
   returnTypeValidated?: boolean;
   exported?: boolean;
   interruptEffects?: InterruptEffect[];
+  /** The subset of `interruptEffects` that nothing inside the callable answers
+   *  with a handler. See `collectUnansweredFacts`. */
+  unansweredEffects?: InterruptEffect[];
   reExportedFrom?: ReExportedFrom;
 };
 
@@ -442,6 +449,10 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           returnTypeValidated: node.returnTypeValidated,
           exported: !!node.exported,
           interruptEffects: collectDirectInterruptEffects(declaredName(node.nodeName), node.body),
+          unansweredEffects: collectDirectUnansweredEffects(
+            declaredName(node.nodeName),
+            node.body,
+          ),
         };
         break;
       case "function":
@@ -455,6 +466,10 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           returnType: node.returnType ?? null,
           returnTypeValidated: node.returnTypeValidated,
           interruptEffects: collectDirectInterruptEffects(
+            declaredName(node.functionName),
+            node.body,
+          ),
+          unansweredEffects: collectDirectUnansweredEffects(
             declaredName(node.functionName),
             node.body,
           ),
@@ -523,6 +538,16 @@ function collectDirectInterruptEffects(name: string, body: AgencyNode[]): Interr
     }
   }
   return effects.map((e) => ({ effect: e }));
+}
+
+/** Seeded effects are raised on the TypeScript side, where no Agency handler
+ *  can enclose them, so they always count as unanswered. */
+function collectDirectUnansweredEffects(name: string, body: AgencyNode[]): InterruptEffect[] {
+  const seeded = Object.prototype.hasOwnProperty.call(TS_SIDE_EFFECT_SEEDS, name)
+    ? TS_SIDE_EFFECT_SEEDS[name]
+    : [];
+  const effects = unique([...seeded, ...collectUnansweredFacts(body).effects]);
+  return effects.map((effect) => ({ effect }));
 }
 
 export function isExportedSymbol(sym: SymbolInfo): boolean {

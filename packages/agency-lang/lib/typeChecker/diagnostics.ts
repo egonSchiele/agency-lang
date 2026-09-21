@@ -233,6 +233,12 @@ export const DIAGNOSTICS = {
     message:
       "{contextLabel} cannot `interrupt(...)` — interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body.",
   },
+  interruptingCallInStaticInit: {
+    code: "AG7008",
+    severity: "error",
+    message:
+      "{contextLabel} calls `{fn}`, which may interrupt [{effects}]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site with `{fn}(...) with approve`.",
+  },
   unionFieldNotOnEveryMember: {
     code: "AG2008",
     severity: "error",

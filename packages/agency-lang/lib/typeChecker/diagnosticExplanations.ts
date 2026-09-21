@@ -599,6 +599,12 @@ def f(): string {
 
 **How to fix:** move the call into a node, or into a function called from a node, where per-run state is available.`,
 
+  interruptingCallInStaticInit: `A \`static\` initializer calls a function that can raise an interrupt. An interrupt pauses the run and saves a checkpoint, and a static initializer runs once at process startup, before any run exists. The program would crash at startup with "Cannot create checkpoint".
+
+This is the same problem as writing \`interrupt\` directly in the initializer, one call away.
+
+**How to fix:** move the call into a node body, or answer the interrupt where it is raised: \`static const home = env("HOME") with approve\`.`,
+
   interruptInStaticInit: `Interrupts pause the per-run execution stack, but static initializers run once at startup before any run has begun — there is no stack to pause. So \`interrupt(...)\` is not allowed in a static initializer.
 
 **How to fix:** move the \`interrupt\` into a node body.`,

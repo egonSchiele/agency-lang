@@ -44,7 +44,35 @@ const isGoto = (visit: Visit): visit is Visit & { node: GotoStatement } =>
 const isGuard = (visit: Visit): boolean => visit.node.type === "guardBlock";
 
 export function collectBodyFacts(body: AgencyNode[]): BodyFacts {
-  const visits: Visit[] = [...walkNodes(body)];
+  return factsFrom([...walkNodes(body)]);
+}
+
+/**
+ * The same reading, keeping only the raises and calls that no handler in this
+ * body answers. `read(f) with approve` is left out, a bare `read(f)` is kept.
+ *
+ * This is what decides whether a function is safe to call where no handler and
+ * no checkpoint can exist, such as a static initializer (issue #912).
+ */
+export function collectUnansweredFacts(body: AgencyNode[]): BodyFacts {
+  return factsFrom([...walkNodes(body)].filter((visit) => !isInsideHandler(visit.ancestors)));
+}
+
+/**
+ * Whether a `handle` block or a `with approve` / `with reject` encloses this
+ * position. `with propagate` answers nothing, so it does not count.
+ *
+ * A `handle` block counts whatever its handler body does, including a handler
+ * that itself propagates. Reading the handler body is out of reach here.
+ */
+export function isInsideHandler(ancestors: WalkAncestor[]): boolean {
+  return ancestors.some((ancestor) => {
+    if (ancestor.type === "handleBlock") return true;
+    return ancestor.type === "withModifier" && ancestor.handlerName !== "propagate";
+  });
+}
+
+function factsFrom(visits: Visit[]): BodyFacts {
   const calls = visits.filter(isCall);
   return {
     effects: unique(visits.filter(isInterrupt).map((visit) => visit.node.effect)),

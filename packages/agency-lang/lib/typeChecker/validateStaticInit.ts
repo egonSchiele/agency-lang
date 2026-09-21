@@ -23,13 +23,19 @@
  */
 import type { AgencyProgram, AgencyNode, Assignment } from "../types.js";
 import type { TypeCheckError } from "./types.js";
+import type { InterruptEffect } from "../symbolTable.js";
 import {
   checkBannedBuiltinCalls,
+  checkInterruptingCalls,
   checkStaticMutation,
   topLevelAssignments,
 } from "./staticInitRules.js";
 
-export function validateStaticInit(program: AgencyProgram, errors: TypeCheckError[]): void {
+export function validateStaticInit(
+  program: AgencyProgram,
+  errors: TypeCheckError[],
+  interruptEffectsByFunction: Record<string, InterruptEffect[]>,
+): void {
   // First sweep: collect static names so the mutation rule has
   // something to match against.
   const staticNames: Record<string, true> = {};
@@ -50,12 +56,16 @@ export function validateStaticInit(program: AgencyProgram, errors: TypeCheckErro
       const a = inner as Assignment;
       const label = `Static const \`${a.variableName}\``;
       errors.push(...checkBannedBuiltinCalls(a.value as AgencyNode, label, a.variableName));
+      errors.push(...checkInterruptingCalls(node, label, interruptEffectsByFunction));
       continue;
     }
 
     // `static <bare>` — validate the wrapped statement.
     if (inner.type === "staticStatement") {
       errors.push(...checkBannedBuiltinCalls(inner.statement, "Static bare statement"));
+      errors.push(
+        ...checkInterruptingCalls(node, "Static bare statement", interruptEffectsByFunction),
+      );
       continue;
     }
 

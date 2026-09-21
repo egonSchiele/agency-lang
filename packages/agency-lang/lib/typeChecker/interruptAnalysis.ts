@@ -9,12 +9,12 @@ import { walkNodes, type WalkAncestor } from "../utils/node.js";
 import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
 import type { Scope } from "./scope.js";
-import { isInsideHandler } from "./checker.js";
 import {
   addUnique,
   argumentExpression,
   calledName,
   collectBodyFacts,
+  isInsideHandler,
   unique,
 } from "../analysis/bodyFacts.js";
 import { propagateToFixpoint } from "../analysis/effects.js";

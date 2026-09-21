@@ -402,3 +402,50 @@ node main() {}`);
     expect(errs.some((m) => /'Nu' is not assignable/i.test(m))).toBe(true);
   });
 });
+
+// Issue #888. A guarded arm lowers to a nested if whose else repeats the later
+// arms, so `failure(err)` is re-tested where the scrutinee is a known success.
+describe("a guarded arm with a binder", () => {
+  const RUN_HEAD = `type Ran = { exitCode: number, stdout: string }`;
+
+  it("narrows the binder inside the guard and leaves later arms clean", () => {
+    const errs = hardErrors(`${RUN_HEAD}
+def outcome(ran: Result<Ran>): Result<string> {
+  return match(ran) {
+    success(result) if (result.exitCode != 0) => failure(result.stdout)
+    success(result) => success(result.stdout)
+    failure(err) => failure("\${err}")
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+
+  it("still reports a field the guard's binder does not have", () => {
+    const errs = hardErrors(`${RUN_HEAD}
+def outcome(ran: Result<Ran>): Result<string> {
+  return match(ran) {
+    success(result) if (result.missing != 0) => failure(result.stdout)
+    success(result) => success(result.stdout)
+    failure(err) => failure("\${err}")
+  }
+}
+node main() {}`);
+    expect(errs.some((m) => /'missing' does not exist/i.test(m))).toBe(true);
+  });
+
+  it("a guarded object-pattern arm on a tagged union is clean too", () => {
+    const errs = hardErrors(`
+type Na = { tag: "a", s: string }
+type Nb = { tag: "b", n: number }
+def f(u: Na | Nb): string {
+  return match(u) {
+    { tag: "a", s } if (s != "") => s
+    { tag: "a", s } => "empty"
+    { tag: "b", n } => "\${n}"
+  }
+}
+node main() {}`);
+    expect(errs).toEqual([]);
+  });
+});

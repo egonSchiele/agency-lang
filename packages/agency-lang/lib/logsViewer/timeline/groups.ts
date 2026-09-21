@@ -3,7 +3,7 @@
 // follow-mode re-parses can legitimately re-group a call (a threadCreated
 // can arrive after the llm call it names). One computation, two readers.
 import { childEvent, spanDetail, stripQuotes } from "../spanText.js";
-import { buildTreeIndex, nearestAncestor, rootOf, type TreeIndex } from "../forest.js";
+import { buildTreeIndex, nearestAncestor, rootOf, walkNodes, type TreeIndex } from "../forest.js";
 import type { TreeNode } from "../types.js";
 import type { TimelineSpan } from "./spans.js";
 
@@ -76,7 +76,7 @@ export function spanDisplayName(node: TreeNode): string {
 
 /** Per-scope threadId→label maps, built once per process subtree instead
  *  of re-scanning the scope for every llm call (O(k·n) otherwise). */
-type ScopeLabelCache = Record<string, Record<string, string>>;
+export type ScopeLabelCache = Record<string, Record<string, string>>;
 
 /** llm: thread label → enclosing function → model. Others: display name. */
 function keyOf(node: TreeNode, index: TreeIndex, cache: ScopeLabelCache): string {
@@ -102,14 +102,49 @@ function threadLabelFor(
   const call = childEvent(node, "promptCompletion") ?? childEvent(node, "promptStart");
   const threadId = call?.data.threadId;
   if (threadId === undefined) return undefined;
-  const scope =
-    nearestAncestor(
-      node,
-      index,
-      (ancestor) => ancestor.nodeKind === "span" && ancestor.label === "subprocessRun",
-    ) ?? rootOf(node, index);
+  const scope = threadScopeOf(node, index);
+  return scopeThreadLabels(scope, cache)[String(threadId)];
+}
+
+/** Process scope for legacy display labels. Fresh tool stores also reuse
+ * local thread ids within this scope; this is not a thread identity. */
+export function threadScopeOf(node: TreeNode, index: TreeIndex): TreeNode {
+  const isSubprocess = (ancestor: TreeNode): boolean =>
+    ancestor.nodeKind === "span" && ancestor.label === "subprocessRun";
+  return nearestAncestor(node, index, isSubprocess) ?? rootOf(node, index);
+}
+
+export function scopeThreadLabels(scope: TreeNode, cache: ScopeLabelCache): Record<string, string> {
   cache[scope.id] ??= scanScopeLabels(scope);
-  return cache[scope.id][String(threadId)];
+  return cache[scope.id];
+}
+
+export function unambiguousThreadLabels(
+  scope: TreeNode,
+  index: TreeIndex,
+  cache: ScopeLabelCache,
+): Record<string, string> {
+  if (cache[scope.id] !== undefined) {
+    return cache[scope.id];
+  }
+  const creations: Record<string, TreeNode[]> = Object.create(null);
+  const labels: Record<string, string> = Object.create(null);
+  for (const node of walkNodes(scope)) {
+    const data = node.event?.data;
+    if (data?.type !== "threadCreated" || threadScopeOf(node, index).id !== scope.id) {
+      continue;
+    }
+    const localId = String(data.threadId);
+    (creations[localId] ??= []).push(node);
+  }
+  for (const [localId, nodes] of Object.entries(creations)) {
+    const label = nodes[0].event?.data.label;
+    if (nodes.length === 1 && typeof label === "string" && label.length > 0) {
+      labels[localId] = label;
+    }
+  }
+  cache[scope.id] = labels;
+  return labels;
 }
 
 /** DFS order means a reused thread id resolves to the LAST threadCreated
@@ -118,15 +153,18 @@ function threadLabelFor(
  *  has not been worth the bookkeeping; revisit if a real log disagrees. */
 function scanScopeLabels(scope: TreeNode): Record<string, string> {
   const labels: Record<string, string> = Object.create(null);
-  const scan = (n: TreeNode) => {
-    if (n !== scope && n.nodeKind === "span" && n.label === "subprocessRun") return;
-    const d = n.event?.data;
-    if (d?.type === "threadCreated" && typeof d.label === "string" && d.label.length > 0) {
-      labels[String(d.threadId)] = d.label;
+  const index = buildTreeIndex(scope);
+  for (const node of walkNodes(scope)) {
+    const data = node.event?.data;
+    if (
+      data?.type === "threadCreated" &&
+      threadScopeOf(node, index).id === scope.id &&
+      typeof data.label === "string" &&
+      data.label.length > 0
+    ) {
+      labels[String(data.threadId)] = data.label;
     }
-    n.children.forEach(scan);
-  };
-  scan(scope);
+  }
   return labels;
 }
 

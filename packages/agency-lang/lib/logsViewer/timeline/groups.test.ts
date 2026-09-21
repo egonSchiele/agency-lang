@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 
+import { buildTreeIndex } from "../forest.js";
 import { leaf, span, trace } from "./fixture.js";
 import { timelineSpans } from "./spans.js";
-import { groupKeyOf, groupSpans, spanDisplayName } from "./groups.js";
+import {
+  groupKeyOf,
+  groupSpans,
+  spanDisplayName,
+  threadScopeOf,
+  unambiguousThreadLabels,
+} from "./groups.js";
 
 const opts = { hideKinds: [] as string[] };
 
@@ -126,5 +133,45 @@ describe("groupSpans", () => {
     const groups = groupSpans(timelineSpans(t, opts), t);
     const llmGroup = groups.find((g) => g.key === "llm(m1)")!;
     expect(llmGroup.share).toBeCloseTo(2.0);
+  });
+});
+
+describe("threadScopeOf", () => {
+  it("is the nearest enclosing subprocess, else the trace", () => {
+    const inner = llm("inner", 300, { threadId: "1" });
+    const sub = span("subprocessRun", [leaf("subprocessStarted", 200), inner], { id: "sub" });
+    const outer = llm("outer", 100, { threadId: "1" });
+    const root = trace([outer, sub]);
+    const index = buildTreeIndex(root);
+    expect(threadScopeOf(inner, index).id).toBe("sub");
+    expect(threadScopeOf(outer, index).id).toBe("trace-T");
+  });
+});
+
+describe("unambiguousThreadLabels", () => {
+  it("returns a label for one creation", () => {
+    const root = trace([leaf("threadCreated", 0, { threadId: "0", label: "main" })]);
+    const index = buildTreeIndex(root);
+    expect(unambiguousThreadLabels(root, index, Object.create(null))["0"]).toBe("main");
+  });
+
+  it("omits a reused local id", () => {
+    const root = trace([
+      leaf("threadCreated", 0, { threadId: "0", label: "first" }),
+      leaf("threadCreated", 1, { threadId: "0", label: "second" }),
+    ]);
+    const index = buildTreeIndex(root);
+    expect(unambiguousThreadLabels(root, index, Object.create(null))["0"]).toBeUndefined();
+  });
+
+  it("does not count a nested subprocess creation in its parent scope", () => {
+    const sub = span(
+      "subprocessRun",
+      [leaf("threadCreated", 1, { threadId: "0", label: "child" })],
+      { id: "sub" },
+    );
+    const root = trace([leaf("threadCreated", 0, { threadId: "0", label: "parent" }), sub]);
+    const index = buildTreeIndex(root);
+    expect(unambiguousThreadLabels(root, index, Object.create(null))["0"]).toBe("parent");
   });
 });

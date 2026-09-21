@@ -312,7 +312,7 @@ function createHost(
         "overview",
         "The overview lands in the next release. Press 2 for the trace.",
       ),
-      trace: new LegacyTraceScreen(treeView),
+      trace: new LegacyTraceScreen(treeView, roots, bootTraceId),
       transcript: new PlaceholderScreen(
         "transcript",
         "The transcript lands in a later release. Press 2 for the trace.",

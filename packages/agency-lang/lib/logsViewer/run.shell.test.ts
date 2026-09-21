@@ -328,3 +328,9 @@ it("the shell table gives each command one owner", () => {
     ),
   ).toEqual([]);
 });
+it("legacy trace navigation stays in the trace named by the header", async () => {
+  const out = await driveJsonl(twoTraceSample, [esc, "g"]);
+  expect(out.lastText()).toContain("trace 2/2");
+  expect(cursorLine(out.lastText())).toContain("[def]");
+  expect(out.lastText()).not.toContain("[abc]");
+});

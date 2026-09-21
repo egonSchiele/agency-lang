@@ -25,7 +25,7 @@ function conversation(extra: unknown[] = [], output: unknown = "result", calls =
     event("toolCall", 106, "tool", "L", { toolName: "read", output, timeTaken: 5 }),
     event("promptCompletion", 200, "L", null, {
       threadIdentity: "main",
-      messages: [system, user, assistant, reply, ...extra],
+      messages: [system, user, assistant, { ...reply }, ...extra],
       completion: { output: "done" },
     }),
   ])[0];
@@ -226,4 +226,26 @@ it("accesses current and historical completions without discarding tool requests
     content: null,
     toolCalls: [{ id: "call", name: "read", arguments: '{"path":"a"}' }],
   });
+});
+
+it.each([
+  { errors: [], warnings: [] },
+  42,
+  { __type: "resultType", success: true, value: "nested" },
+])("suppresses an exact model-visible object or scalar reply once: %j", (content) => {
+  const trace = conversation([], { __type: "resultType", success: true, value: content });
+  const last = transcriptBlocks(trace)
+    .filter((block) => block.kind === "assistant")
+    .at(-1)!;
+  last.round.node.event!.data.messages[3].content = content;
+  expect(transcriptBlocks(trace).filter((block) => block.kind === "history")).toHaveLength(0);
+});
+
+it("does not suppress equal text with a different name, ID or tool arguments", () => {
+  const trace = conversation([
+    { ...assistant, toolCalls: [{ ...request, arguments: { path: "b" } }] },
+    { ...reply, tool_call_id: "another" },
+    { ...reply, name: "other" },
+  ]);
+  expect(transcriptBlocks(trace).filter((block) => block.kind === "history")).toHaveLength(3);
 });

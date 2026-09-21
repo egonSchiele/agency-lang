@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
 import { ScreenHost } from "./screenHost.js";
-import { PlaceholderScreen } from "./screens/placeholderScreen.js";
+import { TranscriptScreen } from "./screens/transcriptScreen.js";
+import { TraceScreen } from "./screens/traceScreen.js";
+import { OverviewScreen } from "./screens/overviewScreen.js";
+import { TimelineScreen } from "./screens/timelineScreen.js";
+import { DEFAULT_THRESHOLDS } from "./thresholds.js";
 import { duplicateKeys } from "./keymap.js";
 // Shell-level behavior: the view stack, action dispatch, help overlay,
 // and the key routing that must NOT misfire (Ctrl+F pages; it is not `f`).
@@ -239,8 +244,10 @@ describe("the viewer shell", () => {
   });
 
   it("? shows the ACTIVE view's help and any key closes it", async () => {
-    const out = await drive(["4", "?", "x"]);
-    const help = texts(out).find((t) => t.includes("Keybindings"))!;
+    const out = await drive(["4", "?", "G", "x"]);
+    const help = texts(out)
+      .filter((text) => text.includes("Keybindings"))
+      .at(-1)!;
     expect(help).toContain("drill");
     expect(out.lastText()).toContain("TIMELINE [timeline]");
   });
@@ -319,10 +326,10 @@ it("number keys leave an open detail overlay in place", async () => {
 it("the shell table gives each command one owner", () => {
   const host = new ScreenHost(
     {
-      overview: new PlaceholderScreen("overview", ""),
-      trace: new PlaceholderScreen("trace", ""),
-      transcript: new PlaceholderScreen("transcript", ""),
-      timeline: new PlaceholderScreen("timeline", ""),
+      overview: new OverviewScreen([], "T", DEFAULT_THRESHOLDS, () => undefined),
+      trace: new TraceScreen([], "T", DEFAULT_THRESHOLDS, { extractEnabled: false }),
+      transcript: new TranscriptScreen([], "T"),
+      timeline: new TimelineScreen([], "T", DEFAULT_THRESHOLDS),
     },
     "trace",
     "T",
@@ -343,4 +350,34 @@ it("trace navigation stays in the trace named by the header", async () => {
   expect(out.lastText()).toContain("trace 2/2");
   expect(out.lastText()).toContain("TRACE def");
   expect(out.lastText()).not.toContain("[abc]");
+});
+
+it.each([
+  ["2", "3"],
+  ["3", "4"],
+  ["4", "2"],
+  ["2", "1"],
+  ["3", "2"],
+])("round focus survives %s → %s and back", async (from, to) => {
+  const jsonl = readFileSync(new URL("./fixtures/handler-chain.jsonl", import.meta.url), "utf8");
+  const out = await driveJsonl(jsonl, ["2", "G", "k", "k", "k", from, to, from]);
+  expect(cursorLine(out.lastText())).toMatch(/round\s+9/);
+});
+
+it("shell help includes quit, back, and numbered screens without duplicate ownership", async () => {
+  const out = await drive(["3", "?"]);
+  expect(out.lastText()).toContain("Escape");
+  expect(out.lastText()).toContain("Ctrl+C");
+  expect(out.lastText()).toContain("1 — overview");
+  expect(out.lastText()).toContain("3 — transcript");
+});
+
+it("help paging reaches screen bindings and Escape closes it", async () => {
+  const out = await drive(["3", "?", "G", esc]);
+  const help = texts(out)
+    .filter((text) => text.includes("Keybindings"))
+    .at(-1)!;
+  expect(help).toContain("copy full block text");
+  expect(help).toContain("system prompt");
+  expect(out.lastText()).toContain("TRANSCRIPT");
 });

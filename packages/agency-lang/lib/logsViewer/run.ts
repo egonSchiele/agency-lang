@@ -18,12 +18,12 @@ import { DetailScreen } from "./views/detailScreen.js";
 import { TimelineScreen } from "./screens/timelineScreen.js";
 import { OverviewScreen } from "./screens/overviewScreen.js";
 import { TraceScreen } from "./screens/traceScreen.js";
-import { PlaceholderScreen } from "./screens/placeholderScreen.js";
+import { TranscriptScreen } from "./screens/transcriptScreen.js";
 import { TracePicker } from "./screens/tracePicker.js";
 import { MIN_COLS, tabStrip, tooNarrow } from "./screens/chrome.js";
 import { ScreenHost } from "./screenHost.js";
 import { escOutcome, type EscOutcome } from "./escLadder.js";
-import { findBinding, helpFrom, type ViewerBinding } from "./keymap.js";
+import { cursorBindings, findBinding, helpFrom, type ViewerBinding } from "./keymap.js";
 import { OccurrencesView } from "./views/occurrencesView.js";
 import { type ViewAction, type Viewport } from "./views/view.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
@@ -108,8 +108,46 @@ async function handleTraceExtract(args: {
   }
 }
 
-function helpScreen(helpLines: readonly string[]): Element {
-  return lines(["Keybindings", "─────────────", ...helpLines, "", "Press any key to close."]);
+const HELP_LAYOUT = { fixedRows: 4 };
+function helpScreen(helpLines: readonly string[], viewport: Viewport, top: number): Element {
+  const page = Math.max(1, viewport.rows - HELP_LAYOUT.fixedRows);
+  return lines([
+    "Keybindings",
+    "─────────────",
+    ...helpLines.slice(top, top + page),
+    "",
+    "j/k or paging to scroll; another key closes help.",
+  ]);
+}
+
+function makeHelp(helpLines: () => string[], viewport: Viewport, close: () => void) {
+  let top = 0;
+  const page = Math.max(1, viewport.rows - HELP_LAYOUT.fixedRows);
+  const move = (delta: number): void => {
+    top = Math.max(0, Math.min(top + delta, Math.max(0, helpLines().length - page)));
+  };
+  const bindings = cursorBindings({
+    by: move,
+    toTop: () => move(-Infinity),
+    toBottom: () => move(Infinity),
+    page: () => page,
+    halfPage: () => Math.max(1, Math.floor(page / 2)),
+  });
+  return {
+    render: (): Element => helpScreen(helpLines(), viewport, top),
+    reset: (): void => {
+      top = 0;
+    },
+    handleKey: (key: string): void => {
+      const binding = findBinding(bindings, key);
+      if (binding) {
+        binding.run();
+      } else {
+        close();
+        top = 0;
+      }
+    },
+  };
 }
 
 function parseErrorFooter(parseErrors: ReadonlyArray<{ line: number }>): Element {
@@ -208,7 +246,7 @@ async function runSession(
     }
     notify(followOn ? "follow on" : "follow off");
   };
-  const shellBindings = (): ViewerBinding[] =>
+  const shellBindings = (controls?: ShellControls): ShellBinding[] =>
     viewerShellBindings(
       host,
       () => roots,
@@ -221,6 +259,7 @@ async function runSession(
             thresholds,
           }),
         ),
+      controls,
     );
 
   const extractIfLocal = async (traceId: string): Promise<void> => {
@@ -258,15 +297,21 @@ async function runSession(
     const handler = onAction[action.kind] as (action: ViewAction) => Promise<void> | void;
     await handler(action);
   };
+  const help = makeHelp(
+    () => [...helpFrom(shellBindings()), ...host.target().helpLines()],
+    viewport,
+    () => host.closeHelp(),
+  );
   const render = (): void => {
     if (tooNarrowNow) {
       screen.render(tooNarrow(viewport.cols));
       return;
     }
     if (host.helpOpen()) {
-      screen.render(helpScreen([...helpFrom(shellBindings()), ...host.target().helpLines()]));
+      screen.render(help.render());
       return;
     }
+    help.reset();
     const parts: Element[] = [tabStrip(stripArgs()), host.target().render(innerViewport())];
     if (parseErrors.length > 0) {
       parts.push(parseErrorFooter(parseErrors));
@@ -288,6 +333,7 @@ async function runSession(
       embedded: opts.embedded === true,
       innerViewport,
       shellBindings,
+      handleHelpKey: help.handleKey,
       dispatch,
       render,
     });
@@ -313,10 +359,7 @@ function createHost(
       trace: new TraceScreen(roots, bootTraceId, thresholds, {
         extractEnabled: opts.extract !== undefined,
       }),
-      transcript: new PlaceholderScreen(
-        "transcript",
-        "The transcript lands in a later release. Press 2 for the trace.",
-      ),
+      transcript: new TranscriptScreen(roots, bootTraceId),
       timeline: new TimelineScreen(roots, bootTraceId, thresholds),
     },
     "overview",
@@ -336,7 +379,8 @@ type KeyLoopArgs = {
   tooNarrowNow: boolean;
   embedded: boolean;
   innerViewport: () => Viewport;
-  shellBindings: () => ViewerBinding[];
+  shellBindings: (controls?: ShellControls) => ShellBinding[];
+  handleHelpKey: (key: string) => void;
   dispatch: (action: ViewAction) => Promise<void>;
   render: () => void;
 };
@@ -357,33 +401,45 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
     const key = formatKey(event);
     const typing = host.target().capturesText?.() === true;
 
-    if (key === "Ctrl+C" || (key === "q" && !typing)) {
-      return "quit";
-    }
-    if (key === "Escape") {
-      const outcome = escOutcome({
-        tooNarrow: tooNarrowNow,
-        helpOpen: host.helpOpen(),
-        overlayOpen: host.overlayOpen(),
-        overlayEscaped: () => host.escapeOverlay(),
-        screenEscaped: () => host.escapeScreen(),
-        activeScreen: host.activeScreen(),
-        embedded,
-      });
-      if (outcome === "back") {
-        return "back";
+    let resolution: ViewerResolution | undefined;
+    const binding = findBinding(
+      shellBindings({
+        typing,
+        quit: () => {
+          resolution = "quit";
+        },
+        escape: () => {
+          const outcome = escOutcome({
+            tooNarrow: tooNarrowNow,
+            helpOpen: host.helpOpen(),
+            overlayOpen: host.overlayOpen(),
+            overlayEscaped: () => host.escapeOverlay(),
+            screenEscaped: () => host.escapeScreen(),
+            activeScreen: host.activeScreen(),
+            embedded,
+          });
+          if (outcome === "back") {
+            resolution = "back";
+          }
+          onEsc[outcome]();
+        },
+      }),
+      key,
+    ) as ShellBinding | undefined;
+    if (binding?.control) {
+      binding.run();
+      if (resolution !== undefined) {
+        return resolution;
       }
-      onEsc[outcome]();
     } else if (tooNarrowNow) {
       continue;
     } else if (host.helpOpen()) {
-      host.closeHelp(); // any key closes help, as today
+      args.handleHelpKey(key);
     } else if (typing) {
       await dispatch(host.target().handleKey(event, innerViewport()));
     } else {
-      const shellBinding = findBinding(shellBindings(), key);
-      if (shellBinding !== undefined) {
-        shellBinding.run();
+      if (binding !== undefined) {
+        binding.run();
       } else {
         await dispatch(host.target().handleKey(event, innerViewport()));
       }
@@ -399,16 +455,23 @@ export function mostRecentTraceId(roots: TreeNode[]): string {
   return (latest ?? roots.at(-1))?.traceId ?? "";
 }
 
-/** Shell commands run only when the target is not accepting text. */
+type ShellControls = { typing: boolean; quit: () => void; escape: () => void };
+type ShellBinding = ViewerBinding & { control?: boolean };
+const HELP_CONTROLS: ShellControls = { typing: false, quit: () => {}, escape: () => {} };
+/** Control bindings also run over help and narrow-terminal messages. */
 export function viewerShellBindings(
   host: ScreenHost,
   roots: () => TreeNode[],
   toggleFollow: () => void,
   openPicker: () => void,
-): ViewerBinding[] {
+  controls: ShellControls = HELP_CONTROLS,
+): ShellBinding[] {
   const onScreen = (): boolean => !host.overlayOpen();
   const several = (): boolean => onScreen() && roots().length > 1;
   return [
+    { keys: ["Escape"], help: "back out one step", control: true, run: controls.escape },
+    { keys: ["q"], help: "quit", control: true, when: () => !controls.typing, run: controls.quit },
+    { keys: ["Ctrl+C"], help: "quit", control: true, run: controls.quit },
     { keys: ["?"], help: "this help", hint: "? help", run: () => host.toggleHelp() },
     { keys: ["f"], help: "follow the file as it grows", hint: "f follow", run: toggleFollow },
     { keys: ["1"], help: "overview", when: onScreen, run: () => host.switchTo("overview") },

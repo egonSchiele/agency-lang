@@ -278,7 +278,10 @@ describe("buildCompiledClosure: import cycles", () => {
   });
 
   it("refuses a cycle that runs through a re-export", () => {
-    write("a.agency", 'export { bVal } from "./b.agency"\nexport def aVal(): number { return 1 }\n');
+    write(
+      "a.agency",
+      'export { bVal } from "./b.agency"\nexport def aVal(): number { return 1 }\n',
+    );
     const bPath = write(
       "b.agency",
       'import { aVal } from "./a.agency"\nexport def bVal(): number { return aVal() }\n',

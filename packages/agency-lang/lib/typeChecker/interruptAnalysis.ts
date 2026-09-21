@@ -174,10 +174,7 @@ function collectFromBody(
       // instead; they aren't blockTypes, so this adds nothing for them.
       ...facts.callees.flatMap((name) => calleeDeclaredEffects(name, scope, ctx)),
     ]),
-    calleeKeys: unique([
-      ...facts.callees,
-      ...argRefs.flatMap((refs) => refs.names),
-    ]),
+    calleeKeys: unique([...facts.callees, ...argRefs.flatMap((refs) => refs.names)]),
   };
 }
 

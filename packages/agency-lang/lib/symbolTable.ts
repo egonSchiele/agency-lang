@@ -449,10 +449,7 @@ export function classifySymbols(program: AgencyProgram): FileSymbols {
           returnTypeValidated: node.returnTypeValidated,
           exported: !!node.exported,
           interruptEffects: collectDirectInterruptEffects(declaredName(node.nodeName), node.body),
-          unansweredEffects: collectDirectUnansweredEffects(
-            declaredName(node.nodeName),
-            node.body,
-          ),
+          unansweredEffects: collectDirectUnansweredEffects(declaredName(node.nodeName), node.body),
         };
         break;
       case "function":

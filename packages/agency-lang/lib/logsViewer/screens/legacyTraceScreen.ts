@@ -1,6 +1,7 @@
 import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
+import { findNode } from "../forest.js";
 import { parseRoundId } from "../timeline/rounds.js";
 import type { TreeNode } from "../types.js";
 import type { TreeView } from "../views/treeView.js";
@@ -13,7 +14,13 @@ const RETIRED_KEYS = ["t", "T", "Escape"];
 
 export class LegacyTraceScreen implements Screen {
   readonly screenName = "trace" as const;
-  constructor(private readonly tree: TreeView) {}
+  constructor(
+    private readonly tree: TreeView,
+    private roots: TreeNode[],
+    private traceId: string,
+  ) {
+    this.refreshTrace();
+  }
 
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction {
     if (RETIRED_KEYS.includes(formatKey(ev))) {
@@ -25,7 +32,8 @@ export class LegacyTraceScreen implements Screen {
     return this.tree.render(viewport);
   }
   setData(roots: TreeNode[]): void {
-    this.tree.setData(roots);
+    this.roots = roots;
+    this.refreshTrace();
   }
   helpLines(): string[] {
     return this.tree.helpLines();
@@ -40,13 +48,25 @@ export class LegacyTraceScreen implements Screen {
     return this.tree.cursorSpanId();
   }
   setFocus(id: string): void {
-    this.tree.reveal(parseRoundId(id)?.spanId ?? id);
+    const target = parseRoundId(id)?.spanId ?? id;
+    if (findNode(this.selectedRoots(), target) !== undefined) {
+      this.tree.reveal(target);
+    }
   }
   setTrace(traceId: string): void {
-    this.tree.reveal(`trace-${traceId}`);
+    this.traceId = traceId;
+    this.tree.clearSearch();
+    this.refreshTrace();
+    this.setFocus(`trace-${traceId}`);
   }
   applySearch(query: string): void {
-    this.tree.search(query, this.tree.cursorTraceId());
+    this.tree.search(query, this.traceId);
+  }
+  private selectedRoots(): TreeNode[] {
+    return this.roots.filter((root) => root.traceId === this.traceId);
+  }
+  private refreshTrace(): void {
+    this.tree.setData(this.selectedRoots());
   }
   escape(): boolean {
     return this.tree.clearSearch();

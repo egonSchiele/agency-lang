@@ -145,8 +145,7 @@ function formatMetrics(node: TreeNode): string {
 }
 
 function fmtCost(c?: number): string {
-  if (c === undefined) return "?";
-  return `$${c.toFixed(3)}`;
+  return c === undefined ? "?" : fmtUsd(c);
 }
 
 function shortId(id?: string): string {
@@ -233,3 +232,4 @@ function wrapTag(text: string, color: string | undefined): string {
   if (!color) return text;
   return `{${color}-fg}${text}{/${color}-fg}`;
 }
+import { fmtUsd } from "./format.js";

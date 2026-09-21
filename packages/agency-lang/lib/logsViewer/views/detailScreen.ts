@@ -14,6 +14,7 @@ import {
   tokensOut,
 } from "../../statelog/wireAccessors.js";
 import { formatConversation } from "../conversation.js";
+import { findNode } from "../forest.js";
 import { fmtDuration, stripQuotes } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
 import { spanExtent, timelineSpans } from "../timeline/spans.js";
@@ -148,18 +149,6 @@ export class DetailScreen implements View {
     }
     return out;
   }
-}
-
-function findNode(roots: TreeNode[], id: string): TreeNode | undefined {
-  for (const root of roots) {
-    const stack: TreeNode[] = [root];
-    while (stack.length > 0) {
-      const n = stack.pop()!;
-      if (n.id === id) return n;
-      stack.push(...n.children);
-    }
-  }
-  return undefined;
 }
 
 function firstDescendantEvent(node: TreeNode, type: string): TreeNode | undefined {

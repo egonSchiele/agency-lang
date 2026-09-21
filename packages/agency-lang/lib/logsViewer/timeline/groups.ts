@@ -3,6 +3,7 @@
 // follow-mode re-parses can legitimately re-group a call (a threadCreated
 // can arrive after the llm call it names). One computation, two readers.
 import { childEvent, spanDetail, stripQuotes } from "../spanText.js";
+import { buildTreeIndex, nearestAncestor, rootOf, type TreeIndex } from "../forest.js";
 import type { TreeNode } from "../types.js";
 import type { TimelineSpan } from "./spans.js";
 
@@ -73,25 +74,6 @@ export function spanDisplayName(node: TreeNode): string {
   return node.label;
 }
 
-export type TreeIndex = { byId: Record<string, TreeNode>; parentIds: Record<string, string> };
-
-/** One DFS over the tree; reused by the views so per-row lookups are O(1)
- *  instead of a fresh tree walk (span ids come from statelog content, so
- *  both records are null-prototype). */
-export function buildTreeIndex(root: TreeNode): TreeIndex {
-  const byId: Record<string, TreeNode> = Object.create(null);
-  const parentIds: Record<string, string> = Object.create(null);
-  const walk = (node: TreeNode) => {
-    byId[node.id] = node;
-    for (const child of node.children) {
-      parentIds[child.id] = node.id;
-      walk(child);
-    }
-  };
-  walk(root);
-  return { byId, parentIds };
-}
-
 /** Per-scope threadId→label maps, built once per process subtree instead
  *  of re-scanning the scope for every llm call (O(k·n) otherwise). */
 type ScopeLabelCache = Record<string, Record<string, string>>;
@@ -121,7 +103,11 @@ function threadLabelFor(
   const threadId = call?.data.threadId;
   if (threadId === undefined) return undefined;
   const scope =
-    nearestAncestor(node, index, (a) => a.label === "subprocessRun") ?? rootOf(node, index);
+    nearestAncestor(
+      node,
+      index,
+      (ancestor) => ancestor.nodeKind === "span" && ancestor.label === "subprocessRun",
+    ) ?? rootOf(node, index);
   cache[scope.id] ??= scanScopeLabels(scope);
   return cache[scope.id][String(threadId)];
 }
@@ -148,33 +134,12 @@ function enclosingFunctionName(node: TreeNode, index: TreeIndex): string | undef
   const found = nearestAncestor(
     node,
     index,
-    (a) => a.label === "toolExecution" || a.label === "nodeExecution",
+    (ancestor) =>
+      ancestor.nodeKind === "span" &&
+      (ancestor.label === "toolExecution" || ancestor.label === "nodeExecution"),
   );
   if (found === undefined) return undefined;
   return spanDisplayName(found);
-}
-
-function nearestAncestor(
-  node: TreeNode,
-  index: TreeIndex,
-  matches: (ancestor: TreeNode) => boolean,
-): TreeNode | undefined {
-  let currentId = index.parentIds[node.id];
-  while (currentId !== undefined) {
-    const ancestor = index.byId[currentId];
-    if (ancestor === undefined) return undefined;
-    if (ancestor.nodeKind === "span" && matches(ancestor)) return ancestor;
-    currentId = index.parentIds[currentId];
-  }
-  return undefined;
-}
-
-function rootOf(node: TreeNode, index: TreeIndex): TreeNode {
-  let current = node;
-  while (index.parentIds[current.id] !== undefined) {
-    current = index.byId[index.parentIds[current.id]];
-  }
-  return current;
 }
 
 function modelOf(node: TreeNode): string | undefined {

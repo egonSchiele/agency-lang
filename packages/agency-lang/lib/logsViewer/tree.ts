@@ -1,6 +1,7 @@
 import { EventEnvelope, TreeNode } from "./types.js";
 import { summarize, summarizeSpan, summarizeTrace } from "./summary.js";
 import { contextTokens, cost as costOf, tokensOut } from "../statelog/wireAccessors.js";
+import { walkNodes } from "./forest.js";
 
 // Event types the viewer skips entirely. `graph` is a one-shot
 // schema dump (nodes + edges + start node) emitted at the top of
@@ -289,10 +290,7 @@ function inferSpanLabel(evt: EventEnvelope): string {
 }
 
 function aggregateMetrics(node: TreeNode): void {
-  const leaves: TreeNode[] = [];
-  walk(node, (n) => {
-    if (n.event) leaves.push(n);
-  });
+  const leaves = walkNodes(node).filter((child) => child.event !== undefined);
 
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
@@ -340,9 +338,4 @@ function aggregateMetrics(node: TreeNode): void {
   if (node.nodeKind === "span") {
     node.summary = summarizeSpan(node);
   }
-}
-
-function walk(node: TreeNode, visit: (n: TreeNode) => void): void {
-  visit(node);
-  for (const c of node.children) walk(c, visit);
 }

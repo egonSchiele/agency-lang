@@ -16,7 +16,7 @@ import type { ViewerThresholds } from "../thresholds.js";
 import { groupSpans, spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
-import { DurationCell, RowLabel } from "./flameView.js";
+import { DurationCell, RowLabel } from "../screens/timelineScreen.js";
 import {
   AxisHeader,
   BarComponent,

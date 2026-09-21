@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { cursorBindings, duplicateKeys, helpFrom, hintsFrom, runKey, type CursorMoves, type KeyBinding } from "../keymap.js";
+import {
+  cursorBindings,
+  duplicateKeys,
+  helpFrom,
+  hintsFrom,
+  runKey,
+  type CursorMoves,
+  type KeyBinding,
+} from "../keymap.js";
 
 type TestAction = { kind: "back" } | { kind: "none" };
 const NONE: TestAction = { kind: "none" };
@@ -12,7 +20,13 @@ function stillMoves(): CursorMoves {
 function sampleBindings(log: string[], drillable: boolean): KeyBinding<TestAction>[] {
   return [
     { keys: ["j", "Down"], help: "move down", hint: "j k move", run: () => void log.push("down") },
-    { keys: ["Enter"], help: "drill in", hint: "⏎ drill", when: () => drillable, run: () => ({ kind: "back" }) },
+    {
+      keys: ["Enter"],
+      help: "drill in",
+      hint: "⏎ drill",
+      when: () => drillable,
+      run: () => ({ kind: "back" }),
+    },
     { keys: ["x"], help: "a key with no footer hint", run: () => void log.push("x") },
   ];
 }
@@ -52,18 +66,30 @@ describe("what is derived from the table", () => {
   });
 
   it("finds a key bound twice", () => {
-    const twice = [...sampleBindings([], true), { keys: ["j"], help: "again", run: () => undefined }];
+    const twice = [
+      ...sampleBindings([], true),
+      { keys: ["j"], help: "again", run: () => undefined },
+    ];
     expect(duplicateKeys(twice)).toEqual(["j"]);
   });
 });
 
 describe("cursorBindings", () => {
   it("binds the keys every Agency TUI shares", () => {
-    const keys = cursorBindings<TestAction>(stillMoves())
-      .flatMap((binding) => binding.keys);
+    const keys = cursorBindings<TestAction>(stillMoves()).flatMap((binding) => binding.keys);
     expect(keys).toEqual([
-      "j", "Down", "k", "Up", "g", "G",
-      "Ctrl+F", "PageDown", "Ctrl+B", "PageUp", "Ctrl+D", "Ctrl+U",
+      "j",
+      "Down",
+      "k",
+      "Up",
+      "g",
+      "G",
+      "Ctrl+F",
+      "PageDown",
+      "Ctrl+B",
+      "PageUp",
+      "Ctrl+D",
+      "Ctrl+U",
     ]);
   });
 

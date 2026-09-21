@@ -56,14 +56,14 @@ describe("BarComponent", () => {
 
 describe("splitWidth", () => {
   it("wide terminals get the nominal gutters", () => {
-    const w = splitWidth("flame", 200);
+    const w = splitWidth("timeline", 200);
     expect(w.gutter).toBe(48);
     expect(w.stats).toBe(16);
     expect(w.bar).toBe(200 - 48 - 16);
   });
 
   it("narrow terminals shrink the gutter first, never the bar below its floor", () => {
-    const w = splitWidth("flame", 60);
+    const w = splitWidth("timeline", 60);
     expect(w.bar).toBeGreaterThanOrEqual(10);
     expect(w.gutter).toBeGreaterThanOrEqual(20);
     expect(w.gutter + w.bar + w.stats).toBeLessThanOrEqual(60);
@@ -78,7 +78,7 @@ describe("splitWidth", () => {
 
 describe("splitWidth degradation", () => {
   it("never returns a split wider than the terminal, all the way down", () => {
-    for (const view of ["flame", "byName", "occurrences"] as const) {
+    for (const view of ["timeline", "byName", "occurrences"] as const) {
       for (let cols = 10; cols <= 200; cols += 7) {
         const w = splitWidth(view, cols);
         expect(w.gutter + w.bar + w.stats).toBeLessThanOrEqual(cols);
@@ -102,7 +102,7 @@ describe("AxisHeader", () => {
 describe("TimelineHeader", () => {
   it("carries view, crumbs, admin marker, and zoom range", () => {
     const text = new TimelineHeader().computeText({
-      view: "flame",
+      view: "timeline",
       title: "trace-1",
       crumbs: ["codeAgent", "llm"],
       totalMs: 90_000,
@@ -110,7 +110,7 @@ describe("TimelineHeader", () => {
       viewStart: 0,
       adminShown: true,
     });
-    expect(text).toContain("TIMELINE [flame]");
+    expect(text).toContain("TIMELINE [timeline]");
     expect(text).toContain("» codeAgent » llm");
     expect(text).toContain("[admin spans shown]");
     expect(text).toContain("zoom 10.0s–20.0s");

@@ -35,7 +35,11 @@ export function findBinding<Action>(
   return bindings.find((candidate) => candidate.keys.includes(key) && isAvailable(candidate));
 }
 
-export function runKey<Action>(bindings: KeyBinding<Action>[], key: string, fallback: Action): Action {
+export function runKey<Action>(
+  bindings: KeyBinding<Action>[],
+  key: string,
+  fallback: Action,
+): Action {
   const result = findBinding(bindings, key)?.run();
   return result ?? fallback;
 }

@@ -1,0 +1,24 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renders the searched picker at 120 columns 1`] = `
+"TRACES · 2 of 3 match "archiveNotes"
+/ archiveNotes▏
+   started   duration rounds context     cost hits what
+   00:00:00  4.0s          1      35             1 ask for A
+   00:00:00  4.0s          1      35             2 ask for B
+
+
+
+
+
+
+
+
+
+
+
+
+first hit: …promptCompletion "m" user ask for A def archiveNotes(count) {return 1} 1970-01-01T00:00:01.0…
+
+⏎ done"
+`;

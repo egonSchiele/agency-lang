@@ -410,12 +410,10 @@ const WALKER_EXCLUDED_TYPES: Record<string, string> = {
 // visits — which is exactly why the fix is a compiler change that gets
 // its own PR and review.
 const KNOWN_WALKER_GAPS: Record<string, string> = {
-  "function.docString":
-    "#668: docstring interpolations are evaluated by the builder " +
-    "(hasDocStringInterpolation) but the segments are never walked",
   "tag.arguments":
     "#668: @validate/@tag annotation arguments reference validator " +
-    "functions and values but are never walked",
+    "functions and values but are never walked. The last gap left: tags also " +
+    "sit inside type hints, and the walker does not enter types at all",
 };
 
 function isExcluded(ownerType: string, key: string): boolean {

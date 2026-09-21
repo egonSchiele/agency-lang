@@ -542,6 +542,12 @@ export function* walkNodes(
         .filter((value) => value !== undefined);
       yield* walkNodes(defaults as AgencyNode[], [...ancestors, node], [...scopes, ownScope]);
     }
+    // Docstring interpolations. A docstring becomes the tool description,
+    // built when the module loads, so it sees top-level names only. It is
+    // walked under the enclosing scopes, without the callable's own.
+    if ((node.type === "function" || node.type === "graphNode") && node.docString) {
+      yield* walkNodes([node.docString], [...ancestors, node], scopes);
+    }
     // Generic statement-body descent, driven by the shared `bodySlots`
     // table. Function/node definitions push their own scope; a
     // functionCall's inline `block:` pushes the block onto `ancestors` so

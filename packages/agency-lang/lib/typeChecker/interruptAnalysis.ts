@@ -136,7 +136,9 @@ function calleeDeclaredEffects(
   const t = scope.lookup(functionName);
   if (t === undefined || isAnyType(t)) return [];
   const resolved = safeResolveType(t, ctx.getTypeAliases());
-  if (resolved.type !== "blockType") return [];
+  if (resolved.type !== "blockType") {
+    return [];
+  }
   return declaredLabels(resolved, ctx);
 }
 
@@ -146,7 +148,9 @@ function declaredLabels(
   fnType: Extract<VariableType, { type: "blockType" }>,
   ctx: TypeCheckerContext,
 ): string[] {
-  if (!fnType.raises) return [];
+  if (!fnType.raises) {
+    return [];
+  }
   const set = resolveEffectSet(fnType.raises, ctx.getTypeAliases());
   return set.any ? [] : set.labels;
 }
@@ -223,9 +227,13 @@ function collectFunctionRefs(
 ): void {
   if (isAnyType(t)) return;
   if (t.type === "typeAliasVariable") {
-    if (seenAliases.includes(t.aliasName)) return;
+    if (seenAliases.includes(t.aliasName)) {
+      return;
+    }
     const resolved = safeResolveType(t, ctx.getTypeAliases());
-    if (resolved.type === "typeAliasVariable") return;
+    if (resolved.type === "typeAliasVariable") {
+      return;
+    }
     collectFunctionRefs(resolved, ctx, out, [...seenAliases, t.aliasName]);
     return;
   }
@@ -234,16 +242,22 @@ function collectFunctionRefs(
       addUnique(out.names, t.name);
       break;
     case "blockType":
-      for (const label of declaredLabels(t, ctx)) addUnique(out.effects, label);
+      for (const label of declaredLabels(t, ctx)) {
+        addUnique(out.effects, label);
+      }
       break;
     case "arrayType":
       collectFunctionRefs(t.elementType, ctx, out, seenAliases);
       break;
     case "objectType":
-      for (const prop of t.properties) collectFunctionRefs(prop.value, ctx, out, seenAliases);
+      for (const prop of t.properties) {
+        collectFunctionRefs(prop.value, ctx, out, seenAliases);
+      }
       break;
     case "unionType":
-      for (const member of t.types) collectFunctionRefs(member, ctx, out, seenAliases);
+      for (const member of t.types) {
+        collectFunctionRefs(member, ctx, out, seenAliases);
+      }
       break;
   }
 }

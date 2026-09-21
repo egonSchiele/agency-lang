@@ -332,7 +332,9 @@ export function narrowUnionByDiscriminant(
   // Result is a discriminated union on `success` — view it as one so the same
   // member-filter handles isSuccess/isFailure/`if (r.success)` narrowing.
   if (resolved.type === "resultType") resolved = resultToObjectUnion(resolved, aliases);
-  if (resolved.type !== "unionType" && resolved.type !== "objectType") return null;
+  if (resolved.type !== "unionType" && resolved.type !== "objectType") {
+    return null;
+  }
   const unionMembers = resolved.type === "unionType" ? resolved.types : [resolved];
   // A union *member* may itself be a Result — e.g. a flow join where one branch
   // kept the raw `Result<…>` and another expanded it to its `{success:…}` object
@@ -351,8 +353,12 @@ export function narrowUnionByDiscriminant(
     const match = propType ? literalTypeMatches(propType, literal, aliases) : "unknown";
     return keep ? match !== "no" : match !== "yes";
   });
-  if (kept.length === 0) return NEVER_T;
-  if (kept.length === members.length) return null;
+  if (kept.length === 0) {
+    return NEVER_T;
+  }
+  if (kept.length === members.length) {
+    return null;
+  }
   return kept.length === 1 ? kept[0] : { type: "unionType", types: kept };
 }
 

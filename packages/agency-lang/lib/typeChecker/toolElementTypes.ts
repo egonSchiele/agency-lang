@@ -33,9 +33,13 @@ function isPlainValue(resolved: VariableType): boolean {
 
 /** Says so when the plain value hides a function of the same name. */
 function shadowHint(toolExpr: AgencyNode, ctx: TypeCheckerContext): string {
-  if (toolExpr.type !== "variableName") return "";
+  if (toolExpr.type !== "variableName") {
+    return "";
+  }
   const name = toolExpr.value;
-  if (!ctx.functionDefs[name] && !ctx.importedFunctions[name]) return "";
+  if (!ctx.functionDefs[name] && !ctx.importedFunctions[name]) {
+    return "";
+  }
   return ` A local variable named '${name}' hides the function '${name}' here. Rename the variable.`;
 }
 
@@ -46,9 +50,13 @@ export function checkToolElementTypes(
 ): void {
   for (const toolExpr of resolveStaticTools(findToolsOption(call))) {
     const actual = synthType(toolExpr as Expression, scope, ctx);
-    if (isAnyType(actual)) continue;
+    if (isAnyType(actual)) {
+      continue;
+    }
     const resolved = safeResolveType(actual, ctx.getTypeAliases());
-    if (isAnyType(resolved) || !isPlainValue(resolved)) continue;
+    if (isAnyType(resolved) || !isPlainValue(resolved)) {
+      continue;
+    }
     ctx.errors.push(
       diagnostic(
         "toolIsNotAFunction",

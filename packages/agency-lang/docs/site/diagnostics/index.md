@@ -99,6 +99,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG4010](names.md#ag4010) | '&#123;name&#125;' is defined in '&#123;module&#125;' but is not exported. Add the 'export' keyword to its definition. |
 | [AG4011](names.md#ag4011) | '&#123;name&#125;' is not accessible under --agency-only. It reaches JavaScript's Function or prototype chain, which pure Agency code may not use. |
 | [AG4012](names.md#ag4012) | Cannot redeclare parameter '&#123;name&#125;' with '&#123;declKind&#125;'. Reads after the redeclare would still see the parameter. Assign to it instead, or pick a different name. |
+| [AG4013](names.md#ag4013) | &#123;violation&#125; |
 
 ## Match and narrowing
 
@@ -150,6 +151,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG6037](tools.md#ag6037) | finalize binder '&#123;name&#125;' collides with a variable that already exists in this scope. Pick a fresh name. The finalize body reads the scope's locals directly, so a colliding binder would silently shadow the local. |
 | [AG6038](tools.md#ag6038) | finalize yields a single value — the scope's saved draft. Use one binder: finalize as &#123;name&#125; &#123; ... &#125;. |
 | [AG6039](tools.md#ag6039) | Parameter '&#123;name&#125;' on '&#123;fn&#125;' has no default but comes after a defaulted parameter. Put defaulted parameters last, so an omitted argument is always a trailing one. |
+| [AG6040](tools.md#ag6040) | '&#123;expr&#125;' is passed as a tool, but it is a value of type '&#123;actual&#125;', not a function.&#123;shadowHint&#125; |
 
 ## Static init, config, and imports
 
@@ -162,6 +164,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG7005](static-init.md#ag7005) | Cannot mutate static `&#123;name&#125;` via `.&#123;method&#125;(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value. |
 | [AG7006](static-init.md#ag7006) | Function '&#123;name&#125;' cannot be both destructive and idempotent — those markers are contradictory. Pick one. |
 | [AG7007](static-init.md#ag7007) | Type '&#123;alias&#125;' takes value argument '&#123;name&#125;', which is &#123;what&#125;. A value argument must be a literal, a 'static const', an imported name, or a value parameter of the enclosing type alias. |
+| [AG7008](static-init.md#ag7008) | &#123;contextLabel&#125; calls `&#123;fn&#125;`, which may interrupt [&#123;effects&#125;]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site with `&#123;fn&#125;(...) with approve`. |
 
 ## Code templates and holes
 

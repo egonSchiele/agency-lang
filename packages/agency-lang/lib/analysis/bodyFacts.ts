@@ -67,7 +67,9 @@ export function collectUnansweredFacts(body: AgencyNode[]): BodyFacts {
  */
 export function isInsideHandler(ancestors: WalkAncestor[]): boolean {
   return ancestors.some((ancestor) => {
-    if (ancestor.type === "handleBlock") return true;
+    if (ancestor.type === "handleBlock") {
+      return true;
+    }
     return ancestor.type === "withModifier" && ancestor.handlerName !== "propagate";
   });
 }

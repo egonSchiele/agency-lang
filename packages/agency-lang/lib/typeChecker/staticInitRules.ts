@@ -146,13 +146,23 @@ export function checkInterruptingCalls(
 ): TypeCheckError[] {
   const errors: TypeCheckError[] = [];
   for (const { node, ancestors } of walkNodes([topLevelNode])) {
-    if (node.type !== "functionCall") continue;
-    if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) continue;
-    if (isInsideHandler(ancestors)) continue;
+    if (node.type !== "functionCall") {
+      continue;
+    }
+    if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) {
+      continue;
+    }
+    if (isInsideHandler(ancestors)) {
+      continue;
+    }
     const called = calledName(node, ancestors);
-    if (called === null) continue;
+    if (called === null) {
+      continue;
+    }
     const effects = effectsByFunction[called] ?? [];
-    if (effects.length === 0) continue;
+    if (effects.length === 0) {
+      continue;
+    }
     const effectList = effects.map((entry) => entry.effect).join(", ");
     errors.push(
       diagnostic(

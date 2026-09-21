@@ -406,3 +406,15 @@ The `as` clause on a finalize binds what the abort yields to the block, and the 
 Arguments bind to parameters left to right, so a call can only ever leave off the LAST arguments. If a parameter without a default comes after one with a default, an omitted argument would fill the defaulted parameter and silently leave the required one empty — for example `node t(a: string = "x", b: string)` called as `goto t("only")` would set `a` and leave `b` undefined.
 
 **How to fix:** move parameters with defaults to the end of the parameter list.
+
+<a id="ag6040"></a>
+
+## AG6040 — '&#123;expr&#125;' is passed as a tool, but it is a value of type '&#123;actual&#125;', not a function.&#123;shadowHint&#125;
+
+*Default severity: error.*
+
+An entry in an `llm()` call's `tools` list is a plain value such as a string or a number. Only functions can be tools, and the call would fail when it runs.
+
+The usual cause is a local variable with the same name as an imported function. In `const summary: string = llm("...", tools: [summary])`, the name `summary` inside the list means the new local, not the import.
+
+**How to fix:** rename the local variable, or import the function under another name with `import { summary as summaryTool }`.

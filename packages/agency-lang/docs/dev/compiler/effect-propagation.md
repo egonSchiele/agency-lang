@@ -144,15 +144,25 @@ different question: can this function be called where no handler and no
 checkpoint exist?
 
 One rule asks that question today. A `static const` initializer runs at process
-startup, before any run exists, so an interrupt that reaches a human crashes with
-"Cannot create checkpoint". `checkInterruptingCalls`
+startup, before any run exists. A policy can still approve an interrupt raised
+there. With no approval the interrupt needs a person, which needs a checkpoint,
+and the call fails with "Cannot create checkpoint". `checkInterruptingCalls`
 (`lib/typeChecker/staticInitRules.ts`) reports AG7008 for a call in a static
 initializer whose callee has unanswered effects, and leaves
 `static const d = home()` alone (issue #912). `buildCompilationUnit` hands the
 table to the type checker as `unansweredEffectsByFunction`.
 
-Two limits, both on the quiet side. A `handle` block counts as answering
-whatever its handler body does, so a handler that propagates is missed. The
+Two details of what counts as answered:
+
+- A `handle` block answers its protected body, not its handler's own body. In
+  `handle { read(f) } with (intr) { write(g) }`, `read(f)` is answered and
+  `write(g)` is not (`isInsideHandler`).
+- A function handed to a call counts as called in this view, so
+  `def hands() { return run(read) }` has `std::read` unanswered (`passedName`).
+  The callee may call what it is handed, and the syntax walk cannot tell.
+
+Two limits, both on the quiet side. What a handler decides is not read, so a
+`handle` block whose handler returns `propagate()` still counts as answering. The
 blind spots under "What the walk cannot see" apply too. In both cases the
 runtime error remains.
 

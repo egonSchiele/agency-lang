@@ -410,7 +410,7 @@ export function checkUnhandledInterruptWarnings(
       if (called === null) continue;
       const kinds = interruptEffectsByFunction[called];
       if (!kinds || kinds.length === 0) continue;
-      if (isInsideHandler(ancestors)) continue;
+      if (isInsideHandler(ancestors, node)) continue;
       const kindList = kinds.map((entry) => entry.effect).join(", ");
       // The guard construct desugars to a `_guard` call before this
       // walk (guardDesugar.ts); users wrote `guard(...) { }`, so the

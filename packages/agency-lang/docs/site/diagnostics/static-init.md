@@ -81,11 +81,11 @@ type Adult = GreaterThan(minAge)
 
 <a id="ag7008"></a>
 
-## AG7008 — &#123;contextLabel&#125; calls `&#123;fn&#125;`, which may interrupt [&#123;effects&#125;]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site with `&#123;fn&#125;(...) with approve`.
+## AG7008 — &#123;contextLabel&#125; calls `&#123;fn&#125;`, which may interrupt [&#123;effects&#125;]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site by ending the statement with `with approve`.
 
 *Default severity: error.*
 
-A `static` initializer calls a function that can raise an interrupt. An interrupt pauses the run and saves a checkpoint, and a static initializer runs once at process startup, before any run exists. The program would crash at startup with "Cannot create checkpoint".
+A `static` initializer calls a function that can raise an interrupt. A static initializer runs once at process startup, before any run exists. If a policy (`--policy`, `--approve`) approves the interrupt, the call goes ahead. Otherwise the interrupt needs a person to answer it, which means pausing the run and saving a checkpoint, and there is no run to pause: the call fails with "Cannot create checkpoint". The same applies to a function the initializer hands to another call, as in `helper(read)`.
 
 This is the same problem as writing `interrupt` directly in the initializer, one call away.
 

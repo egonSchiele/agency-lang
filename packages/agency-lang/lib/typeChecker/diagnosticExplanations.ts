@@ -605,7 +605,7 @@ def f(): string {
 
 **How to fix:** move the call into a node, or into a function called from a node, where per-run state is available.`,
 
-  interruptingCallInStaticInit: `A \`static\` initializer calls a function that can raise an interrupt. An interrupt pauses the run and saves a checkpoint, and a static initializer runs once at process startup, before any run exists. The program would crash at startup with "Cannot create checkpoint".
+  interruptingCallInStaticInit: `A \`static\` initializer calls a function that can raise an interrupt. A static initializer runs once at process startup, before any run exists. If a policy (\`--policy\`, \`--approve\`) approves the interrupt, the call goes ahead. Otherwise the interrupt needs a person to answer it, which means pausing the run and saving a checkpoint, and there is no run to pause: the call fails with "Cannot create checkpoint". The same applies to a function the initializer hands to another call, as in \`helper(read)\`.
 
 This is the same problem as writing \`interrupt\` directly in the initializer, one call away.
 

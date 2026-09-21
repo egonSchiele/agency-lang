@@ -164,7 +164,7 @@ or suppress a type-checker one on the next line with `// @tc-ignore AG####`.
 | [AG7005](static-init.md#ag7005) | Cannot mutate static `&#123;name&#125;` via `.&#123;method&#125;(...)` at module top level — statics are deep-frozen after initialization. Use a global (`const`/`let` without `static`) if you need a mutable value. |
 | [AG7006](static-init.md#ag7006) | Function '&#123;name&#125;' cannot be both destructive and idempotent — those markers are contradictory. Pick one. |
 | [AG7007](static-init.md#ag7007) | Type '&#123;alias&#125;' takes value argument '&#123;name&#125;', which is &#123;what&#125;. A value argument must be a literal, a 'static const', an imported name, or a value parameter of the enclosing type alias. |
-| [AG7008](static-init.md#ag7008) | &#123;contextLabel&#125; calls `&#123;fn&#125;`, which may interrupt [&#123;effects&#125;]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site with `&#123;fn&#125;(...) with approve`. |
+| [AG7008](static-init.md#ag7008) | &#123;contextLabel&#125; calls `&#123;fn&#125;`, which may interrupt [&#123;effects&#125;]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site by ending the statement with `with approve`. |
 
 ## Code templates and holes
 

@@ -3,6 +3,7 @@ import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
 import { typecheckSource } from "./testUtils.js";
+import { checkInterruptingCalls } from "./staticInitRules.js";
 
 // Mirrors the helper used by `constReassignment.test.ts`. Returns
 // just the error messages so assertions stay terse.
@@ -208,6 +209,46 @@ static const h = risky() with propagate
 node main() { return h }`),
     );
     expect(errs).toHaveLength(1);
+  });
+
+  it("a raise in the handler's own body is not answered by that handler", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+def raisesWhileHandling(): string {
+  handle { return safe() } with (intr) {
+    const r = risky()
+    return approve()
+  }
+}
+static const q = raisesWhileHandling()
+node main() { return q }`),
+    );
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain("calls `raisesWhileHandling`");
+  });
+
+  it("a function handed to a call counts as called, directly and through a helper", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+def run(cb: () -> string): string { return cb() }
+def hands(): string { return run(risky) }
+static const s = run(risky)
+static const t = hands()
+static const u = run(safe)
+static const v = run(risky) with approve
+node main() { return s }`),
+    );
+    expect(errs).toHaveLength(2);
+    expect(errs[0]).toContain("Static const `s` calls `risky`");
+    expect(errs[1]).toContain("Static const `t` calls `hands`");
+  });
+
+  it("a call named after an inherited Object property finds no effects", () => {
+    const parsed = parseAgency(`static const w = hasOwnProperty("a")`);
+    if (!parsed.success) throw new Error(parsed.message);
+    const statics = parsed.result.nodes.filter((node) => node.type === "assignment");
+    expect(statics).toHaveLength(1);
+    expect(checkInterruptingCalls(statics[0], "Static const \`w\`", {})).toEqual([]);
   });
 
   it("a non-static top-level const is not this rule's business", () => {

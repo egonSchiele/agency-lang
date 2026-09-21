@@ -108,7 +108,7 @@ export idempotent def compile(source: string, dir: string = "", strict: boolean 
 
   @param source - Agency source code as a string
   @param dir - Directory relative imports resolve against, and the boundary they are confined to. Empty (the default) means local imports cannot resolve.
-  @param strict - True adds the checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, a JavaScript global outside the sandbox allowlist is refused, and so is any import `compile` would refuse (error AG4013). Use it for code that will run sandboxed, such as a tool an agent wrote
+  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
   """
   return try _compile(source, dir, strict)
 }
@@ -643,7 +643,7 @@ export idempotent def typecheck(
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
   @param dir - Directory the source's relative imports resolve against. Empty (the default) means local imports cannot resolve.
-  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
+  @param strict - True adds the checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, a JavaScript global outside the sandbox allowlist is refused, and so is any import `compile` would refuse (error AG4013). Use it for code that will run sandboxed, such as a tool an agent wrote
   """
   const report = try _typecheck(source, dir, strict)
   if (report is failure) {

@@ -460,7 +460,9 @@ type VisibleCallable = { localName: string; symbol: FunctionSymbol | NodeSymbol 
 const isCallableSymbol = (symbol: SymbolInfo): symbol is FunctionSymbol | NodeSymbol =>
   symbol.kind === "function" || symbol.kind === "node";
 
-/** Every function and node a file can call by name: its own, then its imports. */
+/** Every function and node a file can call by name. The file's own come last,
+ *  so in `effectTable` a local definition wins over an import of the same name,
+ *  which is how the type checker resolves the call. */
 function callablesVisibleFrom(
   unit: CompilationUnit,
   symbolTable: SymbolTable,
@@ -476,7 +478,7 @@ function callablesVisibleFrom(
   const importedNodes = unit.importedNodes
     .flatMap((stmt) => symbolTable.resolveImportedNodes(stmt, fromFile))
     .filter((resolved) => resolved.symbol.kind === "node");
-  return [...own, ...imported, ...importedNodes]
+  return [...imported, ...importedNodes, ...own]
     .filter((entry): entry is VisibleCallable => isCallableSymbol(entry.symbol))
     .map((entry) => ({ localName: entry.localName, symbol: entry.symbol }));
 }
@@ -485,7 +487,9 @@ function effectTable(
   callables: VisibleCallable[],
   field: "interruptEffects" | "unansweredEffects",
 ): Record<string, InterruptEffect[]> {
-  const table: Record<string, InterruptEffect[]> = {};
+  // Null prototype: keys are names the user wrote, and readers index the
+  // table with a called name such as `hasOwnProperty`.
+  const table: Record<string, InterruptEffect[]> = Object.create(null);
   for (const { localName, symbol } of callables) {
     const effects = symbol[field];
     if (effects) {

@@ -28,7 +28,7 @@ import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { AgencyNode, Assignment, Expression } from "../types.js";
 import type { TypeCheckError } from "./types.js";
 import { walkNodes } from "../utils/node.js";
-import { calledName, isInsideHandler } from "../analysis/bodyFacts.js";
+import { calledName, isInsideHandler, passedName } from "../analysis/bodyFacts.js";
 import type { InterruptEffect } from "../symbolTable.js";
 
 /**
@@ -135,6 +135,8 @@ export function checkBannedBuiltinCalls(
  * so a call answered at the site is left alone too. `with propagate` answers
  * nothing and is still flagged.
  *
+ * A function handed to a call, as in `helper(read)`, counts as called.
+ *
  * The table is built by reading syntax. It cannot see through a function held
  * in a variable or a method call, and this rule says nothing there: the
  * runtime error remains the backstop.
@@ -146,20 +148,20 @@ export function checkInterruptingCalls(
 ): TypeCheckError[] {
   const errors: TypeCheckError[] = [];
   for (const { node, ancestors } of walkNodes([topLevelNode])) {
-    if (node.type !== "functionCall") {
-      continue;
-    }
     if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) {
       continue;
     }
-    if (isInsideHandler(ancestors)) {
+    if (isInsideHandler(ancestors, node)) {
       continue;
     }
-    const called = calledName(node, ancestors);
+    const called =
+      node.type === "functionCall" ? calledName(node, ancestors) : passedName(node, ancestors);
     if (called === null) {
       continue;
     }
-    const effects = effectsByFunction[called] ?? [];
+    // Own properties only: `called` is a name the user wrote, and a plain
+    // object answers `hasOwnProperty` with a function inherited from Object.
+    const effects = Object.hasOwn(effectsByFunction, called) ? effectsByFunction[called] : [];
     if (effects.length === 0) {
       continue;
     }

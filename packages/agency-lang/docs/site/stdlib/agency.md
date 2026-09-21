@@ -315,7 +315,7 @@ Compile Agency source code. Returns a CompiledProgram on success, or a failure w
 
   @param source - Agency source code as a string
   @param dir - Directory relative imports resolve against, and the boundary they are confined to. Empty (the default) means local imports cannot resolve.
-  @param strict - True adds the checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, a JavaScript global outside the sandbox allowlist is refused, and so is any import `compile` would refuse (error AG4013). Use it for code that will run sandboxed, such as a tool an agent wrote
+  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
 
 **Parameters:**
 
@@ -630,7 +630,7 @@ Type-check Agency source code given as a string. To check a file that is already
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
   @param dir - Directory the source's relative imports resolve against. Empty (the default) means local imports cannot resolve.
-  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
+  @param strict - True adds the checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, a JavaScript global outside the sandbox allowlist is refused, and so is any import `compile` would refuse (error AG4013). Use it for code that will run sandboxed, such as a tool an agent wrote
 
 Without `dir`, relative imports (./foo.agency) cannot be resolved from a
 source string. With `dir`, the source is checked as if it were a file in

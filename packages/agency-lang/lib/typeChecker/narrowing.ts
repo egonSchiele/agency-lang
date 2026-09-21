@@ -316,10 +316,8 @@ function literalValuesEqual(
  * object type counts as a union of one.
  *
  * When EVERY member is provably excluded the branch cannot run, and the result
- * is `never`, so reads inside it report nothing. A guarded match arm depends
- * on this: its lowering repeats the later arms inside the branch where the
- * scrutinee is already narrowed, so `failure(e)` gets re-tested against a
- * known success (issue #888).
+ * is `never`, so reads inside it report nothing. Guarded match arms depend on
+ * this; see docs/dev/compiler/typechecker/narrowing/README.md.
  */
 export function narrowUnionByDiscriminant(
   type: VariableType,

@@ -663,7 +663,9 @@ Splices are safe to run during compilation because dangerous operations in Agenc
 
 The rule covers everything a generator can reach, not just what it imports directly. A local \`.agency\` file that looks harmless can import an npm package one step further down.
 
-**How to fix:** move the work into Agency, or set \`allowNonAgencyGenerators: true\` in your config if the generator genuinely needs a JavaScript library. Turning it off means the generator can do whatever that library can.`,
+The rule looks at files, not at what the generator calls. Running a generator loads its file, and loading a file loads every import in it and runs that import's top-level code. So a generator is refused when another function in the same file imports an npm package, even though the generator never uses it.
+
+**How to fix:** if the generator does not need the JavaScript, move it into its own \`.agency\` file that imports only \`std::\` modules and other \`.agency\` files. If it does need a JavaScript library, set \`allowNonAgencyGenerators: true\` in your config. That switches the check off for every generator in the project, and a generator can then do whatever the libraries it loads can do.`,
 
   spliceRefused: `This file contains a splice, and generator execution was declined for this compile.
 

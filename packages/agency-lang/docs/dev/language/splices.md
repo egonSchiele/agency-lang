@@ -159,6 +159,16 @@ That only holds for Agency code. A plain JS/TS package passes through untouched 
 
 `checkImportGraph` is therefore not an optional extra. It is the precondition: a generator's transitive import graph may contain only `std::` and relative `.agency` files. Transitive is load-bearing, because a clean-looking local file can import `zod` one level down. `tests/agency/splices/refuseNonAgency.agency` is exactly that case.
 
+The check looks at the whole file closure, while `checkGeneratorEffects` beside it looks only at what the generator calls. The two scopes differ because the two risks happen at different times. An effect happens when a function is called. An import happens when a module loads, and running a generator loads its module and everything that module imports, running each import's top-level code. So this is refused, even though `callFunc` never uses `z`:
+
+```
+import { z } from "zod"
+export def unused(): number { return 1 }
+export def callFunc(): Code { return [| def greet(): string { return "hi" } |] }
+```
+
+Issue #731 proposed narrowing the check to the call graph. We measured it instead: with a local `./sideEffect.js` in place of `zod` and the check switched off, `agency compile host.agency` ran the JavaScript file's top-level code, and nothing had called into it. The fix for the user is to give the generator a file of its own, which the AG8006 message says.
+
 `allowNonAgencyGenerators` turns it off for users who need it, and turns off the guarantee with it.
 
 Unhandled interrupts are the backstop rather than the mechanism. Compilation installs no handlers, so an operation that somehow passed eligibility still cannot complete.

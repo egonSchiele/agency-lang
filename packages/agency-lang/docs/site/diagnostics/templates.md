@@ -73,7 +73,7 @@ The generator has to be compiled before the file that splices it can be compiled
 
 <a id="ag8006"></a>
 
-## AG8006 — The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Compile-time generators may import only `std::` modules and relative `.agency` files, because JavaScript raises no interrupts and cannot be checked. Set `allowNonAgencyGenerators` in your config to permit it.
+## AG8006 — The generator `&#123;name&#125;` reaches non-Agency code through `&#123;importPath&#125;`. Running a generator loads its file and every file that one imports, and loading a JavaScript module runs it, even when the generator calls nothing from it. JavaScript raises no interrupts and cannot be checked. Move `&#123;name&#125;` into a file that imports only `std::` modules and relative `.agency` files, and check what those files import in turn: one of them importing a JavaScript package is the same problem one step down. If the generator itself needs the JavaScript, set `allowNonAgencyGenerators` in your config, which switches this check off for every generator.
 
 *Default severity: error.*
 
@@ -83,7 +83,9 @@ Splices are safe to run during compilation because dangerous operations in Agenc
 
 The rule covers everything a generator can reach, not just what it imports directly. A local `.agency` file that looks harmless can import an npm package one step further down.
 
-**How to fix:** move the work into Agency, or set `allowNonAgencyGenerators: true` in your config if the generator genuinely needs a JavaScript library. Turning it off means the generator can do whatever that library can.
+The rule looks at files, not at what the generator calls. Running a generator loads its file, and loading a file loads every import in it and runs that import's top-level code. So a generator is refused when another function in the same file imports an npm package, even though the generator never uses it.
+
+**How to fix:** if the generator does not need the JavaScript, move it into its own `.agency` file that imports only `std::` modules and other `.agency` files. If it does need a JavaScript library, set `allowNonAgencyGenerators: true` in your config. That switches the check off for every generator in the project, and a generator can then do whatever the libraries it loads can do.
 
 <a id="ag8007"></a>
 

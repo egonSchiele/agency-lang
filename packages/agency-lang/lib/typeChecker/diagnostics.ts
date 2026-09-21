@@ -566,6 +566,11 @@ export const DIAGNOSTICS = {
     message:
       "'{name}' is defined in '{module}' but is not exported. Add the 'export' keyword to its definition.",
   },
+  sandboxImportRefused: {
+    code: "AG4013",
+    severity: "error",
+    message: "{violation}",
+  },
   reservedBlockKeyword: {
     code: "AG4006",
     severity: "error",

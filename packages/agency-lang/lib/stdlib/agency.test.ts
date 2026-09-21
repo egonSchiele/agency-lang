@@ -22,6 +22,7 @@ import {
   _getNodesOfType,
   _filterImports,
   _exactVerdictFeedback,
+  _typecheck,
   reExportedHiddenNames,
 } from "./agency.js";
 import type { AgencyNode } from "../types.js";
@@ -837,5 +838,43 @@ describe("_exactVerdictFeedback", () => {
     const feedback = _exactVerdictFeedback(5, 6);
     expect(feedback).toContain("6");
     expect(feedback).toContain("5");
+  });
+});
+
+// Issue #959. None of these imports raise an interrupt, so a clean strict
+// report for one would have let a tool run a shell lookup with no approval.
+describe("_typecheck import policy", () => {
+  const SHELL_IMPORT = `import { _which } from "agency-lang/stdlib-lib/shell.js"
+node main() { return _which("ls") }`;
+
+  const codes = (source: string, strict: boolean): string[] =>
+    _typecheck(source, "", strict).errors.map((error) => error.code);
+
+  it("strict refuses a JavaScript import that compile would refuse", () => {
+    const report = _typecheck(SHELL_IMPORT, "", true);
+    expect(report.errors.map((error) => error.code)).toEqual(["AG4013"]);
+    expect(report.errors[0].message).toContain("agency-lang/stdlib-lib/shell.js");
+  });
+
+  it("strict refuses a pkg:: import and a Node module", () => {
+    expect(codes(`import { thing } from "pkg::wikipedia"\nnode main() { return 1 }`, true)).toEqual(
+      ["AG4013"],
+    );
+    expect(codes(`import * as fs from "fs"\nnode main() { return 1 }`, true)).toEqual(["AG4013"]);
+  });
+
+  it("strict refuses a local import when there is no dir to confine it to", () => {
+    expect(
+      codes(`import { helper } from "./helper.agency"\nnode main() { return 1 }`, true),
+    ).toEqual(["AG4013"]);
+  });
+
+  it("strict accepts std:: imports", () => {
+    const source = `import { exists } from "std::shell"\nnode main() { return 1 }`;
+    expect(codes(source, true)).not.toContain("AG4013");
+  });
+
+  it("the plain check applies no import policy", () => {
+    expect(codes(SHELL_IMPORT, false)).not.toContain("AG4013");
   });
 });

@@ -29,7 +29,12 @@ import { SANDBOX_NAME_CHECKS } from "../compiler/compileValidatedClosure.js";
 import { nanoid } from "nanoid";
 import { exactVerdictValue } from "../testFormat/verdict.js";
 import { parseTestFileSandbox, type ParsedInterrupt } from "../testFormat/schema.js";
-import type { ClosureEntry } from "../compiler/closureValidator.js";
+import {
+  ClosureValidationError,
+  validateClosure,
+  type ClosureEntry,
+} from "../compiler/closureValidator.js";
+import { diagnostic } from "../typeChecker/diagnostics.js";
 import { ImportKind, ImportPolicy, isImportAllowed } from "../importPaths.js";
 import type { AgencyMultiLineComment, AgencyProgram, AgencyNode } from "../types.js";
 import type { ImportStatement } from "../types/importStatement.js";
@@ -183,6 +188,12 @@ export function _typecheck(
   dir: string = "",
   strict: boolean = false,
 ): TypeCheckReport {
+  if (strict) {
+    const refused = sandboxImportErrors(source, dir);
+    if (refused.length > 0) {
+      return { errors: refused, warnings: [] };
+    }
+  }
   const config = strict ? { typechecker: SANDBOX_NAME_CHECKS } : {};
   if (dir === "") {
     return typeCheckSource(source, undefined, config);
@@ -192,6 +203,41 @@ export function _typecheck(
   // the override: nothing is written to dir.
   const draftPath = join(root(dir).real, `agency_draft_${nanoid()}.agency`);
   return typeCheckSource(source, draftPath, config, { [draftPath]: source });
+}
+
+/**
+ * What a sandboxed compile would refuse about this source's imports, as type
+ * errors. Strict code is code that will run sandboxed, and a clean report for
+ * it must not cover an import `compile` refuses (issue #959).
+ *
+ * Runs before the type check on purpose: the type check expands splices, which
+ * runs their generators in this process, and the validator refuses a splice
+ * without running it.
+ *
+ * Source that does not parse is left to the type check, which reports it the
+ * way it always has.
+ */
+function sandboxImportErrors(source: string, dir: string): TypeCheckReport["errors"] {
+  if (!parseAgency(source, {}, false).success) {
+    return [];
+  }
+  try {
+    validateClosure({ entry: { source }, dir });
+    return [];
+  } catch (error) {
+    if (!(error instanceof ClosureValidationError)) {
+      throw error;
+    }
+    return error.violations.map((violation) => {
+      const refused = diagnostic("sandboxImportRefused", { violation }, null);
+      return {
+        code: refused.code,
+        severity: "error",
+        message: refused.message,
+        params: { violation },
+      };
+    });
+  }
 }
 
 export function _getEffects(source: string): Record<string, string[]> {
@@ -511,6 +557,10 @@ function thinReExport(sourceName: string, localName: string, from: string): Expo
 // The real file path is handed to the type-checker so relative imports in
 // `source` resolve against `dir` (transitive imports may still walk outside
 // `dir` — typechecking is read-only so this is intentional).
+//
+// No import policy applies here, unlike _compileFile. The coding agent runs
+// this over the user's own project, which may import TypeScript and npm
+// packages. `_typecheck(strict: true)` is the check that applies the policy.
 export function _typecheckFile(dir: string, filename: string): TypeCheckReport {
   const target = resolveInSandbox(dir, filename);
   return typeCheckSource(readText(fixedRoot(dir), filename), target);

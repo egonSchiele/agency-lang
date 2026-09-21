@@ -369,6 +369,12 @@ effect app::x { a: string, b: string }
 
 **How to fix:** correct the path, create the missing file, or install the package that provides it. Agency imports must resolve to a real module.`,
 
+  sandboxImportRefused: `The code was checked the strict way, \`typecheck(source, strict: true)\`, which is for code that will run sandboxed. Sandboxed code may import \`std::\` modules and \`.agency\` files inside its own directory, and nothing else. A TypeScript or JavaScript file, a Node module, a \`pkg::\` package, and a compile-time splice are all refused, because none of them raise interrupts and so nothing could ask before they run.
+
+\`compile\` and \`runFile\` refuse the same things, so this error means the code could not have run.
+
+**How to fix:** import the function from a \`std::\` module, or move the code it needs into an \`.agency\` file beside it.`,
+
   importNameNotExported: `An import names a symbol that its target module defines but does not \`export\`. A plain \`import { ... }\` can only see \`export\`ed functions, types, and constants — a bare \`def\`/\`type\` without \`export\` is module-private. (Nodes are the exception: they are importable without \`export\`.) The compile path already rejects this; the type checker reports it too.
 
 **How to fix:** add the \`export\` keyword to the definition in the target file, or import a symbol that is exported.`,

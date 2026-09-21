@@ -98,7 +98,9 @@ export function spanExtent(node: TreeNode): Interval | undefined {
   for (const leafNode of walkNodes(node).filter((child) => child.event !== undefined)) {
     const data = leafNode.event!.data;
     const ts = Date.parse(data.timestamp);
-    if (!Number.isFinite(ts)) return;
+    if (!Number.isFinite(ts)) {
+      continue;
+    }
     const taken = typeof data.timeTaken === "number" ? data.timeTaken : 0;
     start = Math.min(start, ts - taken);
     end = Math.max(end, ts);

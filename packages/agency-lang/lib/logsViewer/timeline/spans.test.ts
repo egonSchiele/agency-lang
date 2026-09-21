@@ -23,6 +23,15 @@ describe("spanExtent", () => {
   it("no parseable timestamps → undefined", () => {
     expect(spanExtent(span("x", []))).toBeUndefined();
   });
+
+  it("skips a malformed timestamp and keeps a valid sibling's timing", () => {
+    const malformed = leaf("promptStart", 0);
+    malformed.event!.data.timestamp = "not a date";
+    const root = span("llmCall", [malformed, leaf("promptCompletion", 1_000, { timeTaken: 250 })]);
+
+    expect(spanExtent(root)).toEqual({ start: 750, end: 1_000 });
+    expect(timelineSpans(trace([root]), opts)[0].extent).toEqual({ start: 750, end: 1_000 });
+  });
 });
 
 describe("timelineSpans", () => {

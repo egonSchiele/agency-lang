@@ -147,8 +147,16 @@ prototype hit each one as a visible rendering bug):
   entries. (`line()` sets `height: 1` for exactly this reason; a
   hand-built `row(...)` must do the same.)
 
-If a real fixed-grid table component ever lands in `lib/tui`, these two
-rules are its reason to exist.
+`lib/tui/table.ts` is that component: declare columns and hand it rows, and
+it applies both rules for you. For a row that is not a table, build it from
+`segment(...)` in `lib/tui/paint.ts`, which returns a string of an exact
+visible width, and wrap it with `paintedLine(content, { width })`.
+
+Text from a statelog must never reach `line()` directly. The style parser
+swallows a brace group it recognizes (`{bold}`, anything ending in `-fg`),
+and escaping changes a string's length without changing its width.
+`paint.ts` handles both; its `Painted` type is how the compiler checks that
+a string went through it.
 
 ## Keybinding and chrome conventions (shared with any sibling TUI)
 

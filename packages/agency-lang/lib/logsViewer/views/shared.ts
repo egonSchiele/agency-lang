@@ -3,6 +3,7 @@
 // width budget. One implementation of shading and layout, used three times.
 import { fmtDuration } from "../spanText.js";
 import { coverage, type Interval } from "../timeline/intervals.js";
+import { clipText } from "../../tui/paint.js";
 
 /** Width budget. The bar-cell count is an input to `coverage`, so these
  *  are rendering math, not cosmetics. Degradation on narrow terminals:
@@ -166,5 +167,5 @@ export function padCell(text: string, width: number): string {
 }
 
 export function clipCell(text: string, width: number): string {
-  return text.length <= width ? text : text.slice(0, Math.max(0, width - 1)) + "…";
+  return clipText(text, width);
 }

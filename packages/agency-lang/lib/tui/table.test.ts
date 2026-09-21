@@ -205,3 +205,19 @@ describe("TableComponent", () => {
     expect(colorAt(frame, 1, 8)).toBe("#ffffff");
   });
 });
+
+it("can omit the header and override the cursor background", () => {
+  const element = new TableComponent<Fruit>().render({
+    columns,
+    rows,
+    cursor: 0,
+    width: 40,
+    showHeader: false,
+    cursorBg: "#313244",
+  });
+  const cells = textCells(element);
+  expect(cells).toHaveLength(rows.length * columns.length);
+  expect(drawn(cells[0].content)).toContain("apple");
+  expect(cells[0].style.bg).toBe("#313244");
+  expect(element.style?.height).toBe(rows.length);
+});

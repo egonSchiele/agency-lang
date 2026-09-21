@@ -12,16 +12,7 @@ export type TreeNode = {
   traceId: string;
   parentId: string | null;
   children: TreeNode[];
-  // Synthetic, on-the-fly rows generated when a leaf event is
-  // expanded — none are part of the persistent forest:
-  //   - "jsonLine"      : one rendered line of the leaf's JSON payload
-  //   - "convoLine"     : one rendered conversation message (promptCompletion only)
-  //   - "convoMessage"  : header for a message too long to show inline; its
-  //                       convoLine children appear only when it is expanded
-  //   - "rawDataToggle" : expandable "raw data" header that, when opened,
-  //                       reveals the underlying JSON payload as jsonLine rows
-  nodeKind:
-    "trace" | "span" | "event" | "jsonLine" | "convoLine" | "convoMessage" | "rawDataToggle";
+  nodeKind: "trace" | "span" | "event";
   // For "trace": the trace_id; for "span": the span type (agentRun,
   // llmCall, ...); for "event": the data.type.
   label: string;
@@ -38,37 +29,4 @@ export type TreeNode = {
   // The raw event for leaf nodes. Spans don't carry one (multiple
   // events share a span).
   event?: EventEnvelope;
-};
-
-export type ViewerState = {
-  // The full forest (one root per trace_id).
-  roots: TreeNode[];
-  // ids of every node currently expanded.
-  expanded: Set<string>;
-  // Currently-focused node id (cursor position).
-  cursorId: string;
-  // Vertical scroll offset (line of the first visible row).
-  scrollTop: number;
-  // Set by the input layer; consumed by the run loop.
-  quit: boolean;
-  // ---- v2 additions ----
-  // Active substring query for `/`, `n`, `N`. Empty when search is off.
-  query?: string;
-  // Node ids that currently match `query`, in flatten order.
-  matches?: string[];
-  // Index into `matches` for the current "n/N" position.
-  matchIdx?: number;
-  // Help-screen overlay shown?
-  helpOpen?: boolean;
-  // Follow mode (`--follow` / `f`) — viewer re-reads the file when it grows.
-  followOn?: boolean;
-  // One-line status message (`copied 312 bytes`, etc.); auto-clears
-  // on the next keystroke. Owned by the input layer.
-  messageBar?: string;
-  // Width (in terminal columns) available to the viewer. Used to
-  // wrap long convoLine summaries onto multiple visible rows so
-  // promptCompletion messages aren't truncated with `…`. Kept on
-  // state so the renderer, input layer, and search all agree on
-  // the same row set.
-  viewportCols?: number;
 };

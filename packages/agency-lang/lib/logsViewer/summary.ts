@@ -1,13 +1,6 @@
+import { fmtUsd } from "./format.js";
 import { EventEnvelope, TreeNode } from "./types.js";
-import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
-import {
-  costColor,
-  durationColor,
-  fmtDuration,
-  spanDetail,
-  stripQuotes,
-  truncate,
-} from "./spanText.js";
+import { fmtDuration, spanDetail, stripQuotes, truncate } from "./spanText.js";
 
 export function summarize(evt: EventEnvelope): string {
   const d = evt.data;
@@ -187,49 +180,3 @@ function formatInterruptSuffix(data: any): string {
     return "";
   }
 }
-
-// ---------------------------------------------------------------------------
-// Styled-summary variants: produce the same text as the plain functions
-// above but wrap durations/costs in `{...-fg}...{/...-fg}` tags so the
-// TUI renderer can color them by magnitude. Token counts stay
-// uncolored (they're noisy and not actionable). The plain functions
-// are still used at tree-build time so `node.summary` stays grep-able
-// for search; the renderer asks for the styled version when drawing.
-
-export function summarizeSpanStyled(
-  node: TreeNode,
-  thresholds: ViewerThresholds = DEFAULT_THRESHOLDS,
-): string {
-  const head = spanHead(node);
-  const metrics = formatMetricsStyled(node, thresholds);
-  return metrics ? `${head} (${metrics})` : head;
-}
-
-export function summarizeTraceStyled(
-  node: TreeNode,
-  thresholds: ViewerThresholds = DEFAULT_THRESHOLDS,
-): string {
-  const shortTraceId = node.traceId.slice(0, 6);
-  const metrics = formatMetricsStyled(node, thresholds);
-  const head = node.firstTs !== undefined ? fmtTime(node.firstTs) : "trace";
-  const middle = metrics ? `  (${metrics})` : "";
-  return `${head}${middle}  [${shortTraceId}]`;
-}
-
-function formatMetricsStyled(node: TreeNode, t: ViewerThresholds): string {
-  const parts: string[] = [];
-  if (node.duration !== undefined) {
-    parts.push(wrapTag(fmtDuration(node.duration), durationColor(node.duration, t)));
-  }
-  if (node.tokens !== undefined) parts.push(`${node.tokens} tok`);
-  if (node.cost !== undefined) {
-    parts.push(wrapTag(fmtCost(node.cost), costColor(node.cost, t)));
-  }
-  return parts.join(", ");
-}
-
-function wrapTag(text: string, color: string | undefined): string {
-  if (!color) return text;
-  return `{${color}-fg}${text}{/${color}-fg}`;
-}
-import { fmtUsd } from "./format.js";

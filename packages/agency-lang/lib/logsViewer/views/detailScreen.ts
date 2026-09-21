@@ -1,3 +1,10 @@
+import { column } from "../../tui/builders.js";
+import type { Element } from "../../tui/elements.js";
+import { formatKey } from "../../tui/input/format.js";
+import type { KeyEvent } from "../../tui/input/types.js";
+import { paint, paintedLine, segment, type Painted } from "../../tui/paint.js";
+import { parseStyledText } from "../../tui/styleParser.js";
+import { resolveDetailRow } from "../detailTarget.js";
 import {
   cursorBindings,
   helpFrom,
@@ -5,182 +12,128 @@ import {
   runViewerKey,
   type ViewerBinding,
 } from "../keymap.js";
-import { paint, paintAnsi, paintedLine } from "../../tui/paint.js";
-// Full information for one call, as a scrollable page: metrics plus the
-// complete prompt transcript (llm) or the complete call payload (tools).
-// A viewer-level screen — reachable from the tree as well as the timeline
-// views — and the one place the one-line-per-row invariant is deliberately
-// broken: lines wrap, and scrolling clamps against the POST-wrap count.
-import { column } from "../../tui/builders.js";
-import type { Element } from "../../tui/elements.js";
-import type { KeyEvent } from "../../tui/input/types.js";
-import { formatKey } from "../../tui/input/format.js";
-import {
-  contextTokens,
-  cost as costOf,
-  tokensCached,
-  tokensOut,
-} from "../../statelog/wireAccessors.js";
-import { formatConversation } from "../conversation.js";
-import { walkNodes } from "../forest.js";
-import { resolveDetailNode } from "../detailTarget.js";
-import { fmtDuration, stripQuotes } from "../spanText.js";
+import { payloadFor } from "../payload.js";
+import { paintPayload } from "../screens/payloadPaint.js";
+import type { StoryRow } from "../story.js";
+import { THEME } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { spanExtent, timelineSpans } from "../timeline/spans.js";
-import { bottomHints, fmtOffset } from "./shared.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
-
+const LAYOUT = { fixedRows: 2 };
+type PayloadCache = { width: number; raw: boolean; lines: Painted[] };
 export class DetailScreen implements View {
   readonly viewName = "detail" as const;
-  private node: TreeNode | undefined;
+  private row: StoryRow | undefined;
+  private raw = false;
   private scroll = 0;
-  private message = "";
   private pageRows = 1;
   private totalRows = 0;
-
+  private message = "";
+  private cache: PayloadCache | undefined;
   constructor(
     roots: TreeNode[],
     private readonly rowId: string,
-    private readonly thresholds: ViewerThresholds,
+    _thresholds: ViewerThresholds,
   ) {
-    this.node = resolveDetailNode(roots, rowId);
+    this.setData(roots);
   }
-
+  private move(delta: number): void {
+    this.scroll = Math.max(
+      0,
+      Math.min(this.scroll + delta, Math.max(0, this.totalRows - this.pageRows)),
+    );
+  }
   private bindings(): ViewerBinding[] {
-    const move = (delta: number): void => {
-      this.scroll = Math.max(
-        0,
-        Math.min(this.scroll + delta, Math.max(0, this.totalRows - this.pageRows)),
-      );
-    };
     return [
       ...cursorBindings<ViewAction>({
-        by: move,
-        toTop: () => {
-          this.scroll = 0;
-        },
-        toBottom: () => move(Infinity),
+        by: (delta) => this.move(delta),
+        toTop: () => this.move(-Infinity),
+        toBottom: () => this.move(Infinity),
         page: () => this.pageRows,
         halfPage: () => Math.max(1, Math.floor(this.pageRows / 2)),
       }),
       { keys: ["Left", "h"], help: "back", hint: "← back", run: () => ({ kind: "back" }) },
       {
+        keys: ["r"],
+        help: "toggle raw JSON",
+        hint: "r raw",
+        run: () => {
+          this.raw = !this.raw;
+          this.scroll = 0;
+        },
+      },
+      {
         keys: ["y"],
         help: "copy the whole page",
         hint: "y copy",
-        run: () => ({ kind: "copy", text: this.allLines(10000).join("\n") }),
+        run: () => ({
+          kind: "copy",
+          text: this.allLines(10000)
+            .map((line) =>
+              parseStyledText(line)
+                .map((part) => part.text)
+                .join(""),
+            )
+            .join("\n"),
+        }),
       },
     ];
   }
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
-    if (this.node === undefined) {
+    if (!this.row) {
       return { kind: "back" };
     }
     this.totalRows = this.allLines(viewport.cols).length;
-    this.pageRows = Math.max(1, viewport.rows - 3);
+    this.pageRows = Math.max(1, viewport.rows - LAYOUT.fixedRows);
     return runViewerKey(this.bindings(), formatKey(event));
   }
   render(viewport: Viewport): Element {
     const all = this.allLines(viewport.cols);
-    const page = Math.max(1, viewport.rows - 3);
-    this.scroll = Math.max(0, Math.min(this.scroll, Math.max(0, all.length - page)));
-    const visible = all.slice(this.scroll, this.scroll + page);
-    const shownTo = Math.min(all.length, this.scroll + page);
+    this.totalRows = all.length;
+    this.pageRows = Math.max(1, viewport.rows - LAYOUT.fixedRows);
+    this.move(0);
+    const visible = all.slice(this.scroll, this.scroll + this.pageRows);
     return column(
-      { justifyContent: "flex-start" },
+      { height: viewport.rows, justifyContent: "flex-start" },
       paintedLine(
-        paint(`DETAIL  ${this.node?.summary ?? "(span no longer in the log)"}`, { fg: "#cdd6f4" }),
+        segment(`DETAIL ${this.row ? this.rowId : "(row no longer in the log)"}`, viewport.cols, {
+          style: { fg: THEME.accent },
+        }),
       ),
-      ...visible.map((text) => paintedLine(paintAnsi(text))),
+      column(
+        { height: this.pageRows, justifyContent: "flex-start" },
+        ...visible.map((line) => paintedLine(line)),
+      ),
       paintedLine(
         paint(
-          bottomHints(
-            `(${Math.min(this.scroll + 1, all.length)}–${shownTo} of ${all.length}) ${hintsFrom(this.bindings())}` +
-              (this.message ? `  ${this.message}` : ""),
-            "detail",
-            viewport.cols,
-          ),
-          { fg: "#7f849c" },
+          `(${Math.min(this.scroll + 1, all.length)}–${Math.min(this.scroll + this.pageRows, all.length)} of ${all.length}) ${hintsFrom(this.bindings())} ${this.message}`,
+          { fg: THEME.muted },
         ),
       ),
     );
   }
-
   setData(roots: TreeNode[]): void {
-    this.node = resolveDetailNode(roots, this.rowId);
+    this.row = resolveDetailRow(roots, this.rowId);
+    this.cache = undefined;
   }
-
   helpLines(): string[] {
     return helpFrom(this.bindings());
   }
-
   notify(message: string): void {
     this.message = message;
   }
-
-  setFollowIndicator(): void {
-    // The detail screen shows a single finished call; nothing to indicate.
-  }
-
-  /** The page content, wrapped to `cols`. Exposed for tests. */
-  allLines(cols: number): string[] {
-    if (this.node === undefined) return [];
-    return this.computeLines().flatMap((text) => wrap(text, Math.max(cols - 2, 8)));
-  }
-
-  private computeLines(): string[] {
-    const node = this.node!;
-    const out: string[] = [];
-    const extent = spanExtent(node);
-    const spans = timelineSpans(node, { hideKinds: [] });
-    if (extent !== undefined) {
-      // A leaf event yields no timeline span; its self-time IS its envelope.
-      const self = spans.length > 0 ? spans[0].selfMs : extent.end - extent.start;
-      out.push(
-        `start +${fmtOffset(0)}   duration ${fmtDuration(extent.end - extent.start, { minutes: true })}` +
-          `   self ${fmtDuration(self, { minutes: true })}`,
-      );
+  setFollowIndicator(): void {}
+  allLines(width: number): Painted[] {
+    if (!this.row) {
+      return [];
     }
-    out.push("");
-    const prompt = firstDescendantEvent(node, "promptCompletion");
-    if (prompt !== undefined) {
-      const d = prompt.event!.data;
-      out.push(`model: ${stripQuotes(typeof d.model === "string" ? d.model : undefined)}`);
-      const event = prompt.event!;
-      out.push(
-        `tokens: ${contextTokens(event)} context (${tokensCached(event)} cached) / ${tokensOut(event)} out` +
-          `   cost: $${costOf(event).toFixed(4)}`,
-      );
-      out.push("", "── transcript ──");
-      const messages = Array.isArray(d.messages) ? d.messages : [];
-      const completion =
-        d.completion?.output || d.completion?.toolCalls?.length
-          ? [{ role: "assistant", content: d.completion.output, toolCalls: d.completion.toolCalls }]
-          : [];
-      out.push(...formatConversation([...messages, ...completion]));
-      return out;
+    if (this.cache?.width !== width || this.cache?.raw !== this.raw) {
+      this.cache = {
+        width,
+        raw: this.raw,
+        lines: paintPayload(payloadFor(this.row, { raw: this.raw }), width),
+      };
     }
-    const tool =
-      firstDescendantEvent(node, "toolCallStart") ?? firstDescendantEvent(node, "toolCall");
-    const payload = tool?.event ?? node.event;
-    if (payload !== undefined) {
-      out.push("── call ──");
-      out.push(...JSON.stringify(payload.data, null, 2).split("\n"));
-    }
-    return out;
+    return this.cache.lines;
   }
-}
-
-function firstDescendantEvent(node: TreeNode, type: string): TreeNode | undefined {
-  return walkNodes(node).find((entry) => entry.event?.data.type === type);
-}
-
-function wrap(text: string, width: number): string[] {
-  if (text.length <= width) return [text];
-  const out: string[] = [];
-  for (let i = 0; i < text.length; i += width) {
-    out.push(text.slice(i, i + width));
-  }
-  return out;
 }

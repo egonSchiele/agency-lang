@@ -1,10 +1,17 @@
-import { findNode } from "./forest.js";
-import { parseRoundId, roundsOf } from "./timeline/rounds.js";
+import { forestOutline, storyOutline, type StoryRow } from "./story.js";
 import type { TreeNode } from "./types.js";
 
-export function resolveDetailNode(roots: TreeNode[], rowId: string): TreeNode | undefined {
-  if (parseRoundId(rowId) === undefined) {
-    return findNode(roots, rowId);
+/** Resolve the original id on every parse; event leaf numbers can shift. */
+export function resolveDetailRow(roots: TreeNode[], rowId: string): StoryRow | undefined {
+  for (const trace of roots) {
+    const story = storyOutline(trace, { admin: true }).find((row) => row.id === rowId);
+    if (story) {
+      return story;
+    }
+    const raw = forestOutline(trace, { admin: true }).find((row) => row.id === rowId);
+    if (raw) {
+      return raw;
+    }
   }
-  return roots.flatMap((root) => roundsOf(root)).find((round) => round.id === rowId)?.node;
+  return undefined;
 }

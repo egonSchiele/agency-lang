@@ -24,7 +24,7 @@ export type ViewAction =
   | { kind: "none" };
 
 export type View = {
-  viewName: "tree" | "tracePicker" | "occurrences" | "detail";
+  viewName: "tracePicker" | "occurrences" | "detail";
   /** Synchronous. Viewport is a parameter so views own their paging keys
    *  (Ctrl-F/B/D/U are viewport arithmetic — the old shell kept them out
    *  of the reducer for exactly that reason). */

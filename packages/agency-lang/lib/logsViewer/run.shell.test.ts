@@ -98,7 +98,7 @@ async function driveEmbedded(keys: (string | { key: string })[]) {
   });
 }
 function cursorLine(text: string): string {
-  return text.split("\n").find((line) => line.trimStart().startsWith("> ")) ?? "";
+  return text.split("\n").find((line) => line.trimStart().startsWith("▶ ")) ?? "";
 }
 describe("the viewer shell", () => {
   it("number keys switch screens and the tab strip says where you are", async () => {
@@ -110,7 +110,7 @@ describe("the viewer shell", () => {
 
   it("the focus travels: a call selected in the timeline is revealed in the trace", async () => {
     const out = await drive(["4", "j", "2"]); // the timeline's second row is the llm call
-    expect(cursorLine(out.lastText())).toMatch(/llmCall/);
+    expect(cursorLine(out.lastText())).toMatch(/round\s+1/);
   });
 
   it("Esc walks the ladder: overlay, then screen state, then home, then nothing", async () => {
@@ -255,17 +255,17 @@ describe("the viewer shell", () => {
     expect(texts(out).join("\n")).toContain("follow unavailable");
   });
 
-  it("promptLine round-trip drives tree search", async () => {
+  it("promptLine round-trip filters the trace", async () => {
     const out = new FrameRecorder();
     const input = new ScriptedInput(["2", "/", "q"]);
-    input.feedLine("agentRun");
+    input.feedLine("add two numbers");
     await runViewer({
       jsonl: sample,
       input,
       output: out,
       viewport: { rows: 20, cols: 120 },
     });
-    expect(out.lastText()).toContain("match 1/");
+    expect(out.lastText()).toContain("/add two numbers");
   });
 
   it("quit works from a timeline view", async () => {
@@ -307,7 +307,7 @@ it("a second round opens its own answer and token counts in detail", async () =>
     .join("\n");
   const out = await driveJsonl(jsonl, ["4", "j", "j", "d"]);
   expect(out.lastText()).toContain("second answer");
-  expect(out.lastText()).toContain("48 context (31 cached) / 9 out");
+  expect(out.lastText()).toContain("context 48 (31 cached) · fresh 17 · out 9");
   expect(out.lastText()).not.toContain("first answer");
 });
 it("number keys leave an open detail overlay in place", async () => {
@@ -338,9 +338,9 @@ it("the shell table gives each command one owner", () => {
     ),
   ).toEqual([]);
 });
-it("legacy trace navigation stays in the trace named by the header", async () => {
+it("trace navigation stays in the trace named by the header", async () => {
   const out = await driveJsonl(twoTraceSample, [esc, "2", "g"]);
   expect(out.lastText()).toContain("trace 2/2");
-  expect(cursorLine(out.lastText())).toContain("[def]");
+  expect(out.lastText()).toContain("TRACE def");
   expect(out.lastText()).not.toContain("[abc]");
 });

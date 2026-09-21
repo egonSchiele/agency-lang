@@ -408,6 +408,14 @@ export function* walkNodes(
         for (const accessElement of node.accessChain) {
           if (accessElement.kind === "index") {
             yield* walkNodes([accessElement.index], [...ancestors, node], scopes);
+          } else if (accessElement.kind === "slice") {
+            // `arr[a:b] = x`. Same as the read side under valueAccess.
+            if (accessElement.start) {
+              yield* walkNodes([accessElement.start], [...ancestors, node], scopes);
+            }
+            if (accessElement.end) {
+              yield* walkNodes([accessElement.end], [...ancestors, node], scopes);
+            }
           } else if (accessElement.kind === "methodCall") {
             yield* walkNodes([accessElement.functionCall], [...ancestors, node], scopes);
           }
@@ -424,6 +432,11 @@ export function* walkNodes(
         if (caseItem.type === "newLine") continue;
         if (caseItem.caseValue !== "_") {
           yield* walkNodes([caseItem.caseValue as AgencyNode], [...ancestors, node], scopes);
+        }
+        // Only present on an unlowered parse (formatter, templates, hygiene).
+        // The compile path has already folded the guard into an if-chain.
+        if (caseItem.guard) {
+          yield* walkNodes([caseItem.guard as AgencyNode], [...ancestors, node], scopes);
         }
       }
     } else if (node.type === "typeTestExpression") {

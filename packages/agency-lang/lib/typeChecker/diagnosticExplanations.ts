@@ -525,6 +525,12 @@ node main() {
 
 **How to fix:** bind it with \`.partial(...)\` before passing the function as a tool.`,
 
+  toolIsNotAFunction: `An entry in an \`llm()\` call's \`tools\` list is a plain value such as a string or a number. Only functions can be tools, and the call would fail when it runs.
+
+The usual cause is a local variable with the same name as an imported function. In \`const summary: string = llm("...", tools: [summary])\`, the name \`summary\` inside the list means the new local, not the import.
+
+**How to fix:** rename the local variable, or import the function under another name with \`import { summary as summaryTool }\`.`,
+
   toolOptionalParamsDropped: `A function passed as a tool has optional function-typed parameters that the LLM cannot fill, so they are dropped and the tool runs with each parameter's declared default. This is a warning, not an error, because a default exists — but the body must be prepared to run without those functions.
 
 **How to fix:** confirm the defaults are correct for the tool use, or bind the parameters explicitly with \`.partial(...)\` if you need specific implementations.`,

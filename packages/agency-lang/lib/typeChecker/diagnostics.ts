@@ -670,6 +670,12 @@ export const DIAGNOSTICS = {
     message:
       "Parameter '{name}' on '{fn}' has no default but comes after a defaulted parameter. Put defaulted parameters last, so an omitted argument is always a trailing one.",
   },
+  toolIsNotAFunction: {
+    code: "AG6040",
+    severity: "error",
+    message:
+      "'{expr}' is passed as a tool, but it is a value of type '{actual}', not a function.{shadowHint}",
+  },
   staticReassignedAtTopLevel: {
     code: "AG7004",
     severity: "error",

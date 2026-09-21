@@ -63,6 +63,18 @@ describe("tool-position binding check (compile-time)", () => {
     expect(e.loc).toBeDefined();
   });
 
+  it("checks the named-argument form, llm(p, tools: [...]), the same way", () => {
+    const diags = checkSource(`
+      def deploy(block: () => void): void {}
+      node main() {
+        llm("x", tools: [deploy])
+      }
+    `);
+    const errs = errorsOnly(diags);
+    expect(errs.length).toBe(1);
+    expect(errs[0].message).toContain(".partial(");
+  });
+
   // #13 — Agency accepts `= null` for optional block params (see
   // stdlib/thread.agency :: guard). We use that as the canonical
   // optional-block declaration form.

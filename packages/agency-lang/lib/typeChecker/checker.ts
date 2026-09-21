@@ -1,4 +1,5 @@
 import { ANY_T } from "./primitives.js";
+import { checkToolElementTypes } from "./toolElementTypes.js";
 import { diagnostic } from "./diagnostics.js";
 import { AgencyNode, FunctionCall, FunctionParameter, VariableType } from "../types.js";
 import { walkNodes, isInsideBlock, type WalkAncestor } from "../utils/node.js";
@@ -314,6 +315,7 @@ function checkSingleFunctionCall(call: FunctionCall, scope: Scope, ctx: TypeChec
   }
 
   if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_TYPES, call.functionName)) {
+    checkToolElementTypes(call, scope, ctx);
     checkCallAgainstBuiltinSig(
       call,
       BUILTIN_FUNCTION_TYPES[call.functionName],

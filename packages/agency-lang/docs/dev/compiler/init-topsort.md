@@ -247,6 +247,31 @@ Static vars cannot depend on each other in a cycle. Break the cycle
 by extracting one into a third file or computing from a literal.
 ```
 
+### Import cycles between files
+
+The two graphs above are about variables. A cycle between files that involves no
+static or global variable passes both sorts, and it still cannot run. Each module
+registers the names it imports as tools at its top level, so when `a.agency` and
+`b.agency` import each other, `b.js` runs `__registerTool(aVal)` while `a.js` is
+half loaded, and Node reports "Cannot access 'aVal' before initialization". A
+cycle made only of type imports fails the same way, because the generated import
+line is the same.
+
+`findImportCycle` (`lib/compiler/importCycle.ts`) runs in `buildCompiledClosure`
+after both sorts and throws a `CompileClosureError`:
+
+```
+Error: Circular import
+  a.agency → b.agency → a.agency
+```
+
+It runs after the sorts on purpose. A cycle between static vars is also an import
+cycle, and "Circular static dependency" names the variables, which is more use.
+
+The graph comes from `agencyImportTargets`, so it follows relative imports,
+`import node`, and re-exports, and skips `std::` and `pkg::` modules like the rest
+of the closure walk does.
+
 ## ModuleInitPlan + per-module codegen
 
 `buildPlans` projects the closure-wide topsort into a

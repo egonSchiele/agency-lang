@@ -233,6 +233,12 @@ export const DIAGNOSTICS = {
     message:
       "{contextLabel} cannot `interrupt(...)` — interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body.",
   },
+  interruptingCallInStaticInit: {
+    code: "AG7008",
+    severity: "error",
+    message:
+      "{contextLabel} calls `{fn}`, which may interrupt [{effects}]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site by ending the statement with `with approve`.",
+  },
   unionFieldNotOnEveryMember: {
     code: "AG2008",
     severity: "error",
@@ -560,6 +566,11 @@ export const DIAGNOSTICS = {
     message:
       "'{name}' is defined in '{module}' but is not exported. Add the 'export' keyword to its definition.",
   },
+  sandboxImportRefused: {
+    code: "AG4013",
+    severity: "error",
+    message: "{violation}",
+  },
   reservedBlockKeyword: {
     code: "AG4006",
     severity: "error",
@@ -669,6 +680,12 @@ export const DIAGNOSTICS = {
     severity: "error",
     message:
       "Parameter '{name}' on '{fn}' has no default but comes after a defaulted parameter. Put defaulted parameters last, so an omitted argument is always a trailing one.",
+  },
+  toolIsNotAFunction: {
+    code: "AG6040",
+    severity: "error",
+    message:
+      "'{expr}' is passed as a tool, but it is a value of type '{actual}', not a function.{shadowHint}",
   },
   staticReassignedAtTopLevel: {
     code: "AG7004",

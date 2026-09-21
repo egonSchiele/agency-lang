@@ -9,6 +9,7 @@ import { Scope } from "./scope.js";
 import { walkNodes } from "../utils/node.js";
 import { isAssignable, safeResolveType } from "./assignability.js";
 import { literalToType } from "./literalType.js";
+import { NEVER_T } from "./primitives.js";
 import { resultToObjectUnion } from "./resultUnion.js";
 import { unescapeStringLiteralValue } from "../parsers/parsers.js";
 // Type-only import: `flow.ts` imports `Refine`/`NarrowCandidate` from here, so a
@@ -311,8 +312,12 @@ function literalValuesEqual(
 
 /**
  * Filter a union's members by `prop == literal` (keep) or `prop != literal`
- * (!keep). Sound/conservative: drops only provably-excluded members; never
- * narrows to `never`; non-union → null (no narrowing).
+ * (!keep). Sound/conservative: drops only provably-excluded members. A lone
+ * object type counts as a union of one.
+ *
+ * When EVERY member is provably excluded the branch cannot run, and the result
+ * is `never`, so reads inside it report nothing. Guarded match arms depend on
+ * this; see docs/dev/compiler/typechecker/narrowing/README.md.
  */
 export function narrowUnionByDiscriminant(
   type: VariableType,
@@ -325,14 +330,17 @@ export function narrowUnionByDiscriminant(
   // Result is a discriminated union on `success` — view it as one so the same
   // member-filter handles isSuccess/isFailure/`if (r.success)` narrowing.
   if (resolved.type === "resultType") resolved = resultToObjectUnion(resolved, aliases);
-  if (resolved.type !== "unionType") return null;
+  if (resolved.type !== "unionType" && resolved.type !== "objectType") {
+    return null;
+  }
+  const unionMembers = resolved.type === "unionType" ? resolved.types : [resolved];
   // A union *member* may itself be a Result — e.g. a flow join where one branch
   // kept the raw `Result<…>` and another expanded it to its `{success:…}` object
   // form (mergeFlows + uniteTypes produce `Result<…> | {success:false,…}`).
   // Expand such members so the discriminant filter below sees homogeneous object
   // members; otherwise a raw `resultType` has no discriminant property, survives
   // every filter, and silently blocks narrowing.
-  const members = resolved.types.flatMap((m) => {
+  const members = unionMembers.flatMap((m) => {
     const rm = safeResolveType(m, aliases);
     return rm.type === "resultType" ? resultToObjectUnion(rm, aliases).types : [m];
   });
@@ -343,7 +351,12 @@ export function narrowUnionByDiscriminant(
     const match = propType ? literalTypeMatches(propType, literal, aliases) : "unknown";
     return keep ? match !== "no" : match !== "yes";
   });
-  if (kept.length === members.length || kept.length === 0) return null;
+  if (kept.length === 0) {
+    return NEVER_T;
+  }
+  if (kept.length === members.length) {
+    return null;
+  }
   return kept.length === 1 ? kept[0] : { type: "unionType", types: kept };
 }
 

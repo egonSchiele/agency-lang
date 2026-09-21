@@ -35,6 +35,12 @@ describe("effects reaching diagnostics across a file boundary", () => {
     expect(report.warnings.map((warning) => warning.code)).toContain("AG3009");
   });
 
+  it("AG7008 reads a local function's effects, not a same-named import's", () => {
+    const local = `def h(): string {\n  return "local"\n}\n`;
+    const report = check(`${IMPORT}${local}static const x = h()\nnode main() {\n  print(x)\n}\n`);
+    expect(report.errors.map((error) => error.code)).not.toContain("AG7008");
+  });
+
   it("AG3009 stays quiet when the call is inside a handle block", () => {
     // Suppression is lexical: isInsideHandler walks the ancestor chain for a
     // handleBlock, so the call has to be INSIDE the block, not beside it.

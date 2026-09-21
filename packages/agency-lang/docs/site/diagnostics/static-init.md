@@ -78,3 +78,15 @@ Mark the variable `static const`, or pass a literal:
 static const minAge: number = 5
 type Adult = GreaterThan(minAge)
 ```
+
+<a id="ag7008"></a>
+
+## AG7008 — &#123;contextLabel&#125; calls `&#123;fn&#125;`, which may interrupt [&#123;effects&#125;]. Interrupts pause the per-run execution stack, but static initializers run once at process startup before any agent run has begun. Move this into a node body, or answer it at the site by ending the statement with `with approve`.
+
+*Default severity: error.*
+
+A `static` initializer calls a function that can raise an interrupt. A static initializer runs once at process startup, before any run exists. If a policy (`--policy`, `--approve`) approves the interrupt, the call goes ahead. Otherwise the interrupt needs a person to answer it, which means pausing the run and saving a checkpoint, and there is no run to pause: the call fails with "Cannot create checkpoint". The same applies to a function the initializer hands to another call, as in `helper(read)`.
+
+This is the same problem as writing `interrupt` directly in the initializer, one call away.
+
+**How to fix:** move the call into a node body, or answer the interrupt where it is raised: `static const home = env("HOME") with approve`.

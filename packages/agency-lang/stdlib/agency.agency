@@ -638,12 +638,12 @@ export idempotent def typecheck(
   strict: boolean = false,
 ): Result<TypeCheckReport> {
   """
-  Type-check Agency source code given as a string. To check a file that is already on disk, call `typecheckFile` with its path instead of pasting its contents here.
+  Type-check Agency source code given as a string. To check a file that is already on disk, call `typecheckFile` with its path instead of pasting its contents here. A clean report does not mean `compile` or `run` will accept the code: those refuse TypeScript, JavaScript, Node and `pkg::` imports and compile-time splices, and this check reports them only when `strict` is true.
 
   @param source - Agency source code as a string
   @param ignoreCodes - Diagnostic codes (e.g. ["AG3009"]) to drop from the report's errors and warnings
   @param dir - Directory the source's relative imports resolve against. Empty (the default) means local imports cannot resolve.
-  @param strict - True adds the name checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, and a JavaScript global outside the sandbox allowlist is refused. Use it for code that will run sandboxed, such as a tool an agent wrote
+  @param strict - True adds the checks a sandboxed (`--agency-only`) compile uses: a name that resolves to nothing is an error, a JavaScript global outside the sandbox allowlist is refused, and so is any import `compile` would refuse (error AG4013). Use it for code that will run sandboxed, such as a tool an agent wrote
   """
   const report = try _typecheck(source, dir, strict)
   if (report is failure) {
@@ -740,6 +740,9 @@ export idempotent def typecheckFile(dir: string, filename: string): Result {
   """
   Type-check an Agency file on disk. The file is read from dir/filename,
   with relative imports inside it resolved against the file's directory.
+  No import policy applies: a file that imports TypeScript, JavaScript or an
+  npm package can pass here and still be refused by `compileFile` and
+  `runFile`, which accept only `std::` modules and `.agency` files inside dir.
 
   @param dir - The directory containing the file
   @param filename - The agency file to type-check. Must stay inside dir; to

@@ -129,3 +129,15 @@ Under `--agency-only` (`typechecker.jsGlobals: "sandbox"`), a program may not re
 A `let` or `const` inside a function or node body reuses the name of one of its parameters. Parameters and locals live in different slots at runtime, and a read after the redeclare still resolves to the parameter slot, so the new value would silently never be seen.
 
 Assign to the parameter instead (`u = { tag: "b", n: 1 }`), or give the local a different name.
+
+<a id="ag4013"></a>
+
+## AG4013 — &#123;violation&#125;
+
+*Default severity: error.*
+
+The code was checked the strict way, `typecheck(source, strict: true)`, which is for code that will run sandboxed. Sandboxed code may import `std::` modules and `.agency` files inside its own directory, and nothing else. A TypeScript or JavaScript file, a Node module, a `pkg::` package, and a compile-time splice are all refused, because none of them raise interrupts and so nothing could ask before they run.
+
+`compile` and `runFile` refuse the same things, so this error means the code could not have run.
+
+**How to fix:** import the function from a `std::` module, or move the code it needs into an `.agency` file beside it.

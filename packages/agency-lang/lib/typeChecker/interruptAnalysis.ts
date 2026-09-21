@@ -9,12 +9,12 @@ import { walkNodes, type WalkAncestor } from "../utils/node.js";
 import type { AgencyNode, Expression, VariableType } from "../types.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
 import type { Scope } from "./scope.js";
-import { isInsideHandler } from "./checker.js";
 import {
   addUnique,
   argumentExpression,
   calledName,
   collectBodyFacts,
+  isInsideHandler,
   unique,
 } from "../analysis/bodyFacts.js";
 import { propagateToFixpoint } from "../analysis/effects.js";
@@ -136,8 +136,22 @@ function calleeDeclaredEffects(
   const t = scope.lookup(functionName);
   if (t === undefined || isAnyType(t)) return [];
   const resolved = safeResolveType(t, ctx.getTypeAliases());
-  if (resolved.type !== "blockType" || !resolved.raises) return [];
-  const set = resolveEffectSet(resolved.raises, ctx.getTypeAliases());
+  if (resolved.type !== "blockType") {
+    return [];
+  }
+  return declaredLabels(resolved, ctx);
+}
+
+/** The concrete labels in a function type's `raises` clause. `<*>` gives [],
+ *  because it has no labels to attribute. */
+function declaredLabels(
+  fnType: Extract<VariableType, { type: "blockType" }>,
+  ctx: TypeCheckerContext,
+): string[] {
+  if (!fnType.raises) {
+    return [];
+  }
+  const set = resolveEffectSet(fnType.raises, ctx.getTypeAliases());
   return set.any ? [] : set.labels;
 }
 
@@ -154,18 +168,17 @@ function collectFromBody(
   ctx: TypeCheckerContext,
 ): FunctionProfile {
   const facts = collectBodyFacts(body);
+  const argRefs = facts.calls.map((call) => functionRefsInArgs(call.arguments, scope, ctx));
   return {
     effects: unique([
       ...facts.effects,
+      ...argRefs.flatMap((refs) => refs.effects),
       // A call THROUGH a function-typed variable (a callback) contributes the
       // variable's declared effects. Named defs resolve via the callee lookup
       // instead; they aren't blockTypes, so this adds nothing for them.
       ...facts.callees.flatMap((name) => calleeDeclaredEffects(name, scope, ctx)),
     ]),
-    calleeKeys: unique([
-      ...facts.callees,
-      ...facts.calls.flatMap((call) => functionRefsInArgs(call.arguments, scope, ctx)),
-    ]),
+    calleeKeys: unique([...facts.callees, ...argRefs.flatMap((refs) => refs.names)]),
   };
 }
 
@@ -185,34 +198,66 @@ function formatResult(
 
 // -- Helpers --
 
-/** Extract function names referenced in arguments via functionRefType synthesis. */
+/** What the function values passed as arguments can raise: `names` are
+ *  named functions, resolved through the call graph, and `effects` are the
+ *  labels a function TYPE declares, e.g. a parameter `f: () -> string raises
+ *  <std::read>` passed on as `tools: [f]`. */
+type ArgFunctionRefs = { names: string[]; effects: string[] };
+
 function functionRefsInArgs(
   args: (Expression | SplatExpression | NamedArgument)[],
   scope: Scope,
   ctx: TypeCheckerContext,
-): string[] {
-  const names: string[] = [];
+): ArgFunctionRefs {
+  const refs: ArgFunctionRefs = { names: [], effects: [] };
   for (const arg of args) {
-    functionNamesFromType(synthType(argumentExpression(arg), scope, ctx), names);
+    const argType = synthType(argumentExpression(arg), scope, ctx);
+    collectFunctionRefs(argType, ctx, refs, []);
   }
-  return names;
+  return refs;
 }
 
-/** Recursively extract function names from a synthesized type. */
-function functionNamesFromType(t: VariableType, out: string[]): void {
+/** Recursively collect function references from a synthesized type.
+ *  `seenAliases` stops a recursive alias such as `type Tree = { kids: Tree[] }`. */
+function collectFunctionRefs(
+  t: VariableType,
+  ctx: TypeCheckerContext,
+  out: ArgFunctionRefs,
+  seenAliases: string[],
+): void {
   if (isAnyType(t)) return;
+  if (t.type === "typeAliasVariable") {
+    if (seenAliases.includes(t.aliasName)) {
+      return;
+    }
+    const resolved = safeResolveType(t, ctx.getTypeAliases());
+    if (resolved.type === "typeAliasVariable") {
+      return;
+    }
+    collectFunctionRefs(resolved, ctx, out, [...seenAliases, t.aliasName]);
+    return;
+  }
   switch (t.type) {
     case "functionRefType":
-      addUnique(out, t.name);
+      addUnique(out.names, t.name);
+      break;
+    case "blockType":
+      for (const label of declaredLabels(t, ctx)) {
+        addUnique(out.effects, label);
+      }
       break;
     case "arrayType":
-      functionNamesFromType(t.elementType, out);
+      collectFunctionRefs(t.elementType, ctx, out, seenAliases);
       break;
     case "objectType":
-      for (const prop of t.properties) functionNamesFromType(prop.value, out);
+      for (const prop of t.properties) {
+        collectFunctionRefs(prop.value, ctx, out, seenAliases);
+      }
       break;
     case "unionType":
-      for (const member of t.types) functionNamesFromType(member, out);
+      for (const member of t.types) {
+        collectFunctionRefs(member, ctx, out, seenAliases);
+      }
       break;
   }
 }
@@ -261,7 +306,7 @@ export function buildInterruptCallGraph(
           });
         } else if (node.type === "functionCall") {
           addEdge(node.functionName, enclosing);
-          for (const refName of functionRefsInArgs(node.arguments, info.scope, ctx)) {
+          for (const refName of functionRefsInArgs(node.arguments, info.scope, ctx).names) {
             addEdge(refName, enclosing);
           }
         } else if (node.type === "gotoStatement") {
@@ -365,7 +410,7 @@ export function checkUnhandledInterruptWarnings(
       if (called === null) continue;
       const kinds = interruptEffectsByFunction[called];
       if (!kinds || kinds.length === 0) continue;
-      if (isInsideHandler(ancestors)) continue;
+      if (isInsideHandler(ancestors, node)) continue;
       const kindList = kinds.map((entry) => entry.effect).join(", ");
       // The guard construct desugars to a `_guard` call before this
       // walk (guardDesugar.ts); users wrote `guard(...) { }`, so the

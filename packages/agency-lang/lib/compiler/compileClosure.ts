@@ -36,6 +36,7 @@ import {
   StaticReferencesGlobalError,
 } from "./initDepGraph.js";
 import { topSortInitGraph, type CycleError } from "./topSortInitGraph.js";
+import { findImportCycle, formatImportCycleError, type ImportGraph } from "./importCycle.js";
 import {
   isNonTemplatedStdlib,
   isAgencyImport,
@@ -144,6 +145,13 @@ export function buildCompiledClosure(
   const staticOrder = sortOrThrow(staticGraph, "static");
   const globalOrder = sortOrThrow(globalGraph, "global");
 
+  // After the two sorts on purpose: a cycle between static vars is also an
+  // import cycle, and "Circular static dependency" names the variables.
+  const importCycle = findImportCycle(importGraphOf(programs));
+  if (importCycle) {
+    throw new CompileClosureError(formatImportCycleError(importCycle));
+  }
+
   // Reject intra-file use-before-def in either phase. Same-file named
   // decls whose plan order disagrees with source order would otherwise
   // be silently reordered by the section assembler — that is a
@@ -184,6 +192,15 @@ export function buildCompiledClosure(
     resolver,
     plans,
   };
+}
+
+function importGraphOf(programs: Record<string, AgencyProgram>): ImportGraph {
+  return Object.fromEntries(
+    Object.entries(programs).map(([moduleId, program]) => [
+      moduleId,
+      agencyImportTargets(program, moduleId),
+    ]),
+  );
 }
 
 /**

@@ -66,7 +66,7 @@ function isBound(toolExpr: AgencyNode, paramName: string): boolean {
  * (spread elements, bare identifiers, non-array expressions); the runtime
  * backstop handles those cases at LLM-request time.
  */
-function resolveStaticTools(opt: AgencyNode | undefined): AgencyNode[] {
+export function resolveStaticTools(opt: AgencyNode | undefined): AgencyNode[] {
   if (!opt) return [];
   if (opt.type !== "agencyArray") return [];
   // If the array contains *any* spread, defer the whole thing to the
@@ -124,15 +124,19 @@ function classifyToolParam(param: FunctionParameter, toolExpr: AgencyNode): Para
   return { kind: "required-unbound", param };
 }
 
-/** Locate the `tools:` value inside an `llm(...)` call's options object. */
-function findToolsOption(llmCall: AgencyNode): AgencyNode | undefined {
+/** Locate the `tools:` value of an `llm(...)` call, written either as a named
+ *  argument (`llm(p, tools: [...])`) or inside an options object
+ *  (`llm(p, { tools: [...] })`). */
+export function findToolsOption(llmCall: AgencyNode): AgencyNode | undefined {
   if (llmCall.type !== "functionCall") return undefined;
   if (llmCall.functionName !== "llm") return undefined;
+  for (const arg of llmCall.arguments) {
+    if (arg.type === "namedArgument" && arg.name === "tools") {
+      return arg.value as AgencyNode;
+    }
+  }
   const optsArg = llmCall.arguments[1];
   if (!optsArg) return undefined;
-  // Options arg may itself be an unwrapped expression (positional) or a
-  // namedArgument (rare). For llm(prompt, { tools: [...] }) it's the
-  // agencyObject literal at arguments[1].
   const inner = optsArg.type === "namedArgument" ? optsArg.value : optsArg;
   if (inner.type !== "agencyObject") return undefined;
   for (const entry of inner.entries) {

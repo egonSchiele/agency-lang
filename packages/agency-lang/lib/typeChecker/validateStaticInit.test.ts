@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { parseAgency } from "../parser.js";
 import { buildCompilationUnit } from "../compilationUnit.js";
 import { typeCheck } from "./index.js";
+import { typecheckSource } from "./testUtils.js";
+import { checkInterruptingCalls } from "./staticInitRules.js";
 
 // Mirrors the helper used by `constReassignment.test.ts`. Returns
 // just the error messages so assertions stay terse.
@@ -109,5 +111,152 @@ node main() {
 }
 `);
     expect(errs.filter((m) => /Cannot mutate static/.test(m)).length).toBe(0);
+  });
+});
+
+// Issue #912: the interrupt is a call or two away from the initializer.
+describe("validateStaticInit — a call that can interrupt", () => {
+  const HEAD = `
+effect test::risky { what: string }
+def risky(): string {
+  return interrupt test::risky("ok?", { what: "x" })
+  return "real"
+}
+def viaHelper(): string { return risky() }
+def safe(): string { return "fine" }`;
+
+  // The rule reads the symbol table's effect pass, so these go through
+  // typecheckSource, which builds one. The file's `check` helper does not.
+  const check = (source: string): string[] => typecheckSource(source).map((e) => e.message);
+
+  const interrupting = (errs: string[]): string[] =>
+    errs.filter((m) => m.includes("which may interrupt"));
+
+  it("rejects a direct call to an interrupting function", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+static const b = risky()
+node main() { return b }`),
+    );
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain("Static const `b` calls `risky`");
+    expect(errs[0]).toContain("[test::risky]");
+    expect(errs[0]).toContain("with approve");
+  });
+
+  it("rejects an interrupt two calls away, and one nested in an argument", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+def wrap(s: string): string { return s }
+static const c = viaHelper()
+static const d = wrap(risky())
+node main() { return c }`),
+    );
+    expect(errs).toHaveLength(2);
+  });
+
+  it("rejects it in a static bare statement", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+static risky()
+node main() { return 1 }`),
+    );
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain("Static bare statement");
+  });
+
+  it("accepts a call answered at the site, and a call that cannot interrupt", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+static const e = risky() with approve
+static const f = risky() with reject
+static const g = safe()
+node main() { return e }`),
+    );
+    expect(errs).toEqual([]);
+  });
+
+  it("accepts a helper that answers its own interrupt", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+def answered(): string { return risky() with approve }
+def viaAnswered(): string { return answered() }
+def inHandleBlock(): string {
+  handle { return risky() } with (intr) { return approve() }
+}
+static const m = answered()
+static const n = viaAnswered()
+static const o = inHandleBlock()
+node main() { return m }`),
+    );
+    expect(errs).toEqual([]);
+  });
+
+  it("a helper that only propagates has answered nothing", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+def passesOn(): string { return risky() with propagate }
+static const p = passesOn()
+node main() { return p }`),
+    );
+    expect(errs).toHaveLength(1);
+  });
+
+  it("with propagate answers nothing, so it is still rejected", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+static const h = risky() with propagate
+node main() { return h }`),
+    );
+    expect(errs).toHaveLength(1);
+  });
+
+  it("a raise in the handler's own body is not answered by that handler", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+def raisesWhileHandling(): string {
+  handle { return safe() } with (intr) {
+    const r = risky()
+    return approve()
+  }
+}
+static const q = raisesWhileHandling()
+node main() { return q }`),
+    );
+    expect(errs).toHaveLength(1);
+    expect(errs[0]).toContain("calls `raisesWhileHandling`");
+  });
+
+  it("a function handed to a call counts as called, directly and through a helper", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+def run(cb: () -> string): string { return cb() }
+def hands(): string { return run(risky) }
+static const s = run(risky)
+static const t = hands()
+static const u = run(safe)
+static const v = run(risky) with approve
+node main() { return s }`),
+    );
+    expect(errs).toHaveLength(2);
+    expect(errs[0]).toContain("Static const `s` calls `risky`");
+    expect(errs[1]).toContain("Static const `t` calls `hands`");
+  });
+
+  it("a call named after an inherited Object property finds no effects", () => {
+    const parsed = parseAgency(`static const w = hasOwnProperty("a")`);
+    if (!parsed.success) throw new Error(parsed.message);
+    const statics = parsed.result.nodes.filter((node) => node.type === "assignment");
+    expect(statics).toHaveLength(1);
+    expect(checkInterruptingCalls(statics[0], "Static const \`w\`", {})).toEqual([]);
+  });
+
+  it("a non-static top-level const is not this rule's business", () => {
+    const errs = interrupting(
+      check(`${HEAD}
+node main() { const k = risky() with approve
+ return k }`),
+    );
+    expect(errs).toEqual([]);
   });
 });

@@ -14,6 +14,7 @@ import type { FunctionCall } from "../types/function.js";
 import type { ValueAccess } from "../types/access.js";
 import type { InterruptStatement } from "../types/interruptStatement.js";
 import type { GotoStatement } from "../types/gotoStatement.js";
+import type { HandleBlock } from "../types/handleBlock.js";
 import type { SplatExpression, NamedArgument } from "../types/dataStructures.js";
 
 export type BodyFacts = {
@@ -44,7 +45,70 @@ const isGoto = (visit: Visit): visit is Visit & { node: GotoStatement } =>
 const isGuard = (visit: Visit): boolean => visit.node.type === "guardBlock";
 
 export function collectBodyFacts(body: AgencyNode[]): BodyFacts {
-  const visits: Visit[] = [...walkNodes(body)];
+  return factsFrom([...walkNodes(body)]);
+}
+
+/**
+ * The same reading, keeping only the raises and calls that no handler in this
+ * body answers. `read(f) with approve` is left out, a bare `read(f)` is kept.
+ *
+ * This is what decides whether a function is safe to call where no handler and
+ * no checkpoint can exist, such as a static initializer (issue #912).
+ */
+export function collectUnansweredFacts(body: AgencyNode[]): BodyFacts {
+  const visits = [...walkNodes(body)].filter(
+    (visit) => !isInsideHandler(visit.ancestors, visit.node),
+  );
+  const facts = factsFrom(visits);
+  const passed = visits
+    .map((visit) => passedName(visit.node, visit.ancestors))
+    .filter((name): name is string => name !== null);
+  return { ...facts, callees: unique([...facts.callees, ...passed]) };
+}
+
+/**
+ * A name written inside a call's arguments, such as `read` in `helper(read)`
+ * and in `llm(p, tools: [read])`, or null. The callee may call what it is
+ * handed, so a caller that asks what can be raised counts it as called. A name
+ * that is not a function finds no effects and adds nothing.
+ */
+export function passedName(node: AgencyNode, ancestors: WalkAncestor[]): string | null {
+  if (node.type !== "variableName") {
+    return null;
+  }
+  return ancestors.some((ancestor) => ancestor.type === "functionCall") ? node.value : null;
+}
+
+/**
+ * Whether a `handle` block or a `with approve` / `with reject` answers an
+ * interrupt raised at `node`. `with propagate` answers nothing, so it does not
+ * count.
+ *
+ * A `handle` block answers its protected body only. A raise written in the
+ * handler's own body is not answered by that handler:
+ *
+ *   handle { read(f) } with (intr) { write(g) }
+ *
+ * `read(f)` is answered and `write(g)` is not.
+ *
+ * What the handler decides is not read. A handler that returns `propagate()`
+ * still counts as answering its protected body.
+ */
+export function isInsideHandler(ancestors: WalkAncestor[], node: AgencyNode): boolean {
+  const path: WalkAncestor[] = [...ancestors, node];
+  return ancestors.some((ancestor, index) => {
+    if (ancestor.type === "handleBlock") {
+      return !isInHandlerBody(ancestor, path[index + 1]);
+    }
+    return ancestor.type === "withModifier" && ancestor.handlerName !== "propagate";
+  });
+}
+
+function isInHandlerBody(block: HandleBlock, child: WalkAncestor): boolean {
+  return block.handler.kind === "inline" && block.handler.body.some((stmt) => stmt === child);
+}
+
+function factsFrom(visits: Visit[]): BodyFacts {
   const calls = visits.filter(isCall);
   return {
     effects: unique(visits.filter(isInterrupt).map((visit) => visit.node.effect)),

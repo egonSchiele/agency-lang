@@ -86,6 +86,7 @@ export class TypeChecker {
   private importedFunctions: Record<string, ImportedFunctionSignature> = {};
   private jsImportedNames: Record<string, true> = {};
   private interruptEffectsByFunction: Record<string, InterruptEffect[]> = {};
+  private unansweredEffectsByFunction: Record<string, InterruptEffect[]> = {};
   private symbolTable?: SymbolTable;
   private currentFile?: string;
   private errors: TypeCheckError[] = [];
@@ -114,6 +115,7 @@ export class TypeChecker {
     this.importedFunctions = { ...resolved.importedFunctions };
     this.jsImportedNames = { ...resolved.jsImportedNames };
     this.interruptEffectsByFunction = resolved.interruptEffectsByFunction ?? {};
+    this.unansweredEffectsByFunction = resolved.unansweredEffectsByFunction ?? {};
     this.symbolTable = resolved.symbolTable;
     this.currentFile = resolved.fromFile;
     this.sourceText = resolved.sourceText;
@@ -389,7 +391,7 @@ export class TypeChecker {
     // reads from statics are caught earlier by `compileClosure`'s
     // `rejectStaticReferencesGlobal`, which has access to the full
     // import closure.
-    validateStaticInit(this.program, this.errors);
+    validateStaticInit(this.program, this.errors, this.unansweredEffectsByFunction);
 
     // A `let`/`const` may not reuse a parameter name: the generated code
     // would keep reading the parameter slot (issue #717).

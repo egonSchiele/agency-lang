@@ -163,8 +163,21 @@ nothing.
 The filter is sound and conservative. A member whose discriminant property is not
 a matching-kind literal type cannot be proven disjoint, so it is kept. A plain
 `string`, a wider union, and a different literal kind all fall in that bucket. A
-result that would be empty, or that keeps every member, returns "no narrowing"
-instead, so this path never narrows to `never`.
+result that keeps every member returns "no narrowing". A lone object type is
+treated as a union of one.
+
+When every member is provably excluded, the branch cannot run and the reference
+narrows to `never`. Reads off `never` give `never` and report nothing. Guarded
+match arms need this. `success(r) if (g) => …` lowers to
+`if (isSuccess(s)) { const r = s.value; if (g) { … } else { <later arms> } }`, and
+the copy of the later arms re-tests `s` where it is already a known success. The
+`failure(e)` arm in that copy is dead, and without `never` its `s.error` read
+reported a missing property (issue #888).
+
+The copy also declares each later binder twice, dead first and live second. A
+`let`/`const` whose existing type is `never` is therefore redeclared with the
+new inferred type (`declareVariable`, `lib/typeChecker/scopes.ts`), so the dead
+copy does not pin the binder to `never`.
 
 Match arms come for free: `match (r) { { kind: "answer", data } => … }` lowers to
 `const __s = r; if (__s.kind == "answer") { const data = __s.data; … }`, so the

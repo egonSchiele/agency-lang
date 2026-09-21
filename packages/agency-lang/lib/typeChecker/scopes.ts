@@ -12,7 +12,7 @@ import type { SourceLocation } from "../types/base.js";
 import { GLOBAL_SCOPE_KEY, scopeKey } from "../compilationUnit.js";
 import { getImportedNames } from "../types/importStatement.js";
 import { getReExportedLocalNames } from "../types/exportFromStatement.js";
-import { isAssignable, widenType } from "./assignability.js";
+import { isAssignable, isNever, widenType } from "./assignability.js";
 import { synthType, synthValueAccess } from "./synthesizer.js";
 import type { AccessChainElement, ValueAccess } from "../types/access.js";
 import type { VariableNameLiteral } from "../types/literals.js";
@@ -156,7 +156,13 @@ export function declareVariable(node: AgencyNode, scope: Scope, ctx: TypeChecker
 
   // Reassignment / access-chain writes don't (re)declare; their value-vs-target
   // checks now run in checkAssignmentsInScope (flow-aware). Nothing to do here.
-  if (existingType) {
+  // The exception is a binding first declared in a branch that cannot run,
+  // where its type is `never`. A guarded match arm lowers to a copy of the
+  // later arms, so the same `const err = ...` appears dead first and live
+  // second, and the live one must set the type.
+  const declaredInDeadBranch =
+    node.declKind !== undefined && existingType !== undefined && isNever(existingType);
+  if (existingType && !declaredInDeadBranch) {
     return;
   }
 

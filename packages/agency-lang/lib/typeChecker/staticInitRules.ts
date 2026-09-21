@@ -7,13 +7,16 @@
  * misuses as TypeCheckError entries on the typechecker, so users see
  * actionable messages before they hit runtime.
  *
- * **Direct-only by design.** The rules in this file walk the static
- * initializer's *own* AST subtree. They do NOT follow user-defined
- * helper functions — `static const x = myHelper()` where
+ * **Direct-only by design, with one exception.** The rules in this file
+ * walk the static initializer's *own* AST subtree. They do NOT follow
+ * user-defined helper functions — `static const x = myHelper()` where
  * `myHelper()` itself calls `llm()` is not flagged here. That trade-
  * off matches PR 2.5's depth-1 dep-graph philosophy: the runtime
- * trap catches the rest. Sound interprocedural analysis is
- * intentionally out of scope for this redesign.
+ * trap catches the rest.
+ *
+ * The exception is interrupts ({@link checkInterruptingCalls}). The effect
+ * fixpoint has already worked out what every function can raise, so that
+ * rule reads the answer instead of following calls itself.
  *
  * **Two surfaces, same rules.** Both `static const x = expr` and
  * `static <bare>` are validated. The driver in `validateStaticInit.ts`
@@ -25,6 +28,8 @@ import { diagnostic, type DiagnosticParams } from "./diagnostics.js";
 import type { AgencyNode, Assignment, Expression } from "../types.js";
 import type { TypeCheckError } from "./types.js";
 import { walkNodes } from "../utils/node.js";
+import { calledName, isInsideHandler, passedName } from "../analysis/bodyFacts.js";
+import type { InterruptEffect } from "../symbolTable.js";
 
 /**
  * The assignments at module top level, with a `with handler { ... }`
@@ -115,6 +120,59 @@ export function checkBannedBuiltinCalls(
       }
       errors.push(diagnostic("interruptInStaticInit", params, node.loc ?? null));
     }
+  }
+  return errors;
+}
+
+/**
+ * Flag a call, inside a static initializer, to a function that can raise an
+ * interrupt (issue #912). `effectsByFunction` is the table of UNANSWERED
+ * effects (`collectUnansweredFacts`), propagated across files, so an interrupt
+ * any number of calls away is found and a helper that answers its own
+ * interrupt with `with approve` is left alone.
+ *
+ * `topLevelNode` is the whole statement, including a `with approve` wrapper,
+ * so a call answered at the site is left alone too. `with propagate` answers
+ * nothing and is still flagged.
+ *
+ * A function handed to a call, as in `helper(read)`, counts as called.
+ *
+ * The table is built by reading syntax. It cannot see through a function held
+ * in a variable or a method call, and this rule says nothing there: the
+ * runtime error remains the backstop.
+ */
+export function checkInterruptingCalls(
+  topLevelNode: AgencyNode,
+  contextLabel: string,
+  effectsByFunction: Record<string, InterruptEffect[]>,
+): TypeCheckError[] {
+  const errors: TypeCheckError[] = [];
+  for (const { node, ancestors } of walkNodes([topLevelNode])) {
+    if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) {
+      continue;
+    }
+    if (isInsideHandler(ancestors, node)) {
+      continue;
+    }
+    const called =
+      node.type === "functionCall" ? calledName(node, ancestors) : passedName(node, ancestors);
+    if (called === null) {
+      continue;
+    }
+    // Own properties only: `called` is a name the user wrote, and a plain
+    // object answers `hasOwnProperty` with a function inherited from Object.
+    const effects = Object.hasOwn(effectsByFunction, called) ? effectsByFunction[called] : [];
+    if (effects.length === 0) {
+      continue;
+    }
+    const effectList = effects.map((entry) => entry.effect).join(", ");
+    errors.push(
+      diagnostic(
+        "interruptingCallInStaticInit",
+        { contextLabel, fn: called, effects: effectList },
+        node.loc ?? null,
+      ),
+    );
   }
   return errors;
 }

@@ -7,7 +7,7 @@
  */
 import { walkNodes } from "../utils/node.js";
 import type { AgencyNode } from "../types.js";
-import { collectBodyFacts, unique } from "./bodyFacts.js";
+import { collectBodyFacts, collectUnansweredFacts, unique, type BodyFacts } from "./bodyFacts.js";
 import { declaredName } from "../types/hole.js";
 import type { AgencyProgram } from "../types.js";
 import type { FunctionDefinition } from "../types/function.js";
@@ -111,12 +111,35 @@ export function propagateEffects(
   table: SymbolTable,
   programs: Record<string, AgencyProgram>,
 ): void {
-  writeBack(table, propagateToFixpoint(buildSummaries(table, programs)));
+  for (const view of EFFECT_VIEWS) {
+    writeBack(table, propagateToFixpoint(buildSummaries(table, programs, view)), view);
+  }
 }
+
+/**
+ * One way of reading the program's effects. The fixpoint runs once per view.
+ *
+ * `interruptEffects` is everything a callable can raise. `unansweredEffects`
+ * leaves out a raise or a call that sits inside a handler in the body it is
+ * written in, so `def home() { return env("HOME") with approve }` raises
+ * `std::env` in the first view and nothing in the second.
+ */
+type EffectView = {
+  field: "interruptEffects" | "unansweredEffects";
+  readBody: (body: AgencyNode[]) => BodyFacts;
+};
+
+const EVERYTHING_RAISED: EffectView = { field: "interruptEffects", readBody: collectBodyFacts };
+const UNANSWERED_ONLY: EffectView = {
+  field: "unansweredEffects",
+  readBody: collectUnansweredFacts,
+};
+const EFFECT_VIEWS: EffectView[] = [EVERYTHING_RAISED, UNANSWERED_ONLY];
 
 function buildSummaries(
   table: SymbolTable,
   programs: Record<string, AgencyProgram>,
+  view: EffectView,
 ): Record<string, EffectSummary> {
   // Null prototype and Object.hasOwn on read: keys are user-controlled file
   // paths and symbol names. House pattern, as in TS_SIDE_EFFECT_SEEDS.
@@ -124,7 +147,7 @@ function buildSummaries(
     Object.create(null),
     Object.fromEntries(
       Object.entries(programs)
-        .flatMap(([file, program]) => summariesForFile(table, program, file))
+        .flatMap(([file, program]) => summariesForFile(table, program, file, view))
         .map((summary) => [keyOf(summary), summary]),
     ),
   );
@@ -147,6 +170,7 @@ function summariesForFile(
   table: SymbolTable,
   program: AgencyProgram,
   file: string,
+  view: EffectView,
 ): EffectSummary[] {
   const resolve = makeResolver(table, program, file);
   return [...walkNodes(program.nodes)]
@@ -159,10 +183,8 @@ function summariesForFile(
       return {
         file,
         name,
-        effects: directEffectsOf(table, file, name),
-        calleeKeys: collectBodyFacts(declaration.body).callees.map((callee) =>
-          keyOf(resolve(callee)),
-        ),
+        effects: directEffectsOf(table, file, name, view),
+        calleeKeys: view.readBody(declaration.body).callees.map((callee) => keyOf(resolve(callee))),
       };
     });
 }
@@ -170,19 +192,28 @@ function summariesForFile(
 /** What classifySymbols already worked out, including the seed table. Read
  *  rather than recomputed: _guard raises on the TypeScript side and has no
  *  `interrupt` in its body, so a body walk would report nothing for it. */
-function directEffectsOf(table: SymbolTable, file: string, name: string): string[] {
+function directEffectsOf(
+  table: SymbolTable,
+  file: string,
+  name: string,
+  view: EffectView,
+): string[] {
   const sym = table.getFile(file)?.[name];
   if (!sym || (sym.kind !== "function" && sym.kind !== "node")) return [];
-  return (sym.interruptEffects ?? []).map((entry) => entry.effect);
+  return (sym[view.field] ?? []).map((entry) => entry.effect);
 }
 
-function writeBack(table: SymbolTable, summaries: Record<string, EffectSummary>): void {
+function writeBack(
+  table: SymbolTable,
+  summaries: Record<string, EffectSummary>,
+  view: EffectView,
+): void {
   for (const { file, name, sym } of callableSymbols(table)) {
     // Resolve through re-exports so a barrel's own copy of a name gets the
     // origin's answer rather than an empty one.
     const summary = summaryAt(summaries, originOf(table, { file, name }));
     if (!summary) continue;
-    sym.interruptEffects = summary.effects.map((effect) => ({ effect }));
+    sym[view.field] = summary.effects.map((effect) => ({ effect }));
   }
 }
 
@@ -294,7 +325,7 @@ export function reachableFrom(
   programs: Record<string, AgencyProgram>,
   start: Origin,
 ): Origin[] {
-  const summaries = buildSummaries(table, programs);
+  const summaries = buildSummaries(table, programs, EVERYTHING_RAISED);
   const seen: Record<string, true> = Object.create(null);
   const found: Origin[] = [];
   const queue: string[] = [keyOf(originOf(table, start))];

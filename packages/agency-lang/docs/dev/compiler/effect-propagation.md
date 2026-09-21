@@ -123,6 +123,49 @@ entry can be re-queued only finitely often. An import cycle costs nothing
 special. The result is written back onto every symbol, resolved through
 re-exports so a barrel's own copy is correct too.
 
+## The second view: unanswered effects
+
+The pass runs twice, once per entry in `EFFECT_VIEWS` (`lib/analysis/effects.ts`).
+The first run fills `sym.interruptEffects` as described above. The second fills
+`sym.unansweredEffects`, and differs in one way: it reads each body with
+`collectUnansweredFacts`, which drops any raise or call that sits inside a
+`handle` block, a `with approve` or a `with reject` in that same body.
+
+```
+def home(): string {
+  return env("HOME") with approve
+}
+```
+
+`home` has `interruptEffects` of `[std::env]` and `unansweredEffects` of `[]`.
+Handlers up the chain still see the raise, which is why a `raises` clause must
+still list it and why the first view keeps it. The second view answers a
+different question: can this function be called where no handler and no
+checkpoint exist?
+
+One rule asks that question today. A `static const` initializer runs at process
+startup, before any run exists. A policy can still approve an interrupt raised
+there. With no approval the interrupt needs a person, which needs a checkpoint,
+and the call fails with "Cannot create checkpoint". `checkInterruptingCalls`
+(`lib/typeChecker/staticInitRules.ts`) reports AG7008 for a call in a static
+initializer whose callee has unanswered effects, and leaves
+`static const d = home()` alone (issue #912). `buildCompilationUnit` hands the
+table to the type checker as `unansweredEffectsByFunction`.
+
+Two details of what counts as answered:
+
+- A `handle` block answers its protected body, not its handler's own body. In
+  `handle { read(f) } with (intr) { write(g) }`, `read(f)` is answered and
+  `write(g)` is not (`isInsideHandler`).
+- A function handed to a call counts as called in this view, so
+  `def hands() { return run(read) }` has `std::read` unanswered (`passedName`).
+  The callee may call what it is handed, and the syntax walk cannot tell.
+
+Two limits, both on the quiet side. What a handler decides is not read, so a
+`handle` block whose handler returns `propagate()` still counts as answering. The
+blind spots under "What the walk cannot see" apply too. In both cases the
+runtime error remains.
+
 ## Which tree each side sees
 
 The symbol table walks trees straight from the parser. The type checker walks

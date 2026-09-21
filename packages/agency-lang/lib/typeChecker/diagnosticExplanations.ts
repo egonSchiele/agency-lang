@@ -369,6 +369,12 @@ effect app::x { a: string, b: string }
 
 **How to fix:** correct the path, create the missing file, or install the package that provides it. Agency imports must resolve to a real module.`,
 
+  sandboxImportRefused: `The code was checked the strict way, \`typecheck(source, strict: true)\`, which is for code that will run sandboxed. Sandboxed code may import \`std::\` modules and \`.agency\` files inside its own directory, and nothing else. A TypeScript or JavaScript file, a Node module, a \`pkg::\` package, and a compile-time splice are all refused, because none of them raise interrupts and so nothing could ask before they run.
+
+\`compile\` and \`runFile\` refuse the same things, so this error means the code could not have run.
+
+**How to fix:** import the function from a \`std::\` module, or move the code it needs into an \`.agency\` file beside it.`,
+
   importNameNotExported: `An import names a symbol that its target module defines but does not \`export\`. A plain \`import { ... }\` can only see \`export\`ed functions, types, and constants — a bare \`def\`/\`type\` without \`export\` is module-private. (Nodes are the exception: they are importable without \`export\`.) The compile path already rejects this; the type checker reports it too.
 
 **How to fix:** add the \`export\` keyword to the definition in the target file, or import a symbol that is exported.`,
@@ -525,6 +531,12 @@ node main() {
 
 **How to fix:** bind it with \`.partial(...)\` before passing the function as a tool.`,
 
+  toolIsNotAFunction: `An entry in an \`llm()\` call's \`tools\` list is a plain value such as a string or a number. Only functions can be tools, and the call would fail when it runs.
+
+The usual cause is a local variable with the same name as an imported function. In \`const summary: string = llm("...", tools: [summary])\`, the name \`summary\` inside the list means the new local, not the import.
+
+**How to fix:** rename the local variable, or import the function under another name with \`import { summary as summaryTool }\`.`,
+
   toolOptionalParamsDropped: `A function passed as a tool has optional function-typed parameters that the LLM cannot fill, so they are dropped and the tool runs with each parameter's declared default. This is a warning, not an error, because a default exists — but the body must be prepared to run without those functions.
 
 **How to fix:** confirm the defaults are correct for the tool use, or bind the parameters explicitly with \`.partial(...)\` if you need specific implementations.`,
@@ -592,6 +604,12 @@ def f(): string {
   bannedBuiltinInStaticInit: `Static initializers run once at process startup, before any per-run state exists — so they may not call built-ins that need a running agent (LLM calls, I/O, and similar). This static init calls one of those.
 
 **How to fix:** move the call into a node, or into a function called from a node, where per-run state is available.`,
+
+  interruptingCallInStaticInit: `A \`static\` initializer calls a function that can raise an interrupt. A static initializer runs once at process startup, before any run exists. If a policy (\`--policy\`, \`--approve\`) approves the interrupt, the call goes ahead. Otherwise the interrupt needs a person to answer it, which means pausing the run and saving a checkpoint, and there is no run to pause: the call fails with "Cannot create checkpoint". The same applies to a function the initializer hands to another call, as in \`helper(read)\`.
+
+This is the same problem as writing \`interrupt\` directly in the initializer, one call away.
+
+**How to fix:** move the call into a node body, or answer the interrupt where it is raised: \`static const home = env("HOME") with approve\`.`,
 
   interruptInStaticInit: `Interrupts pause the per-run execution stack, but static initializers run once at startup before any run has begun — there is no stack to pause. So \`interrupt(...)\` is not allowed in a static initializer.
 

@@ -227,3 +227,93 @@ describe("agencyImportTargets resolveStdlib option", () => {
     ).toEqual([]);
   });
 });
+
+// Issue #541: a cycle compiled cleanly and crashed at load.
+describe("buildCompiledClosure: import cycles", () => {
+  const closureError = (entry: string): string => {
+    try {
+      buildCompiledClosure(entry, {});
+    } catch (e) {
+      if (e instanceof CompileClosureError) return e.message;
+      throw e;
+    }
+    return "";
+  };
+
+  it("refuses two modules that import each other, and names the loop", () => {
+    write(
+      "a.agency",
+      'import { bVal } from "./b.agency"\n' +
+        "export def aVal(): number { return 1 }\n" +
+        "export def useB(): number { return bVal() }\n",
+    );
+    write(
+      "b.agency",
+      'import { aVal } from "./a.agency"\n' +
+        "export def bVal(): number { return 2 }\n" +
+        "export def useA(): number { return aVal() }\n",
+    );
+    const mainPath = write(
+      "main.agency",
+      'import { useB } from "./a.agency"\nnode main() { print(useB()) }\n',
+    );
+    const message = closureError(mainPath);
+    expect(message).toContain("Circular import");
+    expect(message).toMatch(/a\.agency → .*b\.agency → .*a\.agency/);
+  });
+
+  it("refuses a cycle made only of type imports, which crashes the same way", () => {
+    write(
+      "a.agency",
+      'import { bVal } from "./b.agency"\n' +
+        "export type Pair = { n: number }\n" +
+        "export def useB(): number { return bVal({ n: 3 }) }\n",
+    );
+    const bPath = write(
+      "b.agency",
+      'import { Pair } from "./a.agency"\n' +
+        "export def bVal(p: Pair): number { return p.n + 1 }\n",
+    );
+    expect(closureError(bPath)).toContain("Circular import");
+  });
+
+  it("refuses a cycle that runs through a re-export", () => {
+    write("a.agency", 'export { bVal } from "./b.agency"\nexport def aVal(): number { return 1 }\n');
+    const bPath = write(
+      "b.agency",
+      'import { aVal } from "./a.agency"\nexport def bVal(): number { return aVal() }\n',
+    );
+    expect(closureError(bPath)).toContain("Circular import");
+  });
+
+  it("accepts a diamond, where two modules share a third", () => {
+    write("shared.agency", "export def base(): number { return 1 }\n");
+    write(
+      "left.agency",
+      'import { base } from "./shared.agency"\nexport def left(): number { return base() }\n',
+    );
+    write(
+      "right.agency",
+      'import { base } from "./shared.agency"\nexport def right(): number { return base() }\n',
+    );
+    const mainPath = write(
+      "main.agency",
+      'import { left } from "./left.agency"\nimport { right } from "./right.agency"\n' +
+        "node main() { print(left() + right()) }\n",
+    );
+    expect(closureError(mainPath)).toBe("");
+  });
+
+  it("a cycle between static vars keeps its more specific message", () => {
+    write(
+      "foo.agency",
+      'import { barValue } from "./bar.agency"\nexport static const fooValue = barValue + "!"\n',
+    );
+    const barPath = write(
+      "bar.agency",
+      'import { fooValue } from "./foo.agency"\nexport static const barValue = fooValue + "?"\n' +
+        "node main() { return barValue }\n",
+    );
+    expect(closureError(barPath)).toContain("Circular static dependency");
+  });
+});

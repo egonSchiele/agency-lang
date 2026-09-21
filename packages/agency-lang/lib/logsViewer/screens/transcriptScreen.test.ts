@@ -228,3 +228,17 @@ it("paging down from a short final block does not scroll backward", () => {
   screen.handleKey({ key: "d", ctrl: true }, viewport);
   expect(text(screen)).toBe(before);
 });
+
+it("keeps a searched tool visible when collapsing its long result", () => {
+  const events = loopEvents();
+  events.find((event) => event.data.type === "toolCall")!.data.output = Array.from(
+    { length: 100 },
+    (_unused, position) => (position === 90 ? "needle inside result" : `ordinary ${position}`),
+  ).join("\n");
+  const screen = make(buildForest(events));
+  screen.applySearch("needle inside result");
+  text(screen);
+  press(screen, "enter");
+  expect(text(screen)).toContain("→ agencyGuide(handlers.md)");
+  expect(screen.focusId()).toBe("guide");
+});

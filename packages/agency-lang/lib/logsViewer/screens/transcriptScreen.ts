@@ -218,6 +218,7 @@ export class TranscriptScreen implements Screen {
     this.needsReveal = false;
   }
   private toggle(id: string): void {
+    this.needsReveal = true;
     this.expanded = this.expanded.includes(id)
       ? this.expanded.filter((value) => value !== id)
       : [...this.expanded, id];

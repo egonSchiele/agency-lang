@@ -1,5 +1,7 @@
 import tseslint from "typescript-eslint";
 
+const SCREEN_PAINT_MESSAGE = "Screens draw text through lib/tui/paint.ts (segment, paint, paintedLine), which escapes it. A raw line() lets statelog content be read as style tags.";
+
 // Files under lib/stdlib that may import fs directly, each with the reason.
 // Everything else in lib/stdlib reads and writes files through
 // lib/stdlib/contained.ts, which refuses symlinks below the approved
@@ -125,6 +127,17 @@ export default [
             "Read token counts through lib/statelog/wireAccessors.ts (hasTokenUsage, tokensIn, tokensCached, tokensCacheWrite, contextTokens, tokensOut).",
         },
       ],
+    },
+  },
+  {
+    files: ["lib/logsViewer/screens/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": ["error", {paths: [
+        {name:"../../tui/builders.js",importNames:["line","lines","text"],message:SCREEN_PAINT_MESSAGE},
+        {name:"../../tui/styleParser.js",importNames:["escapeStyleTags"],message:SCREEN_PAINT_MESSAGE},
+        {name:"../../tui/index.js",importNames:["line","lines","text","escapeStyleTags"],message:SCREEN_PAINT_MESSAGE},
+      ]}],
     },
   },
   // ----- Per-file overrides for existing code -----

@@ -2,7 +2,7 @@
 
 The interactive statelog viewer behind `agency logs` and `agency eval logs`. This page is
 the architecture; the user-facing keys and views are documented in
-`docs/site/guide/observability.md`. The CROSS-run explorer (`agency logs` over run
+`docs/site/guide/observability.md`. The cross-run explorer (`agency logs` over run
 directories) is a separate app that embeds this viewer, described in
 [`runs-explorer.md`](./runs-explorer.md).
 
@@ -36,9 +36,9 @@ type Screen = View & {
 
 The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay also declares its `viewName`. A screen can decline an Esc by returning false, allowing the shell to continue down the ladder.
 
-Pure modules compute plain records. Screen painters draw those records and own the TUI imports.
+Pure modules compute plain records. Screen painters draw those records and own the TUI imports. Shared bar components live in `views/shared.ts`.
 
-The overview fills slot 1 and is the starting screen. `LegacyTraceScreen` adapts `TreeView` to slot 2. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
+The overview fills slot 1 and is the starting screen. The trace outline fills slot 2. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
 
 The overview reserves room for the header, message and key hints. It reduces chart height and scrolls the time groups when the terminal is short. Selecting a callout focuses its round in both charts and carries that focus to other screens.
 
@@ -62,8 +62,7 @@ At boot, multiple traces with no requested focus open the picker over the most r
 
 ## The timeline kernel (`lib/logsViewer/timeline/`)
 
-Three pure modules whose outputs must be identical across views, and which the planned
-cross-run analysis project can reuse without a TUI:
+The timeline modules compute plain data for the screens:
 
 - `intervals.ts` — interval arithmetic. `subtract(base, pieces)` removes the UNION of the
   pieces (clamped into the base, so malformed logs cannot produce negative residue);
@@ -72,9 +71,9 @@ cross-run analysis project can reuse without a TUI:
   data. A span's **extent** is the envelope over ALL descendant leaf events
   (`timestamp − timeTaken` to `timestamp` — the same rule `tree.ts` uses for duration,
   which is what keeps parent ⊇ child and self-time non-negative). A span's **self-time**
-  is its extent minus its direct children's extents. Without self-time the top-level
-  `llmCall` span wraps the agent's whole tool loop and absorbs the entire run; the
-  prototype measured a 193% share. `running` is true when a start-marking event has no
+  is its extent minus its direct children's extents. An `llmCall` span includes its
+  tool loop, so subtracting children measures the call's own time.
+  `running` is true when a start-marking event has no
   terminus, and `promptCancelled` counts as a terminus. The admin spans listed in
   `ADMIN_KINDS` (`handlerChain` and `threadEndHooks`) are filtered presentationally: rows
   disappear and depths close up, while extents and self-time stay untouched.
@@ -85,26 +84,18 @@ cross-run analysis project can reuse without a TUI:
   consumers use it (the overview displays groups, occurrences resolves a key back to members)
   and a follow-mode re-parse can legitimately re-group a call — one computation, two
   readers. A group's share is of wall clock and may exceed 100% for parallel work; that is
-  real compute time, not the nesting bug self-time fixes.
+  the total compute time of overlapping calls.
 
 `TimelineSpan` carries no names and no `TreeNode` reference. Naming is a view opinion, so
 label components look nodes up by id, and the kernel's output stays plain serializable
-data. Span naming and text formatting shared with the tree live in `spanText.ts` (lifted
-from `summary.ts`): `spanDetail`, `lastUserMessage`, `fmtDuration`, threshold colors — one
-implementation, so a span cannot read differently in two views of the same session.
+data. Shared span naming and text formatting live in `spanText.ts`. Screens use its
+`spanDetail`, `lastUserMessage`, `fmtDuration` and threshold colors consistently.
 
 ## Follow mode
 
-`makeFollowWatcher` in `run.ts` owns ONE `makeAppendReader(path, 0)`
-(`lib/statelog/appendReader.ts`), created at boot. Its first `read()` IS the boot read,
-returned as `bootText`. `f` toggles polling only. The reader and its byte offset persist
-for the whole session. This kills the two bugs that made follow dead on
-arrival, by construction:
-
-- **the boot gap**: the old CLI pre-read the file, then the watcher started reading at the
-  file's *current* size. Anything appended in between was never parsed.
-- **the accumulator rewind**: toggling `f` off/on re-seeded the accumulated text from the
-  boot snapshot, silently dropping earlier appends.
+`makeFollowWatcher` in `run.ts` creates one `makeAppendReader(path, 0)`
+from `lib/statelog/appendReader.ts`. Its first read supplies the boot text.
+The reader, byte offset and accumulated text persist when `f` toggles polling.
 
 On growth the shell re-parses the accumulated text, rebuilds the forest, and calls
 `setData(roots)` on every numbered screen and every open overlay. `setData`'s contract has four parts.
@@ -118,31 +109,21 @@ fast".
 End-to-end regressions live in `followMode.test.ts` (append, toggle-rewind, truncation) and
 `lib/statelog/appendReader.test.ts` (UTF-8 split across read boundaries, offset rewind).
 
-## Folding a long message
+## The story outline
 
-An agent's system prompt is hundreds of lines long and is resent on every
-round, so expanding a trace buried the conversation under it — a real agent
-trace came to 2,181 rows, 1,841 of them copies of two long messages.
+The trace screen shows one row per round, tool, interrupt, error, new user turn or subagent. `storyOutline` puts each tool below the round that requested it. Interrupts and errors belong to the tool that emitted them; events from a nested tool do not change its parent tool's status.
 
-`messageRows` in `treeRows.ts` lays out a transcript a message at a time. Under
-`FOLD_MESSAGE_LINES` (15) display lines a message becomes flat `convoLine`
-rows; at or over it, one `convoMessage` header owning those lines as children,
-so they appear only when the header is expanded. Both the `promptCompletion`
-leaf and the flattened `llmCall` span go through it.
+A round has an ID such as `round:call-id:2`. Other event-backed rows use `leaf:parent-id:event-type:ordinal`, and a user turn uses its round ID plus `:user`. These IDs survive follow updates. Forest leaf IDs such as `evt-12` can change when a completed prompt hides its earlier start event, so the screen does not retain them as cursor IDs.
 
-No keybinding changed, because `e` and `z` add ids from the persistent forest
-and these headers are synthetic. Two places do have to know about them:
+Press `m` to replace the story with the forest's own nesting. With `a` on too, every node beneath the trace has exactly one row. With `a` off, the forest omits admin subtrees. In the story, `a` adds handler decisions beneath their interrupt. `Enter` collapses or expands children. Filters retain matching rows and their ancestors.
 
-- `collapseSubtree` (`E`) deletes real-forest ids, which would leave an opened
-  fold in the expanded set to spring back the next time you opened its span. It
-  also drops expanded ids namespaced under the node.
-- `search.ts` walks the hidden lines and, in `expandSyntheticAncestors`, opens
-  the fold around a match, or `/` would highlight a row `n` could never reach.
+The payload pane follows the outline cursor. `Tab` moves scrolling into the payload; `r` shows raw JSON; `d` opens the same payload at full width. `payload.ts` computes unstyled records, and `screens/payloadPaint.ts` wraps text and highlights `code` fields as Agency source. Highlighted lines also wrap without discarding content. Both screens cache painted content until the row, raw toggle, width or data changes. Detail overlays keep the original story or span ID and resolve it again after each follow update.
 
-## Composing rows over lib/tui: two layout rules that will bite you
+Tool outcomes describe recorded evidence. A missing completion reads “completion not recorded.” A rejected interrupt does not establish whether work occurred earlier. Error flags can establish that work occurred or that the tool never started. `classifyTool` and `toolStatusText` own these judgments and labels.
 
-Both were found the hard way while building tables (the runs-explorer
-prototype hit each one as a visible rendering bug):
+`messageDelta.ts` compares each round with the previous round on the same recorded thread identity, using a conservative span-local key for older logs. It compares normalized full message contents, including tool-call IDs and image data. A prefix extension adds only the new occurrences; a rewrite retains the entire replacement history and its before/after counts.
+
+## Composing rows over lib/tui
 
 - **Every child of a `row(...)` needs an explicit `width`.** A child
   without one gets `flex: 1`, and the layout engine SPLITS the terminal
@@ -157,9 +138,10 @@ prototype hit each one as a visible rendering bug):
   entries. (`line()` sets `height: 1` for exactly this reason; a
   hand-built `row(...)` must do the same.)
 
-Use `TableComponent` from `lib/tui/table.ts` for tables. It sets cell widths
-and row heights. To compose another kind of row, use `segment(text, width)`
-from `lib/tui/paint.ts` for each part, then `paintedLine(content, { width })`.
+Declare columns and rows with `lib/tui/table.ts`, and
+it applies both rules for you. For a row that is not a table, build it from
+`segment(...)` in `lib/tui/paint.ts`, which returns a string of an exact
+visible width, and wrap it with `paintedLine(content, { width })`.
 
 Pass statelog text through `paint(text)` or `segment(text, width)` before
 rendering it. They display style-like text such as `{bold}` literally and
@@ -176,11 +158,11 @@ Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
   and resolves with `"back"` (Esc at the bottom of the stack, nothing
   left to clear) or `"quit"` (`q`), so the host can honor the same
   contract.
-- Copying: `y` copies the focused node's JSON. `Y` in the tree view copies
+- Copying: `y` copies the focused node's JSON. `Y` in the trace screen copies
   every statelog event of the focused trace as JSONL, one object per line in
   file order. Views only *name* what to copy, through the `copy` and
   `copyTrace` actions. The shell in `run.ts` owns the events and the
-  clipboard. `x` in the tree view extracts the focused trace to a file, and
+  clipboard. `x` in the trace screen extracts the focused trace to a file, and
   only when the source is a local file.
 - Every view pins its name to the bottom-right corner via
   `bottomHints(hints, tag, cols)` in `views/shared.ts`, so the answer to
@@ -195,8 +177,7 @@ Add the painter under `screens/` and implement `Screen` for a numbered slot or `
 `agency logs <dir>` on a run directory ([`run-directory.md`](../evals/run-directory.md)) opens
 this viewer on `<dir>/statelog.jsonl` with `traceAnnotations`: one line per
 trace id ("notes · score 0.70 · labeled", built by `annotationSummaries`
-in `lib/runDirectory/list.ts`) that `renderRowText` appends, dimmed, to the
-trace's row and nowhere else. `focusTraceId` starts the cursor on a given
-trace and expands it; the runs explorer uses it when drilling from a test
+in `lib/runDirectory/list.ts`) shown in the trace picker and shell header.
+`focusTraceId` opens the requested trace; the runs explorer uses it when drilling from a test
 into the run's shared statelog. Both are read once at open; follow mode
 re-reads the statelog, not the annotations.

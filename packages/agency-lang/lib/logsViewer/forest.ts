@@ -73,6 +73,31 @@ export function rootOf(node: TreeNode, index: TreeIndex): TreeNode {
   return ancestorsOf(node, index).at(-1) ?? node;
 }
 
+export type PlacedNode = { node: TreeNode; parent: TreeNode; depth: number };
+/** Descendants in forest order, omitting a skipped node and its subtree. */
+export function walkWithDepth(
+  root: TreeNode,
+  skip: (node: TreeNode) => boolean = () => false,
+): PlacedNode[] {
+  const output: PlacedNode[] = [];
+  const pending = root.children.map((node) => ({ node, parent: root, depth: 0 })).reverse();
+  while (pending.length > 0) {
+    const placed = pending.pop()!;
+    if (skip(placed.node)) {
+      continue;
+    }
+    output.push(placed);
+    for (let index = placed.node.children.length - 1; index >= 0; index--) {
+      pending.push({
+        node: placed.node.children[index],
+        parent: placed.node,
+        depth: placed.depth + 1,
+      });
+    }
+  }
+  return output;
+}
+
 function parentOf(node: TreeNode, index: TreeIndex): TreeNode | undefined {
   const parentId = index.parentIds[node.id];
   return parentId === undefined ? undefined : index.byId[parentId];

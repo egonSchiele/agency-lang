@@ -122,12 +122,16 @@ export function userMessageOf(promptCompletion: EventEnvelope): string | null {
   const userMsgs = msgs.filter((m: any) => m?.role === "user");
   const last = userMsgs[userMsgs.length - 1];
   if (last === undefined) return null;
-  if (typeof last.content === "string") return last.content;
-  // smoltalk messages can also carry an array-of-parts content shape;
-  // best-effort: concatenate any string parts.
+  if (typeof last.content === "string") {
+    return last.content;
+  }
   if (Array.isArray(last.content)) {
-    const text = last.content.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("");
-    return text.length > 0 ? text : null;
+    return (
+      last.content
+        .map(partText)
+        .filter((part: string | undefined) => part !== undefined)
+        .join("") || null
+    );
   }
   return null;
 }
@@ -146,4 +150,86 @@ export function completionOf(promptCompletion: EventEnvelope): string | null {
     if (typeof msg === "string" && msg.length > 0) return msg;
   }
   return null;
+}
+
+export type ToolCallRequest = { id?: string; name?: string; arguments?: unknown };
+export type WireMessage = {
+  role: string;
+  content: unknown;
+  name?: string;
+  toolCalls?: ToolCallRequest[];
+  toolCallId?: string;
+};
+
+/** The complete message list sent with a completion. */
+export function messagesOf(event: EventEnvelope): unknown[] {
+  return Array.isArray(event.data.messages) ? event.data.messages : [];
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+export function normalizeMessage(value: unknown): WireMessage {
+  const message = record(value);
+  const result: WireMessage = {
+    role: String(message.role ?? "unknown"),
+    content: message.content ?? null,
+  };
+  if (typeof message.name === "string") {
+    result.name = message.name;
+  }
+  const calls = message.toolCalls ?? message.tool_calls;
+  if (Array.isArray(calls)) {
+    result.toolCalls = calls.map(normalizeToolCall);
+  }
+  const id = message.toolCallId ?? message.tool_call_id;
+  if (typeof id === "string") {
+    result.toolCallId = id;
+  }
+  return result;
+}
+
+function normalizeToolCall(value: unknown): ToolCallRequest {
+  const call = record(value);
+  const nested = record(call.function);
+  const result: ToolCallRequest = {};
+  if (typeof call.id === "string") {
+    result.id = call.id;
+  }
+  const name = call.name ?? nested.name;
+  if (typeof name === "string") {
+    result.name = name;
+  }
+  if (Object.hasOwn(call, "arguments")) {
+    result.arguments = call.arguments;
+  } else if (Object.hasOwn(nested, "arguments")) {
+    result.arguments = nested.arguments;
+  }
+  return result;
+}
+
+/** Display text only; message equality must compare the full content. */
+export function contentText(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (content === null || content === undefined) {
+    return "";
+  }
+  if (Array.isArray(content)) {
+    const parts = content.map(partText).filter((part): part is string => part !== undefined);
+    if (parts.length > 0) {
+      return parts.join("");
+    }
+  }
+  return JSON.stringify(content) ?? String(content);
+}
+
+function partText(part: unknown): string | undefined {
+  if (typeof part === "string") {
+    return part;
+  }
+  const text = record(part).text;
+  return typeof text === "string" ? text : undefined;
 }

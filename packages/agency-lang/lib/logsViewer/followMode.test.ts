@@ -49,7 +49,7 @@ function cursorRow(out: FrameRecorder): string {
   if (out.frames.length === 0) return "";
   // eslint-disable-next-line no-control-regex
   const text = out.lastText().replace(/\x1b\[[0-9;]*m/g, "");
-  return text.split("\n").find((line) => line.trimStart().startsWith("> ")) ?? "";
+  return text.split("\n").find((line) => line.trimStart().startsWith("▶ ")) ?? "";
 }
 
 describe("follow mode", () => {
@@ -124,9 +124,8 @@ describe("follow mode", () => {
     expect(out.lastText()).toContain("earlyTool");
   });
 
-  it("an append keeps the cursor on a conversation line (a synthetic row)", async () => {
-    // Synthetic rows (conversation lines, raw data) are built at render time
-    // and are not in the forest; setData must resolve them through their leaf.
+  it("an append keeps the cursor on a stable user story row", async () => {
+    // User rows retain their round-based identity across a follow parse.
     fs.appendFileSync(
       file,
       envelope("s1", "promptCompletion", 500, {
@@ -137,10 +136,7 @@ describe("follow mode", () => {
     const input = new ScriptedInput([]);
     const out = new FrameRecorder();
     const done = start(input, out);
-    input.feedKey({ key: "z" }); // expand every span
-    input.feedKey({ key: "G" }); // the promptCompletion leaf is the last row
-    input.feedKey({ key: "Enter" }); // expand it into conversation lines
-    input.feedKey({ key: "j" }); // onto "[user] hello there"
+    input.feedKey({ key: "g" }); // the first row is the user turn
     await until(() => cursorRow(out).includes("hello there"));
     input.feedKey({ key: "f" });
     fs.appendFileSync(file, toolLines("s2", "laterTool", 1_000));

@@ -7,6 +7,7 @@ import {
   nearestAncestor,
   rootOf,
   walkNodes,
+  walkWithDepth,
 } from "./forest.js";
 import { leaf, span, trace } from "./timeline/fixture.js";
 
@@ -25,6 +26,9 @@ describe("walkNodes", () => {
       deep = span("toolExecution", [deep]);
     }
     expect(walkNodes(deep)).toHaveLength(depth + 1);
+    const placed = walkWithDepth(deep);
+    expect(placed).toHaveLength(depth);
+    expect(placed.at(-1)).toMatchObject({ node: completion, depth: depth - 1 });
     const index = buildTreeIndex(deep);
     expect(ancestorsOf(completion, index)).toHaveLength(depth);
     expect(nearestAncestor(completion, index, (node) => node === deep)).toBe(deep);

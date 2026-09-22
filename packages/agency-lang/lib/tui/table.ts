@@ -38,16 +38,22 @@ export type TableFrame<Row> = {
   cursor: number | null;
   sort?: { columnKey: string; direction: "asc" | "desc" };
   width: number;
+  showHeader?: boolean;
+  cursorBg?: string;
 };
 
 export class TableComponent<Row> {
   render(frame: TableFrame<Row>): Element {
     const widths = this.resolveWidths(frame);
-    const header = this.renderHeader(frame, widths);
+    const headers = frame.showHeader === false ? [] : [this.renderHeader(frame, widths)];
     const body = frame.rows.map((rowData, index) =>
       this.renderRow(frame, rowData, index === frame.cursor, widths),
     );
-    return column({ height: 1 + frame.rows.length, justifyContent: "flex-start" }, header, ...body);
+    return column(
+      { height: headers.length + frame.rows.length, justifyContent: "flex-start" },
+      ...headers,
+      ...body,
+    );
   }
 
   private resolveWidths(frame: TableFrame<Row>): number[] {
@@ -95,7 +101,7 @@ export class TableComponent<Row> {
     const cells = frame.columns.map((column, index) => {
       const style: CellStyle = { ...column.cellStyle?.(rowData) };
       if (isCursor) {
-        style.bg = CURSOR_BG;
+        style.bg = frame.cursorBg ?? CURSOR_BG;
       }
       return cellElement(column.cell(rowData), widths[index], column.align, style);
     });

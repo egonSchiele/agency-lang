@@ -17,7 +17,7 @@ import { buildForest } from "./tree.js";
 import { DetailScreen } from "./views/detailScreen.js";
 import { TimelineScreen } from "./screens/timelineScreen.js";
 import { OverviewScreen } from "./screens/overviewScreen.js";
-import { LegacyTraceScreen } from "./screens/legacyTraceScreen.js";
+import { TraceScreen } from "./screens/traceScreen.js";
 import { PlaceholderScreen } from "./screens/placeholderScreen.js";
 import { TracePicker } from "./screens/tracePicker.js";
 import { MIN_COLS, tabStrip, tooNarrow } from "./screens/chrome.js";
@@ -25,7 +25,6 @@ import { ScreenHost } from "./screenHost.js";
 import { escOutcome, type EscOutcome } from "./escLadder.js";
 import { findBinding, helpFrom, type ViewerBinding } from "./keymap.js";
 import { OccurrencesView } from "./views/occurrencesView.js";
-import { TreeView } from "./views/treeView.js";
 import { type ViewAction, type Viewport } from "./views/view.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 import { findTrace, writeTraceFile } from "../runDirectory/extractTrace.js";
@@ -54,11 +53,11 @@ export type RunViewerOpts = {
   // resolution tells the host whether the user backed out or quit.
   embedded?: boolean;
   thresholds?: ViewerThresholds;
-  // Enables the tree `x` action: extract the focused trace to a file of its
+  // Enables the trace `x` action: extract the focused trace to a file of its
   // own, read back from this local path. Undefined for remote or stdin sources.
   extract?: { sourcePath: string };
   // A run directory's annotations, one summary line per trace id, shown on
-  // each trace's row in the tree.
+  // the trace picker and shell header.
   traceAnnotations?: Record<string, string>;
   // Start with the cursor on this trace (the explorer drilling into a test).
   focusTraceId?: string;
@@ -303,11 +302,6 @@ function createHost(
   bootTraceId: string,
 ): ScreenHost {
   const annotations = opts.traceAnnotations ?? {};
-  const treeView = new TreeView(roots, thresholds, opts.viewport, {
-    extractEnabled: opts.extract !== undefined,
-    traceAnnotations: annotations,
-    focusTraceId: bootTraceId,
-  });
   const host = new ScreenHost(
     {
       overview: new OverviewScreen(
@@ -316,7 +310,9 @@ function createHost(
         thresholds,
         opts.contextWindowOf ?? (() => undefined),
       ),
-      trace: new LegacyTraceScreen(treeView, roots, bootTraceId),
+      trace: new TraceScreen(roots, bootTraceId, thresholds, {
+        extractEnabled: opts.extract !== undefined,
+      }),
       transcript: new PlaceholderScreen(
         "transcript",
         "The transcript lands in a later release. Press 2 for the trace.",
@@ -507,7 +503,7 @@ function makeFollowWatcher(opts: RunViewerOpts): {
   };
 }
 
-/** `Y` in the tree view: every event of one trace, one JSON object per line. */
+/** `Y` in the trace screen: every event of one trace, one JSON object per line. */
 function copyTraceToClipboard(
   events: readonly EventEnvelope[],
   traceId: string,

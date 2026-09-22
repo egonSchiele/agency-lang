@@ -57,3 +57,15 @@ There are a lot of cases to test with message threads, so this doc keeps a list 
 - no thread -- just making sure that if there is no thread, things run async as normal: tests/agency/threads/no-thread.agency
 
 - do funcs specifically marked sync/async create threads? What about func calls that are awaited?
+
+## Logs viewer
+
+- Normalized message deltas, full-content equality and rewritten histories: `lib/logsViewer/messageDelta.test.ts`.
+- Round/tool nesting, nested tool ownership, interrupt outcomes and stable IDs: `lib/logsViewer/story.test.ts`.
+- Parallel nested LLM calls, fork values and wall-clock envelopes: `lib/logsViewer/story.integration.test.ts`.
+- Decoded fields, complete result contents, output line counts and error sources: `lib/logsViewer/payload.test.ts`.
+- Split-pane navigation, complete payload search, raw forest coverage and golden frames: `lib/logsViewer/screens/traceScreen.test.ts`.
+- Safe text wrapping and highlighted source: `lib/logsViewer/screens/payloadPaint.test.ts`.
+- Follow append, toggle and truncation behavior: `lib/logsViewer/followMode.test.ts`.
+
+The inline conversation rows and long-message folds belonged to the retired tree view. Payloads now scroll separately from the outline.

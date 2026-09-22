@@ -1,5 +1,6 @@
+import { parseStyledText } from "../tui/styleParser.js";
 import { it, expect } from "vitest";
-import { resolveDetailNode } from "./detailTarget.js";
+import { resolveDetailRow } from "./detailTarget.js";
 import { DetailScreen } from "./views/detailScreen.js";
 import { DEFAULT_THRESHOLDS } from "./thresholds.js";
 import { buildForest } from "./tree.js";
@@ -37,12 +38,30 @@ it("resolves the second round again when an earlier prompt hides and leaf ids sh
   const before = loopForest(false);
   const after = loopForest(true);
   const id = "round:L:1";
-  expect(resolveDetailNode(before, id)?.event?.data.completion.output).toBe("second answer");
-  expect(resolveDetailNode(before, id)?.id).not.toBe(resolveDetailNode(after, id)?.id);
-  expect(resolveDetailNode(after, id)?.event?.data.completion.output).toBe("second answer");
-  expect(resolveDetailNode(after, "L")?.id).toBe("L");
+  expect(resolveDetailRow(before, id)?.node.event?.data.completion.output).toBe("second answer");
+  expect(resolveDetailRow(before, id)?.node.id).not.toBe(resolveDetailRow(after, id)?.node.id);
+  expect(resolveDetailRow(after, id)?.node.event?.data.completion.output).toBe("second answer");
+  expect(resolveDetailRow(after, "L")?.node.id).toBe("L");
   const detail = new DetailScreen(before, id, DEFAULT_THRESHOLDS);
   detail.setData(after);
-  expect(detail.allLines(120).join("\n")).toContain("second answer");
-  expect(detail.allLines(120).join("\n")).toContain("48 context (31 cached, 0 write) / 9 out");
+  expect(
+    detail
+      .allLines(120)
+      .map((line) =>
+        parseStyledText(line)
+          .map((part) => part.text)
+          .join(""),
+      )
+      .join("\n"),
+  ).toContain("second answer");
+  expect(
+    detail
+      .allLines(120)
+      .map((line) =>
+        parseStyledText(line)
+          .map((part) => part.text)
+          .join(""),
+      )
+      .join("\n"),
+  ).toContain("context 48 (31 cached) · fresh 17 · out 9");
 });

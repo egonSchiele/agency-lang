@@ -1,3 +1,4 @@
+import { userMessageOf } from "../statelog/wireAccessors.js";
 // Shared span naming, text, and magnitude-color helpers — lifted verbatim
 // from summary.ts so the tree view and the timeline views name a span and
 // format a duration ONE way. A span reading differently in two views of
@@ -89,18 +90,7 @@ export function llmCallDetail(node: TreeNode): string | undefined {
 // The last user-role message's text in a promptCompletion's messages —
 // the prompt that was just sent.
 export function lastUserMessage(pc: EventEnvelope): string | undefined {
-  const msgs = pc.data.messages;
-  if (!Array.isArray(msgs)) return undefined;
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i];
-    if (m?.role !== "user") continue;
-    if (typeof m.content === "string") return m.content;
-    if (Array.isArray(m.content)) {
-      const text = m.content.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("");
-      return text || undefined;
-    }
-  }
-  return undefined;
+  return userMessageOf(pc) ?? undefined;
 }
 
 // What an llmCall produced: the assistant text if present, else the
@@ -145,11 +135,11 @@ export function durationColor(ms: number, t: ViewerThresholds): string | undefin
   return colorForMagnitude(durationMagnitude(ms, t));
 }
 
-export function costColor(usd: number, t: ViewerThresholds): string | undefined {
-  return colorForMagnitude(costMagnitude(usd, t));
+export function costColor(usd: number, thresholds: ViewerThresholds): string | undefined {
+  return colorForMagnitude(costMagnitude(usd, thresholds));
 }
 
-export function colorForMagnitude(m: Magnitude): string | undefined {
+function colorForMagnitude(m: Magnitude): string | undefined {
   switch (m) {
     case "slow":
     case "expensive":

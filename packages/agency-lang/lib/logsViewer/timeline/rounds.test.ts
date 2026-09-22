@@ -128,7 +128,7 @@ describe("roundsOf", () => {
     const rounds = benchForest().flatMap((root) => roundsOf(root));
     expect(rounds.length).toBeGreaterThan(0);
     const ids = rounds.map((round) => round.id);
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.filter((id, index) => ids.indexOf(id) === index)).toHaveLength(ids.length);
     expect(rounds.map((round) => round.end)).toEqual(
       rounds.map((round) => round.end).sort((first, second) => first - second),
     );
@@ -143,5 +143,9 @@ describe("round ids", () => {
   it("anything else is not a round id", () => {
     expect(parseRoundId("L")).toBeUndefined();
     expect(parseRoundId("round:L:x")).toBeUndefined();
+    expect(parseRoundId("round:L:")).toBeUndefined();
+    expect(parseRoundId("round:L: ")).toBeUndefined();
+    expect(parseRoundId("round:L:1e2")).toBeUndefined();
+    expect(parseRoundId("round::0")).toBeUndefined();
   });
 });

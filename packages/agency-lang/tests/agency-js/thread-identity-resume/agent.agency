@@ -1,0 +1,12 @@
+def askTool(): string {
+  interrupt("approve ask-tool")
+  return "TOOL_RESULT"
+}
+
+def worker(): string {
+  return llm("inner", { tools: [askTool] })
+}
+
+node main() {
+  return llm("outer", { tools: [worker] })
+}

@@ -115,23 +115,24 @@ export function threadScopeOf(node: TreeNode, index: TreeIndex): TreeNode {
 }
 
 export function scopeThreadLabels(scope: TreeNode, cache: ScopeLabelCache): Record<string, string> {
-  cache[scope.id] ??= scanScopeLabels(scope);
-  return cache[scope.id];
+  const key = `last:${scope.id}`;
+  cache[key] ??= scanScopeLabels(scope);
+  return cache[key];
 }
 
 export function unambiguousThreadLabels(
   scope: TreeNode,
-  index: TreeIndex,
   cache: ScopeLabelCache,
 ): Record<string, string> {
-  if (cache[scope.id] !== undefined) {
-    return cache[scope.id];
+  const key = `unambiguous:${scope.id}`;
+  if (cache[key] !== undefined) {
+    return cache[key];
   }
   const creations: Record<string, TreeNode[]> = Object.create(null);
   const labels: Record<string, string> = Object.create(null);
-  for (const node of walkNodes(scope)) {
+  for (const node of scopeNodes(scope)) {
     const data = node.event?.data;
-    if (data?.type !== "threadCreated" || threadScopeOf(node, index).id !== scope.id) {
+    if (data?.type !== "threadCreated") {
       continue;
     }
     const localId = String(data.threadId);
@@ -143,29 +144,27 @@ export function unambiguousThreadLabels(
       labels[localId] = label;
     }
   }
-  cache[scope.id] = labels;
+  cache[key] = labels;
   return labels;
 }
 
-/** DFS order means a reused thread id resolves to the LAST threadCreated
- *  in the scope — "the most recent naming wins". Id reuse within one
- *  process is rare enough that positional (before-the-call) resolution
- *  has not been worth the bookkeeping; revisit if a real log disagrees. */
+/** Legacy groups use the last labeled creation in depth-first order. */
 function scanScopeLabels(scope: TreeNode): Record<string, string> {
   const labels: Record<string, string> = Object.create(null);
-  const index = buildTreeIndex(scope);
-  for (const node of walkNodes(scope)) {
+  for (const node of scopeNodes(scope)) {
     const data = node.event?.data;
-    if (
-      data?.type === "threadCreated" &&
-      threadScopeOf(node, index).id === scope.id &&
-      typeof data.label === "string" &&
-      data.label.length > 0
-    ) {
+    if (data?.type === "threadCreated" && typeof data.label === "string" && data.label.length > 0) {
       labels[String(data.threadId)] = data.label;
     }
   }
   return labels;
+}
+
+function scopeNodes(scope: TreeNode): TreeNode[] {
+  return walkNodes(
+    scope,
+    (node) => node === scope || node.nodeKind !== "span" || node.label !== "subprocessRun",
+  );
 }
 
 function enclosingFunctionName(node: TreeNode, index: TreeIndex): string | undefined {

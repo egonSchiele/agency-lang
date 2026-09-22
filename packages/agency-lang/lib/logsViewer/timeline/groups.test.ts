@@ -7,6 +7,7 @@ import {
   groupKeyOf,
   groupSpans,
   spanDisplayName,
+  scopeThreadLabels,
   threadScopeOf,
   unambiguousThreadLabels,
 } from "./groups.js";
@@ -151,8 +152,7 @@ describe("threadScopeOf", () => {
 describe("unambiguousThreadLabels", () => {
   it("returns a label for one creation", () => {
     const root = trace([leaf("threadCreated", 0, { threadId: "0", label: "main" })]);
-    const index = buildTreeIndex(root);
-    expect(unambiguousThreadLabels(root, index, Object.create(null))["0"]).toBe("main");
+    expect(unambiguousThreadLabels(root, Object.create(null))["0"]).toBe("main");
   });
 
   it("omits a reused local id", () => {
@@ -160,8 +160,7 @@ describe("unambiguousThreadLabels", () => {
       leaf("threadCreated", 0, { threadId: "0", label: "first" }),
       leaf("threadCreated", 1, { threadId: "0", label: "second" }),
     ]);
-    const index = buildTreeIndex(root);
-    expect(unambiguousThreadLabels(root, index, Object.create(null))["0"]).toBeUndefined();
+    expect(unambiguousThreadLabels(root, Object.create(null))["0"]).toBeUndefined();
   });
 
   it("does not count a nested subprocess creation in its parent scope", () => {
@@ -171,7 +170,38 @@ describe("unambiguousThreadLabels", () => {
       { id: "sub" },
     );
     const root = trace([leaf("threadCreated", 0, { threadId: "0", label: "parent" }), sub]);
-    const index = buildTreeIndex(root);
-    expect(unambiguousThreadLabels(root, index, Object.create(null))["0"]).toBe("parent");
+    expect(unambiguousThreadLabels(root, Object.create(null))["0"]).toBe("parent");
+  });
+});
+
+describe("scope label caches", () => {
+  it.each([true, false])(
+    "keeps last and unambiguous labels separate (last first: %s)",
+    (lastFirst) => {
+      const root = trace([
+        leaf("threadCreated", 0, { threadId: "0", label: "first" }),
+        leaf("threadCreated", 1, { threadId: "0", label: "second" }),
+      ]);
+      const cache = Object.create(null);
+      if (lastFirst) {
+        scopeThreadLabels(root, cache);
+      } else {
+        unambiguousThreadLabels(root, cache);
+      }
+      expect(scopeThreadLabels(root, cache)["0"]).toBe("second");
+      expect(unambiguousThreadLabels(root, cache)["0"]).toBeUndefined();
+    },
+  );
+
+  it("does not traverse nested subprocess contents when scanning a scope", () => {
+    const sub = span("subprocessRun", [], { id: "sub" });
+    const root = trace([leaf("threadCreated", 0, { threadId: "0", label: "parent" }), sub]);
+    Object.defineProperty(sub, "children", {
+      get() {
+        throw new Error("outside scope");
+      },
+    });
+    expect(scopeThreadLabels(root, Object.create(null))["0"]).toBe("parent");
+    expect(unambiguousThreadLabels(root, Object.create(null))["0"]).toBe("parent");
   });
 });

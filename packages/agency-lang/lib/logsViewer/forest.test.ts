@@ -17,6 +17,20 @@ const root = trace([sub]);
 const index = buildTreeIndex(root);
 
 describe("walkNodes", () => {
+  it("walks deeply nested logs without exhausting the call stack", () => {
+    const completion = leaf("promptCompletion", 0);
+    let deep = completion;
+    const depth = 10000;
+    for (let level = 0; level < depth; level++) {
+      deep = span("toolExecution", [deep]);
+    }
+    expect(walkNodes(deep)).toHaveLength(depth + 1);
+    const index = buildTreeIndex(deep);
+    expect(ancestorsOf(completion, index)).toHaveLength(depth);
+    expect(nearestAncestor(completion, index, (node) => node === deep)).toBe(deep);
+    expect(rootOf(completion, index)).toBe(deep);
+  });
+
   it("lists every node, parents before children", () => {
     const labels = walkNodes(root).map((node) => node.label);
     expect(labels).toEqual([

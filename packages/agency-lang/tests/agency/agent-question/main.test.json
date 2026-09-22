@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejected",
+      "input": "",
+      "expectedOutput": "\"pass\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

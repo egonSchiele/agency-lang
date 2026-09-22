@@ -1,0 +1,48 @@
+// `question` is how an agent asks the user for a fact only they have. It
+// raises an interrupt rather than reading the terminal, so a handler can
+// answer it in-process and it works anywhere the agent runs.
+import { question } from "std::agent"
+
+// An approval carries the answer, and that answer is what `question`
+// returns. The prompt reaches the handler too, so a handler can decide on
+// what was asked rather than on the effect alone.
+node main(): string {
+  let seen = ""
+  let asked = ""
+  let answer = "unset"
+
+  handle {
+    answer = question("Which account should I use?")
+  } with (intr) {
+    seen = intr.effect
+    asked = "${intr.data.prompt}"
+    return approve("the personal one")
+  }
+
+  if (seen != "std::question") { return "FAIL effect: ${seen}" }
+  if (asked != "Which account should I use?") { return "FAIL prompt: ${asked}" }
+  if (answer != "the personal one") { return "FAIL answer: ${answer}" }
+  return "pass"
+}
+
+def ask(prompt: string): Result<string> {
+  return try question(prompt)
+}
+
+// A rejected question fails with the reason the handler gave. That reason
+// is what an LLM whose tool called `question` reads back, so it has to
+// survive as far as the call site.
+node rejected(): string {
+  let outcome = "unset"
+
+  handle {
+    const answered = ask("Which account should I use?")
+    if (answered is failure(reason)) { outcome = "${reason}" }
+    if (answered is success(value)) { outcome = "answered ${value}" }
+  } with (intr) {
+    return reject("do not ask me that")
+  }
+
+  if (!outcome.includes("do not ask me that")) { return "FAIL: ${outcome}" }
+  return "pass"
+}

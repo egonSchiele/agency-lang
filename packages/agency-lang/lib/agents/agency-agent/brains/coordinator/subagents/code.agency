@@ -122,7 +122,6 @@ export static const codeTools: any[] = [
   // actual diff and build output, and its reads stay in the coder's
   // history.
   oracleAgent,
-  question,
 ]
 
 // Appended to the system prompt only when a web-search backend is active
@@ -285,7 +284,6 @@ Deliverable: ONLY the Agency module source that will be saved as ${target}. The 
     context: context,
     maxCost: ESCALATE_MAX_COST,
     maxTime: ESCALATE_MAX_TIME,
-    extraTools: [question],
   )
 }
 
@@ -376,7 +374,6 @@ def supervisedPlan(task: string, reason: string, plan: string): Result<string> {
       plan: plan,
       maxCost: ESCALATE_MAX_COST,
       maxTime: ESCALATE_MAX_TIME,
-      extraTools: [question],
     ),
   )
 }

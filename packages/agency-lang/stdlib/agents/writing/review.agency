@@ -20,6 +20,7 @@ import {
   readOnlyFileTools,
   writableFileTools,
   SAVE_DRAFT_HINT,
+  ASK_USER_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
@@ -48,7 +49,7 @@ How to review, stepwise:
 6. Do not invent errors or facts. Rewrites should preserve the original facts; if you must add a fact to make the text actionable, mark that rewrite advisory and call out the added fact.
 7. A clean verdict is a fine outcome. Never pad findings with generic advice. Always offer one concrete rewrite for each substantive finding.
 
-Keep each finding short, factual, and actionable: quote the passage, name the principle, and give one concrete fix. ${SAVE_DRAFT_HINT}"""
+Keep each finding short, factual, and actionable: quote the passage, name the principle, and give one concrete fix. ${ASK_USER_HINT}${SAVE_DRAFT_HINT}"""
 
 // The cuts pass: one question of every part of the text, does this reader
 // need it. Returns cuts only, never rewrites.

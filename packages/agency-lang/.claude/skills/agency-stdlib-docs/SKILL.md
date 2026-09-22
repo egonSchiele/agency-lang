@@ -9,6 +9,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 
 - `docs/dev/stdlib/adding-a-module-to-the-agency-stdlib.md` — The pattern for adding a stdlib module, including where files go and how docs are generated.
 - `docs/dev/stdlib/data-connectors.md` — Writing a `std::data` connector that reads a public data source, and the conventions they all follow.
+- `docs/dev/stdlib/asking-the-user.md` — `question` and the `std::question` effect: why asking goes through an interrupt, why no policy rule can answer it, which agents carry the tool and which are handed it at the call site, and the prompt hint without which none of them use it.
 - `docs/dev/stdlib/aws.md` — S3 support with no AWS SDK, including the request signer and the safety contracts around it.
 - `docs/dev/stdlib/contained-files.md` — The one module every stdlib file operation goes through: the root that is realpathed once, the refusal of any symlink below it, the whole-path split, the lint fence, and the symlink battery.
 - `docs/dev/stdlib/grep-flags.md` — `std::grep`: why it is an in-process regex walk and not the `grep` program, the flag rule table that turns grep habits into regex flags or named parameters, and the messages a rejected flag sends back to the model.

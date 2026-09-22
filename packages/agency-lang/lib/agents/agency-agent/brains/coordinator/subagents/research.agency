@@ -25,7 +25,7 @@ import { highlight } from "std::syntax"
 import { announce } from "../lib/announce.agency"
 import { budgeted, costBudget, timeBudget } from "../lib/budgets.agency"
 
-export static const researchTools: any[] = [...memoryTools(), ...planningTools(), highlight.partial(language: "ts"), print, question]
+export static const researchTools: any[] = [...memoryTools(), ...planningTools(), highlight.partial(language: "ts"), print]
 
 static const replStyle = """Reply for a terminal REPL that renders Markdown: use headings, bullets, bold, links, and fenced code blocks. Put a blank line between a heading and whatever follows it, or the renderer truncates the rest.
 
@@ -66,7 +66,7 @@ export handoff def researchAgent(
         maxCost: costBudget(maxDollars, $10.00),
         maxTime: timeBudget(maxSeconds, 10m),
         session: "research",
-        extraTools: researchTools,
+        extraTools: [...researchTools, question],
       )
     }
   }

@@ -1,3 +1,5 @@
+import { ScreenHost } from "../screenHost.js";
+import { PlaceholderScreen } from "./placeholderScreen.js";
 import { it, expect } from "vitest";
 import { LegacyTraceScreen } from "./legacyTraceScreen.js";
 import { TreeView } from "../views/treeView.js";
@@ -54,4 +56,38 @@ it("normal slash search cannot leave the selected trace", () => {
   }
   expect(tree.cursorTraceId()).toBe("B");
   expect(tree.messageBar()).toContain("no matches");
+});
+
+it("opens the chosen trace root so its children can be read", () => {
+  const roots = buildForest([
+    ...traceEvents("A", { answer: "alpha", toolOutput: "alpha" }),
+    ...traceEvents("B", { answer: "beta", toolOutput: "beta" }),
+  ]);
+  const viewport = { rows: 20, cols: 120 };
+  const tree = new TreeView(roots, DEFAULT_THRESHOLDS, viewport, { focusTraceId: "A" });
+  const screen = new LegacyTraceScreen(tree, roots, "A");
+  screen.setTrace("B");
+  screen.handleKey({ key: "j" }, viewport);
+  expect(tree.cursorRowId()).not.toBe("trace-B");
+  expect(tree.cursorTraceId()).toBe("B");
+});
+
+it("selecting the active trace screen retains its leaf cursor", () => {
+  const roots = buildForest(traceEvents("A", { answer: "needle", toolOutput: "done" }));
+  const tree = new TreeView(roots, DEFAULT_THRESHOLDS, { rows: 20, cols: 120 });
+  const screen = new LegacyTraceScreen(tree, roots, "A");
+  screen.applySearch("needle");
+  const cursor = tree.cursorRowId();
+  const host = new ScreenHost(
+    {
+      trace: screen,
+      overview: new PlaceholderScreen("overview", ""),
+      transcript: new PlaceholderScreen("transcript", ""),
+      timeline: screen,
+    },
+    "trace",
+    "A",
+  );
+  host.switchTo("trace");
+  expect(tree.cursorRowId()).toBe(cursor);
 });

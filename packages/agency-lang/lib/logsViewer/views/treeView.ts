@@ -166,6 +166,9 @@ export class TreeView implements View {
   /** `o` in a timeline view lands here: reveal and focus the span. */
   reveal(spanId: string): void {
     const revealed = expandAncestorsOf(this.state, [spanId]);
+    if (this.state.roots.some((root) => root.id === spanId)) {
+      revealed.expanded.add(spanId);
+    }
     this.state = { ...this.state, ...revealed, cursorId: spanId };
   }
 

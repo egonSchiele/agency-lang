@@ -1,3 +1,4 @@
+import { fmtUsd } from "./format.js";
 import { EventEnvelope, TreeNode } from "./types.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 import {
@@ -232,4 +233,3 @@ function wrapTag(text: string, color: string | undefined): string {
   if (!color) return text;
   return `{${color}-fg}${text}{/${color}-fg}`;
 }
-import { fmtUsd } from "./format.js";

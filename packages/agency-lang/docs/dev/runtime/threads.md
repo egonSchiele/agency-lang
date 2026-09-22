@@ -227,6 +227,7 @@ The variable receives a **deep clone** of the thread's accumulated messages (`sm
 ## Accessing the active ThreadStore from stdlib TS
 
 Stdlib helpers that push messages onto the active thread (e.g. `_systemMessage`, `_userMessage`, `_assistantMessage` in `lib/stdlib/thread.ts`) read the live `ThreadStore` from the AsyncLocalStorage frame via `getRuntimeContext().threads`. That's the same `ThreadStore` `setupNode` installs on the frame — see [async-context.md](./async-context.md) for the seeding points.
+
 ## Message-thread identity
 
 Each `MessageThread` has a stable `id` that is separate from the local
@@ -236,6 +237,12 @@ identity identifies the conversation itself. The identity is serialized with
 the thread so checkpoints and resumed runs keep emitting the same identity.
 Legacy snapshots without an `id` receive a new one when they are read.
 
-`MessageThread.adoptFrom()` deliberately keeps the destination identity. A
-handoff instead uses `ThreadStore.viewWithActive()` over the caller's actual
-thread, so its prompt completions carry the caller's identity.
+`restoreThreadForResume()` restores the saved identity while preserving the
+live object alias. This also covers async subthreads and tool-local threads
+that replay creates before restoring the prompt snapshot. `adoptFrom()` on
+its own copies messages while keeping the destination identity.
+
+`thread(session:)` and `thread(continue:)` reopen the same registry entry, so
+its identity stays the same. A handoff uses `ThreadStore.viewWithActive()` over
+the caller's thread and records the same identity. New subthreads get their
+own identity even though they inherit their parent's messages.

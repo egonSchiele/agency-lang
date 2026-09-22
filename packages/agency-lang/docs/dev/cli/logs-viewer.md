@@ -36,7 +36,7 @@ type Screen = View & {
 
 The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay also declares its `viewName`. A screen can decline an Esc by returning false, allowing the shell to continue down the ladder.
 
-A pure module computes plain records. One painter per screen draws those records and owns the TUI imports. The bar components in `views/shared.ts` predate this rule and keep their existing compute/render organization.
+Pure modules compute plain records. Screen painters draw those records and own the TUI imports.
 
 The overview fills slot 1 and is the starting screen. `LegacyTraceScreen` adapts `TreeView` to slot 2. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
 
@@ -58,7 +58,7 @@ A `TraceFilter` declares an ID, label and a predicate over `TraceSummary`. Every
 
 `capturesText()` is true while editing. The shell then sends q, f, ?, digits and other printable characters to the picker. Enter finishes editing; another Enter opens the selected trace. A nonempty query opens slot 2 and searches that trace's payloads, regardless of which screen was underneath the picker.
 
-At boot, multiple traces with no requested focus open the picker over the most recent trace. A single trace or `focusTraceId` opens directly. Follow updates never reopen the picker. This preserves the old multi-trace tree's first interaction: choosing from a collapsed list of traces.
+At boot, multiple traces with no requested focus open the picker over the most recent trace. A single trace or `focusTraceId` opens directly. Follow updates never reopen the picker.
 
 ## The timeline kernel (`lib/logsViewer/timeline/`)
 
@@ -157,16 +157,14 @@ prototype hit each one as a visible rendering bug):
   entries. (`line()` sets `height: 1` for exactly this reason; a
   hand-built `row(...)` must do the same.)
 
-`lib/tui/table.ts` is that component: declare columns and hand it rows, and
-it applies both rules for you. For a row that is not a table, build it from
-`segment(...)` in `lib/tui/paint.ts`, which returns a string of an exact
-visible width, and wrap it with `paintedLine(content, { width })`.
+Use `TableComponent` from `lib/tui/table.ts` for tables. It sets cell widths
+and row heights. To compose another kind of row, use `segment(text, width)`
+from `lib/tui/paint.ts` for each part, then `paintedLine(content, { width })`.
 
-Text from a statelog must never reach `line()` directly. The style parser
-swallows a brace group it recognizes (`{bold}`, anything ending in `-fg`),
-and escaping changes a string's length without changing its width.
-`paint.ts` handles both; its `Painted` type is how the compiler checks that
-a string went through it.
+Pass statelog text through `paint(text)` or `segment(text, width)` before
+rendering it. They display style-like text such as `{bold}` literally and
+replace ESC with `␛`, so recorded terminal escapes cannot change the output.
+Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
 
 ## Keybinding and chrome conventions (shared with any sibling TUI)
 

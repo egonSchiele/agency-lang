@@ -348,3 +348,18 @@ it("falls back to a surviving parent when follow removes the selected child", ()
   view.setData(roots);
   expect(view.focusId()).toBe("llm1");
 });
+
+it.each(["trace-T", "missing"])("retains its drill and cursor for unresolvable focus %s", (id) => {
+  const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS, { drillTo: "agent1" });
+  view.setFocus("bash1");
+  view.setFocus(id);
+  expect(view.focusId()).toBe("bash1");
+  expect(frame(view)).toContain("» codeAgent");
+  expect(frame(view)).not.toContain("agentRun");
+});
+it("leaves its drill to reveal a focus drawn outside it", () => {
+  const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS, { drillTo: "llm1" });
+  view.setFocus("root1");
+  expect(view.focusId()).toBe("root1");
+  expect(frame(view)).toContain("agentRun");
+});

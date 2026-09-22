@@ -255,3 +255,30 @@ describe("completionOf", () => {
     expect(completionOf(ev({ type: "promptCompletion" }))).toBeNull();
   });
 });
+
+it("does not turn image-only or object user messages into JSON text", () => {
+  for (const content of [
+    [{ type: "image", data: "base64-content" }],
+    { image: "base64-content" },
+  ]) {
+    expect(
+      userMessageOf(ev({ type: "promptCompletion", messages: [{ role: "user", content }] })),
+    ).toBeNull();
+  }
+  expect(
+    userMessageOf(
+      ev({
+        type: "promptCompletion",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", data: "base64" },
+              { type: "text", text: "look here" },
+            ],
+          },
+        ],
+      }),
+    ),
+  ).toBe("look here");
+});

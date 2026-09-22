@@ -9,37 +9,37 @@ all · 0 hidden · outline focus
       ⚠ std::read approv…                         ┃
   round  2 tool: agencyG…    2.8s    16k  $0.0011 ┃response
     agencyGuide interrup…     1ms                 ┃  code
-      ⚠ std::read approv…                         ┃def archiveNotes(count: number): Result<string> {
-  round  3 tool: agencyG…   5.5s!    17k  $0.0011 ┃  // Raise an interrupt with effect \`notes::arch…
-    agencyGuide builtins…     5ms                 ┃  raise notes::archive("Archive \${count} notes?"…
-      ⚠ std::read approv…                         ┃  return success("archived \${count}")
-  round  4 tool: grep        4.7s    18k  $0.0015 ┃}
-    ✖ grep interrupt            —                 ┃
-      ⚠ std::grep reject…                         ┃/**
-      ✖ interrupt reject…                         ┃For count == 11:
-  round  5 tool: grep        4.1s    18k  $0.0009 ┃- Both handlers run. The inner handler (closest …
-    ✖ grep notes::archive       —                 ┃- Because any handler rejecting causes the inter…
-      ⚠ std::grep reject…                         ┃*/
-      ✖ interrupt reject…                         ┃def runArchive(count: number): string {
-  round  6 tool: grep        4.2s    18k  $0.0010 ┃  handle {
-    ✖ grep effect               —                 ┃    // Inner handler: approves notes::archive in…
-      ⚠ std::grep reject…                         ┃    handle {
-      ✖ interrupt reject…                         ┃      const res: Result<string> = archiveNotes(c…
-  round  7 tool: grep       7.4s!    18k  $0.0015 ┃      if (isSuccess(res)) {
-    ✖ grep notes::              —                 ┃        return "archived"
-      ⚠ std::grep reject…                         ┃      }
-      ✖ interrupt reject…                         ┃      return "rejected"
-  round  8 tool: agencyG…   5.0s!    18k  $0.0013 ┃    } with (intr) {
-    agencyGuide effects.…     6ms                 ┃      if (intr.effect == "notes::archive") {
-      ⚠ std::read approv…                         ┃        return approve()
-  round  9 tool: typeche…  23.7s!    19k  $0.0050 ┃      }
-    typecheck def archiv…    95ms                 ┃      return pass()
-▶ round 10 {"response":{…  22.0s!    20k  $0.0034 ┃    }
-  ⚠ std::write approved                           ┃  } with (intr) {
-                                                  ┃    // Outer handler: rejects notes::archive whe…
-                                                  ┃    if (intr.effect == "notes::archive") {
-                                                  ┃      if (intr.data.count > 10) {
-                                                  ┃        return reject()
+      ⚠ std::read approv…                         ┃    def archiveNotes(count: number): Result<strin
+  round  3 tool: agencyG…   5.5s!    17k  $0.0011 ┃    g> {
+    agencyGuide builtins…     5ms                 ┃      // Raise an interrupt with effect \`notes::a
+      ⚠ std::read approv…                         ┃    rchive\` and payload containing the count.
+  round  4 tool: grep        4.7s    18k  $0.0015 ┃      raise notes::archive("Archive \${count} note
+    ✖ grep interrupt            —                 ┃    s?", { count: count })
+      ⚠ std::grep reject…                         ┃      return success("archived \${count}")
+      ✖ interrupt reject…                         ┃    }
+  round  5 tool: grep        4.1s    18k  $0.0009 ┃
+    ✖ grep notes::archive       —                 ┃    /**
+      ⚠ std::grep reject…                         ┃    For count == 11:
+      ✖ interrupt reject…                         ┃    - Both handlers run. The inner handler (close
+  round  6 tool: grep        4.2s    18k  $0.0010 ┃    st to the call) executes and approves the not
+    ✖ grep effect               —                 ┃    es::archive interrupt. The outer handler then
+      ⚠ std::grep reject…                         ┃     executes and, because count > 10, rejects th
+      ✖ interrupt reject…                         ┃    e notes::archive interrupt.
+  round  7 tool: grep       7.4s!    18k  $0.0015 ┃    - Because any handler rejecting causes the in
+    ✖ grep notes::              —                 ┃    terrupt to be rejected even if an inner handl
+      ⚠ std::grep reject…                         ┃    er approved it, archiveNotes ends up failing,
+      ✖ interrupt reject…                         ┃     so runArchive returns "rejected".
+  round  8 tool: agencyG…   5.0s!    18k  $0.0013 ┃    */
+    agencyGuide effects.…     6ms                 ┃    def runArchive(count: number): string {
+      ⚠ std::read approv…                         ┃      handle {
+  round  9 tool: typeche…  23.7s!    19k  $0.0050 ┃        // Inner handler: approves notes::archive
+    typecheck def archiv…    95ms                 ┃     interrupts.
+▶ round 10 {"response":{…  22.0s!    20k  $0.0034 ┃        handle {
+  ⚠ std::write approved                           ┃          const res: Result<string> = archiveNote
+                                                  ┃    s(count)
+                                                  ┃          if (isSuccess(res)) {
+                                                  ┃            return "archived"
+                                                  ┃          }
 j k move   ⏎ fold   tab pane   r raw   m machinery   a admin   d detail   / find   F filter"
 `;
 
@@ -52,37 +52,37 @@ all · 0 hidden · outline focus
       ⚠ std::read approved                                       ┃
   round  2 tool: agencyGuide                2.8s    16k  $0.0011 ┃response
     agencyGuide interrupts.md                1ms                 ┃  code
-      ⚠ std::read approved                                       ┃def archiveNotes(count: number): Result<string> {
-  round  3 tool: agencyGuide               5.5s!    17k  $0.0011 ┃  // Raise an interrupt with effect \`notes::archive\` and payloa…
-    agencyGuide builtins.md                  5ms                 ┃  raise notes::archive("Archive \${count} notes?", { count: coun…
-      ⚠ std::read approved                                       ┃  return success("archived \${count}")
-  round  4 tool: grep                       4.7s    18k  $0.0015 ┃}
-    ✖ grep interrupt                           —                 ┃
-      ⚠ std::grep rejected                                       ┃/**
-      ✖ interrupt rejected                                       ┃For count == 11:
-  round  5 tool: grep                       4.1s    18k  $0.0009 ┃- Both handlers run. The inner handler (closest to the call) ex…
-    ✖ grep notes::archive                      —                 ┃- Because any handler rejecting causes the interrupt to be reje…
-      ⚠ std::grep rejected                                       ┃*/
-      ✖ interrupt rejected                                       ┃def runArchive(count: number): string {
-  round  6 tool: grep                       4.2s    18k  $0.0010 ┃  handle {
-    ✖ grep effect                              —                 ┃    // Inner handler: approves notes::archive interrupts.
-      ⚠ std::grep rejected                                       ┃    handle {
-      ✖ interrupt rejected                                       ┃      const res: Result<string> = archiveNotes(count)
-  round  7 tool: grep                      7.4s!    18k  $0.0015 ┃      if (isSuccess(res)) {
-    ✖ grep notes::                             —                 ┃        return "archived"
-      ⚠ std::grep rejected                                       ┃      }
-      ✖ interrupt rejected                                       ┃      return "rejected"
-  round  8 tool: agencyGuide               5.0s!    18k  $0.0013 ┃    } with (intr) {
-    agencyGuide effects.md                   6ms                 ┃      if (intr.effect == "notes::archive") {
-      ⚠ std::read approved                                       ┃        return approve()
-  round  9 tool: typecheck                23.7s!    19k  $0.0050 ┃      }
-    typecheck def archiveNotes(count: n…    95ms                 ┃      return pass()
-▶ round 10 {"response":{"code":"def arc…  22.0s!    20k  $0.0034 ┃    }
-  ⚠ std::write approved                                          ┃  } with (intr) {
-                                                                 ┃    // Outer handler: rejects notes::archive when count > 10, o…
-                                                                 ┃    if (intr.effect == "notes::archive") {
-                                                                 ┃      if (intr.data.count > 10) {
-                                                                 ┃        return reject()
+      ⚠ std::read approved                                       ┃    def archiveNotes(count: number): Result<string> {
+  round  3 tool: agencyGuide               5.5s!    17k  $0.0011 ┃      // Raise an interrupt with effect \`notes::archive\` and pay
+    agencyGuide builtins.md                  5ms                 ┃    load containing the count.
+      ⚠ std::read approved                                       ┃      raise notes::archive("Archive \${count} notes?", { count: c
+  round  4 tool: grep                       4.7s    18k  $0.0015 ┃    ount })
+    ✖ grep interrupt                           —                 ┃      return success("archived \${count}")
+      ⚠ std::grep rejected                                       ┃    }
+      ✖ interrupt rejected                                       ┃
+  round  5 tool: grep                       4.1s    18k  $0.0009 ┃    /**
+    ✖ grep notes::archive                      —                 ┃    For count == 11:
+      ⚠ std::grep rejected                                       ┃    - Both handlers run. The inner handler (closest to the call)
+      ✖ interrupt rejected                                       ┃     executes and approves the notes::archive interrupt. The out
+  round  6 tool: grep                       4.2s    18k  $0.0010 ┃    er handler then executes and, because count > 10, rejects th
+    ✖ grep effect                              —                 ┃    e notes::archive interrupt.
+      ⚠ std::grep rejected                                       ┃    - Because any handler rejecting causes the interrupt to be r
+      ✖ interrupt rejected                                       ┃    ejected even if an inner handler approved it, archiveNotes e
+  round  7 tool: grep                      7.4s!    18k  $0.0015 ┃    nds up failing, so runArchive returns "rejected".
+    ✖ grep notes::                             —                 ┃    */
+      ⚠ std::grep rejected                                       ┃    def runArchive(count: number): string {
+      ✖ interrupt rejected                                       ┃      handle {
+  round  8 tool: agencyGuide               5.0s!    18k  $0.0013 ┃        // Inner handler: approves notes::archive interrupts.
+    agencyGuide effects.md                   6ms                 ┃        handle {
+      ⚠ std::read approved                                       ┃          const res: Result<string> = archiveNotes(count)
+  round  9 tool: typecheck                23.7s!    19k  $0.0050 ┃          if (isSuccess(res)) {
+    typecheck def archiveNotes(count: n…    95ms                 ┃            return "archived"
+▶ round 10 {"response":{"code":"def arc…  22.0s!    20k  $0.0034 ┃          }
+  ⚠ std::write approved                                          ┃          return "rejected"
+                                                                 ┃        } with (intr) {
+                                                                 ┃          if (intr.effect == "notes::archive") {
+                                                                 ┃            return approve()
+                                                                 ┃          }
 j k move   ⏎ fold   tab pane   r raw   m machinery   a admin   d detail   / find   F filter"
 `;
 
@@ -95,36 +95,36 @@ all · 0 hidden · outline focus
       ⚠ std::read approved                                                                          ┃
   round  2 tool: agencyGuide                                                   2.8s    16k  $0.0011 ┃response
     agencyGuide interrupts.md                                                   1ms                 ┃  code
-      ⚠ std::read approved                                                                          ┃def archiveNotes(count: number): Result<string> {
-  round  3 tool: agencyGuide                                                  5.5s!    17k  $0.0011 ┃  // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
-    agencyGuide builtins.md                                                     5ms                 ┃  raise notes::archive("Archive \${count} notes?", { count: count })
-      ⚠ std::read approved                                                                          ┃  return success("archived \${count}")
-  round  4 tool: grep                                                          4.7s    18k  $0.0015 ┃}
+      ⚠ std::read approved                                                                          ┃    def archiveNotes(count: number): Result<string> {
+  round  3 tool: agencyGuide                                                  5.5s!    17k  $0.0011 ┃      // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
+    agencyGuide builtins.md                                                     5ms                 ┃      raise notes::archive("Archive \${count} notes?", { count: count })
+      ⚠ std::read approved                                                                          ┃      return success("archived \${count}")
+  round  4 tool: grep                                                          4.7s    18k  $0.0015 ┃    }
     ✖ grep interrupt                                                              —                 ┃
-      ⚠ std::grep rejected                                                                          ┃/**
-      ✖ interrupt rejected                                                                          ┃For count == 11:
-  round  5 tool: grep                                                          4.1s    18k  $0.0009 ┃- Both handlers run. The inner handler (closest to the call) executes and approves the notes::arch…
-    ✖ grep notes::archive                                                         —                 ┃- Because any handler rejecting causes the interrupt to be rejected even if an inner handler appro…
-      ⚠ std::grep rejected                                                                          ┃*/
-      ✖ interrupt rejected                                                                          ┃def runArchive(count: number): string {
-  round  6 tool: grep                                                          4.2s    18k  $0.0010 ┃  handle {
-    ✖ grep effect                                                                 —                 ┃    // Inner handler: approves notes::archive interrupts.
-      ⚠ std::grep rejected                                                                          ┃    handle {
-      ✖ interrupt rejected                                                                          ┃      const res: Result<string> = archiveNotes(count)
-  round  7 tool: grep                                                         7.4s!    18k  $0.0015 ┃      if (isSuccess(res)) {
-    ✖ grep notes::                                                                —                 ┃        return "archived"
-      ⚠ std::grep rejected                                                                          ┃      }
-      ✖ interrupt rejected                                                                          ┃      return "rejected"
-  round  8 tool: agencyGuide                                                  5.0s!    18k  $0.0013 ┃    } with (intr) {
-    agencyGuide effects.md                                                      6ms                 ┃      if (intr.effect == "notes::archive") {
-      ⚠ std::read approved                                                                          ┃        return approve()
-  round  9 tool: typecheck                                                   23.7s!    19k  $0.0050 ┃      }
-    typecheck def archiveNotes(count: number): Result<string> {   // Raise…    95ms                 ┃      return pass()
-▶ round 10 {"response":{"code":"def archiveNotes(count: number): Result<st…  22.0s!    20k  $0.0034 ┃    }
-  ⚠ std::write approved                                                                             ┃  } with (intr) {
-                                                                                                    ┃    // Outer handler: rejects notes::archive when count > 10, otherwise passes.
-                                                                                                    ┃    if (intr.effect == "notes::archive") {
-                                                                                                    ┃      if (intr.data.count > 10) {
-                                                                                                    ┃        return reject()
+      ⚠ std::grep rejected                                                                          ┃    /**
+      ✖ interrupt rejected                                                                          ┃    For count == 11:
+  round  5 tool: grep                                                          4.1s    18k  $0.0009 ┃    - Both handlers run. The inner handler (closest to the call) executes and approves the notes::a
+    ✖ grep notes::archive                                                         —                 ┃    rchive interrupt. The outer handler then executes and, because count > 10, rejects the notes::a
+      ⚠ std::grep rejected                                                                          ┃    rchive interrupt.
+      ✖ interrupt rejected                                                                          ┃    - Because any handler rejecting causes the interrupt to be rejected even if an inner handler ap
+  round  6 tool: grep                                                          4.2s    18k  $0.0010 ┃    proved it, archiveNotes ends up failing, so runArchive returns "rejected".
+    ✖ grep effect                                                                 —                 ┃    */
+      ⚠ std::grep rejected                                                                          ┃    def runArchive(count: number): string {
+      ✖ interrupt rejected                                                                          ┃      handle {
+  round  7 tool: grep                                                         7.4s!    18k  $0.0015 ┃        // Inner handler: approves notes::archive interrupts.
+    ✖ grep notes::                                                                —                 ┃        handle {
+      ⚠ std::grep rejected                                                                          ┃          const res: Result<string> = archiveNotes(count)
+      ✖ interrupt rejected                                                                          ┃          if (isSuccess(res)) {
+  round  8 tool: agencyGuide                                                  5.0s!    18k  $0.0013 ┃            return "archived"
+    agencyGuide effects.md                                                      6ms                 ┃          }
+      ⚠ std::read approved                                                                          ┃          return "rejected"
+  round  9 tool: typecheck                                                   23.7s!    19k  $0.0050 ┃        } with (intr) {
+    typecheck def archiveNotes(count: number): Result<string> {   // Raise…    95ms                 ┃          if (intr.effect == "notes::archive") {
+▶ round 10 {"response":{"code":"def archiveNotes(count: number): Result<st…  22.0s!    20k  $0.0034 ┃            return approve()
+  ⚠ std::write approved                                                                             ┃          }
+                                                                                                    ┃          return pass()
+                                                                                                    ┃        }
+                                                                                                    ┃      } with (intr) {
+                                                                                                    ┃        // Outer handler: rejects notes::archive when count > 10, otherwise passes.
 j k move   ⏎ fold   tab pane   r raw   m machinery   a admin   d detail   / find   F filter"
 `;

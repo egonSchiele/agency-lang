@@ -132,3 +132,25 @@ it("keeps ordinary prose as wrapping text with its structured indentation", () =
   });
   expect(valuePayload("done")).toEqual([{ kind: "text", text: "done", indent: 0, role: "text" }]);
 });
+
+it("shows unknown usage and cache writes in round details", () => {
+  const row = roundRow("done");
+  row.node.event!.data.usage = undefined;
+  expect(payloadFor(row, options)).toContainEqual({
+    kind: "meta",
+    text: "context ? · fresh ? · out ?",
+  });
+  row.node.event!.data.usage = {
+    inputTokens: 95,
+    cachedInputTokens: 13824,
+    cacheCreationInputTokens: 40,
+    outputTokens: 190,
+  };
+  // Rounds are rebuilt from the recorded event, as they are during follow.
+  const refreshed = outlineRows(buildForest([row.node.event!])[0], {
+    machinery: false,
+    admin: false,
+  })[0];
+  const lines = payloadFor(refreshed, options);
+  expect(lines.some((line) => line.kind === "meta" && line.text.includes("40 write"))).toBe(true);
+});

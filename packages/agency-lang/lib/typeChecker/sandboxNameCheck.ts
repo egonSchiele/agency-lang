@@ -235,6 +235,15 @@ function collectDeclHangingExpressions(
     if (dv !== undefined && dv !== null && typeof dv === "object" && "type" in dv) {
       found.push({ expr: dv as AgencyNode, scopeNames: childScope });
     }
+    // A docstring hangs off the declaration the same way, and it is live
+    // code: `"""home is ${process.env.HOME}"""` becomes the tool
+    // description, a template literal evaluated when the module loads.
+    // `scopeNames`, not `childScope`: it is built before any call, so it
+    // sees top-level names only, never this declaration's parameters.
+    const doc = record.docString;
+    if (doc !== undefined && doc !== null && typeof doc === "object" && "type" in doc) {
+      found.push({ expr: doc as AgencyNode, scopeNames });
+    }
 
     for (const key of Object.keys(record)) {
       if (key === "loc") continue;

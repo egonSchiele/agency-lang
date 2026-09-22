@@ -3,7 +3,11 @@
 // and then vanish at compile time.) Two mechanisms cooperate, and the
 // tests below name which one they pin:
 // - the exported wrapper carries the default in its TS signature, so a
-//   direct invocation with no argument is filled by JS itself;
+//   direct invocation with no argument is filled by JS itself. Every
+//   default here is literal; one that names a global is left out of the
+//   signature and filled by the body instead, because the signature is
+//   evaluated before the frame exists (tests/agency-js/
+//   node-param-default-names);
 // - the node BODY defaults an undefined __state.data slot, which is what
 //   a goto that omits the argument exercises.
 

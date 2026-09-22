@@ -113,8 +113,9 @@ function cellElement(
   align: "left" | "right" | undefined,
   style: CellStyle,
 ): Element {
-  // The last cell of every column is a guaranteed gap, so a full-width
-  // value never touches its neighbor.
+  // The last column of every cell is a guaranteed gap: without it, a
+  // full-width value (or a right-aligned one) touches its neighbor and
+  // adjacent headers read as one word.
   if (width <= 0) {
     return paintedLine(paint(""), { width, ...style });
   }

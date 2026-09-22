@@ -9,6 +9,8 @@ import type { KeyEvent } from "../../tui/input/types.js";
 import { formatKey } from "../../tui/input/format.js";
 import {
   contextTokens,
+  hasTokenUsage,
+  tokensCacheWrite,
   cost as costOf,
   tokensCached,
   tokensOut,
@@ -127,10 +129,10 @@ export class DetailScreen implements View {
       const d = prompt.event!.data;
       out.push(`model: ${stripQuotes(typeof d.model === "string" ? d.model : undefined)}`);
       const event = prompt.event!;
-      out.push(
-        `tokens: ${contextTokens(event)} context (${tokensCached(event)} cached) / ${tokensOut(event)} out` +
-          `   cost: $${costOf(event).toFixed(4)}`,
-      );
+      const tokens = hasTokenUsage(event)
+        ? `${contextTokens(event)} context (${tokensCached(event)} cached, ${tokensCacheWrite(event)} write) / ${tokensOut(event)} out`
+        : "? context / ? out";
+      out.push(`tokens: ${tokens}   cost: $${costOf(event).toFixed(4)}`);
       out.push("", "── transcript ──");
       const messages = Array.isArray(d.messages) ? d.messages : [];
       const completion =

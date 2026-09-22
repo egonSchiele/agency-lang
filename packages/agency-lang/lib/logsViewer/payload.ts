@@ -1,5 +1,9 @@
-import { completionOf, normalizeMessage } from "../statelog/wireAccessors.js";
-import { detectLanguage } from "../stdlib/syntax.js";
+import {
+  completionOf,
+  normalizeMessage,
+  hasTokenUsage,
+  tokensCacheWrite,
+} from "../statelog/wireAccessors.js";
 import { buildTreeIndex } from "./forest.js";
 import { fmtTokens, fmtUsd } from "./format.js";
 import { childEvent, fmtDuration } from "./spanText.js";
@@ -21,7 +25,7 @@ export type PayloadLine =
     }
   | { kind: "meta"; text: string }
   | { kind: "text"; text: string; indent: number; role: StructuredLine["role"] | "plain" | "error" }
-  | { kind: "code"; text: string; language: string }
+  | { kind: "code"; text: string; language: string; indent?: number }
   | { kind: "json"; text: string }
   | { kind: "blank" };
 export type PayloadOptions = { raw: boolean };
@@ -69,7 +73,7 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
     },
     {
       kind: "meta",
-      text: `context ${fmtTokens(round.contextTokens)} (${fmtTokens(round.cachedTokens)} cached) · fresh ${fmtTokens(round.freshTokens)} · out ${fmtTokens(round.outputTokens)}`,
+      text: roundTokenSummary(row),
     },
     { kind: "blank" },
     ...valuePayload(completionOf(event) ?? ""),
@@ -78,6 +82,16 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
       ...valuePayload(call.arguments),
     ]),
   ];
+}
+function roundTokenSummary(row: RoundStoryRow): string {
+  const event = row.node.event!;
+  if (!hasTokenUsage(event)) {
+    return "context ? · fresh ? · out ?";
+  }
+  const round = row.round;
+  const written = tokensCacheWrite(event);
+  const writes = written > 0 ? `, ${fmtTokens(written)} write` : "";
+  return `context ${fmtTokens(round.contextTokens)} (${fmtTokens(round.cachedTokens)} cached${writes}) · fresh ${fmtTokens(round.freshTokens)} · out ${fmtTokens(round.outputTokens)}`;
 }
 function toolPayload(row: ToolStoryRow): PayloadLine[] {
   const started = childEvent(row.node, "toolCallStart");
@@ -168,10 +182,9 @@ function structuredPayload(lines: StructuredLine[]): PayloadLine[] {
     }
     const text = block.join("\n");
     const previous = lines[position - block.length];
-    const language =
-      previous?.role === "key" && previous.text === "code" ? "agency" : detectLanguage(text);
+    const language = previous?.role === "key" && previous.text === "code" ? "agency" : "plaintext";
     if (language !== "plaintext") {
-      output.push({ kind: "code", text, language });
+      output.push({ kind: "code", text, language, indent: line.indent });
     } else {
       output.push(
         ...block.map((text) => ({

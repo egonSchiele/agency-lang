@@ -1,6 +1,6 @@
 // Components shared by the timeline and occurrences views:
 // the bar itself, the axis, the header line, the selection footer, and the
-// width budget. One implementation of shading and layout, used three times.
+// width budget.
 import { fmtDuration } from "../spanText.js";
 import { coverage, type Interval } from "../timeline/intervals.js";
 import { clipText } from "../../tui/paint.js";

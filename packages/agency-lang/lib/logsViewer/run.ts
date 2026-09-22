@@ -416,6 +416,7 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
             overlayEscaped: () => host.escapeOverlay(),
             screenEscaped: () => host.escapeScreen(),
             activeScreen: host.activeScreen(),
+            overviewAvailable: true,
             embedded,
           });
           if (outcome === "back") {

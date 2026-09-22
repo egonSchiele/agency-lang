@@ -57,6 +57,10 @@ export class ScreenHost {
   /** The shared cursor: what was focused where we were is focused where
    *  we are going. */
   switchTo(name: ScreenName, focusId?: string): void {
+    if (name === this.active && focusId === undefined) {
+      this.closeAllOverlays();
+      return;
+    }
     const carried = focusId ?? this.screens[this.active].focusId();
     this.closeAllOverlays();
     this.active = name;
@@ -78,7 +82,6 @@ export class ScreenHost {
     this.closeAllOverlays();
     this.showTrace(traceId);
     if (query !== undefined && query.length > 0) {
-      // The trace searches payloads and is available from PR 4 onward.
       this.active = "trace";
       this.screens.trace.applySearch(query);
     }

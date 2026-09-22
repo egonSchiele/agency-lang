@@ -54,6 +54,11 @@ export function toolNameOf(ev: EventEnvelope): string {
   return String(ev.data.toolName ?? "");
 }
 
+/** Whether the event records token usage, including a recorded zero. */
+export function hasTokenUsage(ev: EventEnvelope): boolean {
+  return ev.data.usage != null;
+}
+
 /** Fresh input tokens: what the model was sent that did not come from
  *  the prompt cache. See `contextTokens` for the full input. */
 export function tokensIn(ev: EventEnvelope): number {
@@ -117,7 +122,18 @@ export function userMessageOf(promptCompletion: EventEnvelope): string | null {
   const userMsgs = msgs.filter((m: any) => m?.role === "user");
   const last = userMsgs[userMsgs.length - 1];
   if (last === undefined) return null;
-  return contentText(last.content) || null;
+  if (typeof last.content === "string") {
+    return last.content;
+  }
+  if (Array.isArray(last.content)) {
+    return (
+      last.content
+        .map(partText)
+        .filter((part: string | undefined) => part !== undefined)
+        .join("") || null
+    );
+  }
+  return null;
 }
 
 /** Assistant's reply text on a promptCompletion. Returns null when

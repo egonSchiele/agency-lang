@@ -43,7 +43,7 @@ export function overviewData(
   const spans = timelineSpans(trace, { hideKinds: ADMIN_KINDS });
   const groups = groupSpans(spans, trace);
   const nodes = walkNodes(trace);
-  const models = unique(rounds.map((round) => round.model).filter((model) => model !== "?"));
+  const models = unique(rounds.map((round) => round.model).filter((model) => model !== ""));
   const latestModel = rounds.at(-1)?.model;
   return {
     models,

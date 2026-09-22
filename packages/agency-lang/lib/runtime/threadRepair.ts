@@ -212,5 +212,10 @@ export function restoreThreadForResume(
     throw new Error(msg);
   }
   live.adoptFrom(restored);
+  // Replay can create a fresh async subthread or tool-local thread before
+  // the prompt restores its snapshot. Keep the saved conversation identity.
+  if (!Array.isArray(snapshot) && typeof snapshot.id === "string" && snapshot.id.length > 0) {
+    live.id = restored.id;
+  }
   return live;
 }

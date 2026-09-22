@@ -36,9 +36,11 @@ type Screen = View & {
 
 The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay also declares its `viewName`. A screen can decline an Esc by returning false, allowing the shell to continue down the ladder.
 
-A pure module computes plain records. One painter per screen draws those records and owns the TUI imports. The bar components in `views/shared.ts` predate this rule and keep their existing compute/render organization.
+Pure modules compute plain records. Screen painters draw those records and own the TUI imports. Shared bar components live in `views/shared.ts`.
 
 The overview fills slot 1, the trace outline slot 2, the transcript slot 3, and the timeline slot 4. Selecting a time group in the overview opens its occurrences as an overlay. Round and tool focus survives all screen transitions, including a trip through overview. A missing ID falls back to its nearest surviving ancestor, then the first row.
+
+The overview reserves room for the header, message and key hints. It reduces chart height and scrolls the time groups when the terminal is short. Selecting a callout focuses its round in both charts and carries that focus to other screens.
 
 ## Key tables
 
@@ -115,7 +117,7 @@ A round has an ID such as `round:call-id:2`. Other event-backed rows use `leaf:p
 
 Press `m` to replace the story with the forest's own nesting. With `a` on too, every node beneath the trace has exactly one row. With `a` off, the forest omits admin subtrees. In the story, `a` adds handler decisions beneath their interrupt. `Enter` collapses or expands children. Filters retain matching rows and their ancestors.
 
-The payload pane follows the outline cursor. `Tab` moves scrolling into the payload; `r` shows raw JSON; `d` opens the same payload at full width. `payload.ts` computes unstyled records, and `screens/payloadPaint.ts` wraps text and highlights whole code blocks. Both screens cache painted content until the row, raw toggle, width or data changes. Detail overlays keep the original story or span ID and resolve it again after each follow update.
+The payload pane follows the outline cursor. `Tab` moves scrolling into the payload; `r` shows raw JSON; `d` opens the same payload at full width. `payload.ts` computes unstyled records, and `screens/payloadPaint.ts` wraps text and highlights `code` fields as Agency source. Highlighted lines also wrap without discarding content. Both screens cache painted content until the row, raw toggle, width or data changes. Detail overlays keep the original story or span ID and resolve it again after each follow update.
 
 Tool outcomes describe recorded evidence. A missing completion reads “completion not recorded.” A rejected interrupt does not establish whether work occurred earlier. Error flags can establish that work occurred or that the tool never started. `classifyTool` and `toolStatusText` own these judgments and labels.
 
@@ -152,16 +154,16 @@ The cursor moves by block; paging scrolls display lines. Search and copy use ful
   entries. (`line()` sets `height: 1` for exactly this reason; a
   hand-built `row(...)` must do the same.)
 
-`lib/tui/table.ts` is that component: declare columns and hand it rows, and
+Declare columns and rows with `lib/tui/table.ts`, and
 it applies both rules for you. For a row that is not a table, build it from
 `segment(...)` in `lib/tui/paint.ts`, which returns a string of an exact
 visible width, and wrap it with `paintedLine(content, { width })`.
 
-Text from a statelog must never reach `line()` directly. The style parser
-swallows a brace group it recognizes (`{bold}`, anything ending in `-fg`),
-and escaping changes a string's length without changing its width.
-`paint.ts` handles both; its `Painted` type is how the compiler checks that
-a string went through it. The structural linter bans direct text builders under `screens/`; statelog text goes through `paint` or the payload painter, which escapes terminal controls before syntax highlighting.
+Pass statelog text through `paint(text)` or `segment(text, width)` before
+rendering it. They display style-like text such as `{bold}` literally and
+replace ESC with `␛`, so recorded terminal escapes cannot change the output.
+Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
+The structural linter bans direct text builders under `screens/`. The payload painter escapes terminal controls before syntax highlighting.
 
 ## Keybinding and chrome conventions (shared with any sibling TUI)
 

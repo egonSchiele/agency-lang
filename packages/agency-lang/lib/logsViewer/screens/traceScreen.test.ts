@@ -238,3 +238,14 @@ it("reveals an explicitly requested shared focus through an active filter", () =
   expect(screen.focusId()).toBe("guide");
   expect(text(screen)).toContain("TOOL · agencyGuide");
 });
+
+it("previous match from a nonmatching ancestor selects the last match", () => {
+  const screen = make([agentLoopTrace()]);
+  screen.applySearch("Search?");
+  screen.setFocus("round:L:1");
+  press(screen, "N");
+  expect(press(screen, "d")).toEqual({
+    kind: "openDetail",
+    rowId: "leaf:grep:interruptResolved:0",
+  });
+});

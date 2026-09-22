@@ -20,22 +20,38 @@ export function buildTreeIndex(root: TreeNode): TreeIndex {
 }
 
 /** Every node under `root`, root included, parents before children. */
-export function walkNodes(root: TreeNode): TreeNode[] {
-  return [root, ...root.children.flatMap(walkNodes)];
+export function walkNodes(
+  root: TreeNode,
+  descend: (node: TreeNode) => boolean = () => true,
+): TreeNode[] {
+  const nodes: TreeNode[] = [];
+  const pending = [root];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    nodes.push(node);
+    if (!descend(node)) {
+      continue;
+    }
+    for (let index = node.children.length - 1; index >= 0; index--) {
+      pending.push(node.children[index]);
+    }
+  }
+  return nodes;
 }
 
 export function findNode(roots: TreeNode[], id: string): TreeNode | undefined {
-  return roots.flatMap(walkNodes).find((node) => node.id === id);
+  return roots.flatMap((root) => walkNodes(root)).find((node) => node.id === id);
 }
 
 /** Nearest first, the trace root last. */
 export function ancestorsOf(node: TreeNode, index: TreeIndex): TreeNode[] {
-  const parentId = index.parentIds[node.id];
-  const parent = parentId === undefined ? undefined : index.byId[parentId];
-  if (parent === undefined) {
-    return [];
+  const ancestors: TreeNode[] = [];
+  let current = parentOf(node, index);
+  while (current !== undefined) {
+    ancestors.push(current);
+    current = parentOf(current, index);
   }
-  return [parent, ...ancestorsOf(parent, index)];
+  return ancestors;
 }
 
 export function nearestAncestor(
@@ -43,7 +59,14 @@ export function nearestAncestor(
   index: TreeIndex,
   matches: (ancestor: TreeNode) => boolean,
 ): TreeNode | undefined {
-  return ancestorsOf(node, index).find(matches);
+  let current = parentOf(node, index);
+  while (current !== undefined) {
+    if (matches(current)) {
+      return current;
+    }
+    current = parentOf(current, index);
+  }
+  return undefined;
 }
 
 export function rootOf(node: TreeNode, index: TreeIndex): TreeNode {
@@ -56,10 +79,26 @@ export function walkWithDepth(
   root: TreeNode,
   skip: (node: TreeNode) => boolean = () => false,
 ): PlacedNode[] {
-  function visit(parent: TreeNode, depth: number): PlacedNode[] {
-    return parent.children
-      .filter((node) => !skip(node))
-      .flatMap((node) => [{ node, parent, depth }, ...visit(node, depth + 1)]);
+  const output: PlacedNode[] = [];
+  const pending = root.children.map((node) => ({ node, parent: root, depth: 0 })).reverse();
+  while (pending.length > 0) {
+    const placed = pending.pop()!;
+    if (skip(placed.node)) {
+      continue;
+    }
+    output.push(placed);
+    for (let index = placed.node.children.length - 1; index >= 0; index--) {
+      pending.push({
+        node: placed.node.children[index],
+        parent: placed.node,
+        depth: placed.depth + 1,
+      });
+    }
   }
-  return visit(root, 0);
+  return output;
+}
+
+function parentOf(node: TreeNode, index: TreeIndex): TreeNode | undefined {
+  const parentId = index.parentIds[node.id];
+  return parentId === undefined ? undefined : index.byId[parentId];
 }

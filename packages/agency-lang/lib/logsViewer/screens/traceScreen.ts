@@ -168,7 +168,9 @@ export class TraceScreen implements Screen {
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
     this.page = Math.max(1, viewport.rows - LAYOUT.fixedRows);
-    this.payloadHeight = this.payload(this.payloadWidth(viewport.cols)).length;
+    if (this.pane === "payload") {
+      this.payloadHeight = this.payload(this.payloadWidth(viewport.cols)).length;
+    }
     return runViewerKey(this.bindings(), formatKey(event));
   }
   helpLines(): string[] {
@@ -305,7 +307,8 @@ export class TraceScreen implements Screen {
       return;
     }
     const position = this.matchIds.indexOf(this.cursorId);
-    const next = (position + direction + this.matchIds.length) % this.matchIds.length;
+    const start = position < 0 && direction < 0 ? 0 : position;
+    const next = (start + direction + this.matchIds.length) % this.matchIds.length;
     this.setFocus(this.matchIds[next]);
   }
   applySearch(query: string): void {

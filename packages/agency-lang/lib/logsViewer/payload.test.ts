@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildForest } from "./tree.js";
 import { outlineRows, type StoryRow } from "./story.js";
 import { agentLoopTrace, event } from "./storyFixture.js";
-import { payloadFor } from "./payload.js";
+import { payloadFor, valuePayload } from "./payload.js";
 const options = { raw: false };
 function roundRow(output: string): StoryRow {
   return outlineRows(
@@ -46,6 +46,7 @@ describe("payloads", () => {
       kind: "code",
       text: "def f(): number {\n  return 1\n}",
       language: "agency",
+      indent: 4,
     });
   });
   it("shows all token bands and the raw event when requested", () => {
@@ -119,4 +120,37 @@ it("reports result line counts and recorded error origin", () => {
   expect(error).toContainEqual({ kind: "meta", text: "function: write" });
   expect(error).toContainEqual({ kind: "meta", text: "span: tool" });
   expect(error).toContainEqual({ kind: "meta", text: "source: disk.agency:12" });
+});
+
+it("keeps ordinary prose as wrapping text with its structured indentation", () => {
+  const sentence = "The capital of France is Paris. Let me know if you want more detail.";
+  expect(valuePayload({ answer: sentence })).toContainEqual({
+    kind: "text",
+    text: sentence,
+    indent: 2,
+    role: "text",
+  });
+  expect(valuePayload("done")).toEqual([{ kind: "text", text: "done", indent: 0, role: "text" }]);
+});
+
+it("shows unknown usage and cache writes in round details", () => {
+  const row = roundRow("done");
+  row.node.event!.data.usage = undefined;
+  expect(payloadFor(row, options)).toContainEqual({
+    kind: "meta",
+    text: "context ? · fresh ? · out ?",
+  });
+  row.node.event!.data.usage = {
+    inputTokens: 95,
+    cachedInputTokens: 13824,
+    cacheCreationInputTokens: 40,
+    outputTokens: 190,
+  };
+  // Rounds are rebuilt from the recorded event, as they are during follow.
+  const refreshed = outlineRows(buildForest([row.node.event!])[0], {
+    machinery: false,
+    admin: false,
+  })[0];
+  const lines = payloadFor(refreshed, options);
+  expect(lines.some((line) => line.kind === "meta" && line.text.includes("40 write"))).toBe(true);
 });

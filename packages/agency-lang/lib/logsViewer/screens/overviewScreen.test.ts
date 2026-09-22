@@ -1,3 +1,6 @@
+import { layout } from "../../tui/layout.js";
+import { render as renderFrame } from "../../tui/render/renderer.js";
+import { FrameRecorder } from "../../tui/output/recorder.js";
 import { describe, expect, it } from "vitest";
 
 import type { Element } from "../../tui/elements.js";
@@ -57,8 +60,8 @@ function fixture(threadLabel = "main") {
   ];
 }
 
-function manyRounds() {
-  const rounds = Array.from({ length: 24 }, (_unused, position) =>
+function manyRounds(count = 24) {
+  const rounds = Array.from({ length: count }, (_unused, position) =>
     leaf("promptCompletion", (position + 1) * 1_000, {
       model: '"m1"',
       timeTaken: 100,
@@ -159,4 +162,78 @@ describe("OverviewScreen", () => {
   it.each([100, 130, 200])("renders the golden frame at %d columns", (cols) => {
     expect(render(cols).replace(/ +$/gm, "")).toMatchSnapshot();
   });
+});
+
+function manyGroups() {
+  const roots = fixture();
+  roots[0].children.push(
+    ...Array.from({ length: 8 }, (_, position) =>
+      span(
+        "toolExecution",
+        [
+          leaf("toolCallStart", 100, { toolName: `extra${position}` }),
+          leaf("toolCall", 200, { toolName: `extra${position}` }),
+        ],
+        { id: `extra${position}` },
+      ),
+    ),
+  );
+  return roots;
+}
+it.each([16, 20, 24, 30])("keeps the selected time group and footer visible in %i rows", (rows) => {
+  const screen = new OverviewScreen(manyGroups(), "T", DEFAULT_THRESHOLDS, () => undefined);
+  const viewport = { rows, cols: 100 };
+  screen.handleKey({ key: "G" }, viewport);
+  screen.notify("selected group");
+  const element = screen.render(viewport);
+  expect(flat(element).length).toBeLessThanOrEqual(rows);
+  const recorder = new FrameRecorder();
+  recorder.write(renderFrame(layout(element, viewport.cols, rows)));
+  expect(recorder.lastText()).toContain("▶ other");
+  expect(recorder.lastText()).toContain("selected group");
+  expect(recorder.lastText()).toContain("tab panel");
+  screen.handleKey({ key: "g" }, viewport);
+  expect(flat(screen.render(viewport)).join("\n")).toMatch(/▶ llm/);
+});
+it("publishes the callout selected by Tab and movement", () => {
+  const screen = new OverviewScreen(fixture(), "T", DEFAULT_THRESHOLDS, () => undefined);
+  const viewport = { rows: 30, cols: 100 };
+  screen.handleKey({ key: "tab" }, viewport);
+  expect(screen.focusId()).toBe("round:L:1");
+  screen.handleKey({ key: "G" }, viewport);
+  expect(screen.focusId()).toBe("round:L:2");
+});
+it("scrolls both charts to the selected callout", () => {
+  const screen = new OverviewScreen(manyRounds(), "T", DEFAULT_THRESHOLDS, () => undefined);
+  const viewport = { rows: 30, cols: 100 };
+  screen.setFocus("round:L:0");
+  screen.handleKey({ key: "tab" }, viewport);
+  screen.handleKey({ key: "j" }, viewport);
+  const ticks = flat(screen.render(viewport)).filter(
+    (row) => (row.match(/r\d+/g) ?? []).length > 2,
+  );
+  expect(ticks).toHaveLength(2);
+  expect(ticks.every((row) => row.includes("r23"))).toBe(true);
+  expect(screen.focusId()).toBe("round:L:23");
+});
+it("aligns every cost column with the ticks when costs reach three digits", () => {
+  const roots = [
+    trace([
+      span("llmCall", [leaf("promptCompletion", 100, { cost: { totalCost: 123.45 } })], {
+        id: "L",
+      }),
+    ]),
+  ];
+  const screen = new OverviewScreen(roots, "T", DEFAULT_THRESHOLDS, () => undefined);
+  const left = flat(screen.render({ rows: 30, cols: 100 })).map((row) => row.split(" │ ")[0]);
+  const start = left.findIndex((row) => row.includes("COST PER ROUND"));
+  const bars = left.slice(start + 1).filter((row) => row.includes("█"));
+  expect(bars.length).toBeGreaterThan(1);
+  expect(bars.every((row) => row.indexOf("█") === 7)).toBe(true);
+});
+it("keeps tick labels in their column slots after round 100", () => {
+  const screen = new OverviewScreen(manyRounds(120), "T", DEFAULT_THRESHOLDS, () => undefined);
+  const lines = flat(screen.render({ rows: 30, cols: 100 })).map((row) => row.split(" │ ")[0]);
+  const ticks = lines.find((row) => (row.match(/r\d+/g) ?? []).length > 2)!;
+  expect([...ticks.matchAll(/r\d+/g)].map((match) => match.index)).toEqual([7, 13, 19, 25, 31, 37]);
 });

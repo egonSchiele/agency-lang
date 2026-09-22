@@ -239,10 +239,10 @@ export function completionMessageOf(event: EventEnvelope): WireMessage | undefin
 export function toolReplyContent(event: EventEnvelope): unknown {
   const output = event.data.output;
   if (output?.__type === "resultType") {
-    if (output.success !== true || output.value == null) {
+    if (output.success !== true) {
       return undefined;
     }
-    return output.value;
+    return output.value ?? `${toolNameOf(event)} ran successfully but did not return a value`;
   }
   return output;
 }

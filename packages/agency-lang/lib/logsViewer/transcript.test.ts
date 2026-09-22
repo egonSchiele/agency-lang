@@ -266,3 +266,125 @@ it("includes owned terminal errors and shared status text in tool search and cop
   expect(transcriptText(block)).toContain("tool failed; work occurred before it stopped");
   expect(transcriptText(block)).not.toContain("nested failure only");
 });
+
+function toolConversation(options: {
+  requested: Record<string, unknown>;
+  recorded: Record<string, unknown>;
+  output?: unknown;
+  reply?: unknown;
+  toolCallId?: string;
+  duplicate?: boolean;
+}) {
+  const call = { id: "call", name: "read", arguments: options.requested };
+  const calls = options.duplicate ? [call, { ...call, id: "other" }] : [call];
+  const answer = { role: "assistant", content: "answer", toolCalls: calls };
+  return buildForest([
+    event("promptCompletion", 100, "L", null, {
+      threadIdentity: "main",
+      messages: [user],
+      completion: { output: "answer", toolCalls: calls },
+    }),
+    event("toolCallStart", 101, "tool", "L", {
+      toolName: "read",
+      args: options.recorded,
+    }),
+    event("toolCall", 105, "tool", "L", {
+      toolName: "read",
+      args: options.recorded,
+      toolCallId: options.toolCallId,
+      output: options.output ?? "result",
+    }),
+    event("promptCompletion", 200, "L", null, {
+      threadIdentity: "main",
+      messages: [user, answer, { ...reply, content: options.reply ?? "result" }],
+      completion: { output: "done" },
+    }),
+  ])[0];
+}
+
+it.each([
+  { requested: { path: "a", limit: null }, recorded: { path: "a" } },
+  { requested: { limit: 1, path: "a" }, recorded: { path: "a", limit: 1 } },
+  {
+    requested: { options: { limit: 1, path: "a" } },
+    recorded: { options: { path: "a", limit: 1 } },
+  },
+])("pairs normalized arguments without repeating the tool reply: %j", (options) => {
+  expect(
+    transcriptBlocks(toolConversation(options)).filter((block) => block.kind === "history"),
+  ).toHaveLength(0);
+});
+
+it.each([
+  { requested: { path: "a" }, recorded: { path: "a", required: null } },
+  { requested: { path: "a", required: null }, recorded: { path: "a", required: "value" } },
+  { requested: { options: { limit: null } }, recorded: { options: {} } },
+])("retains replies with different required or nested arguments: %j", (options) => {
+  expect(
+    transcriptBlocks(toolConversation(options)).filter((block) => block.kind === "history"),
+  ).toHaveLength(1);
+});
+
+it("uses the recorded call ID to distinguish identical requests", () => {
+  const trace = toolConversation({
+    requested: { path: "a" },
+    recorded: { path: "a" },
+    toolCallId: "call",
+    duplicate: true,
+  });
+  expect(transcriptBlocks(trace).filter((block) => block.kind === "history")).toHaveLength(0);
+});
+
+it("does not fall back to arguments when a recorded call ID disagrees", () => {
+  const trace = toolConversation({
+    requested: { path: "a" },
+    recorded: { path: "a" },
+    toolCallId: "different",
+  });
+  expect(transcriptBlocks(trace).filter((block) => block.kind === "history")).toHaveLength(1);
+});
+
+it.each([null, undefined])("suppresses the successful void reply once: %j", (value) => {
+  const trace = toolConversation({
+    requested: { path: "a" },
+    recorded: { path: "a" },
+    output: { __type: "resultType", success: true, value },
+    reply: "read ran successfully but did not return a value",
+  });
+  const blocks = transcriptBlocks(trace);
+  expect(blocks.filter((block) => block.kind === "history")).toHaveLength(0);
+  expect(blocks.find((block) => block.kind === "tool")).toMatchObject({
+    output: "read ran successfully but did not return a value",
+  });
+});
+
+it.each([
+  { compactionSpan: "A", data: { threadIdentity: "a" }, expected: "HISTORY REWRITTEN" },
+  { compactionSpan: "A", data: {}, expected: "HISTORY REWRITTEN" },
+  { compactionSpan: "B", data: {}, expected: "CONTEXT COMPACTED" },
+  { compactionSpan: "B", data: { threadIdentity: "a" }, expected: "HISTORY REWRITTEN" },
+  { compactionSpan: "B", data: { threadId: "wrong" }, expected: "HISTORY REWRITTEN" },
+  { compactionSpan: "B", data: { threadId: "0" }, expected: "CONTEXT COMPACTED" },
+])("attributes compaction to its own thread: %j", ({ compactionSpan, data, expected }) => {
+  const trace = buildForest([
+    event("promptCompletion", 90, "A", null, {
+      threadIdentity: "a",
+      threadId: "0",
+      messages: [user],
+    }),
+    event("promptCompletion", 100, "B", null, {
+      threadIdentity: "b",
+      threadId: "0",
+      messages: [user],
+    }),
+    event("memoryCompaction", 150, "compact", compactionSpan, data),
+    event("promptCompletion", 200, "B", null, {
+      threadIdentity: "b",
+      threadId: "0",
+      messages: [system],
+    }),
+  ])[0];
+  expect(transcriptBlocks(trace).find((block) => block.kind === "rewrite")).toMatchObject({
+    label: expected,
+  });
+});

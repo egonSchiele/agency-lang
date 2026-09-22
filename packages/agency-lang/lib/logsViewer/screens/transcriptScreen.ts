@@ -265,7 +265,8 @@ export class TranscriptScreen implements Screen {
     if (this.matches.length === 0) {
       return;
     }
-    const position = this.matches.indexOf(this.cursor);
+    const current = this.matches.indexOf(this.cursor);
+    const position = current < 0 && direction < 0 ? 0 : current;
     this.showMatch(
       this.matches[(position + direction + this.matches.length) % this.matches.length],
     );

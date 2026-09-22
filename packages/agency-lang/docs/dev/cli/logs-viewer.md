@@ -125,9 +125,13 @@ Tool outcomes describe recorded evidence. A missing completion reads “completi
 
 `transcript.ts` builds plain blocks from `roundsOf`, `roundDeltas` and the story outline. Each round contributes new input messages, its assistant completion, and its tools with results and interrupts. `transcriptPayload.ts` turns blocks into payload records; `transcriptScreen.ts` paints them with the shared payload painter.
 
-Suppression requires an exact message occurrence on the same thread. Each thread has a pending array of completion and tool messages already represented by blocks. Each matching input occurrence consumes one entry. After processing an input snapshot, the array is replaced by that round's represented messages. A tool candidate needs one unambiguous request with matching name and arguments, a call ID and a completed result. The wire accessor unwraps the same outer successful Result as the producer. Full message equality still checks reply content, IDs, names and requests. Caps, attachments, uncertain conversions, repeated ambiguous requests and unmatched refusals stay visible as history.
+Each thread tracks completion and tool messages already represented by blocks. A matching input message consumes one tracked occurrence. After processing a round, only that round's represented messages remain eligible for suppression.
 
-A rewrite clears pending suppression and displays the replacement history. A `memoryCompaction` event between the preceding and current round marks it “CONTEXT COMPACTED”; otherwise it says “HISTORY REWRITTEN.” New system-role summaries remain visible. The synthetic rewrite fixture follows this producer shape; no real compaction log was available for the recorded fixture.
+A completed tool pairs with a request by recorded call ID when available. Older records use the tool name and arguments, ignoring object key order and allowing top-level null request fields omitted from the recorded arguments. Recorded null values remain significant. Ambiguous matches stay visible.
+
+The wire accessor unwraps the outer successful Result and supplies the runtime's placeholder for a successful call without a value. Full message equality checks reply content, IDs, names and requests before suppressing an occurrence. Capped results, attachments, uncertain conversions and unmatched refusals stay visible as history.
+
+A rewrite clears pending suppression and displays the replacement history. A `memoryCompaction` event on the same thread between the preceding and current round marks it “CONTEXT COMPACTED”; otherwise it says “HISTORY REWRITTEN.” Events without a recorded thread identity use the nearest enclosing span with an unambiguous round thread. New system-role summaries remain visible.
 
 System blocks are unique per thread and exact text. Their IDs use the introducing round and position in the full input list. User and history IDs also use the round and full input position. Appending rounds preserves these IDs. Each system expands independently, and `s` chooses the latest preceding system on the cursor's thread, or that thread's first system if none precedes it.
 

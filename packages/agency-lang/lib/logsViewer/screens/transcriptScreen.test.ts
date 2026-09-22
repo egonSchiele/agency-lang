@@ -304,3 +304,21 @@ it("reveals an interrupt message found inside a collapsed tool", () => {
     text: expect.stringContaining("Approve replacing the archived notes?"),
   });
 });
+
+it("cycles to the last or first match after moving to a nonmatching block", () => {
+  const screen = make(
+    buildForest([
+      event("promptCompletion", 100, "L", null, { completion: { output: "needle first" } }),
+      event("promptCompletion", 200, "L", null, { completion: { output: "ordinary" } }),
+      event("promptCompletion", 300, "L", null, { completion: { output: "needle last" } }),
+    ]),
+  );
+  screen.applySearch("needle");
+  press(screen, "j");
+  expect(screen.focusId()).toBe("round:L:1");
+  press(screen, "N");
+  expect(screen.focusId()).toBe("round:L:2");
+  press(screen, "k");
+  press(screen, "n");
+  expect(screen.focusId()).toBe("round:L:0");
+});

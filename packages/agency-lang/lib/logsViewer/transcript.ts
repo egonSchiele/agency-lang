@@ -1,10 +1,13 @@
+import { isDeepStrictEqual } from "node:util";
 import {
   completionMessageOf,
   contentText,
   toolReplyContent,
+  threadIdOf,
+  threadIdentityOf,
   type ToolCallRequest,
 } from "../statelog/wireAccessors.js";
-import { buildTreeIndex, walkNodes } from "./forest.js";
+import { ancestorsOf, buildTreeIndex, walkNodes, type TreeIndex } from "./forest.js";
 import {
   messageKey,
   messagesOf,
@@ -60,13 +63,17 @@ export function consumeRepresented(message: WireMessage, pending: WireMessage[])
   return true;
 }
 export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
-  const rounds = roundsOf(trace);
+  const index = buildTreeIndex(trace);
+  const rounds = roundsOf(trace, index);
   const deltas = roundDeltas(rounds);
   const story = storyOutline(trace, { admin: false });
   const threads: Record<string, ThreadHistory> = Object.create(null);
-  const compactions = walkNodes(trace).filter(
-    (node) => node.event?.data.type === "memoryCompaction",
-  );
+  const compactions = walkNodes(trace)
+    .filter((node) => node.event?.data.type === "memoryCompaction")
+    .map((node) => ({
+      at: Date.parse(node.event!.data.timestamp),
+      thread: compactionThread(node, rounds, index),
+    }));
   return rounds.flatMap((round, position) => {
     const state = (threads[threadKey(round.thread)] ??= {
       pending: [],
@@ -78,10 +85,13 @@ export function transcriptBlocks(trace: TreeNode): TranscriptBlock[] {
     const base = { roundId: round.id, thread: round.thread };
     if (delta.rewrite) {
       state.pending = [];
-      const compacted = compactions.some((node) => {
-        const at = Date.parse(node.event!.data.timestamp);
-        return state.previousEnd < at && at <= round.end;
-      });
+      const compacted = compactions.some(
+        ({ at, thread }) =>
+          thread !== undefined &&
+          threadKey(thread) === threadKey(round.thread) &&
+          state.previousEnd < at &&
+          at <= round.end,
+      );
       blocks.push({
         ...base,
         id: `${round.id}:rewrite`,
@@ -168,32 +178,77 @@ function toolBlock(round: Round, row: ToolStoryRow, story: StoryRow[]): Transcri
     outputLines: output ? output.split("\n").length : 0,
   };
 }
+function compactionThread(
+  node: TreeNode,
+  rounds: Round[],
+  index: TreeIndex,
+): ThreadKey | undefined {
+  const identity = threadIdentityOf(node.event!);
+  if (identity !== null) {
+    return { kind: "recorded", id: identity };
+  }
+  const localId = threadIdOf(node.event!);
+  for (const ancestor of ancestorsOf(node, index)) {
+    const enclosing = rounds.filter((round) => round.spanId === ancestor.id);
+    if (enclosing.length === 0) {
+      continue;
+    }
+    const candidates = enclosing.filter(
+      (round) => localId === null || threadIdOf(round.node.event!) === localId,
+    );
+    const first = candidates[0]?.thread;
+    return first && candidates.every((round) => threadKey(round.thread) === threadKey(first))
+      ? first
+      : undefined;
+  }
+  return undefined;
+}
+
+function matchesRequest(tool: ToolStoryRow, request: ToolCallRequest): boolean {
+  if (request.name !== tool.name) {
+    return false;
+  }
+  const started = childEvent(tool.node, "toolCallStart");
+  const finished = childEvent(tool.node, "toolCall");
+  const id = finished?.data.toolCallId ?? started?.data.toolCallId;
+  if (typeof id === "string" && id.length > 0) {
+    return request.id === id;
+  }
+  const args = (started ?? finished)?.data.args;
+  if (request.arguments === undefined) {
+    return false;
+  }
+  if (
+    !args ||
+    typeof args !== "object" ||
+    Array.isArray(args) ||
+    !request.arguments ||
+    typeof request.arguments !== "object" ||
+    Array.isArray(request.arguments)
+  ) {
+    return isDeepStrictEqual(request.arguments, args);
+  }
+  // Defaulted null arguments are omitted from the recorded call. Nulls
+  // retained in the record, including nested values, must still match.
+  const normalized = Object.fromEntries(
+    Object.entries(request.arguments).filter(
+      ([key, value]) => value !== null || Object.hasOwn(args, key),
+    ),
+  );
+  return isDeepStrictEqual(normalized, args);
+}
+
 function representedTools(tools: ToolStoryRow[], requests: ToolCallRequest[]): WireMessage[] {
   return tools.flatMap((tool) => {
-    const started = childEvent(tool.node, "toolCallStart");
     const finished = childEvent(tool.node, "toolCall");
-    const args = (started ?? finished)?.data.args;
-    const matching = requests.filter(
-      (request) =>
-        request.name === tool.name &&
-        request.arguments !== undefined &&
-        JSON.stringify(request.arguments) === JSON.stringify(args),
-    );
-    const siblings = tools.filter(
-      (other) =>
-        other.name === tool.name &&
-        JSON.stringify(
-          (childEvent(other.node, "toolCallStart") ?? childEvent(other.node, "toolCall"))?.data
-            .args,
-        ) === JSON.stringify(args),
-    );
+    const matching = requests.filter((request) => matchesRequest(tool, request));
     const request = matching[0];
     if (
       tool.status !== "completed" ||
       !finished ||
       matching.length !== 1 ||
-      siblings.length !== 1 ||
-      !request.id
+      !request.id ||
+      tools.filter((other) => matchesRequest(other, request)).length !== 1
     ) {
       return [];
     }

@@ -169,3 +169,17 @@ it("renders the searched picker at 120 columns", () => {
   type(picker, "archiveNotes");
   expect(renderOf(picker)).toMatchSnapshot();
 });
+
+it("pasted text filters traces and is carried into the selected trace", () => {
+  const picker = makePicker(threeTraceForest());
+  press(picker, "/");
+  type(picker, "arch");
+  picker.handleKey({ key: "paste", text: "iveNotes(" }, viewport);
+  expect(renderOf(picker)).toContain("1 of 3 match");
+  press(picker, "Enter");
+  expect(press(picker, "Enter")).toEqual({
+    kind: "selectTrace",
+    traceId: "A",
+    query: "archiveNotes(",
+  });
+});

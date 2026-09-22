@@ -334,3 +334,17 @@ it("legacy trace navigation stays in the trace named by the header", async () =>
   expect(cursorLine(out.lastText())).toContain("[def]");
   expect(out.lastText()).not.toContain("[abc]");
 });
+
+it("embedded focused traces return to their host on the first Esc", async () => {
+  const output = new FrameRecorder();
+  const resolution = await runViewer({
+    jsonl: sample,
+    input: new ScriptedInput([esc, "q"]),
+    output,
+    viewport: { rows: 20, cols: 120 },
+    embedded: true,
+    focusTraceId: "abc",
+  });
+  expect(resolution).toBe("back");
+  expect(texts(output).join("\n")).not.toContain("The overview lands");
+});

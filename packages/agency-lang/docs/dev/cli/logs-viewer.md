@@ -36,9 +36,9 @@ type Screen = View & {
 
 The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay also declares its `viewName`. A screen can decline an Esc by returning false, allowing the shell to continue down the ladder.
 
-A pure module computes plain records. One painter per screen draws those records and owns the TUI imports. The bar components in `views/shared.ts` predate this rule and keep their existing compute/render organization.
+Pure modules compute plain records. Screen painters draw those records and own the TUI imports.
 
-The legacy tree fills slot 2 through `LegacyTraceScreen` until the new trace screen arrives. Slots 1 and 3 currently show placeholders. During this stage the viewer starts on the usable trace screen; once the overview arrives it becomes the starting screen. The old by-name and occurrences views are unreachable during this stage.
+`LegacyTraceScreen` adapts `TreeView` to slot 2. The viewer starts on the trace screen. Slots 1 and 3 show placeholders. Embedded viewers skip the placeholder overview when Esc returns to the host.
 
 ## Key tables
 
@@ -56,7 +56,7 @@ A `TraceFilter` declares an ID, label and a predicate over `TraceSummary`. Every
 
 `capturesText()` is true while editing. The shell then sends q, f, ?, digits and other printable characters to the picker. Enter finishes editing; another Enter opens the selected trace. A nonempty query opens slot 2 and searches that trace's payloads, regardless of which screen was underneath the picker.
 
-At boot, multiple traces with no requested focus open the picker over the most recent trace. A single trace or `focusTraceId` opens directly. Follow updates never reopen the picker. This preserves the old multi-trace tree's first interaction: choosing from a collapsed list of traces.
+At boot, multiple traces with no requested focus open the picker over the most recent trace. A single trace or `focusTraceId` opens directly. Follow updates never reopen the picker.
 
 ## The timeline kernel (`lib/logsViewer/timeline/`)
 

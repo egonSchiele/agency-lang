@@ -7,9 +7,7 @@ import type { TreeNode } from "../types.js";
 import type { TreeView } from "../views/treeView.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import type { Screen } from "./screen.js";
-// screens/legacyTraceScreen.ts
-// Slot 2 until the new trace screen lands (PR 6 deletes this file). It
-// forwards to the old TreeView and swallows the keys that no longer exist.
+// Adapts TreeView to the trace screen and disables its retired navigation keys.
 const RETIRED_KEYS = ["t", "T", "Escape"];
 
 export class LegacyTraceScreen implements Screen {

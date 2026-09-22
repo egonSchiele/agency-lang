@@ -9,6 +9,7 @@ const base: EscState = {
   screenEscaped: () => false,
   activeScreen: "trace",
   embedded: false,
+  overviewAvailable: true,
 };
 
 describe("escOutcome walks the ladder top down", () => {

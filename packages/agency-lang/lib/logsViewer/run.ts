@@ -319,7 +319,7 @@ function createHost(
       ),
       timeline: new TimelineScreen(roots, bootTraceId, thresholds),
     },
-    "trace", // "overview" once PR 5 lands
+    "trace",
     bootTraceId,
   );
   if (opts.focusTraceId === undefined && roots.length > 1) {
@@ -368,6 +368,7 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
         overlayEscaped: () => host.escapeOverlay(),
         screenEscaped: () => host.escapeScreen(),
         activeScreen: host.activeScreen(),
+        overviewAvailable: !(host.screen("overview") instanceof PlaceholderScreen),
         embedded,
       });
       if (outcome === "back") {
@@ -377,7 +378,7 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
     } else if (tooNarrowNow) {
       continue;
     } else if (host.helpOpen()) {
-      host.closeHelp(); // any key closes help, as today
+      host.closeHelp(); // Any key closes help.
     } else if (typing) {
       await dispatch(host.target().handleKey(event, innerViewport()));
     } else {

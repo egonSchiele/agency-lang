@@ -1,6 +1,7 @@
 import type { EventEnvelope } from "../statelog/wireTypes.js";
 import {
   completionOf,
+  contextTokens,
   cost,
   modelOf,
   timestampMs,
@@ -147,6 +148,7 @@ function normalizeEvents(n: Normalized, opts: ExtractOptions): WithWarnings<Norm
     durationMs: numberOrNull(e.raw.data.timeTaken),
     costUsd: cost(e.raw) || null,
     tokensIn: tokensIn(e.raw) || null,
+    contextTokens: contextTokens(e.raw) || null,
     tokensOut: tokensOut(e.raw) || null,
   }));
   const starts: NormalizedEvent[] = (n.byType.toolCallStart ?? []).map((e) => ({
@@ -281,6 +283,7 @@ function computeMetrics(n: Normalized): WithWarnings<Metrics> {
   const ends = n.byType.toolCall ?? [];
   const models = [...new Set(proms.map((e) => modelOf(e.raw)).filter((m) => m.length > 0))].sort();
   const tokensInTotal = proms.reduce((s, e) => s + tokensIn(e.raw), 0);
+  const contextTokensTotal = proms.reduce((total, entry) => total + contextTokens(entry.raw), 0);
   const tokensOutTotal = proms.reduce((s, e) => s + tokensOut(e.raw), 0);
   const costUsdTotal = proms.reduce((s, e) => s + cost(e.raw), 0);
   const toolCounts: Record<string, number> = {};
@@ -296,6 +299,7 @@ function computeMetrics(n: Normalized): WithWarnings<Metrics> {
       toolEnds: ends.length,
       models,
       tokensInTotal,
+      contextTokensTotal,
       tokensOutTotal,
       costUsdTotal,
       toolCounts,

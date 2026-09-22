@@ -98,6 +98,35 @@ export default [
       ],
     },
   },
+  {
+    files: ["lib/logsViewer/**/*.ts", "lib/eval/**/*.ts", "lib/runsExplorer/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression",
+          message: "Dynamic imports are not allowed. Use static import statements.",
+        },
+        {
+          selector: [
+            "MemberExpression[object.name='data'][property.name='usage']",
+            "MemberExpression[object.name='data'][computed=true][property.value='usage']",
+            "VariableDeclarator[init.name='data'] > ObjectPattern > Property[key.name='usage']",
+            "VariableDeclarator[init.name='data'] > ObjectPattern > Property[key.value='usage']",
+            "MemberExpression[object.property.name='data'][property.name='usage']",
+            "MemberExpression[object.property.name='data'][computed=true][property.value='usage']",
+            "VariableDeclarator[init.property.name='data'] > ObjectPattern > Property[key.name='usage']",
+            "VariableDeclarator[init.property.name='data'] > ObjectPattern > Property[key.value='usage']",
+            "AssignmentExpression[right.property.name='data'] > ObjectPattern > Property[key.name='usage']",
+            "AssignmentExpression[right.property.name='data'] > ObjectPattern > Property[key.value='usage']",
+          ].join(", "),
+          message:
+            "Read token counts through lib/statelog/wireAccessors.ts (hasTokenUsage, tokensIn, tokensCached, tokensCacheWrite, contextTokens, tokensOut).",
+        },
+      ],
+    },
+  },
   // ----- Per-file overrides for existing code -----
   // These files predate the structural lint rules. New files should comply.
   // TODO: Gradually fix these and remove overrides.

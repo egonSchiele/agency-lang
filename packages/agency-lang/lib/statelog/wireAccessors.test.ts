@@ -4,6 +4,7 @@ import type { EventEnvelope } from "./wireTypes.js";
 import {
   byType,
   completionOf,
+  contextTokens,
   cost,
   groupByType,
   modelOf,
@@ -12,6 +13,8 @@ import {
   toolNameOf,
   toolsOf,
   tokensIn,
+  tokensCached,
+  tokensCacheWrite,
   tokensOut,
   userMessageOf,
 } from "./wireAccessors.js";
@@ -92,6 +95,43 @@ describe("tokensIn / tokensOut / cost", () => {
     expect(tokensIn(e)).toBe(0);
     expect(tokensOut(e)).toBe(0);
     expect(cost(e)).toBe(0);
+  });
+});
+
+describe("the cached token bands", () => {
+  const event = ev({
+    type: "promptCompletion",
+    usage: {
+      inputTokens: 95,
+      outputTokens: 190,
+      cachedInputTokens: 13824,
+      cacheCreationInputTokens: 40,
+      totalTokens: 14149,
+    },
+  });
+
+  it("reads each band separately", () => {
+    expect(tokensIn(event)).toBe(95);
+    expect(tokensCached(event)).toBe(13824);
+    expect(tokensCacheWrite(event)).toBe(40);
+    expect(tokensOut(event)).toBe(190);
+  });
+
+  it("contextTokens is every input band, and leaves output out", () => {
+    expect(contextTokens(event)).toBe(95 + 13824 + 40);
+  });
+
+  it("an old event with no cache fields counts them as zero", () => {
+    const old = ev({
+      type: "promptCompletion",
+      usage: { inputTokens: 100, outputTokens: 50 },
+    });
+    expect(tokensCached(old)).toBe(0);
+    expect(contextTokens(old)).toBe(100);
+  });
+
+  it("an event with no usage at all is zero, not NaN", () => {
+    expect(contextTokens(ev({ type: "promptCompletion" }))).toBe(0);
   });
 });
 

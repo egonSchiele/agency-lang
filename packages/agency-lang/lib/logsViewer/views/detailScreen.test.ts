@@ -33,6 +33,14 @@ function llmForest() {
   return [trace([call])];
 }
 
+function detailTextFor(usage?: Record<string, number>): string {
+  const call = span("llmCall", [leaf("promptCompletion", 1_000, { model: '"model"', usage })], {
+    id: "L1",
+  });
+  const screen = new DetailScreen([trace([call])], "L1", DEFAULT_THRESHOLDS);
+  return flat(screen.render({ rows: 40, cols: 120 })).join("\n");
+}
+
 function toolForest() {
   const call = span(
     "toolExecution",
@@ -50,10 +58,27 @@ describe("DetailScreen", () => {
     const screen = new DetailScreen(llmForest(), "L1", DEFAULT_THRESHOLDS);
     const text = flat(screen.render({ rows: 40, cols: 120 })).join("\n");
     expect(text).toContain("model: claude-sonnet-5");
-    expect(text).toContain("120 in / 30 out");
+    expect(text).toContain("120 context (0 cached, 0 write) / 30 out");
     expect(text).toContain("$0.0123");
     expect(text).toContain("what is 2+2");
     expect(text).toContain("4");
+  });
+
+  it("prints context with its cached share, and output", () => {
+    const text = detailTextFor({
+      inputTokens: 95,
+      outputTokens: 190,
+      cachedInputTokens: 13824,
+      cacheCreationInputTokens: 40,
+    });
+    expect(text).toContain("tokens: 13959 context (13824 cached, 40 write) / 190 out");
+  });
+
+  it("distinguishes missing usage from recorded zero usage", () => {
+    expect(detailTextFor()).toContain("tokens: ? context / ? out");
+    expect(detailTextFor({ inputTokens: 0, outputTokens: 0 })).toContain(
+      "tokens: 0 context (0 cached, 0 write) / 0 out",
+    );
   });
 
   it("tool details carry the untruncated arguments", () => {

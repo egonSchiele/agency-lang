@@ -7,6 +7,14 @@ import { column, line } from "../../tui/builders.js";
 import type { Element } from "../../tui/elements.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { formatKey } from "../../tui/input/format.js";
+import {
+  contextTokens,
+  hasTokenUsage,
+  tokensCacheWrite,
+  cost as costOf,
+  tokensCached,
+  tokensOut,
+} from "../../statelog/wireAccessors.js";
 import { formatConversation } from "../conversation.js";
 import { fmtDuration, stripQuotes } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
@@ -119,11 +127,11 @@ export class DetailScreen implements View {
     if (prompt !== undefined) {
       const d = prompt.event!.data;
       out.push(`model: ${stripQuotes(typeof d.model === "string" ? d.model : undefined)}`);
-      const usage = d.usage ?? {};
-      out.push(
-        `tokens: ${usage.inputTokens ?? "?"} in / ${usage.outputTokens ?? "?"} out` +
-          `   cost: $${(d.cost?.totalCost ?? 0).toFixed(4)}`,
-      );
+      const event = prompt.event!;
+      const tokens = hasTokenUsage(event)
+        ? `${contextTokens(event)} context (${tokensCached(event)} cached, ${tokensCacheWrite(event)} write) / ${tokensOut(event)} out`
+        : "? context / ? out";
+      out.push(`tokens: ${tokens}   cost: $${costOf(event).toFixed(4)}`);
       out.push("", "── transcript ──");
       const messages = Array.isArray(d.messages) ? d.messages : [];
       const completion =

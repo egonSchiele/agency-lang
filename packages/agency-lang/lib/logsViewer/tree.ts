@@ -1,5 +1,6 @@
 import { EventEnvelope, TreeNode } from "./types.js";
 import { summarize, summarizeSpan, summarizeTrace } from "./summary.js";
+import { contextTokens, cost as costOf, tokensOut } from "../statelog/wireAccessors.js";
 
 // Event types the viewer skips entirely. `graph` is a one-shot
 // schema dump (nodes + edges + start node) emitted at the top of
@@ -295,20 +296,11 @@ function aggregateMetrics(node: TreeNode): void {
 
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
+  const completions = leaves.filter((leafNode) => leafNode.event!.data.type === "promptCompletion");
   const tokens = sum(
-    leaves
-      .filter((l) => l.event!.data.type === "promptCompletion")
-      .map((l) => {
-        const u = l.event!.data.usage ?? {};
-        return (u.inputTokens ?? 0) + (u.outputTokens ?? 0);
-      }),
+    completions.map((leafNode) => contextTokens(leafNode.event!) + tokensOut(leafNode.event!)),
   );
-
-  const cost = sum(
-    leaves
-      .filter((l) => l.event!.data.type === "promptCompletion")
-      .map((l) => l.event!.data.cost?.totalCost ?? 0),
-  );
+  const cost = sum(completions.map((leafNode) => costOf(leafNode.event!)));
 
   const timestamps = leaves.map((l) => Date.parse(l.event!.data.timestamp)).filter(Number.isFinite);
 

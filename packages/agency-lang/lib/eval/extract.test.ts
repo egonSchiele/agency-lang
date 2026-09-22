@@ -40,6 +40,32 @@ describe("extractEvalRecord", () => {
     expect(() => extractEvalRecord([a, b], "src")).toThrow(/multiple trace_ids/i);
   });
 
+  it("records full context beside fresh input tokens", () => {
+    resetClock();
+    const record = extractEvalRecord(
+      [
+        ev("promptCompletion", {
+          model: '"gpt-5"',
+          usage: {
+            inputTokens: 95,
+            cachedInputTokens: 13824,
+            outputTokens: 190,
+          },
+        }),
+      ],
+      "src",
+    );
+    const llmEvent = record.events.find((event) => event.kind === "llm");
+
+    expect(record.metrics.tokensInTotal).toBe(95);
+    expect(record.metrics.contextTokensTotal).toBe(13919);
+    expect(llmEvent?.kind).toBe("llm");
+    if (llmEvent?.kind === "llm") {
+      expect(llmEvent.tokensIn).toBe(95);
+      expect(llmEvent.contextTokens).toBe(13919);
+    }
+  });
+
   describe("fixture A — trivial: one thread, one prompt, one tool pair", () => {
     resetClock();
     const events: EventEnvelope[] = [

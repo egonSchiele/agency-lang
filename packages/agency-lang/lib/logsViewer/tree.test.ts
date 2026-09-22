@@ -137,6 +137,28 @@ describe("buildForest", () => {
     expect(s1.cost).toBeCloseTo(0.0052, 5);
   });
 
+  it("a span's tokens include cached and cache-write input", () => {
+    const forest = buildForest([
+      evt({
+        span_id: "llm1",
+        parent_span_id: null,
+        data: {
+          type: "promptCompletion",
+          timestamp: "",
+          timeTaken: 100,
+          usage: {
+            inputTokens: 95,
+            outputTokens: 190,
+            cachedInputTokens: 13824,
+            cacheCreationInputTokens: 0,
+          },
+        },
+      }),
+    ]);
+    const llm = forest[0].children[0];
+    expect(llm.tokens).toBe(95 + 13824 + 190);
+  });
+
   it("uses promptCompletion.timeTaken for a single-round llmCall duration", () => {
     // The emission timestamp is the END of the call, so the timestamp
     // range alone would be ~0ms. The envelope (start = timestamp -

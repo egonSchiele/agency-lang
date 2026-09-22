@@ -44,6 +44,11 @@ export function toolNameOf(ev: EventEnvelope): string {
   return String(ev.data.toolName ?? "");
 }
 
+/** Whether the event records token usage, including a recorded zero. */
+export function hasTokenUsage(ev: EventEnvelope): boolean {
+  return ev.data.usage != null;
+}
+
 /** Fresh input tokens: what the model was sent that did not come from
  *  the prompt cache. See `contextTokens` for the full input. */
 export function tokensIn(ev: EventEnvelope): number {

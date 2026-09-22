@@ -11,6 +11,7 @@ import type { KeyEvent } from "../../tui/input/types.js";
 import { clampScroll, followCursor } from "../../tui/scroll.js";
 import { scrollList } from "../../tui/scrollList.js";
 import { detectClipboard } from "../clipboard.js";
+import { findNode } from "../forest.js";
 import { helpLines as treeHelpLines } from "../help.js";
 import { handleKeyEx } from "./treeReducer.js";
 import { colorFor, flattenVisibleRows, renderRowText, VisibleRow } from "../treeRows.js";
@@ -310,14 +311,4 @@ export class TreeView implements View {
 function realIdOf(id: string): string {
   const colon = id.indexOf(":");
   return colon > 0 ? id.slice(0, colon) : id;
-}
-
-function findNode(roots: TreeNode[], id: string): TreeNode | undefined {
-  const stack: TreeNode[] = [...roots];
-  while (stack.length > 0) {
-    const n = stack.pop()!;
-    if (n.id === id) return n;
-    stack.push(...n.children);
-  }
-  return undefined;
 }

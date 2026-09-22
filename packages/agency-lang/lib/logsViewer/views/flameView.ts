@@ -8,6 +8,7 @@ import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { scrollList } from "../../tui/scrollList.js";
+import { buildTreeIndex, type TreeIndex } from "../forest.js";
 import {
   childEvent,
   durationColor,
@@ -18,7 +19,7 @@ import {
   truncate,
 } from "../spanText.js";
 import type { ViewerThresholds } from "../thresholds.js";
-import { buildTreeIndex, groupSpans, spanDisplayName, type TreeIndex } from "../timeline/groups.js";
+import { groupSpans, spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
 import {

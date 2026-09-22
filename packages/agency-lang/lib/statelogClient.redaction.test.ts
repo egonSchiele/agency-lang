@@ -25,6 +25,22 @@ function printed(spy: ReturnType<typeof vi.spyOn>): string {
 afterEach(() => vi.restoreAllMocks());
 
 describe("StatelogClient redaction", () => {
+  it("redacts a tagged prompt thread label", async () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const ctx = makeStdoutCtx();
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+      execCtx.globals.markRedacted("private-worker");
+      await execCtx.statelogClient.promptCompletion({
+        messages: [],
+        completion: {},
+        threadLabel: "private-worker",
+      });
+    });
+    expect(printed(spy)).toContain("[REDACTED]");
+    expect(printed(spy)).not.toContain("private-worker");
+  });
+
   it("replaces a redact-tagged primitive in a posted event with [REDACTED]", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const ctx = makeStdoutCtx();

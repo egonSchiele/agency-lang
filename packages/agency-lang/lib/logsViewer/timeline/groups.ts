@@ -3,6 +3,7 @@
 // follow-mode re-parses can legitimately re-group a call (a threadCreated
 // can arrive after the llm call it names). One computation, two readers.
 import { childEvent, spanDetail, stripQuotes } from "../spanText.js";
+import { buildTreeIndex, nearestAncestor, rootOf, walkNodes, type TreeIndex } from "../forest.js";
 import type { TreeNode } from "../types.js";
 import type { TimelineSpan } from "./spans.js";
 
@@ -73,28 +74,9 @@ export function spanDisplayName(node: TreeNode): string {
   return node.label;
 }
 
-export type TreeIndex = { byId: Record<string, TreeNode>; parentIds: Record<string, string> };
-
-/** One DFS over the tree; reused by the views so per-row lookups are O(1)
- *  instead of a fresh tree walk (span ids come from statelog content, so
- *  both records are null-prototype). */
-export function buildTreeIndex(root: TreeNode): TreeIndex {
-  const byId: Record<string, TreeNode> = Object.create(null);
-  const parentIds: Record<string, string> = Object.create(null);
-  const walk = (node: TreeNode) => {
-    byId[node.id] = node;
-    for (const child of node.children) {
-      parentIds[child.id] = node.id;
-      walk(child);
-    }
-  };
-  walk(root);
-  return { byId, parentIds };
-}
-
 /** Per-scope threadId→label maps, built once per process subtree instead
  *  of re-scanning the scope for every llm call (O(k·n) otherwise). */
-type ScopeLabelCache = Record<string, Record<string, string>>;
+export type ScopeLabelCache = Record<string, Record<string, string>>;
 
 /** llm: thread label → enclosing function → model. Others: display name. */
 function keyOf(node: TreeNode, index: TreeIndex, cache: ScopeLabelCache): string {
@@ -120,61 +102,81 @@ function threadLabelFor(
   const call = childEvent(node, "promptCompletion") ?? childEvent(node, "promptStart");
   const threadId = call?.data.threadId;
   if (threadId === undefined) return undefined;
-  const scope =
-    nearestAncestor(node, index, (a) => a.label === "subprocessRun") ?? rootOf(node, index);
-  cache[scope.id] ??= scanScopeLabels(scope);
-  return cache[scope.id][String(threadId)];
+  const scope = threadScopeOf(node, index);
+  return scopeThreadLabels(scope, cache)[String(threadId)];
 }
 
-/** DFS order means a reused thread id resolves to the LAST threadCreated
- *  in the scope — "the most recent naming wins". Id reuse within one
- *  process is rare enough that positional (before-the-call) resolution
- *  has not been worth the bookkeeping; revisit if a real log disagrees. */
+/** Process scope for legacy display labels. Fresh tool stores also reuse
+ * local thread ids within this scope; this is not a thread identity. */
+export function threadScopeOf(node: TreeNode, index: TreeIndex): TreeNode {
+  const isSubprocess = (ancestor: TreeNode): boolean =>
+    ancestor.nodeKind === "span" && ancestor.label === "subprocessRun";
+  return nearestAncestor(node, index, isSubprocess) ?? rootOf(node, index);
+}
+
+export function scopeThreadLabels(scope: TreeNode, cache: ScopeLabelCache): Record<string, string> {
+  const key = `last:${scope.id}`;
+  cache[key] ??= scanScopeLabels(scope);
+  return cache[key];
+}
+
+export function unambiguousThreadLabels(
+  scope: TreeNode,
+  cache: ScopeLabelCache,
+): Record<string, string> {
+  const key = `unambiguous:${scope.id}`;
+  if (cache[key] !== undefined) {
+    return cache[key];
+  }
+  const creations: Record<string, TreeNode[]> = Object.create(null);
+  const labels: Record<string, string> = Object.create(null);
+  for (const node of scopeNodes(scope)) {
+    const data = node.event?.data;
+    if (data?.type !== "threadCreated") {
+      continue;
+    }
+    const localId = String(data.threadId);
+    (creations[localId] ??= []).push(node);
+  }
+  for (const [localId, nodes] of Object.entries(creations)) {
+    const label = nodes[0].event?.data.label;
+    if (nodes.length === 1 && typeof label === "string" && label.length > 0) {
+      labels[localId] = label;
+    }
+  }
+  cache[key] = labels;
+  return labels;
+}
+
+/** Legacy groups use the last labeled creation in depth-first order. */
 function scanScopeLabels(scope: TreeNode): Record<string, string> {
   const labels: Record<string, string> = Object.create(null);
-  const scan = (n: TreeNode) => {
-    if (n !== scope && n.nodeKind === "span" && n.label === "subprocessRun") return;
-    const d = n.event?.data;
-    if (d?.type === "threadCreated" && typeof d.label === "string" && d.label.length > 0) {
-      labels[String(d.threadId)] = d.label;
+  for (const node of scopeNodes(scope)) {
+    const data = node.event?.data;
+    if (data?.type === "threadCreated" && typeof data.label === "string" && data.label.length > 0) {
+      labels[String(data.threadId)] = data.label;
     }
-    n.children.forEach(scan);
-  };
-  scan(scope);
+  }
   return labels;
+}
+
+function scopeNodes(scope: TreeNode): TreeNode[] {
+  return walkNodes(
+    scope,
+    (node) => node === scope || node.nodeKind !== "span" || node.label !== "subprocessRun",
+  );
 }
 
 function enclosingFunctionName(node: TreeNode, index: TreeIndex): string | undefined {
   const found = nearestAncestor(
     node,
     index,
-    (a) => a.label === "toolExecution" || a.label === "nodeExecution",
+    (ancestor) =>
+      ancestor.nodeKind === "span" &&
+      (ancestor.label === "toolExecution" || ancestor.label === "nodeExecution"),
   );
   if (found === undefined) return undefined;
   return spanDisplayName(found);
-}
-
-function nearestAncestor(
-  node: TreeNode,
-  index: TreeIndex,
-  matches: (ancestor: TreeNode) => boolean,
-): TreeNode | undefined {
-  let currentId = index.parentIds[node.id];
-  while (currentId !== undefined) {
-    const ancestor = index.byId[currentId];
-    if (ancestor === undefined) return undefined;
-    if (ancestor.nodeKind === "span" && matches(ancestor)) return ancestor;
-    currentId = index.parentIds[currentId];
-  }
-  return undefined;
-}
-
-function rootOf(node: TreeNode, index: TreeIndex): TreeNode {
-  let current = node;
-  while (index.parentIds[current.id] !== undefined) {
-    current = index.byId[index.parentIds[current.id]];
-  }
-  return current;
 }
 
 function modelOf(node: TreeNode): string | undefined {

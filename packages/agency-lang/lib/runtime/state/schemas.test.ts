@@ -4,6 +4,7 @@ import {
   stateJSONSchema,
   branchStateJSONSchema,
   guardJSONSchema,
+  messageThreadJSONSchema,
 } from "./schemas.js";
 import { Checkpoint } from "./checkpointStore.js";
 import { StateStack, State } from "./stateStack.js";
@@ -14,6 +15,13 @@ import { CostGuard } from "../guard.js";
 // `StateStack.fromJSON(toJSON())` skips zod entirely, so every test here goes
 // through the schema on purpose — that is the only path where a stripped field
 // shows up.
+
+describe("messageThreadJSONSchema", () => {
+  it("keeps the stable message-thread identity", () => {
+    const json = { id: "stable-thread", messages: [] };
+    expect(messageThreadJSONSchema.parse(json)).toEqual(json);
+  });
+});
 
 describe("guardJSONSchema", () => {
   it("keeps every field of a cost guard", () => {

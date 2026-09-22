@@ -587,7 +587,7 @@ describe("StatelogClient", () => {
       expect(evt.data.tokenStats.cost.totalCost).toBe(0.01);
     });
 
-    it("promptCompletion includes usage, cost, stream", async () => {
+    it("promptCompletion includes usage, cost, stream, and thread metadata", async () => {
       const file = newLogFile("prompt");
       const client = fileClient(file);
       await client.promptCompletion({
@@ -596,12 +596,25 @@ describe("StatelogClient", () => {
         usage: { inputTokens: 10, outputTokens: 20 },
         cost: { totalCost: 0.005 },
         stream: false,
+        threadIdentity: "message-thread-1",
+        threadLabel: "worker",
       });
       const [evt] = readEvents(file);
       expect(evt.data.type).toBe("promptCompletion");
       expect(evt.data.usage.inputTokens).toBe(10);
       expect(evt.data.cost.totalCost).toBe(0.005);
       expect(evt.data.stream).toBe(false);
+      expect(evt.data.threadIdentity).toBe("message-thread-1");
+      expect(evt.data.threadLabel).toBe("worker");
+    });
+
+    it("promptCompletion writes null thread metadata when absent", async () => {
+      const file = newLogFile("prompt-no-thread-metadata");
+      const client = fileClient(file);
+      await client.promptCompletion({ messages: [], completion: {} });
+      const [evt] = readEvents(file);
+      expect(evt.data.threadIdentity).toBeNull();
+      expect(evt.data.threadLabel).toBeNull();
     });
 
     /**

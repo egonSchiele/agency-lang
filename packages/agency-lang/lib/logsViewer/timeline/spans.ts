@@ -1,6 +1,7 @@
 // Timed spans for the timeline views: extents, self-time, running
 // detection. Pure over the TreeNode forest; output is plain data with no
 // TreeNode reference (the cross-run project consumes this without a TUI).
+import { walkNodes } from "../forest.js";
 import type { TreeNode } from "../types.js";
 import { subtract, totalMs, type Interval } from "./intervals.js";
 
@@ -94,35 +95,28 @@ function makeSpan(node: TreeNode, depth: number): TimelineSpan | undefined {
 export function spanExtent(node: TreeNode): Interval | undefined {
   let start = Number.POSITIVE_INFINITY;
   let end = Number.NEGATIVE_INFINITY;
-  visitLeaves(node, (leafNode) => {
+  for (const leafNode of walkNodes(node).filter((child) => child.event !== undefined)) {
     const data = leafNode.event!.data;
     const ts = Date.parse(data.timestamp);
-    if (!Number.isFinite(ts)) return;
+    if (!Number.isFinite(ts)) {
+      continue;
+    }
     const taken = typeof data.timeTaken === "number" ? data.timeTaken : 0;
     start = Math.min(start, ts - taken);
     end = Math.max(end, ts);
-  });
+  }
   if (!Number.isFinite(start)) return undefined;
   return { start, end: Math.max(end, start) };
 }
 
 function isRunning(node: TreeNode): boolean {
   const counts: Record<string, number> = {};
-  visitLeaves(node, (leafNode) => {
+  for (const leafNode of walkNodes(node).filter((child) => child.event !== undefined)) {
     const type = leafNode.event!.data.type;
     counts[type] = (counts[type] ?? 0) + 1;
-  });
+  }
   return Object.entries(ENDS_BY_START).some(([startType, endTypes]) => {
     const ends = endTypes.reduce((sum, t) => sum + (counts[t] ?? 0), 0);
     return (counts[startType] ?? 0) > ends;
   });
-}
-
-function visitLeaves(node: TreeNode, visit: (leafNode: TreeNode) => void): void {
-  if (node.event) {
-    visit(node);
-  }
-  for (const child of node.children) {
-    visitLeaves(child, visit);
-  }
 }

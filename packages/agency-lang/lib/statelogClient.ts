@@ -562,6 +562,8 @@ export class StatelogClient {
     finishReason,
     stream,
     threadId,
+    threadIdentity,
+    threadLabel,
   }: {
     messages: any[];
     completion: any;
@@ -583,6 +585,10 @@ export class StatelogClient {
      *  promptCompletion back to threadCreated). Null when the caller
      *  has no active thread (rare — only at the very start of a run). */
     threadId?: string | null;
+    /** Stable identity of the MessageThread that issued this call. */
+    threadIdentity?: string | null;
+    /** Optional user-facing label on that MessageThread. */
+    threadLabel?: string | null;
   }): Promise<void> {
     await this.post({
       type: "promptCompletion",
@@ -605,6 +611,8 @@ export class StatelogClient {
       finishReason,
       stream,
       threadId: threadId ?? null,
+      threadIdentity: threadIdentity ?? null,
+      threadLabel: threadLabel ?? null,
     });
   }
 

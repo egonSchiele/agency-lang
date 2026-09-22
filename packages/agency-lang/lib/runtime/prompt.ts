@@ -629,6 +629,8 @@ async function _runPrompt({
     finishReason: completion.stopReason ?? completion.rawStopReason,
     stream,
     threadId: __threads()?.activeId() ?? null,
+    threadIdentity: messages.id,
+    threadLabel: messages.label,
   });
 
   if (toolCalls.length > 0) {

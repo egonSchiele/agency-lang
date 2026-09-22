@@ -39,6 +39,16 @@ export function threadIdOf(ev: EventEnvelope): string | null {
   return typeof v === "string" ? v : null;
 }
 
+export function threadIdentityOf(event: EventEnvelope): string | null {
+  const identity = event.data.threadIdentity;
+  return typeof identity === "string" && identity.length > 0 ? identity : null;
+}
+
+export function threadLabelOf(event: EventEnvelope): string | null {
+  const label = event.data.threadLabel;
+  return typeof label === "string" && label.length > 0 ? label : null;
+}
+
 /** Tool name on a toolCall / toolCallStart. */
 export function toolNameOf(ev: EventEnvelope): string {
   return String(ev.data.toolName ?? "");

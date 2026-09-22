@@ -162,6 +162,21 @@ Esc / timeout — deliberately not an error). Pairing is by span + order: the
 nth start in an `llmCall` span pairs with the nth terminator; an unpaired start
 is a hung/killed-mid-call run.
 
+A completion records three thread fields:
+
+- `threadId` is the local registry key, such as `"0"`. Fresh tool stores can
+  reuse this key for different conversations.
+- `threadIdentity` is the serialized `MessageThread.id`. Interrupt resume,
+  named sessions, and `thread(continue:)` preserve it. Handoff calls also use
+  the caller's identity. New threads and subthreads have separate identities.
+- `threadLabel` is the optional label from `thread(label:)`.
+
+The ids returned by `std::thread` use the registry key with a `t` prefix.
+`threadIdentity` is an observability field, not an argument to `getThread`
+or `thread(continue:)`. See the [cross-thread context guide](../../site/guide/cross-thread-context.md).
+Older logs lack `threadIdentity`; the rounds viewer keeps their conversations
+separate across spans because registry keys alone cannot establish identity.
+
 Tools: `toolCallStart` → `toolCall` (share the `toolExecution` span; OTEL
 start+end mergeable).
 

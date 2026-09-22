@@ -1,3 +1,4 @@
+import { fmtUsd } from "./format.js";
 import { EventEnvelope, TreeNode } from "./types.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 import {
@@ -145,8 +146,7 @@ function formatMetrics(node: TreeNode): string {
 }
 
 function fmtCost(c?: number): string {
-  if (c === undefined) return "?";
-  return `$${c.toFixed(3)}`;
+  return c === undefined ? "?" : fmtUsd(c);
 }
 
 function shortId(id?: string): string {

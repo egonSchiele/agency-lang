@@ -14,6 +14,20 @@ describe("MessageThread defaults", () => {
 });
 
 describe("MessageThread JSON round-trip", () => {
+  it("preserves a message-thread identity through serialization", () => {
+    const thread = new MessageThread();
+    expect(MessageThread.fromJSON(thread.toJSON()).id).toBe(thread.id);
+  });
+
+  it("accepts old snapshots and keeps adoption's destination identity", () => {
+    const legacy = MessageThread.fromJSON({ messages: [] });
+    expect(legacy.id.length).toBeGreaterThan(0);
+    const destination = new MessageThread();
+    const identity = destination.id;
+    destination.adoptFrom(legacy);
+    expect(destination.id).toBe(identity);
+  });
+
   it("preserves hidden / label / summary / parentId / messages", () => {
     const t = new MessageThread();
     t.hidden = true;

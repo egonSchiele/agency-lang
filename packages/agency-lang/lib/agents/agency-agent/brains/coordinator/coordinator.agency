@@ -4,6 +4,7 @@
   and lib/) owns the CLI, the REPL, the policy handler, and the per-turn
   guard; this module only answers turns.
 */
+import { question } from "std::agent"
 import { readOnlyFileTools, whatIAmDoing } from "std::agents/lib/toolkits"
 import { now, elapsedTime } from "std::date"
 import { edit } from "std::fs"
@@ -116,6 +117,7 @@ export def turnTools(turnStart: any): any[] {
     ...getMcpTools(),
     ...learnedExtras(),
     whatIAmDoing,
+    question,
     elapsedTime.partial(since: turnStart),
   ]
 }

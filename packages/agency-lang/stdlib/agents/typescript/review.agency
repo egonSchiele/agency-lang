@@ -18,6 +18,7 @@ import {
   readOnlyGitTools,
   webTools,
   SAVE_DRAFT_HINT,
+  ASK_USER_HINT,
 } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { evalValue } from "std::statelog"
@@ -77,7 +78,7 @@ How to review:
    report it once and say it repeats.
 
 Keep each finding brief, concrete, and pointed at the construct it is
-about.${SAVE_DRAFT_HINT}"""
+about.${ASK_USER_HINT}${SAVE_DRAFT_HINT}"""
 
 static const skills = agentSkill("typescript/review")
 

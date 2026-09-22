@@ -29,7 +29,7 @@ export def reviewAgent(userMsg: string, agencyTask: boolean = false): string {
   """
   announce("review", userMsg)
   if (!agencyTask) {
-    const general = generalReviewAgent(work: userMsg, task: "Review this code.", extraTools: [question])
+    const general = generalReviewAgent(work: userMsg, task: "Review this code.")
     return renderFeedback(general)
   }
   return renderFeedback(review(userMsg))

@@ -134,6 +134,56 @@
           "type": "exact"
         }
       ]
+    },
+    {
+      "nodeName": "subagentsOfferQuestion",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "coordinatorTurnOffersQuestion",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    },
+    {
+      "nodeName": "composedOracleToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
+    },
+    {
+      "nodeName": "composedAgencyReviewToolsHaveUniqueNames",
+      "input": "",
+      "expectedOutput": "\"ok\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "llmMocks": [
+        {
+          "return": "pong"
+        }
+      ]
     }
   ]
 }

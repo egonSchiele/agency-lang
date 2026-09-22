@@ -7,7 +7,7 @@
 */
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { llmOptions } from "std::agents/lib/shared"
-import { readOnlyFileTools, readOnlyGitTools, shellTools, agencyCodeTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, readOnlyGitTools, shellTools, agencyCodeTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { concurrencyPool } from "std::concurrency"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
@@ -47,7 +47,7 @@ Method:
    For Agency code there is no `agency` command line here: run a `.test.json` harness with `testFile(dir, filename)` and check a source file with `typecheck`. Do not search for an `agency` executable.
 3. A criterion you did NOT computationally verify is itself a gap — report it as one. A near-miss on any numeric constraint is an error: report the actual computed value vs. the requirement (e.g. "Tm difference 6.5°C, limit 5°C").
 
-Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers.${SAVE_DRAFT_HINT}"""
+Never say the artifact "appears" or "should" satisfy something. Run it, measure it, and report a concrete pass/fail per criterion with the numbers.${ASK_USER_HINT}${SAVE_DRAFT_HINT}"""
 
 // The judgment call, split out so its declared `Feedback[]` return type
 // flows into `llm` and a model saveDraft propagates as typed partial

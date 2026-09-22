@@ -11,7 +11,7 @@
 import { Feedback, failOpenFeedback } from "std::agents/lib/feedback"
 import { hostedSearchTools, searchTools } from "std::agents/lib/search"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { webTools, githubReadTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { webTools, githubReadTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { systemMessage, threadIsNew } from "std::thread"
 
@@ -22,7 +22,7 @@ static const systemPrompt = """You review a work product against a task. For eac
 Check the work point by point, most important points first. After each point, call `saveDraft` with all the Feedback items you have so far. Reviews run under a time budget: if it runs out mid-review, the findings you have saved are all the caller receives.
 
 ## Communicating with the user
-- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${SAVE_DRAFT_HINT}
+- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 """
 
 static const skills = agentSkill("review")

@@ -10,7 +10,7 @@ import { agencyCodingAgent } from "std::agents/agency/coding"
 import { codingAgent } from "std::agents/coding"
 import { feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { llmOptions, withContext } from "std::agents/lib/shared"
-import { readOnlyFileTools, SAVE_DRAFT_HINT } from "std::agents/lib/toolkits"
+import { readOnlyFileTools, SAVE_DRAFT_HINT, ASK_USER_HINT } from "std::agents/lib/toolkits"
 import { verifierAgent } from "std::agents/verifier"
 import { getAgentCwd } from "std::index"
 import { agentSkill } from "std::skills"
@@ -51,7 +51,7 @@ Prefer to DO THE WORK directly: call codingAgent (or researchAgent, or direct to
 
 
 ## Communicating with the user
-- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${SAVE_DRAFT_HINT}
+- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 """
 
 static const planExample = """EXAMPLE, compose a worker in a node main. Worker agents return a Result, so unwrap it:

@@ -16,6 +16,7 @@ import {
   agencyDocTools,
   webTools,
   SAVE_DRAFT_HINT,
+  ASK_USER_HINT,
  } from "std::agents/lib/toolkits"
 import { agentSkill } from "std::skills"
 import { ensureSystemMessage } from "std::thread"
@@ -95,10 +96,11 @@ summary, which is the fastest way to answer "what exists".
 - Don't write or modify any code. You have no write, edit, or shell tools.
 - Don't critique or recommend changes — that's the oracle's job.
   You describe what exists; you don't judge it.
-- Don't ask clarifying questions for broad asks. If the caller
-  said "summarize the docs", interpret that generously — read
-  widely, organize the result, deliver. Ask only if the request
-  is genuinely under-specified.
+- Don't ask the caller to narrow a broad ask. If they said
+  "summarize the docs", interpret that generously — read widely,
+  organize the result, deliver. A broad scope is not a missing
+  fact: use `question` for something you cannot find by reading,
+  never to turn a wide survey into a narrow one.
 - Don't stop early because the answer "feels good enough" after
   reading three files. Coverage is the point. If you set out to
   read 12, read 12.
@@ -106,7 +108,7 @@ summary, which is the fastest way to answer "what exists".
   question or apologies for length. Get to the substance.
 
 ## Communicating with the user
-- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${SAVE_DRAFT_HINT}
+- Make sure the user is following what you're doing. Use the `whatIAmDoing` tool frequently to tell the user what you're doing.${ASK_USER_HINT}${SAVE_DRAFT_HINT}
 
 """
 

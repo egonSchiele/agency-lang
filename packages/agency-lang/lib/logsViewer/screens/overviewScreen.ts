@@ -33,7 +33,10 @@ import type { Screen } from "./screen.js";
 const LAYOUT = {
   leftShare: 0.45,
   dividerCells: 3,
-  maxTimeBars: 6,
+  outerRows: 3,
+  timeBarRows: 2,
+  timeAndCostChromeRows: 4,
+  contextAndFactsChromeRows: 6,
   timeNameWidth: 22,
   timeDurationWidth: 8,
   timePercentWidth: 5,
@@ -45,7 +48,6 @@ const LAYOUT = {
   calloutLabelWidth: 10,
   calloutValueWidth: 12,
   ceilingScaleLimit: 4,
-  fixedRows: 14,
 };
 
 type Panel = "time" | "callouts";
@@ -56,6 +58,7 @@ export class OverviewScreen implements Screen {
   private data: OverviewData | undefined;
   private panel: Panel = "time";
   private timeCursor = 0;
+  private timeScrollTop = 0;
   private calloutCursor = 0;
   private pendingFocus: string | undefined;
   private message = "";
@@ -99,7 +102,10 @@ export class OverviewScreen implements Screen {
 
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
-    this.pageRows = Math.max(1, viewport.rows - LAYOUT.fixedRows);
+    this.pageRows = Math.max(
+      1,
+      this.panel === "time" ? this.panelLayout(viewport).timeBars : this.panelLength(),
+    );
     return runViewerKey(this.bindings(), formatKey(event));
   }
 
@@ -117,15 +123,12 @@ export class OverviewScreen implements Screen {
     }
     const leftWidth = Math.floor((viewport.cols - LAYOUT.dividerCells) * LAYOUT.leftShare);
     const rightWidth = viewport.cols - leftWidth - LAYOUT.dividerCells;
-    const chartHeight = Math.max(
-      LAYOUT.minChartRows,
-      Math.min(LAYOUT.maxChartRows, Math.floor((viewport.rows - LAYOUT.fixedRows) / 2)),
-    );
+    const { chartHeight, timeBars, bodyHeight } = this.panelLayout(viewport);
     const chartWidth = Math.min(leftWidth, rightWidth);
     const shownRounds = roundWindow(data.rounds, chartWidth, this.pendingFocus);
     const columnWidth = chartColumnWidth(chartWidth, shownRounds.length);
     const left = [
-      ...this.timePanel(data, leftWidth),
+      ...this.timePanel(data, leftWidth, timeBars),
       paint(""),
       ...this.costPanel(shownRounds, columnWidth, leftWidth, chartHeight),
     ];
@@ -134,7 +137,7 @@ export class OverviewScreen implements Screen {
       paint(""),
       ...this.factsPanel(data, rightWidth),
     ];
-    const bodyRows = Math.max(left.length, right.length);
+    const bodyRows = Math.min(bodyHeight, Math.max(left.length, right.length));
     const body = Array.from({ length: bodyRows }, (_unused, position) =>
       paintedLine(
         joinPainted(
@@ -174,6 +177,7 @@ export class OverviewScreen implements Screen {
     this.traceId = traceId;
     this.panel = "time";
     this.timeCursor = 0;
+    this.timeScrollTop = 0;
     this.calloutCursor = 0;
     this.pendingFocus = undefined;
     this.derive();
@@ -202,6 +206,7 @@ export class OverviewScreen implements Screen {
 
   private togglePanel(): ViewAction {
     this.panel = this.panel === "time" ? "callouts" : "time";
+    this.setCursor(this.cursor());
     return { kind: "none" };
   }
 
@@ -231,6 +236,7 @@ export class OverviewScreen implements Screen {
       this.timeCursor = bounded;
     } else {
       this.calloutCursor = bounded;
+      this.pendingFocus = this.data?.callouts[bounded]?.round.id;
     }
   }
 
@@ -261,16 +267,55 @@ export class OverviewScreen implements Screen {
     return `${parts.join(" · ")}${following}`;
   }
 
-  private timePanel(data: OverviewData, width: number): Painted[] {
-    const bars = data.timeBars.slice(0, LAYOUT.maxTimeBars + 1);
-    const largest = Math.max(...bars.map((bar) => bar.selfMs), 1);
+  private panelLayout(viewport: Viewport): {
+    chartHeight: number;
+    timeBars: number;
+    bodyHeight: number;
+  } {
+    const bodyHeight = Math.max(0, viewport.rows - LAYOUT.outerRows);
+    const count = this.data?.timeBars.length ?? 0;
+    const leftFixed = LAYOUT.timeAndCostChromeRows + count * LAYOUT.timeBarRows;
+    const rightFixed =
+      LAYOUT.contextAndFactsChromeRows +
+      (this.data?.callouts.length ?? 0) +
+      ((this.data?.threads.length ?? 0) > 1 ? 1 : 0);
+    const chartHeight = Math.max(
+      0,
+      Math.min(
+        LAYOUT.maxChartRows,
+        Math.max(LAYOUT.minChartRows, bodyHeight - leftFixed),
+        bodyHeight - rightFixed,
+        bodyHeight - LAYOUT.timeAndCostChromeRows - Math.min(count, 1) * LAYOUT.timeBarRows,
+      ),
+    );
+    const timeBars = Math.max(
+      0,
+      Math.min(
+        count,
+        Math.floor((bodyHeight - LAYOUT.timeAndCostChromeRows - chartHeight) / LAYOUT.timeBarRows),
+      ),
+    );
+    return { chartHeight, timeBars, bodyHeight };
+  }
+
+  private timePanel(data: OverviewData, width: number, visibleBars: number): Painted[] {
+    this.timeScrollTop = Math.max(
+      0,
+      Math.min(this.timeScrollTop, this.timeCursor, data.timeBars.length - visibleBars),
+    );
+    if (this.timeCursor >= this.timeScrollTop + visibleBars) {
+      this.timeScrollTop = Math.max(0, this.timeCursor - visibleBars + 1);
+    }
+    const bars = data.timeBars.slice(this.timeScrollTop, this.timeScrollTop + visibleBars);
+    const largest = Math.max(...data.timeBars.map((bar) => bar.selfMs), 1);
     const barWidth = Math.max(
       1,
       width - LAYOUT.timeNameWidth - LAYOUT.timeDurationWidth - LAYOUT.timePercentWidth,
     );
     const lines: Painted[] = [sectionTitle("WHERE THE TIME WENT", width)];
     bars.forEach((bar, position) => {
-      const marker = this.panel === "time" && position === this.timeCursor ? "▶ " : "  ";
+      const marker =
+        this.panel === "time" && position + this.timeScrollTop === this.timeCursor ? "▶ " : "  ";
       const nameStyle = { fg: bar.isLlm ? THEME.kind.assistant : THEME.kind.tool };
       lines.push(
         joinPainted(
@@ -317,7 +362,10 @@ export class OverviewScreen implements Screen {
     for (let rowPosition = 0; rowPosition < height; rowPosition += 1) {
       const axis = rowPosition === 0 ? fmtTokens(scaleMax) : rowPosition === height - 1 ? "0" : "";
       const pieces: Piece[] = [
-        { text: axis.padStart(LAYOUT.axisLabelWidth - 1) + " ", style: { fg: THEME.chrome } },
+        {
+          text: axis.slice(0, LAYOUT.axisLabelWidth - 1).padStart(LAYOUT.axisLabelWidth - 1) + " ",
+          style: { fg: THEME.chrome },
+        },
       ];
       cells.forEach((columnCells, columnPosition) => {
         const band = columnCells[rowPosition];
@@ -360,7 +408,10 @@ export class OverviewScreen implements Screen {
     for (let rowPosition = 0; rowPosition < height; rowPosition += 1) {
       const axis = rowPosition === 0 ? fmtUsd(highest) : rowPosition === height - 1 ? "$0" : "";
       const pieces: Piece[] = [
-        { text: axis.padStart(LAYOUT.axisLabelWidth - 1) + " ", style: { fg: THEME.chrome } },
+        {
+          text: axis.slice(0, LAYOUT.axisLabelWidth - 1).padStart(LAYOUT.axisLabelWidth - 1) + " ",
+          style: { fg: THEME.chrome },
+        },
       ];
       cells.forEach((columnCells) => {
         const glyph = columnCells[rowPosition];
@@ -478,7 +529,7 @@ function contextTicks(rounds: Round[], columnWidth: number, width: number): Pain
   const slot = columnWidth + 1;
   const ticks = rounds
     .map((round, position) =>
-      position % 2 === 0 ? `r${round.index + 1}`.padEnd(slot) : " ".repeat(slot),
+      position % 2 === 0 ? `r${round.index + 1}`.slice(0, slot).padEnd(slot) : " ".repeat(slot),
     )
     .join("");
   return segment(`${" ".repeat(LAYOUT.axisLabelWidth)}${ticks}`, width, {

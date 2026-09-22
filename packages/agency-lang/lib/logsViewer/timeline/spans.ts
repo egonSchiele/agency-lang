@@ -26,7 +26,7 @@ export const ADMIN_KINDS = ["handlerChain", "threadEndHooks"];
 // Cancellation counts as an end: summary.ts renders "⏳ … never completed"
 // on the same judgment, and a cancelled call must not read running forever.
 const ENDS_BY_START: Record<string, string[]> = {
-  toolCallStart: ["toolCall", "error"],
+  toolCallStart: ["toolCall", "toolError"],
   promptStart: ["promptCompletion", "promptCancelled"],
   subprocessStarted: ["subprocessEnd"],
 };
@@ -117,7 +117,11 @@ function ownerHasRunningWork(owner: TreeNode): boolean {
   const types = owner.children
     .flatMap((child) => (child.event === undefined ? [] : [child.event]))
     .sort((first, second) => Date.parse(first.data.timestamp) - Date.parse(second.data.timestamp))
-    .map((event) => event.data.type);
+    .map((event) =>
+      event.data.type === "error" && event.data.errorType === "toolError"
+        ? "toolError"
+        : event.data.type,
+    );
   return Object.entries(ENDS_BY_START).some(([startType, endTypes]) =>
     hasUnmatchedStart(types, startType, endTypes),
   );

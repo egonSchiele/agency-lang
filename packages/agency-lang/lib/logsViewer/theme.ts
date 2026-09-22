@@ -1,5 +1,4 @@
-// Every color the viewer draws, by role. A row names a role and this file
-// decides the hex, so retuning the viewer is an edit to one file.
+// Viewer colors by role.
 import type { PaintStyle } from "../tui/paint.js";
 import { costMagnitude, durationMagnitude, type ViewerThresholds } from "./thresholds.js";
 

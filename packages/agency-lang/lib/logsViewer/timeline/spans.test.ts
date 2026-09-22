@@ -41,7 +41,10 @@ describe("hasRunningWork", () => {
   });
 
   it("treats tool errors, including after rejection, as finished", () => {
-    const failed = span("toolExecution", [leaf("toolCallStart", 0), leaf("error", 10)]);
+    const failed = span("toolExecution", [
+      leaf("toolCallStart", 0),
+      leaf("error", 10, { errorType: "toolError" }),
+    ]);
     const rejected = span("toolExecution", [
       leaf("toolCallStart", 20),
       leaf("interruptResolved", 30, { outcome: "rejected" }),
@@ -147,4 +150,16 @@ describe("timelineSpans", () => {
     expect(roots.length).toBeGreaterThanOrEqual(1);
     expect(timelineSpans(roots[0], opts).length).toBeGreaterThan(20);
   });
+});
+
+it.each([
+  undefined,
+  "runtimeError",
+  "validationError",
+  "limitExceeded",
+  "structuredOutput",
+  "finalizeError",
+])("keeps the timeline tool running after an unrelated error %s", (errorType) => {
+  const tool = span("toolExecution", [leaf("toolCallStart", 0), leaf("error", 10, { errorType })]);
+  expect(timelineSpans(trace([tool]), { hideKinds: [] })[0].running).toBe(true);
 });

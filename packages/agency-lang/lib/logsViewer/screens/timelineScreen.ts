@@ -18,11 +18,7 @@ const ZOOM_OUT = 2;
 const PAN_STEP = 0.25;
 const CHROME_ROWS = 4;
 const LAYOUT = { indentCells: 2, maxIndentLevels: 10, cursorMarker: "▶ ", noMarker: "  " };
-// The flame view: one row per call, indented by nesting, on a shared time
-// axis. Enter/→ re-roots on the selected span (drill); ← climbs out. Row
-// labels say what each call was DOING — the last user message for llm
-// calls, the first string argument for tools — never the model name,
-// which identified nothing (prototype finding).
+// Timeline rows share a time axis and can be drilled into nested calls.
 import { column } from "../../tui/builders.js";
 import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
@@ -241,7 +237,7 @@ export class TimelineScreen implements Screen {
   }
 
   setTrace(traceId: string): void {
-    this.traceId = traceId; // no longer readonly
+    this.traceId = traceId;
     this.drillPath = [];
     this.zoom = undefined;
     this.cursor = 0;
@@ -250,7 +246,7 @@ export class TimelineScreen implements Screen {
   }
 
   applySearch(query: string): void {
-    this.applySearchText(query); // the existing method `/` already calls
+    this.applySearchText(query);
   }
 
   escape(): boolean {
@@ -288,9 +284,18 @@ export class TimelineScreen implements Screen {
     if (this.drillPath.length === 0) {
       return undefined;
     }
+    const drillPath = this.drillPath;
+    const cursor = this.cursor;
+    const rows = this.rows;
     this.drillPath = [];
     this.derive();
-    return this.drawnIdFor(id);
+    const target = this.drawnIdFor(id);
+    if (target === undefined) {
+      this.drillPath = drillPath;
+      this.rows = rows;
+      this.cursor = cursor;
+    }
+    return target;
   }
 
   notify(message: string): void {

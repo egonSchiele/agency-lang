@@ -40,6 +40,8 @@ Pure modules compute plain records. Screen painters draw those records and own t
 
 The overview fills slot 1 and is the starting screen. The trace outline fills slot 2. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
 
+The overview reserves room for the header, message and key hints. It reduces chart height and scrolls the time groups when the terminal is short. Selecting a callout focuses its round in both charts and carries that focus to other screens.
+
 ## Key tables
 
 A `KeyBinding<Action>` gives a set of keys, help text, an optional footer hint, an optional availability condition and an action. `handleKey`, `helpLines()` and the footer derive from that table through `runViewerKey`, `helpFrom` and `hintsFrom`. A new screen must not contain an `if (key === …)` chain. `cursorBindings` supplies the shared movement keys. Ctrl+D/U moves half a page; Ctrl+F/B and PageDown/Up move a full page.
@@ -141,11 +143,10 @@ it applies both rules for you. For a row that is not a table, build it from
 `segment(...)` in `lib/tui/paint.ts`, which returns a string of an exact
 visible width, and wrap it with `paintedLine(content, { width })`.
 
-Text from a statelog must never reach `line()` directly. The style parser
-swallows a brace group it recognizes (`{bold}`, anything ending in `-fg`),
-and escaping changes a string's length without changing its width.
-`paint.ts` handles both; its `Painted` type is how the compiler checks that
-a string went through it.
+Pass statelog text through `paint(text)` or `segment(text, width)` before
+rendering it. They display style-like text such as `{bold}` literally and
+replace ESC with `␛`, so recorded terminal escapes cannot change the output.
+Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
 
 ## Keybinding and chrome conventions (shared with any sibling TUI)
 

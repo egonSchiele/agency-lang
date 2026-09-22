@@ -1,5 +1,4 @@
-// The order in which Esc undoes things. One pure function, so the order is
-// written once and tested without a terminal. Esc never quits.
+// Esc clears the nearest active state before returning to the host.
 import type { ScreenName } from "./screens/screen.js";
 
 export type EscOutcome =
@@ -17,6 +16,7 @@ export type EscState = {
   screenEscaped: () => boolean;
   activeScreen: ScreenName;
   embedded: boolean;
+  overviewAvailable: boolean;
 };
 
 export function escOutcome(state: EscState): EscOutcome {
@@ -33,7 +33,7 @@ export function escOutcome(state: EscState): EscOutcome {
   if (state.screenEscaped()) {
     return "screen";
   }
-  if (state.activeScreen !== "overview") {
+  if (state.activeScreen !== "overview" && !(state.embedded && state.overviewAvailable === false)) {
     return "goOverview";
   }
   return leave;

@@ -1,7 +1,4 @@
-// Rounds: one record per promptCompletion. A round is not a span. An
-// agent's whole tool loop is one llmCall span holding many completions,
-// so anything that wants "round 4" has to build it, and this is where.
-// Pure over the forest, like the other timeline modules.
+// One round per promptCompletion; an llmCall span can contain many rounds.
 import {
   contextTokens,
   cost,
@@ -64,11 +61,15 @@ export function parseRoundId(id: string): { spanId: string; ordinal: number } | 
     return undefined;
   }
   const lastColon = id.lastIndexOf(":");
-  if (lastColon < ROUND_PREFIX.length) {
+  if (lastColon <= ROUND_PREFIX.length) {
     return undefined;
   }
-  const ordinal = Number(id.slice(lastColon + 1));
-  if (!Number.isInteger(ordinal) || ordinal < 0) {
+  const ordinalText = id.slice(lastColon + 1);
+  if (!/^\d+$/.test(ordinalText)) {
+    return undefined;
+  }
+  const ordinal = Number(ordinalText);
+  if (!Number.isSafeInteger(ordinal)) {
     return undefined;
   }
   return { spanId: id.slice(ROUND_PREFIX.length, lastColon), ordinal };
@@ -115,7 +116,7 @@ function draftRound(inputs: DraftInputs): RoundDraft | undefined {
     thread = { kind: "recorded", id: identity };
   }
   const recordedLabel = threadLabelOf(event);
-  const legacyLabel = unambiguousThreadLabels(scope, index, labelCache)[threadId];
+  const legacyLabel = unambiguousThreadLabels(scope, labelCache)[threadId];
   const cachedTokens = tokensCached(event);
   const allInput = contextTokens(event);
   return {

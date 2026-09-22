@@ -4,6 +4,7 @@
 // the same session is the drift this file exists to prevent.
 import { EventEnvelope, TreeNode } from "./types.js";
 import { ViewerThresholds, durationMagnitude, costMagnitude, Magnitude } from "./thresholds.js";
+import { clipText } from "../tui/paint.js";
 
 // Find the first direct child leaf event of the given type under a span.
 export function childEvent(node: TreeNode, type: string): EventEnvelope | undefined {
@@ -136,8 +137,8 @@ export function stripQuotes(s?: string): string {
   return s.replace(/^"+|"+$/g, "");
 }
 
-export function truncate(s: string, n: number): string {
-  return s.length <= n ? s : s.slice(0, n - 1) + "…";
+export function truncate(text: string, limit: number): string {
+  return clipText(text, limit);
 }
 
 export function durationColor(ms: number, t: ViewerThresholds): string | undefined {

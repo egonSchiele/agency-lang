@@ -1,6 +1,7 @@
 export * from "./elements.js";
 export * from "./builders.js";
 export * from "./styleParser.js";
+export * from "./paint.js";
 export * from "./colors.js";
 export * from "./layout.js";
 export * from "./frame.js";

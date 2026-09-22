@@ -147,8 +147,14 @@ prototype hit each one as a visible rendering bug):
   entries. (`line()` sets `height: 1` for exactly this reason; a
   hand-built `row(...)` must do the same.)
 
-If a real fixed-grid table component ever lands in `lib/tui`, these two
-rules are its reason to exist.
+Use `TableComponent` from `lib/tui/table.ts` for tables. It sets cell widths
+and row heights. To compose another kind of row, use `segment(text, width)`
+from `lib/tui/paint.ts` for each part, then `paintedLine(content, { width })`.
+
+Pass statelog text through `paint(text)` or `segment(text, width)` before
+rendering it. They display style-like text such as `{bold}` literally and
+replace ESC with `␛`, so recorded terminal escapes cannot change the output.
+Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
 
 ## Keybinding and chrome conventions (shared with any sibling TUI)
 

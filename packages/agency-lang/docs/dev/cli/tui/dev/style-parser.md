@@ -34,6 +34,12 @@ Closing tags match by both type AND value, and only against tag-origin entries. 
 
 The regex uses a negative lookbehind `(?<!\\)` to skip escaped braces. The `makeSpan` function unescapes `\{` and `\}` in the output text. A tag body may not contain `}` at all, so an escaped `}` inside a tag body is unsupported by design.
 
+Use `paint(text)` from `lib/tui/paint.ts` to display braces literally and
+replace ESC characters with the visible symbol `␛`. Use `paintAnsi(text)`
+when ANSI colors should be interpreted, such as syntax-highlighted code.
+`segment(text, width)` clips or pads plain text to a fixed width.
+`clipPainted(content, width)` clips prepared text while preserving colors.
+
 ## Regex Safety
 
 `TAG_PATTERN_SOURCE` is defined at module level, but `parseStyledText()` builds a new `RegExp` on every call. This prevents `lastIndex` corruption if the function is called reentrantly, for example from parallel renders. The pattern `[^}]+` is a negated character class that cannot catastrophically backtrack.

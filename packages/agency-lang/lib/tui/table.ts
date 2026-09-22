@@ -5,9 +5,12 @@
 // algorithm std::ui/table uses (lib/utils/columnWidths.ts). Every emitted
 // segment carries an explicit width and height — the two lib/tui layout
 // rules that otherwise bite (see docs/dev/cli/logs-viewer.md).
-import { column, line, row } from "./builders.js";
+import { column, row } from "./builders.js";
 import type { Element, Style } from "./elements.js";
+import { joinPainted, paint, paintedLine, segment as paintedSegment, type Piece } from "./paint.js";
 import { resolveColumnWidths, type ColumnPlan } from "../utils/columnWidths.js";
+
+export { clipText as clipCell } from "./paint.js";
 
 export const CURSOR_BG = "#3a3a3a";
 const HEADER_FG = "gray";
@@ -23,7 +26,7 @@ export type TableColumn<Row> = {
    *  width. `{ min }` = natural with a floor. */
   width?: number | "flex" | { min: number };
   align?: "left" | "right";
-  cell: (row: Row) => string;
+  cell: (row: Row) => string | Piece[];
   headerStyle?: () => CellStyle;
   cellStyle?: (row: Row) => CellStyle;
 };
@@ -65,7 +68,7 @@ export class TableComponent<Row> {
   /** Content width plus one trailing space so adjacent columns never
    *  touch. Header labels reserve room for a sort arrow. */
   private naturalWidth(column: TableColumn<Row>, frame: TableFrame<Row>): number {
-    const cellWidths = frame.rows.map((rowData) => column.cell(rowData).length);
+    const cellWidths = frame.rows.map((rowData) => plainText(column.cell(rowData)).length);
     return Math.max(column.header.length, ...cellWidths, 0) + 1;
   }
 
@@ -78,7 +81,7 @@ export class TableComponent<Row> {
       const style: CellStyle = column.headerStyle?.() ?? {
         fg: sorted ? SORTED_HEADER_FG : HEADER_FG,
       };
-      return segment(label, widths[index], column.align, style);
+      return cellElement(label, widths[index], column.align, style);
     });
     return row({ height: 1 }, ...cells);
   }
@@ -94,26 +97,18 @@ export class TableComponent<Row> {
       if (isCursor) {
         style.bg = CURSOR_BG;
       }
-      return segment(column.cell(rowData), widths[index], column.align, style);
+      return cellElement(column.cell(rowData), widths[index], column.align, style);
     });
     return row({ height: 1 }, ...cells);
   }
 }
 
-/** Clip to `width` with a trailing ellipsis. Width 0 renders nothing;
- *  width 1 renders just the ellipsis. */
-export function clipCell(value: string, width: number): string {
-  if (width <= 0) {
-    return "";
-  }
-  if (value.length <= width) {
-    return value;
-  }
-  return `${value.slice(0, width - 1)}…`;
+function plainText(value: string | Piece[]): string {
+  return typeof value === "string" ? value : value.map((piece) => piece.text).join("");
 }
 
-function segment(
-  value: string,
+function cellElement(
+  value: string | Piece[],
   width: number,
   align: "left" | "right" | undefined,
   style: CellStyle,
@@ -122,11 +117,8 @@ function segment(
   // full-width value (or a right-aligned one) touches its neighbor and
   // adjacent headers read as one word.
   if (width <= 0) {
-    return line("", { width, ...style });
+    return paintedLine(paint(""), { width, ...style });
   }
-  const inner = width - 1;
-  const clipped = clipCell(value, inner);
-  const padding = " ".repeat(inner - clipped.length);
-  const content = align === "right" ? `${padding}${clipped} ` : `${clipped}${padding} `;
-  return line(content, { width, ...style });
+  const body = paintedSegment(value, width - 1, { align });
+  return paintedLine(joinPainted(body, paint(" ")), { width, ...style });
 }

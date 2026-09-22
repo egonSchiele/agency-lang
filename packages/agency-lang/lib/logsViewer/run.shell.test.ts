@@ -297,7 +297,7 @@ it("a second round opens its own answer and token counts in detail", async () =>
     .join("\n");
   const out = await driveJsonl(jsonl, ["4", "j", "j", "d"]);
   expect(out.lastText()).toContain("second answer");
-  expect(out.lastText()).toContain("48 context (31 cached) / 9 out");
+  expect(out.lastText()).toContain("48 context (31 cached, 0 write) / 9 out");
   expect(out.lastText()).not.toContain("first answer");
 });
 it("number keys leave an open detail overlay in place", async () => {

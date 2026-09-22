@@ -44,5 +44,5 @@ it("resolves the second round again when an earlier prompt hides and leaf ids sh
   const detail = new DetailScreen(before, id, DEFAULT_THRESHOLDS);
   detail.setData(after);
   expect(detail.allLines(120).join("\n")).toContain("second answer");
-  expect(detail.allLines(120).join("\n")).toContain("48 context (31 cached) / 9 out");
+  expect(detail.allLines(120).join("\n")).toContain("48 context (31 cached, 0 write) / 9 out");
 });

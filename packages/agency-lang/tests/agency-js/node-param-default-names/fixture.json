@@ -1,0 +1,10 @@
+{
+  "omitted": {
+    "first": 5,
+    "label": "up to 5"
+  },
+  "passed": {
+    "first": 1,
+    "label": "given"
+  }
+}

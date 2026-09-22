@@ -14,7 +14,15 @@ node main() {
   let negativeStart = [1, 2, 3, 4, 5]
   negativeStart[-2:] = [10, 20]
 
+  // Bounds held in locals. They used to be emitted as bare names, so this
+  // crashed with "from is not defined" (issue #668).
+  let variableBounds = [1, 2, 3, 4, 5]
+  let from = 1
+  let to = 3
+  variableBounds[from:to] = [7, 8]
+
   return {
+    variableBounds: variableBounds,
     bothBounds: bothBounds,
     startOnly: startOnly,
     endOnly: endOnly,

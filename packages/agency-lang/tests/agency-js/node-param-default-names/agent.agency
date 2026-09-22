@@ -1,0 +1,9 @@
+// A NODE parameter default that names a global, called from TypeScript with
+// no argument. The name compiles to a global-store read, which needs an
+// async-context frame; a parameter default runs before `runNode` installs
+// one, so the wrapper must leave the default to the node body (issue #668).
+let LIMIT = 5
+
+node main(xs: number[] = [LIMIT], label: string = "up to ${LIMIT}"): { first: number, label: string } {
+  return { first: xs[0], label: label }
+}

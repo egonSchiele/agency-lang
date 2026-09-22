@@ -47,6 +47,11 @@
       "name": "bound-default",
       "exitCode": 1,
       "refused": true
+    },
+    {
+      "name": "bound-docstring",
+      "exitCode": 1,
+      "refused": true
     }
   ],
   "boundGood": {

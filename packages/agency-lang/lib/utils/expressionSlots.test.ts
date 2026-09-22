@@ -410,22 +410,10 @@ const WALKER_EXCLUDED_TYPES: Record<string, string> = {
 // visits — which is exactly why the fix is a compiler change that gets
 // its own PR and review.
 const KNOWN_WALKER_GAPS: Record<string, string> = {
-  "functionParameter.defaultValue": "#668: parameter default expressions are never walked",
-  "function.docString":
-    "#668: docstring interpolations are evaluated by the builder " +
-    "(hasDocStringInterpolation) but the segments are never walked",
-  // Slice-bound fields precisely: chain entries are untyped records, so
-  // ownerType stays "assignment" and the bound fields key directly.
-  // Keying the whole accessChain would shield the walked index and
-  // methodCall entries too (measured: 20 of 24 nodes lost coverage).
-  "assignment.start": "#668: slice-assignment bounds (arr[a:b] = x) are not walked",
-  "assignment.end": "#668: slice-assignment bounds (arr[a:b] = x) are not walked",
-  "matchBlockCase.guard":
-    "#668: unlowered match-arm guard expressions are not walked " +
-    "(the lowered if-chain form is)",
   "tag.arguments":
     "#668: @validate/@tag annotation arguments reference validator " +
-    "functions and values but are never walked",
+    "functions and values but are never walked. The last gap left: tags also " +
+    "sit inside type hints, and the walker does not enter types at all",
 };
 
 function isExcluded(ownerType: string, key: string): boolean {

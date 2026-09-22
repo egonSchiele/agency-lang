@@ -174,6 +174,10 @@ node subagentsOfferQuestion(): string {
 // through a subagent. Its list is built per turn, so the check has to build
 // one too.
 node coordinatorTurnOffersQuestion(): string {
+  // turnTools() scans the agent home for learned tools. Point it at the
+  // fixture, as the learned-tools node above does, so this never reads the
+  // developer's own saved tools.
+  _setLearnedRoot("${__dirname}/../../../tests/learned-fixture")
   let names: string[] = []
   handle {
     names = map(turnTools(now()), \tool -> "${tool.name}")
@@ -184,10 +188,11 @@ node coordinatorTurnOffersQuestion(): string {
   return "ok"
 }
 
-// The two agents handed `question` at the call site rather than through the
-// bundle. Adding communicationTools() to either one without dropping the
-// call-site copy would send two tools named `question`, which the runtime
-// rejects before the request goes out.
+// Two of the agents handed `question` at the call site rather than through
+// the bundle (composedAgencyResearchToolsHaveUniqueNames above covers a
+// third). Adding communicationTools() to one without dropping its call-site
+// copy would send two tools named `question`, which the runtime rejects
+// before the request goes out.
 node composedOracleToolsHaveUniqueNames() {
   return pingWith([...oracleTools(), question, saveDraft])
 }

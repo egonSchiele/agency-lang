@@ -101,9 +101,11 @@ export def communicationTools(): any[] {
   Return tools that help the agent communicate with the user: `whatIAmDoing`
   to report progress, and `question` to ask for a fact only the user has.
 
-  `question` raises an interrupt rather than reading the terminal, so it works
-  wherever the agent runs. An approval policy can never answer it, because the
-  answer is a value and `approve()` carries none; see ASK_USER_HINT.
+  `question` raises an interrupt rather than reading the terminal, so whoever
+  hosts the agent can answer it: a person at a prompt, an HTTP host, or a
+  handler in a test. A run with no one to ask rejects it. An approval policy
+  rule can never answer it, because the answer is a value and `approve()`
+  carries none; see `docs/dev/stdlib/asking-the-user.md`.
   """
   return [whatIAmDoing, question]
 }
@@ -306,7 +308,7 @@ export def planningTools(): any[] {
 // A model-facing instruction, spliced into an agent's prompt when the agent
 // offers the `question` tool. Without it the tool sits unused: a model that
 // has not been told to ask will guess instead.
-export static const ASK_USER_HINT = "\n\nWhen the work turns on something only the user can tell you — which account they mean, which of two readings of the request, a value you cannot look up — ask with the `question` tool, and ask before you build on the guess rather than after. Do not ask for anything you could find yourself, and do not ask the user to narrow a scope they left broad on purpose. In a run with nobody at a terminal your question comes back rejected; when that happens, pick the most reasonable reading, say which one you picked, and carry on."
+export static const ASK_USER_HINT = "\n\nWhen the work turns on something only the user can tell you — which account they mean, which of two readings of the request, a value you cannot look up — ask with the `question` tool, and ask before you build on the guess rather than after. Do not ask for anything you could find yourself, and do not ask the user to narrow a scope they left broad on purpose. When nobody can answer, your question comes back rejected; when that happens, pick the most reasonable reading, say which one you picked, and carry on."
 
 // A model-facing instruction, spliced into an agent's prompt when the agent
 // offers the `saveDraft` tool. Tells the model to checkpoint its best answer

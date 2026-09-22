@@ -1,6 +1,6 @@
-// `question` is how an agent asks the user for a fact only they have. It
-// raises an interrupt rather than reading the terminal, so a handler can
-// answer it in-process and it works anywhere the agent runs.
+// `question` asks the user for a fact only they have. It raises an interrupt
+// rather than reading the terminal, which is what lets these nodes answer it
+// in-process with no LLM and no terminal.
 import { question } from "std::agent"
 
 // An approval carries the answer, and that answer is what `question`

@@ -8,47 +8,55 @@ directories) is a separate app that embeds this viewer, described in
 
 ## The component model
 
-Every top-level view is a class implementing one type (`lib/logsViewer/views/view.ts`):
+`ScreenHost` owns four numbered screens: overview, trace, transcript and timeline. It keeps a separate, initially empty stack of overlays. The top overlay receives keys and renders while it is open; otherwise the active screen does. Switching screens carries the focused span or stable round ID to the destination and closes overlays.
+
+The shell in `run.ts` owns the terminal, follow watcher, help, clipboard and extraction. A view returns a `ViewAction` when it needs one of these operations. It receives the inner viewport for paging, excluding the tab strip and parse-error footer.
 
 ```ts
 type View = {
-  viewName: "tree" | "flame" | "byName" | "occurrences" | "detail";
-  handleKey(ev: KeyEvent, viewport: Viewport): ViewAction;
+  handleKey(event: KeyEvent, viewport: Viewport): ViewAction;
   render(viewport: Viewport): Element;
   setData(roots: TreeNode[]): void;
   helpLines(): string[];
   notify(message: string): void;
   setFollowIndicator(on: boolean): void;
+  escape?(): boolean;
+  capturesText?(): boolean;
+};
+
+type Screen = View & {
+  screenName: ScreenName;
+  focusId(): string | undefined;
+  setFocus(id: string): void;
+  setTrace(traceId: string): void;
+  escape(): boolean;
+  applySearch(query: string): void;
 };
 ```
 
-The stack itself is `makeViewStack(bottom)` in the same file. `popTo(name)`
-returns false when no instance of that view is on the stack, which is the
-shell's signal to construct one.
+The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay also declares its `viewName`. A screen can decline an Esc by returning false, allowing the shell to continue down the ladder.
 
-A view owns its own UI state: cursor, scroll, zoom window, drill path, and admin toggle.
-`handleKey` is synchronous. It returns a `ViewAction` for anything the view cannot do
-alone, such as opening another view, jumping to the tree, prompting for a search line, or
-writing the clipboard. The shell (`run.ts`) owns the screen, a **view stack** (tree always at the
-bottom), the `?` help overlay (content comes from the active view's `helpLines()`), the
-parse-error footer, quit, and follow mode. `open` actions pop back to an existing view on
-the stack rather than pushing a duplicate; `back` pops one. That single rule makes every
-"t goes back to the tree" case fall out.
+Pure modules compute plain records. Screen painters draw those records and own the TUI imports.
 
-Why the viewport is a `handleKey` parameter: paging keys (`Ctrl-F/B/D/U`) are viewport
-arithmetic. The old design kept them in the shell because its pure reducer had no viewport.
-A component that receives the viewport owns its own paging and scrolling, built on
-`lib/tui/scrollList.ts`.
+`LegacyTraceScreen` adapts `TreeView` to slot 2. The viewer starts on the trace screen. Slots 1 and 3 show placeholders. Embedded viewers skip the placeholder overview when Esc returns to the host.
 
-The tree view's reducer lives in `views/treeReducer.ts`. The row model and the row text
-shared by the tree and by search live in `treeRows.ts`. A shared helper must not depend on
-a view, so search imports the neutral module rather than the view.
+## Key tables
 
-Components inside a view follow one rule: a **compute method and a render method on the same
-class**. One method decides the text, such as "the last user message, first N characters",
-and the other draws it. The shared visual components live in `views/shared.ts` and all
-three bar views use them: `BarComponent`, `AxisHeader`, `TimelineHeader`, and the width
-budget `splitWidth`.
+A `KeyBinding<Action>` gives a set of keys, help text, an optional footer hint, an optional availability condition and an action. `handleKey`, `helpLines()` and the footer derive from that table through `runViewerKey`, `helpFrom` and `hintsFrom`. A new screen must not contain an `if (key === …)` chain. `cursorBindings` supplies the shared movement keys. Ctrl+D/U moves half a page; Ctrl+F/B and PageDown/Up move a full page.
+
+The generic table helpers live in `lib/tui/keymap.ts`. The viewer-specific wrapper lives in `lib/logsViewer/keymap.ts`. The runs explorer retains its existing key handlers.
+
+## The trace picker
+
+The picker shows each trace's starting time, duration, rounds, token total, cost, ask and annotation. A `●` marks the current trace and `✖` marks a recorded error. Annotations occupy display lines under their trace; scrolling counts those lines.
+
+`traceTexts` collects string values from event data, including prompts, answers, nested tool payloads and errors. It does not search serialized JSON, because escaping would hide literal quotes and line breaks. The picker computes these strings on each parse and filters them as you type.
+
+A `TraceFilter` declares an ID, label and a predicate over `TraceSummary`. Every active filter must accept a trace for it to appear. To add a filter, create its predicate and put it in the picker's filter list. The text search is the first filter.
+
+`capturesText()` is true while editing. The shell then sends q, f, ?, digits and other printable characters to the picker. Enter finishes editing; another Enter opens the selected trace. A nonempty query opens slot 2 and searches that trace's payloads, regardless of which screen was underneath the picker.
+
+At boot, multiple traces with no requested focus open the picker over the most recent trace. A single trace or `focusTraceId` opens directly. Follow updates never reopen the picker.
 
 ## The timeline kernel (`lib/logsViewer/timeline/`)
 
@@ -97,7 +105,7 @@ arrival, by construction:
   boot snapshot, silently dropping earlier appends.
 
 On growth the shell re-parses the accumulated text, rebuilds the forest, and calls
-`setData(roots)` on **every** view on the stack. `setData`'s contract has four parts.
+`setData(roots)` on every numbered screen and every open overlay. `setData`'s contract has four parts.
 Cursor and drill state is stored as ids, so it survives. An id that no longer resolves
 falls back to the nearest ancestor, then to the first row. A zoomed window stays put while
 an unzoomed one tracks the live end. A shrunken file, from rotation or truncation, resets
@@ -158,8 +166,8 @@ Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
 
 ## Keybinding and chrome conventions (shared with any sibling TUI)
 
-- `t` cycles views forward, `Shift+T` backward — any Agency TUI with
-  multiple views uses the same pair.
+- Number keys 1–4 choose screens. `t` opens the trace picker when there are several traces. `<` and `>` step between traces.
+- Esc follows the same ladder: close help; let the overlay clear its state; close the overlay; let the screen clear its state; return to overview; return to the host when embedded; otherwise do nothing. A terminal narrower than 100 columns returns directly to the host when embedded and otherwise does nothing.
 - **Esc backs out until there is nothing left to back out of, and never
   quits; `q` quits the whole program instantly from any screen.** For a
   viewer hosted inside another TUI, `runViewer` takes `embedded: true`
@@ -176,11 +184,9 @@ Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
   `bottomHints(hints, tag, cols)` in `views/shared.ts`, so the answer to
   "where am I" always lives in the same place.
 
-## Adding a view
+## Adding a screen or an overlay
 
-Implement the `View` type, add a `ViewAction` case if the view needs a new cross-view jump,
-construct it in the shell's `dispatch`, and give it `helpLines()`. State that must survive
-follow re-parses goes by id or absolute time, never by row index.
+Add the painter under `screens/` and implement `Screen` for a numbered slot or `View` for an overlay. Declare its keys in one table. Give shared computations a pure module outside the painter. Keep follow state as IDs or absolute times, and use `forest.ts` for tree traversal. Round detail overlays retain the original round ID and resolve it again after every update, because event leaf IDs can change.
 
 ## Run directories
 

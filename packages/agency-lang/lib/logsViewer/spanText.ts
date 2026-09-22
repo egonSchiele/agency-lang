@@ -160,3 +160,20 @@ export function colorForMagnitude(m: Magnitude): string | undefined {
       return undefined;
   }
 }
+
+/** Argument names that usually hold the thing a tool acted on, best first. */
+const SUBJECT_KEYS = ["command", "pattern", "path", "file", "filename", "query", "name", "code"];
+
+export function toolArgSummary(args: unknown): string {
+  if (args === null || args === undefined) {
+    return "";
+  }
+  if (typeof args !== "object") {
+    return String(args);
+  }
+  const record = args as Record<string, unknown>;
+  const isText = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+  const bySubjectKey = SUBJECT_KEYS.map((key) => record[key]).find(isText);
+  const firstText = Object.values(record).find(isText);
+  return bySubjectKey ?? firstText ?? JSON.stringify(record);
+}

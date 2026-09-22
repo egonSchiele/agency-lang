@@ -16,7 +16,7 @@ import type { ViewerThresholds } from "../thresholds.js";
 import { groupSpans, spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
-import { DurationCell, RowLabel } from "./flameView.js";
+import { DurationCell, RowLabel } from "../screens/timelineScreen.js";
 import {
   AxisHeader,
   BarComponent,
@@ -72,17 +72,15 @@ export class OccurrencesView implements View {
       const sel = this.occ[this.cursor];
       if (sel === undefined) return { kind: "none" };
       const hasChildren = sel.node.children.some((c) => c.nodeKind === "span");
-      return hasChildren
-        ? { kind: "openFlameAt", spanId: sel.span.id }
-        : { kind: "openDetail", spanId: sel.span.id };
+      return hasChildren ? { kind: "none" } : { kind: "openDetail", rowId: sel.span.id };
     } else if (fmt === "Left" || fmt === "h" || fmt === "Escape") return { kind: "back" };
     else if (fmt === "t") return { kind: "back" };
     else if (fmt === "d") {
       const sel = this.occ[this.cursor];
-      if (sel !== undefined) return { kind: "openDetail", spanId: sel.span.id };
+      if (sel !== undefined) return { kind: "openDetail", rowId: sel.span.id };
     } else if (fmt === "o") {
       const sel = this.occ[this.cursor];
-      if (sel !== undefined) return { kind: "focusInTree", spanId: sel.span.id };
+      if (sel !== undefined) return { kind: "none" };
     }
     return { kind: "none" };
   }

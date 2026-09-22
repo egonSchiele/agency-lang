@@ -20,3 +20,5 @@ export { FrameRecorder } from "./output/recorder.js";
 export { Screen } from "./screen.js";
 export * from "./scroll.js";
 export * from "./scrollList.js";
+
+export * from "./keymap.js";

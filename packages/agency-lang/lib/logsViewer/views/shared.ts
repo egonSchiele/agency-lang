@@ -21,9 +21,9 @@ export const LAYOUT = {
 
 export type WidthSplit = { gutter: number; bar: number; stats: number };
 
-export function splitWidth(view: "flame" | "byName" | "occurrences", cols: number): WidthSplit {
+export function splitWidth(view: "timeline" | "byName" | "occurrences", cols: number): WidthSplit {
   let gutter: number;
-  if (view === "flame") {
+  if (view === "timeline") {
     gutter = LAYOUT.flameGutter;
   } else if (view === "byName") {
     gutter = LAYOUT.byNameGutter;

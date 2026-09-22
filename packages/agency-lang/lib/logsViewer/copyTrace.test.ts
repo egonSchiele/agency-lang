@@ -38,6 +38,7 @@ describe("Y copies the whole focused trace", () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl,
+      focusTraceId: "abc",
       input: new ScriptedInput(["Y", "q"]),
       output: out,
       viewport: { rows: 12, cols: 100 },
@@ -52,6 +53,7 @@ describe("Y copies the whole focused trace", () => {
     written.length = 0;
     await runViewer({
       jsonl,
+      focusTraceId: "abc",
       input: new ScriptedInput(["y", "q"]),
       output: new FrameRecorder(),
       viewport: { rows: 12, cols: 100 },

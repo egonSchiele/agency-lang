@@ -14,12 +14,18 @@ import { detectClipboard } from "./clipboard.js";
 import { parseStatelogJsonl } from "./parse.js";
 import { DEFAULT_THRESHOLDS, ViewerThresholds } from "./thresholds.js";
 import { buildForest } from "./tree.js";
-import { ByNameView } from "./views/byNameView.js";
 import { DetailScreen } from "./views/detailScreen.js";
-import { FlameView } from "./views/flameView.js";
+import { TimelineScreen } from "./screens/timelineScreen.js";
+import { LegacyTraceScreen } from "./screens/legacyTraceScreen.js";
+import { PlaceholderScreen } from "./screens/placeholderScreen.js";
+import { TracePicker } from "./screens/tracePicker.js";
+import { MIN_COLS, tabStrip, tooNarrow } from "./screens/chrome.js";
+import { ScreenHost } from "./screenHost.js";
+import { escOutcome, type EscOutcome } from "./escLadder.js";
+import { findBinding, helpFrom, type ViewerBinding } from "./keymap.js";
 import { OccurrencesView } from "./views/occurrencesView.js";
 import { TreeView } from "./views/treeView.js";
-import { makeViewStack, type ViewAction, type Viewport } from "./views/view.js";
+import { type ViewAction, type Viewport } from "./views/view.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
 import { findTrace, writeTraceFile } from "../runDirectory/extractTrace.js";
 
@@ -114,9 +120,9 @@ function parseErrorFooter(parseErrors: ReadonlyArray<{ line: number }>): Element
 export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> {
   const watcher = makeFollowWatcher(opts);
   const parsed = parseStatelogJsonl(watcher.bootText);
-  let roots = buildForest(parsed.events);
-  let parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
-  let allEvents: readonly EventEnvelope[] = parsed.events; // `Y` copies these verbatim
+  const roots = buildForest(parsed.events);
+  const parseErrors: ReadonlyArray<{ line: number }> = parsed.errors;
+  const allEvents: readonly EventEnvelope[] = parsed.events; // `Y` copies these verbatim
 
   const screen = new Screen({
     input: opts.input,
@@ -134,146 +140,310 @@ export async function runViewer(opts: RunViewerOpts): Promise<ViewerResolution> 
     return "back";
   }
 
+  return runSession(opts, screen, watcher, roots, parseErrors, allEvents);
+}
+
+type ParseErrors = ReadonlyArray<{ line: number }>;
+type ActionHandlers = {
+  [Kind in ViewAction["kind"]]: (
+    action: Extract<ViewAction, { kind: Kind }>,
+  ) => Promise<void> | void;
+};
+
+async function runSession(
+  opts: RunViewerOpts,
+  screen: Screen,
+  watcher: FollowWatcher,
+  roots: TreeNode[],
+  parseErrors: ParseErrors,
+  allEvents: readonly EventEnvelope[],
+): Promise<ViewerResolution> {
   const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
   const viewport: Viewport = opts.viewport;
-  const treeView = new TreeView(roots, thresholds, viewport, {
-    extractEnabled: opts.extract !== undefined,
-    traceAnnotations: opts.traceAnnotations,
-    focusTraceId: opts.focusTraceId,
-  });
-  const stack = makeViewStack(treeView);
-  const notify = (message: string): void => stack.active().notify(message);
-  // The trace timeline views open on: fixed when flame opens from the tree.
-  let timelineTraceId = treeView.cursorTraceId();
-  let helpOpen = false;
-  let quit = false;
+  const tooNarrowNow = viewport.cols < MIN_COLS;
+  const annotations = opts.traceAnnotations ?? {};
+  const bootTraceId = opts.focusTraceId ?? mostRecentTraceId(roots);
+
+  const host = createHost(roots, opts, thresholds, bootTraceId);
+  const notify = (message: string): void => host.target().notify(message);
 
   let followOn = false;
+  const innerViewport = (): Viewport => ({
+    cols: viewport.cols,
+    rows: Math.max(1, viewport.rows - 1 - (parseErrors.length > 0 ? 1 : 0)),
+  });
+  const stripArgs = () => ({
+    active: host.activeScreen(),
+    title: host.currentTraceId().slice(0, 8),
+    tracePosition: {
+      at: roots.findIndex((root) => root.traceId === host.currentTraceId()) + 1,
+      of: roots.length,
+    },
+    annotation: Object.hasOwn(annotations, host.currentTraceId())
+      ? annotations[host.currentTraceId()]
+      : undefined,
+    following: followOn,
+    cols: viewport.cols,
+  });
   const onNewText = (text: string): void => {
-    // Update the parsed state unconditionally — including to an EMPTY forest.
-    // A truncation/rotation to empty or malformed content must clear the views;
-    // returning early here would leave the previous file's trace selectable, so
-    // `x` could extract a trace no longer in the file.
     const reparsed = parseStatelogJsonl(text);
     roots = buildForest(reparsed.events);
     parseErrors = reparsed.errors;
     allEvents = reparsed.events;
-    for (const view of stack.all()) view.setData(roots);
+    host.setData(roots, mostRecentTraceId(roots));
     render();
   };
   const toggleFollow = (): void => {
-    if (!opts.followPath) {
+    if (opts.followPath === undefined) {
       notify("follow unavailable when reading from stdin");
       return;
     }
     followOn = !followOn;
-    for (const view of stack.all()) view.setFollowIndicator(followOn);
-    if (followOn) watcher.start(onNewText);
-    else watcher.stop();
+    host.setFollowIndicator(followOn);
+    if (followOn) {
+      watcher.start(onNewText);
+    } else {
+      watcher.stop();
+    }
     notify(followOn ? "follow on" : "follow off");
   };
+  const shellBindings = (): ViewerBinding[] =>
+    viewerShellBindings(
+      host,
+      () => roots,
+      toggleFollow,
+      () =>
+        host.openOverlay(
+          new TracePicker(roots, {
+            currentTraceId: host.currentTraceId(),
+            annotations,
+            thresholds,
+          }),
+        ),
+    );
 
-  if (opts.initialFollow && opts.followPath) {
-    followOn = true;
-    treeView.setFollowIndicator(true);
-    watcher.start(onNewText);
-  }
-
-  const render = (): void => {
-    if (helpOpen) {
-      screen.render(helpScreen(stack.active().helpLines()));
+  const extractIfLocal = async (traceId: string): Promise<void> => {
+    if (opts.extract === undefined) {
       return;
     }
-    const parts: Element[] = [stack.active().render(viewport)];
-    if (parseErrors.length > 0) parts.push(parseErrorFooter(parseErrors));
+    await handleTraceExtract({
+      screen,
+      sourcePath: opts.extract.sourcePath,
+      traceId,
+      following: followOn,
+      watcher,
+      onNewText,
+      render,
+      notify,
+    });
+  };
+  const onAction: ActionHandlers = {
+    none: () => {},
+    back: () => host.closeOverlay(),
+    openScreen: (action) => host.switchTo(action.screen, action.focusId),
+    selectTrace: (action) => host.selectTrace(action.traceId, action.query),
+    openDetail: (action) => host.openOverlay(new DetailScreen(roots, action.rowId, thresholds)),
+    openOccurrences: (action) =>
+      host.openOverlay(
+        new OccurrencesView(roots, host.currentTraceId(), action.groupKey, thresholds),
+      ),
+    promptLine: async (action) => action.onResult(await screen.nextLine(action.label)),
+    copy: (action) => copyToClipboard(action.text, notify),
+    copyTrace: (action) => copyTraceToClipboard(allEvents, action.traceId, notify),
+    extractTrace: (action) => extractIfLocal(action.traceId),
+  };
+
+  const dispatch = async (action: ViewAction): Promise<void> => {
+    const handler = onAction[action.kind] as (action: ViewAction) => Promise<void> | void;
+    await handler(action);
+  };
+  const render = (): void => {
+    if (tooNarrowNow) {
+      screen.render(tooNarrow(viewport.cols));
+      return;
+    }
+    if (host.helpOpen()) {
+      screen.render(helpScreen([...helpFrom(shellBindings()), ...host.target().helpLines()]));
+      return;
+    }
+    const parts: Element[] = [tabStrip(stripArgs()), host.target().render(innerViewport())];
+    if (parseErrors.length > 0) {
+      parts.push(parseErrorFooter(parseErrors));
+    }
     screen.render(column({ justifyContent: "flex-start" }, ...parts));
   };
 
-  const pushView = (view: FlameView | ByNameView | OccurrencesView | DetailScreen): void => {
-    view.setFollowIndicator(followOn);
-    stack.push(view);
-  };
-  const dispatch = async (action: ViewAction): Promise<void> => {
-    if (action.kind === "open") {
-      if (action.view === "tree") {
-        stack.popTo("tree");
-        return;
-      }
-      if (stack.popTo(action.view)) return;
-      if (action.view === "flame") {
-        timelineTraceId = treeView.cursorTraceId();
-        pushView(new FlameView(roots, timelineTraceId, thresholds));
-      } else {
-        pushView(new ByNameView(roots, timelineTraceId, thresholds));
-      }
-    } else if (action.kind === "openFlameAt") {
-      pushView(new FlameView(roots, timelineTraceId, thresholds, { drillTo: action.spanId }));
-    } else if (action.kind === "openOccurrences") {
-      pushView(new OccurrencesView(roots, timelineTraceId, action.groupKey, thresholds));
-    } else if (action.kind === "openDetail") {
-      pushView(new DetailScreen(roots, action.spanId, thresholds));
-    } else if (action.kind === "focusInTree") {
-      stack.popTo("tree");
-      treeView.reveal(action.spanId);
-    } else if (action.kind === "back") {
-      if (stack.all().length === 1) return;
-      stack.pop();
-    } else if (action.kind === "promptLine") {
-      const text = await screen.nextLine(action.label);
-      action.onResult(text);
-    } else if (action.kind === "copy") {
-      copyToClipboard(action.text, notify);
-    } else if (action.kind === "copyTrace") {
-      copyTraceToClipboard(allEvents, action.traceId, notify);
-    } else if (action.kind === "extractTrace" && opts.extract !== undefined) {
-      await handleTraceExtract({
-        screen,
-        sourcePath: opts.extract.sourcePath,
-        traceId: action.traceId,
-        following: followOn,
-        watcher,
-        onNewText,
-        render,
-        notify,
-      });
-    }
-  };
-
+  if (opts.initialFollow && opts.followPath !== undefined) {
+    followOn = true;
+    host.setFollowIndicator(true);
+    watcher.start(onNewText);
+  }
   render();
   try {
-    while (!quit) {
-      const event = await screen.nextKey();
-      const fmt = formatKey(event);
-      if (fmt === "q" || fmt === "Ctrl+C") {
-        quit = true;
-        break;
-      }
-      // Esc backs out, never quits: with nothing left to pop or clear,
-      // an embedded viewer hands control back to its host.
-      const nothingLeftToClear = stack.all().length === 1 && !treeView.hasActiveSearch();
-      if (opts.embedded && fmt === "Escape" && nothingLeftToClear) return "back";
-      if (helpOpen) {
-        helpOpen = false;
-        render();
-        continue;
-      }
-      if (fmt === "?") {
-        helpOpen = true;
-        render();
-        continue;
-      }
-      if (fmt === "f") {
-        toggleFollow();
-        render();
-        continue;
-      }
-      await dispatch(stack.active().handleKey(event, viewport));
-      render();
-    }
+    return await runKeyLoop({
+      screen,
+      host,
+      tooNarrowNow,
+      embedded: opts.embedded === true,
+      innerViewport,
+      shellBindings,
+      dispatch,
+      render,
+    });
   } finally {
     watcher.stop();
   }
-  return quit ? "quit" : "back";
+}
+function createHost(
+  roots: TreeNode[],
+  opts: RunViewerOpts,
+  thresholds: ViewerThresholds,
+  bootTraceId: string,
+): ScreenHost {
+  const annotations = opts.traceAnnotations ?? {};
+  const treeView = new TreeView(roots, thresholds, opts.viewport, {
+    extractEnabled: opts.extract !== undefined,
+    traceAnnotations: annotations,
+    focusTraceId: bootTraceId,
+  });
+  const host = new ScreenHost(
+    {
+      overview: new PlaceholderScreen(
+        "overview",
+        "The overview lands in the next release. Press 2 for the trace.",
+      ),
+      trace: new LegacyTraceScreen(treeView, roots, bootTraceId),
+      transcript: new PlaceholderScreen(
+        "transcript",
+        "The transcript lands in a later release. Press 2 for the trace.",
+      ),
+      timeline: new TimelineScreen(roots, bootTraceId, thresholds),
+    },
+    "trace",
+    bootTraceId,
+  );
+  if (opts.focusTraceId === undefined && roots.length > 1) {
+    host.openOverlay(
+      new TracePicker(roots, { currentTraceId: bootTraceId, annotations, thresholds }),
+    );
+  }
+  return host;
+}
+
+type KeyLoopArgs = {
+  screen: Screen;
+  host: ScreenHost;
+  tooNarrowNow: boolean;
+  embedded: boolean;
+  innerViewport: () => Viewport;
+  shellBindings: () => ViewerBinding[];
+  dispatch: (action: ViewAction) => Promise<void>;
+  render: () => void;
+};
+async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
+  const { screen, host, tooNarrowNow, embedded, innerViewport, shellBindings, dispatch, render } =
+    args;
+  const onEsc: Record<EscOutcome, () => void> = {
+    closeHelp: () => host.closeHelp(),
+    overlay: () => {},
+    popOverlay: () => host.closeOverlay(),
+    screen: () => {},
+    goOverview: () => host.switchTo("overview"),
+    back: () => {},
+    nothing: () => {},
+  };
+  for (;;) {
+    const event = await screen.nextKey();
+    const key = formatKey(event);
+    const typing = host.target().capturesText?.() === true;
+
+    if (key === "Ctrl+C" || (key === "q" && !typing)) {
+      return "quit";
+    }
+    if (key === "Escape") {
+      const outcome = escOutcome({
+        tooNarrow: tooNarrowNow,
+        helpOpen: host.helpOpen(),
+        overlayOpen: host.overlayOpen(),
+        overlayEscaped: () => host.escapeOverlay(),
+        screenEscaped: () => host.escapeScreen(),
+        activeScreen: host.activeScreen(),
+        overviewAvailable: !(host.screen("overview") instanceof PlaceholderScreen),
+        embedded,
+      });
+      if (outcome === "back") {
+        return "back";
+      }
+      onEsc[outcome]();
+    } else if (tooNarrowNow) {
+      continue;
+    } else if (host.helpOpen()) {
+      host.closeHelp(); // Any key closes help.
+    } else if (typing) {
+      await dispatch(host.target().handleKey(event, innerViewport()));
+    } else {
+      const shellBinding = findBinding(shellBindings(), key);
+      if (shellBinding !== undefined) {
+        shellBinding.run();
+      } else {
+        await dispatch(host.target().handleKey(event, innerViewport()));
+      }
+    }
+    render();
+  }
+}
+
+/** The trace that started last; the last root when none has a start time. */
+export function mostRecentTraceId(roots: TreeNode[]): string {
+  const started = roots.filter((root) => root.firstTs !== undefined);
+  const latest = [...started].sort((first, second) => second.firstTs! - first.firstTs!)[0];
+  return (latest ?? roots.at(-1))?.traceId ?? "";
+}
+
+/** Shell commands run only when the target is not accepting text. */
+export function viewerShellBindings(
+  host: ScreenHost,
+  roots: () => TreeNode[],
+  toggleFollow: () => void,
+  openPicker: () => void,
+): ViewerBinding[] {
+  const onScreen = (): boolean => !host.overlayOpen();
+  const several = (): boolean => onScreen() && roots().length > 1;
+  return [
+    { keys: ["?"], help: "this help", hint: "? help", run: () => host.toggleHelp() },
+    { keys: ["f"], help: "follow the file as it grows", hint: "f follow", run: toggleFollow },
+    { keys: ["1"], help: "overview", when: onScreen, run: () => host.switchTo("overview") },
+    { keys: ["2"], help: "trace", when: onScreen, run: () => host.switchTo("trace") },
+    { keys: ["3"], help: "transcript", when: onScreen, run: () => host.switchTo("transcript") },
+    { keys: ["4"], help: "timeline", when: onScreen, run: () => host.switchTo("timeline") },
+    {
+      keys: ["t"],
+      help: "pick a trace or search their text",
+      hint: "t traces",
+      when: several,
+      run: openPicker,
+    },
+    {
+      keys: ["<"],
+      help: "previous trace",
+      when: several,
+      run: () =>
+        host.stepTrace(
+          -1,
+          roots().map((root) => root.traceId),
+        ),
+    },
+    {
+      keys: [">"],
+      help: "next trace",
+      when: several,
+      run: () =>
+        host.stepTrace(
+          1,
+          roots().map((root) => root.traceId),
+        ),
+    },
+  ];
 }
 
 /**

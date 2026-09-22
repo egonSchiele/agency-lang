@@ -111,9 +111,8 @@ describe("DetailScreen", () => {
     expect(header).not.toContain("self 0ms");
   });
 
-  it("escape and left go back", () => {
+  it("left goes back", () => {
     const screen = new DetailScreen(llmForest(), "L1", DEFAULT_THRESHOLDS);
-    expect(screen.handleKey({ key: "escape" }, viewport)).toEqual({ kind: "back" });
     expect(screen.handleKey({ key: "left" }, viewport)).toEqual({ kind: "back" });
   });
 
@@ -122,4 +121,17 @@ describe("DetailScreen", () => {
     screen.setData(toolForest());
     expect(screen.handleKey({ key: "down" }, viewport)).toEqual({ kind: "back" });
   });
+});
+it("Ctrl+D scrolls half a page and help lists the handled keys", () => {
+  const screen = new DetailScreen(toolForest(), "T1", DEFAULT_THRESHOLDS);
+  const before = flat(screen.render(viewport)).join("\n");
+  screen.handleKey({ key: "d", ctrl: true }, viewport);
+  const half = flat(screen.render(viewport)).join("\n");
+  screen.handleKey({ key: "g" }, viewport);
+  screen.handleKey({ key: "f", ctrl: true }, viewport);
+  expect(half).not.toBe(before);
+  expect(half).not.toBe(flat(screen.render(viewport)).join("\n"));
+  expect(screen.helpLines().some((line) => line.includes("Ctrl+D") && line.includes("half"))).toBe(
+    true,
+  );
 });

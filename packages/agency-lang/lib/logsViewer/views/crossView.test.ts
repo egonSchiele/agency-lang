@@ -8,11 +8,11 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_THRESHOLDS } from "../thresholds.js";
 import { benchForest, leaf, span, trace } from "../timeline/fixture.js";
 import { ByNameView } from "./byNameView.js";
-import { FlameView } from "./flameView.js";
+import { TimelineScreen } from "../screens/timelineScreen.js";
 import type { TreeNode } from "../types.js";
 
 function agreementHolds(roots: TreeNode[], traceId: string): void {
-  const flame = new FlameView(roots, traceId, DEFAULT_THRESHOLDS);
+  const flame = new TimelineScreen(roots, traceId, DEFAULT_THRESHOLDS);
   const byName = new ByNameView(roots, traceId, DEFAULT_THRESHOLDS);
   const selfBySpanId: Record<string, number> = {};
   for (const s of flame.rowSpans()) selfBySpanId[s.id] = s.selfMs;

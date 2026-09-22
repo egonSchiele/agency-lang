@@ -55,16 +55,11 @@ describe("OccurrencesView", () => {
     expect(text).toContain("ls -la");
   });
 
-  it("Enter on a leaf opens detail; on a call with children opens a drilled flame", () => {
+  it("Enter on a leaf opens detail", () => {
     const view = new OccurrencesView(forest(), "T", "bash", DEFAULT_THRESHOLDS);
     expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
       kind: "openDetail",
-      spanId: "b1",
-    });
-    view.handleKey({ key: "down" }, viewport);
-    expect(view.handleKey({ key: "enter" }, viewport)).toEqual({
-      kind: "openFlameAt",
-      spanId: "b2",
+      rowId: "b1",
     });
   });
 

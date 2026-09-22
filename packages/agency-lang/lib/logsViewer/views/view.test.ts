@@ -18,36 +18,41 @@ function fakeView(viewName: View["viewName"]): View {
 describe("makeViewStack", () => {
   it("push and active track the top; all() lists bottom-first", () => {
     const tree = fakeView("tree");
-    const stack = makeViewStack(tree);
-    const flame = fakeView("flame");
+    const stack = makeViewStack();
+    expect(stack.active()).toBeUndefined();
+    stack.push(tree);
+    const flame = fakeView("tracePicker");
     stack.push(flame);
     expect(stack.active()).toBe(flame);
-    expect(stack.all().map((v) => v.viewName)).toEqual(["tree", "flame"]);
+    expect(stack.all().map((v) => v.viewName)).toEqual(["tree", "tracePicker"]);
   });
 
   it("popTo unwinds multiple levels to an existing view", () => {
-    const stack = makeViewStack(fakeView("tree"));
-    stack.push(fakeView("flame"));
+    const stack = makeViewStack();
+    stack.push(fakeView("tree"));
+    stack.push(fakeView("tracePicker"));
     stack.push(fakeView("byName"));
     stack.push(fakeView("detail"));
     expect(stack.popTo("tree")).toBe(true);
-    expect(stack.active().viewName).toBe("tree");
+    expect(stack.active()?.viewName).toBe("tree");
     expect(stack.all()).toHaveLength(1);
   });
 
   it("popTo returns false when the view is absent, leaving the stack alone", () => {
-    const stack = makeViewStack(fakeView("tree"));
-    stack.push(fakeView("flame"));
+    const stack = makeViewStack();
+    stack.push(fakeView("tree"));
+    stack.push(fakeView("tracePicker"));
     expect(stack.popTo("byName")).toBe(false);
-    expect(stack.all().map((v) => v.viewName)).toEqual(["tree", "flame"]);
+    expect(stack.all().map((v) => v.viewName)).toEqual(["tree", "tracePicker"]);
   });
 
-  it("pop never removes the bottom view", () => {
-    const stack = makeViewStack(fakeView("tree"));
-    stack.push(fakeView("flame"));
+  it("pop removes the last overlay", () => {
+    const stack = makeViewStack();
+    stack.push(fakeView("tree"));
+    stack.push(fakeView("tracePicker"));
     stack.pop();
     stack.pop();
     stack.pop();
-    expect(stack.all().map((v) => v.viewName)).toEqual(["tree"]);
+    expect(stack.all().map((v) => v.viewName)).toEqual([]);
   });
 });

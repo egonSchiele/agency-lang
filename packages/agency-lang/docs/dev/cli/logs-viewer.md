@@ -155,16 +155,14 @@ prototype hit each one as a visible rendering bug):
   entries. (`line()` sets `height: 1` for exactly this reason; a
   hand-built `row(...)` must do the same.)
 
-`lib/tui/table.ts` is that component: declare columns and hand it rows, and
-it applies both rules for you. For a row that is not a table, build it from
-`segment(...)` in `lib/tui/paint.ts`, which returns a string of an exact
-visible width, and wrap it with `paintedLine(content, { width })`.
+Use `TableComponent` from `lib/tui/table.ts` for tables. It sets cell widths
+and row heights. To compose another kind of row, use `segment(text, width)`
+from `lib/tui/paint.ts` for each part, then `paintedLine(content, { width })`.
 
-Text from a statelog must never reach `line()` directly. The style parser
-swallows a brace group it recognizes (`{bold}`, anything ending in `-fg`),
-and escaping changes a string's length without changing its width.
-`paint.ts` handles both; its `Painted` type is how the compiler checks that
-a string went through it.
+Pass statelog text through `paint(text)` or `segment(text, width)` before
+rendering it. They display style-like text such as `{bold}` literally and
+replace ESC with `␛`, so recorded terminal escapes cannot change the output.
+Use `paintAnsi(text)` for text whose ANSI colors should be interpreted.
 
 ## Keybinding and chrome conventions (shared with any sibling TUI)
 

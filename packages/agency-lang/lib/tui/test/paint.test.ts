@@ -21,6 +21,11 @@ describe("paint", () => {
     expect(drawn(paint("{bold} and {red-fg}"))).toBe("{bold} and {red-fg}");
   });
 
+  it("displays terminal escapes as text without applying their colors", () => {
+    expect(parseStyledText(paint("\x1b[31mred\x1b[0m"))).toEqual([{ text: "␛[31mred␛[0m" }]);
+    expect(drawn(paint("\x1b[2J\x1b["))).toBe("␛[2J␛[");
+  });
+
   it("keeps a JSON payload intact", () => {
     const json = '{"code":"def f() { return 1 }"}';
     expect(drawn(paint(json, { fg: "#cdd6f4" }))).toBe(json);
@@ -87,6 +92,37 @@ describe("segment", () => {
 
   it("right-aligns", () => {
     expect(drawn(segment("42", 5, { align: "right" }))).toBe("   42");
+  });
+
+  it("applies the segment style to padding on either side", () => {
+    for (const align of ["left", "right"] as const) {
+      const output = segment("42", 5, { align, style: { bg: "#3a3a3a", bold: true } });
+      expect(drawn(output)).toBe(align === "right" ? "   42" : "42   ");
+      for (const span of parseStyledText(output)) {
+        expect(span.bg).toBe("#3a3a3a");
+        expect(span.bold).toBe(true);
+      }
+    }
+  });
+
+  it("styles padding without overriding individual piece styles", () => {
+    const output = segment([{ text: "a", style: { fg: "red" } }, { text: "b" }], 4, {
+      align: "right",
+      style: { bg: "#3a3a3a" },
+    });
+    expect(parseStyledText(output)).toEqual([
+      { text: "  ", bg: "#3a3a3a" },
+      { text: "a", fg: "red" },
+      { text: "b" },
+    ]);
+  });
+
+  it("clips terminal escapes without leaving live ESC bytes in the text", () => {
+    for (const content of ["\x1b[31mred", [{ text: "\x1b[31mred" }]]) {
+      const output = segment(content, 4);
+      expect(drawn(output)).toBe("␛[3…");
+      expect(visibleWidth(output)).toBe(4);
+    }
   });
 
   it("replaces line breaks without collapsing ordinary spaces", () => {

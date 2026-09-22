@@ -109,9 +109,20 @@ export default [
           message: "Dynamic imports are not allowed. Use static import statements.",
         },
         {
-          selector: "MemberExpression[property.name='usage']",
+          selector: [
+            "MemberExpression[object.name='data'][property.name='usage']",
+            "MemberExpression[object.name='data'][computed=true][property.value='usage']",
+            "VariableDeclarator[init.name='data'] > ObjectPattern > Property[key.name='usage']",
+            "VariableDeclarator[init.name='data'] > ObjectPattern > Property[key.value='usage']",
+            "MemberExpression[object.property.name='data'][property.name='usage']",
+            "MemberExpression[object.property.name='data'][computed=true][property.value='usage']",
+            "VariableDeclarator[init.property.name='data'] > ObjectPattern > Property[key.name='usage']",
+            "VariableDeclarator[init.property.name='data'] > ObjectPattern > Property[key.value='usage']",
+            "AssignmentExpression[right.property.name='data'] > ObjectPattern > Property[key.name='usage']",
+            "AssignmentExpression[right.property.name='data'] > ObjectPattern > Property[key.value='usage']",
+          ].join(", "),
           message:
-            "Read token counts through lib/statelog/wireAccessors.ts (tokensIn, tokensCached, contextTokens, tokensOut). Reading data.usage directly is how the viewer and the eval records drifted apart (issue #1097).",
+            "Read token counts through lib/statelog/wireAccessors.ts (hasTokenUsage, tokensIn, tokensCached, tokensCacheWrite, contextTokens, tokensOut).",
         },
       ],
     },

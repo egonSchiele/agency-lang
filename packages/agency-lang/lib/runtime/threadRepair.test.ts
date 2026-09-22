@@ -258,6 +258,26 @@ describe("repairReopenedThread — the seam helper", () => {
 });
 
 describe("restoreThreadForResume", () => {
+  it("restores identity into an async thread recreated during replay", () => {
+    const parent = new MessageThread();
+    const original = parent.newSubthreadChild("0");
+    original.push(smoltalk.userMessage("before interrupt"));
+    const snapshot = JSON.parse(JSON.stringify(original.toJSON()));
+    const replayed = parent.newSubthreadChild("0");
+    const restored = restoreThreadForResume(snapshot, replayed);
+    expect(restored).toBe(replayed);
+    expect(restored.id).toBe(original.id);
+    expect(restored.id).not.toBe(parent.id);
+    expect(roles(restored)).toEqual(["user"]);
+  });
+
+  it("keeps the live identity when a legacy snapshot has none", () => {
+    const live = new MessageThread();
+    const identity = live.id;
+    expect(restoreThreadForResume({ messages: [] }, live).id).toBe(identity);
+    expect(restoreThreadForResume([], live).id).toBe(identity);
+  });
+
   it("adopts into the live thread and preserves the alias", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     const out = restoreThreadForResume(live.toJSON(), live);

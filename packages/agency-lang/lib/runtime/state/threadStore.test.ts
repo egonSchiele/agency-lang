@@ -116,9 +116,16 @@ describe("ThreadStore.openSession", () => {
 
   it("sessions survive JSON round-trip", () => {
     const store = new ThreadStore();
-    store.openSession("coding");
-    const restored = ThreadStore.fromJSON(store.toJSON());
+    const session = store.openSession("coding");
+    const identity = store.active()!.id;
+    store.popActive();
+    const restored = ThreadStore.fromJSON(JSON.parse(JSON.stringify(store.toJSON())));
     expect(restored.sessions.coding).toBe(store.sessions.coding);
+    restored.openSession("coding");
+    expect(restored.active()!.id).toBe(identity);
+    restored.popActive();
+    restored.resumeExisting(session.id);
+    expect(restored.active()!.id).toBe(identity);
   });
 });
 

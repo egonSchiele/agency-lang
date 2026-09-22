@@ -1046,13 +1046,19 @@ export class TypescriptPreprocessor {
     const localVarsInFunction: Record<string, Set<string>> = {};
 
     // First, we collect all global and static variables
-    for (const { node, scopes } of walkNodesArray(this.program.nodes)) {
+    for (const { node, ancestors, scopes } of walkNodesArray(this.program.nodes)) {
       if (scopes.length === 0) {
         throw new Error(
           `Top-level nodes should have at least the global scope in their scopes array. Node: ${JSON.stringify({ node })}, scopes: ${JSON.stringify({ scopes })}`,
         );
       }
       if (scopes.at(-1)?.type !== "global") continue;
+      // A declaration written inside a function or node is never a module
+      // global, whatever the scope stack says. The stack alone is not enough:
+      // a docstring is walked under the ENCLOSING scopes (it is built at
+      // module load, so it sees top-level names only), so a `let` inside one
+      // of its interpolation blocks arrives here with `global` on top.
+      if (ancestors.some((a) => a.type === "function" || a.type === "graphNode")) continue;
       if (node.type === "assignment") {
         if (node.static) {
           staticVars.add(node.variableName);
@@ -1130,6 +1136,15 @@ export class TypescriptPreprocessor {
         // this before the main walk so it sees these variables already
         // scoped and skips them.
         this.resolveBlockScopes(node.body, nodeName, lookupScope);
+
+        // A docstring's blocks get the same treatment, but under the module
+        // scope (`""`) rather than this callable's: the docstring is built
+        // when the module loads, so a name in it sees top-level names only.
+        // Without this a `let` inside one of its blocks reaches the catch-all
+        // pass below with no scope and is emitted as a bare assignment.
+        if (node.docString) {
+          this.resolveBlockScopes([node.docString as AgencyNode], "", lookupScope);
+        }
 
         // Phase 2: Resolve function/node body variables.
         // Variables inside blocks already have scopes from Phase 1, so they are skipped.

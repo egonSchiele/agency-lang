@@ -37,12 +37,17 @@ rmSync(resolve(here, "y.txt"), { force: true });
 // references a capability but performs no destructive action, so a regression
 // that let one compile still could not do harm when only the exit code is
 // asserted (anti-patterns.md: no catastrophic-on-failure tests).
-const boundRefused = ["bound-globals", "bound-new", "bound-ctor", "bound-tag", "bound-default"].map(
-  (name) => {
-    const r = agency(["run", "--agency-only", "--reject", "*", `${name}.agency`]);
-    return { name, exitCode: r.exitCode, refused: r.output.includes("compile refused") };
-  },
-);
+const boundRefused = [
+  "bound-globals",
+  "bound-new",
+  "bound-ctor",
+  "bound-tag",
+  "bound-default",
+  "bound-docstring",
+].map((name) => {
+  const r = agency(["run", "--agency-only", "--reject", "*", `${name}.agency`]);
+  return { name, exitCode: r.exitCode, refused: r.output.includes("compile refused") };
+});
 const boundGood = agency(["run", "--agency-only", "bound-good.agency"]);
 
 // Layer 2: --agency-only runs the child Node process with

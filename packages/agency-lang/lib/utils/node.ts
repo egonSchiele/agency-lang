@@ -408,6 +408,12 @@ export function* walkNodes(
         for (const accessElement of node.accessChain) {
           if (accessElement.kind === "index") {
             yield* walkNodes([accessElement.index], [...ancestors, node], scopes);
+          } else if (accessElement.kind === "slice") {
+            // `arr[a:b] = x`. Same as the read side under valueAccess.
+            const bounds = [accessElement.start, accessElement.end].filter(
+              (bound) => bound !== undefined,
+            );
+            yield* walkNodes(bounds as AgencyNode[], [...ancestors, node], scopes);
           } else if (accessElement.kind === "methodCall") {
             yield* walkNodes([accessElement.functionCall], [...ancestors, node], scopes);
           }
@@ -424,6 +430,11 @@ export function* walkNodes(
         if (caseItem.type === "newLine") continue;
         if (caseItem.caseValue !== "_") {
           yield* walkNodes([caseItem.caseValue as AgencyNode], [...ancestors, node], scopes);
+        }
+        // Only present on an unlowered parse (formatter, templates, hygiene).
+        // The compile path has already folded the guard into an if-chain.
+        if (caseItem.guard) {
+          yield* walkNodes([caseItem.guard as AgencyNode], [...ancestors, node], scopes);
         }
       }
     } else if (node.type === "typeTestExpression") {
@@ -514,6 +525,26 @@ export function* walkNodes(
     }
     if (node.type === "graphNode" && typeof node.nodeName !== "string") {
       yield* walkNodes([node.nodeName], [...ancestors, node], scopes);
+    }
+    // Parameter defaults. A default is a literal, array or object, so a name
+    // can appear inside one (`xs = [LIMIT]`, `s = "up to ${LIMIT}"`). It is
+    // evaluated inside the callable, so it is walked under the callable's own
+    // scope, where the parameters before it are visible.
+    if (node.type === "function" || node.type === "graphNode") {
+      const ownScope =
+        node.type === "function"
+          ? functionScope(declaredName(node.functionName))
+          : nodeScope(declaredName(node.nodeName));
+      const defaults = node.parameters
+        .map((param) => param.defaultValue)
+        .filter((value) => value !== undefined);
+      yield* walkNodes(defaults as AgencyNode[], [...ancestors, node], [...scopes, ownScope]);
+    }
+    // Docstring interpolations. A docstring becomes the tool description,
+    // built when the module loads, so it sees top-level names only. It is
+    // walked under the enclosing scopes, without the callable's own.
+    if ((node.type === "function" || node.type === "graphNode") && node.docString) {
+      yield* walkNodes([node.docString], [...ancestors, node], scopes);
     }
     // Generic statement-body descent, driven by the shared `bodySlots`
     // table. Function/node definitions push their own scope; a

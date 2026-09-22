@@ -8,6 +8,7 @@
 import * as fs from "fs";
 import * as tty from "tty";
 import type { AgencyConfig } from "@/config/config.js";
+import { _hostedModelInfo } from "@/stdlib/llm.js";
 import { runViewer } from "@/logsViewer/run.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
@@ -206,8 +207,12 @@ function viewerOptions(
   output: OutputTarget,
   viewport: { rows: number; cols: number },
 ): Parameters<typeof runViewer>[0] {
+  const contextWindowOf = (model: string): number | undefined => {
+    const info = _hostedModelInfo(model);
+    return info !== null && info.contextWindow > 0 ? info.contextWindow : undefined;
+  };
   if (source.kind === "text") {
-    return { jsonl: source.jsonl, input, output, viewport };
+    return { jsonl: source.jsonl, input, output, viewport, contextWindowOf };
   }
   return {
     input,
@@ -218,6 +223,7 @@ function viewerOptions(
     // A local file: the tree's `x` can extract a trace from it.
     extract: { sourcePath: source.followPath },
     traceAnnotations: source.traceAnnotations,
+    contextWindowOf,
   };
 }
 

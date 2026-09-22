@@ -70,7 +70,7 @@ describe("splitWidth", () => {
   });
 
   it("below that, the stats column gives way", () => {
-    const w = splitWidth("byName", 44);
+    const w = splitWidth("occurrences", 44);
     expect(w.bar).toBeGreaterThanOrEqual(10);
     expect(w.stats).toBeGreaterThanOrEqual(8);
   });
@@ -78,7 +78,7 @@ describe("splitWidth", () => {
 
 describe("splitWidth degradation", () => {
   it("never returns a split wider than the terminal, all the way down", () => {
-    for (const view of ["timeline", "byName", "occurrences"] as const) {
+    for (const view of ["timeline", "occurrences"] as const) {
       for (let cols = 10; cols <= 200; cols += 7) {
         const w = splitWidth(view, cols);
         expect(w.gutter + w.bar + w.stats).toBeLessThanOrEqual(cols);

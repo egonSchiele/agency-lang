@@ -1,24 +1,32 @@
-// The structural test: flame and by-name must agree about self-time,
+// The structural test: timeline and overview must agree about self-time,
 // which is the kernel's reason to exist ("a disagreement between two
 // classes' private copies would be silent and wrong"). For every group,
-// the by-name total equals the sum over the flame view's spans that
+// the overview total equals the sum over the timeline's spans that
 // belong to that group — on the synthetic fixture AND the real one.
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_THRESHOLDS } from "../thresholds.js";
+import { overviewData } from "../overviewData.js";
 import { benchForest, leaf, span, trace } from "../timeline/fixture.js";
-import { ByNameView } from "./byNameView.js";
 import { TimelineScreen } from "../screens/timelineScreen.js";
+import { groupSpans } from "../timeline/groups.js";
 import type { TreeNode } from "../types.js";
 
 function agreementHolds(roots: TreeNode[], traceId: string): void {
   const flame = new TimelineScreen(roots, traceId, DEFAULT_THRESHOLDS);
-  const byName = new ByNameView(roots, traceId, DEFAULT_THRESHOLDS);
+  const traceRoot = roots.find((root) => root.traceId === traceId)!;
+  const overview = overviewData(traceRoot, () => undefined);
   const selfBySpanId: Record<string, number> = {};
   for (const s of flame.rowSpans()) selfBySpanId[s.id] = s.selfMs;
-  for (const group of byName.groupRows()) {
+  for (const bar of overview.timeBars) {
+    if (bar.key === "other") {
+      continue;
+    }
+    const group = groupSpans(flame.rowSpans(), traceRoot).find(
+      (candidate) => candidate.key === bar.key,
+    )!;
     const flameSum = group.spanIds.reduce((sum, id) => sum + (selfBySpanId[id] ?? 0), 0);
-    expect(flameSum).toBeCloseTo(group.totalSelfMs, 5);
+    expect(flameSum).toBeCloseTo(bar.selfMs, 5);
   }
 }
 

@@ -41,7 +41,7 @@ describe("runViewer", () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input: new ScriptedInput(["j", "Enter", "q"]),
+      input: new ScriptedInput(["2", "j", "Enter", "q"]),
       output: out,
       viewport: { rows: 10, cols: 100 },
     });
@@ -53,7 +53,7 @@ describe("runViewer", () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input: new ScriptedInput(["q"]),
+      input: new ScriptedInput(["2", "q"]),
       output: out,
       viewport: { rows: 10, cols: 100 },
       traceAnnotations: { abc: "1 note · score 0.50" },
@@ -69,7 +69,7 @@ describe("runViewer", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "viewer-focus-"));
     const source = path.join(dir, "log.jsonl");
     fs.writeFileSync(source, sample + second);
-    const input = new ScriptedInput(["x"]);
+    const input = new ScriptedInput(["2", "x"]);
     input.feedLine(path.join(dir, "picked.jsonl"));
     input.feedKey({ key: "q" });
     await runViewer({
@@ -88,7 +88,7 @@ describe("runViewer", () => {
     const source = path.join(dir, "log.jsonl");
     fs.writeFileSync(source, sample);
     const outPath = path.join(dir, "out", "abc.jsonl");
-    const input = new ScriptedInput(["x"]);
+    const input = new ScriptedInput(["2", "x"]);
     input.feedLine(outPath);
     input.feedKey({ key: "q" });
     const out = new FrameRecorder();
@@ -109,7 +109,7 @@ describe("runViewer", () => {
     fs.writeFileSync(source, sample);
     const outPath = path.join(dir, "taken.jsonl");
     fs.writeFileSync(outPath, "precious\n");
-    const input = new ScriptedInput(["x"]);
+    const input = new ScriptedInput(["2", "x"]);
     input.feedLine(outPath);
     input.feedKey({ key: "q" });
     const out = new FrameRecorder();
@@ -128,7 +128,7 @@ describe("runViewer", () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input: new ScriptedInput(["x", "q"]),
+      input: new ScriptedInput(["2", "x", "q"]),
       output: out,
       viewport: { rows: 12, cols: 100 },
     });
@@ -160,7 +160,7 @@ describe("runViewer", () => {
     }));
     const jsonl = many.map((e) => JSON.stringify(e)).join("\n") + "\n";
     // Enter: expand span. j × 20: scroll far down. h: collapse it. q.
-    const keys = ["Enter", ...Array.from({ length: 20 }, () => "j"), "h", "q"];
+    const keys = ["2", "Enter", ...Array.from({ length: 20 }, () => "j"), "h", "q"];
     const out = new FrameRecorder();
     await runViewer({
       jsonl,
@@ -181,7 +181,7 @@ describe("runViewer", () => {
       jsonl: sample,
       // Navigate: Enter (expand trace) Enter (expand agentRun span) j (move
       // to first child leaf, agentStart) Enter (inline its JSON) q.
-      input: new ScriptedInput(["Enter", "Enter", "j", "Enter", "q"]),
+      input: new ScriptedInput(["2", "Enter", "Enter", "j", "Enter", "q"]),
       output: out,
       viewport: { rows: 20, cols: 100 },
     });
@@ -195,7 +195,7 @@ describe("runViewer", () => {
     const out2 = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input: new ScriptedInput(["Enter", "Enter", "j", "Enter", "h", "q"]),
+      input: new ScriptedInput(["2", "Enter", "Enter", "j", "Enter", "h", "q"]),
       output: out2,
       viewport: { rows: 20, cols: 100 },
     });
@@ -204,7 +204,7 @@ describe("runViewer", () => {
 
   it("/ then a query jumps the cursor to the first match", async () => {
     const out = new FrameRecorder();
-    const scripted = new ScriptedInput(["Enter", "j", "/"]);
+    const scripted = new ScriptedInput(["2", "Enter", "j", "/"]);
     // Pre-load the search prompt response and the final 'q'.
     scripted.feedLine("agentEnd");
     scripted.feedKey({ key: "q" });

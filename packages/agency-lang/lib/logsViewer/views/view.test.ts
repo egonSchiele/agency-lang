@@ -31,7 +31,7 @@ describe("makeViewStack", () => {
     const stack = makeViewStack();
     stack.push(fakeView("tree"));
     stack.push(fakeView("tracePicker"));
-    stack.push(fakeView("byName"));
+    stack.push(fakeView("occurrences"));
     stack.push(fakeView("detail"));
     expect(stack.popTo("tree")).toBe(true);
     expect(stack.active()?.viewName).toBe("tree");
@@ -42,7 +42,7 @@ describe("makeViewStack", () => {
     const stack = makeViewStack();
     stack.push(fakeView("tree"));
     stack.push(fakeView("tracePicker"));
-    expect(stack.popTo("byName")).toBe(false);
+    expect(stack.popTo("occurrences")).toBe(false);
     expect(stack.all().map((v) => v.viewName)).toEqual(["tree", "tracePicker"]);
   });
 

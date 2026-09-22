@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { benchForest, leaf, span, trace } from "./fixture.js";
-import { ADMIN_KINDS, spanExtent, timelineSpans } from "./spans.js";
+import { ADMIN_KINDS, hasRunningWork, spanExtent, timelineSpans } from "./spans.js";
 
 const opts = { hideKinds: [] as string[] };
 
@@ -31,6 +31,26 @@ describe("spanExtent", () => {
 
     expect(spanExtent(root)).toEqual({ start: 750, end: 1_000 });
     expect(timelineSpans(trace([root]), opts)[0].extent).toEqual({ start: 750, end: 1_000 });
+  });
+});
+
+describe("hasRunningWork", () => {
+  it("does not let an earlier completion close a later prompt start", () => {
+    const root = trace([leaf("promptCompletion", 1_000), leaf("promptStart", 2_000)]);
+    expect(hasRunningWork(root)).toBe(true);
+  });
+
+  it("treats tool errors, including after rejection, as finished", () => {
+    const failed = span("toolExecution", [
+      leaf("toolCallStart", 0),
+      leaf("error", 10, { errorType: "toolError" }),
+    ]);
+    const rejected = span("toolExecution", [
+      leaf("toolCallStart", 20),
+      leaf("interruptResolved", 30, { outcome: "rejected" }),
+      leaf("error", 40, { errorType: "toolError" }),
+    ]);
+    expect(hasRunningWork(trace([failed, rejected]))).toBe(false);
   });
 });
 
@@ -130,4 +150,16 @@ describe("timelineSpans", () => {
     expect(roots.length).toBeGreaterThanOrEqual(1);
     expect(timelineSpans(roots[0], opts).length).toBeGreaterThan(20);
   });
+});
+
+it.each([
+  undefined,
+  "runtimeError",
+  "validationError",
+  "limitExceeded",
+  "structuredOutput",
+  "finalizeError",
+])("keeps the timeline tool running after an unrelated error %s", (errorType) => {
+  const tool = span("toolExecution", [leaf("toolCallStart", 0), leaf("error", 10, { errorType })]);
+  expect(timelineSpans(trace([tool]), { hideKinds: [] })[0].running).toBe(true);
 });

@@ -38,7 +38,9 @@ The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay als
 
 Pure modules compute plain records. Screen painters draw those records and own the TUI imports.
 
-`LegacyTraceScreen` adapts `TreeView` to slot 2. The viewer starts on the trace screen. Slots 1 and 3 show placeholders. Embedded viewers skip the placeholder overview when Esc returns to the host.
+The overview fills slot 1 and is the starting screen. `LegacyTraceScreen` adapts `TreeView` to slot 2. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
+
+The overview reserves room for the header, message and key hints. It reduces chart height and scrolls the time groups when the terminal is short. Selecting a callout focuses its round in both charts and carries that focus to other screens.
 
 ## Key tables
 
@@ -76,11 +78,11 @@ cross-run analysis project can reuse without a TUI:
   terminus, and `promptCancelled` counts as a terminus. The admin spans listed in
   `ADMIN_KINDS` (`handlerChain` and `threadEndHooks`) are filtered presentationally: rows
   disappear and depths close up, while extents and self-time stay untouched.
-- `groups.ts` — the by-name grouping, via `groupSpans(spans, root, index?)`. LLM calls group by **thread label** (from
+- `groups.ts` — the overview time-panel grouping, via `groupSpans(spans, root, index?)`. LLM calls group by **thread label** (from
   `threadCreated` events, scoped to the nearest enclosing `subprocessRun` span because
   thread ids restart per process), else the **enclosing function**, else the model;
   everything else groups by its display name. Grouping lives in the kernel because two
-  views consume it (by-name displays groups, occurrences resolves a key back to members)
+  consumers use it (the overview displays groups, occurrences resolves a key back to members)
   and a follow-mode re-parse can legitimately re-group a call — one computation, two
   readers. A group's share is of wall clock and may exceed 100% for parallel work; that is
   real compute time, not the nesting bug self-time fixes.

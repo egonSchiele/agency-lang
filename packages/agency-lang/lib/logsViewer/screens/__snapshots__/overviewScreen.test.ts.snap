@@ -1,0 +1,79 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`OverviewScreen > renders the golden frame at 100 columns 1`] = `
+"m1 · done · 4.0s · 3 rounds · $0.051
+WHERE THE TIME WENT ─────────────────────── │ CONTEXT PER ROUND ────────────────────────────────────
+▶ llm(main)           ████████    3.1s 100% │    40k ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  1 call                                    │
+  read                ▌          200ms   6% │
+  1 call                                    │
+  write               ▌          200ms   6% │
+  1 call                                    │                  ░░░░
+                                            │                  ░░░░
+COST PER ROUND ──────────────────────────── │        ░░░░ ░░░░ ░░░░
+$0.025      ████                            │        ░░░░ ░░░░ ░░░░
+            ████                            │      0 ░░░░ ░░░░ ░░░░
+            ████                            │        r1        r3
+            ████                            │ ░ cached  ▒ fresh  █ output
+            ████ ████                       │
+       ▃▃▃▃ ████ ████                       │ FACTS ────────────────────────────────────────────────
+       ████ ████ ████                       │ 2 tool calls · 0 approved · 0 rejected · 0 errors
+       ████ ████ ████                       │   slowest  round 2                              1.5s →
+       ████ ████ ████                       │   priciest round 2                            $0.025 →
+    $0 ████ ████ ████                       │   biggest  round 3                           20k ctx →
+       r1        r3                         │
+
+j k move   tab panel   ⏎ open"
+`;
+
+exports[`OverviewScreen > renders the golden frame at 130 columns 1`] = `
+"m1 · done · 4.0s · 3 rounds · $0.051
+WHERE THE TIME WENT ───────────────────────────────────── │ CONTEXT PER ROUND ────────────────────────────────────────────────────
+▶ llm(main)           ██████████████████████    3.1s 100% │    40k ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  1 call                                                  │
+  read                █▍                       200ms   6% │
+  1 call                                                  │
+  write               █▍                       200ms   6% │
+  1 call                                                  │                  ░░░░
+                                                          │                  ░░░░
+COST PER ROUND ────────────────────────────────────────── │        ░░░░ ░░░░ ░░░░
+$0.025      ████                                          │        ░░░░ ░░░░ ░░░░
+            ████                                          │      0 ░░░░ ░░░░ ░░░░
+            ████                                          │        r1        r3
+            ████                                          │ ░ cached  ▒ fresh  █ output
+            ████ ████                                     │
+       ▃▃▃▃ ████ ████                                     │ FACTS ────────────────────────────────────────────────────────────────
+       ████ ████ ████                                     │ 2 tool calls · 0 approved · 0 rejected · 0 errors
+       ████ ████ ████                                     │   slowest  round 2                                              1.5s →
+       ████ ████ ████                                     │   priciest round 2                                            $0.025 →
+    $0 ████ ████ ████                                     │   biggest  round 3                                           20k ctx →
+       r1        r3                                       │
+
+j k move   tab panel   ⏎ open"
+`;
+
+exports[`OverviewScreen > renders the golden frame at 200 columns 1`] = `
+"m1 · done · 4.0s · 3 rounds · $0.051
+WHERE THE TIME WENT ──────────────────────────────────────────────────────────────────── │ CONTEXT PER ROUND ───────────────────────────────────────────────────────────────────────────────────────────
+▶ llm(main)           █████████████████████████████████████████████████████    3.1s 100% │    40k ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+  1 call                                                                                 │
+  read                ███▍                                                    200ms   6% │
+  1 call                                                                                 │
+  write               ███▍                                                    200ms   6% │
+  1 call                                                                                 │                  ░░░░
+                                                                                         │                  ░░░░
+COST PER ROUND ───────────────────────────────────────────────────────────────────────── │        ░░░░ ░░░░ ░░░░
+$0.025      ████                                                                         │        ░░░░ ░░░░ ░░░░
+            ████                                                                         │      0 ░░░░ ░░░░ ░░░░
+            ████                                                                         │        r1        r3
+            ████                                                                         │ ░ cached  ▒ fresh  █ output
+            ████ ████                                                                    │
+       ▃▃▃▃ ████ ████                                                                    │ FACTS ───────────────────────────────────────────────────────────────────────────────────────────────────────
+       ████ ████ ████                                                                    │ 2 tool calls · 0 approved · 0 rejected · 0 errors
+       ████ ████ ████                                                                    │   slowest  round 2                                                                                     1.5s →
+       ████ ████ ████                                                                    │   priciest round 2                                                                                   $0.025 →
+    $0 ████ ████ ████                                                                    │   biggest  round 3                                                                                  20k ctx →
+       r1        r3                                                                      │
+
+j k move   tab panel   ⏎ open"
+`;

@@ -26,7 +26,7 @@ export const ADMIN_KINDS = ["handlerChain", "threadEndHooks"];
 // Cancellation counts as an end: summary.ts renders "⏳ … never completed"
 // on the same judgment, and a cancelled call must not read running forever.
 const ENDS_BY_START: Record<string, string[]> = {
-  toolCallStart: ["toolCall"],
+  toolCallStart: ["toolCall", "toolError"],
   promptStart: ["promptCompletion", "promptCancelled"],
   subprocessStarted: ["subprocessEnd"],
 };
@@ -79,7 +79,7 @@ function makeSpan(node: TreeNode, depth: number): TimelineSpan | undefined {
     kind: node.label,
     depth,
     extent,
-    running: isRunning(node),
+    running: hasRunningWork(node),
     selfIntervals,
     selfMs: totalMs(selfIntervals),
   };
@@ -109,14 +109,32 @@ export function spanExtent(node: TreeNode): Interval | undefined {
   return { start, end: Math.max(end, start) };
 }
 
-function isRunning(node: TreeNode): boolean {
-  const counts: Record<string, number> = {};
-  for (const leafNode of walkNodes(node).filter((child) => child.event !== undefined)) {
-    const type = leafNode.event!.data.type;
-    counts[type] = (counts[type] ?? 0) + 1;
+export function hasRunningWork(node: TreeNode): boolean {
+  return walkNodes(node).some((owner) => ownerHasRunningWork(owner));
+}
+
+function ownerHasRunningWork(owner: TreeNode): boolean {
+  const types = owner.children
+    .flatMap((child) => (child.event === undefined ? [] : [child.event]))
+    .sort((first, second) => Date.parse(first.data.timestamp) - Date.parse(second.data.timestamp))
+    .map((event) =>
+      event.data.type === "error" && event.data.errorType === "toolError"
+        ? "toolError"
+        : event.data.type,
+    );
+  return Object.entries(ENDS_BY_START).some(([startType, endTypes]) =>
+    hasUnmatchedStart(types, startType, endTypes),
+  );
+}
+
+function hasUnmatchedStart(types: string[], startType: string, endTypes: string[]): boolean {
+  let open = 0;
+  for (const type of types) {
+    if (type === startType) {
+      open += 1;
+    } else if (endTypes.includes(type) && open > 0) {
+      open -= 1;
+    }
   }
-  return Object.entries(ENDS_BY_START).some(([startType, endTypes]) => {
-    const ends = endTypes.reduce((sum, t) => sum + (counts[t] ?? 0), 0);
-    return (counts[startType] ?? 0) > ends;
-  });
+  return open > 0;
 }

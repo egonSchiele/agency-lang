@@ -15,7 +15,7 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/cli/debugger.md` — The interactive debugger: stepping, inspecting variables, and rewinding.
 - `docs/dev/cli/debugger-tests.md` — Driving the debugger headlessly in tests.
 - `docs/dev/cli/debugger-future-work.md` — The few debugger and TUI items still open.
-- `docs/dev/cli/logs-viewer.md` — The interactive viewer for a single statelog trace, including the timeline.
+- `docs/dev/cli/logs-viewer.md` — The logs viewer: screens, the timeline kernel, and follow mode.
 - `docs/dev/cli/runs-explorer.md` — The cross-run table `agency logs` opens when pointed at several paths.
 - `docs/dev/cli/tui.md` — The terminal UI toolkit the debugger, the viewer, and `std::ui` are built on.
 - `docs/dev/cli/tui/guide/getting-started.md` — Writing a first TUI screen, and the builders available.

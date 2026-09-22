@@ -233,3 +233,32 @@ function partText(part: unknown): string | undefined {
   const text = record(part).text;
   return typeof text === "string" ? text : undefined;
 }
+
+/** Full model message represented by a recorded completion, including requests. */
+export function completionMessageOf(event: EventEnvelope): WireMessage | undefined {
+  const completion = event.data.completion;
+  if (typeof completion === "string") {
+    return { role: "assistant", content: completion };
+  }
+  if (!completion || typeof completion !== "object") {
+    return undefined;
+  }
+  const historical = completion.choices?.[0]?.message;
+  if (!Object.hasOwn(completion, "output") && historical) {
+    return normalizeMessage({ ...historical, role: "assistant" });
+  }
+  return normalizeMessage({ ...completion, role: "assistant", content: completion.output ?? null });
+}
+
+/** The uncapped reply value produced by one successful tool call. A later
+ * exact message comparison still checks caps, attachments and formatting. */
+export function toolReplyContent(event: EventEnvelope): unknown {
+  const output = event.data.output;
+  if (output?.__type === "resultType") {
+    if (output.success !== true) {
+      return undefined;
+    }
+    return output.value ?? `${toolNameOf(event)} ran successfully but did not return a value`;
+  }
+  return output;
+}

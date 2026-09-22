@@ -206,18 +206,18 @@ describe("runViewer", () => {
     expect(last).toMatch(/agentEnd/);
   });
 
-  it("? opens the help overlay; any key closes it", async () => {
+  it("? opens the help overlay; a non-navigation key closes it", async () => {
     const out = new FrameRecorder();
     await runViewer({
       jsonl: sample,
-      input: new ScriptedInput(["?", "j", "q"]),
+      input: new ScriptedInput(["?", "x", "q"]),
       output: out,
       viewport: { rows: 20, cols: 100 },
     });
     // At least one frame should show the help heading.
     const anyHelp = out.frames.some((_, i) => out.textAt(i).includes("Keybindings"));
     expect(anyHelp).toBe(true);
-    // And the final frame (after `j`) should not.
+    // The non-navigation key dismisses help.
     expect(out.lastText()).not.toMatch(/Keybindings/);
   });
 

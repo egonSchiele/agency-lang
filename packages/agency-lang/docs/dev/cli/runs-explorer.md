@@ -129,6 +129,8 @@ effective score row, so they show exactly what `eval grade` scored and
 `runs list` sums. Esc pops the overlay, then falls back to the
 runs variant, then goes inert.
 
+Once screen state and overlays are cleared, Esc from overview resolves `"back"`. Esc from the message for a terminal narrower than 100 columns also resolves `"back"`. The explorer resumes with its selection intact; `q` or Ctrl+C resolves `"quit"`.
+
 ## CSV
 
 Interactive `e` exports the current projection — sort and grouping

@@ -116,3 +116,32 @@ function event(
     data: { type, timestamp: new Date(at).toISOString(), ...extra },
   });
 }
+
+it("omits missing models from mixed named and unnamed rounds", () => {
+  const root = trace([
+    leaf("promptCompletion", 100),
+    leaf("promptCompletion", 200, { model: '"m1"' }),
+  ]);
+  expect(overviewData(root, () => undefined).models).toEqual(["m1"]);
+});
+it.each(["runtimeError", "validationError", "limitExceeded", "structuredOutput", "finalizeError"])(
+  "keeps a tool running after an unrelated %s",
+  (errorType) => {
+    const root = trace([
+      span("toolExecution", [leaf("toolCallStart", 100), leaf("error", 200, { errorType })], {
+        id: "tool",
+      }),
+    ]);
+    expect(overviewData(root, () => undefined).running).toBe(true);
+  },
+);
+it("ends a tool on a toolError", () => {
+  const root = trace([
+    span(
+      "toolExecution",
+      [leaf("toolCallStart", 100), leaf("error", 200, { errorType: "toolError" })],
+      { id: "tool" },
+    ),
+  ]);
+  expect(overviewData(root, () => undefined).running).toBe(false);
+});

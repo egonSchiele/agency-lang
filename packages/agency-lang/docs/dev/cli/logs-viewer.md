@@ -38,7 +38,9 @@ The actual types live in `views/view.ts` and `screens/screen.ts`. An overlay als
 
 A pure module computes plain records. One painter per screen draws those records and owns the TUI imports. The bar components in `views/shared.ts` predate this rule and keep their existing compute/render organization.
 
-The overview fills slot 1 and is the starting screen. The legacy tree fills slot 2 through `LegacyTraceScreen` until the new trace screen arrives. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
+The overview fills slot 1 and is the starting screen. `LegacyTraceScreen` adapts `TreeView` to slot 2. Slot 3 currently shows a placeholder. Selecting a time group in the overview opens its occurrences as an overlay.
+
+The overview reserves room for the header, message and key hints. It reduces chart height and scrolls the time groups when the terminal is short. Selecting a callout focuses its round in both charts and carries that focus to other screens.
 
 ## Key tables
 

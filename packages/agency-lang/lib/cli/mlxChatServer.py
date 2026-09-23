@@ -214,7 +214,8 @@ def make_logits_processors(args):
     0.31.3's batch generator trims its list of processors only when some
     entry is truthy, so a request with an empty list would leave a stale
     entry behind when it finished, and the next request's constraint would
-    sit at the wrong index and never run."""
+    sit at the wrong index and never run. Fixed upstream in mlx-lm PR
+    #1772, after 0.31.3; drop this once the pin moves past it."""
     processors = list(original_make_logits_processors(args))
     constraint = getattr(args, "constraint", None)
     if constraint is not None:

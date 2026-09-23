@@ -295,11 +295,12 @@ at most four whitespace characters, after which the JSON has to start.
 ### Still open
 
 - The MLX shim reaches into three names inside `mlx_lm.server`, and one of
-  its workarounds is for a bug in mlx_lm 0.31.3's batch generator. Both
-  deserve an upstream report: the missing `response_format` (issue #1007),
-  and the stale processor list.
-- node-llama-cpp deserves a report too (G7): a grammar plus an
-  auto-opened thought block files the JSON as thinking.
+  its workarounds is for a bug in mlx_lm 0.31.3's batch generator. That
+  bug is fixed on mlx-lm's `main` (PR #1772) but not released; the
+  workaround goes when the pin moves. The missing `response_format` is
+  open as issue #1007 with no maintainer reply.
+- node-llama-cpp has no report of the grammar-in-thought bug (G7). A
+  draft, with a reproduction, is in `upstream-bug-reports.md`.
 - Sampling. Agency sends no temperature, so both local backends decode
   greedily, and Qwen3.5-2B loops in its thinking at greedy decoding on the
   longer cases. That is independent of structured output, but it decides

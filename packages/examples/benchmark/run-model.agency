@@ -44,10 +44,12 @@ const ALL_CASES: CaseInfo[] = [
   { name: "classify", category: "classification", description: "Label six reviews, including sarcasm" }
 ]
 
-/** A case's own verdict: a score from 0 to 1, and what the model said. */
+/** A case's own verdict: a score from 0 to 1, and what the model said. A
+ *  non-empty `error` means the case could not be graded at all. */
 type CaseOutcome = {
   score: number,
-  detail: string
+  detail: string,
+  error: string
 }
 
 type CaseResult = {
@@ -78,8 +80,11 @@ type RunFile = {
 // even when the label is a nickname.
 let seenModel: string = ""
 
+// The runtime reports the model name wrapped in double quotes, so they are
+// stripped.
 callback("onLLMCallEnd") as data {
-  seenModel = "${data.model}"
+  const name = "${data.model}"
+  seenModel = name.split('"').join("")
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +96,19 @@ def scoreOf(ok: boolean): number {
 }
 
 def outcome(score: number, detail: string): CaseOutcome {
-  return { score: score, detail: detail }
+  return { score: score, detail: detail, error: "" }
+}
+
+// Agency's message for a reply that does not fit the type starts with a long
+// schema report and ends with the reply itself. The reply is the part worth
+// reading, so it is moved to the front.
+def errored(message: string): CaseOutcome {
+  const marker = "Raw output (first 200 chars): "
+  const at = message.indexOf(marker)
+  if (at >= 0) {
+    return { score: 0, detail: "", error: "reply did not fit the type. The model sent: " + message.slice(at + marker.length) }
+  }
+  return { score: 0, detail: "", error: message }
 }
 
 def wordCount(text: string): number {
@@ -220,7 +237,9 @@ def caseThroughput(): CaseOutcome {
 }
 
 // ---------------------------------------------------------------------------
-// Structured output
+// Structured output. Each of these cases asks for `T!`, so a reply that does
+// not fit the type comes back as a failure. The case records the failure's
+// message as its error, and that message quotes the model's raw reply.
 // ---------------------------------------------------------------------------
 
 type Invoice = {
@@ -239,7 +258,11 @@ Please pay by March 14, 2026. (Ignore the old quote of $900, that was before the
 """
 
 def caseExtract(): CaseOutcome {
-  const invoice: Invoice = llm("Extract the invoice details from this email:\n${INVOICE_EMAIL}")
+  const reply: Invoice! = llm("Extract the invoice details from this email:\n${INVOICE_EMAIL}")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const invoice = reply.value
   let right = 0
   if (invoice.vendor.toLowerCase().includes("bluefin")) {
     right = right + 1
@@ -279,8 +302,11 @@ def countOwner(items: ActionItem[], name: string): number {
 // Four items: two for Priya, one each for Marco and Dana. The offsite is a
 // trap, because nobody owns it.
 def caseActionItems(): CaseOutcome {
-  const notes: ActionItems = llm("List every action item in these meeting notes, with the person who owns it. Only include items that someone actually owns.\n${MEETING_NOTES}")
-  const items = notes.items
+  const reply: ActionItems! = llm("List every action item in these meeting notes, with the person who owns it. Only include items that someone actually owns.\n${MEETING_NOTES}")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const items = reply.value.items
   let right = 0
   if (items.length == 4) {
     right = right + 1
@@ -339,8 +365,12 @@ type NumberAnswer = {
 // Three boxes plus two singles costs $51. Four boxes costs $60, and twenty
 // singles costs $60. So the answer is 51.
 def caseMath(): CaseOutcome {
-  const result: NumberAnswer = llm("A bakery sells muffins for $3 each, or in boxes of 6 for $15. Sam needs at least 20 muffins and wants to spend as little as possible. How many dollars does Sam spend?")
-  return outcome(scoreOf(result.answer == 51), "${result.answer}")
+  const reply: NumberAnswer! = llm("A bakery sells muffins for $3 each, or in boxes of 6 for $15. Sam needs at least 20 muffins and wants to spend as little as possible. How many dollars does Sam spend?")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const answer = reply.value.answer
+  return outcome(scoreOf(answer == 51), "${answer}")
 }
 
 type NameAnswer = {
@@ -359,8 +389,12 @@ Who owns the dog?
 """
 
 def caseLogic(): CaseOutcome {
-  const result: NameAnswer = llm(PUZZLE)
-  return outcome(scoreOf(result.name.toLowerCase().includes("cy")), result.name)
+  const reply: NameAnswer! = llm(PUZZLE)
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const name = reply.value.name
+  return outcome(scoreOf(name.toLowerCase().includes("cy")), name)
 }
 
 // ---------------------------------------------------------------------------
@@ -443,14 +477,18 @@ const REVIEWS = """
 const EXPECTED_SENTIMENTS: Sentiment[] = ["positive", "negative", "neutral", "positive", "neutral", "negative"]
 
 def caseClassify(): CaseOutcome {
-  const result: Sentiments = llm("Label the sentiment of each review as positive, negative, or neutral.\n${REVIEWS}")
+  const reply: Sentiments! = llm("Label the sentiment of each review as positive, negative, or neutral.\n${REVIEWS}")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const labels = reply.value.labels
   let right = 0
   for (expected, i in EXPECTED_SENTIMENTS) {
-    if (i < result.labels.length && result.labels[i] == expected) {
+    if (i < labels.length && labels[i] == expected) {
       right = right + 1
     }
   }
-  return outcome(right / EXPECTED_SENTIMENTS.length, result.labels.join(", "))
+  return outcome(right / EXPECTED_SENTIMENTS.length, labels.join(", "))
 }
 
 // ---------------------------------------------------------------------------
@@ -499,10 +537,11 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
   let detail = ""
   let error = ""
   if (isFailure(result)) {
-    error = oneLine(result.error, 120)
+    error = oneLine(result.error, 160)
   } else {
     score = result.score
     detail = oneLine(result.detail)
+    error = oneLine(result.error, 160)
   }
   return {
     caseName: info.name,

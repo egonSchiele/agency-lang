@@ -26,10 +26,11 @@ import {
 import { CURATED_LOCAL_MODELS } from "../stdlib/localModels.js";
 
 describe("serveArgs", () => {
-  it("builds the mlx_lm.server command line", () => {
-    expect(serveArgs("/models/mlx/org--repo", 8081, 16384)).toEqual([
-      "-m",
-      "mlx_lm.server",
+  it("builds the chat server command line, with mlx_lm.server's options", () => {
+    expect(
+      serveArgs("/pkg/lib/cli/mlxChatServer.py", "/models/mlx/org--repo", 8081, 16384),
+    ).toEqual([
+      "/pkg/lib/cli/mlxChatServer.py",
       "--model",
       "/models/mlx/org--repo",
       "--host",
@@ -119,11 +120,23 @@ describe("messages", () => {
   });
 
   it("pythonMissingMessage shows the venv commands for the default environment", () => {
-    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me", "no-mlx-lm");
+    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me", "no-mlx-lm", [
+      "mlx_lm",
+      "llguidance",
+    ]);
     expect(msg).toContain("/usr/bin/python3 cannot import mlx_lm.");
     expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
-    expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install mlx-lm");
+    expect(msg).toContain(
+      "/home/me/.agency-agent/mlx-env/bin/pip install mlx-lm==0.31.3 llguidance==1.8.0",
+    );
     expect(msg).toContain("point --python at a Python that has");
+  });
+
+  it("pythonMissingMessage names llguidance when only it is missing", () => {
+    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me", "no-llguidance");
+    expect(msg).toContain("/usr/bin/python3 cannot import llguidance.");
+    expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install llguidance==1.8.0");
+    expect(msg).not.toContain("venv");
   });
 
   it("pythonMissingMessage says when the Python itself is not there", () => {
@@ -147,7 +160,9 @@ describe("messages", () => {
       "mlx_lm",
       "mlx_audio",
     ]);
-    expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install mlx-lm mlx-audio==0.5.4");
+    expect(msg).toContain(
+      "/home/me/.agency-agent/mlx-env/bin/pip install mlx-lm==0.31.3 mlx-audio==0.5.4",
+    );
   });
 });
 
@@ -418,11 +433,11 @@ describe("runServe", () => {
     const a = recordedModel("org/a", true);
     const b = recordedModel("org/b", true);
     const handle = await runServe(["mlx:org/a", "mlx:org/b"], { port: 0 }, deps);
-    expect(spawned).toEqual([
+    expect(spawned[0][1].endsWith("/lib/cli/mlxChatServer.py")).toBe(true);
+    expect(spawned[1][1].endsWith("/lib/cli/mlxChatServer.py")).toBe(true);
+    expect(spawned.map((args) => [args[0], ...args.slice(2)])).toEqual([
       [
         "/home/me/.agency-agent/mlx-env/bin/python",
-        "-m",
-        "mlx_lm.server",
         "--model",
         a,
         "--host",
@@ -436,8 +451,6 @@ describe("runServe", () => {
       ],
       [
         "/home/me/.agency-agent/mlx-env/bin/python",
-        "-m",
-        "mlx_lm.server",
         "--model",
         b,
         "--host",
@@ -473,7 +486,8 @@ describe("runServe", () => {
     }) as unknown as typeof fetch;
     const handle = await runServe(["mlx:org/a"], { port: 0, embedding: ["mlx:org/emb"] }, deps);
     expect(spawned.length).toBe(2);
-    expect(spawned[0].slice(1, 5)).toEqual(["-m", "mlx_lm.server", "--model", a]);
+    expect(spawned[0][1].endsWith("/lib/cli/mlxChatServer.py")).toBe(true);
+    expect(spawned[0].slice(2, 4)).toEqual(["--model", a]);
     expect(spawned[1][1].endsWith("/lib/cli/mlxEmbedServer.py")).toBe(true);
     expect(spawned[1].slice(2)).toEqual([
       "--model",
@@ -743,7 +757,7 @@ describe("runServe", () => {
     await handle.close();
   });
 
-  it("asks for mlx_lm only when a chat or embedding model is planned", async () => {
+  it("asks for mlx_lm and llguidance for a chat model, and mlx_audio for speech", async () => {
     recordedModel("org/a", true);
     recordedModel("org/tts", true);
     const imports: string[] = [];
@@ -752,7 +766,7 @@ describe("runServe", () => {
       return { status: 0 };
     };
     const handle = await runServe(["mlx:org/a"], { port: 0, speech: ["mlx:org/tts"] }, deps);
-    expect(imports).toEqual(["import mlx_lm", "import mlx_audio"]);
+    expect(imports).toEqual(["import mlx_lm", "import llguidance", "import mlx_audio"]);
     await handle.close();
   });
 

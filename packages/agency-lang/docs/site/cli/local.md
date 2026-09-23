@@ -61,7 +61,7 @@ Serving needs a Python with `mlx-lm` installed. Agency looks for it at `--python
 
 ```bash
 python3.12 -m venv ~/.agency-agent/mlx-env
-~/.agency-agent/mlx-env/bin/pip install mlx-lm
+~/.agency-agent/mlx-env/bin/pip install mlx-lm==0.31.3 llguidance==1.8.0
 ```
 
 Serve and run must name the model the same way, which is the string `agency local resolve` prints: the repo id for an `mlx:` URI, or the directory path for a directory alias. A request naming a model the server was not started with gets a 404 that says how to start it.

@@ -79,6 +79,7 @@ build:
 	mkdir -p dist/lib/cli/runShim
 	rm -f dist/lib/cli/runShim/*.mjs
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
+	cp lib/cli/mlxChatServer.py dist/lib/cli/mlxChatServer.py
 	cp lib/cli/mlxEmbedServer.py dist/lib/cli/mlxEmbedServer.py
 	cp lib/cli/mlxSpeechServer.py dist/lib/cli/mlxSpeechServer.py
 	cp lib/cli/mlxSpeechRules.py dist/lib/cli/mlxSpeechRules.py

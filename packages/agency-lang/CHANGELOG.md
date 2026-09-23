@@ -1,3 +1,47 @@
+## Sep 23 2026 — v0.22.0
+
+### Language
+
+- **Type casts.** `x as Person` changes the type the typechecker sees. `x as Person!` validates the value at runtime and gives a `Result<Person>`, like a declaration bang does.
+- **Breaking — names starting with `__` are refused.** These names were always reserved for the compiler, and the parser now enforces it. `__dirname` is still allowed.
+
+### Compiler
+
+- Parse errors now start with `Line X, col Y:` and point to the statement that is wrong. They used to point to the enclosing block. The line number is also right when the file has blank lines above the mistake.
+- New parse errors with examples for a JavaScript regex literal, for `let x: string` with no value, and for an `as` cast in a position Agency and TypeScript would group differently.
+- Bug fix: `arr[from:to] = ...` and a parameter default that names a top-level variable (`xs: number[] = [LIMIT]`) crashed at runtime with "is not defined". Both work now.
+- Bug fix: an import cycle compiled and then crashed at load. It is now refused at compile time.
+- New checks: a plain value in `tools:` (AG6040), a static initializer that calls a function that raises an interrupt (AG7008), and an import that breaks the import policy in `agency tc` (AG4013).
+- `agency tc` now resolves imports and lifts callback blocks, so it checks the same program `agency compile` does. Import errors now print first, and the command carries on to the next file after a parse error.
+- The AG8006 message now explains that loading a file runs its imports, and suggests moving the generator into a file of its own.
+
+### Typechecker
+
+- Bug fix: `const s = if (r.subject != null) then r.subject else "Note"` reported that `string | null` is not assignable to `string`. A null check on a field now narrows it when the checker infers a declaration's type.
+- Bug fix: an `if ... then ... else` value failed the undefined-variable check under `--agency-only`.
+- Bug fix: a function type lost its `raises` when passed as an argument, and a guard on a `success(x)` match arm reported false errors.
+
+### Runtime
+
+- The generated `respondToInterrupts` now passes `invocation` options through, so a TypeScript host can give the resumed run its own time and cost budget or root policy.
+
+### CLI
+
+- **A new logs viewer.** `agency logs` has four numbered screens: an overview with time, context and cost charts per LLM call, a trace outline with a payload pane, a transcript for each conversation.
+- The logs viewer now counts cached input tokens in context totals, and shows missing usage differently from zero usage.
+- `agency doc` no longer copies the leading `*` of each doc comment line into the page.
+
+### Agents
+
+- Every subagent and the coordinator can now ask the user a question mid-task.
+- The Agency writer has a tutorial of the language in its system prompt and a shorter docs listing. Its eval score went from 0.79 to about 0.82, at a lower cost per run.
+- `designTool` can ask the user for missing details, no longer saves a tool the sandbox cannot compile, and gives a draft up to 6 attempts to pass the checker.
+
+### Standard Library
+
+- `round` in `std::math` defaults its precision to 0, so `round(x)` works.
+- `speak` takes an `instructions` argument that says how the speech should sound.
+
 ## Sep 19 2026 — v0.21.0
 
 ### Agents

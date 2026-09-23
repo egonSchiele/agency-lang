@@ -24,3 +24,15 @@ export function fmtUsd(usd: number): string {
   }
   return `$${usd.toFixed(4)}`;
 }
+
+/** Full local date and 12-hour time, with aligned days and hours for tables. */
+export function fmtStartedAt(timestamp: number): string {
+  const date = new Date(timestamp);
+  const month = date.toLocaleString("en-US", { month: "short" });
+  const day = String(date.getDate()).padStart(2);
+  const hour = String(date.getHours() % 12 || 12).padStart(2);
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const second = String(date.getSeconds()).padStart(2, "0");
+  const period = date.getHours() < 12 ? "AM" : "PM";
+  return `${month} ${day}, ${date.getFullYear()}  ${hour}:${minute}:${second} ${period}`;
+}

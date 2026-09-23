@@ -25,7 +25,7 @@ function describeRows(root: ReturnType<typeof trace>) {
 }
 
 describe("timelineRows", () => {
-  it("puts each round between the tools it ran before and after", () => {
+  it("nests tools beneath the completed call that requested them", () => {
     const loop = span(
       "llmCall",
       [
@@ -41,9 +41,9 @@ describe("timelineRows", () => {
     expect(rows.map((row) => `${row.depth}:${row.id}`)).toEqual([
       "0:L",
       "1:round:L:0",
-      "1:grep",
+      "2:grep",
       "1:round:L:1",
-      "1:read",
+      "2:read",
       "1:round:L:2",
     ]);
   });
@@ -69,7 +69,75 @@ describe("timelineRows", () => {
     );
     const loop = span("llmCall", [completion(1000), agentTool, completion(2000)], { id: "L" });
     const { rows } = describeRows(trace([loop]));
-    expect(rows.map((row) => row.id)).toEqual(["L", "round:L:0", "agent", "S", "round:L:1"]);
+    expect(rows.map((row) => `${row.depth}:${row.id}`)).toEqual([
+      "0:L",
+      "1:round:L:0",
+      "2:agent",
+      "3:S",
+      "1:round:L:1",
+    ]);
+  });
+
+  it("draws a lone call when it owns tools, keeping parallel tools together and their timings intact", () => {
+    const root = trace([
+      span("llmCall", [completion(1000), tool("first", 1000, 3000), tool("second", 1100, 1500)], {
+        id: "L",
+      }),
+    ]);
+    const spans = timelineSpans(root, { hideKinds: [] });
+    const rows = timelineRows(spans, roundsOf(root));
+    expect(rows.map((row) => `${row.depth}:${row.id}`)).toEqual([
+      "0:L",
+      "1:round:L:0",
+      "2:first",
+      "2:second",
+    ]);
+    expect(rows.flatMap((row) => (row.kind === "span" ? [row.span] : []))).toEqual(spans);
+  });
+
+  it("does not put earlier tools or unrelated span kinds under a later completion", () => {
+    const root = trace([
+      span(
+        "llmCall",
+        [
+          tool("before", 500, 800),
+          completion(1000),
+          span("nodeExecution", [leaf("nodeEnd", 1200)], { id: "node" }),
+          tool("after", 1300, 3000),
+          completion(2000),
+        ],
+        { id: "L" },
+      ),
+    ]);
+    expect(describeRows(root).rows.map((row) => `${row.depth}:${row.id}`)).toEqual([
+      "0:L",
+      "1:before",
+      "1:round:L:0",
+      "2:after",
+      "1:node",
+      "1:round:L:1",
+    ]);
+  });
+
+  it("uses the recorded tool start when the inferred bar begins before its requesting call ends", () => {
+    const root = trace([
+      span(
+        "llmCall",
+        [
+          completion(1000),
+          span(
+            "toolExecution",
+            [leaf("toolCallStart", 1007), leaf("toolCall", 2000, { timeTaken: 1015 })],
+            { id: "tool" },
+          ),
+        ],
+        { id: "L" },
+      ),
+    ]);
+    const { rows } = describeRows(root);
+    expect(rows.map((row) => `${row.depth}:${row.id}`)).toEqual(["0:L", "1:round:L:0", "2:tool"]);
+    const toolRow = rows.find((row) => row.id === "tool");
+    expect(toolRow?.kind === "span" && toolRow.span.extent.start).toBe(985);
   });
 
   it("handles many sibling spans without deep recursion", () => {
@@ -95,7 +163,7 @@ describe("rowIdFor", () => {
     const rows = timelineRows(spans, rounds, root.id);
     expect(rows.map((row) => `${row.depth}:${row.id}`)).toEqual([
       `0:round:${root.id}:0`,
-      "0:grep",
+      "1:grep",
       `0:round:${root.id}:1`,
     ]);
   });

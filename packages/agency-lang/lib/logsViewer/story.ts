@@ -41,6 +41,12 @@ export type InterruptStoryRow = RowBase & {
 };
 export type ErrorStoryRow = RowBase & { kind: "error"; message: string };
 export type SubagentStoryRow = RowBase & { kind: "subagent"; label: string };
+export type LlmGroupStoryRow = RowBase & {
+  kind: "llmGroup";
+  label: string;
+  toolName: string;
+  rounds: Round[];
+};
 export type MachineryStoryRow = RowBase & { kind: "machinery"; text: string };
 export type StoryRow =
   | RoundStoryRow
@@ -49,6 +55,7 @@ export type StoryRow =
   | InterruptStoryRow
   | ErrorStoryRow
   | SubagentStoryRow
+  | LlmGroupStoryRow
   | MachineryStoryRow;
 export type OutlineOptions = { machinery: boolean; admin: boolean };
 type AdminOptions = { admin: boolean };
@@ -237,6 +244,26 @@ function subagentRow(context: RowContext): SubagentStoryRow {
       context.node.label,
   };
 }
+function llmGroupRow(context: RowContext): LlmGroupStoryRow {
+  const tool = nearestAncestor(
+    context.node,
+    context.index,
+    (node) => node.label === "toolExecution",
+  );
+  const rounds = Object.values(context.roundsByLeaf).filter(
+    (round) => round.spanId === context.node.id,
+  );
+  const names = rounds
+    .map((round) => round.threadLabel)
+    .filter((name): name is string => Boolean(name));
+  return {
+    ...base(context),
+    kind: "llmGroup",
+    label: names.filter((name, index) => names.indexOf(name) === index).join(", ") || "unnamed",
+    toolName: (tool ? spanDetail(tool) : undefined) ?? "unknown tool",
+    rounds,
+  };
+}
 function machineryRow(context: RowContext): MachineryStoryRow {
   return {
     ...base(context),
@@ -306,7 +333,7 @@ function storyCandidates(trace: TreeNode, lookups: Lookups): StoryRow[] {
       item.node.label === "llmCall" &&
       nearestAncestor(item.node, lookups.index, (node) => node.label === "toolExecution")
     ) {
-      return subagentRow(context);
+      return llmGroupRow(context);
     }
     return rowFor(context);
   });

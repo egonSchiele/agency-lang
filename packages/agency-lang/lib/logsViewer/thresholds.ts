@@ -1,6 +1,6 @@
 // Color-coding thresholds for the logs viewer. Durations above
-// `SLOW_MS` and costs above `EXPENSIVE_USD` render bright-red so
-// long/expensive operations jump out. Durations under `FAST_MS`
+// `slowMs` and costs above `expensiveUsd` render amber so
+// long/expensive operations jump out. Durations under `fastMs`
 // render gray so the noise fades. Tunable via `agency.json` —
 // see `lib/config/config.ts`.
 
@@ -11,9 +11,9 @@ export type ViewerThresholds = {
 };
 
 export const DEFAULT_THRESHOLDS: ViewerThresholds = {
-  slowMs: 5000,
+  slowMs: 300000,
   fastMs: 100,
-  expensiveUsd: 0.01,
+  expensiveUsd: 1,
 };
 
 export type Magnitude = "fast" | "normal" | "slow" | "cheap" | "expensive";

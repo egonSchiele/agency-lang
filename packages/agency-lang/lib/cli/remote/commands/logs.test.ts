@@ -83,7 +83,8 @@ describe("runLogs", () => {
     hoisted.client.traceLogs.mockResolvedValue([
       { traceId: "t1", spanId: null, parentSpanId: null, data: { type: "debug", message: "x" } },
     ]);
-    await runLogs({ kind: "fetch", traceId: "t1", output: "viewer" }, opts, context());
+    const viewerContext = { ...context(), config: { viewer: { expensiveUsd: 2 } } };
+    await runLogs({ kind: "fetch", traceId: "t1", output: "viewer" }, opts, viewerContext);
     expect(hoisted.client.traceLogs).toHaveBeenCalledWith("t1");
     expect(viewMocks.openViewer).toHaveBeenCalledWith({
       jsonl: JSON.stringify({
@@ -93,6 +94,7 @@ describe("runLogs", () => {
         data: { type: "debug", message: "x" },
       }),
       terminalInput: "current-stdin",
+      thresholds: { expensiveUsd: 2 },
     });
   });
 

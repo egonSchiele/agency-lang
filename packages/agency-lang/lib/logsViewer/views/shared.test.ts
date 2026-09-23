@@ -100,17 +100,15 @@ describe("AxisHeader", () => {
 });
 
 describe("TimelineHeader", () => {
-  it("carries view, crumbs, admin marker, and zoom range", () => {
+  it("carries elapsed time, crumbs, admin marker, and zoom range", () => {
     const text = new TimelineHeader().computeText({
-      view: "timeline",
-      title: "trace-1",
       crumbs: ["codeAgent", "llm"],
       totalMs: 90_000,
       zoom: { start: 10_000, end: 20_000 },
       viewStart: 0,
       adminShown: true,
     });
-    expect(text).toContain("TIMELINE [timeline]");
+    expect(text).toContain("Elapsed 1m30s");
     expect(text).toContain("» codeAgent » llm");
     expect(text).toContain("[admin spans shown]");
     expect(text).toContain("zoom 10.0s–20.0s");

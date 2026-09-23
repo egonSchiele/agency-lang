@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Element } from "../../tui/elements.js";
 import { DEFAULT_THRESHOLDS } from "../thresholds.js";
+import { THEME } from "../theme.js";
 import { benchForest, leaf, span, trace } from "../timeline/fixture.js";
 import { TimelineScreen } from "../screens/timelineScreen.js";
 import type { TreeNode } from "../types.js";
@@ -72,12 +73,34 @@ function fixtureForest(): TreeNode[] {
 }
 
 describe("TimelineScreen", () => {
-  it("labels: llm shows the asked question, tools show their argument, never the model", () => {
+  it("labels thread groups by name and keeps tool argument summaries", () => {
     const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
     const text = frame(view);
-    expect(text).toContain("llm · solve the gcode puzzle");
+    expect(text).toContain("Thread · codingAgent");
     expect(text).toContain("bash · pip install matplotlib");
     expect(text).not.toContain("claude-sonnet-5");
+  });
+
+  it("keeps thread labels bold and accented when selected, including drill breadcrumbs", () => {
+    const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
+    view.setFocus("llm1");
+    const styled = (element: Element): ReturnType<typeof parseStyledText> =>
+      element.type === "text"
+        ? parseStyledText(element.content ?? "")
+        : (element.children ?? []).flatMap(styled);
+    const label = styled(view.render(viewport)).find((part) =>
+      part.text.includes("Thread · codingAgent"),
+    );
+    expect(label).toMatchObject({ fg: THEME.accent, bold: true });
+    view.handleKey({ key: "enter" }, viewport);
+    expect(frame(view)).toContain("» Thread · codingAgent");
+  });
+
+  it("uses unnamed for threads without recorded names and preserves individual call labels", () => {
+    const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
+    expect(frame(view)).toContain("Thread · unnamed");
+    expect(frame(view)).toContain("LLM call 1");
+    expect(frame(view)).toContain("LLM call 3");
   });
 
   it("admin spans are hidden by default; a reveals them and marks the header", () => {
@@ -113,10 +136,13 @@ describe("TimelineScreen", () => {
     view.handleKey({ key: "+" }, viewport);
     const zoomed = view.currentWindow();
     expect(zoomed.end - zoomed.start).toBeCloseTo((full.end - full.start) / 2, 3);
-    view.handleKey({ key: "]" }, viewport);
+    view.handleKey({ key: "}" }, viewport);
     const panned = view.currentWindow();
+    expect(panned.start).toBeGreaterThan(zoomed.start);
     expect(panned.start).toBeGreaterThanOrEqual(full.start);
     expect(panned.end).toBeLessThanOrEqual(full.end);
+    view.handleKey({ key: "{" }, viewport);
+    expect(view.currentWindow()).toEqual(zoomed);
     view.handleKey({ key: "0" }, viewport);
     expect(view.currentWindow()).toEqual(full);
   });
@@ -208,7 +234,7 @@ describe("TimelineScreen", () => {
     const view = new TimelineScreen(roots, roots[0].traceId, DEFAULT_THRESHOLDS);
     const lines = flat(view.render({ rows: 30, cols: 120 }));
     expect(lines.length).toBeGreaterThan(10);
-    expect(lines[0]).toContain("TIMELINE [timeline]");
+    expect(lines.at(-1)).toContain("[TIMELINE]");
   });
 });
 
@@ -240,12 +266,75 @@ function loopForest(): TreeNode[] {
   ];
 }
 describe("timeline screen rows and focus", () => {
+  it("brackets skip descendants and stop at sibling boundaries, including while zoomed", () => {
+    const forest = [
+      trace([
+        span(
+          "toolExecution",
+          [
+            leaf("toolCallStart", 0),
+            span("toolExecution", [leaf("toolCall", 100)], { id: "child1" }),
+            leaf("toolCall", 200),
+          ],
+          { id: "first" },
+        ),
+        span(
+          "toolExecution",
+          [
+            leaf("toolCallStart", 300),
+            span("toolExecution", [leaf("toolCall", 400)], { id: "child2" }),
+            leaf("toolCall", 500),
+          ],
+          { id: "second" },
+        ),
+      ]),
+    ];
+    const view = new TimelineScreen(forest, "T", DEFAULT_THRESHOLDS);
+    view.handleKey({ key: "[" }, viewport);
+    expect(view.focusId()).toBe("first");
+    view.handleKey({ key: "]" }, viewport);
+    expect(view.focusId()).toBe("second");
+    view.handleKey({ key: "]" }, viewport);
+    expect(view.focusId()).toBe("second");
+    view.handleKey({ key: "+" }, viewport);
+    const zoomed = view.currentWindow();
+    view.handleKey({ key: "[" }, viewport);
+    expect(view.focusId()).toBe("first");
+    expect(view.currentWindow()).toEqual(zoomed);
+    for (const id of ["child1", "child2"]) {
+      view.setFocus(id);
+      for (const key of ["[", "]"]) {
+        view.handleKey({ key }, viewport);
+        expect(view.focusId()).toBe(id);
+      }
+    }
+  });
+  it("brackets skip requested tools between LLM calls inside a drilled timeline", () => {
+    const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
+    view.handleKey({ key: "enter" }, viewport);
+    view.setFocus("round:L:0");
+    view.handleKey({ key: "]" }, viewport);
+    expect(view.focusId()).toBe("round:L:1");
+    view.handleKey({ key: "]" }, viewport);
+    expect(view.focusId()).toBe("round:L:2");
+    view.handleKey({ key: "[" }, viewport);
+    expect(view.focusId()).toBe("round:L:1");
+    view.setFocus("tool1");
+    view.handleKey({ key: "]" }, viewport);
+    expect(view.focusId()).toBe("tool1");
+  });
   it("uses full-width, consecutive height-one bar rows and draws rounds", () => {
     const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
     const text = frame(view, { rows: 12, cols: 140 });
-    expect(text).toContain("round 1");
-    expect(text).toContain("round 3");
+    expect(text).toContain("LLM call 1");
+    expect(text).toContain("LLM call 3");
     expect(text).toContain("{bold}");
+    const recorder = new FrameRecorder();
+    recorder.write(render(layout(view.render({ rows: 12, cols: 140 }), 140, 12)));
+    const lines = recorder.lastText().split("\n");
+    expect(lines.find((line) => line.includes("read · {bold}"))!.indexOf("read ·")).toBe(
+      lines.find((line) => line.includes("LLM call 1"))!.indexOf("LLM call 1") + 2,
+    );
     const bars = flat(view.render({ rows: 12, cols: 140 })).filter((text) => text.includes("█"));
     expect(bars[0].lastIndexOf("█")).toBeGreaterThan(110);
   });
@@ -272,9 +361,9 @@ describe("timeline screen rows and focus", () => {
   });
   it("clears search before drill and offers pan only when zoomed", () => {
     const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
-    expect(frame(view)).not.toContain("[ ] pan");
+    expect(frame(view)).not.toContain("{ } pan");
     view.handleKey({ key: "+" }, viewport);
-    expect(frame(view)).toContain("[ ] pan");
+    expect(frame(view)).toContain("{ } pan");
     view.handleKey({ key: "enter" }, viewport);
     view.applySearch("round");
     expect(view.escape()).toBe(true);
@@ -312,6 +401,9 @@ it.each([100, 130, 200])("renders a timeline golden at %i columns", (cols) => {
   const recorder = new FrameRecorder();
   recorder.write(render(layout(view.render({ rows: 12, cols }), cols, 12)));
   expect(recorder.lastText()).toMatchSnapshot();
+  view.handleKey({ key: "#" }, { rows: 12, cols });
+  recorder.write(render(layout(view.render({ rows: 12, cols }), cols, 12)));
+  expect(recorder.lastText()).toMatchSnapshot();
   recorder.writeHTML(`/tmp/pr4-timeline-${cols}.html`);
 });
 it("help derives a table with no duplicate key ownership", () => {
@@ -323,21 +415,21 @@ it("help derives a table with no duplicate key ownership", () => {
 it("drilling a multi-round call draws each round once", () => {
   const view = new TimelineScreen(loopForest(), "T", DEFAULT_THRESHOLDS);
   view.handleKey({ key: "enter" }, viewport);
-  expect(frame(view).match(/round 1/g)).toHaveLength(1);
-  expect(frame(view).match(/round 2/g)).toHaveLength(1);
+  expect(frame(view).match(/LLM call 1/g)).toHaveLength(1);
+  expect(frame(view).match(/LLM call 2/g)).toHaveLength(1);
 });
 it("drilling a single-round call keeps the duplicate round bar suppressed", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
   view.setFocus("llm1");
   view.handleKey({ key: "enter" }, viewport);
-  expect(frame(view)).not.toContain("round 1");
+  expect(frame(view)).not.toContain("LLM call 1");
 });
 it("drilling never imports unrelated rounds from the trace root", () => {
   const roots = loopForest();
   roots[0].children.push(leaf("promptCompletion", 4000, { timeTaken: 100 }));
   const view = new TimelineScreen(roots, "T", DEFAULT_THRESHOLDS);
   view.handleKey({ key: "enter" }, viewport);
-  expect(frame(view)).not.toContain("round 4");
+  expect(frame(view)).not.toContain("LLM call 4");
 });
 it("falls back to a surviving parent when follow removes the selected child", () => {
   const view = new TimelineScreen(fixtureForest(), "T", DEFAULT_THRESHOLDS);
@@ -362,4 +454,20 @@ it("leaves its drill to reveal a focus drawn outside it", () => {
   view.setFocus("root1");
   expect(view.focusId()).toBe("root1");
   expect(frame(view)).toContain("agentRun");
+});
+
+it("toggles row numbers without changing focus, zoom, or drill state", () => {
+  const roots = fixtureForest();
+  const screen = new TimelineScreen(roots, roots[0].traceId, DEFAULT_THRESHOLDS);
+  const before = frame(screen);
+  const focus = screen.focusId();
+  const window = screen.currentWindow();
+  screen.handleKey({ key: "#" }, viewport);
+  expect(frame(screen)).toMatch(/\n\s*1 /);
+  expect(screen.focusId()).toBe(focus);
+  expect(screen.currentWindow()).toEqual(window);
+  screen.setData(roots);
+  expect(frame(screen)).toMatch(/\n\s*1 /);
+  screen.handleKey({ key: "#" }, viewport);
+  expect(frame(screen)).toBe(before);
 });

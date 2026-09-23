@@ -48,6 +48,20 @@ const events = [
 
 const sample = events.join("\n") + "\n";
 
+it("merges partial threshold overrides with the defaults", async () => {
+  const output = new FrameRecorder();
+  await runViewer({
+    jsonl: sample,
+    input: new ScriptedInput(["2", "q"]),
+    output,
+    viewport: { rows: 20, cols: 120 },
+    thresholds: { expensiveUsd: 0.005 },
+  });
+  const frames = texts(output).join("\n");
+  expect(frames).toContain("$0.010!");
+  expect(frames).not.toContain("800ms!");
+});
+
 async function drive(keys: (string | { key: string; ctrl?: boolean })[]): Promise<FrameRecorder> {
   const out = new FrameRecorder();
   await runViewer({
@@ -103,8 +117,139 @@ async function driveEmbedded(keys: (string | { key: string })[]) {
   });
 }
 function cursorLine(text: string): string {
-  return text.split("\n").find((line) => line.trimStart().startsWith("▶ ")) ?? "";
+  return (
+    text
+      .split("\n")
+      .find(
+        (line) => line.trimStart().startsWith("▶ ") && !line.trimStart().startsWith("▶ OUTLINE ·"),
+      ) ?? ""
+  );
 }
+
+describe("traces list navigation", () => {
+  it("combines the hints and page title on the bottom row", async () => {
+    const out = await driveJsonl(twoTraceSample, []);
+    const lines = out.lastText().split("\n");
+    const footer = lines.at(-1)!;
+    expect(lines).toHaveLength(20);
+    expect(footer).toContain("j k move   ⏎ open   / search");
+    expect(footer).toContain("esc back   q quit   ? help   f follow");
+    expect(footer).toMatch(/\[TRACES\]$/);
+    expect(footer).toHaveLength(130);
+    expect(lines.slice(0, -1).join("\n")).not.toContain("TRACES");
+    expect(lines.slice(0, -1).join("\n")).not.toContain("j k move");
+  });
+
+  it("keeps the footer at the bottom when the log has a parse error", async () => {
+    const out = await driveJsonl(`${twoTraceSample}{broken json\n`, []);
+    const lines = out.lastText().split("\n");
+    expect(lines).toHaveLength(20);
+    expect(lines.slice(0, -1).join("\n")).toContain("1 parse error(s)");
+    expect(lines.at(-1)).toMatch(/\[TRACES\]$/);
+  });
+
+  it.each([
+    ["1", "OVERVIEW"],
+    ["2", "TRACE"],
+    ["3", "TRANSCRIPT"],
+    ["4", "TIMELINE"],
+  ])("keeps the %s page title at bottom right", async (key, title) => {
+    const out = await drive([key]);
+    const lines = out.lastText().split("\n");
+    expect(lines).toHaveLength(20);
+    expect(lines.at(-1)).toHaveLength(120);
+    expect(lines.at(-1)?.endsWith(`[${title}]`)).toBe(true);
+    expect(lines.at(-1)).toContain("? help");
+    expect(lines.slice(0, -1).join("\n")).not.toMatch(new RegExp(`^${title}(?: |$)`, "m"));
+  });
+
+  it.each([[["2", "d"], "DETAIL"]])(
+    "gives overlays the same footer layout (%s)",
+    async (keys, title) => {
+      const out = await drive(keys as (string | { key: string })[]);
+      const lines = out.lastText().split("\n");
+      expect(lines).toHaveLength(20);
+      expect(lines.at(-1)).toHaveLength(120);
+      expect(lines.at(-1)?.endsWith(`[${title}]`)).toBe(true);
+      expect(lines.at(-1)).toContain("? help");
+    },
+  );
+
+  it("shows the highlighted trace in the header as the cursor moves", async () => {
+    const out = await driveJsonl(twoTraceSample, [{ key: "up" }, { key: "down" }]);
+    const headers = texts(out).map((frame) => frame.split("\n")[0]);
+    expect(headers[0]).toContain("def  trace 2/2");
+    expect(headers[1]).toContain("abc  trace 1/2");
+    expect(headers[2]).toContain("def  trace 2/2");
+    expect(texts(out).join("\n")).not.toContain("●");
+    expect(headers.every((header) => !/\[[1-4] /.test(header))).toBe(true);
+  });
+
+  it.each([
+    ["1", "overview"],
+    ["2", "trace"],
+    ["3", "transcript"],
+    ["4", "timeline"],
+  ])("%s opens the highlighted trace's %s", async (key, name) => {
+    const out = await driveJsonl(twoTraceSample, ["k", key]);
+    expect(out.lastText()).not.toContain("TRACES ·");
+    expect(out.lastText()).toContain(`[${key} ${name}]`);
+    expect(out.lastText().split("\n")[0]).toContain("abc  trace 1/2");
+  });
+
+  it("updates the header when search changes the highlighted trace", async () => {
+    const out = await driveJsonl(twoTraceSample, ["k", "/", "0", "1", ":", "0", "0", enter]);
+    expect(out.lastText()).toContain("1 of 2 match");
+    expect(out.lastText().split("\n")[0]).toContain("def  trace 2/2");
+  });
+
+  it("shows no stale trace or active tab when a search has no matches", async () => {
+    const out = await driveJsonl(twoTraceSample, ["/", "~", enter, "2", enter]);
+    const header = out.lastText().split("\n")[0];
+    expect(out.lastText()).toContain("0 of 2 match");
+    expect(header).not.toContain("def");
+    expect(header).not.toMatch(/trace \d+\/2/);
+    expect(header).not.toMatch(/\[[1-4] /);
+  });
+
+  it("puts the traces shortcut in the footer of an opened trace", async () => {
+    const out = await driveJsonl(twoTraceSample, [enter]);
+    const lines = out.lastText().trimEnd().split("\n");
+    expect(lines[0]).not.toContain("t traces");
+    expect(lines.at(-1)).toContain("t traces");
+  });
+
+  it("backs out through overview to the list with the same trace highlighted", async () => {
+    const out = await driveJsonl(twoTraceSample, ["k", "4", esc, esc, esc, enter]);
+    const frames = texts(out);
+    expect(frames[3]).toContain("[1 overview]");
+    expect(frames[4]).toContain("[TRACES]");
+    expect(frames[4].split("\n")[0]).toContain("abc  trace 1/2");
+    expect(frames[5]).toContain("[TRACES]");
+    expect(out.lastText()).toContain("[1 overview]");
+    expect(out.lastText()).toContain("abc  trace 1/2");
+  });
+
+  it("opens overview with Enter even when the picker was opened from another tab", async () => {
+    const out = await driveJsonl(twoTraceSample, ["4", "t", "k", enter]);
+    expect(out.lastText()).toContain("[1 overview]");
+    expect(out.lastText()).toContain("abc  trace 1/2");
+  });
+
+  it("returns to the embedding app after backing out to the traces list", async () => {
+    const out = new FrameRecorder();
+    const resolution = await runViewer({
+      jsonl: twoTraceSample,
+      input: new ScriptedInput([enter, esc, esc, "q"]),
+      output: out,
+      viewport: { rows: 20, cols: 130 },
+      embedded: true,
+    });
+    expect(resolution).toBe("back");
+    expect(texts(out).filter((frame) => frame.includes("[TRACES]"))).toHaveLength(2);
+  });
+});
+
 describe("the viewer shell", () => {
   it("number keys switch screens and the tab strip says where you are", async () => {
     const out = await drive(["4", "2"]);
@@ -115,7 +260,7 @@ describe("the viewer shell", () => {
 
   it("the focus travels: a call selected in the timeline is revealed in the trace", async () => {
     const out = await drive(["4", "j", "2"]); // the timeline's second row is the llm call
-    expect(cursorLine(out.lastText())).toMatch(/round\s+1/);
+    expect(cursorLine(out.lastText())).toMatch(/LLM call\s+1/);
   });
 
   it("Esc walks the ladder: overlay, then screen state, then home, then nothing", async () => {
@@ -165,14 +310,13 @@ describe("the viewer shell", () => {
 
   it("opens on the trace picker when the log holds several traces", async () => {
     const out = await driveJsonl(twoTraceSample, []);
-    expect(out.lastText()).toContain("TRACES · 2");
+    expect(out.lastText()).toContain("[TRACES]");
   });
 
-  it("dismissing the picker leaves the most recent trace showing", async () => {
-    const out = await driveJsonl(twoTraceSample, [esc]);
-    expect(out.lastText()).not.toContain("TRACES");
-    expect(out.lastText()).toContain("[1 overview]");
-    expect(out.lastText()).toContain("trace 2/2 · t traces");
+  it("Esc stays on the traces list when there is nothing left to clear", async () => {
+    const out = await driveJsonl(twoTraceSample, [esc, esc]);
+    expect(out.lastText()).toContain("[TRACES]");
+    expect(out.lastText()).not.toContain("[1 overview]");
   });
 
   it("a log with one trace opens on its overview", async () => {
@@ -181,10 +325,10 @@ describe("the viewer shell", () => {
     expect(out.lastText()).toContain("[1 overview]");
   });
 
-  it("a time bar opens its occurrences, and Esc returns to the overview", async () => {
+  it("the selected LLM call opens in trace, and Esc returns to overview", async () => {
     const out = await drive([enter, esc]);
     const frames = texts(out);
-    expect(frames[frames.length - 2]).toContain("OCCURRENCES");
+    expect(frames[frames.length - 2]).toContain("[2 trace]");
     expect(out.lastText()).toContain("[1 overview]");
   });
 
@@ -203,7 +347,7 @@ describe("the viewer shell", () => {
   });
 
   it("< and > step between traces", async () => {
-    const out = await driveJsonl(twoTraceSample, [esc, "<"]);
+    const out = await driveJsonl(twoTraceSample, [enter, "<"]);
     expect(out.lastText()).toContain("trace 1/2");
   });
 
@@ -213,9 +357,17 @@ describe("the viewer shell", () => {
     expect(out.lastText()).not.toContain("TRACES");
   });
 
-  it("t reopens the picker after it has been dismissed", async () => {
-    const out = await driveJsonl(twoTraceSample, [esc, "t"]);
-    expect(out.lastText()).toContain("TRACES · 2");
+  it("a number key in the picker returns to the open trace without resetting it", async () => {
+    const out = await driveJsonl(twoTraceSample, [enter, "2", "k", "t", "2"]);
+    const frames = texts(out);
+    expect(out.lastText()).toContain("[2 trace]");
+    expect(cursorLine(out.lastText())).toBe(cursorLine(frames[frames.length - 3]));
+    expect(cursorLine(out.lastText())).not.toBe(cursorLine(frames[frames.length - 4]));
+  });
+
+  it("t reopens the picker after opening a trace", async () => {
+    const out = await driveJsonl(twoTraceSample, [enter, "t"]);
+    expect(out.lastText()).toContain("[TRACES]");
   });
 
   it("while the picker takes text, q is a letter and does not quit", async () => {
@@ -236,11 +388,11 @@ describe("the viewer shell", () => {
     expect(out.lastText()).toContain("add two numbers");
   });
 
-  it("Esc in the picker clears the search before it closes the picker", async () => {
+  it("Esc in the picker clears the search and then stays on the list", async () => {
     const out = await driveJsonl(twoTraceSample, ["/", "z", enter, esc, esc]);
     const frames = texts(out);
-    expect(frames[frames.length - 2]).toContain("TRACES · 2"); // search cleared, picker still open
-    expect(out.lastText()).not.toContain("TRACES");
+    expect(frames[frames.length - 2]).toContain("[TRACES]"); // search cleared, picker still open
+    expect(out.lastText()).toContain("[TRACES]");
   });
 
   it("? shows the ACTIVE view's help and any key closes it", async () => {
@@ -249,7 +401,7 @@ describe("the viewer shell", () => {
       .filter((text) => text.includes("Keybindings"))
       .at(-1)!;
     expect(help).toContain("drill");
-    expect(out.lastText()).toContain("TIMELINE [timeline]");
+    expect(out.lastText()).toContain("[TIMELINE]");
   });
 
   it("Ctrl+F pages — it must not toggle follow", async () => {
@@ -289,8 +441,8 @@ it("typing q f ? and digits never triggers shell commands", async () => {
 });
 it("2, d and Esc opens and closes detail on a real node", async () => {
   const out = await drive(["2", "d", esc]);
-  expect(texts(out).some((frame) => frame.includes("DETAIL"))).toBe(true);
-  expect(out.lastText()).not.toContain("DETAIL");
+  expect(texts(out).some((frame) => frame.includes("[DETAIL]"))).toBe(true);
+  expect(out.lastText()).not.toContain("[DETAIL]");
 });
 
 it("a second round opens its own answer and token counts in detail", async () => {
@@ -319,14 +471,14 @@ it("a second round opens its own answer and token counts in detail", async () =>
 });
 it("number keys leave an open detail overlay in place", async () => {
   const out = await drive(["4", "d", "2"]);
-  expect(out.lastText()).toContain("DETAIL");
+  expect(out.lastText()).toContain("[DETAIL]");
   expect(out.lastText()).toContain("[4 timeline]");
 });
 
 it("the shell table gives each command one owner", () => {
   const host = new ScreenHost(
     {
-      overview: new OverviewScreen([], "T", DEFAULT_THRESHOLDS, () => undefined),
+      overview: new OverviewScreen([], "T", () => undefined),
       trace: new TraceScreen([], "T", DEFAULT_THRESHOLDS, { extractEnabled: false }),
       transcript: new TranscriptScreen([], "T"),
       timeline: new TimelineScreen([], "T", DEFAULT_THRESHOLDS),
@@ -348,7 +500,7 @@ it("the shell table gives each command one owner", () => {
 it("trace navigation stays in the trace named by the header", async () => {
   const out = await driveJsonl(twoTraceSample, [esc, "2", "g"]);
   expect(out.lastText()).toContain("trace 2/2");
-  expect(out.lastText()).toContain("TRACE def");
+  expect(out.lastText()).toContain("[TRACE]");
   expect(out.lastText()).not.toContain("[abc]");
 });
 
@@ -360,8 +512,8 @@ it.each([
   ["3", "2"],
 ])("round focus survives %s → %s and back", async (from, to) => {
   const jsonl = readFileSync(new URL("./fixtures/handler-chain.jsonl", import.meta.url), "utf8");
-  const out = await driveJsonl(jsonl, ["2", "G", "k", "k", "k", from, to, from]);
-  expect(cursorLine(out.lastText())).toMatch(/round\s+9/);
+  const out = await driveJsonl(jsonl, ["2", "G", "k", "k", from, to, from]);
+  expect(cursorLine(out.lastText())).toMatch(/LLM call\s+9/);
 });
 
 it("shell help includes quit, back, and numbered screens without duplicate ownership", async () => {

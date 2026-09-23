@@ -77,7 +77,7 @@ function requestLines(calls: ToolCallRequest[]): PayloadLine[] {
     {
       kind: "heading" as const,
       tone: "tool" as const,
-      text: `REQUEST · ${call.name ?? "tool"} · ${call.id ?? "no call ID"}`,
+      text: `TOOL CALL · ${call.name ?? "tool"} · ${call.id ?? "no call ID"}`,
     },
     ...valuePayload(call.arguments),
   ]);

@@ -130,7 +130,7 @@ describe("parallel trace story", () => {
     expect(text).toContain("forkAll 2 branches");
   });
   it("distinguishes parallel nested LLM rounds and preserves wall-clock envelopes", () => {
-    expect(rows.filter((row) => row.kind === "subagent")).toHaveLength(2);
+    expect(rows.filter((row) => row.kind === "llmGroup")).toHaveLength(2);
     expect(rows.filter((row) => row.kind === "round")).toHaveLength(4);
     const node = findNode(roots, "N")!;
     const outer = findNode(roots, "L")!;

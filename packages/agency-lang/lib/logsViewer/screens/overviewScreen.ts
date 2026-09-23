@@ -3,554 +3,400 @@ import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import {
-  joinPainted,
   clipPainted,
+  joinPainted,
   padPainted,
   paint,
   paintedLine,
   segment,
   type Painted,
-  type Piece,
 } from "../../tui/paint.js";
-import { fmtTokens, fmtUsd } from "../format.js";
-import {
-  cursorBindings,
-  helpFrom,
-  hintsFrom,
-  runViewerKey,
-  type ViewerBinding,
-} from "../keymap.js";
-import { overviewData, type Callout, type OverviewData, type TimeBar } from "../overviewData.js";
+import { hasTokenUsage } from "../../statelog/wireAccessors.js";
+import { findNode } from "../forest.js";
+import { storyOutline } from "../story.js";
+import { fmtUsd } from "../format.js";
+import { helpFrom, hintsFrom, runViewerKey, type ViewerBinding } from "../keymap.js";
+import { overviewData, type OverviewData } from "../overviewData.js";
+import { roundResponsePayload, type PayloadLine } from "../payload.js";
+import { hasSystemMessages, roundInputPayload } from "../roundInputPayload.js";
 import { fmtDuration } from "../spanText.js";
-import { THEME, threadColor } from "../theme.js";
-import type { ViewerThresholds } from "../thresholds.js";
-import type { Round, ThreadKey } from "../timeline/rounds.js";
+import { THEME } from "../theme.js";
+import type { Round } from "../timeline/rounds.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
-import { barText, ceilingRow, columnWindow, EMPTY_CELL, stackedColumn } from "./charts.js";
+import { keyFooter } from "./chrome.js";
+import {
+  fmtCost,
+  overviewCallCapacity,
+  overviewCharts,
+  overviewSection,
+} from "./overviewCharts.js";
+import { paintPayload } from "./payloadPaint.js";
 import type { Screen } from "./screen.js";
 
-const LAYOUT = {
-  leftShare: 0.45,
-  dividerCells: 3,
-  outerRows: 3,
-  timeBarRows: 2,
-  timeAndCostChromeRows: 4,
-  contextAndFactsChromeRows: 6,
-  timeNameWidth: 22,
-  timeDurationWidth: 8,
-  timePercentWidth: 5,
-  axisLabelWidth: 7,
-  minChartRows: 6,
-  maxChartRows: 10,
-  minColumnCells: 2,
-  maxColumnCells: 5,
-  calloutLabelWidth: 10,
-  calloutValueWidth: 12,
-  ceilingScaleLimit: 4,
-};
-
-type Panel = "time" | "callouts";
+const LAYOUT = { leftShare: 0.45, dividerCells: 3, outerRows: 3 };
+type PreviewMode = "input" | "output";
+type Preview = { header: Painted[]; body: Painted[]; room: number };
 
 export class OverviewScreen implements Screen {
   readonly screenName = "overview" as const;
-  private roots: TreeNode[];
   private data: OverviewData | undefined;
-  private panel: Panel = "time";
-  private timeCursor = 0;
-  private timeScrollTop = 0;
-  private calloutCursor = 0;
-  private pendingFocus: string | undefined;
+  private selectedId: string | undefined;
+  // Keep a tool selected when visiting overview without choosing another call.
+  private returnFocusId: string | undefined;
+  private previewMode: PreviewMode = "output";
+  private scrollOffsets = { input: 0, output: 0 };
+  private systemsExpanded = false;
+  private get scrollTop(): number {
+    return this.scrollOffsets[this.previewMode];
+  }
+  private set scrollTop(value: number) {
+    this.scrollOffsets[this.previewMode] = value;
+  }
   private message = "";
   private following = false;
-  private pageRows = 1;
-  private moves = {
-    by: (delta: number): void => this.moveCursor(delta),
-    toTop: (): void => this.setCursor(0),
-    toBottom: (): void => this.setCursor(this.panelLength() - 1),
-    page: (): number => this.pageRows,
-    halfPage: (): number => Math.max(1, Math.floor(this.pageRows / 2)),
-  };
-
+  private previewRoom = 1;
+  private previewLength = 0;
+  private previewCache:
+    | {
+        round: Round;
+        width: number;
+        metadata: Painted[];
+        bodies: Partial<Record<PreviewMode, Painted[]>>;
+      }
+    | undefined;
+  private callPageSize = 1;
   constructor(
-    roots: TreeNode[],
+    private roots: TreeNode[],
     private traceId: string,
-    private readonly thresholds: ViewerThresholds,
     private readonly contextWindowOf: (model: string) => number | undefined,
   ) {
-    this.roots = roots;
     this.derive();
   }
-
   private bindings(): ViewerBinding[] {
     return [
-      ...cursorBindings<ViewAction>(this.moves),
       {
         keys: ["Tab"],
-        help: "move between the time panel and the callouts",
-        hint: "tab panel",
-        run: () => this.togglePanel(),
+        help: "switch the preview between input and output",
+        hint: "tab input/output",
+        run: () => {
+          this.previewMode = this.previewMode === "output" ? "input" : "output";
+        },
+      },
+      {
+        keys: ["Left", "h"],
+        help: "select the previous LLM call",
+        hint: "← → call",
+        run: () => this.moveCall(-1),
+      },
+      { keys: ["Right", "l"], help: "select the next LLM call", run: () => this.moveCall(1) },
+      {
+        keys: ["Ctrl+F"],
+        help: "select the LLM call one chart page forward",
+        hint: "^f/^b page",
+        run: () => this.moveCall(this.callPageSize),
+      },
+      {
+        keys: ["Ctrl+B"],
+        help: "select the LLM call one chart page back",
+        run: () => this.moveCall(-this.callPageSize),
+      },
+      {
+        keys: ["Ctrl+D"],
+        help: "select the LLM call half a chart page forward",
+        run: () => this.moveCall(Math.max(1, Math.floor(this.callPageSize / 2))),
+      },
+      {
+        keys: ["Ctrl+U"],
+        help: "select the LLM call half a chart page back",
+        run: () => this.moveCall(-Math.max(1, Math.floor(this.callPageSize / 2))),
+      },
+      {
+        keys: ["Up", "k"],
+        help: "scroll the preview up",
+        hint: "↑ ↓ preview",
+        run: () => this.movePreview(-1),
+      },
+      { keys: ["Down", "j"], help: "scroll the preview down", run: () => this.movePreview(1) },
+      {
+        keys: ["PageUp"],
+        help: "scroll the preview up one page",
+        run: () => this.movePreview(-Math.max(1, this.previewRoom)),
+      },
+      {
+        keys: ["PageDown"],
+        help: "scroll the preview down one page",
+        run: () => this.movePreview(Math.max(1, this.previewRoom)),
+      },
+      {
+        keys: ["Ctrl+Home"],
+        help: "scroll to the start of the preview",
+        run: () => this.scrollPreview(0),
+      },
+      {
+        keys: ["Ctrl+End"],
+        help: "scroll to the end of the preview",
+        run: () => this.scrollPreview(this.previewLength),
+      },
+      {
+        keys: ["s"],
+        help: "show or hide system and developer prompts in the input",
+        hint: "s system",
+        when: () => this.previewMode === "input" && hasSystemMessages(this.selected()),
+        run: () => this.toggleSystems(),
+      },
+      {
+        keys: ["g", "Home"],
+        help: "select the first LLM call",
+        hint: "g/G ends",
+        run: () => this.selectCall(0),
+      },
+      {
+        keys: ["G", "End"],
+        help: "select the last LLM call",
+        run: () => this.selectCall((this.data?.rounds.length ?? 1) - 1),
       },
       {
         keys: ["Enter"],
-        help: "open the selected group's occurrences, or the selected round in the trace",
+        help: "open the selected LLM call in the trace",
         hint: "⏎ open",
-        run: () => this.openSelected(),
+        run: () =>
+          this.selectedId === undefined
+            ? { kind: "none" }
+            : { kind: "openScreen", screen: "trace", focusId: this.selectedId },
       },
     ];
   }
-
   handleKey(event: KeyEvent, viewport: Viewport): ViewAction {
     this.message = "";
-    this.pageRows = Math.max(
-      1,
-      this.panel === "time" ? this.panelLayout(viewport).timeBars : this.panelLength(),
-    );
+    const widths = panelWidths(viewport.cols);
+    this.callPageSize = overviewCallCapacity(this.data?.rounds.length ?? 0, widths.left);
+    this.preview(widths.right, Math.max(0, viewport.rows - LAYOUT.outerRows));
     return runViewerKey(this.bindings(), formatKey(event));
   }
-
   helpLines(): string[] {
     return helpFrom(this.bindings());
   }
-
-  render(viewport: Viewport): Element {
+  render(viewport: Viewport, sharedHints = ""): Element {
     const data = this.data;
-    if (data === undefined) {
+    const footer = keyFooter(hintsFrom(this.bindings()), viewport.cols, "OVERVIEW", sharedHints);
+    if (data === undefined)
       return column(
-        { justifyContent: "flex-start" },
-        paintedLine(segment("No trace selected.", viewport.cols, { style: { fg: THEME.muted } })),
+        { height: viewport.rows, justifyContent: "flex-start" },
+        column(
+          { height: Math.max(0, viewport.rows - 1), justifyContent: "flex-start" },
+          paintedLine(segment("No trace selected.", viewport.cols, { style: { fg: THEME.muted } })),
+        ),
+        footer,
       );
-    }
-    const leftWidth = Math.floor((viewport.cols - LAYOUT.dividerCells) * LAYOUT.leftShare);
-    const rightWidth = viewport.cols - leftWidth - LAYOUT.dividerCells;
-    const { chartHeight, timeBars, bodyHeight } = this.panelLayout(viewport);
-    const chartWidth = Math.min(leftWidth, rightWidth);
-    const shownRounds = roundWindow(data.rounds, chartWidth, this.pendingFocus);
-    const columnWidth = chartColumnWidth(chartWidth, shownRounds.length);
-    const left = [
-      ...this.timePanel(data, leftWidth, timeBars),
-      paint(""),
-      ...this.costPanel(shownRounds, columnWidth, leftWidth, chartHeight),
-    ];
+    const bodyHeight = Math.max(0, viewport.rows - LAYOUT.outerRows);
+    const widths = panelWidths(viewport.cols);
+    const left = overviewCharts(
+      data.rounds,
+      this.selectedId,
+      widths.left,
+      bodyHeight,
+      data.models.length === 1 ? this.contextWindowOf(data.models[0]) : undefined,
+    );
+    const preview = this.preview(widths.right, bodyHeight);
     const right = [
-      ...this.contextPanel(data, shownRounds, columnWidth, rightWidth, chartHeight),
-      paint(""),
-      ...this.factsPanel(data, rightWidth),
+      ...preview.header,
+      ...preview.body.slice(this.scrollTop, this.scrollTop + preview.room),
     ];
-    const bodyRows = Math.min(bodyHeight, Math.max(left.length, right.length));
-    const body = Array.from({ length: bodyRows }, (_unused, position) =>
+    const body = Array.from({ length: bodyHeight }, (_, index) =>
       paintedLine(
         joinPainted(
-          fitPainted(left[position] ?? paint(""), leftWidth),
+          fit(left[index] ?? paint(""), widths.left),
           segment(" │ ", LAYOUT.dividerCells, { style: { fg: THEME.rule } }),
-          fitPainted(right[position] ?? paint(""), rightWidth),
+          fit(right[index] ?? paint(""), widths.right),
         ),
       ),
     );
     return column(
-      { justifyContent: "flex-start" },
+      { height: viewport.rows, justifyContent: "flex-start" },
       paintedLine(
-        segment(this.header(data), viewport.cols, { style: { fg: THEME.text, bold: true } }),
+        segment(header(data, this.following), viewport.cols, {
+          style: { fg: THEME.text, bold: true },
+        }),
       ),
-      ...body,
-      paintedLine(segment(this.message, viewport.cols, { style: { fg: THEME.muted } })),
+      column({ height: bodyHeight, justifyContent: "flex-start" }, ...body),
       paintedLine(
-        segment(hintsFrom(this.bindings()), viewport.cols, { style: { fg: THEME.muted } }),
+        segment(this.message || this.scrollStatus(), viewport.cols, { style: { fg: THEME.muted } }),
       ),
+      footer,
     );
   }
-
   setData(roots: TreeNode[]): void {
     this.roots = roots;
     this.derive();
   }
-
   focusId(): string | undefined {
-    return this.pendingFocus;
+    return this.returnFocusId ?? this.selectedId;
   }
-
   setFocus(id: string): void {
-    this.pendingFocus = id;
+    const rounds = this.data?.rounds ?? [];
+    const index = rounds.findIndex((round) => round.id === id || round.node.id === id);
+    if (index !== -1) {
+      this.selectCall(index);
+      return;
+    }
+    const trace = this.roots.find((root) => root.traceId === this.traceId);
+    if (trace === undefined) return;
+    // A span id (a Thread group row) previews its first call but stays the focus.
+    const ownerId = owningCall(trace, id);
+    const owner = rounds.findIndex((round) =>
+      ownerId === undefined ? round.spanId === id : round.id === ownerId,
+    );
+    if (owner !== -1) this.selectCall(owner);
+    if (findNode([trace], id) !== undefined) this.returnFocusId = id;
   }
-
   setTrace(traceId: string): void {
     this.traceId = traceId;
-    this.panel = "time";
-    this.timeCursor = 0;
-    this.timeScrollTop = 0;
-    this.calloutCursor = 0;
-    this.pendingFocus = undefined;
+    this.selectedId = undefined;
+    this.returnFocusId = undefined;
+    this.resetPreview();
     this.derive();
   }
-
   escape(): boolean {
     return false;
   }
-
   applySearch(_query: string): void {}
-
   notify(message: string): void {
     this.message = message;
   }
-
   setFollowIndicator(on: boolean): void {
     this.following = on;
   }
-
   private derive(): void {
     const trace = this.roots.find((root) => root.traceId === this.traceId) ?? this.roots[0];
-    this.data = trace === undefined ? undefined : overviewData(trace, this.contextWindowOf);
-    this.timeCursor = clampCursor(this.timeCursor, this.data?.timeBars.length ?? 0);
-    this.calloutCursor = clampCursor(this.calloutCursor, this.data?.callouts.length ?? 0);
+    this.data = trace === undefined ? undefined : overviewData(trace);
+    if (this.returnFocusId !== undefined && findNode(this.roots, this.returnFocusId) === undefined)
+      this.returnFocusId = undefined;
+    if (!this.data?.rounds.some((round) => round.id === this.selectedId)) this.selectCall(0);
   }
-
-  private togglePanel(): ViewAction {
-    this.panel = this.panel === "time" ? "callouts" : "time";
-    this.setCursor(this.cursor());
-    return { kind: "none" };
+  private selected(): Round | undefined {
+    return this.data?.rounds.find((round) => round.id === this.selectedId);
   }
-
-  private openSelected(): ViewAction {
-    if (this.data === undefined) {
-      return { kind: "none" };
-    }
-    if (this.panel === "time") {
-      const selected = this.data.timeBars[this.timeCursor];
-      return selected === undefined || selected.key === "other"
-        ? { kind: "none" }
-        : { kind: "openOccurrences", groupKey: selected.key };
-    }
-    const selected = this.data.callouts[this.calloutCursor];
-    return selected === undefined
-      ? { kind: "none" }
-      : { kind: "openScreen", screen: "trace", focusId: selected.round.id };
+  private moveCall(delta: number): void {
+    const index = this.data?.rounds.findIndex((round) => round.id === this.selectedId) ?? 0;
+    this.selectCall(index + delta);
   }
-
-  private moveCursor(delta: number): void {
-    this.setCursor(this.cursor() + delta);
+  private selectCall(index: number): void {
+    this.returnFocusId = undefined;
+    const rounds = this.data?.rounds ?? [];
+    const next = rounds[Math.max(0, Math.min(rounds.length - 1, index))]?.id;
+    if (next !== this.selectedId) this.resetPreview();
+    this.selectedId = next;
   }
-
-  private setCursor(position: number): void {
-    const bounded = clampCursor(position, this.panelLength());
-    if (this.panel === "time") {
-      this.timeCursor = bounded;
-    } else {
-      this.calloutCursor = bounded;
-      this.pendingFocus = this.data?.callouts[bounded]?.round.id;
-    }
+  private resetPreview(): void {
+    this.scrollOffsets = { input: 0, output: 0 };
+    this.systemsExpanded = false;
+    this.previewCache = undefined;
   }
-
-  private cursor(): number {
-    return this.panel === "time" ? this.timeCursor : this.calloutCursor;
+  private toggleSystems(): void {
+    this.systemsExpanded = !this.systemsExpanded;
+    this.scrollOffsets.input = 0;
+    if (this.previewCache !== undefined) this.previewCache.bodies.input = undefined;
   }
-
-  private panelLength(): number {
-    return this.panel === "time"
-      ? (this.data?.timeBars.length ?? 0)
-      : (this.data?.callouts.length ?? 0);
+  private movePreview(delta: number): void {
+    this.scrollPreview(this.scrollTop + delta);
   }
-
-  private header(data: OverviewData): string {
-    const model = data.models.join(", ") || "unknown model";
-    const state = data.running ? "● running" : "done";
-    const following = this.following ? " · following" : "";
-    const parts = [
-      model,
-      state,
-      fmtDuration(data.elapsedMs, { minutes: true }),
-      `${data.rounds.length} rounds`,
-    ];
-    const cost = fmtUsd(data.costUsd);
-    if (cost !== "") {
-      parts.push(cost);
-    }
-    return `${parts.join(" · ")}${following}`;
+  private scrollPreview(position: number): void {
+    this.scrollTop = Math.max(0, Math.min(position, this.previewLength - this.previewRoom));
   }
-
-  private panelLayout(viewport: Viewport): {
-    chartHeight: number;
-    timeBars: number;
-    bodyHeight: number;
-  } {
-    const bodyHeight = Math.max(0, viewport.rows - LAYOUT.outerRows);
-    const count = this.data?.timeBars.length ?? 0;
-    const leftFixed = LAYOUT.timeAndCostChromeRows + count * LAYOUT.timeBarRows;
-    const rightFixed =
-      LAYOUT.contextAndFactsChromeRows +
-      (this.data?.callouts.length ?? 0) +
-      ((this.data?.threads.length ?? 0) > 1 ? 1 : 0);
-    const chartHeight = Math.max(
-      0,
-      Math.min(
-        LAYOUT.maxChartRows,
-        Math.max(LAYOUT.minChartRows, bodyHeight - leftFixed),
-        bodyHeight - rightFixed,
-        bodyHeight - LAYOUT.timeAndCostChromeRows - Math.min(count, 1) * LAYOUT.timeBarRows,
-      ),
+  private preview(width: number, height: number): Preview {
+    const selected = this.selected();
+    const heading = overviewSection(
+      `${selected === undefined ? "LLM CALL" : `LLM CALL ${selected.index + 1}`} · ${this.previewMode === "output" ? "[OUTPUT] INPUT" : "OUTPUT [INPUT]"}`,
+      width,
     );
-    const timeBars = Math.max(
-      0,
-      Math.min(
-        count,
-        Math.floor((bodyHeight - LAYOUT.timeAndCostChromeRows - chartHeight) / LAYOUT.timeBarRows),
-      ),
-    );
-    return { chartHeight, timeBars, bodyHeight };
-  }
-
-  private timePanel(data: OverviewData, width: number, visibleBars: number): Painted[] {
-    this.timeScrollTop = Math.max(
-      0,
-      Math.min(this.timeScrollTop, this.timeCursor, data.timeBars.length - visibleBars),
-    );
-    if (this.timeCursor >= this.timeScrollTop + visibleBars) {
-      this.timeScrollTop = Math.max(0, this.timeCursor - visibleBars + 1);
-    }
-    const bars = data.timeBars.slice(this.timeScrollTop, this.timeScrollTop + visibleBars);
-    const largest = Math.max(...data.timeBars.map((bar) => bar.selfMs), 1);
-    const barWidth = Math.max(
-      1,
-      width - LAYOUT.timeNameWidth - LAYOUT.timeDurationWidth - LAYOUT.timePercentWidth,
-    );
-    const lines: Painted[] = [sectionTitle("WHERE THE TIME WENT", width)];
-    bars.forEach((bar, position) => {
-      const marker =
-        this.panel === "time" && position + this.timeScrollTop === this.timeCursor ? "▶ " : "  ";
-      const nameStyle = { fg: bar.isLlm ? THEME.kind.assistant : THEME.kind.tool };
-      lines.push(
-        joinPainted(
-          segment(`${marker}${bar.label}`, LAYOUT.timeNameWidth, { style: nameStyle }),
-          segment(barText(bar.selfMs / largest, barWidth), barWidth, { style: nameStyle }),
-          segment(fmtDuration(bar.selfMs), LAYOUT.timeDurationWidth, {
-            align: "right",
-            style: { fg: THEME.muted },
-          }),
-          segment(`${Math.round(bar.share * 100)}%`, LAYOUT.timePercentWidth, {
-            align: "right",
-            style: { fg: THEME.chrome },
-          }),
-        ),
-      );
-      lines.push(
-        segment(`  ${bar.calls} ${bar.calls === 1 ? "call" : "calls"}`, width, {
-          style: { fg: THEME.chrome, dim: true },
-        }),
-      );
-    });
-    return lines;
-  }
-
-  private contextPanel(
-    data: OverviewData,
-    rounds: Round[],
-    columnWidth: number,
-    width: number,
-    height: number,
-  ): Painted[] {
-    const tallest = Math.max(...rounds.map((round) => round.contextTokens + round.outputTokens), 1);
-    const ceiling = data.contextWindow;
-    const scaleMax =
-      ceiling !== undefined && ceiling > tallest && ceiling <= tallest * LAYOUT.ceilingScaleLimit
-        ? ceiling
-        : tallest;
-    const ceilingAt = ceiling === undefined ? undefined : ceilingRow(ceiling, scaleMax, height);
-    const threadKeys = data.threads.map(threadKey);
-    const cells = rounds.map((round) =>
-      stackedColumn([round.cachedTokens, round.freshTokens, round.outputTokens], scaleMax, height),
-    );
-    const rows: Painted[] = [sectionTitle("CONTEXT PER ROUND", width)];
-    for (let rowPosition = 0; rowPosition < height; rowPosition += 1) {
-      const axis = rowPosition === 0 ? fmtTokens(scaleMax) : rowPosition === height - 1 ? "0" : "";
-      const pieces: Piece[] = [
-        {
-          text: axis.slice(0, LAYOUT.axisLabelWidth - 1).padStart(LAYOUT.axisLabelWidth - 1) + " ",
-          style: { fg: THEME.chrome },
-        },
-      ];
-      cells.forEach((columnCells, columnPosition) => {
-        const band = columnCells[rowPosition];
-        const round = rounds[columnPosition];
-        pieces.push(
-          band === EMPTY_CELL && ceilingAt === rowPosition
-            ? { text: "┄".repeat(columnWidth), style: { fg: THEME.chrome } }
-            : contextPiece(band, columnWidth, round, threadKeys),
-        );
-        pieces.push({ text: ceilingAt === rowPosition ? "┄" : " " });
-      });
-      rows.push(segment(pieces, width));
-    }
-    rows.push(contextTicks(rounds, columnWidth, width));
-    rows.push(
-      segment(
-        [
-          { text: "░ cached", style: { fg: THEME.cached } },
-          { text: "  ▒ fresh", style: { fg: THEME.kind.user } },
-          { text: "  █ output", style: { fg: THEME.kind.assistant } },
-        ],
+    if (
+      selected !== undefined &&
+      (this.previewCache?.round !== selected || this.previewCache.width !== width)
+    ) {
+      this.previewCache = {
+        round: selected,
         width,
-      ),
-    );
-    if (data.threads.length > 1) {
-      rows.push(threadLegend(data.rounds, width));
+        metadata: paintPayload(previewMetadata(selected), width),
+        bodies: {},
+      };
     }
-    return rows;
-  }
-
-  private costPanel(
-    rounds: Round[],
-    columnWidth: number,
-    width: number,
-    height: number,
-  ): Painted[] {
-    const highest = Math.max(...rounds.map((round) => round.costUsd), 0.000001);
-    const cells = rounds.map((round) => verticalColumn(round.costUsd, highest, height));
-    const rows: Painted[] = [sectionTitle("COST PER ROUND", width)];
-    for (let rowPosition = 0; rowPosition < height; rowPosition += 1) {
-      const axis = rowPosition === 0 ? fmtUsd(highest) : rowPosition === height - 1 ? "$0" : "";
-      const pieces: Piece[] = [
-        {
-          text: axis.slice(0, LAYOUT.axisLabelWidth - 1).padStart(LAYOUT.axisLabelWidth - 1) + " ",
-          style: { fg: THEME.chrome },
-        },
-      ];
-      cells.forEach((columnCells) => {
-        const glyph = columnCells[rowPosition];
-        pieces.push({
-          text: glyph.repeat(columnWidth),
-          style: { fg: THEME.kind.interrupt },
-        });
-        pieces.push({ text: " " });
-      });
-      rows.push(segment(pieces, width));
+    if (selected !== undefined && this.previewCache!.bodies[this.previewMode] === undefined) {
+      const payload =
+        this.previewMode === "output"
+          ? roundResponsePayload(selected)
+          : roundInputPayload(selected, this.systemsExpanded);
+      this.previewCache!.bodies[this.previewMode] = paintPayload(payload, width);
     }
-    rows.push(contextTicks(rounds, columnWidth, width));
-    return rows;
+    const header =
+      selected === undefined ? [heading] : [heading, ...this.previewCache!.metadata, paint("")];
+    const body =
+      selected === undefined
+        ? [segment("No completed LLM calls.", width, { style: { fg: THEME.muted } })]
+        : this.previewCache!.bodies[this.previewMode]!;
+    const room = Math.max(0, height - header.length);
+    this.previewRoom = room;
+    this.previewLength = body.length;
+    this.scrollPreview(this.scrollTop);
+    return { header, body, room };
   }
-
-  private factsPanel(data: OverviewData, width: number): Painted[] {
-    const { counts } = data;
-    const summary = `${counts.toolCalls} tool calls · ${counts.approved} approved · ${counts.rejected} rejected · ${counts.errors} errors`;
-    return [
-      sectionTitle("FACTS", width),
-      segment(summary, width, {
-        style: { fg: counts.errors > 0 ? THEME.kind.error : THEME.muted },
-      }),
-      ...data.callouts.map((callout, position) => this.calloutLine(callout, position, width)),
-    ];
-  }
-
-  private calloutLine(callout: Callout, position: number, width: number): Painted {
-    const selected = this.panel === "callouts" && this.calloutCursor === position;
-    const middleWidth = Math.max(
-      1,
-      width - LAYOUT.calloutLabelWidth - LAYOUT.calloutValueWidth - 2,
-    );
-    return joinPainted(
-      segment(`${selected ? "▶" : " "} ${callout.label}`, LAYOUT.calloutLabelWidth, {
-        style: { fg: THEME.chrome },
-      }),
-      segment(` round ${callout.round.index + 1}`, middleWidth, { style: { fg: THEME.text } }),
-      segment(callout.value, LAYOUT.calloutValueWidth, {
-        align: "right",
-        style: { fg: THEME.kind.user },
-      }),
-      segment(" →", 2, { style: { fg: THEME.accent } }),
-    );
+  private scrollStatus(): string {
+    return this.previewLength > this.previewRoom && this.previewRoom > 0
+      ? `preview ${this.scrollTop + 1}–${Math.min(this.previewLength, this.scrollTop + this.previewRoom)}/${this.previewLength}`
+      : "";
   }
 }
-
-function sectionTitle(title: string, width: number): Painted {
-  const suffix = Math.max(0, width - title.length - 1);
-  return segment(`${title} ${"─".repeat(suffix)}`, width, { style: { fg: THEME.accent } });
+function panelWidths(cols: number): { left: number; right: number } {
+  const left = Math.max(0, Math.floor((cols - LAYOUT.dividerCells) * LAYOUT.leftShare));
+  return { left, right: Math.max(0, cols - left - LAYOUT.dividerCells) };
 }
-
-function fitPainted(content: Painted, width: number): Painted {
+function fit(content: Painted, width: number): Painted {
   return padPainted(clipPainted(content, width), width);
 }
-
-function clampCursor(position: number, length: number): number {
-  return Math.max(0, Math.min(Math.max(0, length - 1), position));
-}
-
-function threadKey(thread: ThreadKey): string {
-  return `${thread.kind}:${thread.id}`;
-}
-
-function contextPiece(band: number, width: number, round: Round, threadKeys: string[]): Piece {
-  if (band === EMPTY_CELL) {
-    return { text: " ".repeat(width) };
-  }
-  if (band === 0) {
-    return { text: "░".repeat(width), style: { fg: THEME.cached } };
-  }
-  if (band === 1) {
-    const threadPosition = Math.max(0, threadKeys.indexOf(threadKey(round.thread)));
-    return { text: "▒".repeat(width), style: { fg: threadColor(threadPosition) } };
-  }
-  return { text: "█".repeat(width), style: { fg: THEME.kind.assistant } };
-}
-
-function roundWindow(rounds: Round[], width: number, focusId: string | undefined): Round[] {
-  const available = Math.max(1, width - LAYOUT.axisLabelWidth);
-  const room = Math.max(1, Math.floor(available / (LAYOUT.minColumnCells + 1)));
-  const focusAt = rounds.findIndex((round) => round.id === focusId);
-  const window = columnWindow(rounds.length, room, focusAt === -1 ? undefined : focusAt);
-  return rounds.slice(window.from, window.to);
-}
-
-function chartColumnWidth(width: number, count: number): number {
-  const available = Math.max(1, width - LAYOUT.axisLabelWidth);
-  const slot = Math.max(
-    LAYOUT.minColumnCells,
-    Math.min(LAYOUT.maxColumnCells, Math.floor(available / Math.max(1, count))),
-  );
-  return Math.max(1, slot - 1);
-}
-
-const VERTICAL_EIGHTHS = ["", "▁", "▂", "▃", "▄", "▅", "▆", "▇"];
-
-function verticalColumn(value: number, max: number, height: number): string[] {
-  const cells = Math.max(0, Math.min(height, (value / max) * height));
-  const fullCells = Math.floor(cells);
-  const eighths = Math.round((cells - fullCells) * VERTICAL_EIGHTHS.length);
-  const partial = VERTICAL_EIGHTHS[Math.min(eighths, VERTICAL_EIGHTHS.length - 1)];
-  const sliver = value > 0 && fullCells === 0 && partial === "" ? "▁" : partial;
-  const bottomUp = [
-    ...Array.from({ length: fullCells }, () => "█"),
-    ...(sliver === "" ? [] : [sliver]),
-  ].slice(0, height);
+function header(data: OverviewData, following: boolean): string {
   return [
-    ...Array.from({ length: Math.max(0, height - bottomUp.length) }, () => " "),
-    ...bottomUp.reverse(),
-  ];
+    data.models.join(", ") || "unknown model",
+    data.running ? "● running" : "done",
+    fmtDuration(data.elapsedMs, { minutes: true }),
+    `${data.rounds.length} LLM ${data.rounds.length === 1 ? "call" : "calls"}`,
+    fmtUsd(data.costUsd),
+    following ? "following" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+function previewMetadata(round: Round): PayloadLine[] {
+  const event = round.node.event!;
+  const time =
+    typeof event.data.timeTaken === "number"
+      ? `${round.durationMs.toLocaleString("en-US")}ms`
+      : "time not recorded";
+  const cost =
+    typeof event.data.cost?.totalCost === "number" ? fmtCost(round.costUsd) : "cost not recorded";
+  const tokens = hasTokenUsage(event)
+    ? [
+        `context ${round.contextTokens.toLocaleString("en-US")} · cached ${round.cachedTokens.toLocaleString("en-US")}`,
+        `fresh ${round.freshTokens.toLocaleString("en-US")} · output ${round.outputTokens.toLocaleString("en-US")}`,
+      ]
+    : ["token usage not recorded"];
+  return [
+    round.model || "unknown model",
+    `${time} · ${cost}`,
+    ...tokens,
+    ...(round.threadLabel ? [`thread ${round.threadLabel}`] : []),
+  ].map((text) => ({ kind: "meta", text }));
 }
 
-function contextTicks(rounds: Round[], columnWidth: number, width: number): Painted {
-  const slot = columnWidth + 1;
-  const ticks = rounds
-    .map((round, position) =>
-      position % 2 === 0 ? `r${round.index + 1}`.slice(0, slot).padEnd(slot) : " ".repeat(slot),
-    )
-    .join("");
-  return segment(`${" ".repeat(LAYOUT.axisLabelWidth)}${ticks}`, width, {
-    style: { fg: THEME.chrome },
-  });
-}
-
-function threadLegend(rounds: Round[], width: number): Painted {
-  const labels: Piece[] = [];
-  const seen: string[] = [];
-  for (const round of rounds) {
-    const key = threadKey(round.thread);
-    if (seen.includes(key)) {
-      continue;
-    }
-    const position = seen.length;
-    seen.push(key);
-    labels.push({
-      text: `${position === 0 ? "" : "  "}▒ ${round.threadLabel ?? `thread ${position + 1}`}`,
-      style: { fg: threadColor(position) },
-    });
+function owningCall(trace: TreeNode, id: string): string | undefined {
+  const rows = storyOutline(trace, { admin: true });
+  const at = rows.findIndex((row) => row.id === id);
+  if (at === -1) return undefined;
+  let depth = rows[at].depth;
+  for (let index = at - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (row.depth >= depth) continue;
+    if (row.kind === "round") return row.id;
+    depth = row.depth;
   }
-  return segment(labels, width);
+  return undefined;
 }

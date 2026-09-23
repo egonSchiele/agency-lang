@@ -33,7 +33,11 @@ export async function runLogs(
       printJson(normalizeTraceLogs(logs));
       return;
     }
-    await openViewer({ jsonl: traceLogsToJsonl(logs), terminalInput: "current-stdin" });
+    await openViewer({
+      jsonl: traceLogsToJsonl(logs),
+      terminalInput: "current-stdin",
+      thresholds: context.config.viewer,
+    });
   } catch (error) {
     failProjectCommand(error);
   }

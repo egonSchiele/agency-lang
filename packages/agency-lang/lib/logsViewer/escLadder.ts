@@ -2,7 +2,14 @@
 import type { ScreenName } from "./screens/screen.js";
 
 export type EscOutcome =
-  "closeHelp" | "overlay" | "popOverlay" | "screen" | "goOverview" | "back" | "nothing";
+  | "closeHelp"
+  | "overlay"
+  | "popOverlay"
+  | "screen"
+  | "goOverview"
+  | "goTraces"
+  | "back"
+  | "nothing";
 
 export type EscState = {
   /** The terminal is under the minimum width, so nothing is drawn. */
@@ -16,7 +23,8 @@ export type EscState = {
   screenEscaped: () => boolean;
   activeScreen: ScreenName;
   embedded: boolean;
-  overviewAvailable: boolean;
+  tracePickerOpen: boolean;
+  tracePickerAvailable: boolean;
 };
 
 export function escOutcome(state: EscState): EscOutcome {
@@ -28,13 +36,19 @@ export function escOutcome(state: EscState): EscOutcome {
     return "closeHelp";
   }
   if (state.overlayOpen) {
-    return state.overlayEscaped() ? "overlay" : "popOverlay";
+    if (state.overlayEscaped()) {
+      return "overlay";
+    }
+    return state.tracePickerOpen ? leave : "popOverlay";
   }
   if (state.screenEscaped()) {
     return "screen";
   }
-  if (state.activeScreen !== "overview" && !(state.embedded && state.overviewAvailable === false)) {
+  if (state.activeScreen !== "overview") {
     return "goOverview";
+  }
+  if (state.tracePickerAvailable) {
+    return "goTraces";
   }
   return leave;
 }

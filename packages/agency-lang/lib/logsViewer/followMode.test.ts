@@ -49,7 +49,13 @@ function cursorRow(out: FrameRecorder): string {
   if (out.frames.length === 0) return "";
   // eslint-disable-next-line no-control-regex
   const text = out.lastText().replace(/\x1b\[[0-9;]*m/g, "");
-  return text.split("\n").find((line) => line.trimStart().startsWith("▶ ")) ?? "";
+  return (
+    text
+      .split("\n")
+      .find(
+        (line) => line.trimStart().startsWith("▶ ") && !line.trimStart().startsWith("▶ OUTLINE ·"),
+      ) ?? ""
+  );
 }
 
 describe("follow mode", () => {
@@ -105,6 +111,41 @@ describe("follow mode", () => {
     input.feedKey({ key: "q" });
     await done;
     expect(out.lastText()).toContain("firstTool");
+  });
+
+  it("keeps the picker header on its highlighted trace through append and truncation", async () => {
+    const second = toolLines("second-tool", "secondTool", 1000).replaceAll(
+      '"trace_id":"abc"',
+      '"trace_id":"second"',
+    );
+    fs.appendFileSync(file, second);
+    const input = new ScriptedInput(["g"]);
+    const out = new FrameRecorder();
+    const done = runViewer({
+      followPath: file,
+      initialFollow: true,
+      followIntervalMs: 20,
+      input,
+      output: out,
+      viewport: { rows: 20, cols: 130 },
+    });
+    const header = () => (out.frames.length > 0 ? out.lastText().split("\n")[0] : "");
+    try {
+      await until(() => header().includes("abc  trace 1/2"));
+      expect(header()).toContain("abc  trace 1/2");
+      fs.appendFileSync(file, second.replaceAll('"second"', '"third"'));
+      await until(() => header().includes("abc  trace 1/3"));
+      expect(header()).toContain("abc  trace 1/3");
+      fs.writeFileSync(file, second);
+      await until(() => header().includes("second") && out.lastText().includes("[TRACES]"));
+      expect(out.lastText()).toContain("[TRACES]");
+      expect(header()).toContain("second");
+      expect(header()).not.toContain("abc");
+      expect(header()).not.toContain("[1 overview]");
+    } finally {
+      input.feedKey({ key: "q" });
+      await done;
+    }
   });
 
   it("toggling follow off and on must not lose earlier appends (the accumulator rewind)", async () => {

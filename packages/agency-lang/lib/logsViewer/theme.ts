@@ -16,6 +16,7 @@ export const THEME = {
   accent: "#cba6f7",
   cached: "#45475a",
   ok: "#94e2d5",
+  warning: "#fab387",
   rule: "#313244",
   cursorBg: "#313244",
 } as const;
@@ -38,7 +39,7 @@ export function costTone(usd: number, thresholds: ViewerThresholds): Tone {
 
 export function toneStyle(tone: Tone): PaintStyle {
   if (tone === "hot") {
-    return { fg: THEME.kind.error, bold: true };
+    return { fg: THEME.warning, bold: true };
   }
   return { fg: tone === "quiet" ? THEME.chrome : THEME.muted };
 }

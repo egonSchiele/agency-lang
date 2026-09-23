@@ -16,6 +16,57 @@ function roundRow(output: string): StoryRow {
   )[0];
 }
 describe("payloads", () => {
+  it("summarizes nested calls without dumping repeated input histories", () => {
+    const trace = buildForest([
+      event("toolCallStart", 0, "research", null, { toolName: "researchAgent" }),
+      event("promptCompletion", 1000, "calls", "research", {
+        threadLabel: "main",
+        threadIdentity: "main-thread",
+        model: "test-model",
+        timeTaken: 1000,
+        cost: { totalCost: 0.1 },
+        messages: [{ role: "system", content: "long repeated history" }],
+        completion: { output: "earlier answer" },
+      }),
+      event("toolCallStart", 1100, "review", "calls", { toolName: "reviewAgent" }),
+      event("promptCompletion", 2000, "review-calls", "review", {
+        timeTaken: 900,
+        cost: { totalCost: 10 },
+        completion: { output: "nested review" },
+      }),
+      event("promptCompletion", 4000, "calls", "research", {
+        threadLabel: "main",
+        threadIdentity: "main-thread",
+        model: "test-model",
+        timeTaken: 2000,
+        cost: { totalCost: 0.2 },
+        completion: { output: "latest answer" },
+      }),
+    ])[0];
+    const row = outlineRows(trace, { machinery: false, admin: false }).find(
+      (row) => row.id === "calls",
+    )!;
+    const text = payloadFor(row, options)
+      .map((line) => ("text" in line ? line.text : ""))
+      .join("\n");
+    expect(text).toContain("THREAD · main");
+    expect(text).toContain("Tool: researchAgent");
+    expect(text).toContain("Thread: main");
+    expect(text).toContain("Model: test-model");
+    expect(text).toContain("2 completed LLM calls");
+    expect(text).toContain("LLM time: 3.0s");
+    expect(text).toContain("Cost: $0.300");
+    expect(text).toContain("Latest response");
+    expect(text).toContain("latest answer");
+    expect(text).not.toContain("earlier answer");
+    expect(text).not.toContain("nested review");
+    expect(text).not.toContain("long repeated history");
+    expect(
+      payloadFor(row, { raw: true }).some(
+        (line) => "text" in line && line.text.includes("long repeated history"),
+      ),
+    ).toBe(true);
+  });
   it("explains rejection, partial failure and unfinished work separately", () => {
     const row = outlineRows(agentLoopTrace(), { machinery: false, admin: false }).find(
       (row) => row.id === "grep",
@@ -93,7 +144,7 @@ describe("payloads", () => {
   });
 });
 
-it("reports result line counts and recorded error origin", () => {
+it("reports estimated result tokens and recorded error origin", () => {
   const trace = buildForest([
     event("toolCallStart", 0, "tool", null, { toolName: "write" }),
     event("toolCall", 1, "tool", null, {
@@ -112,7 +163,7 @@ it("reports result line counts and recorded error origin", () => {
       rows.find((row) => row.kind === "tool")!,
       options,
     ),
-  ).toContainEqual({ kind: "meta", text: "result: 3 lines" });
+  ).toContainEqual({ kind: "meta", text: "result: ~4 tokens" });
   const error = payloadFor(
     rows.find((row) => row.kind === "error")!,
     options,
@@ -153,4 +204,15 @@ it("shows unknown usage and cache writes in round details", () => {
   })[0];
   const lines = payloadFor(refreshed, options);
   expect(lines.some((line) => line.kind === "meta" && line.text.includes("40 write"))).toBe(true);
+});
+
+it.each([
+  ["", "result: ~0 tokens"],
+  ["12345", "result: ~2 tokens"],
+  [{ __type: "resultType", success: true, value: "a".repeat(8000) }, "result: ~2.0k tokens"],
+  [{ answer: "done" }, "result: ~5 tokens"],
+])("estimates tool output tokens from text or compact JSON: %j", (output, expected) => {
+  const trace = buildForest([event("toolCall", 1, "tool", null, { toolName: "read", output })])[0];
+  const row = outlineRows(trace, { machinery: false, admin: false })[0];
+  expect(payloadFor(row, options)).toContainEqual({ kind: "meta", text: expected });
 });

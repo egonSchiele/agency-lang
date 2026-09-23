@@ -143,7 +143,7 @@ function colorForMagnitude(m: Magnitude): string | undefined {
   switch (m) {
     case "slow":
     case "expensive":
-      return "bright-red";
+      return "bright-yellow";
     case "fast":
       return "gray";
     default:

@@ -1,130 +1,259 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`transcript screen > renders the final answer at 100 columns 1`] = `
-"TRANSCRIPT 4kRr1sFNYuCSMX1JipL40
-  system      │── ASSISTANT · round 10 ──                                  22.0s · 20k ctx · $0.0034
-  user        │response
-  round 1     │  code
-    agencyGui…│    def archiveNotes(count: number): Result<string> {
-  round 2     │      // Raise an interrupt with effect \`notes::archive\` and payload containing the c
-    agencyGui…│    ount.
-  round 3     │      raise notes::archive("Archive \${count} notes?", { count: count })
-    agencyGui…│      return success("archived \${count}")
-  round 4     │    }
-    grep      │
-  tool        │    /**
-  round 5     │    For count == 11:
-    grep      │    - Both handlers run. The inner handler (closest to the call) executes and approve
-  tool        │    s the notes::archive interrupt. The outer handler then executes and, because coun
-  round 6     │    t > 10, rejects the notes::archive interrupt.
-    grep      │    - Because any handler rejecting causes the interrupt to be rejected even if an in
-  tool        │    ner handler approved it, archiveNotes ends up failing, so runArchive returns "rej
-  round 7     │    ected".
-    grep      │    */
-  tool        │    def runArchive(count: number): string {
-  round 8     │      handle {
-    agencyGui…│        // Inner handler: approves notes::archive interrupts.
-  round 9     │        handle {
-    typecheck │          const res: Result<string> = archiveNotes(count)
-▶ round 10    │          if (isSuccess(res)) {
-              │            return "archived"
-              │          }
-              │          return "rejected"
-              │        } with (intr) {
-              │          if (intr.effect == "notes::archive") {
-              │            return approve()
-              │          }
-              │          return pass()
-              │        }
-              │      } with (intr) {
-              │        // Outer handler: rejects notes::archive when count > 10, otherwise passes.
-              │        if (intr.effect == "notes::archive") {
-              │          if (intr.data.count > 10) {
-j k move   ⏎ expand   s system   / find   d detail   y copy"
+"  system                    │ ── ASSISTANT · LLM call 10 ──                22.0s · 20k ctx · $0.0034
+  user                      │ response
+  LLM call 1                │   code
+    agencyGuide             │     def archiveNotes(count: number): Result<string> {
+  LLM call 2                │       // Raise an interrupt with effect \`notes::archive\` and payload c
+    agencyGuide             │     ontaining the count.
+  LLM call 3                │       raise notes::archive("Archive \${count} notes?", { count: count }
+    agencyGuide             │     )
+  LLM call 4                │       return success("archived \${count}")
+    grep                    │     }
+  tool                      │
+  LLM call 5                │     /**
+    grep                    │     For count == 11:
+  tool                      │     - Both handlers run. The inner handler (closest to the call) execu
+  LLM call 6                │     tes and approves the notes::archive interrupt. The outer handler t
+    grep                    │     hen executes and, because count > 10, rejects the notes::archive i
+  tool                      │     nterrupt.
+  LLM call 7                │     - Because any handler rejecting causes the interrupt to be rejecte
+    grep                    │     d even if an inner handler approved it, archiveNotes ends up faili
+  tool                      │     ng, so runArchive returns "rejected".
+  LLM call 8                │     */
+    agencyGuide             │     def runArchive(count: number): string {
+  LLM call 9                │       handle {
+    typecheck               │         // Inner handler: approves notes::archive interrupts.
+▶ LLM call 10               │         handle {
+                            │           const res: Result<string> = archiveNotes(count)
+                            │           if (isSuccess(res)) {
+                            │             return "archived"
+                            │           }
+                            │           return "rejected"
+                            │         } with (intr) {
+                            │           if (intr.effect == "notes::archive") {
+                            │             return approve()
+                            │           }
+                            │           return pass()
+                            │         }
+                            │       } with (intr) {
+                            │         // Outer handler: rejects notes::archive when count > 10, othe
+                            │     rwise passes.
+# numbers   j k move   ⏎ expand   s system   / find   d detail   y copy                 [TRANSCRIPT]"
+`;
+
+exports[`transcript screen > renders the final answer at 100 columns 2`] = `
+"  system                    │ 254 )   1 lines   95ms
+  user                      │ 255 completed
+  LLM call 1                │ 256
+    agencyGuide             │ 257 ── ASSISTANT · LLM call 10 ──            22.0s · 20k ctx · $0.0034
+  LLM call 2                │ 258 response
+    agencyGuide             │ 259   code
+  LLM call 3                │ 260     def archiveNotes(count: number): Result<string> {
+    agencyGuide             │ 261       // Raise an interrupt with effect \`notes::archive\` and paylo
+  LLM call 4                │ 262     ad containing the count.
+    grep                    │ 263       raise notes::archive("Archive \${count} notes?", { count: cou
+  tool                      │ 264     nt })
+  LLM call 5                │ 265       return success("archived \${count}")
+    grep                    │ 266     }
+  tool                      │ 267
+  LLM call 6                │ 268     /**
+    grep                    │ 269     For count == 11:
+  tool                      │ 270     - Both handlers run. The inner handler (closest to the call) e
+  LLM call 7                │ 271     xecutes and approves the notes::archive interrupt. The outer h
+    grep                    │ 272     andler then executes and, because count > 10, rejects the note
+  tool                      │ 273     s::archive interrupt.
+  LLM call 8                │ 274     - Because any handler rejecting causes the interrupt to be rej
+    agencyGuide             │ 275     ected even if an inner handler approved it, archiveNotes ends
+  LLM call 9                │ 276     up failing, so runArchive returns "rejected".
+    typecheck               │ 277     */
+▶ LLM call 10               │ 278     def runArchive(count: number): string {
+                            │ 279       handle {
+                            │ 280         // Inner handler: approves notes::archive interrupts.
+                            │ 281         handle {
+                            │ 282           const res: Result<string> = archiveNotes(count)
+                            │ 283           if (isSuccess(res)) {
+                            │ 284             return "archived"
+                            │ 285           }
+                            │ 286           return "rejected"
+                            │ 287         } with (intr) {
+                            │ 288           if (intr.effect == "notes::archive") {
+                            │ 289             return approve()
+                            │ 290           }
+                            │ 291           return pass()
+                            │ 292         }
+# numbers   j k move   ⏎ expand   s system   / find   d detail   y copy                 [TRANSCRIPT]"
 `;
 
 exports[`transcript screen > renders the final answer at 130 columns 1`] = `
-"TRANSCRIPT 4kRr1sFNYuCSMX1JipL40
-  system      │── ASSISTANT · round 10 ──                                                                22.0s · 20k ctx · $0.0034
-  user        │response
-  round 1     │  code
-    agencyGui…│    def archiveNotes(count: number): Result<string> {
-  round 2     │      // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
-    agencyGui…│      raise notes::archive("Archive \${count} notes?", { count: count })
-  round 3     │      return success("archived \${count}")
-    agencyGui…│    }
-  round 4     │
-    grep      │    /**
-  tool        │    For count == 11:
-  round 5     │    - Both handlers run. The inner handler (closest to the call) executes and approves the notes::archive interrupt
-    grep      │    . The outer handler then executes and, because count > 10, rejects the notes::archive interrupt.
-  tool        │    - Because any handler rejecting causes the interrupt to be rejected even if an inner handler approved it, archi
-  round 6     │    veNotes ends up failing, so runArchive returns "rejected".
-    grep      │    */
-  tool        │    def runArchive(count: number): string {
-  round 7     │      handle {
-    grep      │        // Inner handler: approves notes::archive interrupts.
-  tool        │        handle {
-  round 8     │          const res: Result<string> = archiveNotes(count)
-    agencyGui…│          if (isSuccess(res)) {
-  round 9     │            return "archived"
-    typecheck │          }
-▶ round 10    │          return "rejected"
-              │        } with (intr) {
-              │          if (intr.effect == "notes::archive") {
-              │            return approve()
-              │          }
-              │          return pass()
-              │        }
-              │      } with (intr) {
-              │        // Outer handler: rejects notes::archive when count > 10, otherwise passes.
-              │        if (intr.effect == "notes::archive") {
-              │          if (intr.data.count > 10) {
-              │            return reject()
-              │          }
-              │        }
-j k move   ⏎ expand   s system   / find   d detail   y copy"
+"  system                    │ ── ASSISTANT · LLM call 10 ──                                              22.0s · 20k ctx · $0.0034
+  user                      │ response
+  LLM call 1                │   code
+    agencyGuide             │     def archiveNotes(count: number): Result<string> {
+  LLM call 2                │       // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
+    agencyGuide             │       raise notes::archive("Archive \${count} notes?", { count: count })
+  LLM call 3                │       return success("archived \${count}")
+    agencyGuide             │     }
+  LLM call 4                │
+    grep                    │     /**
+  tool                      │     For count == 11:
+  LLM call 5                │     - Both handlers run. The inner handler (closest to the call) executes and approves the notes::ar
+    grep                    │     chive interrupt. The outer handler then executes and, because count > 10, rejects the notes::arc
+  tool                      │     hive interrupt.
+  LLM call 6                │     - Because any handler rejecting causes the interrupt to be rejected even if an inner handler app
+    grep                    │     roved it, archiveNotes ends up failing, so runArchive returns "rejected".
+  tool                      │     */
+  LLM call 7                │     def runArchive(count: number): string {
+    grep                    │       handle {
+  tool                      │         // Inner handler: approves notes::archive interrupts.
+  LLM call 8                │         handle {
+    agencyGuide             │           const res: Result<string> = archiveNotes(count)
+  LLM call 9                │           if (isSuccess(res)) {
+    typecheck               │             return "archived"
+▶ LLM call 10               │           }
+                            │           return "rejected"
+                            │         } with (intr) {
+                            │           if (intr.effect == "notes::archive") {
+                            │             return approve()
+                            │           }
+                            │           return pass()
+                            │         }
+                            │       } with (intr) {
+                            │         // Outer handler: rejects notes::archive when count > 10, otherwise passes.
+                            │         if (intr.effect == "notes::archive") {
+                            │           if (intr.data.count > 10) {
+                            │             return reject()
+                            │           }
+                            │         }
+# numbers   j k move   ⏎ expand   s system   / find   d detail   y copy                                               [TRANSCRIPT]"
+`;
+
+exports[`transcript screen > renders the final answer at 130 columns 2`] = `
+"  system                    │ 240 ── ASSISTANT · LLM call 10 ──                                          22.0s · 20k ctx · $0.0034
+  user                      │ 241 response
+  LLM call 1                │ 242   code
+    agencyGuide             │ 243     def archiveNotes(count: number): Result<string> {
+  LLM call 2                │ 244       // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
+    agencyGuide             │ 245       raise notes::archive("Archive \${count} notes?", { count: count })
+  LLM call 3                │ 246       return success("archived \${count}")
+    agencyGuide             │ 247     }
+  LLM call 4                │ 248
+    grep                    │ 249     /**
+  tool                      │ 250     For count == 11:
+  LLM call 5                │ 251     - Both handlers run. The inner handler (closest to the call) executes and approves the notes
+    grep                    │ 252     ::archive interrupt. The outer handler then executes and, because count > 10, rejects the no
+  tool                      │ 253     tes::archive interrupt.
+  LLM call 6                │ 254     - Because any handler rejecting causes the interrupt to be rejected even if an inner handler
+    grep                    │ 255      approved it, archiveNotes ends up failing, so runArchive returns "rejected".
+  tool                      │ 256     */
+  LLM call 7                │ 257     def runArchive(count: number): string {
+    grep                    │ 258       handle {
+  tool                      │ 259         // Inner handler: approves notes::archive interrupts.
+  LLM call 8                │ 260         handle {
+    agencyGuide             │ 261           const res: Result<string> = archiveNotes(count)
+  LLM call 9                │ 262           if (isSuccess(res)) {
+    typecheck               │ 263             return "archived"
+▶ LLM call 10               │ 264           }
+                            │ 265           return "rejected"
+                            │ 266         } with (intr) {
+                            │ 267           if (intr.effect == "notes::archive") {
+                            │ 268             return approve()
+                            │ 269           }
+                            │ 270           return pass()
+                            │ 271         }
+                            │ 272       } with (intr) {
+                            │ 273         // Outer handler: rejects notes::archive when count > 10, otherwise passes.
+                            │ 274         if (intr.effect == "notes::archive") {
+                            │ 275           if (intr.data.count > 10) {
+                            │ 276             return reject()
+                            │ 277           }
+                            │ 278         }
+# numbers   j k move   ⏎ expand   s system   / find   d detail   y copy                                               [TRANSCRIPT]"
 `;
 
 exports[`transcript screen > renders the final answer at 200 columns 1`] = `
-"TRANSCRIPT 4kRr1sFNYuCSMX1JipL40
-  system      │── ASSISTANT · round 10 ──                                                                                                                                      22.0s · 20k ctx · $0.0034
-  user        │response
-  round 1     │  code
-    agencyGui…│    def archiveNotes(count: number): Result<string> {
-  round 2     │      // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
-    agencyGui…│      raise notes::archive("Archive \${count} notes?", { count: count })
-  round 3     │      return success("archived \${count}")
-    agencyGui…│    }
-  round 4     │
-    grep      │    /**
-  tool        │    For count == 11:
-  round 5     │    - Both handlers run. The inner handler (closest to the call) executes and approves the notes::archive interrupt. The outer handler then executes and, because count > 10, rejects the
-    grep      │     notes::archive interrupt.
-  tool        │    - Because any handler rejecting causes the interrupt to be rejected even if an inner handler approved it, archiveNotes ends up failing, so runArchive returns "rejected".
-  round 6     │    */
-    grep      │    def runArchive(count: number): string {
-  tool        │      handle {
-  round 7     │        // Inner handler: approves notes::archive interrupts.
-    grep      │        handle {
-  tool        │          const res: Result<string> = archiveNotes(count)
-  round 8     │          if (isSuccess(res)) {
-    agencyGui…│            return "archived"
-  round 9     │          }
-    typecheck │          return "rejected"
-▶ round 10    │        } with (intr) {
-              │          if (intr.effect == "notes::archive") {
-              │            return approve()
-              │          }
-              │          return pass()
-              │        }
-              │      } with (intr) {
-              │        // Outer handler: rejects notes::archive when count > 10, otherwise passes.
-              │        if (intr.effect == "notes::archive") {
-              │          if (intr.data.count > 10) {
-              │            return reject()
-              │          }
-              │        }
-              │        return pass()
-j k move   ⏎ expand   s system   / find   d detail   y copy"
+"  system                    │ ── ASSISTANT · LLM call 10 ──                                                                                                                    22.0s · 20k ctx · $0.0034
+  user                      │ response
+  LLM call 1                │   code
+    agencyGuide             │     def archiveNotes(count: number): Result<string> {
+  LLM call 2                │       // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
+    agencyGuide             │       raise notes::archive("Archive \${count} notes?", { count: count })
+  LLM call 3                │       return success("archived \${count}")
+    agencyGuide             │     }
+  LLM call 4                │
+    grep                    │     /**
+  tool                      │     For count == 11:
+  LLM call 5                │     - Both handlers run. The inner handler (closest to the call) executes and approves the notes::archive interrupt. The outer handler then executes and, because count >
+    grep                    │     10, rejects the notes::archive interrupt.
+  tool                      │     - Because any handler rejecting causes the interrupt to be rejected even if an inner handler approved it, archiveNotes ends up failing, so runArchive returns "rejecte
+  LLM call 6                │     d".
+    grep                    │     */
+  tool                      │     def runArchive(count: number): string {
+  LLM call 7                │       handle {
+    grep                    │         // Inner handler: approves notes::archive interrupts.
+  tool                      │         handle {
+  LLM call 8                │           const res: Result<string> = archiveNotes(count)
+    agencyGuide             │           if (isSuccess(res)) {
+  LLM call 9                │             return "archived"
+    typecheck               │           }
+▶ LLM call 10               │           return "rejected"
+                            │         } with (intr) {
+                            │           if (intr.effect == "notes::archive") {
+                            │             return approve()
+                            │           }
+                            │           return pass()
+                            │         }
+                            │       } with (intr) {
+                            │         // Outer handler: rejects notes::archive when count > 10, otherwise passes.
+                            │         if (intr.effect == "notes::archive") {
+                            │           if (intr.data.count > 10) {
+                            │             return reject()
+                            │           }
+                            │         }
+                            │         return pass()
+# numbers   j k move   ⏎ expand   s system   / find   d detail   y copy                                                                                                                     [TRANSCRIPT]"
+`;
+
+exports[`transcript screen > renders the final answer at 200 columns 2`] = `
+"  system                    │ 235
+  user                      │ 236 ── ASSISTANT · LLM call 10 ──                                                                                                                22.0s · 20k ctx · $0.0034
+  LLM call 1                │ 237 response
+    agencyGuide             │ 238   code
+  LLM call 2                │ 239     def archiveNotes(count: number): Result<string> {
+    agencyGuide             │ 240       // Raise an interrupt with effect \`notes::archive\` and payload containing the count.
+  LLM call 3                │ 241       raise notes::archive("Archive \${count} notes?", { count: count })
+    agencyGuide             │ 242       return success("archived \${count}")
+  LLM call 4                │ 243     }
+    grep                    │ 244
+  tool                      │ 245     /**
+  LLM call 5                │ 246     For count == 11:
+    grep                    │ 247     - Both handlers run. The inner handler (closest to the call) executes and approves the notes::archive interrupt. The outer handler then executes and, because coun
+  tool                      │ 248     t > 10, rejects the notes::archive interrupt.
+  LLM call 6                │ 249     - Because any handler rejecting causes the interrupt to be rejected even if an inner handler approved it, archiveNotes ends up failing, so runArchive returns "rej
+    grep                    │ 250     ected".
+  tool                      │ 251     */
+  LLM call 7                │ 252     def runArchive(count: number): string {
+    grep                    │ 253       handle {
+  tool                      │ 254         // Inner handler: approves notes::archive interrupts.
+  LLM call 8                │ 255         handle {
+    agencyGuide             │ 256           const res: Result<string> = archiveNotes(count)
+  LLM call 9                │ 257           if (isSuccess(res)) {
+    typecheck               │ 258             return "archived"
+▶ LLM call 10               │ 259           }
+                            │ 260           return "rejected"
+                            │ 261         } with (intr) {
+                            │ 262           if (intr.effect == "notes::archive") {
+                            │ 263             return approve()
+                            │ 264           }
+                            │ 265           return pass()
+                            │ 266         }
+                            │ 267       } with (intr) {
+                            │ 268         // Outer handler: rejects notes::archive when count > 10, otherwise passes.
+                            │ 269         if (intr.effect == "notes::archive") {
+                            │ 270           if (intr.data.count > 10) {
+                            │ 271             return reject()
+                            │ 272           }
+                            │ 273         }
+# numbers   j k move   ⏎ expand   s system   / find   d detail   y copy                                                                                                                     [TRANSCRIPT]"
 `;

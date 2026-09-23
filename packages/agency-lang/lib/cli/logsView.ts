@@ -10,6 +10,7 @@ import * as tty from "tty";
 import type { AgencyConfig } from "@/config/config.js";
 import { _hostedModelInfo } from "@/stdlib/llm.js";
 import { runViewer } from "@/logsViewer/run.js";
+import type { ViewerThresholds } from "@/logsViewer/thresholds.js";
 import { annotationSummaries } from "@/runDirectory/list.js";
 import { readRunDirectory, runDirPaths } from "@/runDirectory/runDir.js";
 import { csvRowsFromRuns, exportCsv } from "@/runsExplorer/csv.js";
@@ -32,7 +33,7 @@ export type LogsViewOpts = {
 export type LogsViewDeps = {
   viewFile?: (file: string, opts: LogsViewOpts) => Promise<void>;
   viewRunDirectory?: (dir: string, opts: LogsViewOpts) => Promise<void>;
-  explorer?: (options: { sources: Source[] }) => Promise<void>;
+  explorer?: (options: ExplorerTerminalOptions) => Promise<void>;
   loadAll?: (sources: Source[]) => RunRow[];
   stdout?: (text: string) => void;
   onError?: (message: string) => void;
@@ -91,7 +92,7 @@ export async function logsView(
     return;
   }
   const explorer = deps.explorer ?? runExplorerOnTerminal;
-  await explorer({ sources: discovery.sources });
+  await explorer({ sources: discovery.sources, thresholds: cliOpts.config?.viewer });
 }
 
 function isRegularFile(file: string): boolean {
@@ -103,12 +104,15 @@ function exitWithError(message: string): void {
   process.exit(1);
 }
 
-async function runExplorerOnTerminal(options: { sources: Source[] }): Promise<void> {
+type ExplorerTerminalOptions = { sources: Source[]; thresholds?: Partial<ViewerThresholds> };
+
+async function runExplorerOnTerminal(options: ExplorerTerminalOptions): Promise<void> {
   const input = new TerminalInput();
   const output = new TerminalOutput();
   try {
     await runExplorer({
       sources: options.sources,
+      thresholds: options.thresholds,
       input,
       output,
       viewport: {
@@ -126,7 +130,7 @@ export type ViewerTerminalInput = "current-stdin" | "controlling-tty";
 
 /** What the one viewer host runs: in-memory text (with the input-source choice)
  *  or a local file with follow. */
-type ViewerSource =
+type ViewerSource = (
   | { kind: "text"; jsonl: string; terminalInput: ViewerTerminalInput }
   | {
       kind: "file";
@@ -135,7 +139,8 @@ type ViewerSource =
       /** Set when the file is a run directory's statelog: one summary line
        *  of annotations per trace id, shown on the trace rows. */
       traceAnnotations?: Record<string, string>;
-    };
+    }
+) & { thresholds?: Partial<ViewerThresholds> };
 
 type ViewerTerminalDependencies = {
   createInput(): InputSource;
@@ -212,7 +217,14 @@ function viewerOptions(
     return info !== null && info.contextWindow > 0 ? info.contextWindow : undefined;
   };
   if (source.kind === "text") {
-    return { jsonl: source.jsonl, input, output, viewport, contextWindowOf };
+    return {
+      jsonl: source.jsonl,
+      input,
+      output,
+      viewport,
+      contextWindowOf,
+      thresholds: source.thresholds,
+    };
   }
   return {
     input,
@@ -223,6 +235,7 @@ function viewerOptions(
     // A local file: the tree's `x` can extract a trace from it.
     extract: { sourcePath: source.followPath },
     traceAnnotations: source.traceAnnotations,
+    thresholds: source.thresholds,
     contextWindowOf,
   };
 }
@@ -279,8 +292,9 @@ const defaultViewerHost = createViewerHost({
 export function openViewer(opts: {
   jsonl: string;
   terminalInput: ViewerTerminalInput;
+  thresholds?: Partial<ViewerThresholds>;
 }): Promise<void> {
-  return defaultViewerHost({ kind: "text", jsonl: opts.jsonl, terminalInput: opts.terminalInput });
+  return defaultViewerHost({ kind: "text", ...opts });
 }
 
 /** The original single-file viewer path. A LOCAL file additionally enables the
@@ -295,7 +309,12 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     }
     // Piped stdin was drained for the data, so keys come from the controlling TTY.
     // No extract: stdin has no local file to read a trace back from.
-    await defaultViewerHost({ kind: "text", jsonl, terminalInput: "controlling-tty" });
+    await defaultViewerHost({
+      kind: "text",
+      jsonl,
+      terminalInput: "controlling-tty",
+      thresholds: cliOpts.config?.viewer,
+    });
     return;
   }
   if (!fs.existsSync(file)) {
@@ -306,6 +325,7 @@ async function viewStatelogFile(file: string, cliOpts: LogsViewOpts): Promise<vo
     kind: "file",
     followPath: file,
     initialFollow: cliOpts.follow ?? false,
+    thresholds: cliOpts.config?.viewer,
   });
 }
 
@@ -354,5 +374,6 @@ async function viewRunDirectory(dir: string, cliOpts: LogsViewOpts): Promise<voi
     followPath: runDirPaths(dir).statelog,
     initialFollow: cliOpts.follow === true,
     traceAnnotations: annotationSummaries(snapshot),
+    thresholds: cliOpts.config?.viewer,
   });
 }

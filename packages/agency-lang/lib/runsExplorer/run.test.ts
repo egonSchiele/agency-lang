@@ -131,7 +131,9 @@ describe("runExplorer", () => {
     const viewerCalls: string[] = [];
     const { options, input, recorder } = makeOptions({
       sources: [{ kind: "runDir", dir: runDir }],
+      thresholds: { expensiveUsd: 2 },
       runViewerFn: async (viewerOpts) => {
+        expect(viewerOpts.thresholds).toEqual({ expensiveUsd: 2 });
         viewerCalls.push(viewerOpts.focusTraceId ?? "?");
         return "back";
       },

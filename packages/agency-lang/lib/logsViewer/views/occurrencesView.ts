@@ -25,7 +25,8 @@ import { groupSpans, spanDisplayName } from "../timeline/groups.js";
 import type { Interval } from "../timeline/intervals.js";
 import { ADMIN_KINDS, timelineSpans, type TimelineSpan } from "../timeline/spans.js";
 import { DurationCell, RowLabel } from "../screens/timelineScreen.js";
-import { AxisHeader, BarComponent, SelectionFooter, splitWidth, bottomHints } from "./shared.js";
+import { AxisHeader, BarComponent, SelectionFooter, splitWidth } from "./shared.js";
+import { keyFooter } from "../screens/chrome.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "./view.js";
 
@@ -99,7 +100,7 @@ export class OccurrencesView implements View {
     ];
   }
 
-  render(viewport: Viewport): Element {
+  render(viewport: Viewport, sharedHints = ""): Element {
     const widths = splitWidth("occurrences", viewport.cols);
     const window = this.windowOf();
     const bodyRows = Math.max(1, viewport.rows - 4);
@@ -118,7 +119,7 @@ export class OccurrencesView implements View {
       { justifyContent: "flex-start" },
       paintedLine(
         segment(
-          `OCCURRENCES  ${this.groupKey} — ${this.occ.length} call(s)${under}` +
+          `${this.groupKey} — ${this.occ.length} call(s)${under}` +
             (this.following ? "  [following]" : "") +
             (this.stale ? "  [group no longer exists — press any key]" : ""),
           viewport.cols,
@@ -138,13 +139,7 @@ export class OccurrencesView implements View {
           style: { fg: "bright-white" },
         }),
       ),
-      paintedLine(
-        segment(
-          bottomHints(hintsFrom(this.bindings()), "occurrences", viewport.cols),
-          viewport.cols,
-          { style: { fg: "gray" } },
-        ),
-      ),
+      keyFooter(hintsFrom(this.bindings()), viewport.cols, "OCCURRENCES", sharedHints),
     );
   }
 

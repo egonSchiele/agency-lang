@@ -1,8 +1,18 @@
 import { column, row } from "../../tui/builders.js";
+import { twoLineKeyFooter } from "./chrome.js";
+import { normalizeMessage } from "../../statelog/wireAccessors.js";
+import { hasRunningWork } from "../timeline/spans.js";
 import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
-import { paint, paintedLine, segment, type Painted, type Piece } from "../../tui/paint.js";
+import {
+  joinPainted,
+  paint,
+  paintedLine,
+  segment,
+  type Painted,
+  type Piece,
+} from "../../tui/paint.js";
 import { TableComponent, type TableColumn } from "../../tui/table.js";
 import { ancestorsOf, buildTreeIndex, walkNodes } from "../forest.js";
 import { fmtTokens, fmtUsd } from "../format.js";
@@ -23,6 +33,7 @@ import { stringsIn } from "../traceSearch.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { paintPayload } from "./payloadPaint.js";
+import { lineNumberWidth, numberedBlocks } from "./lineNumbers.js";
 import type { Screen } from "./screen.js";
 const LAYOUT = {
   outlineShare: 0.5,
@@ -30,7 +41,7 @@ const LAYOUT = {
   durationWidth: 8,
   tokensWidth: 7,
   costWidth: 9,
-  dividerWidth: 1,
+  dividerWidth: 2,
   fixedRows: 3,
   indent: 2,
 };
@@ -43,7 +54,11 @@ export class TraceScreen implements Screen {
   private machinery = false;
   private admin = false;
   private raw = false;
+  private lineNumbers = false;
   private collapsed: string[] = [];
+  private defaultCollapsed: string[] = [];
+  private groupDefaultsApplied: string[] = [];
+  private showApprovals = false;
   private cursorId = "";
   private scrollTop = 0;
   private pane: "outline" | "payload" = "outline";
@@ -78,6 +93,47 @@ export class TraceScreen implements Screen {
     return [
       ...cursorBindings<ViewAction>(this.moves),
       {
+        keys: ["#"],
+        help: "toggle line numbers",
+        hint: "# numbers",
+        run: () => {
+          this.lineNumbers = !this.lineNumbers;
+        },
+      },
+      {
+        keys: ["Space", " "],
+        help: "page down in the active pane",
+        hint: "space page",
+        run: () => this.move(this.page),
+      },
+      {
+        keys: ["Left"],
+        help: "focus outline",
+        run: () => {
+          this.pane = "outline";
+        },
+      },
+      {
+        keys: ["Right"],
+        help: "focus details",
+        run: () => {
+          this.pane = "payload";
+        },
+      },
+      {
+        keys: ["["],
+        help: "previous sibling in the outline",
+        when: () => this.pane === "outline",
+        run: () => this.moveSibling(-1),
+      },
+      {
+        keys: ["]"],
+        help: "next sibling in the outline",
+        hint: "[] sibling",
+        when: () => this.pane === "outline",
+        run: () => this.moveSibling(1),
+      },
+      {
         keys: ["Enter"],
         help: "expand or collapse children",
         hint: "⏎ fold",
@@ -86,7 +142,7 @@ export class TraceScreen implements Screen {
       {
         keys: ["Tab"],
         help: "switch outline and payload focus",
-        hint: "tab pane",
+        hint: "tab/←→ pane",
         run: () => {
           this.pane = this.pane === "outline" ? "payload" : "outline";
         },
@@ -103,10 +159,19 @@ export class TraceScreen implements Screen {
       {
         keys: ["m"],
         help: "toggle machinery rows",
-        hint: "m machinery",
+        hint: "m tree",
         run: () => {
           this.machinery = !this.machinery;
           this.derive();
+        },
+      },
+      {
+        keys: ["p"],
+        help: "show or hide successful approvals",
+        hint: "p approvals",
+        run: () => {
+          this.showApprovals = !this.showApprovals;
+          this.filterRows();
         },
       },
       {
@@ -203,6 +268,23 @@ export class TraceScreen implements Screen {
       this.cursorId = fallback ?? this.ancestorFallback(old?.node) ?? this.allRows[0]?.id ?? "";
     }
     this.cache = undefined;
+    for (const row of this.allRows) {
+      if (row.kind !== "llmGroup") {
+        continue;
+      }
+      const completed = completedGroup(row);
+      if (!completed && this.defaultCollapsed.includes(row.id)) {
+        this.defaultCollapsed = this.defaultCollapsed.filter((id) => id !== row.id);
+        this.groupDefaultsApplied = this.groupDefaultsApplied.filter((id) => id !== row.id);
+      }
+      if (this.groupDefaultsApplied.includes(row.id) || !completed) {
+        continue;
+      }
+      this.groupDefaultsApplied.push(row.id);
+      if (old?.id !== row.id && !oldAncestors.includes(row.id)) {
+        this.defaultCollapsed.push(row.id);
+      }
+    }
     this.filterRows();
   }
   private ancestorFallback(node: TreeNode | undefined): string | undefined {
@@ -228,15 +310,29 @@ export class TraceScreen implements Screen {
       return (
         this.filter ||
         this.quick ||
-        !rowAncestors(this.allRows, row).some((ancestor) => this.collapsed.includes(ancestor.id))
+        !rowAncestors(this.allRows, row).some((ancestor) => this.isCollapsed(ancestor))
       );
     });
     if (!this.visible.some((row) => row.id === this.cursorId)) {
-      this.select(this.visible[0]?.id ?? "");
+      const selected = this.selected();
+      const ancestor =
+        selected && rowAncestors(this.allRows, selected).find((row) => this.visible.includes(row));
+      this.select(ancestor?.id ?? this.visible[0]?.id ?? "");
     }
     this.clampOutline();
   }
   private matches(row: StoryRow): boolean {
+    if (
+      row.kind === "interrupt" &&
+      row.interrupt.outcome === "approved" &&
+      !this.showApprovals &&
+      !this.machinery &&
+      !this.admin &&
+      !this.filter &&
+      this.quick !== "interrupts"
+    ) {
+      return false;
+    }
     if (
       this.quick === "errors" &&
       !(
@@ -297,10 +393,53 @@ export class TraceScreen implements Screen {
     this.select(this.visible[next]?.id ?? "");
   }
   private toggleCollapsed(): void {
-    this.collapsed = this.collapsed.includes(this.cursorId)
-      ? this.collapsed.filter((id) => id !== this.cursorId)
-      : [...this.collapsed, this.cursorId];
+    const row = this.selected();
+    if (!row) {
+      return;
+    }
+    const collapsed = this.isCollapsed(row);
+    this.openRows([row]);
+    if (!collapsed) {
+      this.collapsed.push(row.id);
+    }
     this.filterRows();
+  }
+  private isCollapsed(row: StoryRow): boolean {
+    return (
+      this.collapsed.includes(row.id) ||
+      (row.kind === "llmGroup" && this.defaultCollapsed.includes(row.id))
+    );
+  }
+  private openRows(rows: StoryRow[]): void {
+    const ids = rows.map((row) => row.id);
+    this.collapsed = this.collapsed.filter((id) => !ids.includes(id));
+    this.defaultCollapsed = this.defaultCollapsed.filter((id) => !ids.includes(id));
+    for (const row of rows) {
+      if (row.kind === "llmGroup" && !this.groupDefaultsApplied.includes(row.id)) {
+        this.groupDefaultsApplied.push(row.id);
+      }
+    }
+  }
+  private moveSibling(direction: number): void {
+    const current = this.visible.findIndex((row) => row.id === this.cursorId);
+    const selected = this.visible[current];
+    if (!selected) {
+      return;
+    }
+    for (
+      let position = current + direction;
+      position >= 0 && position < this.visible.length;
+      position += direction
+    ) {
+      const row = this.visible[position];
+      if (row.depth < selected.depth) {
+        return;
+      }
+      if (row.depth === selected.depth) {
+        this.select(row.id);
+        return;
+      }
+    }
   }
   private nextMatch(direction: number): void {
     if (this.matchIds.length === 0) {
@@ -361,8 +500,10 @@ export class TraceScreen implements Screen {
       this.filter = undefined;
       this.quick = undefined;
     }
-    const ancestorIds = rowAncestors(this.allRows, target).map((row) => row.id);
-    this.collapsed = this.collapsed.filter((id) => !ancestorIds.includes(id));
+    this.openRows(rowAncestors(this.allRows, target));
+    if (target.kind === "interrupt" && target.interrupt.outcome === "approved") {
+      this.showApprovals = true;
+    }
     this.cursorId = target.id;
     this.paneScroll = 0;
     this.filterRows();
@@ -375,6 +516,8 @@ export class TraceScreen implements Screen {
     this.traceId = traceId;
     this.cursorId = "";
     this.collapsed = [];
+    this.defaultCollapsed = [];
+    this.groupDefaultsApplied = [];
     this.filter = undefined;
     this.quick = undefined;
     this.scrollTop = 0;
@@ -402,13 +545,16 @@ export class TraceScreen implements Screen {
     if (!selected) {
       return [];
     }
-    const key = JSON.stringify([this.cursorId, this.raw, width]);
+    const key = JSON.stringify([this.cursorId, this.raw, width, this.lineNumbers]);
     if (this.cache?.key !== key) {
-      this.cache = { key, lines: paintPayload(payloadFor(selected, { raw: this.raw }), width) };
+      const payload = payloadFor(selected, { raw: this.raw });
+      const render = (contentWidth: number) => [{ lines: paintPayload(payload, contentWidth) }];
+      const blocks = this.lineNumbers ? numberedBlocks(width, render) : render(width);
+      this.cache = { key, lines: blocks[0].lines };
     }
     return this.cache.lines;
   }
-  render(viewport: Viewport): Element {
+  render(viewport: Viewport, sharedHints = ""): Element {
     this.page = Math.max(1, viewport.rows - LAYOUT.fixedRows);
     this.clampOutline();
     const width = this.outlineWidth(viewport.cols);
@@ -422,7 +568,7 @@ export class TraceScreen implements Screen {
     const table = this.table.render({
       columns: this.columns(),
       rows: shown,
-      cursor: shown.findIndex((row) => row.id === this.cursorId),
+      cursor: this.pane === "outline" ? shown.findIndex((row) => row.id === this.cursorId) : null,
       width,
       showHeader: false,
       cursorBg: THEME.cursorBg,
@@ -434,13 +580,7 @@ export class TraceScreen implements Screen {
     );
     const divider = column(
       { width: LAYOUT.dividerWidth, height: this.page },
-      ...Array.from({ length: this.page }, () =>
-        paintedLine(
-          paint(this.pane === "outline" ? "┃" : "│", {
-            fg: this.pane === "outline" ? THEME.accent : THEME.chrome,
-          }),
-        ),
-      ),
+      ...Array.from({ length: this.page }, () => paintedLine(paint("│ ", { fg: THEME.chrome }))),
     );
     const body = column(
       { width: this.payloadWidth(viewport.cols), height: this.page, justifyContent: "flex-start" },
@@ -452,32 +592,51 @@ export class TraceScreen implements Screen {
     return column(
       { height: viewport.rows, justifyContent: "flex-start" },
       paintedLine(
-        segment(`TRACE ${this.traceId}${this.following ? " · following" : ""}`, viewport.cols, {
-          style: { fg: THEME.accent },
-        }),
-      ),
-      paintedLine(
-        segment(
-          `${this.filter ? `/${this.filter} ` : ""}${this.quick ?? "all"} · ${hidden} hidden${this.machinery ? " · machinery" : ""}${this.admin ? " · admin" : ""} · ${this.pane} focus${this.raw ? " · raw" : ""}`,
-          viewport.cols,
-          { style: { fg: THEME.muted } },
+        joinPainted(
+          paneHeader(
+            "OUTLINE",
+            this.pane === "outline",
+            `${this.filter ? `/${this.filter} ` : ""}${this.quick ?? "all"} · ${hidden} hidden${this.machinery ? " · machinery" : ""}${this.admin ? " · admin" : ""}${this.following ? " · following" : ""}`,
+            width,
+          ),
+          segment("│", LAYOUT.dividerWidth, { style: { fg: THEME.chrome } }),
+          paneHeader(
+            "DETAILS",
+            this.pane === "payload",
+            this.raw ? "raw JSON" : "",
+            this.payloadWidth(viewport.cols),
+          ),
         ),
       ),
       row({ height: this.page }, outline, divider, body),
-      paintedLine(
-        segment(this.message || hintsFrom(this.bindings()), viewport.cols, {
-          style: { fg: THEME.chrome },
-        }),
+      twoLineKeyFooter(
+        this.message || hintsFrom(this.bindings()),
+        viewport.cols,
+        "TRACE",
+        sharedHints,
       ),
     );
   }
   private columns(): TableColumn<StoryRow>[] {
+    const numbers: TableColumn<StoryRow>[] = this.lineNumbers
+      ? [
+          {
+            key: "line",
+            header: "",
+            width: lineNumberWidth(this.allRows.length),
+            align: "right",
+            cell: (row) => String(this.allRows.indexOf(row) + 1),
+            cellStyle: () => ({ fg: THEME.muted }),
+          },
+        ]
+      : [];
     return [
+      ...numbers,
       {
         key: "story",
         header: "",
         width: "flex",
-        cell: (row) => rowPieces(row, row.id === this.cursorId, this.collapsed.includes(row.id)),
+        cell: (row) => rowPieces(row, row.id === this.cursorId, this.isCollapsed(row)),
       },
       {
         key: "duration",
@@ -517,7 +676,7 @@ export class TraceScreen implements Screen {
   }
 }
 function travels(row: StoryRow): boolean {
-  return ["round", "tool", "subagent"].includes(row.kind);
+  return ["round", "tool", "subagent", "llmGroup"].includes(row.kind);
 }
 function rowAncestors(rows: StoryRow[], row: StoryRow): StoryRow[] {
   const ancestors: StoryRow[] = [];
@@ -550,7 +709,7 @@ function rowPieces(row: StoryRow, selected: boolean, collapsed: boolean): Piece[
       return [
         ...prefix,
         {
-          text: `round ${String(row.round.index + 1).padStart(2)} `,
+          text: `LLM call ${String(row.round.index + 1).padStart(2)} `,
           style: { fg: THEME.kind.assistant, bold: true },
         },
         { text: row.gist, style: { fg: THEME.text } },
@@ -585,7 +744,40 @@ function rowPieces(row: StoryRow, selected: boolean, collapsed: boolean): Piece[
       ];
     case "subagent":
       return [...prefix, { text: `subagent ${row.label}`, style: { fg: THEME.kind.assistant } }];
+    case "llmGroup":
+      return [
+        ...prefix,
+        { text: `Thread · ${row.label}`, style: { fg: THEME.accent, bold: true } },
+      ];
     case "machinery":
       return [...prefix, { text: row.text, style: { fg: THEME.chrome } }];
   }
+}
+
+function paneHeader(label: string, active: boolean, status: string, width: number): Painted {
+  const heading = active ? `▶ ${label} · ↑↓ scroll` : `${label} · Tab to focus`;
+  return segment(`${heading}${status ? ` · ${status}` : ""}`, width, {
+    style: active ? { fg: THEME.accent, bg: THEME.rule, bold: true } : { fg: THEME.muted },
+  });
+}
+
+function completedGroup(row: Extract<StoryRow, { kind: "llmGroup" }>): boolean {
+  if (hasRunningWork(row.node)) {
+    return false;
+  }
+  const last = row.node.children
+    .flatMap((node) => (node.event ? [node.event] : []))
+    .filter((event) =>
+      ["promptStart", "promptCompletion", "promptCancelled"].includes(event.data.type),
+    )
+    .sort((first, second) => Date.parse(first.data.timestamp) - Date.parse(second.data.timestamp))
+    .at(-1);
+  if (last?.data.type === "promptCancelled") {
+    return true;
+  }
+  if (last?.data.type !== "promptCompletion") {
+    return false;
+  }
+  const calls = normalizeMessage({ role: "assistant", ...last.data.completion }).toolCalls ?? [];
+  return calls.length === 0;
 }

@@ -92,17 +92,25 @@ describe("story outline", () => {
       status: "awaitingApproval",
     });
   });
-  it("nests an inner LLM as a subagent and ignores unknown event types", () => {
+  it("labels nested LLM calls by thread and keeps the owning tool as metadata", () => {
     const trace = buildForest([
-      event("toolCallStart", 0, "tool", null, { toolName: "agent" }),
-      event("promptCompletion", 10, "child", "tool", { threadLabel: "writer" }),
+      event("toolCallStart", 0, "tool", null, { toolName: "researchAgent" }),
+      event("promptCompletion", 10, "child", "tool", {
+        threadLabel: "main",
+        threadIdentity: "main-thread",
+      }),
     ])[0];
     const rows = outlineRows(trace, STORY);
     expect(rows.map((row) => [row.kind, row.depth])).toEqual([
       ["tool", 0],
-      ["subagent", 1],
+      ["llmGroup", 1],
       ["round", 2],
     ]);
+    expect(rows[1]).toMatchObject({
+      label: "main",
+      toolName: "researchAgent",
+      rounds: [expect.objectContaining({ threadLabel: "main" })],
+    });
     const unknown = buildForest([event("somethingNew", 0, null)])[0];
     expect(outlineRows(unknown, STORY)).toEqual([]);
     expect(outlineRows(unknown, RAW)).toHaveLength(1);

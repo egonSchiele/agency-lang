@@ -19,7 +19,7 @@ function plain(screen: DetailScreen, width = 140) {
 describe("DetailScreen", () => {
   it("resolves a round and an interrupt story id", () => {
     expect(plain(new DetailScreen(roots, "round:L:0", DEFAULT_THRESHOLDS))).toContain(
-      "ASSISTANT · round 1",
+      "ASSISTANT · LLM call 1",
     );
     const interrupt = new DetailScreen(roots, "leaf:grep:interruptResolved:0", DEFAULT_THRESHOLDS);
     expect(plain(interrupt)).toContain("INTERRUPT · std::grep");

@@ -1,79 +1,100 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`OverviewScreen > renders the golden frame at 100 columns 1`] = `
-"m1 · done · 4.0s · 3 rounds · $0.051
-WHERE THE TIME WENT ─────────────────────── │ CONTEXT PER ROUND ────────────────────────────────────
-▶ llm(main)           ████████    3.1s 100% │    40k ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-  1 call                                    │
-  read                ▌          200ms   6% │
-  1 call                                    │
-  write               ▌          200ms   6% │
-  1 call                                    │                  ░░░░
-                                            │                  ░░░░
-COST PER ROUND ──────────────────────────── │        ░░░░ ░░░░ ░░░░
-$0.025      ████                            │        ░░░░ ░░░░ ░░░░
-            ████                            │      0 ░░░░ ░░░░ ░░░░
-            ████                            │        r1        r3
-            ████                            │ ░ cached  ▒ fresh  █ output
-            ████ ████                       │
-       ▃▃▃▃ ████ ████                       │ FACTS ────────────────────────────────────────────────
-       ████ ████ ████                       │ 2 tool calls · 0 approved · 0 rejected · 0 errors
-       ████ ████ ████                       │   slowest  round 2                              1.5s →
-       ████ ████ ████                       │   priciest round 2                            $0.025 →
-    $0 ████ ████ ████                       │   biggest  round 3                           20k ctx →
-       r1        r3                         │
-
-j k move   tab panel   ⏎ open"
+exports[`renders the linked graphs and preview at 100 columns 1`] = `
+"m1 · done · 4.1s · 3 LLM calls · $0.0001
+CONTEXT PER LLM CALL ────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ──────────────────────────
+      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                    │ m1
+                                            │ 100ms · $0.000012
+                                            │ context 13,919 · cached 13,824
+                                            │ fresh 95 · output 190
+          ░░░░ ░░░░ ░░░░                    │
+        0 ░░░░ ░░░░ ░░░░                    │ answer 1 line 1
+          1    2    3                       │ answer 1 line 2
+░ cached  ▒ fresh  █ output                 │ answer 1 line 3
+                                            │ answer 1 line 4
+COST PER LLM CALL ───────────────────────── │ answer 1 line 5
+$0.000037           ████                    │ answer 1 line 6
+                    ████                    │ answer 1 line 7
+               ████ ████                    │ answer 1 line 8
+               ████ ████                    │ answer 1 line 9
+          ████ ████ ████                    │ answer 1 line 10
+        0 ████ ████ ████                    │ answer 1 line 11
+          1    2    3                       │ answer 1 line 12
+                                            │ answer 1 line 13
+TIME PER LLM CALL ───────────────────────── │ answer 1 line 14
+    300ms           ████                    │ answer 1 line 15
+                    ████                    │ answer 1 line 16
+               ████ ████                    │ answer 1 line 17
+               ████ ████                    │ answer 1 line 18
+          ████ ████ ████                    │ answer 1 line 19
+        0 ████ ████ ████                    │ answer 1 line 20
+          1    2    3                       │ answer 1 line 21
+preview 1–21/60
+tab input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                [OVERVIEW]"
 `;
 
-exports[`OverviewScreen > renders the golden frame at 130 columns 1`] = `
-"m1 · done · 4.0s · 3 rounds · $0.051
-WHERE THE TIME WENT ───────────────────────────────────── │ CONTEXT PER ROUND ────────────────────────────────────────────────────
-▶ llm(main)           ██████████████████████    3.1s 100% │    40k ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-  1 call                                                  │
-  read                █▍                       200ms   6% │
-  1 call                                                  │
-  write               █▍                       200ms   6% │
-  1 call                                                  │                  ░░░░
-                                                          │                  ░░░░
-COST PER ROUND ────────────────────────────────────────── │        ░░░░ ░░░░ ░░░░
-$0.025      ████                                          │        ░░░░ ░░░░ ░░░░
-            ████                                          │      0 ░░░░ ░░░░ ░░░░
-            ████                                          │        r1        r3
-            ████                                          │ ░ cached  ▒ fresh  █ output
-            ████ ████                                     │
-       ▃▃▃▃ ████ ████                                     │ FACTS ────────────────────────────────────────────────────────────────
-       ████ ████ ████                                     │ 2 tool calls · 0 approved · 0 rejected · 0 errors
-       ████ ████ ████                                     │   slowest  round 2                                              1.5s →
-       ████ ████ ████                                     │   priciest round 2                                            $0.025 →
-    $0 ████ ████ ████                                     │   biggest  round 3                                           20k ctx →
-       r1        r3                                       │
-
-j k move   tab panel   ⏎ open"
+exports[`renders the linked graphs and preview at 130 columns 1`] = `
+"m1 · done · 4.1s · 3 LLM calls · $0.0001
+CONTEXT PER LLM CALL ──────────────────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ──────────────────────────────────────────
+      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                  │ m1
+                                                          │ 100ms · $0.000012
+                                                          │ context 13,919 · cached 13,824
+                                                          │ fresh 95 · output 190
+          ░░░░ ░░░░ ░░░░                                  │
+        0 ░░░░ ░░░░ ░░░░                                  │ answer 1 line 1
+          1    2    3                                     │ answer 1 line 2
+░ cached  ▒ fresh  █ output                               │ answer 1 line 3
+                                                          │ answer 1 line 4
+COST PER LLM CALL ─────────────────────────────────────── │ answer 1 line 5
+$0.000037           ████                                  │ answer 1 line 6
+                    ████                                  │ answer 1 line 7
+               ████ ████                                  │ answer 1 line 8
+               ████ ████                                  │ answer 1 line 9
+          ████ ████ ████                                  │ answer 1 line 10
+        0 ████ ████ ████                                  │ answer 1 line 11
+          1    2    3                                     │ answer 1 line 12
+                                                          │ answer 1 line 13
+TIME PER LLM CALL ─────────────────────────────────────── │ answer 1 line 14
+    300ms           ████                                  │ answer 1 line 15
+                    ████                                  │ answer 1 line 16
+               ████ ████                                  │ answer 1 line 17
+               ████ ████                                  │ answer 1 line 18
+          ████ ████ ████                                  │ answer 1 line 19
+        0 ████ ████ ████                                  │ answer 1 line 20
+          1    2    3                                     │ answer 1 line 21
+preview 1–21/60
+tab input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                                              [OVERVIEW]"
 `;
 
-exports[`OverviewScreen > renders the golden frame at 200 columns 1`] = `
-"m1 · done · 4.0s · 3 rounds · $0.051
-WHERE THE TIME WENT ──────────────────────────────────────────────────────────────────── │ CONTEXT PER ROUND ───────────────────────────────────────────────────────────────────────────────────────────
-▶ llm(main)           █████████████████████████████████████████████████████    3.1s 100% │    40k ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-  1 call                                                                                 │
-  read                ███▍                                                    200ms   6% │
-  1 call                                                                                 │
-  write               ███▍                                                    200ms   6% │
-  1 call                                                                                 │                  ░░░░
-                                                                                         │                  ░░░░
-COST PER ROUND ───────────────────────────────────────────────────────────────────────── │        ░░░░ ░░░░ ░░░░
-$0.025      ████                                                                         │        ░░░░ ░░░░ ░░░░
-            ████                                                                         │      0 ░░░░ ░░░░ ░░░░
-            ████                                                                         │        r1        r3
-            ████                                                                         │ ░ cached  ▒ fresh  █ output
-            ████ ████                                                                    │
-       ▃▃▃▃ ████ ████                                                                    │ FACTS ───────────────────────────────────────────────────────────────────────────────────────────────────────
-       ████ ████ ████                                                                    │ 2 tool calls · 0 approved · 0 rejected · 0 errors
-       ████ ████ ████                                                                    │   slowest  round 2                                                                                     1.5s →
-       ████ ████ ████                                                                    │   priciest round 2                                                                                   $0.025 →
-    $0 ████ ████ ████                                                                    │   biggest  round 3                                                                                  20k ctx →
-       r1        r3                                                                      │
-
-j k move   tab panel   ⏎ open"
+exports[`renders the linked graphs and preview at 200 columns 1`] = `
+"m1 · done · 4.1s · 3 LLM calls · $0.0001
+CONTEXT PER LLM CALL ─────────────────────────────────────────────────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ─────────────────────────────────────────────────────────────────────────────────
+      40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                                                 │ m1
+                                                                                         │ 100ms · $0.000012
+                                                                                         │ context 13,919 · cached 13,824
+                                                                                         │ fresh 95 · output 190
+          ░░░░ ░░░░ ░░░░                                                                 │
+        0 ░░░░ ░░░░ ░░░░                                                                 │ answer 1 line 1
+          1    2    3                                                                    │ answer 1 line 2
+░ cached  ▒ fresh  █ output                                                              │ answer 1 line 3
+                                                                                         │ answer 1 line 4
+COST PER LLM CALL ────────────────────────────────────────────────────────────────────── │ answer 1 line 5
+$0.000037           ████                                                                 │ answer 1 line 6
+                    ████                                                                 │ answer 1 line 7
+               ████ ████                                                                 │ answer 1 line 8
+               ████ ████                                                                 │ answer 1 line 9
+          ████ ████ ████                                                                 │ answer 1 line 10
+        0 ████ ████ ████                                                                 │ answer 1 line 11
+          1    2    3                                                                    │ answer 1 line 12
+                                                                                         │ answer 1 line 13
+TIME PER LLM CALL ────────────────────────────────────────────────────────────────────── │ answer 1 line 14
+    300ms           ████                                                                 │ answer 1 line 15
+                    ████                                                                 │ answer 1 line 16
+               ████ ████                                                                 │ answer 1 line 17
+               ████ ████                                                                 │ answer 1 line 18
+          ████ ████ ████                                                                 │ answer 1 line 19
+        0 ████ ████ ████                                                                 │ answer 1 line 20
+          1    2    3                                                                    │ answer 1 line 21
+preview 1–21/60
+tab input/output   ← → call   ^f/^b page   ↑ ↓ preview   g/G ends   ⏎ open                                                                                                                    [OVERVIEW]"
 `;

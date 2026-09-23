@@ -2,7 +2,7 @@ import { column } from "../../tui/builders.js";
 import type { Element } from "../../tui/elements.js";
 import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
-import { paint, paintedLine, segment, type Painted } from "../../tui/paint.js";
+import { paintedLine, segment, type Painted } from "../../tui/paint.js";
 import { parseStyledText } from "../../tui/styleParser.js";
 import { resolveDetailRow } from "../detailTarget.js";
 import {
@@ -14,6 +14,7 @@ import {
 } from "../keymap.js";
 import { payloadFor } from "../payload.js";
 import { paintPayload } from "../screens/payloadPaint.js";
+import { keyFooter } from "../screens/chrome.js";
 import type { StoryRow } from "../story.js";
 import { THEME } from "../theme.js";
 import type { ViewerThresholds } from "../thresholds.js";
@@ -87,7 +88,7 @@ export class DetailScreen implements View {
     this.pageRows = Math.max(1, viewport.rows - LAYOUT.fixedRows);
     return runViewerKey(this.bindings(), formatKey(event));
   }
-  render(viewport: Viewport): Element {
+  render(viewport: Viewport, sharedHints = ""): Element {
     const all = this.allLines(viewport.cols);
     this.totalRows = all.length;
     this.pageRows = Math.max(1, viewport.rows - LAYOUT.fixedRows);
@@ -96,20 +97,19 @@ export class DetailScreen implements View {
     return column(
       { height: viewport.rows, justifyContent: "flex-start" },
       paintedLine(
-        segment(`DETAIL ${this.row ? this.rowId : "(row no longer in the log)"}`, viewport.cols, {
-          style: { fg: THEME.accent },
-        }),
+        segment(
+          `${this.row ? this.rowId : "(row no longer in the log)"} · ${Math.min(this.scroll + 1, all.length)}–${Math.min(this.scroll + this.pageRows, all.length)} of ${all.length} lines`,
+          viewport.cols,
+          {
+            style: { fg: THEME.accent },
+          },
+        ),
       ),
       column(
         { height: this.pageRows, justifyContent: "flex-start" },
         ...visible.map((line) => paintedLine(line)),
       ),
-      paintedLine(
-        paint(
-          `(${Math.min(this.scroll + 1, all.length)}–${Math.min(this.scroll + this.pageRows, all.length)} of ${all.length}) ${hintsFrom(this.bindings())} ${this.message}`,
-          { fg: THEME.muted },
-        ),
-      ),
+      keyFooter(this.message || hintsFrom(this.bindings()), viewport.cols, "DETAIL", sharedHints),
     );
   }
   setData(roots: TreeNode[]): void {

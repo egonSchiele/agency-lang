@@ -1,0 +1,294 @@
+/**
+ * Read the JSON files that run-model.agency wrote, one per model, and print
+ * them side by side. Also writes every run into one combined file.
+ *
+ *   agency run compare.agency results/*.json
+ *   agency run compare.agency results/gpt-5.4-mini.json results/qwen3.5-2b.json --out combined.json
+ *
+ * A combined file can be passed back in, too, so you can add a new model to
+ * an old comparison without rerunning the old models.
+ *
+ * Three tables are printed:
+ *   1. Each case, each model: trials passed, then the mean and median time.
+ *      The raw time of every trial is in the JSON files. When the mean and
+ *      median are far apart, one trial was much slower than the others.
+ *   2. Each category, each model: the average score, as a percent.
+ *   3. One row per model: pass rate, mean and median time, speed, and the tokens and
+ *      cost of one trial, so runs with different trial counts compare fairly.
+ */
+import { parseArgs } from "std::args"
+import { basename, dirname } from "std::path"
+
+// The same shapes run-model.agency writes.
+type CaseResult = {
+  caseName: string,
+  category: string,
+  trial: number,
+  passed: boolean,
+  score: number,
+  latencyMs: number,
+  tokens: number,
+  cost: number,
+  detail: string,
+  error: string
+}
+
+type RunFile = {
+  label: string,
+  model: string,
+  startedAt: string,
+  trials: number,
+  haystackLines: number,
+  results: CaseResult[]
+}
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+
+def pad(text: string, width: number): string {
+  return text.padEnd(width)
+}
+
+def rule(width: number): string {
+  const dash = "-"
+  return dash.repeat(width)
+}
+
+def seconds(ms: number): string {
+  const s = ms / 1000
+  return s.toFixed(1) + "s"
+}
+
+def median(values: number[]): number {
+  if (values.length == 0) {
+    return 0
+  }
+  const sorted = sortBy(values) as v { return v }
+  const middle = Math.floor(sorted.length / 2)
+  if (sorted.length % 2 == 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2
+  }
+  return sorted[middle]
+}
+
+def sumOf(values: number[]): number {
+  return reduce(values, 0) as (total, v) { return total + v }
+}
+
+def average(values: number[]): number {
+  if (values.length == 0) {
+    return 0
+  }
+  return sumOf(values) / values.length
+}
+
+// Every distinct value, in the order it first appears. The tables list cases
+// and categories in the order run-model.agency ran them.
+def inOrder(values: string[]): string[] {
+  let seen: string[] = []
+  for (v in values) {
+    if (!seen.includes(v)) {
+      seen.push(v)
+    }
+  }
+  return seen
+}
+
+// Each model gets a column wide enough for its label, and at least wide
+// enough for a cell like "3/3 12.4s | 10.1s (1 err)".
+def columnWidth(label: string): number {
+  return Math.max(label.length, 25) + 2
+}
+
+// ---------------------------------------------------------------------------
+// Reading the files
+// ---------------------------------------------------------------------------
+
+// A path is split into its directory and file name, because read() only
+// accepts a bare file name inside a directory. The caller approves the read.
+def readRuns(path: string): RunFile[] {
+  const text = read(basename(path), dirname(path))
+  if (isFailure(text)) {
+    print("Skipping ${path}: ${text.error}")
+    return []
+  }
+  const parsed = try JSON.parse(text.value)
+  if (isFailure(parsed)) {
+    print("Skipping ${path}: it is not valid JSON")
+    return []
+  }
+  const data = parsed.value
+  // A combined file written by this script holds a list of runs.
+  if (data.runs != null) {
+    return data.runs
+  }
+  if (data.results == null) {
+    print("Skipping ${path}: it has no results, so it was not written by run-model.agency")
+    return []
+  }
+  return [data]
+}
+
+// ---------------------------------------------------------------------------
+// Tables
+// ---------------------------------------------------------------------------
+
+def casesOf(run: RunFile, caseName: string): CaseResult[] {
+  return filter(run.results) as r { return r.caseName == caseName }
+}
+
+// One cell of the case table: trials passed, then the mean and median time.
+// For example "2/3 1.7s | 1.2s". A case the model never ran shows as "-".
+def caseCell(runs: CaseResult[]): string {
+  if (runs.length == 0) {
+    return "-"
+  }
+  const passes = count(runs) as r { return r.passed }
+  const errors = count(runs) as r { return r.error != "" }
+  const times = map(runs) as r { return r.latencyMs }
+  let text = "${passes}/${runs.length} ${seconds(average(times))} | ${seconds(median(times))}"
+  if (errors > 0) {
+    text = text + " (${errors} err)"
+  }
+  return text
+}
+
+def headerRow(firstColumn: string, firstWidth: number, runs: RunFile[]): string {
+  let header = pad(firstColumn, firstWidth)
+  for (run in runs) {
+    header = header + pad(run.label, columnWidth(run.label))
+  }
+  return header
+}
+
+def printCaseTable(runs: RunFile[], caseNames: string[]) {
+  const firstWidth = 14
+  const header = headerRow("case", firstWidth, runs)
+  print("")
+  print(header)
+  print(rule(header.length))
+  for (caseName in caseNames) {
+    let row = pad(caseName, firstWidth)
+    for (run in runs) {
+      row = row + pad(caseCell(casesOf(run, caseName)), columnWidth(run.label))
+    }
+    print(row)
+  }
+  print("Each cell: trials passed, mean time | median time.")
+}
+
+def printCategoryTable(runs: RunFile[], categories: string[]) {
+  const firstWidth = 16
+  const header = headerRow("category", firstWidth, runs)
+  print("")
+  print(header)
+  print(rule(header.length))
+  for (category in categories) {
+    let row = pad(category, firstWidth)
+    for (run in runs) {
+      const inCategory = filter(run.results) as r { return r.category == category }
+      let text = "-"
+      if (inCategory.length > 0) {
+        const scores = map(inCategory) as r { return r.score }
+        const percent = average(scores) * 100
+        text = percent.toFixed(0) + "%"
+      }
+      row = row + pad(text, columnWidth(run.label))
+    }
+    print(row)
+  }
+}
+
+// Tokens per second on the long story. The token count includes the short
+// prompt, so this slightly overstates generation speed.
+def storySpeed(run: RunFile): string {
+  const stories = filter(casesOf(run, "throughput")) as r { return r.error == "" && r.latencyMs > 0 }
+  if (stories.length == 0) {
+    return "-"
+  }
+  const rates = map(stories) as r { return r.tokens / (r.latencyMs / 1000) }
+  return average(rates).toFixed(0)
+}
+
+def printSummaryTable(runs: RunFile[]) {
+  let labelWidth = 7
+  for (run in runs) {
+    labelWidth = Math.max(labelWidth, run.label.length + 2)
+  }
+  print("")
+  print(pad("model", labelWidth) + pad("passed", 10) + pad("avg score", 11) + pad("mean time", 11) + pad("median time", 13) + pad("story tok/s", 13) + pad("tokens/trial", 14) + "cost/trial")
+  print(rule(labelWidth + 82))
+  for (run in runs) {
+    const results = run.results
+    const passes = count(results) as r { return r.passed }
+    const scores = map(results) as r { return r.score }
+    const times = map(results) as r { return r.latencyMs }
+    const tokenCounts = map(results) as r { return r.tokens }
+    const costs = map(results) as r { return r.cost }
+    const trials = Math.max(run.trials, 1)
+    const tokens = Math.round(sumOf(tokenCounts) / trials)
+    const cost = sumOf(costs) / trials
+    print(pad(run.label, labelWidth) + pad("${passes}/${results.length}", 10) + pad(average(scores).toFixed(2), 11) + pad(seconds(average(times)), 11) + pad(seconds(median(times)), 13) + pad(storySpeed(run), 13) + pad("${tokens}", 14) + "$" + cost.toFixed(4))
+  }
+}
+
+node main() {
+  const args = parseArgs({
+    programName: "compare",
+    description: "Compare benchmark results from several run-model.agency JSON files.",
+    flags: {
+      out: { type: "string", short: "o", default: "combined.json", description: "Where to write every run as one JSON file. Pass an empty string to skip it" }
+    }
+  })
+
+  const paths = args.positionals
+  if (paths.length == 0) {
+    print("Pass the result files to compare, for example: agency run compare.agency results/*.json")
+    return null
+  }
+
+  // The same run can arrive twice, once in its own file and once inside a
+  // combined file, as when comparing results/*.json after run-all.sh.
+  let runs: RunFile[] = []
+  let seenKeys: string[] = []
+  for (path in paths) {
+    // Reading the files the user named is the point of this script, so the
+    // reads are approved here rather than asking once per file.
+    const fileRuns = readRuns(path) with approve
+    for (run in fileRuns) {
+      const key = "${run.label}@${run.startedAt}"
+      if (!seenKeys.includes(key)) {
+        seenKeys.push(key)
+        runs.push(run)
+      }
+    }
+  }
+  if (runs.length == 0) {
+    print("No results to compare.")
+    return null
+  }
+
+  let allCaseNames: string[] = []
+  let allCategories: string[] = []
+  for (run in runs) {
+    for (r in run.results) {
+      allCaseNames.push(r.caseName)
+      allCategories.push(r.category)
+    }
+  }
+
+  printCaseTable(runs, inOrder(allCaseNames))
+  printCategoryTable(runs, inOrder(allCategories))
+  printSummaryTable(runs)
+
+  if (args.flags.out != "") {
+    const saved = write(args.flags.out, JSON.stringify({ runs: runs }, null, 2)) with approve
+    print("")
+    if (isFailure(saved)) {
+      print("Could not write ${args.flags.out}: ${saved.error}")
+    } else {
+      print("Wrote ${runs.length} runs to ${args.flags.out}")
+    }
+  }
+}

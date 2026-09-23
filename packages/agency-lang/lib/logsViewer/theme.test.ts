@@ -5,7 +5,10 @@ import { DEFAULT_THRESHOLDS } from "./thresholds.js";
 
 describe("tones", () => {
   it("a slow duration is hot, a fast one quiet, the rest normal", () => {
-    expect(durationTone(6000, DEFAULT_THRESHOLDS)).toBe("hot");
+    expect(durationTone(300000, DEFAULT_THRESHOLDS)).toBe("hot");
+    expect(durationTone(120000, DEFAULT_THRESHOLDS)).toBe("normal");
+    expect(costTone(0.05, DEFAULT_THRESHOLDS)).toBe("quiet");
+    expect(costTone(1, DEFAULT_THRESHOLDS)).toBe("hot");
     expect(durationTone(50, DEFAULT_THRESHOLDS)).toBe("quiet");
     expect(durationTone(900, DEFAULT_THRESHOLDS)).toBe("normal");
   });
@@ -18,7 +21,8 @@ describe("tones", () => {
   it("a hot number is marked in text as well as color", () => {
     expect(hotMark("hot")).toBe("!");
     expect(hotMark("normal")).toBe("");
-    expect(toneStyle("hot").fg).toBe(THEME.kind.error);
+    expect(toneStyle("hot").fg).toBe(THEME.warning);
+    expect(toneStyle("hot").fg).not.toBe(THEME.kind.error);
   });
 });
 
@@ -39,6 +43,7 @@ describe("the palette", () => {
       THEME.accent,
       THEME.cached,
       THEME.ok,
+      THEME.warning,
       THEME.rule,
       THEME.cursorBg,
     ];

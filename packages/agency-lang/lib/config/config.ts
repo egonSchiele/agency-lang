@@ -393,9 +393,9 @@ export interface AgencyConfig {
 
   /**
    * Visual thresholds used by `agency logs view`. Durations at or
-   * above `slowMs` (default 5000) render bright-red; durations below
+   * above `slowMs` (default 300000) render amber; durations below
    * `fastMs` (default 100) render gray. Costs at or above
-   * `expensiveUsd` (default 0.01) render bright-red.
+   * `expensiveUsd` (default 1) render amber.
    */
   viewer?: {
     slowMs?: number;

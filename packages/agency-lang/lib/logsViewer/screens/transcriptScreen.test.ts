@@ -158,6 +158,9 @@ describe("transcript screen", () => {
     const recorder = new FrameRecorder();
     recorder.write(render(layout(screen.render({ rows: 40, cols }), cols, 40)));
     expect(recorder.lastText()).toMatchSnapshot();
+    press(screen, "#");
+    recorder.write(render(layout(screen.render({ rows: 40, cols }), cols, 40)));
+    expect(recorder.lastText()).toMatchSnapshot();
     recorder.writeHTML(`/tmp/pr7-transcript-${cols}.html`);
   });
 });
@@ -175,7 +178,8 @@ it("pages inside a long block by display lines and keeps j/k on blocks", () => {
   expect(screen.focusId()).toBe("round:L:0");
   screen.handleKey({ key: "g" }, small);
   screen.handleKey({ key: "f", ctrl: true }, small);
-  expect(text(screen, small.cols, small.rows)).toContain("line 9");
+  expect(text(screen, small.cols, small.rows)).toContain("line 10");
+  expect(text(screen, small.cols, small.rows)).not.toContain("line 9");
   expect(text(screen, small.cols, small.rows)).not.toContain("line 4");
   const keys = screen.helpLines().flatMap((line) => line.split(" — ")[0].split(" / "));
   expect(keys.filter((key, position) => keys.indexOf(key) !== position)).toEqual([]);
@@ -217,7 +221,7 @@ it("scrolls to a search match deep inside an expanded result", () => {
   ).join("\n");
   const screen = make(buildForest(events));
   screen.applySearch("needle inside result");
-  expect(text(screen)).toContain("│needle inside result");
+  expect(text(screen)).toContain("│ needle inside result");
   expect(screen.focusId()).toBe("guide");
 });
 
@@ -252,7 +256,7 @@ it("finds and copies an owned final tool error without a later prompt snapshot",
   const screen = make(roots);
   screen.applySearch("disk quota exceeded");
   expect(screen.focusId()).toBe("write");
-  expect(text(screen)).toContain("│disk quota exceeded");
+  expect(text(screen)).toContain("│ disk quota exceeded");
   expect(press(screen, "y")).toMatchObject({
     kind: "copy",
     text: expect.stringContaining("disk quota exceeded"),
@@ -298,7 +302,7 @@ it("reveals an interrupt message found inside a collapsed tool", () => {
   );
   screen.applySearch("Approve replacing the archived notes?");
   expect(screen.focusId()).toBe("write");
-  expect(text(screen)).toContain("│Approve replacing the archived notes?");
+  expect(text(screen)).toContain("│ Approve replacing the archived notes?");
   expect(press(screen, "y")).toMatchObject({
     kind: "copy",
     text: expect.stringContaining("Approve replacing the archived notes?"),
@@ -321,4 +325,41 @@ it("cycles to the last or first match after moving to a nonmatching block", () =
   press(screen, "k");
   press(screen, "n");
   expect(screen.focusId()).toBe("round:L:0");
+});
+
+it("toggles continuous text line numbers and preserves focus and follow state", () => {
+  const roots = buildForest([
+    event("promptCompletion", 100, "L", null, {
+      completion: { output: Array.from({ length: 80 }, (_, index) => `body ${index}`).join("\n") },
+    }),
+  ]);
+  const screen = make(roots);
+  const vp = { rows: 12, cols: 100 };
+  const frame = () => text(screen, vp.cols, vp.rows);
+  const before = frame();
+  const focus = screen.focusId();
+  screen.handleKey({ key: "#" }, vp);
+  expect(frame()).toMatch(/│\s*1 /);
+  screen.handleKey({ key: "pagedown" }, vp);
+  expect(frame()).toMatch(/│\s*12 /);
+  expect(screen.focusId()).toBe(focus);
+  screen.setData(roots);
+  expect(frame()).toMatch(/│\s*12 /);
+  screen.handleKey({ key: "g" }, vp);
+  screen.handleKey({ key: "#" }, vp);
+  expect(frame()).toBe(before);
+});
+
+it("searches payload text rather than the numbered gutter", () => {
+  const roots = buildForest([
+    event("promptCompletion", 100, "L", null, {
+      completion: {
+        output: [...Array.from({ length: 70 }, () => "filler"), "target 42"].join("\n"),
+      },
+    }),
+  ]);
+  const screen = make(roots);
+  screen.handleKey({ key: "#" }, viewport);
+  screen.applySearch("42");
+  expect(text(screen, 100, 12)).toContain("target 42");
 });

@@ -16,7 +16,9 @@ import {
   type ToolStoryRow,
   type InterruptStoryRow,
   type ErrorStoryRow,
+  type LlmGroupStoryRow,
 } from "./story.js";
+import type { Round } from "./timeline/rounds.js";
 export type PayloadLine =
   | {
       kind: "heading";
@@ -38,6 +40,7 @@ const PAYLOADS: PayloadMakers = {
   tool: toolPayload,
   interrupt: interruptPayload,
   error: errorPayload,
+  llmGroup: llmGroupPayload,
   subagent: (row) => [
     { kind: "heading", text: `SUBAGENT · ${row.label}`, tone: "assistant" },
     ...rawPayload(row),
@@ -63,10 +66,8 @@ function rawPayload(row: StoryRow): PayloadLine[] {
 }
 function roundPayload(row: RoundStoryRow): PayloadLine[] {
   const round = row.round;
-  const event = row.node.event!;
-  const calls = normalizeMessage({ role: "assistant", ...event.data.completion }).toolCalls ?? [];
   return [
-    { kind: "heading", text: `ASSISTANT · round ${round.index + 1}`, tone: "assistant" },
+    { kind: "heading", text: `ASSISTANT · LLM call ${round.index + 1}`, tone: "assistant" },
     {
       kind: "meta",
       text: `${round.model} · ${fmtDuration(round.durationMs)} · ${fmtUsd(round.costUsd)}`,
@@ -76,9 +77,60 @@ function roundPayload(row: RoundStoryRow): PayloadLine[] {
       text: roundTokenSummary(row),
     },
     { kind: "blank" },
+    ...roundResponsePayload(round),
+  ];
+}
+
+function llmGroupPayload(row: LlmGroupStoryRow): PayloadLine[] {
+  const rounds = row.rounds;
+  const models = rounds.map((round) => round.model).filter(Boolean);
+  const threads = rounds.map((round) => round.threadLabel).filter(Boolean);
+  const unique = (values: (string | undefined)[]): string =>
+    values.filter((value, index) => values.indexOf(value) === index).join(", ") || "not recorded";
+  const latest = rounds.at(-1);
+  const lines: PayloadLine[] = [
+    { kind: "heading", text: `THREAD · ${row.label}`, tone: "assistant" },
+    { kind: "meta", text: `Tool: ${row.toolName}` },
+    { kind: "meta", text: `Thread: ${unique(threads)}` },
+    { kind: "meta", text: `Model: ${unique(models)}` },
+    {
+      kind: "meta",
+      text: `${rounds.length} completed LLM ${rounds.length === 1 ? "call" : "calls"}`,
+    },
+    {
+      kind: "meta",
+      text: `LLM time: ${fmtDuration(rounds.reduce((sum, round) => sum + round.durationMs, 0))} · Cost: ${fmtUsd(rounds.reduce((sum, round) => sum + round.costUsd, 0)) || "$0"}`,
+    },
+    {
+      kind: "meta",
+      text: "Metrics cover these calls; nested tools are excluded. Press r for raw events.",
+    },
+  ];
+  if (latest) {
+    lines.push(
+      { kind: "blank" },
+      {
+        kind: "heading",
+        text: `Latest response · LLM call ${latest.index + 1}`,
+        tone: "assistant",
+      },
+      ...roundResponsePayload(latest),
+    );
+  }
+  return lines;
+}
+
+export function roundResponsePayload(round: Round): PayloadLine[] {
+  const event = round.node.event!;
+  const calls = normalizeMessage({ role: "assistant", ...event.data.completion }).toolCalls ?? [];
+  return [
     ...valuePayload(completionOf(event) ?? ""),
     ...calls.flatMap((call) => [
-      { kind: "heading" as const, text: `REQUEST · ${call.name ?? "tool"}`, tone: "tool" as const },
+      {
+        kind: "heading" as const,
+        text: `TOOL CALL · ${call.name ?? "tool"}`,
+        tone: "tool" as const,
+      },
       ...valuePayload(call.arguments),
     ]),
   ];
@@ -117,17 +169,21 @@ function toolPayload(row: ToolStoryRow): PayloadLine[] {
   if (finished !== undefined) {
     output.push(
       { kind: "heading", text: "Output", tone: "chrome" },
-      { kind: "meta", text: `result: ${resultLineCount(finished.data.output)} lines` },
+      {
+        kind: "meta",
+        text: `result: ~${fmtTokens(resultTokenEstimate(finished.data.output))} tokens`,
+      },
       ...valuePayload(finished.data.output),
     );
   }
   return output;
 }
-function resultLineCount(output: unknown): number {
+function resultTokenEstimate(output: unknown): number {
   const result = output as { __type?: string; success?: boolean; value?: unknown } | null;
   const value = result?.__type === "resultType" && result.success === true ? result.value : output;
-  const text = typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? "");
-  return text.length === 0 ? 0 : text.split("\n").length;
+  const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
+  // Rough estimate for the result text, excluding viewer formatting and message overhead.
+  return Math.ceil(text.length / 4);
 }
 function errorPayload(row: ErrorStoryRow): PayloadLine[] {
   const event = row.node.event;

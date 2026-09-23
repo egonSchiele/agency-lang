@@ -114,8 +114,6 @@ export class AxisHeader {
 
 export class TimelineHeader {
   computeText(args: {
-    view: string;
-    title: string;
     crumbs: string[];
     totalMs: number;
     zoom?: Interval;
@@ -130,7 +128,7 @@ export class TimelineHeader {
       args.zoom !== undefined
         ? `  (zoom ${fmtOffset(args.zoom.start - args.viewStart)}–${fmtOffset(args.zoom.end - args.viewStart)})`
         : "";
-    return `TIMELINE [${args.view}]  ${args.title}${crumbs}  ${fmtOffset(args.totalMs)}${admin}${zoom}`;
+    return `Elapsed ${fmtOffset(args.totalMs)}${crumbs}${admin}${zoom}`;
   }
 }
 

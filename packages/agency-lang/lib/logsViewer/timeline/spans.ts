@@ -10,6 +10,8 @@ export type TimelineSpan = {
   kind: string;
   depth: number;
   extent: Interval;
+  /** Recorded tool start, which can differ from the duration-derived envelope. */
+  toolStartedAt?: number;
   /** Start-marking event has no matching terminus yet (live run under follow). */
   running: boolean;
   /** Envelope minus the union of DIRECT child span envelopes. Without
@@ -79,10 +81,18 @@ function makeSpan(node: TreeNode, depth: number): TimelineSpan | undefined {
     kind: node.label,
     depth,
     extent,
+    toolStartedAt: toolStartedAt(node),
     running: hasRunningWork(node),
     selfIntervals,
     selfMs: totalMs(selfIntervals),
   };
+}
+
+function toolStartedAt(node: TreeNode): number | undefined {
+  const event = node.children.find((child) => child.event?.data.type === "toolCallStart")?.event;
+  if (event === undefined) return undefined;
+  const timestamp = Date.parse(event.data.timestamp);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
 /** Envelope over ALL descendant leaves: start = min(timestamp − timeTaken),

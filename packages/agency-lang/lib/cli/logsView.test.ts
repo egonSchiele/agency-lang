@@ -80,6 +80,16 @@ describe("logsView routing", () => {
     expect(calls.viewed).toEqual([{ file: "-", follow: false }]);
   });
 
+  it("passes viewer thresholds to the explorer", async () => {
+    const runDir = writeGradedRun(tmpDir);
+    const file = writeMultiTraceStatelog(tmpDir);
+    const explorer = vi.fn().mockResolvedValue(undefined);
+    await logsView([runDir, file], { config: { viewer: { expensiveUsd: 2 } } }, { explorer });
+    expect(explorer).toHaveBeenCalledWith(
+      expect.objectContaining({ thresholds: { expensiveUsd: 2 } }),
+    );
+  });
+
   it("a sole regular file with --follow goes straight to the viewer, even when empty", async () => {
     const empty = path.join(tmpDir, "empty.jsonl");
     fs.writeFileSync(empty, "");
@@ -204,12 +214,28 @@ describe("createViewerHost lifecycle", () => {
       runViewer,
       viewport,
     });
-    await host({ kind: "text", jsonl: "L", terminalInput: "current-stdin" });
-    expect(runViewer).toHaveBeenCalledWith(expect.objectContaining({ jsonl: "L" }));
-    runViewer.mockClear();
-    await host({ kind: "file", followPath: "/f", initialFollow: true });
+    await host({
+      kind: "text",
+      jsonl: "L",
+      terminalInput: "current-stdin",
+      thresholds: { expensiveUsd: 2 },
+    });
     expect(runViewer).toHaveBeenCalledWith(
-      expect.objectContaining({ followPath: "/f", initialFollow: true }),
+      expect.objectContaining({ jsonl: "L", thresholds: { expensiveUsd: 2 } }),
+    );
+    runViewer.mockClear();
+    await host({
+      kind: "file",
+      followPath: "/f",
+      initialFollow: true,
+      thresholds: { slowMs: 600000 },
+    });
+    expect(runViewer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        followPath: "/f",
+        initialFollow: true,
+        thresholds: { slowMs: 600000 },
+      }),
     );
   });
 

@@ -15,6 +15,7 @@
 import * as fs from "fs";
 
 import { runViewer } from "../logsViewer/run.js";
+import type { ViewerThresholds } from "../logsViewer/thresholds.js";
 import { Screen } from "../tui/screen.js";
 import type { InputSource, KeyEvent } from "../tui/input/types.js";
 import type { OutputTarget } from "../tui/output/types.js";
@@ -40,6 +41,7 @@ export type ExplorerOptions = {
   input: InputSource;
   output: OutputTarget;
   viewport: Viewport;
+  thresholds?: Partial<ViewerThresholds>;
   /** Injectable for tests; production uses the real logs viewer. */
   runViewerFn?: typeof runViewer;
 };
@@ -264,6 +266,7 @@ class ExplorerShell {
         extract: { sourcePath: statelogPath },
         // A run directory's statelog holds every test's trace; land on this one.
         focusTraceId: traceId,
+        thresholds: this.options.thresholds,
       });
       if (resolution === "quit") {
         return true;

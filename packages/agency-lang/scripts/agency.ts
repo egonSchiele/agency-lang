@@ -1083,7 +1083,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         opts.input === undefined &&
         fs.existsSync(path.join(path.resolve(runDir), "statelog.jsonl"))
       ) {
-        await logsView([runDir], { follow: opts.follow });
+        await logsView([runDir], { follow: opts.follow, config: getConfig() });
         return;
       }
       let statelogPath: string;
@@ -1093,7 +1093,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
         console.error(`Error: ${(e as Error).message}`);
         process.exit(2);
       }
-      await logsView(statelogPath, { follow: opts.follow });
+      await logsView(statelogPath, { follow: opts.follow, config: getConfig() });
     });
 
   evalCmd

@@ -37,46 +37,15 @@ function fixture() {
 }
 
 describe("overviewData", () => {
-  it("selects the slowest, priciest and biggest rounds", () => {
-    const data = overviewData(fixture(), () => 4_000);
-    expect(data.callouts.map((callout) => [callout.label, callout.round.id])).toEqual([
-      ["slowest", "round:L:1"],
-      ["priciest", "round:L:1"],
-      ["biggest", "round:L:2"],
-    ]);
-  });
-
-  it("counts tools, approvals, rejections and errors independently", () => {
-    expect(overviewData(fixture(), () => undefined).counts).toEqual({
-      toolCalls: 2,
-      approved: 1,
-      rejected: 1,
-      errors: 1,
-    });
-  });
-
-  it("combines groups after the sixth into other", () => {
-    const tools = Array.from({ length: 8 }, (_unused, position) =>
-      span(
-        "toolExecution",
-        [
-          leaf("toolCallStart", position * 100, { toolName: `tool${position}` }),
-          leaf("toolCall", position * 100 + 50, { toolName: `tool${position}` }),
-        ],
-        { id: `tool-${position}` },
-      ),
-    );
-    const data = overviewData(trace(tools), () => undefined);
-    expect(data.timeBars).toHaveLength(7);
-    expect(data.timeBars.at(-1)?.label).toBe("other");
-    expect(data.timeBars.at(-1)?.calls).toBe(2);
+  it("uses individual request durations rather than the surrounding invocation", () => {
+    const data = overviewData(fixture());
+    expect(data.rounds.map((round) => round.durationMs)).toEqual([100, 800, 200]);
+    expect(data.rounds.map((round) => round.id)).toEqual(["round:L:0", "round:L:1", "round:L:2"]);
+    expect(data.costUsd).toBeCloseTo(0.045);
   });
 
   it("uses trace-root rounds for elapsed time", () => {
-    const data = overviewData(
-      trace([leaf("promptCompletion", 1_000, { timeTaken: 100 })]),
-      () => undefined,
-    );
+    const data = overviewData(trace([leaf("promptCompletion", 1_000, { timeTaken: 100 })]));
     expect(data.elapsedMs).toBe(100);
   });
 
@@ -87,7 +56,7 @@ describe("overviewData", () => {
       event("promptStart", 200),
     ].join("\n");
     const roots = buildForest(parseStatelogJsonl(jsonl).events);
-    expect(overviewData(roots[0], () => undefined).running).toBe(true);
+    expect(overviewData(roots[0]).running).toBe(true);
   });
 
   it("does not let another span's completion close a pending prompt", () => {
@@ -97,7 +66,7 @@ describe("overviewData", () => {
       event("promptCompletion", 100, { timeTaken: 100 }, "A"),
     ].join("\n");
     const roots = buildForest(parseStatelogJsonl(jsonl).events);
-    expect(overviewData(roots[0], () => undefined).running).toBe(true);
+    expect(overviewData(roots[0]).running).toBe(true);
   });
 });
 
@@ -122,7 +91,7 @@ it("omits missing models from mixed named and unnamed rounds", () => {
     leaf("promptCompletion", 100),
     leaf("promptCompletion", 200, { model: '"m1"' }),
   ]);
-  expect(overviewData(root, () => undefined).models).toEqual(["m1"]);
+  expect(overviewData(root).models).toEqual(["m1"]);
 });
 it.each(["runtimeError", "validationError", "limitExceeded", "structuredOutput", "finalizeError"])(
   "keeps a tool running after an unrelated %s",
@@ -132,7 +101,7 @@ it.each(["runtimeError", "validationError", "limitExceeded", "structuredOutput",
         id: "tool",
       }),
     ]);
-    expect(overviewData(root, () => undefined).running).toBe(true);
+    expect(overviewData(root).running).toBe(true);
   },
 );
 it("ends a tool on a toolError", () => {
@@ -143,5 +112,5 @@ it("ends a tool on a toolError", () => {
       { id: "tool" },
     ),
   ]);
-  expect(overviewData(root, () => undefined).running).toBe(false);
+  expect(overviewData(root).running).toBe(false);
 });

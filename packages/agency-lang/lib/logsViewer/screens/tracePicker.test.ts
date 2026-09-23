@@ -57,7 +57,7 @@ function cursorLine(text: string): string {
 }
 it("lists every trace with its numbers and what it was asked", () => {
   const text = renderPicker(threeTraceForest());
-  expect(text).toContain("TRACES · 3");
+  expect(text).toContain("[TRACES]");
   expect(text).toMatch(/ask for A/);
   expect(text).toMatch(/ask for C/);
 });
@@ -115,7 +115,7 @@ it("Esc clears the search first, and only then has nothing left to undo", () => 
   press(picker, "/");
   type(picker, "arch");
   expect(picker.escape!()).toBe(true);
-  expect(renderOf(picker)).toContain("TRACES · 3");
+  expect(renderOf(picker)).toContain("[TRACES]");
   expect(picker.escape!()).toBe(false);
 });
 
@@ -138,9 +138,9 @@ it("an ask that looks like a style tag is drawn as written", () => {
   expect(renderPicker(forestAsking("{bold} please"))).toContain("{bold} please");
 });
 
-it("marks the current trace and a trace with an error without relying on color", () => {
+it("marks errors without a second selection marker", () => {
   const text = renderPicker(threeTraceForestWithErrorInB());
-  expect(text).toMatch(/●.*ask for C/);
+  expect(text).not.toContain("●");
   expect(text).toMatch(/✖.*ask for B/);
 });
 
@@ -164,7 +164,11 @@ it("keeps annotated rows together while scrolling in display lines", () => {
   expect(renderOf(picker)).toContain("note for trace0");
 });
 it("renders the searched picker at 120 columns", () => {
-  const picker = makePicker(threeTraceForest());
+  const roots = threeTraceForest();
+  // Use local dates so this snapshot is the same in every timezone.
+  roots[0].firstTs = new Date(2026, 8, 22, 16, 37, 19).getTime();
+  roots[1].firstTs = new Date(2026, 8, 21, 11, 8, 2).getTime();
+  const picker = makePicker(roots);
   press(picker, "/");
   type(picker, "archiveNotes");
   expect(renderOf(picker)).toMatchSnapshot();

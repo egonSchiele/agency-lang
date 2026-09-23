@@ -4,7 +4,7 @@ import { formatKey } from "../../tui/input/format.js";
 import type { KeyEvent } from "../../tui/input/types.js";
 import { segment, paintedLine } from "../../tui/paint.js";
 import { TableComponent, type TableColumn } from "../../tui/table.js";
-import { fmtTokens, fmtUsd } from "../format.js";
+import { fmtStartedAt, fmtTokens, fmtUsd } from "../format.js";
 import {
   cursorBindings,
   helpFrom,
@@ -27,16 +27,16 @@ import {
 } from "../traceSearch.js";
 import type { TreeNode } from "../types.js";
 import type { View, ViewAction, Viewport } from "../views/view.js";
+import { keyFooter } from "./chrome.js";
 
 const LAYOUT = {
-  chromeRows: 6,
-  startedWidth: 10,
+  chromeRows: 5,
+  startedWidth: 26,
   durationWidth: 9,
-  roundsWidth: 7,
+  roundsWidth: 10,
   tokensWidth: 8,
   costWidth: 9,
   hitsWidth: 5,
-  markerWidth: 3,
 };
 export type TracePickerOptions = {
   currentTraceId: string;
@@ -128,6 +128,9 @@ export class TracePicker implements View {
   capturesText(): boolean {
     return this.editing;
   }
+  selectedTraceId(): string | undefined {
+    return this.cursorTraceId || undefined;
+  }
   escape(): boolean {
     if (this.editing || this.query.length > 0) {
       this.query = "";
@@ -185,11 +188,11 @@ export class TracePicker implements View {
     }
     return { kind: "selectTrace", traceId: this.cursorTraceId };
   }
-  render(viewport: Viewport): Element {
+  render(viewport: Viewport, sharedHints = ""): Element {
     const shown = this.shown();
-    const title = shown.searching
-      ? `TRACES · ${shown.summaries.length} of ${this.summaries.length} match "${this.query}"`
-      : `TRACES · ${this.summaries.length}`;
+    const matches = shown.searching
+      ? `  · ${shown.summaries.length} of ${this.summaries.length} match`
+      : "";
     const table = new TableComponent<TraceSummary>().render({
       columns: this.columns(shown),
       rows: shown.summaries,
@@ -220,9 +223,8 @@ export class TracePicker implements View {
     const hit = shown.hits.find((entry) => entry.traceId === this.cursorTraceId);
     const footer = hintsFrom(this.editing ? this.editingBindings() : this.browsingBindings());
     return column(
-      { justifyContent: "flex-start" },
-      paintedLine(segment(title, viewport.cols, { style: { fg: THEME.accent, bold: true } })),
-      paintedLine(segment(`/ ${this.query}${this.editing ? "▏" : ""}`, viewport.cols)),
+      { height: viewport.rows, justifyContent: "flex-start" },
+      paintedLine(segment(`/ ${this.query}${this.editing ? "▏" : ""}${matches}`, viewport.cols)),
       tableRows[0],
       column(
         { height, justifyContent: "flex-start" },
@@ -234,26 +236,18 @@ export class TracePicker implements View {
         }),
       ),
       paintedLine(segment(this.message || (this.following ? "● following" : ""), viewport.cols)),
-      paintedLine(segment(footer, viewport.cols, { style: { fg: THEME.muted } })),
+      keyFooter(footer, viewport.cols, "TRACES", sharedHints),
     );
   }
   private columns(shown: ShownTraces): TableColumn<TraceSummary>[] {
     const thresholds = this.options.thresholds;
     const columns: TableColumn<TraceSummary>[] = [
       {
-        key: "current",
-        header: "",
-        width: LAYOUT.markerWidth,
-        cell: (summary) => (summary.traceId === this.options.currentTraceId ? "●" : ""),
-      },
-      {
         key: "started",
-        header: "started",
+        header: "Started (local)",
         width: LAYOUT.startedWidth,
         cell: (summary) =>
-          summary.startedAt === undefined
-            ? "—"
-            : new Date(summary.startedAt).toISOString().slice(11, 19),
+          summary.startedAt === undefined ? "—" : fmtStartedAt(summary.startedAt),
       },
       {
         key: "duration",
@@ -264,7 +258,7 @@ export class TracePicker implements View {
       },
       {
         key: "rounds",
-        header: "rounds",
+        header: "LLM calls",
         width: LAYOUT.roundsWidth,
         align: "right",
         cell: (summary) => String(summary.rounds),

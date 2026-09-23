@@ -26,8 +26,10 @@ import { transcriptPayload } from "../transcriptPayload.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { paintPayload } from "./payloadPaint.js";
+import { lineNumberWidth, numberedBlocks } from "./lineNumbers.js";
+import { keyFooter } from "./chrome.js";
 import type { Screen } from "./screen.js";
-const LAYOUT = { spineWidth: 14, dividerWidth: 1, fixedRows: 2, gap: 1, half: 2 };
+const LAYOUT = { spineWidth: 28, dividerWidth: 2, fixedRows: 1, gap: 1, half: 2 };
 type BlockLines = { id: string; start: number; lines: Painted[] };
 
 export class TranscriptScreen implements Screen {
@@ -40,6 +42,7 @@ export class TranscriptScreen implements Screen {
   private matches: string[] = [];
   private message = "";
   private following = false;
+  private lineNumbers = false;
   private page = 1;
   private width = 1;
   private painted: BlockLines[] = [];
@@ -66,6 +69,14 @@ export class TranscriptScreen implements Screen {
       "Ctrl+U": -Math.max(1, Math.floor(this.page / LAYOUT.half)),
     };
     return [
+      {
+        keys: ["#"],
+        help: "toggle line numbers",
+        hint: "# numbers",
+        run: () => {
+          this.lineNumbers = !this.lineNumbers;
+        },
+      },
       ...moves.map((binding) =>
         Object.hasOwn(paging, binding.keys[0])
           ? { ...binding, run: () => this.pageBy(paging[binding.keys[0]]) }
@@ -97,7 +108,7 @@ export class TranscriptScreen implements Screen {
       { keys: ["N"], help: "previous match", run: () => this.nextMatch(-1) },
       {
         keys: ["d"],
-        help: "open round or tool detail",
+        help: "open LLM call or tool detail",
         hint: "d detail",
         when: () => this.focusId() !== undefined,
         run: () => ({ kind: "openDetail", rowId: this.focusId()! }),
@@ -280,19 +291,26 @@ export class TranscriptScreen implements Screen {
     return true;
   }
   private prepare(viewport: Viewport): void {
-    this.page = Math.max(1, viewport.rows - LAYOUT.fixedRows);
+    const statusRows = this.query || this.following ? 1 : 0;
+    this.page = Math.max(1, viewport.rows - LAYOUT.fixedRows - statusRows);
     this.width = Math.max(1, viewport.cols - LAYOUT.spineWidth - LAYOUT.dividerWidth);
-    let start = 0;
-    this.painted = this.blocks.map((block) => {
-      const lines = paintBlock(block, this.expanded.includes(block.id), this.width);
-      const placed = {
-        id: block.id,
-        start,
-        lines: [...lines, ...Array.from({ length: LAYOUT.gap }, () => paint(""))],
-      };
-      start += placed.lines.length;
-      return placed;
-    });
+    const renderBlocks = (width: number): BlockLines[] => {
+      let start = 0;
+      return this.blocks.map((block) => {
+        const lines = paintBlock(block, this.expanded.includes(block.id), width);
+        const placed = {
+          id: block.id,
+          start,
+          lines: [...lines, ...Array.from({ length: LAYOUT.gap }, () => paint(""))],
+        };
+        start += placed.lines.length;
+        return placed;
+      });
+    };
+    this.painted = this.lineNumbers
+      ? numberedBlocks(this.width, renderBlocks)
+      : renderBlocks(this.width);
+    const total = this.painted.reduce((sum, block) => sum + block.lines.length, 0);
     if (this.needsReveal) {
       const focused = this.painted.find((block) => block.id === this.cursor);
       this.scrollTop = focused?.start ?? 0;
@@ -301,6 +319,7 @@ export class TranscriptScreen implements Screen {
           parseStyledText(line)
             .map((span) => span.text)
             .join("")
+            .slice(this.lineNumbers ? lineNumberWidth(total) : 0)
             .toLowerCase()
             .includes(this.query.toLowerCase()),
         );
@@ -309,9 +328,9 @@ export class TranscriptScreen implements Screen {
       this.needsReveal = false;
       this.revealMatch = false;
     }
-    this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, start - 1)));
+    this.scrollTop = Math.max(0, Math.min(this.scrollTop, Math.max(0, total - 1)));
   }
-  render(viewport: Viewport): Element {
+  render(viewport: Viewport, sharedHints = ""): Element {
     this.prepare(viewport);
     const position = this.blocks.findIndex((block) => block.id === this.cursor);
     const spineTop = Math.max(0, position - this.page + 1);
@@ -319,7 +338,7 @@ export class TranscriptScreen implements Screen {
       paintedLine(
         segment(`${block.id === this.cursor ? "▶" : " "} ${spineLabel(block)}`, LAYOUT.spineWidth, {
           style: {
-            fg: THEME.text,
+            fg: spineColor(block),
             ...(block.id === this.cursor ? { bg: THEME.cursorBg } : {}),
           },
         }),
@@ -328,16 +347,17 @@ export class TranscriptScreen implements Screen {
     const lines = this.painted
       .flatMap((block) => block.lines)
       .slice(this.scrollTop, this.scrollTop + this.page);
-    const status = this.query ? ` · /${this.query} · ${this.matches.length} matches` : "";
+    const status = [
+      this.query ? `/${this.query} · ${this.matches.length} matches` : "",
+      this.following ? "following" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
     return column(
       { height: viewport.rows, justifyContent: "flex-start" },
-      paintedLine(
-        segment(
-          `TRANSCRIPT ${this.traceId}${this.following ? " · following" : ""}${status}`,
-          viewport.cols,
-          { style: { fg: THEME.accent } },
-        ),
-      ),
+      ...(status
+        ? [paintedLine(segment(status, viewport.cols, { style: { fg: THEME.muted } }))]
+        : []),
       row(
         { height: this.page },
         column(
@@ -346,17 +366,20 @@ export class TranscriptScreen implements Screen {
         ),
         column(
           { width: LAYOUT.dividerWidth, height: this.page },
-          ...Array.from({ length: this.page }, () => paintedLine(paint("│", { fg: THEME.chrome }))),
+          ...Array.from({ length: this.page }, () =>
+            paintedLine(paint("│ ", { fg: THEME.chrome })),
+          ),
         ),
         column(
           { width: this.width, height: this.page, justifyContent: "flex-start" },
           ...lines.map((line) => paintedLine(line)),
         ),
       ),
-      paintedLine(
-        segment(this.message || hintsFrom(this.bindings()), viewport.cols, {
-          style: { fg: THEME.chrome },
-        }),
+      keyFooter(
+        this.message || hintsFrom(this.bindings()),
+        viewport.cols,
+        "TRANSCRIPT",
+        sharedHints,
       ),
     );
   }
@@ -368,9 +391,13 @@ function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): P
   }
   const stats = `${fmtDuration(block.round.durationMs)} · ${fmtTokens(block.round.contextTokens)} ctx · ${fmtUsd(block.round.costUsd)}`;
   const heading = joinPainted(
-    segment(`── ASSISTANT · round ${block.round.index + 1} ──`, Math.max(0, width - stats.length), {
-      style: { fg: THEME.kind.assistant, bold: true },
-    }),
+    segment(
+      `── ASSISTANT · LLM call ${block.round.index + 1} ──`,
+      Math.max(0, width - stats.length),
+      {
+        style: { fg: THEME.kind.assistant, bold: true },
+      },
+    ),
     segment(stats, Math.min(width, stats.length), { align: "right", style: { fg: THEME.muted } }),
   );
   return [heading, ...body];
@@ -378,7 +405,7 @@ function paintBlock(block: TranscriptBlock, expanded: boolean, width: number): P
 function spineLabel(block: TranscriptBlock): string {
   switch (block.kind) {
     case "assistant":
-      return `round ${block.round.index + 1}`;
+      return `LLM call ${block.round.index + 1}`;
     case "tool":
       return `  ${block.row.name}`;
     case "rewrite":
@@ -388,4 +415,15 @@ function spineLabel(block: TranscriptBlock): string {
     default:
       return block.kind;
   }
+}
+
+function spineColor(block: TranscriptBlock): string {
+  const role = block.kind === "history" ? block.message.role : block.kind;
+  if (role === "user") {
+    return THEME.kind.user;
+  }
+  if (role === "assistant") {
+    return THEME.kind.assistant;
+  }
+  return THEME.text;
 }

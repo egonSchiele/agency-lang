@@ -12,6 +12,8 @@ import {
   type ViewerBinding,
 } from "../keymap.js";
 import type { Screen } from "./screen.js";
+import { keyFooter } from "./chrome.js";
+import { lineNumber, lineNumberWidth } from "./lineNumbers.js";
 import type { WidthSplit } from "../views/shared.js";
 const ZOOM_IN = 0.5;
 const ZOOM_OUT = 2;
@@ -82,6 +84,7 @@ export class TimelineScreen implements Screen {
   private query: string | undefined;
   private message = "";
   private following = false;
+  private lineNumbers = false;
   private index: TreeIndex | undefined;
   private rows: FlameRow[] = [];
 
@@ -103,8 +106,27 @@ export class TimelineScreen implements Screen {
     return [
       ...cursorBindings<ViewAction>(this.moves),
       {
+        keys: ["["],
+        help: "previous sibling, skipping descendants",
+        hint: "[ ] sibling",
+        run: () => this.moveSibling(-1),
+      },
+      {
+        keys: ["]"],
+        help: "next sibling, skipping descendants",
+        run: () => this.moveSibling(1),
+      },
+      {
+        keys: ["#"],
+        help: "toggle line numbers",
+        hint: "# numbers",
+        run: () => {
+          this.lineNumbers = !this.lineNumbers;
+        },
+      },
+      {
         keys: ["Enter", "Right", "l"],
-        help: "drill into the selected call; on a round, open it in the trace",
+        help: "drill into the selected call; on an LLM call, open it in the trace",
         hint: "⏎ drill",
         run: () => this.drillOrOpen(),
       },
@@ -124,13 +146,13 @@ export class TimelineScreen implements Screen {
       { keys: ["+", "="], help: "zoom in", hint: "+/- zoom", run: () => this.zoomBy(ZOOM_IN) },
       { keys: ["-"], help: "zoom out", run: () => this.zoomBy(ZOOM_OUT) },
       {
-        keys: ["["],
+        keys: ["{"],
         help: "pan left",
-        hint: "[ ] pan",
+        hint: "{ } pan",
         when: zoomed,
         run: () => this.pan(-PAN_STEP),
       },
-      { keys: ["]"], help: "pan right", when: zoomed, run: () => this.pan(PAN_STEP) },
+      { keys: ["}"], help: "pan right", when: zoomed, run: () => this.pan(PAN_STEP) },
       {
         keys: ["0"],
         help: "reset the zoom",
@@ -170,6 +192,23 @@ export class TimelineScreen implements Screen {
     return helpFrom(this.bindings());
   }
 
+  private moveSibling(direction: -1 | 1): void {
+    const selected = this.selected();
+    if (selected === undefined) return;
+    for (
+      let position = this.cursor + direction;
+      position >= 0 && position < this.rows.length;
+      position += direction
+    ) {
+      const { row } = this.rows[position];
+      if (row.depth < selected.row.depth) return;
+      if (row.depth === selected.row.depth) {
+        this.cursor = position;
+        return;
+      }
+    }
+  }
+
   private openDetail(): ViewAction {
     const selected = this.selected();
     return selected === undefined
@@ -186,8 +225,9 @@ export class TimelineScreen implements Screen {
   private promptSearch(): ViewAction {
     return { kind: "promptLine", label: "Search: ", onResult: (text) => this.applySearch(text) };
   }
-  render(viewport: Viewport): Element {
-    const widths = splitWidth("timeline", viewport.cols);
+  render(viewport: Viewport, sharedHints = ""): Element {
+    const numberWidth = this.lineNumbers ? lineNumberWidth(this.rows.length) : 0;
+    const widths = splitWidth("timeline", viewport.cols - numberWidth);
     const window = this.window();
     const bodyRows = Math.max(1, viewport.rows - CHROME_ROWS);
     if (this.cursor < this.scrollTop) {
@@ -207,15 +247,20 @@ export class TimelineScreen implements Screen {
       { justifyContent: "flex-start" },
       paintedLine(paint(this.headerText(window), { fg: THEME.text })),
       paintedLine(
-        paint(new AxisHeader(widths.gutter).computeText(window, this.viewStart(), widths.bar), {
-          fg: THEME.chrome,
-        }),
+        paint(
+          new AxisHeader(widths.gutter + numberWidth).computeText(
+            window,
+            this.viewStart(),
+            widths.bar,
+          ),
+          {
+            fg: THEME.chrome,
+          },
+        ),
       ),
       body,
       paintedLine(paint(new SelectionFooter().computeText(this.footerText()), { fg: THEME.text })),
-      paintedLine(
-        segment(hintsFrom(this.bindings()), viewport.cols, { style: { fg: THEME.muted } }),
-      ),
+      keyFooter(hintsFrom(this.bindings()), viewport.cols, "TIMELINE", sharedHints),
     );
   }
 
@@ -483,10 +528,8 @@ export class TimelineScreen implements Screen {
     const crumbs = this.drillPath
       .map((id) => this.index?.byId[id])
       .filter((node): node is TreeNode => node !== undefined)
-      .map((node) => spanDisplayName(node));
+      .map((node) => this.threadLabel(node) ?? spanDisplayName(node));
     return new TimelineHeader().computeText({
-      view: "timeline",
-      title: this.traceId.slice(0, 8),
       crumbs,
       totalMs: full.end - full.start,
       zoom: this.zoom !== undefined ? window : undefined,
@@ -501,8 +544,10 @@ export class TimelineScreen implements Screen {
     if (sel === undefined) {
       return this.message;
     }
+    const label =
+      (sel.row.kind === "span" ? this.threadLabel(sel.node) : undefined) ?? sel.node.summary;
     const base =
-      `${sel.node.summary}  ·  start +${fmtOffset(extentOf(sel.row).start - this.viewStart())}` +
+      `${label}  ·  start +${fmtOffset(extentOf(sel.row).start - this.viewStart())}` +
       `  self ${fmtDuration(sel.row.kind === "span" ? sel.row.span.selfMs : sel.row.round.durationMs, { minutes: true })}`;
     return this.message ? `${base}  ${this.message}` : base;
   }
@@ -511,14 +556,24 @@ export class TimelineScreen implements Screen {
     if (item.row.kind === "round") {
       const round = item.row.round;
       return [
-        `round ${round.index + 1}`,
+        `LLM call ${round.index + 1}`,
         `${fmtTokens(round.contextTokens)} ctx`,
         fmtUsd(round.costUsd),
       ]
         .filter((part) => part.length > 0)
         .join(" · ");
     }
-    return new RowLabel(item.node).computeText();
+    return this.threadLabel(item.node) ?? new RowLabel(item.node).computeText();
+  }
+
+  private threadLabel(node: TreeNode): string | undefined {
+    if (node.label !== "llmCall") return undefined;
+    const names = this.rounds
+      .filter((round) => round.spanId === node.id)
+      .map((round) => round.threadLabel)
+      .filter((name): name is string => Boolean(name));
+    const name = names.filter((name, index) => names.indexOf(name) === index).join(", ");
+    return `Thread · ${name || "unnamed"}`;
   }
 
   private renderRow(
@@ -529,12 +584,19 @@ export class TimelineScreen implements Screen {
   ): Element {
     const identity = isCursor ? THEME.text : (item.color ?? THEME.muted);
     const content = joinPainted(
+      ...(this.lineNumbers
+        ? [lineNumber(this.rows.indexOf(item) + 1, lineNumberWidth(this.rows.length))]
+        : []),
       this.labelPart(item, isCursor, widths.gutter, identity),
       this.barPart(item, window, widths.bar, identity),
       this.statsPart(item, widths.stats),
     );
     return paintedLine(content, {
-      width: widths.gutter + widths.bar + widths.stats,
+      width:
+        widths.gutter +
+        widths.bar +
+        widths.stats +
+        (this.lineNumbers ? lineNumberWidth(this.rows.length) : 0),
       bg: isCursor ? THEME.cursorBg : undefined,
     });
   }
@@ -543,7 +605,10 @@ export class TimelineScreen implements Screen {
     const levels = Math.min(item.row.depth, LAYOUT.maxIndentLevels);
     const indent = " ".repeat(levels * LAYOUT.indentCells);
     const marker = isCursor ? LAYOUT.cursorMarker : LAYOUT.noMarker;
-    return segment(`${marker}${indent}${this.rowText(item)}`, width, { style: { fg } });
+    const isThread = item.row.kind === "span" && item.node.label === "llmCall";
+    return segment(`${marker}${indent}${this.rowText(item)}`, width, {
+      style: isThread ? { fg: THEME.accent, bold: true } : { fg },
+    });
   }
 
   private barPart(item: FlameRow, window: Interval, width: number, fg: string): Painted {

@@ -70,17 +70,30 @@ function nestByDepth(spans: TimelineSpan[]): SpanBlock[] {
   });
 }
 
-/** One level: its blocks and its rounds, in start order. A round that
- *  starts with a span goes first, because the round requested it. */
+/** Keep requested tools beneath their call, with other siblings in start order. */
 function rowsFor(
   blocks: SpanBlock[],
   rounds: Round[],
   depth: number,
   roundsBySpan: RoundsBySpan,
 ): TimelineRow[] {
+  const toolsByRound: Record<string, SpanBlock[]> = Object.create(null);
+  const siblings: SpanBlock[] = [];
+  for (const block of blocks) {
+    const owner = requestingRound(block, rounds);
+    if (owner === undefined) {
+      siblings.push(block);
+    } else {
+      (toolsByRound[owner.id] ??= []).push(block);
+    }
+  }
   const placed: Placed[] = [
-    ...rounds.map((round) => placeRound(round, depth)),
-    ...blocks.map((block) => placeBlock(block, roundsBySpan)),
+    ...rounds.map((round) => {
+      const placed = placeRound(round, depth);
+      placed.rows.push(...rowsFor(toolsByRound[round.id] ?? [], [], depth + 1, roundsBySpan));
+      return placed;
+    }),
+    ...siblings.map((block) => placeBlock(block, depth, roundsBySpan)),
   ];
   const inOrder = [...placed].sort(
     (first, second) => first.start - second.start || first.tieBreak - second.tieBreak,
@@ -93,12 +106,25 @@ function placeRound(round: Round, depth: number): Placed {
   return { start: round.start, tieBreak: ROUND_BEFORE_SPAN, rows: [row] };
 }
 
-function placeBlock(block: SpanBlock, roundsBySpan: RoundsBySpan): Placed {
+/** Only direct tool children can belong to a call in this scope. */
+function requestingRound(block: SpanBlock, rounds: Round[]): Round | undefined {
+  if (block.span.kind !== "toolExecution") return undefined;
+  const start = block.span.toolStartedAt ?? block.span.extent.start;
+  return rounds
+    .filter((round) => round.end <= start)
+    .sort((first, second) => first.end - second.end)
+    .at(-1);
+}
+
+function placeBlock(block: SpanBlock, depth: number, roundsBySpan: RoundsBySpan): Placed {
   const { span } = block;
   const own = roundsBySpan[span.id] ?? [];
-  const drawn = drawsRoundRows(own) ? own : [];
-  const spanRow: SpanRow = { kind: "span", id: span.id, depth: span.depth, span };
-  const below = rowsFor(block.children, drawn, span.depth + 1, roundsBySpan);
+  const hasRequestedTools = block.children.some(
+    (child) => requestingRound(child, own) !== undefined,
+  );
+  const drawn = drawsRoundRows(own) || hasRequestedTools ? own : [];
+  const spanRow: SpanRow = { kind: "span", id: span.id, depth, span };
+  const below = rowsFor(block.children, drawn, depth + 1, roundsBySpan);
   return { start: span.extent.start, tieBreak: SPAN_AFTER_ROUND, rows: [spanRow, ...below] };
 }
 

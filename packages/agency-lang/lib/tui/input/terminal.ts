@@ -37,6 +37,11 @@ const KEY_MAP: Record<string, KeyEvent> = {
   "\x1b[6~": { key: "pagedown" },
   "\x1b[3~": { key: "delete" },
   "\x1b[2~": { key: "insert" },
+  // Ctrl+Home/End, in CSI letter and tilde forms.
+  "\x1b[1;5H": { key: "home", ctrl: true },
+  "\x1b[1;5F": { key: "end", ctrl: true },
+  "\x1b[1;5~": { key: "home", ctrl: true },
+  "\x1b[4;5~": { key: "end", ctrl: true },
   // Shift+arrow
   "\x1b[1;2A": { key: "up", shift: true },
   "\x1b[1;2B": { key: "down", shift: true },

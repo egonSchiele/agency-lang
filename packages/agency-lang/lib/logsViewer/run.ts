@@ -1,5 +1,5 @@
 // The viewer shell: owns the screen, the view stack, action dispatch, the
-// help overlay, the parse-error footer, quit, and follow mode. Everything
+// help overlay, the parse-error notice, quit, and follow mode. Everything
 // view-specific lives in the View classes (lib/logsViewer/views/); the
 // shell only routes keys to the active view and interprets the actions it
 // cannot perform itself.
@@ -21,9 +21,10 @@ import { TraceScreen } from "./screens/traceScreen.js";
 import { TranscriptScreen } from "./screens/transcriptScreen.js";
 import { TracePicker } from "./screens/tracePicker.js";
 import { MIN_COLS, tabStrip, tooNarrow } from "./screens/chrome.js";
+import type { ScreenName } from "./screens/screen.js";
 import { ScreenHost } from "./screenHost.js";
 import { escOutcome, type EscOutcome } from "./escLadder.js";
-import { cursorBindings, findBinding, helpFrom, type ViewerBinding } from "./keymap.js";
+import { cursorBindings, findBinding, helpFrom, hintsFrom, type ViewerBinding } from "./keymap.js";
 import { OccurrencesView } from "./views/occurrencesView.js";
 import { type ViewAction, type Viewport } from "./views/view.js";
 import type { EventEnvelope, TreeNode } from "./types.js";
@@ -52,7 +53,7 @@ export type RunViewerOpts = {
   // the stack RETURNS to the host instead of doing nothing, and the
   // resolution tells the host whether the user backed out or quit.
   embedded?: boolean;
-  thresholds?: ViewerThresholds;
+  thresholds?: Partial<ViewerThresholds>;
   // Enables the trace `x` action: extract the focused trace to a file of its
   // own, read back from this local path. Undefined for remote or stdin sources.
   extract?: { sourcePath: string };
@@ -150,7 +151,7 @@ function makeHelp(helpLines: () => string[], viewport: Viewport, close: () => vo
   };
 }
 
-function parseErrorFooter(parseErrors: ReadonlyArray<{ line: number }>): Element {
+function parseErrorNotice(parseErrors: ReadonlyArray<{ line: number }>): Element {
   return line(`${parseErrors.length} parse error(s) — first: line ${parseErrors[0].line}`, {
     fg: "bright-red",
   });
@@ -197,7 +198,7 @@ async function runSession(
   parseErrors: ParseErrors,
   allEvents: readonly EventEnvelope[],
 ): Promise<ViewerResolution> {
-  const thresholds = opts.thresholds ?? DEFAULT_THRESHOLDS;
+  const thresholds = { ...DEFAULT_THRESHOLDS, ...opts.thresholds };
   const viewport: Viewport = opts.viewport;
   const tooNarrowNow = viewport.cols < MIN_COLS;
   const annotations = opts.traceAnnotations ?? {};
@@ -210,19 +211,6 @@ async function runSession(
   const innerViewport = (): Viewport => ({
     cols: viewport.cols,
     rows: Math.max(1, viewport.rows - 1 - (parseErrors.length > 0 ? 1 : 0)),
-  });
-  const stripArgs = () => ({
-    active: host.activeScreen(),
-    title: host.currentTraceId().slice(0, 8),
-    tracePosition: {
-      at: roots.findIndex((root) => root.traceId === host.currentTraceId()) + 1,
-      of: roots.length,
-    },
-    annotation: Object.hasOwn(annotations, host.currentTraceId())
-      ? annotations[host.currentTraceId()]
-      : undefined,
-    following: followOn,
-    cols: viewport.cols,
   });
   const onNewText = (text: string): void => {
     const reparsed = parseStatelogJsonl(text);
@@ -246,21 +234,17 @@ async function runSession(
     }
     notify(followOn ? "follow on" : "follow off");
   };
-  const shellBindings = (controls?: ShellControls): ShellBinding[] =>
-    viewerShellBindings(
-      host,
-      () => roots,
-      toggleFollow,
-      () =>
-        host.openOverlay(
-          new TracePicker(roots, {
-            currentTraceId: host.currentTraceId(),
-            annotations,
-            thresholds,
-          }),
-        ),
-      controls,
+  const openPicker = (): void => {
+    host.openOverlay(
+      new TracePicker(roots, {
+        currentTraceId: host.currentTraceId(),
+        annotations,
+        thresholds,
+      }),
     );
+  };
+  const shellBindings = (controls?: ShellControls): ShellBinding[] =>
+    viewerShellBindings(host, () => roots, toggleFollow, openPicker, controls);
 
   const extractIfLocal = async (traceId: string): Promise<void> => {
     if (opts.extract === undefined) {
@@ -312,10 +296,18 @@ async function runSession(
       return;
     }
     help.reset();
-    const parts: Element[] = [tabStrip(stripArgs()), host.target().render(innerViewport())];
-    if (parseErrors.length > 0) {
-      parts.push(parseErrorFooter(parseErrors));
-    }
+    const parts: Element[] = [
+      viewerHeader(host, roots, annotations, followOn, viewport.cols),
+      ...(parseErrors.length > 0 ? [parseErrorNotice(parseErrors)] : []),
+      host
+        .target()
+        .render(
+          innerViewport(),
+          hintsFrom(
+            shellBindings({ ...HELP_CONTROLS, typing: host.target().capturesText?.() === true }),
+          ),
+        ),
+    ];
     screen.render(column({ justifyContent: "flex-start" }, ...parts));
   };
 
@@ -333,6 +325,8 @@ async function runSession(
       embedded: opts.embedded === true,
       innerViewport,
       shellBindings,
+      openPicker,
+      tracePickerAvailable: () => roots.length > 1,
       handleHelpKey: help.handleKey,
       dispatch,
       render,
@@ -350,12 +344,7 @@ function createHost(
   const annotations = opts.traceAnnotations ?? {};
   const host = new ScreenHost(
     {
-      overview: new OverviewScreen(
-        roots,
-        bootTraceId,
-        thresholds,
-        opts.contextWindowOf ?? (() => undefined),
-      ),
+      overview: new OverviewScreen(roots, bootTraceId, opts.contextWindowOf ?? (() => undefined)),
       trace: new TraceScreen(roots, bootTraceId, thresholds, {
         extractEnabled: opts.extract !== undefined,
       }),
@@ -380,6 +369,8 @@ type KeyLoopArgs = {
   embedded: boolean;
   innerViewport: () => Viewport;
   shellBindings: (controls?: ShellControls) => ShellBinding[];
+  openPicker: () => void;
+  tracePickerAvailable: () => boolean;
   handleHelpKey: (key: string) => void;
   dispatch: (action: ViewAction) => Promise<void>;
   render: () => void;
@@ -393,6 +384,7 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
     popOverlay: () => host.closeOverlay(),
     screen: () => {},
     goOverview: () => host.switchTo("overview"),
+    goTraces: args.openPicker,
     back: () => {},
     nothing: () => {},
   };
@@ -416,7 +408,8 @@ async function runKeyLoop(args: KeyLoopArgs): Promise<ViewerResolution> {
             overlayEscaped: () => host.escapeOverlay(),
             screenEscaped: () => host.escapeScreen(),
             activeScreen: host.activeScreen(),
-            overviewAvailable: true,
+            tracePickerOpen: host.target() instanceof TracePicker,
+            tracePickerAvailable: args.tracePickerAvailable(),
             embedded,
           });
           if (outcome === "back") {
@@ -456,6 +449,47 @@ export function mostRecentTraceId(roots: TreeNode[]): string {
   return (latest ?? roots.at(-1))?.traceId ?? "";
 }
 
+function viewerHeader(
+  host: ScreenHost,
+  roots: TreeNode[],
+  annotations: Record<string, string>,
+  following: boolean,
+  cols: number,
+): Element {
+  const target = host.target();
+  const picking = target instanceof TracePicker;
+  const traceId = picking ? target.selectedTraceId() : host.currentTraceId();
+  return tabStrip({
+    active: picking ? undefined : host.activeScreen(),
+    title: traceId?.slice(0, 8) ?? "",
+    tracePosition:
+      traceId === undefined
+        ? undefined
+        : {
+            at: roots.findIndex((root) => root.traceId === traceId) + 1,
+            of: roots.length,
+          },
+    annotation:
+      traceId !== undefined && Object.hasOwn(annotations, traceId)
+        ? annotations[traceId]
+        : undefined,
+    following,
+    cols,
+  });
+}
+
+function openNumberedScreen(host: ScreenHost, name: ScreenName): void {
+  const target = host.target();
+  if (target instanceof TracePicker) {
+    const traceId = target.selectedTraceId();
+    if (traceId === undefined) {
+      return;
+    }
+    host.selectTrace(traceId);
+  }
+  host.switchTo(name);
+}
+
 type ShellControls = { typing: boolean; quit: () => void; escape: () => void };
 type ShellBinding = ViewerBinding & { control?: boolean };
 const HELP_CONTROLS: ShellControls = { typing: false, quit: () => {}, escape: () => {} };
@@ -468,17 +502,69 @@ export function viewerShellBindings(
   controls: ShellControls = HELP_CONTROLS,
 ): ShellBinding[] {
   const onScreen = (): boolean => !host.overlayOpen();
+  const canChooseScreen = (): boolean => onScreen() || host.target() instanceof TracePicker;
   const several = (): boolean => onScreen() && roots().length > 1;
   return [
-    { keys: ["Escape"], help: "back out one step", control: true, run: controls.escape },
-    { keys: ["q"], help: "quit", control: true, when: () => !controls.typing, run: controls.quit },
-    { keys: ["Ctrl+C"], help: "quit", control: true, run: controls.quit },
-    { keys: ["?"], help: "this help", hint: "? help", run: () => host.toggleHelp() },
-    { keys: ["f"], help: "follow the file as it grows", hint: "f follow", run: toggleFollow },
-    { keys: ["1"], help: "overview", when: onScreen, run: () => host.switchTo("overview") },
-    { keys: ["2"], help: "trace", when: onScreen, run: () => host.switchTo("trace") },
-    { keys: ["3"], help: "transcript", when: onScreen, run: () => host.switchTo("transcript") },
-    { keys: ["4"], help: "timeline", when: onScreen, run: () => host.switchTo("timeline") },
+    {
+      keys: ["Escape"],
+      help: "back out one step",
+      hint: "esc back",
+      control: true,
+      run: controls.escape,
+    },
+    {
+      keys: ["q"],
+      help: "quit",
+      hint: "q quit",
+      control: true,
+      when: () => !controls.typing,
+      run: controls.quit,
+    },
+    {
+      keys: ["Ctrl+C"],
+      help: "quit",
+      hint: controls.typing ? "ctrl+c quit" : undefined,
+      control: true,
+      run: controls.quit,
+    },
+    {
+      keys: ["?"],
+      help: "this help",
+      hint: "? help",
+      when: () => !controls.typing,
+      run: () => host.toggleHelp(),
+    },
+    {
+      keys: ["f"],
+      help: "follow the file as it grows",
+      hint: "f follow",
+      when: () => !controls.typing,
+      run: toggleFollow,
+    },
+    {
+      keys: ["1"],
+      help: "overview",
+      when: canChooseScreen,
+      run: () => openNumberedScreen(host, "overview"),
+    },
+    {
+      keys: ["2"],
+      help: "trace",
+      when: canChooseScreen,
+      run: () => openNumberedScreen(host, "trace"),
+    },
+    {
+      keys: ["3"],
+      help: "transcript",
+      when: canChooseScreen,
+      run: () => openNumberedScreen(host, "transcript"),
+    },
+    {
+      keys: ["4"],
+      help: "timeline",
+      when: canChooseScreen,
+      run: () => openNumberedScreen(host, "timeline"),
+    },
     {
       keys: ["t"],
       help: "pick a trace or search their text",

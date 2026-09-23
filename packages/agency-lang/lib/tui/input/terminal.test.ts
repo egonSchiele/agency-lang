@@ -125,3 +125,16 @@ describe("readEscapeSequence", () => {
     });
   });
 });
+
+it.each([
+  ["\x1b[1;5H", "home"],
+  ["\x1b[1;5F", "end"],
+  ["\x1b[1;5~", "home"],
+  ["\x1b[4;5~", "end"],
+])("decodes modified navigation %j without emitting its trailing characters", (sequence, key) => {
+  expect(parseKeypress(sequence)).toEqual({ key, ctrl: true });
+  expect(readEscapeSequence(`${sequence}x`, 0)).toEqual({
+    event: { key, ctrl: true },
+    consumed: sequence.length,
+  });
+});

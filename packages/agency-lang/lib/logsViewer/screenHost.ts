@@ -81,6 +81,7 @@ export class ScreenHost {
   selectTrace(traceId: string, query?: string): void {
     this.closeAllOverlays();
     this.showTrace(traceId);
+    this.active = "overview";
     if (query !== undefined && query.length > 0) {
       this.active = "trace";
       this.screens.trace.applySearch(query);

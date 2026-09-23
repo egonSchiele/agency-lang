@@ -29,7 +29,7 @@ export type View = {
    *  (Ctrl-F/B/D/U are viewport arithmetic — the old shell kept them out
    *  of the reducer for exactly that reason). */
   handleKey(ev: KeyEvent, viewport: Viewport): ViewAction;
-  render(viewport: Viewport): Element;
+  render(viewport: Viewport, sharedHints?: string): Element;
   /** Follow mode: a fresh forest. UI state (cursor, drill, zoom) survives
    *  by id / absolute time; ids that no longer resolve fall back. */
   setData(roots: TreeNode[]): void;

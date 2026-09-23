@@ -35,11 +35,13 @@
  *    the subtree — a splice anywhere in it (splices expand at compile time
  *    and may legally emit imports, so raw-parse edges are not the true
  *    edges), or an unparseable/missing reachable file. Never fresh.
- *  - compilerStamp: content hash of the compiled compiler (dist/lib minus
- *    runtime/ and agents/). runtime/ because generated TEXT does not
- *    depend on runtime internals; agents/ because those are the agency
- *    compiler's OWN OUTPUT — including them would make every build
- *    invalidate the next (self-invalidation loop). Content, not mtimes:
+ *  - compilerStamp: content hash of the compiled modules the compile path
+ *    imports (computeCompilerStamp), minus runtime/, because generated
+ *    TEXT does not depend on runtime internals. Code the compiler does not
+ *    import, such as the logs viewer, cannot change its output. The
+ *    compiled agents under dist/lib/agents are never imported, which
+ *    matters: they are the agency compiler's OWN OUTPUT, and hashing them
+ *    would make every build invalidate the next. Content, not mtimes:
  *    tsc-alias rewrites the whole outDir every build.
  *  - configKey: compiled output bakes config in.
  *
@@ -147,15 +149,13 @@ export function deriveConfigKey(config: unknown): string {
 
 // Deliberate near-duplicate of lib/cli/util.ts findRecursively — see the
 // module doc comment (leaf-ness beats reuse here).
-function walkFiles(dir: string, extension: string, skipDirs: string[]): string[] {
+function walkFiles(dir: string, extension: string): string[] {
   const out: string[] = [];
   const walk = (current: string) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const child = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (!skipDirs.includes(entry.name)) {
-          walk(child);
-        }
+        walk(child);
       } else if (child.endsWith(extension)) {
         out.push(child);
       }
@@ -169,9 +169,9 @@ function walkFiles(dir: string, extension: string, skipDirs: string[]): string[]
 
 // NUL separators between path and content and between files: without a
 // delimiter, path/content boundaries are ambiguous in principle.
-function hashTree(dir: string, extension: string, skipDirs: string[]): string {
+function hashTree(dir: string, extension: string): string {
   const hash = crypto.createHash("sha256");
-  for (const file of walkFiles(dir, extension, skipDirs)) {
+  for (const file of walkFiles(dir, extension)) {
     hash.update(path.relative(dir, file));
     hash.update("\0");
     hash.update(fs.readFileSync(file));
@@ -181,7 +181,7 @@ function hashTree(dir: string, extension: string, skipDirs: string[]): string {
 }
 
 export function computeStdlibHash(stdlibDir: string): string {
-  return hashTree(stdlibDir, ".agency", []);
+  return hashTree(stdlibDir, ".agency");
 }
 
 /** Stdlib STRUCTURE only (sorted file list, no contents). Stdlib-resident
@@ -191,15 +191,55 @@ export function computeStdlibHash(stdlibDir: string): string {
  *  world while a plain edit no longer does. */
 export function computeStdlibNamesHash(stdlibDir: string): string {
   const hash = crypto.createHash("sha256");
-  for (const file of walkFiles(stdlibDir, ".agency", [])) {
+  for (const file of walkFiles(stdlibDir, ".agency")) {
     hash.update(path.relative(stdlibDir, file));
     hash.update("\0");
   }
   return hash.digest("hex");
 }
 
-export function computeCompilerStamp(distLibDir: string): string {
-  return hashTree(distLibDir, ".js", ["runtime", "agents"]);
+// A relative import in compiled JS: `from "./x.js"` or `import "./x.js"`.
+// tsc-alias has rewritten every `@/` alias to a relative path by now.
+const RELATIVE_IMPORT = /(?:\bfrom\s*|\bimport\s*)["'](\.{1,2}\/[^"']+)["']/g;
+
+function isFile(file: string): boolean {
+  return fs.statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
+/**
+ * Content hash of the code `entryFile` runs: every module it reaches by
+ * relative import, except those under `distLibDir/runtime/`. Only this code
+ * can change what the entry emits, so an edit to the logs viewer or the TUI
+ * does not rebuild every .agency file. Runtime modules are still walked, so
+ * whatever they import is hashed. A match inside a string literal can only
+ * add a file to the hash, which costs a rebuild, never a stale skip.
+ *
+ * A missing entry hashes to the empty stamp: under vitest the entry
+ * resolves into lib/, which holds .ts files, and the writer and the
+ * checker both get that same stamp.
+ */
+export function computeCompilerStamp(distLibDir: string, entryFile: string): string {
+  const reached: string[] = [];
+  const queue = [entryFile];
+  while (queue.length > 0) {
+    const file = queue.pop()!;
+    if (reached.includes(file) || !isFile(file)) {
+      continue;
+    }
+    reached.push(file);
+    for (const match of fs.readFileSync(file, "utf-8").matchAll(RELATIVE_IMPORT)) {
+      queue.push(path.resolve(path.dirname(file), match[1]));
+    }
+  }
+  const runtimeDir = path.join(distLibDir, "runtime") + path.sep;
+  const hash = crypto.createHash("sha256");
+  for (const file of reached.filter((f) => !f.startsWith(runtimeDir)).sort()) {
+    hash.update(path.relative(distLibDir, file));
+    hash.update("\0");
+    hash.update(fs.readFileSync(file));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
 }
 
 export type FreshnessContext = {

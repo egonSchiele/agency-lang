@@ -72,6 +72,11 @@ hash flavor is unchanged; the compiler stamp is unchanged; the render key
 is unchanged; the recorded link resolutions still answer identically; and
 the rendered page is present with its recorded content hash.
 
+The doc cache's compiler stamp covers what `dist/lib/cli/doc.js`
+imports, the same way the build manifest's stamp covers what the compile
+pipeline imports (see `docs/dev/compiler/incremental-builds.md`). An edit
+to code the doc generator does not import leaves every page fresh.
+
 A few of those deserve a note. `dependencyFingerprint` decides
 `cacheable`. It sets the flag to false for a parse failure, a filesystem
 error while reading candidates, or a splice anywhere in the subtree. Deps

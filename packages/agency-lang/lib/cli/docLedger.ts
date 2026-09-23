@@ -341,16 +341,18 @@ export function buildDocFreshnessContext(
 ): DocFreshnessContext {
   const stdlibDir = getStdlibDir();
   // Same resolution trick as manifestTracker: dist/lib relative to this
-  // module in production; the source tree (an empty-ish stamp) under
-  // vitest, where writer and checker agree.
+  // module in production; the source tree (an empty stamp) under vitest,
+  // where writer and checker agree. The stamp covers what doc.js, the
+  // page generator, imports.
   const distLib = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const docGenerator = path.join(distLib, "cli", "doc.js");
   return {
     inputDir: inputDirReal,
     outputDir: outDirReal,
     stdlibDir,
     stdlibHash: computeStdlibHash(stdlibDir),
     stdlibNamesHash: computeStdlibNamesHash(stdlibDir),
-    compilerStamp: computeCompilerStamp(distLib),
+    compilerStamp: computeCompilerStamp(distLib, docGenerator),
   };
 }
 

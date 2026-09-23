@@ -18,6 +18,7 @@ import {
   type BuildManifest,
   type FreshnessContext,
 } from "./buildManifest.js";
+import { safeDeleteDirectoryWithin } from "../utils.js";
 
 function tmp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "agency-manifest-"));
@@ -135,21 +136,73 @@ describe("hashing", () => {
     fs.writeFileSync(path.join(dir, "sub", "b.agency"), "two!");
     expect(computeStdlibHash(dir)).not.toBe(before);
   });
+});
 
-  test("computeCompilerStamp excludes runtime/ and agents/ and keys on content", () => {
+describe("computeCompilerStamp", () => {
+  // A dist/lib-shaped tree: compiler/entry.js imports backends/gen.js,
+  // which imports utils/u.js and runtime/r.js; runtime/r.js imports
+  // typeChecker/t.js. Nothing imports logsViewer/view.js or the compiled
+  // agent in agents/a.js.
+  function withDistTree(fn: (dir: string, entry: string) => void) {
     const dir = tmp();
-    fs.mkdirSync(path.join(dir, "backends"));
-    fs.mkdirSync(path.join(dir, "runtime"));
-    fs.mkdirSync(path.join(dir, "agents"));
-    fs.writeFileSync(path.join(dir, "backends", "gen.js"), "v1");
-    fs.writeFileSync(path.join(dir, "runtime", "r.js"), "r1");
-    fs.writeFileSync(path.join(dir, "agents", "a.js"), "a1");
-    const before = computeCompilerStamp(dir);
-    fs.writeFileSync(path.join(dir, "runtime", "r.js"), "r2");
-    fs.writeFileSync(path.join(dir, "agents", "a.js"), "a2");
-    expect(computeCompilerStamp(dir)).toBe(before);
-    fs.writeFileSync(path.join(dir, "backends", "gen.js"), "v2");
-    expect(computeCompilerStamp(dir)).not.toBe(before);
+    try {
+      const files: Record<string, string> = {
+        "compiler/entry.js": 'import { gen } from "../backends/gen.js";\n',
+        "backends/gen.js":
+          'import { u } from "../utils/u.js";\nimport "../runtime/r.js";\nexport const gen = 1;\n',
+        "utils/u.js": "export const u = 1;\n",
+        "runtime/r.js": 'export * from "../typeChecker/t.js";\n',
+        "typeChecker/t.js": "export const t = 1;\n",
+        "logsViewer/view.js": "export const view = 1;\n",
+        "agents/a.js": "export const a = 1;\n",
+      };
+      for (const [rel, source] of Object.entries(files)) {
+        fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fs.writeFileSync(path.join(dir, rel), source);
+      }
+      fn(dir, path.join(dir, "compiler", "entry.js"));
+    } finally {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
+  }
+
+  test("changes when a module the entry imports changes", () => {
+    withDistTree((dir, entry) => {
+      const before = computeCompilerStamp(dir, entry);
+      fs.writeFileSync(path.join(dir, "utils", "u.js"), "export const u = 2;\n");
+      expect(computeCompilerStamp(dir, entry)).not.toBe(before);
+    });
+  });
+
+  test("ignores modules the entry does not import, including compiled agents", () => {
+    withDistTree((dir, entry) => {
+      const before = computeCompilerStamp(dir, entry);
+      fs.writeFileSync(path.join(dir, "logsViewer", "view.js"), "export const view = 2;\n");
+      fs.writeFileSync(path.join(dir, "agents", "a.js"), "export const a = 2;\n");
+      expect(computeCompilerStamp(dir, entry)).toBe(before);
+    });
+  });
+
+  test("leaves runtime/ out of the hash but follows its imports", () => {
+    withDistTree((dir, entry) => {
+      const before = computeCompilerStamp(dir, entry);
+      fs.writeFileSync(
+        path.join(dir, "runtime", "r.js"),
+        'export * from "../typeChecker/t.js";\nexport const r = 2;\n',
+      );
+      expect(computeCompilerStamp(dir, entry)).toBe(before);
+      fs.writeFileSync(path.join(dir, "typeChecker", "t.js"), "export const t = 2;\n");
+      expect(computeCompilerStamp(dir, entry)).not.toBe(before);
+    });
+  });
+
+  test("an import cycle terminates, and a missing entry gives the empty stamp", () => {
+    withDistTree((dir, entry) => {
+      fs.writeFileSync(path.join(dir, "utils", "u.js"), 'import "../compiler/entry.js";\n');
+      expect(computeCompilerStamp(dir, entry)).toMatch(/^[0-9a-f]{64}$/);
+      const missing = path.join(dir, "compiler", "missing.js");
+      expect(computeCompilerStamp(dir, missing)).toBe(hashBytes(""));
+    });
   });
 });
 

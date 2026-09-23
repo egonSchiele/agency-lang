@@ -169,15 +169,20 @@ function walkFiles(dir: string, extension: string): string[] {
 
 // NUL separators between path and content and between files: without a
 // delimiter, path/content boundaries are ambiguous in principle.
-function hashTree(dir: string, extension: string): string {
+// `files` must be sorted, so the same set always gives the same hash.
+function hashFiles(baseDir: string, files: string[]): string {
   const hash = crypto.createHash("sha256");
-  for (const file of walkFiles(dir, extension)) {
-    hash.update(path.relative(dir, file));
+  for (const file of files) {
+    hash.update(path.relative(baseDir, file));
     hash.update("\0");
     hash.update(fs.readFileSync(file));
     hash.update("\0");
   }
   return hash.digest("hex");
+}
+
+function hashTree(dir: string, extension: string): string {
+  return hashFiles(dir, walkFiles(dir, extension));
 }
 
 export function computeStdlibHash(stdlibDir: string): string {
@@ -232,14 +237,7 @@ export function computeCompilerStamp(distLibDir: string, entryFile: string): str
     }
   }
   const runtimeDir = path.join(distLibDir, "runtime") + path.sep;
-  const hash = crypto.createHash("sha256");
-  for (const file of reached.filter((f) => !f.startsWith(runtimeDir)).sort()) {
-    hash.update(path.relative(distLibDir, file));
-    hash.update("\0");
-    hash.update(fs.readFileSync(file));
-    hash.update("\0");
-  }
-  return hash.digest("hex");
+  return hashFiles(distLibDir, reached.filter((f) => !f.startsWith(runtimeDir)).sort());
 }
 
 export type FreshnessContext = {

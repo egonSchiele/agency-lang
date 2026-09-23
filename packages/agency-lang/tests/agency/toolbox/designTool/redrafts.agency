@@ -60,9 +60,6 @@ node nodeImportGoesBackToTheCodingAgent(): boolean {
   return result is success && cleanSource
 }
 
-// A refused write is not something a new draft can fix, so designTool
-// stops after the first round instead of drafting maxRounds times. If it
-// looped, the error would read "gave up after".
 // The toolbox's own bookkeeping raises its own effects, so a policy can
 // name them without granting writes anywhere else. Nothing it does to a
 // draft comes through as a plain std::write, std::mkdir or std::move,
@@ -104,6 +101,9 @@ node draftRaisesOnlyToolboxEffects(): boolean {
   return result is success && sawWriteFile && sawCreateStaging && generic.length == 0
 }
 
+// A refused write is not something a new draft can fix, so designTool
+// stops after the first round instead of drafting maxRounds times. If it
+// looped, the error would read "gave up after".
 node refusedWriteStopsTheRounds(): boolean {
   cleanup(OUT, "addFourteen")
   let result: Result = success(null)

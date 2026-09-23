@@ -84,7 +84,8 @@ node rejectAtSaveWritesNothing(): boolean {
 node rejectWritesNothing(): boolean {
   cleanup(OUT, "addTwo")
   const result = runDesign("addTwo", OUT, [null])
-  const nothing = !exists("addTwo", OUT) && !exists("staging/addTwo", OUT)
+  const staged = ls("${OUT}/staging") with approve
+  const nothing = !exists("addTwo", OUT) && (staged catch []).length == 0
   const keptMessage = result is failure && "${result.error}" =~ re/cancelled by the test/
   cleanup(OUT, "addTwo")
   return keptMessage && nothing

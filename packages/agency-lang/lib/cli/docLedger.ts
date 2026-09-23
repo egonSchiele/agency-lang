@@ -84,6 +84,10 @@ export type DocLedger = {
 export const DOC_LEDGER_NAME = ".agency-doc.json";
 export const DOC_LOCK_NAME = ".agency-doc.lock";
 
+/** The doc generator, relative to dist/lib. The doc cache's compiler stamp
+ *  covers the modules it imports. */
+export const DOC_GENERATOR_ENTRY = "cli/doc.js";
+
 /** A safe ledger key: relative, normalized, no `..`, and ending exactly
  *  in `.agency`. The suffix rule is deletion-critical: `outputPathFor` on
  *  a non-`.agency` key like "README" would be a no-op mapping, and
@@ -345,7 +349,7 @@ export function buildDocFreshnessContext(
   // where writer and checker agree. The stamp covers what doc.js, the
   // page generator, imports.
   const distLib = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const docGenerator = path.join(distLib, "cli", "doc.js");
+  const docGenerator = path.join(distLib, DOC_GENERATOR_ENTRY);
   return {
     inputDir: inputDirReal,
     outputDir: outDirReal,

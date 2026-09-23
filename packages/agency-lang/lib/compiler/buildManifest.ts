@@ -149,13 +149,15 @@ export function deriveConfigKey(config: unknown): string {
 
 // Deliberate near-duplicate of lib/cli/util.ts findRecursively — see the
 // module doc comment (leaf-ness beats reuse here).
-function walkFiles(dir: string, extension: string): string[] {
+function walkFiles(dir: string, extension: string, skipDirs: string[] = []): string[] {
   const out: string[] = [];
   const walk = (current: string) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const child = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        walk(child);
+        if (!skipDirs.includes(entry.name)) {
+          walk(child);
+        }
       } else if (child.endsWith(extension)) {
         out.push(child);
       }
@@ -219,11 +221,19 @@ function isFile(file: string): boolean {
  * whatever they import is hashed. A match inside a string literal can only
  * add a file to the hash, which costs a rebuild, never a stale skip.
  *
- * A missing entry hashes to the empty stamp: under vitest the entry
- * resolves into lib/, which holds .ts files, and the writer and the
- * checker both get that same stamp.
+ * A missing entry means it was renamed or moved, and a walk from it would
+ * reach nothing, so every compiler edit would leave the stamp unchanged.
+ * Instead, hash every compiled module except runtime/ and agents/ (the
+ * compiled agents are the agency compiler's own output; hashing them would
+ * make every build invalidate the next). That rebuilds too often but never
+ * skips a stale file. compilerStampEntries.test.ts fails on the rename.
+ * Under vitest the entry resolves into lib/, which holds .ts files, so
+ * the writer and the checker both take this path and agree.
  */
 export function computeCompilerStamp(distLibDir: string, entryFile: string): string {
+  if (!isFile(entryFile)) {
+    return hashFiles(distLibDir, walkFiles(distLibDir, ".js", ["runtime", "agents"]));
+  }
   const reached: string[] = [];
   const queue = [entryFile];
   while (queue.length > 0) {

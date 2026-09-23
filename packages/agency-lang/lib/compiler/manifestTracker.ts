@@ -28,6 +28,10 @@ import {
 } from "./buildManifest.js";
 import type { DependencyFingerprint } from "./depFingerprint.js";
 
+/** The compile pipeline, relative to dist/lib. The build manifest's
+ *  compiler stamp covers the modules it imports. */
+export const COMPILE_PIPELINE_ENTRY = "compiler/buildSession.js";
+
 /** "incremental" consults and records the manifest; "force" recompiles
  *  everything but rewrites it (--force); "always" is internal
  *  (allowTestImports / --ts / caller-supplied importStrategy) and touches
@@ -80,7 +84,7 @@ class RealManifestTracker implements ManifestTracker {
     // exist — writer and checker agree on that empty stamp, so tests are
     // sound. Do not "fix" one side of this.
     const distLib = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-    const compilePipeline = path.join(distLib, "compiler", "buildSession.js");
+    const compilePipeline = path.join(distLib, COMPILE_PIPELINE_ENTRY);
     this.ctx = {
       manifestDir,
       stdlibHash: computeStdlibHash(getStdlibDir()),

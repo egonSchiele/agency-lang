@@ -196,12 +196,24 @@ describe("computeCompilerStamp", () => {
     });
   });
 
-  test("an import cycle terminates, and a missing entry gives the empty stamp", () => {
+  test("an import cycle terminates", () => {
     withDistTree((dir, entry) => {
       fs.writeFileSync(path.join(dir, "utils", "u.js"), 'import "../compiler/entry.js";\n');
       expect(computeCompilerStamp(dir, entry)).toMatch(/^[0-9a-f]{64}$/);
-      const missing = path.join(dir, "compiler", "missing.js");
-      expect(computeCompilerStamp(dir, missing)).toBe(hashBytes(""));
+    });
+  });
+
+  // A renamed entry must not freeze the stamp: that would skip stale
+  // output after every compiler edit.
+  test("a missing entry hashes every module except runtime/ and agents/", () => {
+    withDistTree((dir) => {
+      const missing = path.join(dir, "compiler", "renamed.js");
+      const before = computeCompilerStamp(dir, missing);
+      fs.writeFileSync(path.join(dir, "runtime", "r.js"), "export const r = 2;\n");
+      fs.writeFileSync(path.join(dir, "agents", "a.js"), "export const a = 2;\n");
+      expect(computeCompilerStamp(dir, missing)).toBe(before);
+      fs.writeFileSync(path.join(dir, "logsViewer", "view.js"), "export const view = 2;\n");
+      expect(computeCompilerStamp(dir, missing)).not.toBe(before);
     });
   });
 });

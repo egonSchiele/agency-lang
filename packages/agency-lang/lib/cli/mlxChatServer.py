@@ -36,7 +36,8 @@ and response generator, and replaces two module-level names, `run` and
 that reason; a new version needs these seams checked.
 
 Options are `mlx_lm.server`'s own: --model, --host, --port, --max-tokens, and
-the rest.
+the rest. Distributed serving (`mlx.distributed`) is not supported; the
+script always runs the HTTP server in its own process.
 """
 
 import json
@@ -116,6 +117,7 @@ class Constraint:
         self.matcher = None
         self.mask = None
         self.free_mask = None
+        self.broken = False
 
     def prepare(self, vocab_width):
         """Built on the first call, because only the logits say how wide the
@@ -132,6 +134,21 @@ class Constraint:
         for token_id in self.tokenizer.eos_token_ids:
             forbid(self.free_mask, token_id)
 
+    def consume(self, token_id):
+        """Feed one JSON token to the matcher. A token it rejects, which can
+        only happen when llguidance and mlx_lm disagree about the tokenizer,
+        leaves it in an error state for good; from then on the reply runs
+        unconstrained, and the log says why, so the caller gets a reply that
+        fails validation rather than one built from a broken matcher."""
+        if self.broken:
+            return
+        if not self.matcher.consume_token(token_id):
+            self.broken = True
+            logging.error(
+                f"The schema constraint failed and the rest of this reply is "
+                f"unconstrained: {self.matcher.get_error()}"
+            )
+
     def step(self, token_id):
         """One generated token moves the phase machine."""
         self.reply.append(token_id)
@@ -140,13 +157,13 @@ class Constraint:
                 self.phase = "reasoning"
             else:
                 self.phase = "json"
-                self.matcher.consume_token(token_id)
+                self.consume(token_id)
         elif self.phase == "reasoning":
             tail = tuple(self.reply[-len(self.think_end) :])
             if tail == self.think_end:
                 self.phase = "json"
         else:
-            self.matcher.consume_token(token_id)
+            self.consume(token_id)
 
     def __call__(self, tokens, logits):
         count = tokens.shape[-1]
@@ -159,6 +176,8 @@ class Constraint:
             self.seen = count
         if self.phase == "reasoning":
             return apply_token_bitmask(logits, self.free_mask)
+        if self.broken:
+            return logits
         fill_next_token_bitmask(self.matcher, self.mask)
         if self.phase == "start":
             allow(self.mask, self.think_start[0])
@@ -175,8 +194,9 @@ class Generator(server.ResponseGenerator):
         self.ll_tokenizers = {}
 
     def ll_tokenizer_for(self, tokenizer, vocab_width):
-        # Wrapping a tokenizer takes about a second, so each is kept.
-        key = (id(tokenizer), vocab_width)
+        # Wrapping a tokenizer takes about a second, so each is kept, keyed
+        # on the model it belongs to.
+        key = (self.model_provider.model_key, vocab_width)
         if key not in self.ll_tokenizers:
             self.ll_tokenizers[key] = from_tokenizer(
                 tokenizer._tokenizer,

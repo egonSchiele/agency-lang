@@ -658,7 +658,7 @@ async function _runPrompt({
     ctx,
     name: "onLLMCallEnd",
     data: {
-      model: JSON.stringify(modelName),
+      model: modelName,
       result: completion,
       usage: completion.usage,
       cost: completion.cost,

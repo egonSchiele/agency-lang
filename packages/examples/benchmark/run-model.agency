@@ -80,11 +80,8 @@ type RunFile = {
 // even when the label is a nickname.
 let seenModel: string = ""
 
-// The runtime reports the model name wrapped in double quotes, so they are
-// stripped.
 callback("onLLMCallEnd") as data {
-  const name = "${data.model}"
-  seenModel = name.split('"').join("")
+  seenModel = "${data.model}"
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +98,9 @@ def outcome(score: number, detail: string): CaseOutcome {
 
 // Agency's message for a reply that does not fit the type starts with a long
 // schema report and ends with the reply itself. The reply is the part worth
-// reading, so it is moved to the front.
+// reading, so it is moved to the front. The marker is the wording of that
+// message in lib/runtime/llmRetry.ts; if the wording changes and the marker
+// is not found, the whole message is kept as is.
 def errored(message: string): CaseOutcome {
   const marker = "Raw output (first 200 chars): "
   const at = message.indexOf(marker)

@@ -203,26 +203,18 @@ server is not exposed directly, because a typo in a model name would load a
 second model. `serve` starts one process per model on a free internal port
 and puts its own server in front.
 
-**Structured output.** `mlx_lm.server` never reads `response_format`. It
-reads about thirty fields from a request, and that is not one of them, so a
-typed `llm()` call sent it a schema that was silently dropped, and the model
-answered in prose. `lib/cli/mlxChatServer.py`, shipped next to
-`localServe.js`, is `mlx_lm.server` with that field honoured. It subclasses
-the request handler to read the schema, subclasses the response generator
-to build a constraint where the tokenizer and the prompt's thinking state
-are both in hand, and appends that constraint to the request's logits
-processors. The constraint is a bitmask from `llguidance`: at each step,
-every token that would break the schema gets a score of minus infinity, so
-the sampler cannot pick it. A thinking model is left free inside its
-`<think>` block, except that it may not end the reply there; the schema
-takes over after `</think>`. A request with tools keeps its schema but is
-not constrained, because a tool call is not the JSON the schema describes,
-the same choice `smoltalk-llama-cpp` makes. The script reaches into
-`mlx_lm.server` internals (`ResponseGenerator._tokenize`,
-`_make_logits_processors`, `run`), which is why `MLX_LM_VERSION` in
-`localServe.ts` pins mlx-lm the way `MLX_AUDIO_VERSION` pins mlx-audio.
-`checkPython` asks for `llguidance` as well as `mlx_lm` before serving a
-chat model.
+**Structured output.** `mlx_lm.server` never reads `response_format`, so
+a typed `llm()` call used to get prose back. `lib/cli/mlxChatServer.py`,
+shipped next to `localServe.js`, is `mlx_lm.server` with that field
+honoured: a request naming a JSON schema gets an `llguidance` logits
+processor that masks every token which would break the schema. A thinking
+model is left free inside its `<think>` block and held to the schema after
+it. A request with tools keeps its schema but is not constrained, because a
+tool call is not the JSON the schema describes; `smoltalk-llama-cpp` makes
+the same choice. The script's docstring explains the phases and the seams
+it patches in `mlx_lm.server`. Those seams are why `MLX_LM_VERSION` in
+`localServe.ts` pins mlx-lm, the way `MLX_AUDIO_VERSION` pins mlx-audio,
+and why `checkPython` asks for `llguidance` before serving a chat model.
 
 **The front door** (`lib/cli/mlxServer.ts`) listens on `--port`, reads
 the request body, and forwards to the process whose public name matches the

@@ -1,0 +1,63 @@
+import { exists } from "std::shell"
+import { runDesign, cleanup } from "./helpers.agency"
+
+const OUT = __dirname + "/test-output/generatedTests"
+
+// A tool that calls a model draws no test-cases mock and saves without a
+// tool.test.json.
+node modelToolSkipsTests(): boolean {
+  cleanup(OUT, "greet")
+  const result = runDesign("greet", OUT, ["accept"])
+  const hasImpl = exists("greet/impl.agency", OUT)
+  const hasMeta = exists("greet/meta.json", OUT)
+  const noCases = !exists("greet/tool.test.json", OUT)
+  cleanup(OUT, "greet")
+  return result is success && hasImpl && hasMeta && noCases
+}
+
+// `read` raises std::read, so `run` has an effect and no test file.
+node effectfulToolSkipsTests(): boolean {
+  cleanup(OUT, "readIt")
+  const result = runDesign("readIt", OUT, ["accept"])
+  const noCases = !exists("readIt/tool.test.json", OUT)
+  let effectsOk = false
+  if (result is success(entry)) {
+    effectsOk = entry.module.effects.join(",") == "std::read"
+  }
+  cleanup(OUT, "readIt")
+  return result is success && noCases && effectsOk
+}
+
+// A tool that calls today() computes without effects, but its output
+// changes daily, so it gets no generated tests.
+node dateToolSkipsTests(): boolean {
+  cleanup(OUT, "stamp")
+  const result = runDesign("stamp", OUT, ["accept"])
+  const noCases = !exists("stamp/tool.test.json", OUT)
+  cleanup(OUT, "stamp")
+  return result is success && noCases
+}
+
+// `import { now as clock }` then `clock()` is still a call to now.
+node aliasedDateCallSkipsTests(): boolean {
+  cleanup(OUT, "clocked")
+  const result = runDesign("clocked", OUT, ["accept"])
+  const noCases = !exists("clocked/tool.test.json", OUT)
+  cleanup(OUT, "clocked")
+  return result is success && noCases
+}
+
+// Round 1 is pure and writes a test file; the user asks for a revision;
+// round 2 calls a model. The saved tool must not ship round 1's tests.
+node staleTestFileDoesNotShip(): boolean {
+  cleanup(OUT, "greetTwice")
+  const answers = [
+    "use a model instead",
+    "accept",
+  ]
+  const result = runDesign("greetTwice", OUT, answers)
+  const noCases = !exists("greetTwice/tool.test.json", OUT)
+  const hasImpl = exists("greetTwice/impl.agency", OUT)
+  cleanup(OUT, "greetTwice")
+  return result is success && hasImpl && noCases
+}

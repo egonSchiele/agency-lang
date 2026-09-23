@@ -1,0 +1,141 @@
+import { mkdir } from "std::fs"
+import { exists, ls } from "std::shell"
+import { designTool, listTools } from "std::toolbox"
+import { runDesign, cleanup, savedFiles } from "./helpers.agency"
+
+const OUT = __dirname + "/test-output/accept"
+const REQUEST = "{ n: number }"
+
+node acceptSavesTheTool(): boolean {
+  cleanup(OUT, "addOne")
+  const result = runDesign("addOne", OUT, ["accept"])
+  const saved = savedFiles(OUT, "addOne")
+  const listed = listTools(OUT) with approve
+  let inCatalog = false
+  if (listed is success(entries)) {
+    inCatalog = some(
+      entries,
+      \entry -> entry.name == "addOne" && entry.broken == null && entry.meta.request == REQUEST,
+    )
+  }
+  cleanup(OUT, "addOne")
+  return result is success && saved && inCatalog
+}
+
+// An accepted design is published through the same std::toolbox::save
+// gate writeTool uses: one review, then one save, in that order.
+node acceptRaisesTheSaveGate(): boolean {
+  cleanup(OUT, "addGated")
+  const order: string[] = []
+  let result: Result = failure("not run")
+  handle {
+    result = designTool(
+      name: "addGated",
+      purpose: "Add one to a number.",
+      request: REQUEST,
+      dir: OUT,
+      review: true,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::toolbox::review" => {
+        order.push("review")
+        return approve("accept")
+      }
+      "std::toolbox::save" => {
+        order.push("save")
+        return approve()
+      }
+      _ => approve()
+    }
+  }
+  const saved = savedFiles(OUT, "addGated")
+  cleanup(OUT, "addGated")
+  return result is success && saved && order.join(",") == "review,save"
+}
+
+// Accepting the review is not the last word: a rejected save publishes
+// nothing and clears staging.
+node rejectAtSaveWritesNothing(): boolean {
+  cleanup(OUT, "addUnsaved")
+  let result: Result = failure("not run")
+  handle {
+    result = designTool(
+      name: "addUnsaved",
+      purpose: "Add one to a number.",
+      request: REQUEST,
+      dir: OUT,
+      review: true,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::toolbox::review" => approve("accept")
+      "std::toolbox::save" => reject("not this one")
+      _ => approve()
+    }
+  }
+  const nothing = !exists("addUnsaved", OUT)
+  const staged = ls("${OUT}/staging") with approve
+  const stagingGone = (staged catch []).length == 0
+  cleanup(OUT, "addUnsaved")
+  return result is failure && "${result.error}" =~ re/not this one/ && nothing && stagingGone
+}
+
+node rejectWritesNothing(): boolean {
+  cleanup(OUT, "addTwo")
+  const result = runDesign("addTwo", OUT, [null])
+  const nothing = !exists("addTwo", OUT) && !exists("staging/addTwo", OUT)
+  const keptMessage = result is failure && "${result.error}" =~ re/cancelled by the test/
+  cleanup(OUT, "addTwo")
+  return keptMessage && nothing
+}
+
+node reviseRunsASecondRound(): boolean {
+  cleanup(OUT, "addThree")
+  const answers = [
+    "name the variable sum",
+    "accept",
+  ]
+  const result = runDesign("addThree", OUT, answers)
+  const ok = result is success && result.value.meta.version == 1
+  cleanup(OUT, "addThree")
+  return ok
+}
+
+node bareApproveAccepts(): boolean {
+  cleanup(OUT, "addSix")
+  const result = runDesign("addSix", OUT, ["bare"])
+  const saved = savedFiles(OUT, "addSix")
+  cleanup(OUT, "addSix")
+  return result is success && saved
+}
+
+// The answer is text; an object is not an answer.
+node objectAnswerFails(): boolean {
+  cleanup(OUT, "addSeven")
+  const result = runDesign("addSeven", OUT, [{
+    verdict: "revise"
+  }])
+  const nothing = !exists("addSeven", OUT)
+  cleanup(OUT, "addSeven")
+  return result is failure && "${result.error}" =~ re/feedback/ && nothing
+}
+
+node whitespaceFeedbackFails(): boolean {
+  cleanup(OUT, "addTwelve")
+  const result = runDesign("addTwelve", OUT, ["   "])
+  const nothing = !exists("addTwelve", OUT)
+  cleanup(OUT, "addTwelve")
+  return result is failure && "${result.error}" =~ re/feedback/ && nothing
+}
+
+// Each call stages in its own directory, so a draft another call left
+// behind does not block this one and is not touched by it.
+node leftoverStagingDoesNotBlock(): boolean {
+  cleanup(OUT, "addEleven")
+  mkdir("${OUT}/staging/addEleven-old") with approve
+  const result = runDesign("addEleven", OUT, ["accept"])
+  const untouched = exists("staging/addEleven-old", OUT)
+  cleanup(OUT, "addEleven")
+  return result is success && untouched
+}

@@ -1,0 +1,86 @@
+import { listTools, runTool } from "std::toolbox"
+import { runDesign, cleanup } from "./helpers.agency"
+
+const OUT = __dirname + "/test-output/runTool"
+
+// Write a tool, run it, and check the record: one use, a last-used time,
+// and the createdAt from the write kept as it was. The record goes
+// through a recordUse interrupt naming the tool's directory.
+node runToolRunsAndRecords(): boolean {
+  cleanup(OUT, "addEight")
+  const written = runDesign("addEight", OUT, ["accept"])
+  if (written is failure) {
+    cleanup(OUT, "addEight")
+    return false
+  }
+  const createdAt = written.value.meta.createdAt
+  let recordDir = ""
+  let answer: Result = failure("not run")
+  handle {
+    answer = runTool("addEight", {
+      n: 41
+    }, OUT)
+  } with (intr) {
+    if (intr.effect == "std::toolbox::recordUse") {
+      recordDir = intr.data.dir
+    }
+    return approve()
+  }
+  const namedTheTool = recordDir == "${OUT}/addEight"
+  const listed = listTools(OUT) with approve
+  let recorded = false
+  if (listed is success(entries)) {
+    const entry = find(entries, \candidate -> candidate.name == "addEight")
+    recorded = entry.meta.uses == 1 && entry.meta.lastUsedAt != null && entry.meta.createdAt == createdAt && createdAt != ""
+  }
+  cleanup(OUT, "addEight")
+  return answer is success && answer.value == 42 && recorded && namedTheTool
+}
+
+// meta.json records the JSON Schema of the Request type, reported by the
+// saved tool's own requestSchema node, so whoever offers the tool to a
+// model can give its request the real shape.
+node savedMetaRecordsTheRequestSchema(): boolean {
+  cleanup(OUT, "addNine")
+  const written = runDesign("addNine", OUT, ["accept"])
+  if (written is failure) {
+    cleanup(OUT, "addNine")
+    return false
+  }
+  const recorded = written.value.meta.requestSchema
+  cleanup(OUT, "addNine")
+  if (recorded == null) {
+    return false
+  }
+  return recorded.properties.n.type == "number" && recorded.required.includes("n")
+}
+
+// The count is only a count: a declined recordUse leaves meta.json as it
+// was and the run still returns the tool's result.
+node declinedRecordUseKeepsTheResult(): boolean {
+  cleanup(OUT, "addSixteen")
+  const written = runDesign("addSixteen", OUT, ["accept"])
+  if (written is failure) {
+    cleanup(OUT, "addSixteen")
+    return false
+  }
+  let answer: Result = failure("not run")
+  handle {
+    answer = runTool("addSixteen", {
+      n: 1
+    }, OUT)
+  } with (intr) {
+    if (intr.effect == "std::toolbox::recordUse") {
+      return reject("no bookkeeping")
+    }
+    return approve()
+  }
+  const listed = listTools(OUT) with approve
+  let unrecorded = false
+  if (listed is success(entries)) {
+    const entry = find(entries, \candidate -> candidate.name == "addSixteen")
+    unrecorded = entry.meta.uses == 0 && entry.meta.lastUsedAt == null
+  }
+  cleanup(OUT, "addSixteen")
+  return answer is success && answer.value == 2 && unrecorded
+}

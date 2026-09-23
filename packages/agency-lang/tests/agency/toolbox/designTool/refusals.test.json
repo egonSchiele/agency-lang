@@ -1,0 +1,148 @@
+{
+  "tests": [
+    {
+      "nodeName": "refusesAnExistingName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesALongName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesAnEmptyDir",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesTheStagingName",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesBadRequestText",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesATimeLimitOverAnHour",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "refusesAnImportInTheRequestText",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "runToolRefusesAnEmptyDir",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "runToolRefusesAMissingTool",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "runToolRefusesAPath",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "runToolRefusesCorruptMeta",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "symlinkedToolIsRefused",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    }
+  ]
+}

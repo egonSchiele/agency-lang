@@ -1,0 +1,155 @@
+{
+  "tests": [
+    {
+      "nodeName": "modelToolSkipsTests",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
+            }
+          }
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "effectfulToolSkipsTests",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Read the file named after the number.\n\n  @param request - The number naming the file\n  \"\"\"\n  return read(\"${request.n}.txt\")\n}\n"
+            }
+          }
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "dateToolSkipsTests",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\nimport { today } from \"std::date\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Stamp the number with the date.\n\n  @param request - The number to stamp\n  \"\"\"\n  return \"${request.n} on ${today()}\"\n}\n"
+            }
+          }
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "aliasedDateCallSkipsTests",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\nimport { now as clock } from \"std::date\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Stamp the number with the date.\n\n  @param request - The number to stamp\n  \"\"\"\n  return \"${request.n} at ${clock()}\"\n}\n"
+            }
+          }
+        ],
+        "review": [
+          {
+            "return": []
+          }
+        ]
+      }
+    },
+    {
+      "nodeName": "staleTestFileDoesNotShip",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": {
+        "coding": [
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Add one to the number in the request.\n\n  @param request - The number to add one to\n  \"\"\"\n  return request.n + 1\n}\n"
+            }
+          },
+          {
+            "return": {
+              "code": "import { Json } from \"std::validation\"\n\nexport type Request = {\n  n: number\n}\n\nexport def run(request: Request): Json {\n  \"\"\"\n  Greet the number using a model.\n\n  @param request - The number to greet\n  \"\"\"\n  return llm(\"Say hello to number ${request.n}\")\n}\n"
+            }
+          }
+        ],
+        "review": [
+          {
+            "return": []
+          },
+          {
+            "return": []
+          }
+        ],
+        "*": [
+          {
+            "return": [
+              {
+                "request": {
+                  "n": 41
+                },
+                "expectedJson": "42"
+              },
+              {
+                "request": {
+                  "n": 0
+                },
+                "expectedJson": "1"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

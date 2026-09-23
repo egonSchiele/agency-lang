@@ -1,0 +1,58 @@
+import { runDesignSeeing, cleanup, savedFiles, shownReviews } from "./helpers.agency"
+
+const OUT = __dirname + "/test-output/keptDrafts"
+
+// A draft that was ready and that nobody accepted is kept for the rest of
+// the session. Asking for the same tool again shows that draft: the
+// coding queue holds one draft, so writing a second would fail.
+node unacceptedDraftIsOfferedAgain(): boolean {
+  cleanup(OUT, "addLater")
+  const first = runDesignSeeing(OUT, "addLater", [null])
+  const firstSeen = shownReviews()
+  const firstWasNew = firstSeen.length == 1 && firstSeen[0].resumed == false
+  const second = runDesignSeeing(OUT, "addLater", ["accept"])
+  const seen = shownReviews()
+  const offeredAgain = seen.length == 1 && seen[0].resumed == true && seen[0].source =~ re/request\.n \+ 1/
+  const saved = savedFiles(OUT, "addLater")
+  cleanup(OUT, "addLater")
+  return first is failure && firstWasNew && second is success && offeredAgain && saved
+}
+
+// The kept draft was written for another purpose, so it is not offered.
+// A rejected draft is kept for the session, and one that still matched a
+// purpose the user has since changed would be the only tool they could
+// ever get under that name.
+node draftForAnotherPurposeIsNotOfferedAgain(): boolean {
+  cleanup(OUT, "addPurpose")
+  runDesignSeeing(OUT, "addPurpose", [null])
+  const second = runDesignSeeing(OUT, "addPurpose", ["accept"], "{ n: number }", "Subtract one from a number.")
+  const seen = shownReviews()
+  const fresh = seen.length == 1 && seen[0].resumed == false
+  cleanup(OUT, "addPurpose")
+  return second is success && fresh
+}
+
+// The kept draft was written for another request type, so it is not
+// offered, and a new draft is written for the new request.
+node draftForAnotherRequestIsNotOfferedAgain(): boolean {
+  cleanup(OUT, "addOther")
+  runDesignSeeing(OUT, "addOther", [null])
+  const second = runDesignSeeing(OUT, "addOther", ["accept"], "{ text: string }")
+  const seen = shownReviews()
+  const fresh = seen.length == 1 && seen[0].resumed == false && seen[0].source =~ re/request\.text/
+  cleanup(OUT, "addOther")
+  return second is success && fresh
+}
+
+// Saving a tool forgets its draft. The next design of that name starts
+// from a new draft.
+node savedToolIsForgotten(): boolean {
+  cleanup(OUT, "addOnce")
+  runDesignSeeing(OUT, "addOnce", ["accept"])
+  cleanup(OUT, "addOnce")
+  const second = runDesignSeeing(OUT, "addOnce", ["accept"])
+  const seen = shownReviews()
+  const fresh = seen.length == 1 && seen[0].resumed == false
+  cleanup(OUT, "addOnce")
+  return second is success && fresh
+}

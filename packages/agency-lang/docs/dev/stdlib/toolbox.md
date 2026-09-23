@@ -447,9 +447,19 @@ task, so it draws no separate mock), one in the review agent (it has a task), an
 a pure tool only, one for the test cases. The review runs before the
 tool is assembled, so a draft with the wrong export still draws the
 review mock. `tests/agency/toolbox/generate-designTool-mocks.mjs`
-regenerates `designTool.test.json`; run it whenever
-`fixtures/tools/good/impl.agency` changes. A stale copy fails the coding
-agent's own check and silently spends the round's mocks.
+regenerates the `designTool/*.test.json` files; run it whenever
+`fixtures/tools/good/impl.agency` changes, or after moving a test node
+between files. A stale copy fails the coding agent's own check and
+silently spends the round's mocks.
+
+The designTool tests are split across seven files in
+`tests/agency/toolbox/designTool/`, with shared helpers in
+`designTool/helpers.agency`. The test runner runs one file's cases one
+after another, and in one file the 47 cases took over four minutes and
+made their CI shard the slowest job. Split, the files run in parallel.
+The generator reads each file's node names and writes that file's cases,
+so a new test only needs its node in a file and its case in the
+generator.
 
 The mocks are scoped by module: `coding` and `review` each have a
 queue. The test-case call runs in a subprocess under a random module id
@@ -460,9 +470,10 @@ single cases mock.
 `tests/agency/toolbox/writeTool.agency` covers the plain primitive with
 no mocks at all, so a model call anywhere on its path fails the suite.
 
-`designTool.agency` and `writeTool.agency` write under
-`tests/agency/toolbox/test-output/` (gitignored) and remove what they
-made. A `tool.test.json` left there is
+The designTool files and `writeTool.agency` write under `test-output/`
+directories (gitignored) and remove what they made. Each designTool file
+has its own, `designTool/test-output/<file>/`, so files running at the
+same time never see each other's tools or staging drafts. A `tool.test.json` left there is
 picked up by `agency test tests/agency/toolbox` and refused by the full
 profile (`args` is sandbox-only), so tests must clean up.
 

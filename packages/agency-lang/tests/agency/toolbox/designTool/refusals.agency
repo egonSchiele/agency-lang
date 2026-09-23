@@ -1,0 +1,125 @@
+import { remove, mkdir } from "std::fs"
+import { exists, exec } from "std::shell"
+import { designTool, listTools, runTool } from "std::toolbox"
+import { runDesign } from "./helpers.agency"
+
+const OUT = __dirname + "/test-output/refusals"
+const TOOLS = __dirname + "/../fixtures/tools"
+
+// No mocks: the name check runs before staging and before any model call.
+// This is the test that fails if the existence check moves later.
+node refusesAnExistingName(): boolean {
+  const result = runDesign("good", TOOLS, ["accept"])
+  return result is failure && "${result.error}" =~ re/exists/
+}
+
+node refusesALongName(): boolean {
+  // 65 characters, one over the cap.
+  const name = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  const result = runDesign(name, OUT, ["accept"])
+  return result is failure && "${result.error}" =~ re/64/
+}
+
+node refusesAnEmptyDir(): boolean {
+  const result = runDesign("addFive", "", ["accept"])
+  return result is failure && "${result.error}" =~ re/dir/
+}
+
+node refusesTheStagingName(): boolean {
+  const result = runDesign("staging", OUT, ["accept"])
+  return result is failure && "${result.error}" =~ re/staging/
+}
+
+// No mocks: the request text is checked before any model call.
+node refusesBadRequestText(): boolean {
+  const unclosed = runDesign("addNine", OUT, ["accept"], "{ n: ")
+  const twoTypes = runDesign(
+    "addTen",
+    OUT,
+    ["accept"],
+    "{ n: number }\nexport type Other = string",
+  )
+  const nothing = !exists("addNine", OUT) && !exists("addTen", OUT)
+  return unclosed is failure && "${unclosed.error}" =~ re/request/ && twoTypes is failure && "${twoTypes.error}" =~ re/request/ && nothing
+}
+
+// No mocks: refused before any model call.
+node refusesATimeLimitOverAnHour(): boolean {
+  const result = designTool(
+    name: "slow",
+    purpose: "Wait.",
+    request: "{ n: number }",
+    dir: OUT,
+    review: true,
+    maxTime: 2h,
+  ) with approve
+  return result is failure && "${result.error}" =~ re/maxTime/
+}
+
+// No mocks: an import smuggled into the request text is refused.
+node refusesAnImportInTheRequestText(): boolean {
+  const result = runDesign(
+    "smuggled",
+    OUT,
+    ["accept"],
+    "{ n: number }\nimport { bash } from \"std::shell\"",
+  )
+  return result is failure && "${result.error}" =~ re/request/ && !exists("smuggled", OUT)
+}
+
+node runToolRefusesAnEmptyDir(): boolean {
+  const answer = runTool("good", {
+    n: 1
+  }, "") with approve
+  return answer is failure && "${answer.error}" =~ re/dir/
+}
+
+node runToolRefusesAMissingTool(): boolean {
+  const answer = runTool("noSuchTool", {
+    n: 1
+  }, OUT) with approve
+  return answer is failure && "${answer.error}" =~ re/noSuchTool/
+}
+
+// A path is not a tool name; runTool must not resolve outside the toolbox.
+node runToolRefusesAPath(): boolean {
+  const answer = runTool("../good", {
+    n: 1
+  }, TOOLS + "/good") with approve
+  return answer is failure && "${answer.error}" =~ re/identifier/
+}
+
+// A corrupt meta.json stops the run before the tool has side effects.
+node runToolRefusesCorruptMeta(): boolean {
+  const answer = runTool("badMeta", {
+    n: 1
+  }, TOOLS) with approve
+  return answer is failure && "${answer.error}" =~ re/meta\.json/
+}
+
+// A tool directory that is a symlink does not carry the scan approval to
+// its target: listTools leaves it out and runTool does not find it, since
+// linked entries are hidden below an approved directory. The link is
+// proven reachable first.
+node symlinkedToolIsRefused(): boolean {
+  const box = "${OUT}/linkbox"
+  remove(box) with approve
+  mkdir(box) with approve
+  const linked = exec("ln", ["-s", "${TOOLS}/good", "${box}/linked"]) with approve
+  if (linked is failure || linked.exitCode != 0) {
+    return false
+  }
+  // Standalone exists follows the caller's own spelling; under `box` the
+  // link would be hidden, which is the behavior under test.
+  const reachable = exists("${box}/linked/tool.agency")
+  const listed = listTools(box) with approve
+  let unlisted = false
+  if (listed is success(entries)) {
+    unlisted = !some(entries, \candidate -> candidate.name == "linked")
+  }
+  const ran = runTool("linked", {
+    n: 1
+  }, box) with approve
+  remove(box) with approve
+  return reachable && unlisted && ran is failure && "${ran.error}" =~ re/no tool named|symlink/
+}

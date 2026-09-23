@@ -67,7 +67,7 @@ it("links all three graphs and the preview to one call selected with arrows", ()
     expect(text).toContain(title);
   expect(text).toContain("answer 2 line 1");
   expect(text).toContain("13,920");
-  expect(text).toContain("$0.0000246");
+  expect(text).toContain("$0.000025");
   expect(text).toContain("200ms");
   expect(text).not.toContain("WHERE THE TIME WENT");
   expect(text).not.toContain("FACTS");
@@ -179,6 +179,20 @@ it("keeps chart scales fixed while browsing a long trace", () => {
   const before = scales(left());
   view.setFocus("round:L:119");
   expect(scales(left())).toEqual(before);
+});
+
+it("keeps a carried span id as the focus while previewing its first call", () => {
+  const view = screen();
+  view.setFocus("L");
+  expect(frame(view)).toContain("LLM CALL 1");
+  expect(view.focusId()).toBe("L");
+});
+it("formats a summed cost without floating-point noise", () => {
+  const roots = fixture(1);
+  roots[0].children[0].children[0].event!.data.cost = { totalCost: 0.1 + 0.2 };
+  const text = frame(new OverviewScreen(roots, "T", () => undefined));
+  expect(text).toContain("$0.300");
+  expect(text).not.toContain("0.30000000000000004");
 });
 
 it("previews a tool's owning call and preserves the tool when passing back through overview", () => {

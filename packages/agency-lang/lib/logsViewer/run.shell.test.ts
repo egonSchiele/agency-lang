@@ -357,6 +357,14 @@ describe("the viewer shell", () => {
     expect(out.lastText()).not.toContain("TRACES");
   });
 
+  it("a number key in the picker returns to the open trace without resetting it", async () => {
+    const out = await driveJsonl(twoTraceSample, [enter, "2", "k", "t", "2"]);
+    const frames = texts(out);
+    expect(out.lastText()).toContain("[2 trace]");
+    expect(cursorLine(out.lastText())).toBe(cursorLine(frames[frames.length - 3]));
+    expect(cursorLine(out.lastText())).not.toBe(cursorLine(frames[frames.length - 4]));
+  });
+
   it("t reopens the picker after opening a trace", async () => {
     const out = await driveJsonl(twoTraceSample, [enter, "t"]);
     expect(out.lastText()).toContain("[TRACES]");

@@ -4,7 +4,7 @@ exports[`renders the linked graphs and preview at 100 columns 1`] = `
 "m1 · done · 4.1s · 3 LLM calls · $0.0001
 CONTEXT PER LLM CALL ────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ──────────────────────────
       40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                    │ m1
-                                            │ 100ms · $0.0000123
+                                            │ 100ms · $0.000012
                                             │ context 13,919 · cached 13,824
                                             │ fresh 95 · output 190
           ░░░░ ░░░░ ░░░░                    │
@@ -37,7 +37,7 @@ exports[`renders the linked graphs and preview at 130 columns 1`] = `
 "m1 · done · 4.1s · 3 LLM calls · $0.0001
 CONTEXT PER LLM CALL ──────────────────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ──────────────────────────────────────────
       40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                  │ m1
-                                                          │ 100ms · $0.0000123
+                                                          │ 100ms · $0.000012
                                                           │ context 13,919 · cached 13,824
                                                           │ fresh 95 · output 190
           ░░░░ ░░░░ ░░░░                                  │
@@ -70,7 +70,7 @@ exports[`renders the linked graphs and preview at 200 columns 1`] = `
 "m1 · done · 4.1s · 3 LLM calls · $0.0001
 CONTEXT PER LLM CALL ─────────────────────────────────────────────────────────────────── │ LLM CALL 1 · [OUTPUT] INPUT ─────────────────────────────────────────────────────────────────────────────────
       40k ┄┄┄┄ ┄┄┄┄ ┄┄┄┄                                                                 │ m1
-                                                                                         │ 100ms · $0.0000123
+                                                                                         │ 100ms · $0.000012
                                                                                          │ context 13,919 · cached 13,824
                                                                                          │ fresh 95 · output 190
           ░░░░ ░░░░ ░░░░                                                                 │

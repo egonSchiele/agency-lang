@@ -25,7 +25,12 @@ import type { Round } from "../timeline/rounds.js";
 import type { TreeNode } from "../types.js";
 import type { ViewAction, Viewport } from "../views/view.js";
 import { keyFooter } from "./chrome.js";
-import { overviewCallCapacity, overviewCharts, overviewSection } from "./overviewCharts.js";
+import {
+  fmtCost,
+  overviewCallCapacity,
+  overviewCharts,
+  overviewSection,
+} from "./overviewCharts.js";
 import { paintPayload } from "./payloadPaint.js";
 import type { Screen } from "./screen.js";
 
@@ -230,17 +235,18 @@ export class OverviewScreen implements Screen {
   }
   setFocus(id: string): void {
     const rounds = this.data?.rounds ?? [];
-    const index = rounds.findIndex(
-      (round) => round.id === id || round.spanId === id || round.node.id === id,
-    );
+    const index = rounds.findIndex((round) => round.id === id || round.node.id === id);
     if (index !== -1) {
       this.selectCall(index);
       return;
     }
     const trace = this.roots.find((root) => root.traceId === this.traceId);
     if (trace === undefined) return;
+    // A span id (a Thread group row) previews its first call but stays the focus.
     const ownerId = owningCall(trace, id);
-    const owner = rounds.findIndex((round) => round.id === ownerId);
+    const owner = rounds.findIndex((round) =>
+      ownerId === undefined ? round.spanId === id : round.id === ownerId,
+    );
     if (owner !== -1) this.selectCall(owner);
     if (findNode([trace], id) !== undefined) this.returnFocusId = id;
   }
@@ -366,7 +372,7 @@ function previewMetadata(round: Round): PayloadLine[] {
       ? `${round.durationMs.toLocaleString("en-US")}ms`
       : "time not recorded";
   const cost =
-    typeof event.data.cost?.totalCost === "number" ? `$${round.costUsd}` : "cost not recorded";
+    typeof event.data.cost?.totalCost === "number" ? fmtCost(round.costUsd) : "cost not recorded";
   const tokens = hasTokenUsage(event)
     ? [
         `context ${round.contextTokens.toLocaleString("en-US")} · cached ${round.cachedTokens.toLocaleString("en-US")}`,

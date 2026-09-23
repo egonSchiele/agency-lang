@@ -485,7 +485,11 @@ function openNumberedScreen(host: ScreenHost, name: ScreenName): void {
     if (traceId === undefined) {
       return;
     }
-    host.selectTrace(traceId);
+    if (traceId === host.currentTraceId()) {
+      host.closeOverlay();
+    } else {
+      host.selectTrace(traceId);
+    }
   }
   host.switchTo(name);
 }

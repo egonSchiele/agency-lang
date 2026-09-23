@@ -61,7 +61,7 @@ export function overviewCharts(
     ...metricChart(shown, layout, {
       title: "COST PER LLM CALL",
       max: maxCost,
-      label: costAxis(maxCost),
+      label: fmtCost(maxCost),
       color: THEME.kind.interrupt,
       values: shown.map((round) => round.costUsd),
     }),
@@ -171,7 +171,7 @@ function ticks(rounds: Round[], layout: ChartLayout): Painted {
   });
   return segment(pieces, layout.width);
 }
-function costAxis(value: number): string {
+export function fmtCost(value: number): string {
   if (value === 0) return "$0";
   if (value < 0.000001) return `$${value.toExponential(1)}`;
   if (value < 0.0001) return `$${value.toFixed(6)}`;

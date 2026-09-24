@@ -1,7 +1,7 @@
 import { fixedPath, resolveUnder, readText, type Located } from "./contained.js";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
-import type { ReplyLimits } from "../runtime/localDefaults.js";
+import { mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 import {
   getAllModels,
@@ -67,9 +67,14 @@ export function _setLlmOptions(opts: LlmDefaults): void {
   const current = (stack.other.llmDefaults ?? {}) as Record<string, unknown>;
   for (const key of Object.keys(opts)) {
     const value = (opts as Record<string, unknown>)[key];
-    if (value !== undefined) {
-      current[key] = value;
+    if (value === undefined) {
+      continue;
     }
+    // The limits combine field by field, so setting one keeps the others.
+    current[key] =
+      key === "replyLimits"
+        ? mergedReplyLimits(current.replyLimits as ReplyLimits | undefined, value as ReplyLimits)
+        : value;
   }
   stack.other.llmDefaults = current;
 }

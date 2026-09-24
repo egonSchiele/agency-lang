@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { withLocalDefaults, mlxThinkingAttributes, localProviderOf } from "./localDefaults.js";
+import {
+  withLocalDefaults,
+  mlxThinkingAttributes,
+  localProviderOf,
+  mergedReplyLimits,
+} from "./localDefaults.js";
 
 describe("localProviderOf", () => {
   it("knows the two local providers by name, and a .gguf path with no provider as llama.cpp", () => {
@@ -217,6 +222,28 @@ describe("withLocalDefaults", () => {
       "/m/big.gguf",
     );
     expect(forAnother.metadata).toEqual({ llamaCppContextSize: 8192 });
+  });
+});
+
+describe("mergedReplyLimits", () => {
+  it("combines a branch default and a call field by field, the call winning", () => {
+    expect(mergedReplyLimits({ hedgeLimit: 30 }, { repeatLimit: 0 })).toEqual({
+      hedgeLimit: 30,
+      repeatLimit: 0,
+    });
+    expect(mergedReplyLimits({ hedgeLimit: 30, limitAnswers: true }, { hedgeLimit: 5 })).toEqual({
+      hedgeLimit: 5,
+      limitAnswers: true,
+    });
+    expect(mergedReplyLimits({ hedgeLimit: 30 }, { hedgeLimit: undefined })).toEqual({
+      hedgeLimit: 30,
+    });
+  });
+
+  it("is whichever side exists when only one does", () => {
+    expect(mergedReplyLimits(undefined, { repeatLimit: 0 })).toEqual({ repeatLimit: 0 });
+    expect(mergedReplyLimits({ repeatLimit: 0 }, undefined)).toEqual({ repeatLimit: 0 });
+    expect(mergedReplyLimits(undefined, undefined)).toBeUndefined();
   });
 });
 

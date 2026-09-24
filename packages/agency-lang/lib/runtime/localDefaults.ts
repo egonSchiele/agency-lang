@@ -32,6 +32,25 @@ export type ReplyLimits = {
   limitAnswers?: boolean;
 };
 
+/** Two sets of limits combined field by field, the second winning where
+ *  both set a field. A branch default and a call's own limits combine
+ *  this way, so a call that sets one field keeps the branch's others. */
+export function mergedReplyLimits(
+  base: ReplyLimits | undefined,
+  over: ReplyLimits | undefined,
+): ReplyLimits | undefined {
+  if (base === undefined || over === undefined) {
+    return over ?? base;
+  }
+  const merged: ReplyLimits = { ...base };
+  for (const key of Object.keys(over) as (keyof ReplyLimits)[]) {
+    if (over[key] !== undefined) {
+      (merged as Record<string, unknown>)[key] = over[key];
+    }
+  }
+  return merged;
+}
+
 /** The request fields the MLX chat server reads for the limits. */
 export function mlxReplyLimitAttributes(
   limits: ReplyLimits,

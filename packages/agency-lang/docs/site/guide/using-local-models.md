@@ -335,7 +335,7 @@ A model that is unsure can write "But wait, is that right? Let me reconsider." f
 The MLX server watches every reply for three signs of this:
 
 1. Thinking past its budget. The budget is half of `maxTokens` unless the call sets `budgetTokens`.
-2. More than twelve second thoughts in the last two thousand tokens. "But wait," "Wait," "Hmm," "Hold on," "Let me reconsider," and phrases like them. A loop says these every few lines; an honest long reply says them a dozen times over thousands of tokens, which is why the count runs over a window rather than the whole reply.
+2. Twelve second thoughts in the last two thousand tokens. "But wait," "Wait," "Hmm," "Hold on," "Let me reconsider," and phrases like them. A loop says these every few lines; an honest long reply says them a dozen times over thousands of tokens, which is why the count runs over a window rather than the whole reply.
 3. The same sentence of six or more words, written three times in that window.
 
 The last two watch the thinking only, unless you ask. An answer repeats itself for honest reasons: a refrain, a table with a repeated row, three similar functions in a file. Thinking rarely does. `--limit-answers` on `agency local serve`, or `limit_answers: true` on a request, watches answers too.
@@ -364,7 +364,7 @@ setLlmOptions({ maxTokens: 8192, timeout: 300000 })
 
 ### A reply you gave up on keeps running, unless something stops it
 
-When a call times out, or you press Ctrl-C, your program moves on. The model does not know that. llama.cpp runs inside your process, so Agency stops it directly. The MLX server is another process behind a socket, and `mlx_lm.server` on its own only looks at that socket once the reply is finished. Agency's chat server looks every half second instead, and drops the reply within that time. The server's log shows it:
+When a call times out, or you press Ctrl-C, your program moves on. The model does not know that. llama.cpp runs inside your process, so Agency stops it directly. The MLX server is another process behind a socket, and `mlx_lm.server` on its own only looks at that socket once the reply is finished. Agency's chat server looks every half second instead, and drops the reply at its next token. A prompt still being read is read to the end first, and on the path a draft model uses that means the whole prompt. The server's log shows it:
 
 ```
 The client went away; stopping its reply.
@@ -401,7 +401,7 @@ agency run --local qwen3.5-4b --draft qwen3.5-2b hello.agency
 
 The first line drafts for an MLX model, the second for a GGUF one. The draft has to share the main model's tokenizer, which in practice means the smallest member of the same family, and both backends check the pair when the draft loads and refuse one that does not match. `--draft-tokens` on the server sets how many tokens the draft guesses at a time, four by default. A draft turns off batching on the MLX server, so calls run one at a time there while it is in use. The MLX server also refuses a draft for a model whose attention cache cannot give tokens back, which is every Qwen3.5 and Qwen3-Next model; Qwen3, gpt-oss, and Gemma 4 can take one.
 
-On llama.cpp the draft runs greedy: node-llama-cpp's draft predictor never returns when the main model samples, so a drafted GGUF model gets temperature 0 unless the call names one, and a call that names a higher one is refused. In testing on Apple Silicon it reported no predictions used and ran slower than the model alone, so treat a llama.cpp draft as an experiment, not a speed-up.
+On llama.cpp the draft runs greedy: node-llama-cpp's draft predictor did not return when the main model sampled, on a Qwen3.5 pair, so a drafted GGUF model gets temperature 0 unless the call names one. The pair measured there was a 2B drafting for a 4B, which is the shape that cannot win: a draft half the size of its model is rarely ready before the main step needs it, and that pair reported no predictions used. The shape the feature is for is a 0.6B drafting for a 30B, and Qwen3.5 is also a hybrid-attention family, so measure a standard pair before drawing a conclusion about llama.cpp drafting as a whole.
 
 Whether a draft pays off depends on the pair and the machine, so measure it: run the throughput case of the benchmark with and without the draft and compare the output speed. A draft that is too large gains little, because checking its guesses costs almost what it saves. On the 235B with a 0.6B draft, prose came out slower with the draft than without.
 
@@ -430,7 +430,7 @@ The prompt, the thinking, and the answer all share one context window. llama.cpp
 | Runs                   | inside your process          | as a process you start and stop        |
 | Loads the model        | on the first call, every run | once, when you start the server        |
 | Calls at the same time | one at a time, the rest wait | several, batched together              |
-| Abandoned reply        | stopped at once              | stopped within half a second           |
+| Abandoned reply        | stopped at once              | stopped at its next token              |
 | Thinking on, off, budget | yes, where the model's wrapper has a switch | yes                     |
 | Watches for loops      | no                           | yes                                    |
 | Speculative decoding   | `agency run --draft`, greedy only | `agency local serve --draft`      |

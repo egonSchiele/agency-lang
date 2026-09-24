@@ -1970,7 +1970,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option(
       "--hedge-limit <n>",
-      'Second thoughts ("But wait", "Hmm") a reply may have before it is cut short (default: 12; 0 for no limit)',
+      'Second thoughts ("But wait", "Hmm") in a reply\'s thinking that cut it short when reached (default: 12; 0 for no limit)',
       parseNonNegativeInt,
     )
     .option(

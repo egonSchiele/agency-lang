@@ -66,7 +66,11 @@ the reply runs on to `max_tokens`, holding its share of the GPU and its
 cache, and every other request in the batch runs slower for it. The handler
 thread that waits for tokens here looks at its socket every half second
 instead, and when the socket has been closed it tells the generator to drop
-the reply. The batch frees the reply's cache on its next step.
+the reply. mlx_lm drops it at the next point it looks: on the batched path
+that is after the next chunk of prompt or the next token, so within a
+moment; on the single path, which a draft model or a seed puts a request
+on, only once the whole prompt has been read, so a long prompt is still read
+to the end. The batch frees the reply's cache on its next step.
 
 With a draft model (`--draft-model`), mlx_lm generates speculatively: the
 draft guesses several tokens, the main model checks them in one pass, and
@@ -388,6 +392,8 @@ class Watcher:
         )
         self.initial = replace(self.state)
         self.seen = None
+        # Where the reply starts in the history mlx_lm hands over.
+        self.start = None
         # Per token of the reply: its id, its text, and the state after it.
         self.reply = []
         self.pieces = []
@@ -485,6 +491,25 @@ class Watcher:
         if self.matcher is not None and fed > self.state.consumed:
             self.matcher.rollback(fed - self.state.consumed)
 
+    def resync(self, tokens):
+        """mlx_lm 0.31.3 only ever shortens the history to a prefix of itself
+        and appends to it, so taking back tokens by count keeps the reply in
+        step with it. This guards the day that changes: when the last token
+        of the history is not the last token stepped, find where the two
+        part, take back from there, and step the rest. One element per call
+        when they agree."""
+        if not self.reply or int(tokens[-1].item()) == self.reply[-1]:
+            return
+        history = tokens[self.start :].tolist()
+        shared = min(len(history), len(self.reply))
+        parted = next((i for i in range(shared) if history[i] != self.reply[i]), shared)
+        logging.warning(
+            f"The token history parted from the reply at token {parted}; reading it again from there."
+        )
+        self.rewind(len(self.reply) - parted)
+        for token_id in history[parted:]:
+            self.step(token_id)
+
     def judged_text(self):
         """The newest WINDOW tokens of the text being judged."""
         start = max(self.state.judged_from, len(self.pieces) - WINDOW)
@@ -534,12 +559,14 @@ class Watcher:
         if self.seen is None:
             self.prepare(max(logits.shape[-1], self.vocab_width))
             self.seen = count
+            self.start = count
         else:
             if count < self.seen:
                 self.rewind(self.seen - count)
             for token_id in tokens[self.seen :].tolist():
                 self.step(token_id)
             self.seen = count
+            self.resync(tokens)
         state = self.state
         if state.phase == "reasoning":
             if state.closing is not None:
@@ -682,11 +709,23 @@ class Generator(server.ResponseGenerator):
         """mlx_lm's path for a request it cannot batch: every request when a
         draft model is loaded, and any request with a seed. mlx_lm holds the
         prompt cache to `--prompt-cache-bytes` only on the batched path, so
-        this one trims it the same way after the reply."""
-        super()._serve_single(request)
+        this one trims it the same way: before the reply, so the cache is
+        under the cap while the reply runs, and after, for what the reply
+        added."""
         limit = self.model_provider.cli_args.prompt_cache_bytes
         if limit is not None:
             self.prompt_cache.trim_to(n_bytes=limit)
+        super()._serve_single(request)
+        if limit is not None:
+            self.prompt_cache.trim_to(n_bytes=limit)
+
+    def check_generating(self):
+        """Every reply comes from the one generation thread. If it has died,
+        from an error it did not catch such as the GPU running out of memory,
+        every request would wait for ever. Fail the request instead, so the
+        caller sees an error and the server can be restarted."""
+        if not self._generation_thread.is_alive():
+            raise RuntimeError("The server's generation thread has stopped; restart the server.")
 
     def generate(self, request, args, progress_callback=None):
         """mlx_lm's `generate`, with two changes. While the handler waits for
@@ -703,7 +742,12 @@ class Generator(server.ResponseGenerator):
         response_queue = Queue()
         self.requests.put((response_queue, request, args))
 
-        ctx = response_queue.get()
+        while True:
+            try:
+                ctx = response_queue.get(timeout=CLIENT_POLL_SECONDS)
+                break
+            except QueueEmpty:
+                self.check_generating()
         if isinstance(ctx, Exception):
             raise ctx
 
@@ -717,6 +761,7 @@ class Generator(server.ResponseGenerator):
                     response = response_queue.get(timeout=CLIENT_POLL_SECONDS)
                 except QueueEmpty:
                     response = WAITING
+                    self.check_generating()
                 if connection is not None and time.monotonic() - last_look >= CLIENT_POLL_SECONDS:
                     last_look = time.monotonic()
                     if client_gone(connection):

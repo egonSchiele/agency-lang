@@ -19,7 +19,12 @@
 # skewed by sharing a rate limit.
 #
 # Environment variables:
-#   BENCH_ARGS   extra flags for run-model.agency, such as --trials 5 (the default is 3)
+#   BENCH_ARGS   extra flags for run-model.agency, such as --cases extract,needle
+#   LOCAL_TRIALS how many times each case runs on a local model (default: 1;
+#                the cases repeat their questions inside the call, so one
+#                trial is enough, and a local run is the slow part)
+#   HOSTED_TRIALS  the same for a hosted model (default: 3; a hosted run is
+#                cheap, and sampling makes trials differ)
 #   RESULTS_DIR  where result files go (default: results)
 #   MAX_TOKENS   cap on output tokens per call, thinking included, for every
 #                model (default: 8192). One cap for all is what makes the
@@ -64,6 +69,8 @@ RESULTS_DIR="${RESULTS_DIR:-results}"
 BENCH_ARGS="${BENCH_ARGS:-}"
 MAX_TOKENS="${MAX_TOKENS:-8192}"
 LOCAL_TIMEOUT="${LOCAL_TIMEOUT:-300}"
+LOCAL_TRIALS="${LOCAL_TRIALS:-1}"
+HOSTED_TRIALS="${HOSTED_TRIALS:-3}"
 MACHINE_LABEL="${MACHINE_LABEL:-}"
 DRAFT="${DRAFT:-}"
 PREFILL_STEP="${PREFILL_STEP:-0}"
@@ -95,12 +102,12 @@ for entry in "${models[@]}"; do
     fi
     # The runtime's timeout is ten minutes. A reply that goes in circles
     # would use it up, and on a large model that is ten minutes per trial.
-    cap_flag=(--max-tokens "$MAX_TOKENS" --timeout "$LOCAL_TIMEOUT")
+    cap_flag=(--max-tokens "$MAX_TOKENS" --timeout "$LOCAL_TIMEOUT" --trials "$LOCAL_TRIALS")
   else
     name="$entry"
     model_flag=(--model "$name")
     record_flag+=(--backend hosted)
-    cap_flag=(--max-tokens "$MAX_TOKENS")
+    cap_flag=(--max-tokens "$MAX_TOKENS" --trials "$HOSTED_TRIALS")
     # The catalog routes OpenAI models to the "openai" provider, which is
     # the older chat completions API. Some cases fail there, so a bare
     # OpenAI name goes to "openai-responses" instead. A name that already

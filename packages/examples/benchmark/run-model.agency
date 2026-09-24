@@ -29,21 +29,22 @@ type CaseInfo = {
   description: string
 }
 
+// A case asks one or more questions in one or more calls and scores itself
+// from 0 to 1, so a case with several questions is graded as a fraction. The
+// "stress" category is left out of "all": it holds the cases that make a
+// small model loop, which measure the runtime's limits more than the model.
 const ALL_CASES: CaseInfo[] = [
   { name: "latency", category: "speed", description: "Answer a trivial prompt with one word" },
   { name: "throughput", category: "speed", description: "Write a 400-word story" },
-  { name: "extract", category: "structured", description: "Pull invoice fields out of a messy email" },
-  { name: "actionItems", category: "structured", description: "Turn meeting notes into a list of owners and tasks" },
-  { name: "singleTool", category: "tools", description: "Call one tool and report what it returned" },
-  { name: "toolChain", category: "tools", description: "Chain two tools, ignoring three distractors" },
+  { name: "extract", category: "structured", description: "Pull invoice fields out of two messy emails" },
+  { name: "toolChain", category: "tools", description: "Chain three tools, recovering from one error, ignoring three distractors" },
   { name: "trustTool", category: "tools", description: "Call a tool three times and trust it over common sense" },
-  { name: "math", category: "reasoning", description: "Solve a word problem with a cheapest-price twist" },
-  { name: "logic", category: "reasoning", description: "Solve a four-person logic puzzle" },
+  { name: "reasoning", category: "reasoning", description: "Three short problems, each with a trap" },
   { name: "format", category: "instructions", description: "List exactly four fruits in a strict format" },
-  { name: "lipogram", category: "instructions", description: "Rewrite a sentence without the letter e" },
-  { name: "multiTurn", category: "context", description: "Recall a fact from two turns earlier" },
   { name: "needle", category: "context", description: "Find one line hidden in a long log" },
-  { name: "classify", category: "classification", description: "Label six reviews, including sarcasm" }
+  { name: "classify", category: "classification", description: "Label six reviews, including sarcasm" },
+  { name: "faithfulness", category: "faithfulness", description: "Answer from a document, and admit what it does not say" },
+  { name: "lipogram", category: "stress", description: "Rewrite a sentence without the letter e. Run it with --cases stress" }
 ]
 
 /** A case's own verdict: a score from 0 to 1, and what the model said. A
@@ -210,12 +211,20 @@ def lookupCustomer(email: string): string {
   return "No customer with email ${email}"
 }
 
+// How many times getBalance has been called in the current case. The first
+// call in the tool-chain case fails, so the model has to try again.
+let balanceCalls = 0
+
 def getBalance(customerId: string): string {
   """
   Get the outstanding balance on a customer's account.
 
   @param customerId - The customer id, such as C-1234
   """
+  balanceCalls = balanceCalls + 1
+  if (balanceCalls == 1) {
+    return "Error: the accounts service timed out. Try again."
+  }
   if (customerId.includes("5530")) {
     return "Balance for C-5530: $2,718.40, overdue since 2026-01-15"
   }
@@ -290,87 +299,74 @@ Line items: freight $1,240.00, fuel surcharge $86.50, handling $45.
 Please pay by March 14, 2026. (Ignore the old quote of $900, that was before the surcharge.)
 """
 
-def caseExtract(): CaseOutcome {
-  const reply: Invoice! = llm("Extract the invoice details from this email:\n${INVOICE_EMAIL}")
+// Twelve chairs at $190 is $2,280, plus the tax is $2,462.40. The January
+// quote is a trap.
+const INVOICE_EMAIL_2 = """
+Subject: Re: Re: PO 8812
+Northwind Traders Inc. sent their invoice NT-8812 for the office chairs: 12 chairs at $190 each,
+so $2,280, plus $182.40 sales tax. They want it paid by the 30th of April 2026.
+(Their quote in January said $2,100, but that was for 11 chairs.)
+"""
+
+type ExpectedInvoice = {
+  vendor: string,
+  invoiceNumber: string,
+  total: number,
+  dueDate: string
+}
+
+// How many of the four fields came back right, and what came back.
+def gradeInvoice(email: string, expected: ExpectedInvoice): { right: number, detail: string } {
+  const reply: Invoice! = llm("Extract the invoice details from this email:\n${email}")
   if (isFailure(reply)) {
-    return errored(reply.error)
+    return { right: 0, detail: "no reply: ${oneLine(reply.error, 40)}" }
   }
   const invoice = reply.value
   let right = 0
-  if (invoice.vendor.toLowerCase().includes("bluefin")) {
+  if (invoice.vendor.toLowerCase().includes(expected.vendor)) {
     right = right + 1
   }
-  if (invoice.invoiceNumber.includes("20931")) {
+  if (invoice.invoiceNumber.includes(expected.invoiceNumber)) {
     right = right + 1
   }
-  if (Math.abs(invoice.total - 1371.5) < 0.01) {
+  if (Math.abs(invoice.total - expected.total) < 0.01) {
     right = right + 1
   }
-  if (invoice.dueDate == "2026-03-14") {
+  if (invoice.dueDate == expected.dueDate) {
     right = right + 1
   }
-  return outcome(right / 4, "${invoice.vendor} | ${invoice.invoiceNumber} | ${invoice.total} | ${invoice.dueDate}")
+  return { right: right, detail: "${invoice.vendor} | ${invoice.invoiceNumber} | ${invoice.total} | ${invoice.dueDate}" }
 }
 
-type ActionItem = {
-  owner: string,
-  task: string
-}
-
-type ActionItems = {
-  items: ActionItem[]
-}
-
-const MEETING_NOTES = """
-Standup notes. Priya will send the revised budget to finance. We talked about the
-offsite but nothing was decided. Marco is fixing the login bug before Friday.
-Someone should look at the flaky checkout test; Dana volunteered. Priya also agreed
-to book the room for the demo.
-"""
-
-def countOwner(items: ActionItem[], name: string): number {
-  return count(items) as item { return item.owner.toLowerCase().includes(name) }
-}
-
-// Four items: two for Priya, one each for Marco and Dana. The offsite is a
-// trap, because nobody owns it.
-def caseActionItems(): CaseOutcome {
-  const reply: ActionItems! = llm("List every action item in these meeting notes, with the person who owns it. Only include items that someone actually owns.\n${MEETING_NOTES}")
-  if (isFailure(reply)) {
-    return errored(reply.error)
+// Two emails, four fields each, so the score is eighths. Each email is its
+// own call on a fresh thread.
+def caseExtract(): CaseOutcome {
+  let first: any = null
+  thread {
+    first = gradeInvoice(INVOICE_EMAIL, { vendor: "bluefin", invoiceNumber: "20931", total: 1371.5, dueDate: "2026-03-14" })
   }
-  const items = reply.value.items
-  let right = 0
-  if (items.length == 4) {
-    right = right + 1
+  let second: any = null
+  thread {
+    second = gradeInvoice(INVOICE_EMAIL_2, { vendor: "northwind", invoiceNumber: "8812", total: 2462.4, dueDate: "2026-04-30" })
   }
-  if (countOwner(items, "priya") == 2) {
-    right = right + 1
-  }
-  if (countOwner(items, "marco") == 1) {
-    right = right + 1
-  }
-  if (countOwner(items, "dana") == 1) {
-    right = right + 1
-  }
-  const owners = map(items) as item { return item.owner }
-  return outcome(right / 4, "${items.length} items: ${owners.join(", ")}")
+  return outcome((first.right + second.right) / 8, "${first.detail} || ${second.detail}")
 }
 
 // ---------------------------------------------------------------------------
 // Tool use
 // ---------------------------------------------------------------------------
 
-def caseSingleTool(): CaseOutcome {
-  const answer: string = llm("What is the tracking number for order 4471?", { tools: [getOrderStatus] })
-  return outcome(scoreOf(answer.includes("ZX-9321-Q")), answer)
-}
-
+// Four tool calls in a row, each needing the last one's result: the email
+// gives the id, the balance fails once and then gives the dollars, and the
+// conversion gives the euros. $2,718.40 at the tool's rate is 2500.928
+// euros. Three of the five tools are distractors.
 def caseToolChain(): CaseOutcome {
-  const answer: string = llm("How much does the customer with the email jreyes@example.com owe us?", {
+  balanceCalls = 0
+  const answer: string = llm("How much does the customer with the email jreyes@example.com owe us, in euros?", {
     tools: [getOrderStatus, lookupCustomer, getBalance, getTemperature, convertCurrency]
   })
-  const ok = answer.includes("2,718.40") || answer.includes("2718.40") || answer.includes("2718.4")
+  const digits = answer.split(",").join("")
+  const ok = digits.includes("2500") || digits.includes("2501")
   return outcome(scoreOf(ok), answer)
 }
 
@@ -395,23 +391,21 @@ type NumberAnswer = {
   answer: number
 }
 
-// Three boxes plus two singles costs $51. Four boxes costs $60, and twenty
-// singles costs $60. So the answer is 51.
-def caseMath(): CaseOutcome {
-  const reply: NumberAnswer! = llm("A bakery sells muffins for $3 each, or in boxes of 6 for $15. Sam needs at least 20 muffins and wants to spend as little as possible. How many dollars does Sam spend?")
-  if (isFailure(reply)) {
-    return errored(reply.error)
-  }
-  const answer = reply.value.answer
-  return outcome(scoreOf(answer == 51), "${answer}")
-}
-
 type NameAnswer = {
   @jsonSchema({ description: "your working, step by step" })
   reasoning: string,
   name: string
 }
 
+// Three boxes plus two singles costs $51. Four boxes costs $60, and twenty
+// singles costs $60. So the answer is 51.
+const MUFFINS = "A bakery sells muffins for $3 each, or in boxes of 6 for $15. Sam needs at least 20 muffins and wants to spend as little as possible. How many dollars does Sam spend?"
+
+// $24 is 80% of the original price, so the original was $30. The trap is to
+// add 20% to $24 and get $28.80.
+const JACKET = "A jacket costs $24 after a 20% discount. What was the price before the discount, in dollars?"
+
+// Ben can only have the fish, Dee has the parrot, Ana has no dog, so Cy does.
 const PUZZLE = """
 Ana, Ben, Cy, and Dee each own exactly one pet: a cat, a dog, a fish, or a parrot.
 No two people own the same kind of pet.
@@ -421,13 +415,44 @@ No two people own the same kind of pet.
 Who owns the dog?
 """
 
-def caseLogic(): CaseOutcome {
-  const reply: NameAnswer! = llm(PUZZLE)
+// A number problem's answer, or null when the reply did not fit the type.
+def askNumber(question: string): number | null {
+  const reply: NumberAnswer! = llm(question)
   if (isFailure(reply)) {
-    return errored(reply.error)
+    return null
   }
-  const name = reply.value.name
-  return outcome(scoreOf(name.toLowerCase().includes("cy")), name)
+  return reply.value.answer
+}
+
+// Three problems, each its own call on a fresh thread, so the score is
+// thirds. A reply that does not fit the type counts as wrong.
+def caseReasoning(): CaseOutcome {
+  let muffins: number | null = null
+  thread {
+    muffins = askNumber(MUFFINS)
+  }
+  let jacket: number | null = null
+  thread {
+    jacket = askNumber(JACKET)
+  }
+  let who = ""
+  thread {
+    const reply: NameAnswer! = llm(PUZZLE)
+    if (!isFailure(reply)) {
+      who = reply.value.name
+    }
+  }
+  let right = 0
+  if (muffins == 51) {
+    right = right + 1
+  }
+  if (jacket == 30) {
+    right = right + 1
+  }
+  if (who.toLowerCase().includes("cy")) {
+    right = right + 1
+  }
+  return outcome(right / 3, "${muffins} | ${jacket} | ${who}")
 }
 
 // ---------------------------------------------------------------------------
@@ -452,22 +477,12 @@ def caseLipogram(): CaseOutcome {
 // Context
 // ---------------------------------------------------------------------------
 
-// The three calls share one thread, so the third can see the first. The fact
-// is harmless on purpose: an earlier version used a locker code, and one
-// model refused to repeat it back, which tested safety tuning, not memory.
-def caseMultiTurn(): CaseOutcome {
-  const first: string = llm("Remember this for later: the code name for our new project is Bramble-7. Reply with just the word noted.")
-  const second: string = llm("What is the capital of Australia? Answer in one word.")
-  const third: string = llm("What is the code name for our new project? Reply with just the code name.")
-  return outcome(scoreOf(third.includes("Bramble-7")), third)
-}
-
 def buildHaystack(lines: number): string {
   let parts: string[] = []
   const needleAt = Math.floor(lines * 0.7)
   for (i in range(lines)) {
     if (i == needleAt) {
-      parts.push("Log ${i}: NOTE, the vault passphrase was changed to violet-kettle-42.")
+      parts.push("Log ${i}: NOTE, the night shift channel was renamed to violet-kettle-42.")
     } else {
       parts.push("Log ${i}: the night shift at dock ${i} counted the crates and signed off.")
     }
@@ -483,7 +498,7 @@ def buildHaystack(lines: number): string {
 // between separate benchmark runs, so a rerun cannot hit the cache either.
 def caseNeedle(lines: number): CaseOutcome {
   const haystack = buildHaystack(lines)
-  const answer: string = llm("Log file exported at ${now()}:\n\n${haystack}\n\nWhat is the new vault passphrase? Reply with just the passphrase.")
+  const answer: string = llm("Log file exported at ${now()}:\n\n${haystack}\n\nWhat was the night shift channel renamed to? Reply with just the new name.")
   return outcome(scoreOf(answer.includes("violet-kettle-42")), answer)
 }
 
@@ -525,6 +540,68 @@ def caseClassify(): CaseOutcome {
 }
 
 // ---------------------------------------------------------------------------
+// Faithfulness
+// ---------------------------------------------------------------------------
+
+type Lookup = {
+  @jsonSchema({ description: "whether the document answers the question" })
+  found: boolean,
+  @jsonSchema({ description: "the answer, taken from the document; an empty string when the document does not say" })
+  answer: string
+}
+
+type Lookups = {
+  @jsonSchema({ description: "one entry per question, in the same order as the questions" })
+  answers: Lookup[]
+}
+
+const MEMO = """
+Facilities memo, 3 March. The Elm Street office closes for repainting from Monday 9 March
+to Wednesday 11 March. Staff should work from the Harbour Road office or from home on those
+days. The Harbour Road car park has 40 spaces, and badge access works at both sites. The
+kitchen at Elm Street will be restocked when it reopens.
+"""
+
+const MEMO_QUESTIONS = """
+1. How many spaces does the Harbour Road car park have?
+2. Which company is doing the repainting?
+3. On which dates is the Elm Street office closed?
+4. How much will the repainting cost?
+"""
+
+// Two questions the memo answers and two it does not, so a model that
+// always says "not in the document" scores a half, and so does one that
+// always makes something up. The score is quarters.
+def caseFaithfulness(): CaseOutcome {
+  const reply: Lookups! = llm("Answer each question from this memo alone. When the memo does not say, say so.\n\nMemo:\n${MEMO}\nQuestions:\n${MEMO_QUESTIONS}")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const answers = reply.value.answers
+  const expected = [
+    { found: true, contains: "40" },
+    { found: false, contains: "" },
+    { found: true, contains: "11" },
+    { found: false, contains: "" }
+  ]
+  let right = 0
+  for (want, i in expected) {
+    if (i >= answers.length) {
+      continue
+    }
+    const got = answers[i]
+    if (want.found && got.found && got.answer.includes(want.contains)) {
+      right = right + 1
+    }
+    if (!want.found && !got.found) {
+      right = right + 1
+    }
+  }
+  const shown = map(answers) as a { return if a.found then a.answer else "(not in memo)" }
+  return outcome(right / expected.length, shown.join(" | "))
+}
+
+// ---------------------------------------------------------------------------
 // Running
 // ---------------------------------------------------------------------------
 
@@ -537,17 +614,14 @@ def runOne(caseName: string, haystackLines: number): CaseOutcome {
     "latency" => caseLatency()
     "throughput" => caseThroughput()
     "extract" => caseExtract()
-    "actionItems" => caseActionItems()
-    "singleTool" => caseSingleTool()
     "toolChain" => caseToolChain()
     "trustTool" => caseTrustTool()
-    "math" => caseMath()
-    "logic" => caseLogic()
+    "reasoning" => caseReasoning()
     "format" => caseFormat()
-    "lipogram" => caseLipogram()
-    "multiTurn" => caseMultiTurn()
     "needle" => caseNeedle(haystackLines)
     "classify" => caseClassify()
+    "faithfulness" => caseFaithfulness()
+    "lipogram" => caseLipogram()
     _ => unknownCase(caseName)
   }
 }
@@ -563,11 +637,13 @@ def runOne(caseName: string, haystackLines: number): CaseOutcome {
 // cases that do not need it, and thinking with one budget on the two
 // reasoning cases. OpenAI's reasoning models ignore the off switch and think
 // at their default effort; that is the one difference left.
-const REASONING_CASES = ["math", "logic"]
+const REASONING_CASES = ["reasoning"]
 
 // How each model is told about thinking. "auto" is the policy above; "off"
 // and "on" apply one setting to every case; "default" leaves each model to
 // its own default, which is what the runs before this policy measured.
+// The reasoning case asks for written working in its reply type, so a
+// model shows its steps there whether or not it thinks first.
 let thinkingMode = "auto"
 let thinkingBudget = 4096
 
@@ -688,18 +764,20 @@ def warmUp(): Result {
 }
 
 def selectCases(filterText: string): CaseInfo[] {
-  if (filterText == "all") {
-    return ALL_CASES
-  }
   const wanted = splitList(filterText)
   const known = map(ALL_CASES) as c { return c.name }
   for (name in wanted) {
-    if (!known.includes(name)) {
-      print("Unknown case '${name}'. Known cases: ${known.join(", ")}")
+    if (name != "all" && name != "stress" && !known.includes(name)) {
+      print("Unknown case '${name}'. Known cases: ${known.join(", ")}, or all, or stress")
       return []
     }
   }
-  return filter(ALL_CASES) as c { return wanted.includes(c.name) }
+  return filter(ALL_CASES) as c {
+    if (c.category == "stress") {
+      return wanted.includes("stress") || wanted.includes(c.name)
+    }
+    return wanted.includes("all") || wanted.includes(c.name)
+  }
 }
 
 node main() {
@@ -709,8 +787,8 @@ node main() {
     flags: {
       label: { type: "string", default: "", description: "Name for this model in the comparison table (defaults to the model name)" },
       out: { type: "string", short: "o", default: "", description: "Where to write the results (defaults to results/<label>.json)" },
-      cases: { type: "string", short: "c", default: "all", description: "Comma-separated case names, or all" },
-      trials: { type: "number", short: "t", default: 3, description: "How many times to run each case. The comparison reports the mean and median time" },
+      cases: { type: "string", short: "c", default: "all", description: "Comma-separated case names; all for every case but the stress ones; stress for those" },
+      trials: { type: "number", short: "t", default: 1, description: "How many times to run each case. One is enough for a local model, whose cases repeat their questions inside the call; three suits a hosted model, where a run is cheap" },
       haystack: { type: "number", default: 1000, description: "Lines of filler in the needle case, about 17 tokens each. Lower it for local models with a small context window" },
       "max-tokens": { type: "number", default: 0, description: "Cap on output tokens per call, thinking included. 0 leaves the provider's default in place" },
       timeout: { type: "number", default: 0, description: "Seconds to wait for one call before giving up on it. 0 leaves the runtime's default in place (ten minutes)" },

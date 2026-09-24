@@ -117,8 +117,9 @@ export function withLocalDefaults(
   if (provider === "llama-cpp") {
     const metadata = draftScopedTo(config, defaultModel);
     // A drafted model runs greedy unless the call says otherwise:
-    // node-llama-cpp's draft predictor only works at temperature 0, and
-    // the plugin refuses a call that samples on a drafted model.
+    // node-llama-cpp's draft predictor hung when a Qwen3.5 model sampled,
+    // and the plugin refuses a sampled call on that family (and warns on
+    // the others). Greedy is the one setting every pair takes.
     const drafted = metadata?.llamaCppDraftModel !== undefined;
     const temperature = config.temperature ?? (drafted ? 0 : DEFAULT_LOCAL_TEMPERATURE);
     return { ...config, temperature, metadata };

@@ -891,6 +891,7 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
     // than set to undefined so the resulting config carries no dangling field.
     // Destructuring is how that happens without mutating `next.client`.
     const { defaultProvider: _dropped, ...client } = next.client ?? {};
+    const sameModel = client.defaultModel === flags.model.model;
     next.client =
       flags.model.explicitProvider === undefined
         ? { ...client, defaultModel: flags.model.model }
@@ -900,20 +901,21 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
             defaultProvider: flags.model.explicitProvider,
           };
     // A draft or a chat wrapper in agency.json is for the model named
-    // there. The flag replaced that model, so they go too, unless --draft
-    // named a draft for the new model.
-    const {
-      draftModel: _forTheOldModel,
-      chatWrapper: _wrapsTheOldModel,
-      ...llamaCpp
-    } = next.client.llamaCpp ?? {};
-    next.client = {
-      ...next.client,
-      llamaCpp:
-        flags.model.draftModel === undefined
-          ? llamaCpp
-          : { ...llamaCpp, draftModel: flags.model.draftModel },
-    };
+    // there. When the flag names another model they go too, unless --draft
+    // named a draft for the new one. A flag that repeats the model keeps
+    // them.
+    const { draftModel, chatWrapper, ...llamaCpp } = next.client.llamaCpp ?? {};
+    const kept: { draftModel?: string; chatWrapper?: string } = {};
+    if (sameModel && draftModel !== undefined) {
+      kept.draftModel = draftModel;
+    }
+    if (sameModel && chatWrapper !== undefined) {
+      kept.chatWrapper = chatWrapper;
+    }
+    if (flags.model.draftModel !== undefined) {
+      kept.draftModel = flags.model.draftModel;
+    }
+    next.client = { ...next.client, llamaCpp: { ...llamaCpp, ...kept } };
   }
   return next;
 }

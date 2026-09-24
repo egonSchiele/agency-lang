@@ -196,6 +196,15 @@ describe("withLocalDefaults", () => {
     expect(withLocalDefaults({ provider: "anthropic", replyLimits: { repeatLimit: 0 } })).toEqual({
       provider: "anthropic",
     });
+    // An Agency call's absent option arrives as null, which means the same
+    // as leaving it out.
+    expect(withLocalDefaults({ provider: "mlx", replyLimits: null }).rawAttributes).toEqual({
+      temperature: 0.7,
+      top_p: 0.95,
+    });
+    expect(withLocalDefaults({ provider: "anthropic", replyLimits: null })).toEqual({
+      provider: "anthropic",
+    });
   });
 
   it("drops a chat wrapper, like a draft, from a call that names another model than the run's", () => {
@@ -240,10 +249,13 @@ describe("mergedReplyLimits", () => {
     });
   });
 
-  it("is whichever side exists when only one does", () => {
+  it("is whichever side exists when only one does, with null counting as absent", () => {
     expect(mergedReplyLimits(undefined, { repeatLimit: 0 })).toEqual({ repeatLimit: 0 });
     expect(mergedReplyLimits({ repeatLimit: 0 }, undefined)).toEqual({ repeatLimit: 0 });
+    expect(mergedReplyLimits({ repeatLimit: 0 }, null)).toEqual({ repeatLimit: 0 });
+    expect(mergedReplyLimits(null, { repeatLimit: 0 })).toEqual({ repeatLimit: 0 });
     expect(mergedReplyLimits(undefined, undefined)).toBeUndefined();
+    expect(mergedReplyLimits(null, null)).toBeUndefined();
   });
 });
 

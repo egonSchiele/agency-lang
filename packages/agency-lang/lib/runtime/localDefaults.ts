@@ -34,13 +34,15 @@ export type ReplyLimits = {
 
 /** Two sets of limits combined field by field, the second winning where
  *  both set a field. A branch default and a call's own limits combine
- *  this way, so a call that sets one field keeps the branch's others. */
+ *  this way, so a call that sets one field keeps the branch's others. A
+ *  `null` counts as absent: Agency has no undefined, and its optional
+ *  fields arrive as null. */
 export function mergedReplyLimits(
-  base: ReplyLimits | undefined,
-  over: ReplyLimits | undefined,
+  base: ReplyLimits | null | undefined,
+  over: ReplyLimits | null | undefined,
 ): ReplyLimits | undefined {
-  if (base === undefined || over === undefined) {
-    return over ?? base;
+  if (base == null || over == null) {
+    return over ?? base ?? undefined;
   }
   const merged: ReplyLimits = { ...base };
   for (const key of Object.keys(over) as (keyof ReplyLimits)[]) {
@@ -143,7 +145,7 @@ export function mlxThinkingAttributes(
 
 /** A call's config as the runtime assembles it: smoltalk's fields plus
  *  `replyLimits`, which is Agency's own and never reaches smoltalk. */
-export type LocalCallConfig = Partial<SmolConfig> & { replyLimits?: ReplyLimits };
+export type LocalCallConfig = Partial<SmolConfig> & { replyLimits?: ReplyLimits | null };
 
 /** A call's config with the choices a hosted provider makes on its own
  *  made explicit for a local one. A call to a hosted provider is returned
@@ -168,7 +170,7 @@ export function withLocalDefaults(
 ): Partial<SmolConfig> {
   const provider = localProviderOf(config);
   if (provider === undefined) {
-    if (config.replyLimits === undefined) {
+    if (!("replyLimits" in config)) {
       return config;
     }
     const { replyLimits: _forTheMlxServer, ...hosted } = config;
@@ -210,7 +212,7 @@ export function withLocalDefaults(
       ? sampling
       : mlxThinkingAttributes(thinking, call.reasoningEffort, sampling);
   const rawAttributes =
-    replyLimits === undefined ? withThinking : mlxReplyLimitAttributes(replyLimits, withThinking);
+    replyLimits == null ? withThinking : mlxReplyLimitAttributes(replyLimits, withThinking);
   return { ...call, temperature, rawAttributes };
 }
 

@@ -58,6 +58,23 @@ describe("SmoltalkClient.normalizeError", () => {
   });
 });
 
+describe("toSmolConfig — metadata pass-through", () => {
+  // smoltalk-llama-cpp reads its settings (llamaCppDraftModel, and the like)
+  // from `config.metadata`. The baked defaults are spread to the top level,
+  // so a `metadata` object baked among them has to come out as the top-level
+  // `metadata` key of the smoltalk config, not be lost in the spread.
+  it("forwards a metadata object baked among the defaults as smoltalk's metadata", () => {
+    const clientConfig = {
+      model: "/m/big.gguf",
+      provider: "llama-cpp",
+      metadata: { llamaCppDraftModel: "/m/small.gguf" },
+    };
+    const promptConfig = { ...clientConfig, messages: [], metadata: clientConfig } as any;
+    const out = toSmolConfig(promptConfig) as any;
+    expect(out.metadata).toEqual({ llamaCppDraftModel: "/m/small.gguf" });
+  });
+});
+
 describe("toSmolConfig — apiKey/baseUrl pass-through", () => {
   // prompt.ts builds the PromptConfig as `{ ...clientConfig, metadata: clientConfig }`,
   // so the nested apiKey/baseUrl maps arrive via metadata. toSmolConfig must

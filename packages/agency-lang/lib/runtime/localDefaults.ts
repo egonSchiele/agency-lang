@@ -5,12 +5,17 @@ import type { SmolConfig } from "smoltalk";
  *  inside this process. */
 export const LOCAL_PROVIDERS = ["mlx", "llama-cpp"];
 
-/** What every hosted provider samples at when a call names no temperature.
- *  The local backends default to 0 instead, which picks the single
- *  likeliest token every step: the same prompt then gives the same reply
- *  every time, and a model that starts going in circles cannot get out of
- *  them. A local model gets the hosted default, so the two behave alike. */
-export const DEFAULT_LOCAL_TEMPERATURE = 1.0;
+/** How a local model samples when a call names no temperature. The local
+ *  backends default to 0, which picks the single likeliest token every
+ *  step: the same prompt then gives the same reply every time, and a model
+ *  that starts going in circles cannot get out of them. Hosted providers
+ *  sample at 1.0, but on top of samplers of their own; on the MLX server,
+ *  1.0 with nothing else is sampling from the whole distribution, which a
+ *  small 4-bit model turns into noise. These are the settings the Qwen and
+ *  Gemma model cards ask for, and close to what node-llama-cpp applies on
+ *  its own at any temperature above zero. */
+export const DEFAULT_LOCAL_TEMPERATURE = 0.7;
+export const DEFAULT_LOCAL_TOP_P = 0.95;
 
 export type ThinkingOption = { enabled: boolean; budgetTokens?: number };
 export type ReasoningEffort = "low" | "medium" | "high";
@@ -23,6 +28,24 @@ export const EFFORT_BUDGETS: Record<ReasoningEffort, number> = {
   medium: 8192,
   high: 16384,
 };
+
+/** The local backend a call goes to, or undefined for a hosted one. A
+ *  `.gguf` path with no provider named is llama.cpp: that is the provider
+ *  smoltalk infers for it, and the call should get the local defaults
+ *  whether or not the provider was spelled out. */
+export function localProviderOf(config: Partial<SmolConfig>): "mlx" | "llama-cpp" | undefined {
+  if (config.provider === "mlx" || config.provider === "llama-cpp") {
+    return config.provider;
+  }
+  if (
+    config.provider === undefined &&
+    config.model !== undefined &&
+    config.model.endsWith(".gguf")
+  ) {
+    return "llama-cpp";
+  }
+  return undefined;
+}
 
 /** The one thinking setting a call amounts to. A `thinking` option is
  *  taken as written. A `reasoningEffort` alone means thinking on, with the
@@ -44,12 +67,14 @@ export function thinkingFor(
 }
 
 /** The request fields the MLX chat server reads for a call's thinking
- *  setting. `chat_template_kwargs` is mlx_lm's own: the model's chat
- *  template reads `enable_thinking` and opens no thinking block when it is
- *  false. `reasoning_budget` is Agency's chat server's: the most tokens the
- *  model may think for before it is made to answer. */
+ *  setting. `chat_template_kwargs` is mlx_lm's own, handed to the model's
+ *  chat template: Qwen and Gemma templates read `enable_thinking`, and
+ *  gpt-oss's reads `reasoning_effort` and has no switch. `reasoning_budget`
+ *  is Agency's chat server's: the most tokens the model may think for
+ *  before it is made to answer. */
 export function mlxThinkingAttributes(
   thinking: ThinkingOption,
+  effort: ReasoningEffort | undefined,
   attributes: Record<string, unknown> = {},
 ): Record<string, unknown> {
   const templateArgs = attributes.chat_template_kwargs;
@@ -58,6 +83,7 @@ export function mlxThinkingAttributes(
     chat_template_kwargs: {
       ...(typeof templateArgs === "object" && templateArgs !== null ? templateArgs : {}),
       enable_thinking: thinking.enabled,
+      ...(effort === undefined ? {} : { reasoning_effort: effort }),
     },
   };
   if (thinking.budgetTokens === undefined) {
@@ -71,25 +97,54 @@ export function mlxThinkingAttributes(
  *  as it is: sending those providers a temperature they did not ask for
  *  is refused by some of their reasoning models.
  *
- *  llama.cpp reads `thinking` and `reasoningEffort` itself, with the same
- *  budgets, so only the MLX server needs them translated here. */
-export function withLocalDefaults(config: Partial<SmolConfig>): Partial<SmolConfig> {
-  if (!LOCAL_PROVIDERS.includes(config.provider ?? "")) {
+ *  llama.cpp reads the temperature, `thinking`, and `reasoningEffort` from
+ *  the config itself, with the same budgets. The MLX server is reached
+ *  through smoltalk's OpenAI-shaped client, which sends none of the
+ *  sampling settings, so they go in `rawAttributes`, which that client
+ *  copies into the request as they are.
+ *
+ *  `defaultModel` is the model the run was started for. A draft model
+ *  named for it (`llamaCppDraftModel` in `metadata`) drafts for that model
+ *  only, so a call that names another model does not carry it. */
+export function withLocalDefaults(
+  config: Partial<SmolConfig>,
+  defaultModel?: string,
+): Partial<SmolConfig> {
+  const provider = localProviderOf(config);
+  if (provider === undefined) {
     return config;
   }
-  const withTemperature =
-    config.temperature === undefined
-      ? { ...config, temperature: DEFAULT_LOCAL_TEMPERATURE }
-      : config;
-  if (config.provider !== "mlx") {
-    return withTemperature;
+  const temperature = config.temperature ?? DEFAULT_LOCAL_TEMPERATURE;
+  if (provider === "llama-cpp") {
+    return { ...config, temperature, metadata: draftScopedTo(config, defaultModel) };
+  }
+  const sampling = { ...(config.rawAttributes ?? {}) };
+  if (sampling.temperature === undefined) {
+    sampling.temperature = temperature;
+  }
+  if (sampling.top_p === undefined) {
+    sampling.top_p = DEFAULT_LOCAL_TOP_P;
   }
   const thinking = thinkingFor(config.thinking, config.reasoningEffort);
-  if (thinking === undefined) {
-    return withTemperature;
+  const rawAttributes =
+    thinking === undefined
+      ? sampling
+      : mlxThinkingAttributes(thinking, config.reasoningEffort, sampling);
+  return { ...config, temperature, rawAttributes };
+}
+
+/** The call's metadata without a draft model meant for another model. */
+function draftScopedTo(
+  config: Partial<SmolConfig>,
+  defaultModel: string | undefined,
+): Record<string, unknown> | undefined {
+  const metadata = config.metadata as Record<string, unknown> | undefined;
+  if (metadata === undefined || metadata.llamaCppDraftModel === undefined) {
+    return metadata;
   }
-  return {
-    ...withTemperature,
-    rawAttributes: mlxThinkingAttributes(thinking, config.rawAttributes),
-  };
+  if (defaultModel === undefined || config.model === undefined || config.model === defaultModel) {
+    return metadata;
+  }
+  const { llamaCppDraftModel: _forAnotherModel, ...rest } = metadata;
+  return rest;
 }

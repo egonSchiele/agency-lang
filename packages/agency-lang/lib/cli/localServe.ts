@@ -68,6 +68,9 @@ export function serveArgs(
       args.push(flag, String(value));
     }
   }
+  if (settings.limits.limitAnswers === true) {
+    args.push("--limit-answers");
+  }
   if (settings.draft !== undefined) {
     args.push(
       "--draft-model",
@@ -120,9 +123,11 @@ export type ReplyLimits = {
   reasoningBudget?: number;
   hedgeLimit?: number;
   repeatLimit?: number;
+  /** Watch answers for hedging and repeats too, not only thinking. */
+  limitAnswers?: boolean;
 };
 
-const LIMIT_FLAGS: [keyof ReplyLimits, string][] = [
+const LIMIT_FLAGS: ["reasoningBudget" | "hedgeLimit" | "repeatLimit", string][] = [
   ["reasoningBudget", "--reasoning-budget"],
   ["hedgeLimit", "--hedge-limit"],
   ["repeatLimit", "--repeat-limit"],
@@ -795,8 +800,18 @@ export async function runServe(
   if (repeated !== undefined) {
     throw new Error(`${repeated} is named twice.`);
   }
+  // The draft, when there is one, is planned like a served model, so it is
+  // found, checked, and sized the same way, but it gets no route: requests
+  // go to the model it drafts for. Every chat server loads its own copy of
+  // it, so the memory warning counts it once per chat model.
+  const draft =
+    flags.draft === undefined ? undefined : planModel(flags.draft, deps.cacheDir, "chat");
+  const chatCount = planned.filter((p) => p.kind === "chat").length;
   const warning = memoryWarning(
-    planned.map((p) => p.sizeBytes),
+    [
+      ...planned.map((p) => p.sizeBytes),
+      ...(draft === undefined ? [] : Array(chatCount).fill(draft.sizeBytes)),
+    ],
     deps.totalmem(),
   );
   if (warning !== null) {
@@ -835,12 +850,10 @@ export async function runServe(
       reasoningBudget: flags.reasoningBudget,
       hedgeLimit: flags.hedgeLimit,
       repeatLimit: flags.repeatLimit,
+      limitAnswers: flags.limitAnswers,
     },
   };
-  if (flags.draft !== undefined) {
-    // Planned like a served model, so it is found, checked, and sized the
-    // same way, but it gets no route: requests go to the model it drafts for.
-    const draft = planModel(flags.draft, deps.cacheDir, "chat");
+  if (draft !== undefined) {
     settings.draft = { dir: draft.dir, tokens: flags.draftTokens ?? DEFAULT_DRAFT_TOKENS };
     deps.log(`Drafting with ${draft.name} (${formatGB(draft.sizeBytes)})`);
   }

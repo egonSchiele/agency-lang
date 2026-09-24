@@ -299,6 +299,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       console.error("Error: Pass either --model (hosted) or --local (local), not both.");
       process.exit(2);
     }
+    if (options.draft !== undefined && options.local === undefined) {
+      console.error("Error: --draft needs --local; the draft is for the local model the run uses.");
+      process.exit(2);
+    }
     if (options.local !== undefined) {
       // Resolve + download in the parent, before compiling, so progress and
       // SHA-256 verification happen in the terminal; the result rides the
@@ -1975,6 +1979,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       parseNonNegativeInt,
     )
     .option(
+      "--limit-answers",
+      "Cut short an answer that hedges or repeats itself too, not only thinking (off by default: answers repeat for honest reasons)",
+    )
+    .option(
       "--draft <model>",
       "A smaller model of the same family that drafts tokens for the served models (speculative decoding)",
     )
@@ -1999,6 +2007,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           reasoningBudget?: number;
           hedgeLimit?: number;
           repeatLimit?: number;
+          limitAnswers?: boolean;
           draft?: string;
           draftTokens?: number;
           prefillStep?: number;

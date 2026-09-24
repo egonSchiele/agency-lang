@@ -2,7 +2,7 @@
 # Benchmark several models, one at a time, then compare them.
 #
 #   ./run-all.sh gpt-5.4-mini claude-haiku-4-5 local:qwen3.5-2b
-#   BENCH_ARGS="--trials 5 --cases latency,toolChain" ./run-all.sh gpt-5.4-mini local:qwen3.5-2b
+#   HOSTED_TRIALS=5 BENCH_ARGS="--cases latency,toolChain" ./run-all.sh gpt-5.4-mini local:qwen3.5-2b
 #
 # Write a hosted model as its plain name, or as provider/model when the name
 # alone is not enough (openrouter/qwen/qwen3-32b). A bare OpenAI name such as
@@ -19,7 +19,9 @@
 # skewed by sharing a rate limit.
 #
 # Environment variables:
-#   BENCH_ARGS   extra flags for run-model.agency, such as --cases extract,needle
+#   BENCH_ARGS   extra flags for run-model.agency, such as --cases extract,needle.
+#                A flag this script sets itself (--trials, --max-tokens,
+#                --timeout) is left to BENCH_ARGS when it is named there.
 #   LOCAL_TRIALS how many times each case runs on a local model (default: 1;
 #                the cases repeat their questions inside the call, so one
 #                trial is enough, and a local run is the slow part)
@@ -87,14 +89,20 @@ files=()
 failed=()
 for entry in "${models[@]}"; do
   # What the results file records about this run, beyond what run-model
-  # measures itself: the machine, the backend, and the speed settings.
-  record_flag=(--machine-label "$MACHINE_LABEL" --draft-model "$DRAFT" --prefill-step "$PREFILL_STEP")
+  # measures itself: the machine, the backend, and the speed settings that
+  # apply to this backend. A draft applies to a local model; the prefill
+  # step to the MLX server alone.
+  record_flag=(--machine-label "$MACHINE_LABEL")
   if [[ "$entry" == local:* ]]; then
     name="${entry#local:}"
     model_flag=(--local "$name")
     # `agency local resolve` prints the backend first: "mlx" or "llama-cpp".
     backend="$($AGENCY local resolve "$name" 2>/dev/null | awk 'NR==1 { print $1 }')"
-    record_flag+=(--backend "${backend:-llama-cpp}")
+    backend="${backend:-llama-cpp}"
+    record_flag+=(--backend "$backend" --draft-model "$DRAFT")
+    if [ "$backend" = "mlx" ]; then
+      record_flag+=(--prefill-step "$PREFILL_STEP")
+    fi
     # A GGUF model takes its draft from the run. An MLX model's draft is the
     # server's business, and is only recorded here.
     if [ -n "$DRAFT" ] && [ "$backend" != "mlx" ]; then
@@ -117,6 +125,20 @@ for entry in "${models[@]}"; do
       gpt-*|o[0-9]*) model_flag=(--model "openai-responses/$name") ;;
     esac
   fi
+  # A flag BENCH_ARGS names wins: run-model refuses a flag given twice, so
+  # the script's own copy is dropped.
+  kept=()
+  i=0
+  while [ $i -lt ${#cap_flag[@]} ]; do
+    flag="${cap_flag[$i]}"
+    value="${cap_flag[$((i + 1))]}"
+    case " $BENCH_ARGS " in
+      *" $flag "*|*" $flag="*) ;;
+      *) kept+=("$flag" "$value") ;;
+    esac
+    i=$((i + 2))
+  done
+  cap_flag=("${kept[@]}")
   # "mlx:mlx-community/Qwen3.8-27B-4bit" becomes "mlx_mlx-community_Qwen3.8-27B-4bit".
   safe="$(printf '%s' "$name" | tr '/:' '__')"
   if [ -n "$MACHINE_LABEL" ]; then

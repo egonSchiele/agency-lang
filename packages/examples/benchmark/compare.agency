@@ -28,6 +28,8 @@ type CaseResult = {
   score: number,
   latencyMs: number,
   tokens: number,
+  // Absent in files written before the benchmark recorded output tokens.
+  outputTokens?: number,
   cost: number,
   detail: string,
   error: string
@@ -36,10 +38,42 @@ type CaseResult = {
 type RunFile = {
   label: string,
   model: string,
+  // Absent in files written before the benchmark recorded the machine.
+  machine?: string,
+  machineLabel?: string,
+  settings?: RunSettings,
   startedAt: string,
   trials: number,
   haystackLines: number,
   results: CaseResult[]
+}
+
+// The choices a run was made with. See run-model.agency.
+type RunSettings = {
+  backend: string,
+  thinking: string,
+  thinkingBudget: number,
+  maxTokens: number,
+  timeout: number,
+  draft: string,
+  prefillStep: number
+}
+
+// A run's heading in the tables: its label, and its machine's label when
+// the runs come from more than one machine, so the same model on two
+// machines gets two columns that can be told apart.
+def headingOf(run: RunFile, runs: RunFile[]): string {
+  const labels = filter(map(runs) as r { return r.machineLabel }) as l { return l != null && l != "" }
+  let seen: string[] = []
+  for (l in labels) {
+    if (!seen.includes(l)) {
+      seen.push(l)
+    }
+  }
+  if (seen.length < 2 || run.machineLabel == null || run.machineLabel == "") {
+    return run.label
+  }
+  return "${run.label} @ ${run.machineLabel}"
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +191,8 @@ def caseCell(runs: CaseResult[]): string {
 def headerRow(firstColumn: string, firstWidth: number, runs: RunFile[]): string {
   let header = pad(firstColumn, firstWidth)
   for (run in runs) {
-    header = header + pad(run.label, columnWidth(run.label))
+    const heading = headingOf(run, runs)
+    header = header + pad(heading, columnWidth(heading))
   }
   return header
 }
@@ -171,7 +206,7 @@ def printCaseTable(runs: RunFile[], caseNames: string[]) {
   for (caseName in caseNames) {
     let row = pad(caseName, firstWidth)
     for (run in runs) {
-      row = row + pad(caseCell(casesOf(run, caseName)), columnWidth(run.label))
+      row = row + pad(caseCell(casesOf(run, caseName)), columnWidth(headingOf(run, runs)))
     }
     print(row)
   }
@@ -194,10 +229,23 @@ def printCategoryTable(runs: RunFile[], categories: string[]) {
         const percent = average(scores) * 100
         text = percent.toFixed(0) + "%"
       }
-      row = row + pad(text, columnWidth(run.label))
+      row = row + pad(text, columnWidth(headingOf(run, runs)))
     }
     print(row)
   }
+}
+
+// Tokens the model wrote per second, over every case that has the count.
+// This is the model's writing speed on this machine, thinking included, and
+// it does not depend on how long the prompts were. A file from before the
+// count was recorded shows "-".
+def outputSpeed(run: RunFile): string {
+  const counted = filter(run.results) as r { return r.error == "" && r.latencyMs > 0 && r.outputTokens != null && r.outputTokens > 0 }
+  if (counted.length == 0) {
+    return "-"
+  }
+  const rates = map(counted) as r { return r.outputTokens / (r.latencyMs / 1000) }
+  return average(rates).toFixed(0)
 }
 
 // Tokens per second on the long story. The token count includes the short
@@ -214,11 +262,11 @@ def storySpeed(run: RunFile): string {
 def printSummaryTable(runs: RunFile[]) {
   let labelWidth = 7
   for (run in runs) {
-    labelWidth = Math.max(labelWidth, run.label.length + 2)
+    labelWidth = Math.max(labelWidth, headingOf(run, runs).length + 2)
   }
   print("")
-  print(pad("model", labelWidth) + pad("passed", 10) + pad("avg score", 11) + pad("mean time", 11) + pad("median time", 13) + pad("story tok/s", 13) + pad("tokens/trial", 14) + "cost/trial")
-  print(rule(labelWidth + 82))
+  print(pad("model", labelWidth) + pad("passed", 10) + pad("avg score", 11) + pad("mean time", 11) + pad("median time", 13) + pad("out tok/s", 11) + pad("story tok/s", 13) + pad("tokens/trial", 14) + "cost/trial")
+  print(rule(labelWidth + 93))
   for (run in runs) {
     const results = run.results
     const passes = count(results) as r { return r.passed }
@@ -229,7 +277,52 @@ def printSummaryTable(runs: RunFile[]) {
     const trials = Math.max(run.trials, 1)
     const tokens = Math.round(sumOf(tokenCounts) / trials)
     const cost = sumOf(costs) / trials
-    print(pad(run.label, labelWidth) + pad("${passes}/${results.length}", 10) + pad(average(scores).toFixed(2), 11) + pad(seconds(average(times)), 11) + pad(seconds(median(times)), 13) + pad(storySpeed(run), 13) + pad("${tokens}", 14) + "$" + cost.toFixed(4))
+    print(pad(headingOf(run, runs), labelWidth) + pad("${passes}/${results.length}", 10) + pad(average(scores).toFixed(2), 11) + pad(seconds(average(times)), 11) + pad(seconds(median(times)), 13) + pad(outputSpeed(run), 11) + pad(storySpeed(run), 13) + pad("${tokens}", 14) + "$" + cost.toFixed(4))
+  }
+  printMachines(runs)
+  printSettingsTable(runs)
+}
+
+// The choices each run was made with, for the runs that recorded them. Two
+// runs of one model that differ here measured different things.
+def printSettingsTable(runs: RunFile[]) {
+  const recorded = filter(runs) as r { return r.settings != null }
+  if (recorded.length == 0) {
+    return
+  }
+  let labelWidth = 7
+  for (run in recorded) {
+    labelWidth = Math.max(labelWidth, headingOf(run, runs).length + 2)
+  }
+  print("")
+  print(pad("model", labelWidth) + pad("backend", 11) + pad("thinking", 10) + pad("budget", 8) + pad("max tokens", 12) + pad("timeout", 9) + pad("prefill", 9) + "draft")
+  print(rule(labelWidth + 65))
+  for (run in recorded) {
+    const s = run.settings
+    const timeout = if s.timeout == 0 then "default" else "${s.timeout}s"
+    const maxTokens = if s.maxTokens == 0 then "default" else "${s.maxTokens}"
+    const prefill = if s.prefillStep == 0 then "default" else "${s.prefillStep}"
+    const draft = if s.draft == "" then "none" else s.draft
+    print(pad(headingOf(run, runs), labelWidth) + pad(s.backend, 11) + pad(s.thinking, 10) + pad("${s.thinkingBudget}", 8) + pad(maxTokens, 12) + pad(timeout, 9) + pad(prefill, 9) + draft)
+  }
+}
+
+// Where each run was made, when the file says. Runs from one machine are
+// listed once, under that machine.
+def printMachines(runs: RunFile[]) {
+  let machines: string[] = []
+  for (run in runs) {
+    if (run.machine != null && run.machine != "" && !machines.includes(run.machine)) {
+      machines.push(run.machine)
+    }
+  }
+  if (machines.length == 0) {
+    return
+  }
+  print("")
+  for (machine in machines) {
+    const labels = map(filter(runs) as r { return r.machine == machine }) as r { return r.label }
+    print("${machine}: ${labels.join(", ")}")
   }
 }
 

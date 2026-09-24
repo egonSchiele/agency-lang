@@ -21,6 +21,10 @@
 # Environment variables:
 #   BENCH_ARGS   extra flags for run-model.agency, such as --trials 5 (the default is 3)
 #   RESULTS_DIR  where result files go (default: results)
+#   LOCAL_MAX_TOKENS  cap on output tokens per call for local models, thinking
+#                included (default: 30000). The llama.cpp context holds 32768
+#                tokens, prompt and output together, so going higher gains
+#                little. Hosted models keep their provider's default.
 #   AGENCY       how to run agency (default: the examples package's own copy,
 #                or agency on your PATH if that is missing)
 
@@ -38,6 +42,7 @@ if [ -z "${AGENCY:-}" ]; then
 fi
 RESULTS_DIR="${RESULTS_DIR:-results}"
 BENCH_ARGS="${BENCH_ARGS:-}"
+LOCAL_MAX_TOKENS="${LOCAL_MAX_TOKENS:-30000}"
 
 if [ $# -gt 0 ]; then
   models=("$@")
@@ -53,9 +58,13 @@ for entry in "${models[@]}"; do
   if [[ "$entry" == local:* ]]; then
     name="${entry#local:}"
     model_flag=(--local "$name")
+    # The default cap is 16384, which a small thinking model can use up
+    # before it answers.
+    cap_flag=(--max-tokens "$LOCAL_MAX_TOKENS")
   else
     name="$entry"
     model_flag=(--model "$name")
+    cap_flag=()
     # The catalog routes OpenAI models to the "openai" provider, which is
     # the older chat completions API. Some cases fail there, so a bare
     # OpenAI name goes to "openai-responses" instead. A name that already
@@ -75,8 +84,10 @@ for entry in "${models[@]}"; do
   # look new.
   rm -f "$out"
   # BENCH_ARGS is left unquoted on purpose, so it splits into separate flags.
+  # cap_flag is written as ${a[@]+"${a[@]}"} because macOS's bash 3.2, under
+  # set -u, treats an empty array as an unset variable.
   # shellcheck disable=SC2086
-  $AGENCY run "${model_flag[@]}" run-model.agency --label "$name" --out "$out" $BENCH_ARGS 2>&1 | tee "$log"
+  $AGENCY run "${model_flag[@]}" run-model.agency --label "$name" --out "$out" ${cap_flag[@]+"${cap_flag[@]}"} $BENCH_ARGS 2>&1 | tee "$log"
 
   if [ -f "$out" ]; then
     files+=("$out")

@@ -20,6 +20,7 @@
 import { parseArgs } from "std::args"
 import { now, format } from "std::date"
 import { getCost, getTokens } from "std::thread"
+import { setLlmOptions } from "std::llm"
 
 type CaseInfo = {
   name: string,
@@ -597,6 +598,7 @@ node main() {
       cases: { type: "string", short: "c", default: "all", description: "Comma-separated case names, or all" },
       trials: { type: "number", short: "t", default: 3, description: "How many times to run each case. The comparison reports the mean and median time" },
       haystack: { type: "number", default: 1000, description: "Lines of filler in the needle case, about 17 tokens each. Lower it for local models with a small context window" },
+      "max-tokens": { type: "number", default: 0, description: "Cap on output tokens per call, thinking included. 0 leaves the provider's default in place" },
       cold: { type: "boolean", description: "Skip the untimed warm-up call, so the first case includes the model's load time" },
       list: { type: "boolean", short: "l", description: "List the cases and exit" }
     }
@@ -616,6 +618,13 @@ node main() {
   const trials = args.flags.trials
   const haystackLines = args.flags.haystack
   const startedAt = format(now())
+
+  // A local thinking model can spend the provider's whole default budget
+  // thinking and never answer. Set here, before the warm-up, so it applies
+  // to every call in the run.
+  if (args.flags["max-tokens"] > 0) {
+    setLlmOptions({ maxTokens: args.flags["max-tokens"] })
+  }
 
   if (!args.flags.cold) {
     const warm = warmUp()

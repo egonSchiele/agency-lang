@@ -21,7 +21,7 @@ import { parseArgs } from "std::args"
 import { now, format } from "std::date"
 import { getCost, getTokens, getModelCosts } from "std::thread"
 import { setLlmOptions } from "std::llm"
-import { exec } from "std::shell"
+import { exec, which } from "std::shell"
 
 type CaseInfo = {
   name: string,
@@ -635,8 +635,11 @@ def runOne(caseName: string, haystackLines: number): CaseOutcome {
 // not think unless asked, OpenAI reasoning models always do, and local
 // thinking models think until told to stop. The policy: no thinking on the
 // cases that do not need it, and thinking with one budget on the two
-// reasoning cases. OpenAI's reasoning models ignore the off switch and think
-// at their default effort; that is the one difference left.
+// reasoning cases. Two providers do not follow the off switch: OpenAI's
+// reasoning models always think, at their default effort, and Gemini keeps
+// its own default, because the Google client only sends a thinking setting
+// when thinking is on. The comparison's settings table shows the policy
+// asked for, not what each provider did with it.
 const REASONING_CASES = ["reasoning"]
 
 // How each model is told about thinking. "auto" is the policy above; "off"
@@ -646,6 +649,30 @@ const REASONING_CASES = ["reasoning"]
 // model shows its steps there whether or not it thinks first.
 let thinkingMode = "auto"
 let thinkingBudget = 4096
+
+// Tokens kept for the answer above the thinking budget. A provider that
+// budgets thinking (Anthropic's older models, for one) refuses a call whose
+// cap is not above its budget, and a cap the budget fills leaves the model
+// nothing to answer with.
+const ANSWER_ROOM = 4096
+
+// The cap on output tokens for the run: the flag, raised when a thinking
+// case's budget would fill it. 0 leaves the provider's default in place,
+// except on a run that thinks, where the budget needs a cap above it.
+def maxTokensFor(flag: number): number {
+  const thinks = thinkingMode == "on" || thinkingMode == "auto"
+  if (!thinks) {
+    return flag
+  }
+  if (flag > 0 && flag > thinkingBudget) {
+    return flag
+  }
+  const raised = thinkingBudget + ANSWER_ROOM
+  if (flag > 0) {
+    print("--max-tokens ${flag} is not above the thinking budget of ${thinkingBudget}; using ${raised}")
+  }
+  return raised
+}
 
 def thinkingFor(caseName: string): void {
   if (thinkingMode == "default") {
@@ -674,33 +701,50 @@ def outputTokensSoFar(): number {
   return total
 }
 
+// One line of a command's output, or "" when the command is not on this
+// machine or fails. exec rejects a command it cannot find, and this runs
+// after every case has finished, so a missing command must not end the run.
+def commandLine(command: string, args: string[]): string {
+  if (which(command) == "") {
+    return ""
+  }
+  const result = exec(command, args) with approve
+  if (result.exitCode != 0) {
+    return ""
+  }
+  return result.stdout.trim()
+}
+
 // The chip, memory, and operating system, from the commands that know them.
 // A command that is missing on this machine leaves its part out.
 def machineInfo(): string {
   const parts: string[] = []
-  const chip = exec("sysctl", ["-n", "machdep.cpu.brand_string"]) with approve
-  if (chip.exitCode == 0 && chip.stdout.trim() != "") {
-    parts.push(chip.stdout.trim())
+  const chip = commandLine("sysctl", ["-n", "machdep.cpu.brand_string"])
+  if (chip != "") {
+    parts.push(chip)
   }
-  const memory = exec("sysctl", ["-n", "hw.memsize"]) with approve
-  if (memory.exitCode == 0 && memory.stdout.trim() != "") {
-    const gb = Math.round(Number(memory.stdout.trim()) / (1024 * 1024 * 1024))
+  const memory = commandLine("sysctl", ["-n", "hw.memsize"])
+  if (memory != "") {
+    const gb = Math.round(Number(memory) / (1024 * 1024 * 1024))
     parts.push("${gb}GB")
   }
-  const os = exec("uname", ["-sr"]) with approve
-  if (os.exitCode == 0) {
-    parts.push(os.stdout.trim())
+  const os = commandLine("uname", ["-sr"])
+  if (os != "") {
+    parts.push(os)
   }
   return parts.join(", ")
 }
 
-// What ran the model, from its name: a GGUF path is llama.cpp, a Hugging
-// Face repo id is the MLX server, and anything else is a hosted provider.
+// What ran the model, from its name, for a run made without --backend: a
+// GGUF path is llama.cpp, an MLX repo id (mlx-community/..., or any name
+// with "mlx" in it) is the MLX server, and anything else is hosted. A
+// hosted name can carry a provider and a slash, so a slash alone says
+// nothing. run-all.sh always passes --backend.
 def backendFor(model: string): string {
   if (model.endsWith(".gguf")) {
     return "llama-cpp"
   }
-  if (model.includes("/")) {
+  if (model.toLowerCase().includes("mlx")) {
     return "mlx"
   }
   return "hosted"
@@ -818,21 +862,26 @@ node main() {
   const haystackLines = args.flags.haystack
   const startedAt = format(now())
 
-  // A local thinking model can spend the provider's whole default budget
-  // thinking and never answer, and the runtime waits ten minutes for it.
-  // Set here, before the warm-up, so they apply to every call in the run.
-  if (args.flags["max-tokens"] > 0) {
-    setLlmOptions({ maxTokens: args.flags["max-tokens"] })
-  }
-  if (args.flags.timeout > 0) {
-    setLlmOptions({ timeout: args.flags.timeout * 1000 })
-  }
   if (!["auto", "on", "off", "default"].includes(args.flags.thinking)) {
     print("--thinking must be auto, on, off, or default, not ${args.flags.thinking}")
     return null
   }
   thinkingMode = args.flags.thinking
   thinkingBudget = args.flags["thinking-budget"]
+
+  // A local thinking model can spend the provider's whole default budget
+  // thinking and never answer, and the runtime waits ten minutes for it.
+  // Set here, before the warm-up, so they apply to every call in the run.
+  const maxTokens = maxTokensFor(args.flags["max-tokens"])
+  if (maxTokens > 0) {
+    setLlmOptions({ maxTokens: maxTokens })
+  }
+  if (args.flags.timeout > 0) {
+    // A timed-out call is not retried: the runtime would try it twice more,
+    // so a reply that goes in circles would cost three timeouts, and on the
+    // MLX server the abandoned tries would run on beside the retry.
+    setLlmOptions({ timeout: args.flags.timeout * 1000, retries: 0 })
+  }
 
   if (!args.flags.cold) {
     const warm = warmUp()
@@ -874,7 +923,7 @@ node main() {
       backend: backend,
       thinking: thinkingMode,
       thinkingBudget: thinkingBudget,
-      maxTokens: args.flags["max-tokens"],
+      maxTokens: maxTokens,
       timeout: args.flags.timeout,
       draft: args.flags["draft-model"],
       prefillStep: args.flags["prefill-step"]

@@ -121,4 +121,5 @@ When the files span more than one machine label, each column is headed `model @ 
 - `out tok/s` is the tokens the model wrote per second, thinking included. It is the speed of the machine on that model, and it does not depend on how long the prompts were.
 - `story tok/s` counts the prompt too and only covers the throughput case. Prefer `out tok/s`.
 - Latency includes the network round trip for a hosted model and not for a local one. Time to first token is not measured separately, so a comparison of latencies alone flatters a local model on short replies.
-- OpenAI reasoning models ignore the thinking policy's off switch and think at their default effort, and Gemini keeps its own default when told off. The settings table shows the policy that was asked for, not what each provider did with it.
+- OpenAI reasoning models ignore the thinking policy's off switch and think at their default effort, and Gemini keeps its own default when told off, because the Google client only sends a thinking setting when thinking is on. The settings table shows the policy that was asked for, not what each provider did with it.
+- A local model's timed-out call is not retried, so a reply that goes in circles costs one timeout, not three.

@@ -131,8 +131,8 @@ function forward(
   });
   // The client went away mid-reply: close our side of the upstream socket.
   // The chat server looks at its socket while it generates and drops the
-  // reply within half a second of this, instead of running it to
-  // max_tokens for nobody.
+  // reply at its next token, instead of running it to max_tokens for
+  // nobody. A prompt still being read is read to the end first.
   res.on("close", () => {
     if (!res.writableFinished) {
       upstream.destroy();

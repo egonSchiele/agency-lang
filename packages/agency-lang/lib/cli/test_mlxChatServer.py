@@ -274,6 +274,34 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(w.state.phase, "start")
         self.assertEqual(w.reply, [])
 
+    def test_a_history_that_parted_from_the_reply_is_read_again_from_there(self):
+        w = watcher(NO_LIMITS, initial="start")
+        _, history = drive(w, [5, 6, 7])
+        # Same length, different last token: not a prefix cut, which mlx_lm
+        # never does today, but what the guard is for.
+        history[-1] = 8
+        with self.assertLogs(level="WARNING") as logs:
+            call(w, history)
+        self.assertEqual(w.reply, [5, 6, 8])
+        self.assertIn("parted from the reply at token 2", logs.output[0])
+
+    def test_a_request_fails_when_the_generation_thread_has_died(self):
+        from queue import Queue
+
+        class DeadThread:
+            def is_alive(self):
+                return False
+
+        gen = m.Generator.__new__(m.Generator)
+        gen.requests = Queue()
+        gen._generation_thread = DeadThread()
+        m.CLIENT_POLL_SECONDS = 0.05
+        try:
+            with self.assertRaises(RuntimeError):
+                gen.generate(object(), None)
+        finally:
+            m.CLIENT_POLL_SECONDS = 0.5
+
     def test_masks_cover_the_main_models_width_even_when_the_draft_calls_first(self):
         w = watcher(NO_LIMITS, initial="reasoning")
         narrow = mx.zeros((1, WIDTH - 8))

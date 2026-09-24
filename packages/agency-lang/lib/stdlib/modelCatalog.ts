@@ -441,8 +441,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     category: "general",
     contextWindow: 262144,
     license: "apache-2.0",
-    description:
-      "The MLX build of qwen3.5-0.8b. Also the draft model for the Qwen3.5 family, for agency local serve --draft.",
+    description: "The MLX build of qwen3.5-0.8b. The smallest Qwen3.5 that runs on the server.",
   },
   "qwen3.5-2b-mlx": {
     backend: "mlx",

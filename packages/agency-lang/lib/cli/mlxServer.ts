@@ -54,6 +54,28 @@ function forwardHeaders(
  *  reply as it went out. */
 type Finish = (reply: Reply) => void;
 
+/** The request with its reply length held to `limit`, the server's
+ *  --max-tokens. mlx_lm.server reads a request's own `max_tokens` over its
+ *  flag, so the flag alone only caps requests that name no length. Capping
+ *  here makes it the ceiling the flag promises. A request that names no
+ *  length is left alone, since the process then applies the flag itself. */
+export function capMaxTokens(
+  body: Record<string, unknown>,
+  limit: number | undefined,
+): Record<string, unknown> {
+  if (limit === undefined) {
+    return body;
+  }
+  const capped = { ...body };
+  for (const field of ["max_tokens", "max_completion_tokens"]) {
+    const value = capped[field];
+    if (typeof value === "number" && value > limit) {
+      capped[field] = limit;
+    }
+  }
+  return capped;
+}
+
 /** The reply for a JSON body the door wrote itself. */
 function ownReply(status: number, body: string): Reply {
   return {
@@ -107,8 +129,10 @@ function forward(
     error(res, 502, message);
     finish(ownReply(502, JSON.stringify({ error: { message } })));
   });
-  // The client went away mid-reply: stop the generation instead of letting
-  // it run to --max-tokens for nobody.
+  // The client went away mid-reply: close our side of the upstream socket.
+  // The chat server looks at its socket while it generates and drops the
+  // reply within half a second of this, instead of running it to
+  // max_tokens for nobody.
   res.on("close", () => {
     if (!res.writableFinished) {
       upstream.destroy();
@@ -180,11 +204,13 @@ function recorder(
 /** Listen on `port` (0 for any) and forward each request to the route whose
  *  model matches the request body's `model`. A request for any other model
  *  gets a 404 and reaches no process. With `logging`, every request is
- *  printed as it ends. */
+ *  printed as it ends. With `maxTokens`, a request asking for a longer
+ *  reply is held to it. */
 export function startFrontDoor(
   port: number,
   routes: Route[],
   logging?: DoorLogging,
+  maxTokens?: number,
 ): Promise<FrontDoor> {
   const served = routes.map((r) => r.model);
   const server = http.createServer(async (req, res) => {
@@ -223,7 +249,9 @@ export function startFrontDoor(
       req,
       res,
       route,
-      Buffer.from(JSON.stringify({ ...parsed, model: route.upstreamModel })),
+      Buffer.from(
+        JSON.stringify({ ...capMaxTokens(parsed, maxTokens), model: route.upstreamModel }),
+      ),
       record.finish,
     );
   });

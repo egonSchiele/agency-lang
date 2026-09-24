@@ -158,6 +158,7 @@ type RunOptions = Omit<CliFlags, "trace"> & {
   maxCost?: string;
   maxTime?: string;
   local?: string;
+  draft?: string;
   captureWorkdir?: string;
   agencyOnly?: boolean;
 };
@@ -303,7 +304,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       // SHA-256 verification happen in the terminal; the result rides the
       // ordinary --model pathway (applyCliFlags) into baked config.
       try {
-        options = { ...options, model: await resolveLocalRunFlag(options.local) };
+        options = {
+          ...options,
+          model: await resolveLocalRunFlag(options.local, options.draft),
+        };
       } catch (e) {
         console.error(`Error: ${(e as Error).message}`);
         process.exit(1);
@@ -480,6 +484,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option(
           "--local <model>",
           "Run every LLM call on a local model: a curated name, an alias, an hf: URI, or a .gguf path (see: agency local list)",
+        )
+        .option(
+          "--draft <model>",
+          "With --local on a GGUF model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
         )
         .option(
           "--policy <name|path>",
@@ -1951,6 +1959,35 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
     .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
+    .option(
+      "--reasoning-budget <n>",
+      "Most tokens a reply may think for before it must answer (default: half its max_tokens; 0 for no limit)",
+      parseNonNegativeInt,
+    )
+    .option(
+      "--hedge-limit <n>",
+      'Second thoughts ("But wait", "Hmm") a reply may have before it is cut short (default: 12; 0 for no limit)',
+      parseNonNegativeInt,
+    )
+    .option(
+      "--repeat-limit <n>",
+      "Times a reply may repeat a sentence before it is cut short (default: 3; 0 for no limit)",
+      parseNonNegativeInt,
+    )
+    .option(
+      "--draft <model>",
+      "A smaller model of the same family that drafts tokens for the served models (speculative decoding)",
+    )
+    .option(
+      "--draft-tokens <n>",
+      "Tokens the draft model guesses at a time (default: 4)",
+      parsePositiveInt,
+    )
+    .option(
+      "--prefill-step <n>",
+      "Tokens of prompt read per pass (default: 2048, 4096, or 8192 by the machine's memory)",
+      parsePositiveInt,
+    )
     .option("--python <path>", "Python with mlx-lm (and mlx-audio, for --speech) installed")
     .option("--log-prompts", "Log each request's full body and reply, not just a summary line")
     .action(
@@ -1959,6 +1996,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         opts: {
           port: number;
           maxTokens: number;
+          reasoningBudget?: number;
+          hedgeLimit?: number;
+          repeatLimit?: number;
+          draft?: string;
+          draftTokens?: number;
+          prefillStep?: number;
           python?: string;
           logPrompts?: boolean;
           embedding: string[];

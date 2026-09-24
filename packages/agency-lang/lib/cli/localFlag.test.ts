@@ -55,6 +55,29 @@ describe("resolveLocalRunFlag", () => {
     expect(flag.explicitProvider).toBe("llama-cpp");
   });
 
+  it("resolves a draft model alongside, for speculative decoding", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = writeFakePlugin();
+    const flag = await resolveLocalRunFlag("./big.gguf", "./small.gguf");
+    expect(flag).toEqual({
+      model: path.resolve(process.cwd(), "./big.gguf"),
+      explicitProvider: "llama-cpp",
+      draftModel: path.resolve(process.cwd(), "./small.gguf"),
+    });
+  });
+
+  it("refuses a draft for an MLX model, naming the serve command that takes one", async () => {
+    await expect(resolveLocalRunFlag("mlx:org/big", "mlx:org/small")).rejects.toThrow(
+      "agency local serve mlx:org/big --draft mlx:org/small",
+    );
+  });
+
+  it("refuses an MLX draft for a GGUF model", async () => {
+    process.env.AGENCY_LLAMA_PROVIDER_MODULE = writeFakePlugin();
+    await expect(resolveLocalRunFlag("./big.gguf", "mlx:org/small")).rejects.toThrow(
+      "must be a GGUF model too",
+    );
+  });
+
   it("propagates the install-hint error when support is missing", async () => {
     // No override; rely on smoltalk-llama-cpp not being installed in CI.
     // Skip on dev machines that have it resolvable.

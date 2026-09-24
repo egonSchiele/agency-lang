@@ -4207,6 +4207,12 @@ export class TypeScriptBuilder {
     if (provider) {
       smoltalkFields.provider = ts.str(provider);
     }
+    // The draft model for llama.cpp rides the config as the field
+    // smoltalk-llama-cpp reads from `metadata`; every baked field lands
+    // there (see toSmolConfig in lib/runtime/llmClient.ts).
+    if (cfg.client?.llamaCpp?.draftModel) {
+      smoltalkFields.llamaCppDraftModel = ts.str(cfg.client.llamaCpp.draftModel);
+    }
     return ts.obj(smoltalkFields);
   }
 

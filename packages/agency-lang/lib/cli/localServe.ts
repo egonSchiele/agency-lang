@@ -43,9 +43,9 @@ export function serveArgs(
   script: string,
   modelDir: string,
   internalPort: number,
-  maxTokens: number,
+  settings: ChatServerSettings,
 ): string[] {
-  return [
+  const args = [
     script,
     "--model",
     modelDir,
@@ -54,10 +54,91 @@ export function serveArgs(
     "--port",
     String(internalPort),
     "--max-tokens",
-    String(maxTokens),
+    String(settings.maxTokens),
+    "--prompt-cache-bytes",
+    String(settings.promptCacheBytes),
+    "--prefill-step-size",
+    String(settings.prefillStepSize),
     "--log-level",
     "INFO",
   ];
+  for (const [key, flag] of LIMIT_FLAGS) {
+    const value = settings.limits[key];
+    if (value !== undefined) {
+      args.push(flag, String(value));
+    }
+  }
+  if (settings.draft !== undefined) {
+    args.push(
+      "--draft-model",
+      settings.draft.dir,
+      "--num-draft-tokens",
+      String(settings.draft.tokens),
+    );
+  }
+  return args;
+}
+
+/** What one chat server is started with, beyond its model and port. */
+export type ChatServerSettings = {
+  maxTokens: number;
+  promptCacheBytes: number;
+  prefillStepSize: number;
+  limits: ReplyLimits;
+  /** A smaller model of the same family that drafts tokens for this one to
+   *  check (speculative decoding), and how many it drafts at a time. */
+  draft?: { dir: string; tokens: number };
+};
+
+/** How many tokens the draft model guesses before the main model checks
+ *  them. Too few and the check happens too often; too many and most of a
+ *  guess is thrown away. mlx_lm's own default is 3; 4 is a little better
+ *  on the prose most replies are. */
+export const DEFAULT_DRAFT_TOKENS = 4;
+
+/** How many tokens of prompt the server reads in one pass. A long prompt
+ *  is read in chunks of this size. A bigger chunk keeps the GPU busier, so
+ *  a long prompt is read sooner, but the attention scores of one chunk
+ *  against the whole prompt have to fit in memory at once. mlx_lm's default
+ *  of 2048 suits a small machine; a machine with the memory to spare reads
+ *  a 20,000-token prompt noticeably faster in chunks of 8192. */
+export function prefillStepSize(totalMemBytes: number): number {
+  const gb = totalMemBytes / 1024 ** 3;
+  if (gb >= 128) {
+    return 8192;
+  }
+  if (gb >= 64) {
+    return 4096;
+  }
+  return 2048;
+}
+
+/** How far a reply may go before the chat server cuts it short. Each is a
+ *  count, 0 turns one off, and an absent one leaves the script's default.
+ *  See the guide on local models for what each one watches. */
+export type ReplyLimits = {
+  reasoningBudget?: number;
+  hedgeLimit?: number;
+  repeatLimit?: number;
+};
+
+const LIMIT_FLAGS: [keyof ReplyLimits, string][] = [
+  ["reasoningBudget", "--reasoning-budget"],
+  ["hedgeLimit", "--hedge-limit"],
+  ["repeatLimit", "--repeat-limit"],
+];
+
+/** How much memory one chat server may spend on attention state: the
+ *  replies it is generating plus its cache of recent prompts, which lets a
+ *  follow-up on the same conversation skip re-reading it. mlx_lm.server
+ *  keeps the last ten prompts and, with no byte limit, keeps them whatever
+ *  their size; a few long prompts to a large model add tens of gigabytes to
+ *  a process that already holds the whole model, and the server dies of
+ *  GPU memory. A sixteenth of the machine's memory is enough for about
+ *  eighty thousand tokens of a 235B model on a 256GB Mac, and about sixteen
+ *  thousand tokens of an 8B model on a 32GB one. */
+export function promptCacheBudget(totalMemBytes: number): number {
+  return Math.floor(totalMemBytes / 16);
 }
 
 /** The argv for one embedding server process, after the Python path. */
@@ -106,7 +187,7 @@ export function speechServeArgs(
 function argsFor(
   model: Planned,
   internalPort: number,
-  maxTokens: number,
+  settings: ChatServerSettings,
   modelsDir: string,
 ): string[] {
   if (model.kind === "embedding") {
@@ -115,7 +196,7 @@ function argsFor(
   if (model.kind === "speech") {
     return speechServeArgs(speechServerScript(), model.dir, internalPort, modelsDir);
   }
-  return serveArgs(chatServerScript(), model.dir, internalPort, maxTokens);
+  return serveArgs(chatServerScript(), model.dir, internalPort, settings);
 }
 
 /** How a process is named in messages: which program, for which model. */
@@ -508,9 +589,17 @@ export type ServeHandle = {
   close: () => Promise<void>;
 };
 
-export type ServeFlags = {
+export type ServeFlags = ReplyLimits & {
   port?: number;
   maxTokens?: number;
+  /** A model that drafts tokens for every chat model served, for
+   *  speculative decoding. The same forms as a served model. */
+  draft?: string;
+  /** How many tokens the draft guesses at a time. Default DEFAULT_DRAFT_TOKENS. */
+  draftTokens?: number;
+  /** Tokens of prompt read per pass. Default from the machine's memory,
+   *  see prefillStepSize. */
+  prefillStep?: number;
   python?: string;
   /** Print each request's prompt and reply under its summary line. The CLI
    *  spells this `--log-prompts`, since `--verbose` is already the whole
@@ -738,9 +827,26 @@ export async function runServe(
     }
   };
   const routes: Route[] = [];
+  const settings: ChatServerSettings = {
+    maxTokens,
+    promptCacheBytes: promptCacheBudget(deps.totalmem()),
+    prefillStepSize: flags.prefillStep ?? prefillStepSize(deps.totalmem()),
+    limits: {
+      reasoningBudget: flags.reasoningBudget,
+      hedgeLimit: flags.hedgeLimit,
+      repeatLimit: flags.repeatLimit,
+    },
+  };
+  if (flags.draft !== undefined) {
+    // Planned like a served model, so it is found, checked, and sized the
+    // same way, but it gets no route: requests go to the model it drafts for.
+    const draft = planModel(flags.draft, deps.cacheDir, "chat");
+    settings.draft = { dir: draft.dir, tokens: flags.draftTokens ?? DEFAULT_DRAFT_TOKENS };
+    deps.log(`Drafting with ${draft.name} (${formatGB(draft.sizeBytes)})`);
+  }
   for (const model of planned) {
     const internalPort = await deps.freePort();
-    const args = argsFor(model, internalPort, maxTokens, deps.cacheDir);
+    const args = argsFor(model, internalPort, settings, deps.cacheDir);
     const child = deps.spawn(python, args);
     children.push(child);
     exits.push(exitOf(child, model.name, model.kind));
@@ -768,11 +874,16 @@ export async function runServe(
 
   let door: FrontDoor;
   try {
-    door = await startFrontDoor(port, routes, {
-      log: deps.log,
-      verbose: flags.logPrompts === true,
-      color: deps.useColor ? color : plainColor,
-    });
+    door = await startFrontDoor(
+      port,
+      routes,
+      {
+        log: deps.log,
+        verbose: flags.logPrompts === true,
+        color: deps.useColor ? color : plainColor,
+      },
+      maxTokens,
+    );
   } catch (err) {
     killAll();
     throw err;

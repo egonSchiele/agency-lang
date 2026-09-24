@@ -93,8 +93,9 @@ Do not run the whole suite for a setting. Thinking, a draft model, and the prefi
 BENCH_ARGS="--cases throughput,needle,reasoning --thinking off" ./run-all.sh local:qwen3.5-27b
 
 # A draft model for a GGUF model. The draft must be the same family, and the
-# run is greedy: node-llama-cpp's draft predictor only works at temperature 0.
-# In testing it gave no speed-up; the MLX server is where a draft can pay.
+# run is greedy: node-llama-cpp's draft predictor hung when a Qwen3.5 model
+# sampled. In testing it gave no speed-up on a Qwen3 pair either; the MLX
+# server is where a draft can pay.
 DRAFT=qwen3.5-0.8b BENCH_ARGS="--cases throughput,needle,reasoning" ./run-all.sh local:qwen3.5-27b
 
 # A draft model for an MLX model: the server takes it, and DRAFT records it.

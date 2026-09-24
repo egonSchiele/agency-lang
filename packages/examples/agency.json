@@ -2,7 +2,15 @@
   "mcpServers": {
     "test": {
       "command": "npx",
-      "args": ["tsx", "../mcp/tests/__tests__/testServer.ts"]
+      "args": [
+        "tsx",
+        "../mcp/tests/__tests__/testServer.ts"
+      ]
     }
+  },
+  "observability": true,
+  "log": {
+    "debugMode": false,
+    "logFile": "log.jsonl"
   }
 }

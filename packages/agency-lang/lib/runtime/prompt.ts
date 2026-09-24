@@ -896,6 +896,7 @@ export async function runPrompt(args: {
       ...stackSmolDefaults,
       ...restClientConfig,
     }),
+    ctx.getSmoltalkConfig().model,
   );
 
   // Cap on characters of a single tool result fed back to the LLM. The

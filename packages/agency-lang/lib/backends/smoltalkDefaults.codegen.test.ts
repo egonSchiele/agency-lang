@@ -25,6 +25,13 @@ function generate(source: string, config?: Partial<AgencyConfig>): string {
 const PROGRAM = "node main() {\n  const x = 1\n}\n";
 
 describe("smoltalkDefaults codegen", () => {
+  it("bakes a llama.cpp draft model inside a metadata object, where the plugin reads it", () => {
+    const out = generate("node main() { return null }", {
+      client: { llamaCpp: { draftModel: "/m/small.gguf" } },
+    });
+    expect(out).toMatch(/metadata:\s*\{\s*llamaCppDraftModel:\s*"\/m\/small\.gguf"/);
+  });
+
   it("emits a nested apiKey map with env fallbacks by default", () => {
     const out = generate(PROGRAM);
     expect(out).toContain("apiKey");

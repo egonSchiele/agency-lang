@@ -192,6 +192,24 @@ describe("loadConfigSafe — removed options are ignored, not rejected", () => {
 });
 
 describe("applyCliFlags", () => {
+  it("sets the llama.cpp draft model from --draft, and drops a stale one when the model changes without it", () => {
+    const withDraft = applyCliFlags(
+      {},
+      {
+        model: { model: "/m/big.gguf", explicitProvider: "llama-cpp", draftModel: "/m/small.gguf" },
+      },
+    );
+    expect(withDraft.client?.llamaCpp?.draftModel).toBe("/m/small.gguf");
+    expect(withDraft.client?.defaultModel).toBe("/m/big.gguf");
+
+    const replaced = applyCliFlags(
+      { client: { llamaCpp: { draftModel: "/m/small.gguf" } } } as any,
+      { model: { model: "/m/other.gguf", explicitProvider: "llama-cpp" } },
+    );
+    expect(replaced.client?.llamaCpp?.draftModel).toBeUndefined();
+    expect(replaced.client?.defaultModel).toBe("/m/other.gguf");
+  });
+
   it("--trace <file> sets trace + traceFile", () => {
     const out = applyCliFlags({}, { trace: "out.trace" });
     expect(out.trace).toBe(true);

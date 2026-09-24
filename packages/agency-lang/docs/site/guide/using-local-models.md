@@ -287,9 +287,9 @@ A hosted provider makes a dozen small choices for you, and you never see them. A
 
 ### The same prompt gives the same reply
 
-Both local backends pick the single likeliest token at every step when nothing tells them otherwise. This is called greedy decoding. A greedy model writes the same reply for the same prompt every time, to the token, and takes the same time doing it. Every hosted provider samples instead, at a temperature of 1.0, so its replies vary from call to call.
+Both local backends pick the single likeliest token at every step when nothing tells them otherwise. This is called greedy decoding. A greedy model writes the same reply for the same prompt every time, to the token, and takes the same time doing it. Every hosted provider samples instead, so its replies vary from call to call.
 
-Agency gives a local model that same temperature of 1.0 when a call names none, so the two behave alike. Ask for the repeatable behaviour when you want it:
+Agency makes a local model sample too when a call names no temperature: at 0.7, with a top-p of 0.95, which is what the Qwen and Gemma model cards ask for. Hosted providers sample at 1.0, but on top of samplers of their own; on the MLX server, 1.0 with nothing else is sampling from the whole distribution, which a small 4-bit model turns into noise. Ask for the repeatable behaviour when you want it:
 
 ```ts
 import { setLlmOptions } from "std::llm"
@@ -326,7 +326,7 @@ After the budget, the thinking block is closed for the model and it has to answe
 | medium | 8192               |
 | high   | 16384              |
 
-Both backends honour all of this. On the MLX server the switch goes to the chat template and the budget to the server's watcher. On llama.cpp the switch goes to the chat wrapper, for the models whose wrapper has one, and the budget to llama.cpp itself. Qwen, Gemma 4, and Seed models can be switched off there. A gpt-oss model can only be asked for its lowest effort, and a DeepSeek model always opens its block, so off means a budget of zero and the block closes at once.
+Both backends honour all of this. On the MLX server the switch goes to the chat template and the budget to the server's watcher. On llama.cpp the switch goes to the chat wrapper, for the models whose wrapper has one, and the budget to llama.cpp itself. Which models the switch reaches depends on their template: Qwen and Gemma 4 have one, gpt-oss takes a `reasoning_effort` instead (which `reasoningEffort` sends), and DeepSeek has none, so on DeepSeek off means a budget of zero and the block closes as soon as it opens. The budget is always held under `maxTokens` by enough to answer in.
 
 ### Replies that go in circles
 
@@ -335,18 +335,18 @@ A model that is unsure can write "But wait, is that right? Let me reconsider." f
 The MLX server watches every reply for three signs of this:
 
 1. Thinking past its budget. The budget is half of `maxTokens` unless the call sets `budgetTokens`.
-2. More than twelve second thoughts. "But wait", "Wait", "Hmm", "Hold on", "Let me reconsider", and phrases like them.
-3. The same sentence of six or more words, written three times.
+2. More than twelve second thoughts in the last two thousand tokens. "But wait," "Wait," "Hmm," "Hold on," "Let me reconsider," and phrases like them. A loop says these every few lines; an honest long reply says them a dozen times over thousands of tokens, which is why the count runs over a window rather than the whole reply.
+3. The same sentence of six or more words, written three times in that window.
 
-When the server sees one, it cuts the reply short in the way that leaves the most usable result. A thinking block is closed, so the answer can follow. A reply that must fit a type has the text field it is writing closed, so the rest of the type can still be filled in. A plain reply ends where it is. The server prints a line saying which limit tripped and what it did.
+The last two watch the thinking only, unless you ask. An answer repeats itself for honest reasons: a refrain, a table with a repeated row, three similar functions in a file. Thinking rarely does. `--limit-answers` on `agency local serve`, or `limit_answers: true` on a request, watches answers too.
+
+When the server sees a sign, it cuts the reply short in the way that leaves the most usable result. A thinking block is closed, so the answer can follow. A reply that must fit a type has the text field it is writing closed, so the rest of the type can still be filled in. A plain reply ends where it is. An answer cut short comes back with a stop reason of `length`, the same as one that hit `maxTokens`, so your program can tell it from a complete one; closing the thinking is not a cut, because the answer still comes. The server prints a line saying which limit tripped and what it did.
 
 You can change the limits when you start the server. `0` turns one off:
 
 ```bash
 agency local serve mlx:mlx-community/Qwen3.5-2B-4bit --hedge-limit 20 --repeat-limit 0
 ```
-
-A strong model doing careful work can say "Wait" a dozen times honestly. If you see it cut off mid-thought, raise `--hedge-limit`.
 
 llama.cpp has no watcher. There, a reply that goes in circles runs to `maxTokens` or to the call's timeout, whichever comes first.
 
@@ -360,7 +360,7 @@ Set both lower for a local model, because a reply that goes in circles costs the
 setLlmOptions({ maxTokens: 8192, timeout: 300000 })
 ```
 
-`timeout` is in milliseconds. Every honest reply seen in Agency's own benchmark fit in 8,192 tokens. The longest was a 4B thinking model at about 7,300.
+`timeout` is in milliseconds. 8,192 tokens is room enough for any honest reply, a small thinking model's working included; a reply that needs more has almost always looped.
 
 ### A reply you gave up on keeps running, unless something stops it
 
@@ -399,7 +399,7 @@ agency local serve mlx:mlx-community/Qwen3-235B-A22B-Instruct-2507-4bit --draft 
 agency run --local qwen3.5-4b --draft qwen3.5-2b hello.agency
 ```
 
-The first line drafts for an MLX model, the second for a GGUF one. The draft has to share the main model's tokenizer, which in practice means the smallest member of the same family, and both backends refuse a pair that does not match. `--draft-tokens` on the server sets how many tokens the draft guesses at a time, four by default. A draft turns off batching on the MLX server, so calls run one at a time there while it is in use.
+The first line drafts for an MLX model, the second for a GGUF one. The draft has to share the main model's tokenizer, which in practice means the smallest member of the same family, and both backends check the pair when the draft loads and refuse one that does not match. `--draft-tokens` on the server sets how many tokens the draft guesses at a time, four by default. A draft turns off batching on the MLX server, so calls run one at a time there while it is in use.
 
 Whether a draft pays off depends on the pair and the machine, so measure it: run the throughput case of the benchmark with and without the draft and compare the output speed. A draft that is too large gains little, because checking its guesses costs almost what it saves.
 

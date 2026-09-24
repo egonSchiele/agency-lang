@@ -898,6 +898,12 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
         ...next.client,
         llamaCpp: { ...next.client.llamaCpp, draftModel: flags.model.draftModel },
       };
+    } else if (next.client.llamaCpp?.draftModel !== undefined) {
+      // A draft in agency.json is for the model named there. The flag
+      // replaced that model, so the draft goes too, unless --draft named
+      // one for the new model.
+      const { draftModel: _forTheOldModel, ...llamaCpp } = next.client.llamaCpp;
+      next.client = { ...next.client, llamaCpp };
     }
   }
   return next;

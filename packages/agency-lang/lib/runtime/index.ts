@@ -1,4 +1,12 @@
-export type { GraphState, Rejected, Approved, HandlerFn } from "./types.js";
+export type {
+  GraphState,
+  Rejected,
+  Approved,
+  HandlerFn,
+  RunNodeResult,
+  RunNodeCoreResult,
+  NodeReturnValue,
+} from "./types.js";
 export type { Interrupt, InterruptResponse } from "./interrupts.js";
 export type { InvocationOptions } from "./invocationOptions.js";
 export { RuntimeContext } from "./state/context.js";

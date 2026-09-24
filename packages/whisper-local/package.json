@@ -1,6 +1,6 @@
 {
   "name": "@agency-lang/whisper-local",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Local Whisper transcription for Agency using vendored whisper.cpp",
   "type": "module",
   "agency": "./index.agency",
@@ -35,7 +35,7 @@
     "test:run": "vitest run"
   },
   "peerDependencies": {
-    "agency-lang": ">=0.9.0"
+    "agency-lang": ">=0.19.3"
   },
   "dependencies": {
     "cmake-js": "^7.3.0",

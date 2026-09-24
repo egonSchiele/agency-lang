@@ -1,8 +1,29 @@
-## Sep 24 2026 — v0.22.1
+## Sep 24 2026 — v0.23.0
+
+### Local models
+
+- **Typed replies from MLX models.** `agency local serve` now honours `response_format`, so a typed `llm()` call on an MLX model gets a reply that fits its type. Before, the schema was dropped and the model answered in prose. The server is now Agency's own script over mlx_lm, and the venv pins `mlx-lm==0.31.3` and `llguidance==1.8.0`.
+- **Runaway replies are cut short.** A thinking model gets a budget of tokens to think in, half of `max_tokens` unless the call says otherwise. A reply that hedges more than twelve times ("But wait", "Hmm") or repeats a sentence three times is closed off so a typed reply still parses, and reports `finish_reason: length`. Set `--reasoning-budget`, `--hedge-limit`, and `--repeat-limit` on `agency local serve`; `0` turns one off.
+- **Abandoned replies stop.** The MLX server notices when the client has closed its connection and drops the reply. Before, it generated to the cap and slowed every other call.
+- **Bounded memory.** The server's prompt cache is capped at a sixteenth of RAM, the prefill step is sized from RAM (`--prefill-step` overrides), and `--max-tokens` is now a real ceiling on every request. A 235B model that used to die of GPU memory over a long run now survives it.
+- **Thinking on and off.** `setLlmOptions` takes `thinking: { enabled, budgetTokens? }`, and `reasoningEffort` maps to a budget (2048, 8192, 16384) on local models. Turning thinking off is the biggest saving there is on a small task. llama.cpp needs smoltalk-llama-cpp 0.7.0 for this.
+- **Sampling by default.** A local model gets temperature 0.7 and top_p 0.95 when the call names none, so it samples like a hosted model instead of running greedy and writing the same reply every time.
+- **Speculative decoding.** `agency run --local <model> --draft <small model>` on a GGUF model, and `agency local serve --draft <model>` on MLX, use a small model of the same family to draft tokens for the big one. Measure it: on llama.cpp it gave no speed-up in testing, and MLX refuses a draft for Qwen3.5 and Qwen3-Next.
+- **Catalog.** Eight new MLX entries: `qwen3-0.6b-mlx`, `qwen3.5-0.8b-mlx`, `qwen3.5-2b-mlx`, `qwen3.5-9b-mlx`, `qwen3.5-27b-mlx`, `qwen3.5-35b-a3b-mlx`, `gpt-oss-20b-mlx`, and `gemma-4-26b-a4b-mlx`.
+- **Docs.** The local models guide has a new section, "What is different about a local model": greedy decoding, thinking, loops, memory, speculative decoding, and a side-by-side table of the two backends.
 
 ### Runtime
 
-- `RunNodeResult`, `RunNodeCoreResult`, and `NodeReturnValue` are exported from `agency-lang/runtime`. Compiled `--ts` output names them in its exported node signatures and serve helpers, and without a reachable export a host project's `tsc` with `declaration` on failed with TS2742 ("cannot be named without a reference to agency-lang/dist/lib/runtime/types").
+- `RunNodeResult`, `RunNodeCoreResult`, and `NodeReturnValue` are exported from `agency-lang/runtime`.
+
+### Build
+
+- `make ci` is `make` without the doc and example regeneration, and the sibling packages now build in parallel. Only a change to the compiler recompiles the `.agency` files, so an edit to the logs viewer or the LSP no longer triggers a full rebuild.
+- The designTool tests are split into seven files, which took the slowest CI shard from about 390s to the same range as the others.
+
+### Packages
+
+- whisper-local 0.0.4 ships the compiled Agency entry, so `import ... from "pkg::@agency-lang/whisper-local"` compiles. It needs agency-lang 0.19.3 or later.
 
 ## Sep 23 2026 — v0.22.0
 

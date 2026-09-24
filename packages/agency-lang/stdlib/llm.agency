@@ -33,12 +33,18 @@ node main() {
 /** Default options for `llm()` calls. Every field is optional; only the
  *  fields you pass are changed. `provider` is normally derived from the
  *  model name. Set it only when the name doesn't imply a provider (e.g.
- *  a custom or local model). */
+ *  a custom or local model).
+ *
+ *  `thinking` turns a model's thinking on or off, with an optional budget
+ *  of tokens it may think for before it has to answer. On a local MLX
+ *  model, `{ enabled: false }` skips the thinking entirely, which is the
+ *  biggest saving there is on a small task. */
 export type LlmDefaults = {
   model?: string;
   provider?: string;
   temperature?: number;
   reasoningEffort?: "low" | "medium" | "high";
+  thinking?: { enabled: boolean, budgetTokens?: number };
   maxTokens?: number;
   maxToolResultChars?: number;
   maxToolCallRounds?: number;

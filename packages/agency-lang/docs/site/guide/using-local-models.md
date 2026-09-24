@@ -217,6 +217,8 @@ The command runs in the foreground and prints the address it is listening on. Le
 
 You can serve several models at once. Agency starts one `mlx_lm.server` for each of them and puts a single port in front. Each model stays in memory for as long as the command runs, so watch the total against the memory your Mac has. Agency warns you when the models add up to more than that, and starts them anyway.
 
+A server uses memory beyond its weights while it works, and it cuts short a reply that goes in circles. Both are covered under [What is different about a local model](#what-is-different-about-a-local-model) below, along with the flags that tune them.
+
 ### Run against the server
 
 ```bash
@@ -277,15 +279,164 @@ The `mlx:` prefix is the spelling that always works. You need it for a model you
 
 ### Differences from GGUF models
 
-1. You start the server yourself, and you stop it yourself. Nothing starts on demand.
-2. The agent's memory feature stays off, because `mlx_lm.server` has no endpoint for embeddings.
-3. MLX runs on Apple Silicon only. On any other machine, use the GGUF models above.
+The table at the end of [What is different about a local model](#llamacpp-and-the-mlx-server-side-by-side) sets the two backends side by side. One difference is not in it: the agent's memory feature stays off on the MLX server, because `mlx_lm.server` has no endpoint for embeddings.
 
-## What to expect
+## What is different about a local model
 
-- The first call in a process loads the model into memory, which takes a few seconds for small models and noticeably longer for large ones. After that, the loaded model is reused for every call in the run.
-- Speed depends on your hardware and the model size. On Apple Silicon, the model runs on the GPU via Metal automatically.
-- One generation runs at a time per model. Concurrent LLM calls in your program queue up rather than running in parallel.
+A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.
+
+### The same prompt gives the same reply
+
+Both local backends pick the single likeliest token at every step when nothing tells them otherwise. This is called greedy decoding. A greedy model writes the same reply for the same prompt every time, to the token, and takes the same time doing it. Every hosted provider samples instead, so its replies vary from call to call.
+
+Agency makes a local model sample too when a call names no temperature: at 0.7, with a top-p of 0.95, which is what the Qwen and Gemma model cards ask for. Hosted providers sample at 1.0, but on top of samplers of their own; on the MLX server, 1.0 with nothing else is sampling from the whole distribution, which a small 4-bit model turns into noise. Ask for the repeatable behaviour when you want it:
+
+```ts
+import { setLlmOptions } from "std::llm"
+
+setLlmOptions({ temperature: 0 })
+```
+
+Two things follow from greedy decoding. Running a greedy model three times measures nothing the first run did not, so a benchmark at temperature 0 needs one trial. And a greedy model that starts going in circles cannot get out of them, because whatever led it to write "But wait" once leads it to write the same thing again.
+
+### Thinking spends your output budget
+
+A thinking model writes a block of reasoning before its answer. Your program never sees that block, but it counts against `maxTokens` along with the answer. A small model can spend thousands of tokens thinking about a one-line question. When the budget runs out inside the thinking block, the call returns an empty reply with a stop reason of `length`, and a typed call fails with "reply did not fit the type".
+
+Turn thinking off when the task does not need it:
+
+```ts
+import { setLlmOptions } from "std::llm"
+
+setLlmOptions({ thinking: { enabled: false } })
+const label: string = llm("Is this review positive or negative? ...")
+```
+
+This asks the model's chat template to open no thinking block. On a classification or extraction task it saves most of the time a thinking model takes. Where thinking helps, give it a budget instead:
+
+```ts
+const answer: NumberAnswer = llm(problem, { thinking: { enabled: true, budgetTokens: 2048 } })
+```
+
+After the budget, the thinking block is closed for the model and it has to answer. `reasoningEffort` works too, and means the same amount of thinking on a local model as it does on Gemini:
+
+| effort | tokens of thinking |
+| ------ | ------------------ |
+| low    | 2048               |
+| medium | 8192               |
+| high   | 16384              |
+
+Both backends honour all of this. On the MLX server the switch goes to the chat template and the budget to the server's watcher. On llama.cpp the switch goes to the chat wrapper, for the models whose wrapper has one, and the budget to llama.cpp itself. Which models the switch reaches depends on their template: Qwen and Gemma 4 have one, gpt-oss takes a `reasoning_effort` instead (which `reasoningEffort` sends), and DeepSeek has none, so on DeepSeek off means a budget of zero and the block closes as soon as it opens. The budget is always held under `maxTokens` by enough to answer in.
+
+### Replies that go in circles
+
+A model that is unsure can write "But wait, is that right? Let me reconsider." for thousands of tokens, or repeat one sentence until its budget runs out. With a hosted model this costs you money. With a local one it costs you the machine. A large model can take ten minutes to write a reply nobody wants, and every other call waits behind it.
+
+The MLX server watches every reply for three signs of this:
+
+1. Thinking past its budget. The budget is half of `maxTokens` unless the call sets `budgetTokens`.
+2. Twelve second thoughts in the last two thousand tokens. "But wait," "Wait," "Hmm," "Hold on," "Let me reconsider," and phrases like them. A loop says these every few lines; an honest long reply says them a dozen times over thousands of tokens, which is why the count runs over a window rather than the whole reply.
+3. The same sentence of six or more words, written three times in that window.
+
+The last two watch the thinking only, unless you ask. An answer repeats itself for honest reasons: a refrain, a table with a repeated row, three similar functions in a file. Thinking rarely does. `--limit-answers` on `agency local serve`, or `limit_answers: true` on a request, watches answers too.
+
+When the server sees a sign, it cuts the reply short in the way that leaves the most usable result. A thinking block is closed, so the answer can follow. A reply that must fit a type has the text field it is writing closed, so the rest of the type can still be filled in. A plain reply ends where it is. An answer cut short comes back with a stop reason of `length`, the same as one that hit `maxTokens`, so your program can tell it from a complete one; closing the thinking is not a cut, because the answer still comes. The server prints a line saying which limit tripped and what it did.
+
+You can change the limits when you start the server. `0` turns one off:
+
+```bash
+agency local serve mlx:mlx-community/Qwen3.5-2B-4bit --hedge-limit 20 --repeat-limit 0
+```
+
+llama.cpp has no watcher. There, a reply that goes in circles runs to `maxTokens` or to the call's timeout, whichever comes first.
+
+### Every call has a cap and a clock
+
+Two limits bound every call, and a local model hits both more often than a hosted one. The cap is `maxTokens`. llama.cpp caps a call at 16,384 tokens when you set none. The MLX server caps it at its `--max-tokens`, also 16,384 by default, and a call that asks for more gets that much. The clock is the runtime's per-call timeout of ten minutes. A call that hits it fails with "Request was aborted".
+
+Set both lower for a local model, because a reply that goes in circles costs the whole cap and the whole clock:
+
+```ts
+setLlmOptions({ maxTokens: 8192, timeout: 300000 })
+```
+
+`timeout` is in milliseconds. 8,192 tokens is room enough for any honest reply, a small thinking model's working included; a reply that needs more has almost always looped.
+
+### A reply you gave up on keeps running, unless something stops it
+
+When a call times out, or you press Ctrl-C, your program moves on. The model does not know that. llama.cpp runs inside your process, so Agency stops it directly. The MLX server is another process behind a socket, and `mlx_lm.server` on its own only looks at that socket once the reply is finished. Agency's chat server looks every half second instead, and drops the reply at its next token. A prompt still being read is read to the end first, and on the path a draft model uses that means the whole prompt. The server's log shows it:
+
+```
+The client went away; stopping its reply.
+```
+
+An abandoned reply that nothing stops runs to `maxTokens`, and every other request shares the GPU with it and runs two to three times slower. If a local model gets slower as a run goes on, check for this first.
+
+### Memory is the weights, plus everything the server remembers
+
+A model's size on disk is the floor of what it needs, not the total. Each reply being generated holds attention state that grows with the prompt and the reply. On a 235B model that is about 190KB per token, so a 22,000-token prompt adds 4GB. The MLX server also keeps that state for the last ten prompts it saw, so a follow-up on the same conversation skips re-reading it. And the GPU keeps memory it has freed around for reuse.
+
+None of this shrinks on its own. A long run on a large model grows until the GPU runs out of memory. The server then stops answering, and every later call waits out its timeout. The system log records the moment:
+
+```
+Execution of the command buffer was aborted due to an error during execution. Insufficient Memory
+```
+
+Agency limits the server to a sixteenth of the machine's memory for attention state, and the server drops its oldest prompts to stay under. Watch the `Prompt Cache` lines the server prints to see how much it holds. Leave headroom when you pick a model. A 123GB model on a 256GB Mac leaves 17GB for everything else once the GPU has its share.
+
+### Prompts cost time up front, replies cost time per token
+
+A reply takes two kinds of time. Reading the prompt is one batch of work that grows with the prompt's length. A 22,000-token prompt took 28 seconds on a 235B model before the first token came out. Writing the reply then costs a fixed time per token. That time is set by how fast the machine can read the model's weights, not by how much arithmetic it does. That is why a 235B model with 22B active parameters and a dense 31B model both write at about 40 tokens per second on the same Mac.
+
+Two things follow. A long prompt is expensive even when the reply is one word, so keep the long prompts to the calls that need them. And the biggest speed-up for a thinking model is not a faster machine, it is `thinking: { enabled: false }` on the calls that do not need it.
+
+### Speculative decoding
+
+Since writing a reply is bound by reading the weights, a smaller model can help a larger one. The small model, the draft, guesses the next few tokens cheaply. The large model then checks the whole guess in one pass, which costs it about the same as writing one token, and keeps every token it agrees with. The reply is exactly what the large model would have written alone, only sooner. On prose the gain is usually 1.5x to 2x. On a typed reply it is less, because the grammar makes the draft's guesses wrong more often.
+
+```bash
+agency local serve mlx:mlx-community/Qwen3-235B-A22B-Instruct-2507-4bit --draft mlx:mlx-community/Qwen3-0.6B-4bit
+agency run --local qwen3.5-4b --draft qwen3.5-2b hello.agency
+```
+
+The first line drafts for an MLX model, the second for a GGUF one. The draft has to share the main model's tokenizer, which in practice means the smallest member of the same family, and both backends check the pair when the draft loads and refuse one that does not match. `--draft-tokens` on the server sets how many tokens the draft guesses at a time, four by default. A draft turns off batching on the MLX server, so calls run one at a time there while it is in use. The MLX server also refuses a draft for a model whose attention cache cannot give tokens back, which is every Qwen3.5 and Qwen3-Next model; Qwen3, gpt-oss, and Gemma 4 can take one.
+
+On llama.cpp a drafted model runs greedy unless the call names a temperature. That is the one setting every pair takes: with node-llama-cpp 3.21.1, a Qwen3.5 model that samples on a draft never returns from the call, so the plugin refuses a sampled call on a drafted Qwen3.5 model, and warns once for other families, where a Qwen3 0.6B drafting for the Qwen3 8B returned as usual. `llamaCppDraftOptions.allowSampling` in the call's metadata turns that check off. The same Qwen3 pair reported no predictions used at any temperature, and ran slower than the 8B alone, so on llama.cpp a draft is not a speed-up today. The draft on the MLX server is the one that can pay.
+
+Whether a draft pays off depends on the pair and the machine, so measure it: run the throughput case of the benchmark with and without the draft and compare the output speed. A draft that is too large gains little, because checking its guesses costs almost what it saves. On the 235B with a 0.6B draft, prose came out slower with the draft than without.
+
+### Long prompts and the machine's memory
+
+The MLX server reads a long prompt in chunks. A bigger chunk keeps the GPU busier, so the prompt is read sooner, but the attention scores of one chunk against the whole prompt have to fit in memory at once. Agency sizes the chunk from the machine's memory: 2048 tokens under 64GB, 4096 up to 128GB, and 8192 above. `--prefill-step` on `agency local serve` overrides that. Raise it if you have memory to spare and long prompts to read; lower it if the server runs out of memory on a long prompt.
+
+### Several calls at once
+
+llama.cpp runs one reply at a time inside your process, and other calls wait their turn. The MLX server batches replies, so calls made at the same time share the GPU and finish sooner together than one after another. Each call still takes about as long as it would alone, so this helps a program with independent calls, not a single slow one. Make the calls concurrent the way you would any Agency work, with [`fork` or `parallel`](/guide/concurrency).
+
+Time to first token is not measured separately by Agency yet. A hosted model's latency includes the network round trip and the provider's queue, and a local model's does not, so a comparison of latencies alone flatters the local model on short replies.
+
+### A type shapes the reply, but cannot make it right
+
+A typed `llm()` call on a local model gets a reply that fits the type, because a grammar forbids every token that would break it. Two things are worth knowing. A call that passes tools is not constrained, since a tool call is not JSON. And the grammar shapes the reply without judging it. Asked for a date as a string, a model can write `March 14, 2026` where you wanted `2026-03-14`, and the grammar is satisfied. Say the format you want in the prompt or in the field's description.
+
+### The context window is smaller than you think
+
+The prompt, the thinking, and the answer all share one context window. llama.cpp gives a model 32,768 tokens of it in Agency. A prompt near that size leaves no room for a reply, and the call fails with a context error. The MLX server uses the model's own limit, which is usually larger.
+
+### llama.cpp and the MLX server, side by side
+
+|                        | llama.cpp                    | MLX server                             |
+| ---------------------- | ---------------------------- | -------------------------------------- |
+| Runs                   | inside your process          | as a process you start and stop        |
+| Loads the model        | on the first call, every run | once, when you start the server        |
+| Calls at the same time | one at a time, the rest wait | several, batched together              |
+| Abandoned reply        | stopped at once              | stopped at its next token              |
+| Thinking on, off, budget | yes, where the model's wrapper has a switch | yes                     |
+| Watches for loops      | no                           | yes                                    |
+| Speculative decoding   | `agency run --draft`, greedy only | `agency local serve --draft`      |
+| Output cap             | 16,384 unless the call says  | the server's `--max-tokens`            |
+| Context window         | 32,768 tokens                | the model's own                        |
+| Where it runs          | any machine                  | Apple Silicon only                     |
 
 ## See also
 

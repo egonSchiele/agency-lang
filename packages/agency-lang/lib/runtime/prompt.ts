@@ -21,6 +21,7 @@ import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
+import { withLocalDefaults } from "./localDefaults.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
 import { armCallTimeout, dispatchWithRetry, runWithRetry } from "./llmDispatch.js";
 import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "./threadRepair.js";
@@ -888,10 +889,15 @@ export async function runPrompt(args: {
   // baked per-call value (agency.json → codegen literal, default 10). Kept out
   // of stackSmolDefaults above — it isn't a smoltalk config field.
   const effectiveMaxToolCallRounds = stackMaxToolCallRounds ?? maxToolCallRounds;
-  const clientConfig = ctx.getSmoltalkConfig({
-    ...stackSmolDefaults,
-    ...restClientConfig,
-  });
+  // A local model gets the choices a hosted provider makes on its own
+  // (the temperature, and how the thinking option reaches the server).
+  const clientConfig = withLocalDefaults(
+    ctx.getSmoltalkConfig({
+      ...stackSmolDefaults,
+      ...restClientConfig,
+    }),
+    ctx.getSmoltalkConfig().model,
+  );
 
   // Cap on characters of a single tool result fed back to the LLM. The
   // full result is still cached for Agency code via `setResultOnBranch`;

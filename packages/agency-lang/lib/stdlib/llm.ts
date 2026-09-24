@@ -30,6 +30,9 @@ export type LlmDefaults = RetryConfig & {
   provider?: string;
   temperature?: number;
   reasoningEffort?: "low" | "medium" | "high";
+  /** Thinking on or off, with an optional budget of tokens to think for.
+   *  See `withLocalDefaults` for what a local MLX model does with it. */
+  thinking?: { enabled: boolean; budgetTokens?: number };
   maxTokens?: number;
   maxToolResultChars?: number;
   maxToolCallRounds?: number;

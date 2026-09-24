@@ -3,7 +3,13 @@ import * as http from "node:http";
 import { startFrontDoor, type FrontDoor } from "./mlxServer.js";
 import { plainColor } from "../utils/termcolors.js";
 
-type Hit = { url: string; model: unknown; headers: http.IncomingHttpHeaders; clientGone: boolean };
+type Hit = {
+  url: string;
+  model: unknown;
+  body: Record<string, unknown>;
+  headers: http.IncomingHttpHeaders;
+  clientGone: boolean;
+};
 type Fake = { server: http.Server; port: number; hits: Hit[] };
 
 /** Stands in for one mlx_lm.server: records what it receives and answers
@@ -14,9 +20,11 @@ async function fakeServer(model: string): Promise<Fake> {
     let raw = "";
     req.on("data", (c) => (raw += c));
     req.on("end", () => {
+      const body = JSON.parse(raw);
       const hit: Hit = {
         url: req.url ?? "",
-        model: JSON.parse(raw).model,
+        model: body.model,
+        body,
         headers: req.headers,
         clientGone: false,
       };
@@ -157,6 +165,39 @@ describe("front door", () => {
     controller.abort();
     await new Promise((r) => setTimeout(r, 50));
     expect(a.hits[a.hits.length - 1].clientGone).toBe(true);
+  });
+
+  it("holds a request's reply length to the server's --max-tokens", async () => {
+    const capped = await startFrontDoor(
+      0,
+      [{ model: "org/a", upstreamModel: "/models/mlx/org--a", port: a.port, label: "a" }],
+      undefined,
+      100,
+    );
+    const send = async (body: Record<string, unknown>) => {
+      const res = await fetch(`http://127.0.0.1:${capped.port}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "org/a", ...body }),
+      });
+      expect(res.status).toBe(200);
+      return a.hits[a.hits.length - 1].body;
+    };
+    expect((await send({ max_tokens: 30000 })).max_tokens).toBe(100);
+    expect((await send({ max_completion_tokens: 30000 })).max_completion_tokens).toBe(100);
+    expect((await send({ max_tokens: 50 })).max_tokens).toBe(50);
+    expect((await send({})).max_tokens).toBeUndefined();
+    await capped.close();
+  });
+
+  it("leaves the reply length alone when the door has no limit", async () => {
+    const res = await fetch(`http://127.0.0.1:${door.port}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "org/a", max_tokens: 30000 }),
+    });
+    expect(res.status).toBe(200);
+    expect(a.hits[a.hits.length - 1].body.max_tokens).toBe(30000);
   });
 
   it("close() finishes while a reply is still streaming", async () => {

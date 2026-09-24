@@ -5,6 +5,8 @@ import * as path from "node:path";
 import { safeDeleteDirectoryWithin } from "../utils.js";
 import {
   serveArgs,
+  promptCacheBudget,
+  prefillStepSize,
   choosePython,
   memoryWarning,
   notServedMessage,
@@ -28,7 +30,12 @@ import { CURATED_LOCAL_MODELS } from "../stdlib/localModels.js";
 describe("serveArgs", () => {
   it("builds the chat server command line, with mlx_lm.server's options", () => {
     expect(
-      serveArgs("/pkg/lib/cli/mlxChatServer.py", "/models/mlx/org--repo", 8081, 16384),
+      serveArgs("/pkg/lib/cli/mlxChatServer.py", "/models/mlx/org--repo", 8081, {
+        maxTokens: 16384,
+        promptCacheBytes: 4_000_000_000,
+        prefillStepSize: 2048,
+        limits: {},
+      }),
     ).toEqual([
       "/pkg/lib/cli/mlxChatServer.py",
       "--model",
@@ -39,9 +46,58 @@ describe("serveArgs", () => {
       "8081",
       "--max-tokens",
       "16384",
+      "--prompt-cache-bytes",
+      "4000000000",
+      "--prefill-step-size",
+      "2048",
       "--log-level",
       "INFO",
     ]);
+  });
+
+  it("adds a flag for each reply limit the user set, and none for the rest", () => {
+    const args = serveArgs("/pkg/s.py", "/models/m", 8081, {
+      maxTokens: 16384,
+      promptCacheBytes: 1000,
+      prefillStepSize: 2048,
+      limits: { reasoningBudget: 0, repeatLimit: 5 },
+    });
+    expect(args.slice(-4)).toEqual(["--reasoning-budget", "0", "--repeat-limit", "5"]);
+    expect(args).not.toContain("--hedge-limit");
+    expect(args).not.toContain("--limit-answers");
+    const watched = serveArgs("/pkg/s.py", "/models/m", 8081, {
+      maxTokens: 16384,
+      promptCacheBytes: 1000,
+      prefillStepSize: 2048,
+      limits: { limitAnswers: true },
+    });
+    expect(watched.slice(-1)).toEqual(["--limit-answers"]);
+  });
+
+  it("names the draft model and how much it drafts", () => {
+    const args = serveArgs("/pkg/s.py", "/models/m", 8081, {
+      maxTokens: 16384,
+      promptCacheBytes: 1000,
+      prefillStepSize: 2048,
+      limits: {},
+      draft: { dir: "/models/small", tokens: 4 },
+    });
+    expect(args.slice(-4)).toEqual(["--draft-model", "/models/small", "--num-draft-tokens", "4"]);
+  });
+});
+
+describe("prefillStepSize", () => {
+  it("reads a long prompt in bigger chunks on a machine with more memory", () => {
+    expect(prefillStepSize(32 * 1024 ** 3)).toBe(2048);
+    expect(prefillStepSize(64 * 1024 ** 3)).toBe(4096);
+    expect(prefillStepSize(256 * 1024 ** 3)).toBe(8192);
+  });
+});
+
+describe("promptCacheBudget", () => {
+  it("is a sixteenth of the machine's memory", () => {
+    expect(promptCacheBudget(256 * 1024 ** 3)).toBe(16 * 1024 ** 3);
+    expect(promptCacheBudget(1_000_000_000)).toBe(62_500_000);
   });
 });
 
@@ -429,6 +485,27 @@ describe("runServe", () => {
     safeDeleteDirectoryWithin(os.tmpdir(), dir);
   });
 
+  it("drafts for every chat model with --draft, and counts the draft's memory once per chat model", async () => {
+    recordedModel("org/a", true);
+    recordedModel("org/b", true);
+    const d = recordedModel("org/d", true);
+    const handle = await runServe(
+      ["mlx:org/a", "mlx:org/b"],
+      { port: 0, draft: "mlx:org/d", draftTokens: 3 },
+      deps,
+    );
+    for (const args of spawned) {
+      expect(args.slice(-4)).toEqual(["--draft-model", d, "--num-draft-tokens", "3"]);
+    }
+    // Two 0.6 GB models plus the 0.6 GB draft loaded by each of them, on a
+    // 1 GB machine.
+    expect(log[0]).toBe(
+      "Warning: these models total 2.40 GB and this machine has 1.00 GB of memory.",
+    );
+    expect(log).toContain("Drafting with org/d (0.60 GB)");
+    await handle.close();
+  });
+
   it("resolves, warns, starts one process per model, waits, then opens the door", async () => {
     const a = recordedModel("org/a", true);
     const b = recordedModel("org/b", true);
@@ -446,6 +523,10 @@ describe("runServe", () => {
         "9000",
         "--max-tokens",
         "16384",
+        "--prompt-cache-bytes",
+        "62500000",
+        "--prefill-step-size",
+        "2048",
         "--log-level",
         "INFO",
       ],
@@ -459,6 +540,10 @@ describe("runServe", () => {
         "9001",
         "--max-tokens",
         "16384",
+        "--prompt-cache-bytes",
+        "62500000",
+        "--prefill-step-size",
+        "2048",
         "--log-level",
         "INFO",
       ],

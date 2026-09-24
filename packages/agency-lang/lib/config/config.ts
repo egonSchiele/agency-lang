@@ -223,6 +223,14 @@ export interface AgencyConfig {
       /** Parallel byte-range requests while downloading an MLX model. Default 8. */
       downloadConcurrency: number;
     }>;
+    /** Settings for GGUF models, which run in this process through llama.cpp. */
+    llamaCpp?: Partial<{
+      /** A smaller model of the same family that drafts tokens for the main
+       *  one to check, which is speculative decoding. A path to a .gguf
+       *  file. Set by `agency run --local <model> --draft <model>`; baked
+       *  into the program as smoltalk's `llamaCppDraftModel`. */
+      draftModel: string;
+    }>;
     statelog?: Partial<{
       host: string;
       projectId: string;
@@ -596,6 +604,11 @@ export const AgencyConfigSchema = z
             downloadConcurrency: z.number().int().positive(),
           })
           .partial(),
+        llamaCpp: z
+          .object({
+            draftModel: z.string(),
+          })
+          .partial(),
         statelog: z
           .object({
             host: z.string(),
@@ -755,6 +768,9 @@ export function loadConfigSafe(configPath: string): ConfigResult {
 export type ResolvedModelFlag = {
   model: string;
   explicitProvider?: string;
+  /** A .gguf path for `agency run --local <model> --draft <model>`: the
+   *  smaller model that drafts tokens for `model`. Only for llama-cpp. */
+  draftModel?: string;
 };
 
 /** Per-invocation flags accepted by `agency run`/`compile` and forwarded to the
@@ -877,6 +893,18 @@ export function applyCliFlags(config: AgencyConfig, flags: CliFlags, input?: str
             defaultModel: flags.model.model,
             defaultProvider: flags.model.explicitProvider,
           };
+    if (flags.model.draftModel !== undefined) {
+      next.client = {
+        ...next.client,
+        llamaCpp: { ...next.client.llamaCpp, draftModel: flags.model.draftModel },
+      };
+    } else if (next.client.llamaCpp?.draftModel !== undefined) {
+      // A draft in agency.json is for the model named there. The flag
+      // replaced that model, so the draft goes too, unless --draft named
+      // one for the new model.
+      const { draftModel: _forTheOldModel, ...llamaCpp } = next.client.llamaCpp;
+      next.client = { ...next.client, llamaCpp };
+    }
   }
   return next;
 }

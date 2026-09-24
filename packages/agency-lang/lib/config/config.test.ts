@@ -210,6 +210,41 @@ describe("applyCliFlags", () => {
     expect(replaced.client?.defaultModel).toBe("/m/other.gguf");
   });
 
+  it("drops a chat wrapper meant for the model agency.json named when the flag replaces it", () => {
+    const replaced = applyCliFlags(
+      { client: { llamaCpp: { chatWrapper: "qwen", draftModel: "/m/small.gguf" } } } as any,
+      {
+        model: {
+          model: "/m/other.gguf",
+          explicitProvider: "llama-cpp",
+          draftModel: "/m/tiny.gguf",
+        },
+      },
+    );
+    expect(replaced.client?.llamaCpp).toEqual({ draftModel: "/m/tiny.gguf" });
+    const untouched = applyCliFlags({ client: { llamaCpp: { chatWrapper: "qwen" } } } as any, {
+      trace: "out.trace",
+    });
+    expect(untouched.client?.llamaCpp?.chatWrapper).toBe("qwen");
+  });
+
+  it("keeps the draft and the chat wrapper when the flag repeats the model agency.json named", () => {
+    const configured = {
+      client: {
+        defaultModel: "/m/big.gguf",
+        llamaCpp: { chatWrapper: "qwen", draftModel: "/m/small.gguf" },
+      },
+    } as any;
+    const same = applyCliFlags(configured, {
+      model: { model: "/m/big.gguf", explicitProvider: "llama-cpp" },
+    });
+    expect(same.client?.llamaCpp).toEqual({ chatWrapper: "qwen", draftModel: "/m/small.gguf" });
+    const newDraft = applyCliFlags(configured, {
+      model: { model: "/m/big.gguf", explicitProvider: "llama-cpp", draftModel: "/m/tiny.gguf" },
+    });
+    expect(newDraft.client?.llamaCpp).toEqual({ chatWrapper: "qwen", draftModel: "/m/tiny.gguf" });
+  });
+
   it("--trace <file> sets trace + traceFile", () => {
     const out = applyCliFlags({}, { trace: "out.trace" });
     expect(out.trace).toBe(true);

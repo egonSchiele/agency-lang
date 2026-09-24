@@ -84,6 +84,8 @@ This is where you set your default model, provider, and API keys.
 | `maxToolSchemaChars` | Warns in the state log when one tool's JSON schema is longer than this. Default `2000`; `0` disables it. A tool's schema is re-sent on every request, so an oversized one quietly raises the cost of the whole run. |
 | `providerModules` | Paths to custom smoltalk provider modules (e.g. a local model via `smoltalk-llama-cpp`). |
 | `modelAliases` / `modelsDir` | Short-name aliases and the cache directory for local models. |
+| `llamaCpp.draftModel` | A smaller GGUF model of the same family that drafts tokens for the main one, which is speculative decoding. `agency run --local <model> --draft <model>` sets it for a run. |
+| `llamaCpp.chatWrapper` | The chat wrapper node-llama-cpp formats the model's prompts with, by its name (`qwen`, `gemma4`, `harmony`, `chatML`), for a model whose template it does not recognise. |
 
 Agency uses [Smoltalk](https://github.com/egonSchiele/smoltalk) for its LLM client.
 

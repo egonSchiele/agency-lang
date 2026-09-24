@@ -21,7 +21,7 @@ import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
-import { withLocalDefaults } from "./localDefaults.js";
+import { mergedReplyLimits, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
 import { armCallTimeout, dispatchWithRetry, runWithRetry } from "./llmDispatch.js";
 import { markThreadCancelled, needsThreadRepair, restoreThreadForResume } from "./threadRepair.js";
@@ -842,6 +842,7 @@ export async function runPrompt(args: {
       tools?: any[];
       messages?: smoltalk.MessageJSON[];
       memory?: boolean | { model?: string };
+      replyLimits?: ReplyLimits;
       maxToolResultChars?: number;
       maxRepeatedToolCalls?: number;
       label?: string;
@@ -891,10 +892,17 @@ export async function runPrompt(args: {
   const effectiveMaxToolCallRounds = stackMaxToolCallRounds ?? maxToolCallRounds;
   // A local model gets the choices a hosted provider makes on its own
   // (the temperature, and how the thinking option reaches the server).
+  // The reply limits combine field by field across the branch default and
+  // the call, where every other option is replaced whole.
+  const replyLimits = mergedReplyLimits(
+    stackSmolDefaults.replyLimits,
+    restClientConfig.replyLimits,
+  );
   const clientConfig = withLocalDefaults(
     ctx.getSmoltalkConfig({
       ...stackSmolDefaults,
       ...restClientConfig,
+      ...(replyLimits === undefined ? {} : { replyLimits }),
     }),
     ctx.getSmoltalkConfig().model,
   );

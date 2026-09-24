@@ -4207,13 +4207,18 @@ export class TypeScriptBuilder {
     if (provider) {
       smoltalkFields.provider = ts.str(provider);
     }
-    // smoltalk-llama-cpp reads the draft model from `config.metadata`, and
-    // the baked fields reach smoltalk as top-level config, so the draft is
-    // baked inside a `metadata` object of its own.
+    // smoltalk-llama-cpp reads the draft model and the chat wrapper from
+    // `config.metadata`, and the baked fields reach smoltalk as top-level
+    // config, so they are baked inside a `metadata` object of their own.
+    const metadata: Record<string, TsNode> = {};
     if (cfg.client?.llamaCpp?.draftModel) {
-      smoltalkFields.metadata = ts.obj({
-        llamaCppDraftModel: ts.str(cfg.client.llamaCpp.draftModel),
-      });
+      metadata.llamaCppDraftModel = ts.str(cfg.client.llamaCpp.draftModel);
+    }
+    if (cfg.client?.llamaCpp?.chatWrapper) {
+      metadata.llamaCppChatWrapper = ts.str(cfg.client.llamaCpp.chatWrapper);
+    }
+    if (Object.keys(metadata).length > 0) {
+      smoltalkFields.metadata = ts.obj(metadata);
     }
     return ts.obj(smoltalkFields);
   }

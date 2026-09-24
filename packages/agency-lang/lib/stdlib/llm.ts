@@ -1,6 +1,7 @@
 import { fixedPath, resolveUnder, readText, type Located } from "./contained.js";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
+import { mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 import {
   getAllModels,
@@ -33,6 +34,11 @@ export type LlmDefaults = RetryConfig & {
   /** Thinking on or off, with an optional budget of tokens to think for.
    *  See `withLocalDefaults` for what a local MLX model does with it. */
   thinking?: { enabled: boolean; budgetTokens?: number };
+  /** The MLX chat server's limits on a reply that goes in circles: how
+   *  many second thoughts ("But wait") and how many repeats of one
+   *  sentence it allows, and whether the answer is watched as well as the
+   *  thinking. `0` turns a limit off. Other providers ignore it. */
+  replyLimits?: ReplyLimits;
   maxTokens?: number;
   maxToolResultChars?: number;
   maxToolCallRounds?: number;
@@ -61,9 +67,14 @@ export function _setLlmOptions(opts: LlmDefaults): void {
   const current = (stack.other.llmDefaults ?? {}) as Record<string, unknown>;
   for (const key of Object.keys(opts)) {
     const value = (opts as Record<string, unknown>)[key];
-    if (value !== undefined) {
-      current[key] = value;
+    if (value === undefined) {
+      continue;
     }
+    // The limits combine field by field, so setting one keeps the others.
+    current[key] =
+      key === "replyLimits"
+        ? mergedReplyLimits(current.replyLimits as ReplyLimits | undefined, value as ReplyLimits)
+        : value;
   }
   stack.other.llmDefaults = current;
 }

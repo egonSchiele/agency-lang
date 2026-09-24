@@ -32,6 +32,16 @@ describe("smoltalkDefaults codegen", () => {
     expect(out).toMatch(/metadata:\s*\{\s*llamaCppDraftModel:\s*"\/m\/small\.gguf"/);
   });
 
+  it("bakes a llama.cpp chat wrapper next to the draft, and no metadata without either", () => {
+    const out = generate("node main() { return null }", {
+      client: { llamaCpp: { chatWrapper: "qwen" } },
+    });
+    expect(out).toMatch(/metadata:\s*\{\s*llamaCppChatWrapper:\s*"qwen"/);
+    expect(generate("node main() { return null }", { client: {} })).not.toMatch(
+      /metadata:\s*\{\s*llamaCpp/,
+    );
+  });
+
   it("emits a nested apiKey map with env fallbacks by default", () => {
     const out = generate(PROGRAM);
     expect(out).toContain("apiKey");

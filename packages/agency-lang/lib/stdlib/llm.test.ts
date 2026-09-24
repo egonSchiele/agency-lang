@@ -66,6 +66,14 @@ describe("_setLlmOptions", () => {
     });
   });
 
+  it("combines replyLimits field by field, where every other option is replaced whole", () => {
+    const stack = { other: { llmDefaults: { replyLimits: { hedgeLimit: 30 } } } as any };
+    withStack(stack, () => _setLlmOptions({ replyLimits: { repeatLimit: 0 } }));
+    expect(stack.other.llmDefaults.replyLimits).toEqual({ hedgeLimit: 30, repeatLimit: 0 });
+    withStack(stack, () => _setLlmOptions({ replyLimits: { hedgeLimit: 5 } }));
+    expect(stack.other.llmDefaults.replyLimits).toEqual({ hedgeLimit: 5, repeatLimit: 0 });
+  });
+
   it("carries maxToolResultChars in the same bag", () => {
     const stack = { other: {} as any };
     withStack(stack, () => _setLlmOptions({ maxToolResultChars: 5 }));

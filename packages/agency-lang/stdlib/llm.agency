@@ -38,13 +38,21 @@ node main() {
  *  `thinking` turns a model's thinking on or off, with an optional budget
  *  of tokens it may think for before it has to answer. On a local MLX
  *  model, `{ enabled: false }` skips the thinking entirely, which is the
- *  biggest saving there is on a small task. */
+ *  biggest saving there is on a small task.
+ *
+ *  `replyLimits` changes how the MLX chat server treats a reply that goes
+ *  in circles: `hedgeLimit` is how many second thoughts ("But wait",
+ *  "Hmm") it allows and `repeatLimit` how many times one sentence may
+ *  repeat, both within the last two thousand tokens, and `limitAnswers`
+ *  watches the answer as well as the thinking. `0` turns a limit off,
+ *  which a song with a chorus needs. Other providers ignore it. */
 export type LlmDefaults = {
   model?: string;
   provider?: string;
   temperature?: number;
   reasoningEffort?: "low" | "medium" | "high";
   thinking?: { enabled: boolean, budgetTokens?: number };
+  replyLimits?: { hedgeLimit?: number, repeatLimit?: number, limitAnswers?: boolean };
   maxTokens?: number;
   maxToolResultChars?: number;
   maxToolCallRounds?: number;

@@ -91,6 +91,20 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
       ],
     }),
   },
+  // The MLX chat server's limits on a reply that goes in circles. See
+  // `ReplyLimits` in lib/stdlib/llm.ts; `setLlmOptions` sets the same
+  // per-branch.
+  {
+    key: "replyLimits",
+    value: optional({
+      type: "objectType",
+      properties: [
+        { key: "hedgeLimit", value: optional(number) },
+        { key: "repeatLimit", value: optional(number) },
+        { key: "limitAnswers", value: optional(boolean) },
+      ],
+    }),
+  },
   { key: "tools", value: optional(anyArray) },
   // Seed the conversation: these messages are appended to the active thread
   // ahead of the prompt. See the `messages` handling in lib/runtime/prompt.ts.

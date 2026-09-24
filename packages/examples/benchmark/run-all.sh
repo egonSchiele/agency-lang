@@ -21,10 +21,30 @@
 # Environment variables:
 #   BENCH_ARGS   extra flags for run-model.agency, such as --trials 5 (the default is 3)
 #   RESULTS_DIR  where result files go (default: results)
-#   LOCAL_MAX_TOKENS  cap on output tokens per call for local models, thinking
-#                included (default: 30000). The llama.cpp context holds 32768
-#                tokens, prompt and output together, so going higher gains
-#                little. Hosted models keep their provider's default.
+#   MAX_TOKENS   cap on output tokens per call, thinking included, for every
+#                model (default: 8192). One cap for all is what makes the
+#                comparison fair. Every honest reply seen so far fits: the
+#                longest was a 4B thinking model at about 7300 tokens. A model
+#                that talks itself in circles used to run to 30000, ten
+#                minutes on a large model, before the run gave up on it. The
+#                llama.cpp context holds 32768 tokens, prompt and output
+#                together.
+#   LOCAL_TIMEOUT  seconds to wait for one call to a local model (default:
+#                300). Hosted models keep the runtime's ten minutes. Set it
+#                to 0 for the runtime's default.
+#   MACHINE_LABEL  a short name for this machine, such as m1-studio. It goes
+#                into each results file and its name, so files from several
+#                machines can share one directory and one comparison.
+#   DRAFT        a draft model for speculative decoding. A GGUF model is run
+#                with it (agency run --draft). For an MLX model, start the
+#                server with --draft and set this to the same name, so the
+#                results say what the server was doing.
+#   PREFILL_STEP the --prefill-step the MLX server was started with, if
+#                any, so the results say so. Recorded only.
+#
+# Every model also gets the same thinking policy: off on the cases that do
+# not need it, on with one budget on the reasoning cases. See --thinking in
+# run-model.agency to change that.
 #   AGENCY       how to run agency (default: the examples package's own copy,
 #                or agency on your PATH if that is missing)
 
@@ -42,7 +62,11 @@ if [ -z "${AGENCY:-}" ]; then
 fi
 RESULTS_DIR="${RESULTS_DIR:-results}"
 BENCH_ARGS="${BENCH_ARGS:-}"
-LOCAL_MAX_TOKENS="${LOCAL_MAX_TOKENS:-30000}"
+MAX_TOKENS="${MAX_TOKENS:-8192}"
+LOCAL_TIMEOUT="${LOCAL_TIMEOUT:-300}"
+MACHINE_LABEL="${MACHINE_LABEL:-}"
+DRAFT="${DRAFT:-}"
+PREFILL_STEP="${PREFILL_STEP:-0}"
 
 if [ $# -gt 0 ]; then
   models=("$@")
@@ -55,16 +79,28 @@ mkdir -p "$RESULTS_DIR"
 files=()
 failed=()
 for entry in "${models[@]}"; do
+  # What the results file records about this run, beyond what run-model
+  # measures itself: the machine, the backend, and the speed settings.
+  record_flag=(--machine-label "$MACHINE_LABEL" --draft-model "$DRAFT" --prefill-step "$PREFILL_STEP")
   if [[ "$entry" == local:* ]]; then
     name="${entry#local:}"
     model_flag=(--local "$name")
-    # The default cap is 16384, which a small thinking model can use up
-    # before it answers.
-    cap_flag=(--max-tokens "$LOCAL_MAX_TOKENS")
+    # `agency local resolve` prints the backend first: "mlx" or "llama-cpp".
+    backend="$($AGENCY local resolve "$name" 2>/dev/null | awk 'NR==1 { print $1 }')"
+    record_flag+=(--backend "${backend:-llama-cpp}")
+    # A GGUF model takes its draft from the run. An MLX model's draft is the
+    # server's business, and is only recorded here.
+    if [ -n "$DRAFT" ] && [ "$backend" != "mlx" ]; then
+      model_flag+=(--draft "$DRAFT")
+    fi
+    # The runtime's timeout is ten minutes. A reply that goes in circles
+    # would use it up, and on a large model that is ten minutes per trial.
+    cap_flag=(--max-tokens "$MAX_TOKENS" --timeout "$LOCAL_TIMEOUT")
   else
     name="$entry"
     model_flag=(--model "$name")
-    cap_flag=()
+    record_flag+=(--backend hosted)
+    cap_flag=(--max-tokens "$MAX_TOKENS")
     # The catalog routes OpenAI models to the "openai" provider, which is
     # the older chat completions API. Some cases fail there, so a bare
     # OpenAI name goes to "openai-responses" instead. A name that already
@@ -76,6 +112,9 @@ for entry in "${models[@]}"; do
   fi
   # "mlx:mlx-community/Qwen3.8-27B-4bit" becomes "mlx_mlx-community_Qwen3.8-27B-4bit".
   safe="$(printf '%s' "$name" | tr '/:' '__')"
+  if [ -n "$MACHINE_LABEL" ]; then
+    safe="$safe--$(printf '%s' "$MACHINE_LABEL" | tr '/:' '__')"
+  fi
   out="$RESULTS_DIR/$safe.json"
   log="$RESULTS_DIR/$safe.log"
 
@@ -87,7 +126,7 @@ for entry in "${models[@]}"; do
   # cap_flag is written as ${a[@]+"${a[@]}"} because macOS's bash 3.2, under
   # set -u, treats an empty array as an unset variable.
   # shellcheck disable=SC2086
-  $AGENCY run "${model_flag[@]}" run-model.agency --label "$name" --out "$out" ${cap_flag[@]+"${cap_flag[@]}"} $BENCH_ARGS 2>&1 | tee "$log"
+  $AGENCY run "${model_flag[@]}" run-model.agency --label "$name" --out "$out" "${record_flag[@]}" ${cap_flag[@]+"${cap_flag[@]}"} $BENCH_ARGS 2>&1 | tee "$log"
 
   if [ -f "$out" ]; then
     files+=("$out")

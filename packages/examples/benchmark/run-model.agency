@@ -19,8 +19,9 @@
  */
 import { parseArgs } from "std::args"
 import { now, format } from "std::date"
-import { getCost, getTokens } from "std::thread"
+import { getCost, getTokens, getModelCosts } from "std::thread"
 import { setLlmOptions } from "std::llm"
+import { exec } from "std::shell"
 
 type CaseInfo = {
   name: string,
@@ -61,6 +62,11 @@ type CaseResult = {
   score: number,
   latencyMs: number,
   tokens: number,
+  // The tokens the model wrote, thinking included. Divided by the time,
+  // this is the model's speed, which the total token count is not: a long
+  // prompt makes `tokens` large and says nothing about how fast the model
+  // writes.
+  outputTokens: number,
   cost: number,
   detail: string,
   error: string
@@ -70,10 +76,37 @@ type CaseResult = {
 type RunFile = {
   label: string,
   model: string,
+  // The machine the run was made on, so files from different machines can
+  // be told apart: the chip, the memory, and the operating system.
+  machine: string,
+  // A short name for the machine, given with --machine-label, for column
+  // headings and file names. Empty when none was given.
+  machineLabel: string,
+  settings: RunSettings,
   startedAt: string,
   trials: number,
   haystackLines: number,
   results: CaseResult[]
+}
+
+/** The choices that change what a run measures, recorded so two runs can be
+ *  compared knowing what differed. The draft model and the prefill step are
+ *  the server's settings for an MLX model, so the run is told them with
+ *  flags; it cannot read them from the server. */
+type RunSettings = {
+  // "hosted", "mlx", or "llama-cpp".
+  backend: string,
+  // The thinking policy: auto, on, off, or default.
+  thinking: string,
+  thinkingBudget: number,
+  // 0 when the provider's default applied.
+  maxTokens: number,
+  // Seconds; 0 when the runtime's default applied.
+  timeout: number,
+  // The draft model for speculative decoding, or "" for none.
+  draft: string,
+  // Tokens of prompt read per pass on the MLX server; 0 when its default applied.
+  prefillStep: number
 }
 
 // The model the run's calls actually went to, as the runtime reports it.
@@ -519,6 +552,84 @@ def runOne(caseName: string, haystackLines: number): CaseOutcome {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Thinking policy
+// ---------------------------------------------------------------------------
+
+// Every model gets the same thinking policy, so the comparison is fair. A
+// hosted provider's default differs from the next one's: Anthropic models do
+// not think unless asked, OpenAI reasoning models always do, and local
+// thinking models think until told to stop. The policy: no thinking on the
+// cases that do not need it, and thinking with one budget on the two
+// reasoning cases. OpenAI's reasoning models ignore the off switch and think
+// at their default effort; that is the one difference left.
+const REASONING_CASES = ["math", "logic"]
+
+// How each model is told about thinking. "auto" is the policy above; "off"
+// and "on" apply one setting to every case; "default" leaves each model to
+// its own default, which is what the runs before this policy measured.
+let thinkingMode = "auto"
+let thinkingBudget = 4096
+
+def thinkingFor(caseName: string): void {
+  if (thinkingMode == "default") {
+    return
+  }
+  const on = thinkingMode == "on" || (thinkingMode == "auto" && REASONING_CASES.includes(caseName))
+  if (on) {
+    setLlmOptions({ thinking: { enabled: true, budgetTokens: thinkingBudget } })
+  } else {
+    setLlmOptions({ thinking: { enabled: false } })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Measuring a case
+// ---------------------------------------------------------------------------
+
+// The tokens every model has written so far, over the whole run. The
+// per-branch counter counts prompt and reply together; this one keeps them
+// apart.
+def outputTokensSoFar(): number {
+  let total = 0
+  for (entry in getModelCosts()) {
+    total = total + entry.outputTokens
+  }
+  return total
+}
+
+// The chip, memory, and operating system, from the commands that know them.
+// A command that is missing on this machine leaves its part out.
+def machineInfo(): string {
+  const parts: string[] = []
+  const chip = exec("sysctl", ["-n", "machdep.cpu.brand_string"]) with approve
+  if (chip.exitCode == 0 && chip.stdout.trim() != "") {
+    parts.push(chip.stdout.trim())
+  }
+  const memory = exec("sysctl", ["-n", "hw.memsize"]) with approve
+  if (memory.exitCode == 0 && memory.stdout.trim() != "") {
+    const gb = Math.round(Number(memory.stdout.trim()) / (1024 * 1024 * 1024))
+    parts.push("${gb}GB")
+  }
+  const os = exec("uname", ["-sr"]) with approve
+  if (os.exitCode == 0) {
+    parts.push(os.stdout.trim())
+  }
+  return parts.join(", ")
+}
+
+// What ran the model, from its name: a GGUF path is llama.cpp, a Hugging
+// Face repo id is the MLX server, and anything else is a hosted provider.
+def backendFor(model: string): string {
+  if (model.endsWith(".gguf")) {
+    return "llama-cpp"
+  }
+  if (model.includes("/")) {
+    return "mlx"
+  }
+  return "hosted"
+}
+
 // Time, tokens, and cost are measured by reading the running totals before
 // and after the case. Each case gets a fresh thread so no case sees another
 // case's messages. If the model call fails (a timeout, a reply that does not
@@ -528,6 +639,8 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
   const startMs = now()
   const startCost = getCost()
   const startTokens = getTokens()
+  const startOutput = outputTokensSoFar()
+  thinkingFor(info.name)
   let result: any = null
   thread {
     result = runOne(info.name, haystackLines)
@@ -551,6 +664,7 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
     score: score,
     latencyMs: latencyMs,
     tokens: getTokens() - startTokens,
+    outputTokens: outputTokensSoFar() - startOutput,
     cost: getCost() - startCost,
     detail: detail,
     error: error
@@ -599,6 +713,13 @@ node main() {
       trials: { type: "number", short: "t", default: 3, description: "How many times to run each case. The comparison reports the mean and median time" },
       haystack: { type: "number", default: 1000, description: "Lines of filler in the needle case, about 17 tokens each. Lower it for local models with a small context window" },
       "max-tokens": { type: "number", default: 0, description: "Cap on output tokens per call, thinking included. 0 leaves the provider's default in place" },
+      timeout: { type: "number", default: 0, description: "Seconds to wait for one call before giving up on it. 0 leaves the runtime's default in place (ten minutes)" },
+      thinking: { type: "string", default: "auto", description: "How models think: auto (off, except on the reasoning cases), on, off, or default (each model's own default)" },
+      "thinking-budget": { type: "number", default: 4096, description: "Tokens a model may think for on a case where thinking is on" },
+      "machine-label": { type: "string", default: "", description: "A short name for this machine, such as m1-studio, put in the results file and its name" },
+      backend: { type: "string", default: "", description: "What runs the model: hosted, mlx, or llama-cpp. Recorded in the results; guessed from the model name when empty" },
+      "draft-model": { type: "string", default: "", description: "The draft model in use for speculative decoding, recorded in the results. For a GGUF model pass it to agency run --draft as well; for an MLX model start the server with it" },
+      "prefill-step": { type: "number", default: 0, description: "The MLX server's prompt chunk size in use, recorded in the results. Start the server with --prefill-step to change it" },
       cold: { type: "boolean", description: "Skip the untimed warm-up call, so the first case includes the model's load time" },
       list: { type: "boolean", short: "l", description: "List the cases and exit" }
     }
@@ -620,11 +741,20 @@ node main() {
   const startedAt = format(now())
 
   // A local thinking model can spend the provider's whole default budget
-  // thinking and never answer. Set here, before the warm-up, so it applies
-  // to every call in the run.
+  // thinking and never answer, and the runtime waits ten minutes for it.
+  // Set here, before the warm-up, so they apply to every call in the run.
   if (args.flags["max-tokens"] > 0) {
     setLlmOptions({ maxTokens: args.flags["max-tokens"] })
   }
+  if (args.flags.timeout > 0) {
+    setLlmOptions({ timeout: args.flags.timeout * 1000 })
+  }
+  if (!["auto", "on", "off", "default"].includes(args.flags.thinking)) {
+    print("--thinking must be auto, on, off, or default, not ${args.flags.thinking}")
+    return null
+  }
+  thinkingMode = args.flags.thinking
+  thinkingBudget = args.flags["thinking-budget"]
 
   if (!args.flags.cold) {
     const warm = warmUp()
@@ -635,7 +765,11 @@ node main() {
   }
 
   const label = if args.flags.label != "" then args.flags.label else seenModel
-  const out = if args.flags.out != "" then args.flags.out else "results/${fileSafe(label)}.json"
+  // A machine label goes into the file name too, so files from several
+  // machines can sit in one directory.
+  const machineLabel = args.flags["machine-label"]
+  const defaultOut = if machineLabel == "" then "results/${fileSafe(label)}.json" else "results/${fileSafe(label)}--${fileSafe(machineLabel)}.json"
+  const out = if args.flags.out != "" then args.flags.out else defaultOut
   print("Running ${cases.length} cases x ${trials} trial(s) on ${label}")
 
   let results: CaseResult[] = []
@@ -652,9 +786,21 @@ node main() {
   print("")
   print("${label}: ${passes}/${results.length} passed")
 
+  const backend = if args.flags.backend != "" then args.flags.backend else backendFor(seenModel)
   const run: RunFile = {
     label: label,
     model: seenModel,
+    machine: machineInfo(),
+    machineLabel: args.flags["machine-label"],
+    settings: {
+      backend: backend,
+      thinking: thinkingMode,
+      thinkingBudget: thinkingBudget,
+      maxTokens: args.flags["max-tokens"],
+      timeout: args.flags.timeout,
+      draft: args.flags["draft-model"],
+      prefillStep: args.flags["prefill-step"]
+    },
     startedAt: startedAt,
     trials: trials,
     haystackLines: haystackLines,

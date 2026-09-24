@@ -1,0 +1,662 @@
+/**
+ * Benchmark one model across different kinds of LLM work: raw speed,
+ * structured output, tool use, reasoning, instruction following, memory
+ * across turns, long-context retrieval, and classification. The results go
+ * to one JSON file. `compare.agency` reads several of those files and prints
+ * them side by side, and `run-all.sh` runs this script once per model and
+ * then runs the comparison.
+ *
+ * This script never names a model. Agency's own flags choose it, so the
+ * same script works for hosted models and local ones:
+ *
+ *   agency run --model claude-sonnet-5 run-model.agency --label claude-sonnet-5
+ *   agency run --local qwen3.5-2b run-model.agency --label qwen3.5-2b
+ *
+ * Agency's flags go before the filename, and this script's flags go after it.
+ *
+ * Every case is graded by plain code, not by another model, so a run only
+ * pays for calls to the model under test.
+ */
+import { parseArgs } from "std::args"
+import { now, format } from "std::date"
+import { getCost, getTokens } from "std::thread"
+
+type CaseInfo = {
+  name: string,
+  category: string,
+  description: string
+}
+
+const ALL_CASES: CaseInfo[] = [
+  { name: "latency", category: "speed", description: "Answer a trivial prompt with one word" },
+  { name: "throughput", category: "speed", description: "Write a 400-word story" },
+  { name: "extract", category: "structured", description: "Pull invoice fields out of a messy email" },
+  { name: "actionItems", category: "structured", description: "Turn meeting notes into a list of owners and tasks" },
+  { name: "singleTool", category: "tools", description: "Call one tool and report what it returned" },
+  { name: "toolChain", category: "tools", description: "Chain two tools, ignoring three distractors" },
+  { name: "trustTool", category: "tools", description: "Call a tool three times and trust it over common sense" },
+  { name: "math", category: "reasoning", description: "Solve a word problem with a cheapest-price twist" },
+  { name: "logic", category: "reasoning", description: "Solve a four-person logic puzzle" },
+  { name: "format", category: "instructions", description: "List exactly four fruits in a strict format" },
+  { name: "lipogram", category: "instructions", description: "Rewrite a sentence without the letter e" },
+  { name: "multiTurn", category: "context", description: "Recall a fact from two turns earlier" },
+  { name: "needle", category: "context", description: "Find one line hidden in a long log" },
+  { name: "classify", category: "classification", description: "Label six reviews, including sarcasm" }
+]
+
+/** A case's own verdict: a score from 0 to 1, and what the model said. A
+ *  non-empty `error` means the case could not be graded at all. */
+type CaseOutcome = {
+  score: number,
+  detail: string,
+  error: string
+}
+
+type CaseResult = {
+  caseName: string,
+  category: string,
+  trial: number,
+  passed: boolean,
+  score: number,
+  latencyMs: number,
+  tokens: number,
+  cost: number,
+  detail: string,
+  error: string
+}
+
+/** The shape of the JSON file this script writes, and compare.agency reads. */
+type RunFile = {
+  label: string,
+  model: string,
+  startedAt: string,
+  trials: number,
+  haystackLines: number,
+  results: CaseResult[]
+}
+
+// The model the run's calls actually went to, as the runtime reports it.
+// It is saved next to the label, so a result file says which model made it
+// even when the label is a nickname.
+let seenModel: string = ""
+
+callback("onLLMCallEnd") as data {
+  seenModel = "${data.model}"
+}
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+
+def scoreOf(ok: boolean): number {
+  return if ok then 1 else 0
+}
+
+def outcome(score: number, detail: string): CaseOutcome {
+  return { score: score, detail: detail, error: "" }
+}
+
+// Agency's message for a reply that does not fit the type starts with a long
+// schema report and ends with the reply itself. The reply is the part worth
+// reading, so it is moved to the front. The marker is the wording of that
+// message in lib/runtime/llmRetry.ts; if the wording changes and the marker
+// is not found, the whole message is kept as is.
+def errored(message: string): CaseOutcome {
+  const marker = "Raw output (first 200 chars): "
+  const at = message.indexOf(marker)
+  if (at >= 0) {
+    return { score: 0, detail: "", error: "reply did not fit the type. The model sent: " + message.slice(at + marker.length) }
+  }
+  return { score: 0, detail: "", error: message }
+}
+
+def wordCount(text: string): number {
+  const words = filter(text.trim().split(" ")) as w { return w != "" }
+  return words.length
+}
+
+def hasAnyChar(text: string, chars: string): boolean {
+  for (c in chars.split("")) {
+    if (text.includes(c)) {
+      return true
+    }
+  }
+  return false
+}
+
+def oneLine(text: string, limit: number = 70): string {
+  const flat = text.split("\n").join(" ").trim()
+  if (flat.length <= limit) {
+    return flat
+  }
+  return flat.slice(0, limit) + "…"
+}
+
+def seconds(ms: number): string {
+  const s = ms / 1000
+  return s.toFixed(1) + "s"
+}
+
+def splitList(text: string): string[] {
+  const trimmed = map(text.split(",")) as s { return s.trim() }
+  return filter(trimmed) as s { return s != "" }
+}
+
+// "mlx-community/Qwen3.8-27B-4bit" becomes "mlx-community_Qwen3.8-27B-4bit".
+def fileSafe(name: string): string {
+  return name.split("/").join("_").split(":").join("_")
+}
+
+// ---------------------------------------------------------------------------
+// Tools. The data is made up on purpose: a model can only answer correctly
+// if it actually called the tool and read the result.
+// ---------------------------------------------------------------------------
+
+def getOrderStatus(orderId: string): string {
+  """
+  Look up the shipping status of an order.
+
+  @param orderId - The order number
+  """
+  if (orderId.includes("4471")) {
+    return "Order 4471: shipped 2026-02-02 via Parcelway, tracking number ZX-9321-Q"
+  }
+  return "No order found with id ${orderId}"
+}
+
+def lookupCustomer(email: string): string {
+  """
+  Find a customer's id from their email address.
+
+  @param email - The customer's email address
+  """
+  if (email.toLowerCase() == "jreyes@example.com") {
+    return "Customer id C-5530 (Jordan Reyes)"
+  }
+  return "No customer with email ${email}"
+}
+
+def getBalance(customerId: string): string {
+  """
+  Get the outstanding balance on a customer's account.
+
+  @param customerId - The customer id, such as C-1234
+  """
+  if (customerId.includes("5530")) {
+    return "Balance for C-5530: $2,718.40, overdue since 2026-01-15"
+  }
+  return "No account for ${customerId}"
+}
+
+def getTemperature(city: string): string {
+  """
+  Get the current temperature in a city, in degrees Celsius.
+
+  @param city - The city name
+  """
+  const name = city.toLowerCase()
+  if (name.includes("oslo")) {
+    return "Oslo: 23°C"
+  }
+  if (name.includes("lisbon")) {
+    return "Lisbon: 12°C"
+  }
+  if (name.includes("cairo")) {
+    return "Cairo: 9°C"
+  }
+  return "No weather data for ${city}"
+}
+
+def convertCurrency(amount: number, from: string, to: string): string {
+  """
+  Convert an amount of money between two currencies.
+
+  @param amount - The amount to convert
+  @param from - The three-letter currency code to convert from
+  @param to - The three-letter currency code to convert to
+  """
+  return "${amount} ${from} is about ${amount * 0.92} ${to}"
+}
+
+// ---------------------------------------------------------------------------
+// Speed
+// ---------------------------------------------------------------------------
+
+def caseLatency(): CaseOutcome {
+  const answer: string = llm("Reply with only the word OK.")
+  const cleaned = answer.trim().toLowerCase().split(".").join("")
+  return outcome(scoreOf(cleaned == "ok"), answer)
+}
+
+// compare.agency turns this case's tokens and time into tokens per second.
+def caseThroughput(): CaseOutcome {
+  const story: string = llm("Write a 400-word short story about a lighthouse keeper who finds a message in a bottle. Output only the story.")
+  const words = wordCount(story)
+  return outcome(scoreOf(words >= 250), "${words} words")
+}
+
+// ---------------------------------------------------------------------------
+// Structured output. Each of these cases asks for `T!`, so a reply that does
+// not fit the type comes back as a failure. The case records the failure's
+// message as its error, and that message quotes the model's raw reply.
+// ---------------------------------------------------------------------------
+
+type Invoice = {
+  vendor: string,
+  invoiceNumber: string,
+  @jsonSchema({ description: "the total amount due, in dollars" })
+  total: number,
+  @jsonSchema({ description: "the payment due date, as YYYY-MM-DD" })
+  dueDate: string
+}
+
+const INVOICE_EMAIL = """
+hey team, forwarding this from accounts. Invoice #INV-20931 from Bluefin Logistics LLC.
+Line items: freight $1,240.00, fuel surcharge $86.50, handling $45.
+Please pay by March 14, 2026. (Ignore the old quote of $900, that was before the surcharge.)
+"""
+
+def caseExtract(): CaseOutcome {
+  const reply: Invoice! = llm("Extract the invoice details from this email:\n${INVOICE_EMAIL}")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const invoice = reply.value
+  let right = 0
+  if (invoice.vendor.toLowerCase().includes("bluefin")) {
+    right = right + 1
+  }
+  if (invoice.invoiceNumber.includes("20931")) {
+    right = right + 1
+  }
+  if (Math.abs(invoice.total - 1371.5) < 0.01) {
+    right = right + 1
+  }
+  if (invoice.dueDate == "2026-03-14") {
+    right = right + 1
+  }
+  return outcome(right / 4, "${invoice.vendor} | ${invoice.invoiceNumber} | ${invoice.total} | ${invoice.dueDate}")
+}
+
+type ActionItem = {
+  owner: string,
+  task: string
+}
+
+type ActionItems = {
+  items: ActionItem[]
+}
+
+const MEETING_NOTES = """
+Standup notes. Priya will send the revised budget to finance. We talked about the
+offsite but nothing was decided. Marco is fixing the login bug before Friday.
+Someone should look at the flaky checkout test; Dana volunteered. Priya also agreed
+to book the room for the demo.
+"""
+
+def countOwner(items: ActionItem[], name: string): number {
+  return count(items) as item { return item.owner.toLowerCase().includes(name) }
+}
+
+// Four items: two for Priya, one each for Marco and Dana. The offsite is a
+// trap, because nobody owns it.
+def caseActionItems(): CaseOutcome {
+  const reply: ActionItems! = llm("List every action item in these meeting notes, with the person who owns it. Only include items that someone actually owns.\n${MEETING_NOTES}")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const items = reply.value.items
+  let right = 0
+  if (items.length == 4) {
+    right = right + 1
+  }
+  if (countOwner(items, "priya") == 2) {
+    right = right + 1
+  }
+  if (countOwner(items, "marco") == 1) {
+    right = right + 1
+  }
+  if (countOwner(items, "dana") == 1) {
+    right = right + 1
+  }
+  const owners = map(items) as item { return item.owner }
+  return outcome(right / 4, "${items.length} items: ${owners.join(", ")}")
+}
+
+// ---------------------------------------------------------------------------
+// Tool use
+// ---------------------------------------------------------------------------
+
+def caseSingleTool(): CaseOutcome {
+  const answer: string = llm("What is the tracking number for order 4471?", { tools: [getOrderStatus] })
+  return outcome(scoreOf(answer.includes("ZX-9321-Q")), answer)
+}
+
+def caseToolChain(): CaseOutcome {
+  const answer: string = llm("How much does the customer with the email jreyes@example.com owe us?", {
+    tools: [getOrderStatus, lookupCustomer, getBalance, getTemperature, convertCurrency]
+  })
+  const ok = answer.includes("2,718.40") || answer.includes("2718.40") || answer.includes("2718.4")
+  return outcome(scoreOf(ok), answer)
+}
+
+// The tool's numbers contradict what the model knows about these cities. A
+// model that answers "Cairo" skipped the tool or ignored it.
+def caseTrustTool(): CaseOutcome {
+  const answer: string = llm("Using the temperature tool, which of Oslo, Lisbon, and Cairo is the warmest right now? Answer with just the city name.", {
+    tools: [getTemperature]
+  })
+  const name = answer.toLowerCase()
+  const ok = name.includes("oslo") && !name.includes("cairo") && !name.includes("lisbon")
+  return outcome(scoreOf(ok), answer)
+}
+
+// ---------------------------------------------------------------------------
+// Reasoning
+// ---------------------------------------------------------------------------
+
+type NumberAnswer = {
+  @jsonSchema({ description: "your working, step by step" })
+  reasoning: string,
+  answer: number
+}
+
+// Three boxes plus two singles costs $51. Four boxes costs $60, and twenty
+// singles costs $60. So the answer is 51.
+def caseMath(): CaseOutcome {
+  const reply: NumberAnswer! = llm("A bakery sells muffins for $3 each, or in boxes of 6 for $15. Sam needs at least 20 muffins and wants to spend as little as possible. How many dollars does Sam spend?")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const answer = reply.value.answer
+  return outcome(scoreOf(answer == 51), "${answer}")
+}
+
+type NameAnswer = {
+  @jsonSchema({ description: "your working, step by step" })
+  reasoning: string,
+  name: string
+}
+
+const PUZZLE = """
+Ana, Ben, Cy, and Dee each own exactly one pet: a cat, a dog, a fish, or a parrot.
+No two people own the same kind of pet.
+1. Ben is allergic to both fur and feathers.
+2. Dee's pet can fly.
+3. Ana does not own the dog.
+Who owns the dog?
+"""
+
+def caseLogic(): CaseOutcome {
+  const reply: NameAnswer! = llm(PUZZLE)
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const name = reply.value.name
+  return outcome(scoreOf(name.toLowerCase().includes("cy")), name)
+}
+
+// ---------------------------------------------------------------------------
+// Instruction following
+// ---------------------------------------------------------------------------
+
+def caseFormat(): CaseOutcome {
+  const answer: string = llm("List exactly 4 fruits. Put each fruit on its own line, all lowercase, with no numbering, bullets, punctuation, or any other text.")
+  const lines = filter(answer.trim().split("\n")) as l { return l.trim() != "" }
+  const clean = every(lines) as l { return l == l.toLowerCase() && !hasAnyChar(l, "-*.,:;0123456789") }
+  return outcome(scoreOf(lines.length == 4 && clean), lines.join(" / "))
+}
+
+// Models see tokens, not letters, so this is hard for most of them.
+def caseLipogram(): CaseOutcome {
+  const answer: string = llm("Rewrite this sentence without using the letter e anywhere, in upper or lower case. Keep the meaning. Output only the new sentence.\n\nThe weather was terrible yesterday, so we stayed inside and read books.")
+  const ok = !answer.toLowerCase().includes("e") && wordCount(answer) >= 6
+  return outcome(scoreOf(ok), answer)
+}
+
+// ---------------------------------------------------------------------------
+// Context
+// ---------------------------------------------------------------------------
+
+// The three calls share one thread, so the third can see the first. The fact
+// is harmless on purpose: an earlier version used a locker code, and one
+// model refused to repeat it back, which tested safety tuning, not memory.
+def caseMultiTurn(): CaseOutcome {
+  const first: string = llm("Remember this for later: the code name for our new project is Bramble-7. Reply with just the word noted.")
+  const second: string = llm("What is the capital of Australia? Answer in one word.")
+  const third: string = llm("What is the code name for our new project? Reply with just the code name.")
+  return outcome(scoreOf(third.includes("Bramble-7")), third)
+}
+
+def buildHaystack(lines: number): string {
+  let parts: string[] = []
+  const needleAt = Math.floor(lines * 0.7)
+  for (i in range(lines)) {
+    if (i == needleAt) {
+      parts.push("Log ${i}: NOTE, the vault passphrase was changed to violet-kettle-42.")
+    } else {
+      parts.push("Log ${i}: the night shift at dock ${i} counted the crates and signed off.")
+    }
+  }
+  return parts.join("\n")
+}
+
+// Providers cache long prompts: when a request starts with the same text as
+// a recent one, they skip re-reading it, so it comes back faster and costs
+// less. This prompt would be identical in every trial, so trials 2 and 3
+// would measure the cache instead of the model. Starting it with the current
+// time makes every prompt differ from the first line. The time also differs
+// between separate benchmark runs, so a rerun cannot hit the cache either.
+def caseNeedle(lines: number): CaseOutcome {
+  const haystack = buildHaystack(lines)
+  const answer: string = llm("Log file exported at ${now()}:\n\n${haystack}\n\nWhat is the new vault passphrase? Reply with just the passphrase.")
+  return outcome(scoreOf(answer.includes("violet-kettle-42")), answer)
+}
+
+// ---------------------------------------------------------------------------
+// Classification
+// ---------------------------------------------------------------------------
+
+type Sentiment = "positive" | "negative" | "neutral"
+
+type Sentiments = {
+  @jsonSchema({ description: "one label per review, in the same order as the reviews" })
+  labels: Sentiment[]
+}
+
+const REVIEWS = """
+1. Arrived two days early and works perfectly.
+2. Oh great, another charger that dies after a week.
+3. It's a phone case. It fits the phone.
+4. I wanted to hate it, but honestly it's the best thing I bought this year.
+5. Not bad, not great. Does the job.
+6. Customer service never answered any of my three emails.
+"""
+
+const EXPECTED_SENTIMENTS: Sentiment[] = ["positive", "negative", "neutral", "positive", "neutral", "negative"]
+
+def caseClassify(): CaseOutcome {
+  const reply: Sentiments! = llm("Label the sentiment of each review as positive, negative, or neutral.\n${REVIEWS}")
+  if (isFailure(reply)) {
+    return errored(reply.error)
+  }
+  const labels = reply.value.labels
+  let right = 0
+  for (expected, i in EXPECTED_SENTIMENTS) {
+    if (i < labels.length && labels[i] == expected) {
+      right = right + 1
+    }
+  }
+  return outcome(right / EXPECTED_SENTIMENTS.length, labels.join(", "))
+}
+
+// ---------------------------------------------------------------------------
+// Running
+// ---------------------------------------------------------------------------
+
+def unknownCase(name: string): CaseOutcome {
+  return outcome(0, "unknown case ${name}")
+}
+
+def runOne(caseName: string, haystackLines: number): CaseOutcome {
+  return match(caseName) {
+    "latency" => caseLatency()
+    "throughput" => caseThroughput()
+    "extract" => caseExtract()
+    "actionItems" => caseActionItems()
+    "singleTool" => caseSingleTool()
+    "toolChain" => caseToolChain()
+    "trustTool" => caseTrustTool()
+    "math" => caseMath()
+    "logic" => caseLogic()
+    "format" => caseFormat()
+    "lipogram" => caseLipogram()
+    "multiTurn" => caseMultiTurn()
+    "needle" => caseNeedle(haystackLines)
+    "classify" => caseClassify()
+    _ => unknownCase(caseName)
+  }
+}
+
+// Time, tokens, and cost are measured by reading the running totals before
+// and after the case. Each case gets a fresh thread so no case sees another
+// case's messages. If the model call fails (a timeout, a reply that does not
+// fit the schema, a local model that runs out of context), the case function
+// returns a failure, and it is recorded as an error with a score of 0.
+def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
+  const startMs = now()
+  const startCost = getCost()
+  const startTokens = getTokens()
+  let result: any = null
+  thread {
+    result = runOne(info.name, haystackLines)
+  }
+  const latencyMs = now() - startMs
+  let score = 0
+  let detail = ""
+  let error = ""
+  if (isFailure(result)) {
+    error = oneLine(result.error, 160)
+  } else {
+    score = result.score
+    detail = oneLine(result.detail)
+    error = oneLine(result.error, 160)
+  }
+  return {
+    caseName: info.name,
+    category: info.category,
+    trial: trial,
+    passed: score >= 1,
+    score: score,
+    latencyMs: latencyMs,
+    tokens: getTokens() - startTokens,
+    cost: getCost() - startCost,
+    detail: detail,
+    error: error
+  }
+}
+
+def statusMark(r: CaseResult): string {
+  if (r.error != "") {
+    return "ERR"
+  }
+  return if r.passed then "pass" else "FAIL"
+}
+
+// A local model loads into memory on its first call, which can take many
+// seconds. One untimed call before the cases keeps that load out of the
+// latency case. It also tells us which model the run is using. Its message
+// stays out of the cases, because every case starts its own empty thread.
+def warmUp(): Result {
+  const reply: string = llm("Reply with only the word OK.")
+  return success(reply)
+}
+
+def selectCases(filterText: string): CaseInfo[] {
+  if (filterText == "all") {
+    return ALL_CASES
+  }
+  const wanted = splitList(filterText)
+  const known = map(ALL_CASES) as c { return c.name }
+  for (name in wanted) {
+    if (!known.includes(name)) {
+      print("Unknown case '${name}'. Known cases: ${known.join(", ")}")
+      return []
+    }
+  }
+  return filter(ALL_CASES) as c { return wanted.includes(c.name) }
+}
+
+node main() {
+  const args = parseArgs({
+    programName: "run-model",
+    description: "Run the benchmark cases against one model and save the results as JSON. Choose the model with agency run --model or --local.",
+    flags: {
+      label: { type: "string", default: "", description: "Name for this model in the comparison table (defaults to the model name)" },
+      out: { type: "string", short: "o", default: "", description: "Where to write the results (defaults to results/<label>.json)" },
+      cases: { type: "string", short: "c", default: "all", description: "Comma-separated case names, or all" },
+      trials: { type: "number", short: "t", default: 3, description: "How many times to run each case. The comparison reports the mean and median time" },
+      haystack: { type: "number", default: 1000, description: "Lines of filler in the needle case, about 17 tokens each. Lower it for local models with a small context window" },
+      cold: { type: "boolean", description: "Skip the untimed warm-up call, so the first case includes the model's load time" },
+      list: { type: "boolean", short: "l", description: "List the cases and exit" }
+    }
+  })
+
+  if (args.flags.list) {
+    for (info in ALL_CASES) {
+      print(info.name.padEnd(14) + info.category.padEnd(16) + info.description)
+    }
+    return null
+  }
+
+  const cases = selectCases(args.flags.cases)
+  if (cases.length == 0) {
+    return null
+  }
+  const trials = args.flags.trials
+  const haystackLines = args.flags.haystack
+  const startedAt = format(now())
+
+  if (!args.flags.cold) {
+    const warm = warmUp()
+    if (isFailure(warm)) {
+      print("The warm-up call failed, so the model is probably not reachable: ${warm.error}")
+      return null
+    }
+  }
+
+  const label = if args.flags.label != "" then args.flags.label else seenModel
+  const out = if args.flags.out != "" then args.flags.out else "results/${fileSafe(label)}.json"
+  print("Running ${cases.length} cases x ${trials} trial(s) on ${label}")
+
+  let results: CaseResult[] = []
+  for (trial in range(1, trials + 1)) {
+    for (info in cases) {
+      const r = runCase(info, trial, haystackLines)
+      results.push(r)
+      const note = if r.error != "" then r.error else r.detail
+      print("[${label}] ${info.name} (trial ${trial}): ${statusMark(r)} in ${seconds(r.latencyMs)}  ${note}")
+    }
+  }
+
+  const passes = count(results) as r { return r.passed }
+  print("")
+  print("${label}: ${passes}/${results.length} passed")
+
+  const run: RunFile = {
+    label: label,
+    model: seenModel,
+    startedAt: startedAt,
+    trials: trials,
+    haystackLines: haystackLines,
+    results: results
+  }
+  // The results file is this script's own output, so the write is approved
+  // here rather than asking at the end of every run.
+  const saved = write(out, JSON.stringify(run, null, 2)) with approve
+  if (isFailure(saved)) {
+    print("Could not write ${out}: ${saved.error}")
+  } else {
+    print("Wrote ${out}")
+  }
+}

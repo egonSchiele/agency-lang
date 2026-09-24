@@ -13,13 +13,17 @@ agency run --local coder my.agency    # provider mlx, model = that directory
 agency agent --local coder
 ```
 
-The server is `mlx_lm.server`, a Python program from the `mlx-lm` package.
-`agency local serve` starts it (see "The serve command" below). By hand, it
-is:
+The server is `mlx_lm.server`, a Python program from the `mlx-lm` package,
+wrapped in a script of ours that adds structured output (see "Structured
+output" below). `agency local serve` starts it (see "The serve command"
+below). By hand, it is:
 
 ```bash
-~/mlx-env/bin/python -m mlx_lm.server --model /Volumes/models/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/7b93 --port 8080 --max-tokens 16384
+~/mlx-env/bin/python lib/cli/mlxChatServer.py --model /Volumes/models/hf/hub/models--mlx-community--Qwen3-Coder-Next-4bit/snapshots/7b93 --port 8080 --max-tokens 16384
 ```
+
+The script takes `mlx_lm.server`'s own options. Plain `python -m
+mlx_lm.server` works too, but then a typed `llm()` call gets prose back.
 
 Agency reaches it through smoltalk's built-in `mlx` provider, which speaks
 the OpenAI chat format to `http://127.0.0.1:8080/v1` by default, or to
@@ -198,6 +202,19 @@ and only the literal `"default_model"` maps to the `--model` flag. So the
 server is not exposed directly, because a typo in a model name would load a
 second model. `serve` starts one process per model on a free internal port
 and puts its own server in front.
+
+**Structured output.** `mlx_lm.server` never reads `response_format`, so
+a typed `llm()` call used to get prose back. `lib/cli/mlxChatServer.py`,
+shipped next to `localServe.js`, is `mlx_lm.server` with that field
+honoured: a request naming a JSON schema gets an `llguidance` logits
+processor that masks every token which would break the schema. A thinking
+model is left free inside its `<think>` block and held to the schema after
+it. A request with tools keeps its schema but is not constrained, because a
+tool call is not the JSON the schema describes; `smoltalk-llama-cpp` makes
+the same choice. The script's docstring explains the phases and the seams
+it patches in `mlx_lm.server`. Those seams are why `MLX_LM_VERSION` in
+`localServe.ts` pins mlx-lm, the way `MLX_AUDIO_VERSION` pins mlx-audio,
+and why `checkPython` asks for `llguidance` before serving a chat model.
 
 **The front door** (`lib/cli/mlxServer.ts`) listens on `--port`, reads
 the request body, and forwards to the process whose public name matches the

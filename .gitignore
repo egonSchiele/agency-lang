@@ -1,4 +1,5 @@
 **/dist/*
+**/agency.local.json
 **/node_modules/*
 .*
 # Re-include .github: the broad dot-rule above would otherwise silently

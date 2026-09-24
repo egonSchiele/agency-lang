@@ -180,13 +180,13 @@ Aliases work everywhere a model value is accepted: `agency local download`, `age
 
 MLX is Apple's array framework for Apple Silicon. Agency can run models through it as well as through llama.cpp. MLX models are often faster than GGUF models on a Mac, and the community publishes them at sizes llama.cpp builds rarely reach.
 
-An MLX model is not one file. It is a directory of `.safetensors` weights next to a `config.json`, the layout Hugging Face repos use. Agency does not run it in its own process. A Python program called `mlx_lm.server` loads the model, and Agency sends it requests.
+An MLX model is not one file. It is a directory of `.safetensors` weights next to a `config.json`, the layout Hugging Face repos use. Agency does not run it in its own process. A Python program called `mlx_lm.server` loads the model, and Agency sends it requests. Agency ships a small script around it that adds structured output, using the `llguidance` library, so a typed `llm()` call gets a reply that fits its type.
 
 Set up Python once:
 
 ```bash
 python3.12 -m venv ~/.agency-agent/mlx-env
-~/.agency-agent/mlx-env/bin/pip install mlx-lm
+~/.agency-agent/mlx-env/bin/pip install mlx-lm==0.31.3 llguidance==1.8.0
 ```
 
 Agency looks for that environment by default. Agency never installs Python for you. To use a different Python, pass `--python`, or set `client.mlx.python` in `agency.json`.

@@ -36,11 +36,17 @@ export type ServeOptions = {
   logPrompts?: boolean;
 };
 
-/** The argv for one `mlx_lm.server` process, after the Python path. */
-export function serveArgs(modelDir: string, internalPort: number, maxTokens: number): string[] {
+/** The argv for one chat server process, after the Python path. The
+ *  script is mlx_lm.server with structured output added; it takes
+ *  mlx_lm.server's own options. */
+export function serveArgs(
+  script: string,
+  modelDir: string,
+  internalPort: number,
+  maxTokens: number,
+): string[] {
   return [
-    "-m",
-    "mlx_lm.server",
+    script,
     "--model",
     modelDir,
     "--host",
@@ -109,7 +115,7 @@ function argsFor(
   if (model.kind === "speech") {
     return speechServeArgs(speechServerScript(), model.dir, internalPort, modelsDir);
   }
-  return serveArgs(model.dir, internalPort, maxTokens);
+  return serveArgs(chatServerScript(), model.dir, internalPort, maxTokens);
 }
 
 /** How a process is named in messages: which program, for which model. */
@@ -127,8 +133,23 @@ export function defaultMlxEnv(home: string): string {
   return path.join(home, ".agency-agent", "mlx-env");
 }
 
-/** The embedding server shipped next to this file. `make build` copies it
- *  into dist, so the path holds for a development checkout and an install. */
+/** The chat server shipped next to this file: mlx_lm.server with
+ *  `response_format` honoured. `make build` copies it into dist, so the
+ *  path holds for a development checkout and an install. */
+export function chatServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxChatServer.py");
+}
+
+/** The mlx-lm release the chat server script was written against. The
+ *  script reaches into mlx_lm.server's internals, so a new release needs
+ *  those seams checked before the pin moves. */
+export const MLX_LM_VERSION = "0.31.3";
+
+/** The llguidance release the chat server enforces schemas with. */
+export const LLGUIDANCE_VERSION = "1.8.0";
+
+/** The embedding server shipped next to this file, copied into dist like
+ *  the chat one. */
 export function embedServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxEmbedServer.py");
 }
@@ -144,22 +165,24 @@ export function speechServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxSpeechServer.py");
 }
 
-/** The Python module each kind of process imports. */
-const MODULE_FOR_KIND: Record<ServeKind, string> = {
-  chat: "mlx_lm",
-  embedding: "mlx_lm",
-  speech: "mlx_audio",
+/** The Python modules each kind of process imports. */
+const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
+  chat: ["mlx_lm", "llguidance"],
+  embedding: ["mlx_lm"],
+  speech: ["mlx_audio"],
 };
 
 /** What a module that will not import means. */
 const PROBLEM_FOR_MODULE: Record<string, PythonProblem> = {
   mlx_lm: "no-mlx-lm",
+  llguidance: "no-llguidance",
   mlx_audio: "no-mlx-audio",
 };
 
 /** The pip requirement that provides each module. */
 const PIP_FOR_MODULE: Record<string, string> = {
-  mlx_lm: "mlx-lm",
+  mlx_lm: `mlx-lm==${MLX_LM_VERSION}`,
+  llguidance: `llguidance==${LLGUIDANCE_VERSION}`,
   mlx_audio: `mlx-audio==${MLX_AUDIO_VERSION}`,
 };
 
@@ -208,7 +231,7 @@ export function notServedMessage(served: string[], requested: string): string {
   );
 }
 
-export type PythonProblem = "missing" | "no-mlx-lm" | "no-mlx-audio";
+export type PythonProblem = "missing" | "no-mlx-lm" | "no-llguidance" | "no-mlx-audio";
 
 /** What to print when the chosen Python is not there, or cannot import a
  *  module the planned kinds need. The venv commands create the default
@@ -222,14 +245,16 @@ export function pythonMissingMessage(
 ): string {
   const venv = defaultMlxEnv(home);
   const pip = path.join(venv, "bin", "pip");
-  if (problem === "no-mlx-audio") {
+  if (problem === "no-mlx-audio" || problem === "no-llguidance") {
+    const module = problem === "no-mlx-audio" ? "mlx_audio" : "llguidance";
+    const requirement = PIP_FOR_MODULE[module];
     return [
-      `${python} cannot import mlx_audio.`,
+      `${python} cannot import ${module}.`,
       "Agency does not install Python. Install it once:",
       "",
-      `  ${pip} install mlx-audio==${MLX_AUDIO_VERSION}`,
+      `  ${pip} install ${requirement}`,
       "",
-      "Or point --python at a Python that has mlx-audio installed.",
+      `Or point --python at a Python that has ${requirement} installed.`,
     ].join("\n");
   }
   const what =
@@ -696,7 +721,7 @@ export async function runServe(
   );
   // The modules the planned kinds import, each once, in plan order.
   const modules = planned
-    .map((model) => MODULE_FOR_KIND[model.kind])
+    .flatMap((model) => MODULES_FOR_KIND[model.kind])
     .filter((module, index, all) => all.indexOf(module) === index);
   const problem = checkPython(python, deps.exec, modules);
   if (problem !== "ok") {

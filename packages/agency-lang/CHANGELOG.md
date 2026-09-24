@@ -1,3 +1,9 @@
+## Sep 24 2026 — v0.22.1
+
+### Runtime
+
+- `RunNodeResult`, `RunNodeCoreResult`, and `NodeReturnValue` are exported from `agency-lang/runtime`. Compiled `--ts` output names them in its exported node signatures and serve helpers, and without a reachable export a host project's `tsc` with `declaration` on failed with TS2742 ("cannot be named without a reference to agency-lang/dist/lib/runtime/types").
+
 ## Sep 23 2026 — v0.22.0
 
 ### Language

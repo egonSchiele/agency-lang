@@ -52,6 +52,19 @@ export type ModelInfo = {
    *  `agency local download` fetches them after the model into the same
    *  layout. The speech server finds them by repo id. */
   companions?: string[];
+  /** How the model card says to sample: the temperature, and the top-p
+   *  and top-k cut-offs on the tokens it may pick from. A call that names
+   *  no temperature gets these on a local backend (see `withLocalDefaults`).
+   *  An entry without them gets Agency's own local default. */
+  sampling?: Sampling;
+};
+
+/** Sampling settings from a model card. `temperature` is required because
+ *  a card that says anything says that; the cut-offs are optional. */
+export type Sampling = {
+  temperature: number;
+  topP?: number;
+  topK?: number;
 };
 
 /** Curated short-name → ModelInfo catalog. Permissive licenses only
@@ -80,6 +93,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Tiny model from Alibaba's current generation. Good edge-device default.",
     sha256: "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3.5-2b": {
     backend: "llama-cpp",
@@ -91,6 +105,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Most popular modern small general model. Runs on CPU comfortably.",
     sha256: "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3.5-4b": {
     backend: "llama-cpp",
@@ -102,6 +117,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Strong multilingual small general workhorse from Alibaba.",
     sha256: "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "gemma-4-e2b": {
     backend: "llama-cpp",
@@ -113,6 +129,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Smallest Gemma 4 for phones and thin laptops.",
     sha256: "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "gemma-4-e4b": {
     backend: "llama-cpp",
@@ -125,6 +142,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Google's compact Gemma 4 (4.5B effective). ~5 GB, laptop-friendly multimodal model.",
     sha256: "85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "granite-4.1-8b": {
     backend: "llama-cpp",
@@ -147,6 +165,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Modern medium general model with strong tool use.",
     sha256: "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "gemma-4-12b": {
     backend: "llama-cpp",
@@ -158,6 +177,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Google's mid-size Gemma 4 dense model. Strong multilingual multimodal use.",
     sha256: "0a270ec9fe6b34f4a0d33992b6135117b484ebc4766ab76b51d4ae8c457e4c42",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "gpt-oss-20b": {
     backend: "llama-cpp",
@@ -169,6 +189,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "OpenAI's open-weights release. Balanced general model for ~16 GB machines.",
     sha256: "c27536640e410032865dc68781d80a08b98f8db5e93575919af8ccc0568aeb4f",
+    sampling: { temperature: 1.0, topP: 1.0 },
   },
   "mistral-small-3.1": {
     backend: "llama-cpp",
@@ -180,6 +201,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Mistral's general 24B base model (also Devstral's foundation). Broad utility.",
     sha256: "6d670773c3908584349d41a5048d1472226b593c881fd394e8ac196c802e81e2",
+    sampling: { temperature: 0.15 },
   },
   "mistral-small-3.2": {
     backend: "llama-cpp",
@@ -192,6 +214,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Drop-in upgrade over 3.1. Better instruction following, far fewer runaway generations.",
     sha256: "a3cc56310807ed0d145eaf9f018ccda9ae7ad8edb41ec870aa2454b0d4700b3c",
+    sampling: { temperature: 0.15 },
   },
   "qwen3.5-27b": {
     backend: "llama-cpp",
@@ -203,6 +226,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Modern dense general 27B. The practical ceiling for most workstations.",
     sha256: "84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "gemma-4-26b-a4b": {
     backend: "llama-cpp",
@@ -214,6 +238,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Google's Gemma 4 MoE (3.8B active). Fast yet capable multimodal model.",
     sha256: "f2c28b3dc4776931ac6f879e11f203dec637ea0f14267a86ec8f6165f63f293f",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "gemma-4-31b": {
     backend: "llama-cpp",
@@ -225,6 +250,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Largest dense Gemma 4. Top Gemma quality for high-RAM workstations.",
     sha256: "38bd64c852c4b460434cc7162fa9bdcf242faf86502581a754cb72956bb17f84",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "qwen3.5-35b-a3b": {
     backend: "llama-cpp",
@@ -236,6 +262,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Qwen's general MoE (3B active). 27B-class quality at 9B speed, needs ~32 GB RAM.",
     sha256: "3b46d1066bc91cc2d613e3bc22ce691dd77e6f0d33c9060690d24ce6de494375",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "deepseek-r1-distill-llama-8b": {
     backend: "llama-cpp",
@@ -247,6 +274,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "mit",
     description: "Chain-of-thought distill into Llama-8B. Best small reasoning model.",
     sha256: "0addb1339a82385bcd973186cd80d18dcc71885d45eabd899781a118d03827d9",
+    sampling: { temperature: 0.6, topP: 0.95 },
   },
   "deepseek-r1-0528-qwen3-8b": {
     backend: "llama-cpp",
@@ -258,6 +286,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "mit",
     description: "DeepSeek's newer R1 distill onto Qwen3-8B. Supersedes the Llama-8B distill.",
     sha256: "a86349a4180c4e6bb43f874c29c404fa2be3f90b15509bd6d86f697dba724ec1",
+    sampling: { temperature: 0.6, topP: 0.95, topK: 20 },
   },
   "phi-4-reasoning": {
     backend: "llama-cpp",
@@ -270,6 +299,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Microsoft's reasoning-tuned 14B. Competitive with much larger models on math/logic.",
     sha256: "960d3870b218f91116c55bf81dc313e6cdbce31b1047bb2bc8bc7ea47899b032",
+    sampling: { temperature: 0.8, topP: 0.95, topK: 50 },
   },
   "magistral-small-2509": {
     backend: "llama-cpp",
@@ -282,6 +312,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Mistral's reasoning model. The strongest chain-of-thought that still fits ~16 GB.",
     sha256: "6d3e5f2a83ed9d64bd3382fb03be2f6e0bc7596a9de16e107bf22f959891945b",
+    sampling: { temperature: 0.7, topP: 0.95 },
   },
   "devstral-small-2507": {
     backend: "llama-cpp",
@@ -293,6 +324,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Mistral's official coding-agent GGUF.",
     sha256: "1bcc2b1b7b7ea3168ba2dbe782432c464f2240598bd193930122c41b117c1796",
+    sampling: { temperature: 0.15 },
   },
   "devstral-small-2-24b": {
     backend: "llama-cpp",
@@ -304,6 +336,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Mistral's current coding agent. Supersedes 2507 and reads 384K tokens at once.",
     sha256: "d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+    sampling: { temperature: 0.15 },
   },
   "qwen3-coder-30b-a3b": {
     backend: "llama-cpp",
@@ -315,6 +348,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description: "Qwen's MoE coder (3.3B active). Strong agentic coding model.",
     sha256: "fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+    sampling: { temperature: 0.7, topP: 0.8, topK: 20 },
   },
   "nomic-embed-text": {
     backend: "llama-cpp",
@@ -337,6 +371,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Qwen's agentic coder with 3B active. Fast enough to be a daily driver on 64 GB.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 40 },
   },
   "qwen3-coder-30b-a3b-mlx": {
     backend: "mlx",
@@ -347,6 +382,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3-coder-30b-a3b. Small, fast agentic coder.",
+    sampling: { temperature: 0.7, topP: 0.8, topK: 20 },
   },
   "qwen3-235b-a22b-2507-mlx": {
     backend: "mlx",
@@ -358,6 +394,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "Top open-weight model on the EQ-Bench creative writing leaderboard. Needs about 140 GB of memory.",
+    sampling: { temperature: 0.7, topP: 0.8, topK: 20 },
   },
   "gemma-4-31b-mlx": {
     backend: "mlx",
@@ -368,6 +405,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Google's dense 31B. The best prose writer at its size.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "qwen3.8-27b-mlx": {
     backend: "mlx",
@@ -379,6 +417,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "Alibaba's current 27B, 89 on GPQA Diamond. Multimodal. The research and science default.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "gpt-oss-120b-mlx": {
     backend: "mlx",
@@ -390,6 +429,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "OpenAI's open reasoning model with adjustable effort. Strong on math and science, weaker on code.",
+    sampling: { temperature: 1.0, topP: 1.0 },
   },
   "qwen3.6-40b-deckard-uncensored-mlx": {
     backend: "mlx",
@@ -401,6 +441,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "Heretic-uncensored Qwen3.6, expanded to 40B and further trained. Beats the base 27B on 6 of 7 benchmarks.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3.8-27b-uncensored-mlx": {
     backend: "mlx",
@@ -411,6 +452,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Qwen3.8-27B with refusals removed. Text-only.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "gemma-4-31b-uncensored-mlx": {
     backend: "mlx",
@@ -421,6 +463,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Gemma 4 31B with refusals removed by Heretic. Text-only.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "qwen3-0.6b-mlx": {
     backend: "mlx",
@@ -432,6 +475,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "Qwen3's smallest. The draft model for the Qwen3 family: pass it to agency local serve --draft for qwen3-235b-a22b-2507-mlx or qwen3-coder-30b-a3b-mlx.",
+    sampling: { temperature: 0.6, topP: 0.95, topK: 20 },
   },
   "qwen3.5-0.8b-mlx": {
     backend: "mlx",
@@ -442,6 +486,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-0.8b. The smallest Qwen3.5 that runs on the server.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3.5-2b-mlx": {
     backend: "mlx",
@@ -453,6 +498,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "The MLX build of qwen3.5-2b. Loads in seconds; the quickest way to try the server.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3.5-4b-mlx": {
     backend: "mlx",
@@ -463,6 +509,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-4b. Small general model for a laptop.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3.5-9b-mlx": {
     backend: "mlx",
@@ -473,6 +520,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-9b. The general model for a 16 to 24 GB Mac.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "gpt-oss-20b-mlx": {
     backend: "mlx",
@@ -484,6 +532,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "The MLX build of gpt-oss-20b. OpenAI's small open model with adjustable reasoning effort; fits a 24 GB Mac.",
+    sampling: { temperature: 1.0, topP: 1.0 },
   },
   "gemma-4-26b-a4b-mlx": {
     backend: "mlx",
@@ -495,6 +544,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "The MLX build of gemma-4-26b-a4b. Gemma 4's MoE, 3.8B active: 12B speed with 27B quality on a 32 GB Mac.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 64 },
   },
   "qwen3.5-27b-mlx": {
     backend: "mlx",
@@ -505,6 +555,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-27b. Dense general model for a 32 GB or larger Mac.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3.5-35b-a3b-mlx": {
     backend: "mlx",
@@ -516,6 +567,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "The MLX build of qwen3.5-35b-a3b. Qwen's general MoE, 3B active: fast on a 36 GB or larger Mac.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
   "qwen3-embedding-4b-mlx": {
     backend: "mlx",
@@ -564,3 +616,30 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
       "Qwen3-TTS with no preset voices. Describe the voice and the emotion in instructions.",
   },
 };
+
+/** The sampling a model card asks for, by the name a local call carries:
+ *  an MLX repo id (`mlx-community/Qwen3.5-9B-4bit`, what the server is
+ *  asked for) or the path of a GGUF file downloaded from the catalog.
+ *  Undefined for a model the catalog does not know, or one whose entry
+ *  names no sampling. */
+export function localSamplingFor(model: string): Sampling | undefined {
+  return Object.values(CURATED_LOCAL_MODELS).find((entry) => servesAs(entry.uri, model))
+    ?.sampling;
+}
+
+/** Whether a catalog URI is the model a local call names. An `mlx:` URI
+ *  names the repo the server serves, with any pinned revision dropped. An
+ *  `hf:` URI names a GGUF file that node-llama-cpp saves as
+ *  `hf_<owner>_<repo without -GGUF>.<quant>.gguf`. */
+function servesAs(uri: string, model: string): boolean {
+  if (uri.startsWith("mlx:")) {
+    return uri.slice("mlx:".length).split("@")[0] === model;
+  }
+  const gguf = /^hf:([^/]+)\/([^:]+):([^:]+)$/.exec(uri);
+  if (gguf === null) {
+    return false;
+  }
+  const file = `hf_${gguf[1]}_${gguf[2].replace(/-GGUF$/i, "")}.${gguf[3]}.gguf`;
+  return model === file || model.endsWith(`/${file}`);
+}
+

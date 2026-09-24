@@ -115,6 +115,100 @@ describe("withLocalDefaults", () => {
     ).toBe(0.5);
   });
 
+  it("samples a catalog model the way its card asks, on both backends", () => {
+    // Qwen3.5's card: temperature 1.0, top-p 0.95, top-k 20.
+    expect(
+      withLocalDefaults({ provider: "mlx", model: "mlx-community/Qwen3.5-9B-4bit" }),
+    ).toEqual({
+      provider: "mlx",
+      model: "mlx-community/Qwen3.5-9B-4bit",
+      temperature: 1.0,
+      rawAttributes: { temperature: 1.0, top_p: 0.95, top_k: 20 },
+    });
+    expect(
+      withLocalDefaults({ model: "/models/hf_unsloth_Qwen3.5-2B.Q4_K_M.gguf" }),
+    ).toEqual({
+      model: "/models/hf_unsloth_Qwen3.5-2B.Q4_K_M.gguf",
+      temperature: 1.0,
+      metadata: undefined,
+      rawAttributes: { topP: 0.95, topK: 20 },
+    });
+    // Mistral Small's card names a temperature and no cut-offs.
+    expect(
+      withLocalDefaults({
+        model: "/models/hf_unsloth_Mistral-Small-3.2-24B-Instruct-2503.Q4_K_M.gguf",
+      }).rawAttributes,
+    ).toBeUndefined();
+  });
+
+  it("lets the call's own sampling win over the card's", () => {
+    expect(
+      withLocalDefaults({
+        provider: "mlx",
+        model: "mlx-community/Qwen3.5-9B-4bit",
+        temperature: 0.2,
+        rawAttributes: { top_k: 5 },
+      }).rawAttributes,
+    ).toEqual({ top_k: 5, temperature: 0.2, top_p: 0.95 });
+    expect(
+      withLocalDefaults({
+        model: "/models/hf_unsloth_Qwen3.5-2B.Q4_K_M.gguf",
+        rawAttributes: { topK: 5 },
+      }).rawAttributes,
+    ).toEqual({ topK: 5, topP: 0.95 });
+  });
+
+  it("keeps a drafted catalog model greedy", () => {
+    expect(
+      withLocalDefaults({
+        model: "/models/hf_unsloth_Qwen3.5-9B.Q4_K_M.gguf",
+        metadata: { llamaCppDraftModel: "/models/hf_unsloth_Qwen3.5-0.8B.Q4_K_M.gguf" },
+      }).temperature,
+    ).toBe(0);
+  });
+
+  it("sends the MLX server a call's reply limits, and keeps them from everyone else", () => {
+    expect(
+      withLocalDefaults({
+        provider: "mlx",
+        replyLimits: { hedgeLimit: 30, repeatLimit: 0, limitAnswers: true },
+      }),
+    ).toEqual({
+      provider: "mlx",
+      temperature: 0.7,
+      rawAttributes: {
+        temperature: 0.7,
+        top_p: 0.95,
+        hedge_limit: 30,
+        repeat_limit: 0,
+        limit_answers: true,
+      },
+    });
+    expect(
+      withLocalDefaults({ provider: "mlx", replyLimits: { repeatLimit: 0 } }).rawAttributes,
+    ).toEqual({ temperature: 0.7, top_p: 0.95, repeat_limit: 0 });
+    expect(withLocalDefaults({ provider: "llama-cpp", replyLimits: { repeatLimit: 0 } })).toEqual({
+      provider: "llama-cpp",
+      temperature: 0.7,
+      metadata: undefined,
+    });
+    expect(withLocalDefaults({ provider: "anthropic", replyLimits: { repeatLimit: 0 } })).toEqual({
+      provider: "anthropic",
+    });
+  });
+
+  it("drops a chat wrapper, like a draft, from a call that names another model than the run's", () => {
+    const metadata = { llamaCppChatWrapper: "qwen", llamaCppContextSize: 8192 };
+    expect(
+      withLocalDefaults({ provider: "llama-cpp", model: "/m/big.gguf", metadata }, "/m/big.gguf")
+        .metadata,
+    ).toEqual(metadata);
+    expect(
+      withLocalDefaults({ provider: "llama-cpp", model: "/m/other.gguf", metadata }, "/m/big.gguf")
+        .metadata,
+    ).toEqual({ llamaCppContextSize: 8192 });
+  });
+
   it("drops a draft model from a call that names another model than the run's", () => {
     const metadata = { llamaCppDraftModel: "/m/small.gguf", llamaCppContextSize: 8192 };
     const forTheRunsModel = withLocalDefaults(

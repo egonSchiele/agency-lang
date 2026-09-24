@@ -210,6 +210,19 @@ describe("applyCliFlags", () => {
     expect(replaced.client?.defaultModel).toBe("/m/other.gguf");
   });
 
+  it("drops a chat wrapper meant for the model agency.json named when the flag replaces it", () => {
+    const replaced = applyCliFlags(
+      { client: { llamaCpp: { chatWrapper: "qwen", draftModel: "/m/small.gguf" } } } as any,
+      { model: { model: "/m/other.gguf", explicitProvider: "llama-cpp", draftModel: "/m/tiny.gguf" } },
+    );
+    expect(replaced.client?.llamaCpp).toEqual({ draftModel: "/m/tiny.gguf" });
+    const untouched = applyCliFlags(
+      { client: { llamaCpp: { chatWrapper: "qwen" } } } as any,
+      { trace: "out.trace" },
+    );
+    expect(untouched.client?.llamaCpp?.chatWrapper).toBe("qwen");
+  });
+
   it("--trace <file> sets trace + traceFile", () => {
     const out = applyCliFlags({}, { trace: "out.trace" });
     expect(out.trace).toBe(true);

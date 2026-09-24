@@ -279,7 +279,14 @@ The `mlx:` prefix is the spelling that always works. You need it for a model you
 
 ### Differences from GGUF models
 
-The table at the end of [What is different about a local model](#llamacpp-and-the-mlx-server-side-by-side) sets the two backends side by side. One difference is not in it: the agent's memory feature stays off on the MLX server, because `mlx_lm.server` has no endpoint for embeddings.
+The table at the end of [What is different about a local model](#llamacpp-and-the-mlx-server-side-by-side) sets the two backends side by side. One difference is not in it: the agent's memory feature needs an embedding model, and a chat server does not serve one unless you ask. Add `--embedding` when you start it, and name that model for the agent:
+
+```bash
+agency local serve qwen3.5-27b-mlx --embedding qwen3-embedding-4b-mlx
+agency agent --local qwen3.5-27b-mlx --model embedding=mlx/qwen3-embedding-4b-mlx
+```
+
+In `agency.json`, the same thing is `embeddings: { model, provider: "mlx" }` under the memory settings.
 
 ## What is different about a local model
 
@@ -289,7 +296,7 @@ A hosted provider makes a dozen small choices for you, and you never see them. A
 
 Both local backends pick the single likeliest token at every step when nothing tells them otherwise. This is called greedy decoding. A greedy model writes the same reply for the same prompt every time, to the token, and takes the same time doing it. Every hosted provider samples instead, so its replies vary from call to call.
 
-Agency makes a local model sample too when a call names no temperature: at 0.7, with a top-p of 0.95, which is what the Qwen and Gemma model cards ask for. Hosted providers sample at 1.0, but on top of samplers of their own; on the MLX server, 1.0 with nothing else is sampling from the whole distribution, which a small 4-bit model turns into noise. Ask for the repeatable behaviour when you want it:
+Agency makes a local model sample too when a call names no temperature, with the settings its model card asks for. Every catalog entry carries its card's numbers: Qwen3.5 asks for a temperature of 1.0 with a top-p of 0.95 and a top-k of 20, Gemma 4 for 1.0 with a top-k of 64, Mistral Small for 0.15, and so on. A model the catalog does not know gets 0.7 with a top-p of 0.95. The MLX server is sent all of it in the request. llama.cpp is sent the temperature and the cut-offs under node-llama-cpp's own names, and applies its own top-p of 0.95 and top-k of 40 to a model with no card of its own. Hosted providers sample at 1.0, but on top of samplers of their own; on the MLX server, 1.0 with nothing else is sampling from the whole distribution, which a small 4-bit model turns into noise. Ask for the repeatable behaviour when you want it:
 
 ```ts
 import { setLlmOptions } from "std::llm"
@@ -326,7 +333,7 @@ After the budget, the thinking block is closed for the model and it has to answe
 | medium | 8192               |
 | high   | 16384              |
 
-Both backends honour all of this. On the MLX server the switch goes to the chat template and the budget to the server's watcher. On llama.cpp the switch goes to the chat wrapper, for the models whose wrapper has one, and the budget to llama.cpp itself. Which models the switch reaches depends on their template: Qwen and Gemma 4 have one, gpt-oss takes a `reasoning_effort` instead (which `reasoningEffort` sends), and DeepSeek has none, so on DeepSeek off means a budget of zero and the block closes as soon as it opens. The budget is always held under `maxTokens` by enough to answer in.
+Both backends honour all of this. On the MLX server the switch goes to the chat template and the budget to the server's watcher. On llama.cpp the switch goes to the chat wrapper, for the models whose wrapper has one, and the budget to llama.cpp itself. node-llama-cpp picks that wrapper by reading the model's template, and for a model it gets wrong, such as a fine-tune with a changed template, the switch reaches nothing. Name the wrapper yourself in `agency.json` with `client.llamaCpp.chatWrapper`, using node-llama-cpp's name for it (`qwen`, `gemma4`, `harmony`, `chatML`). Which models the switch reaches depends on their template: Qwen and Gemma 4 have one, gpt-oss takes a `reasoning_effort` instead (which `reasoningEffort` sends), and DeepSeek has none, so on DeepSeek off means a budget of zero and the block closes as soon as it opens. The budget is always held under `maxTokens` by enough to answer in.
 
 ### Replies that go in circles
 
@@ -340,12 +347,25 @@ The MLX server watches every reply for three signs of this:
 
 The last two watch the thinking only, unless you ask. An answer repeats itself for honest reasons: a refrain, a table with a repeated row, three similar functions in a file. Thinking rarely does. `--limit-answers` on `agency local serve`, or `limit_answers: true` on a request, watches answers too.
 
-When the server sees a sign, it cuts the reply short in the way that leaves the most usable result. A thinking block is closed, so the answer can follow. A reply that must fit a type has the text field it is writing closed, so the rest of the type can still be filled in. A plain reply ends where it is. An answer cut short comes back with a stop reason of `length`, the same as one that hit `maxTokens`, so your program can tell it from a complete one; closing the thinking is not a cut, because the answer still comes. The server prints a line saying which limit tripped and what it did.
+When the server sees a sign, it cuts the reply short in the way that leaves the most usable result. A thinking block is closed, so the answer can follow. A reply that must fit a type has the text field it is writing closed, so the rest of the type can still be filled in. A plain reply ends where it is. An answer cut short is reported to the client with a stop reason of `length`, the same as one that hit `maxTokens`; closing the thinking is not a cut, because the answer still comes. An Agency program does not see the stop reason, so a cut typed reply that still fits its type succeeds like any other. The server's log is where to look: it prints a line saying which limit tripped and what it did.
 
 You can change the limits when you start the server. `0` turns one off:
 
 ```bash
 agency local serve mlx:mlx-community/Qwen3.5-2B-4bit --hedge-limit 20 --repeat-limit 0
+```
+
+A program can change them for its own calls, which matters when an answer repeats itself on purpose. `replyLimits` takes the same three settings; a field left out keeps the server's:
+
+```ts
+import { setLlmOptions } from "std::llm"
+
+// A song's chorus repeats, and that is not a loop.
+setLlmOptions({ replyLimits: { repeatLimit: 0 } })
+const lyrics: string = llm("Write a song with a chorus that repeats after every verse.")
+
+// A single careful call may hedge more than twelve times honestly.
+const proof: string = llm(problem, { replyLimits: { hedgeLimit: 30 } })
 ```
 
 llama.cpp has no watcher. There, a reply that goes in circles runs to `maxTokens` or to the call's timeout, whichever comes first.
@@ -382,13 +402,36 @@ None of this shrinks on its own. A long run on a large model grows until the GPU
 Execution of the command buffer was aborted due to an error during execution. Insufficient Memory
 ```
 
-Agency limits the server to a sixteenth of the machine's memory for attention state, and the server drops its oldest prompts to stay under. Watch the `Prompt Cache` lines the server prints to see how much it holds. Leave headroom when you pick a model. A 123GB model on a 256GB Mac leaves 17GB for everything else once the GPU has its share.
+Agency limits the server to a sixteenth of the machine's memory for attention state, and the server drops its oldest prompts to stay under. Watch the `Prompt Cache` lines the server prints to see how much it holds.
+
+The GPU does not get the whole machine. macOS gives it a working set below the total, and keeps the rest for everything else: on a 256GB Mac the GPU's share is about 223GB, so a 132GB model leaves about 90GB of that share for attention state and the prompt cache. The share can be raised, which takes memory from the rest of the machine until the next reboot:
+
+```bash
+sudo sysctl iogpu.wired_limit_mb=240000
+```
+
+Do this only when a model almost fits and nothing else on the machine matters while it runs.
+
+### Which model fits the machine
+
+A model's name says how its weights are stored. `4bit` on an MLX model and `Q4_K_M` on a GGUF one both mean about four bits per weight instead of sixteen, which is a quarter of the size for a small loss in quality; `8bit` and `Q8_0` are half the size for almost none. The catalog picks 4-bit builds, and at 4 bits a model takes about 0.6GB per billion parameters: 27B is 16GB, 31B is 18GB, 235B is 132GB. The weights should take at most about half the machine's memory, so the context, the prompt cache, and the rest of the machine have the other half. A mixture-of-experts model (the `A3B` in `qwen3.5-35b-a3b`) needs memory for all of its parameters and runs at the speed of its active ones.
+
+| Mac    | Fits comfortably                                       |
+| ------ | ------------------------------------------------------ |
+| 24GB   | `qwen3.5-9b` (6GB); `gpt-oss-20b` (12GB) with little room |
+| 36GB   | `qwen3.5-27b` (16GB), `gemma-4-26b-a4b` (15GB)          |
+| 64GB   | `gemma-4-31b` (18GB), `qwen3.5-35b-a3b` (20GB)          |
+| 256GB  | `qwen3-235b-a22b-2507` (132GB)                          |
+
+`agency local alias list` shows every catalog model's size, `agency local list` the size of each one you have downloaded, and `agency local serve` warns when the models it is starting come near the machine's memory.
 
 ### Prompts cost time up front, replies cost time per token
 
 A reply takes two kinds of time. Reading the prompt is one batch of work that grows with the prompt's length. A 22,000-token prompt took 28 seconds on a 235B model before the first token came out. Writing the reply then costs a fixed time per token. That time is set by how fast the machine can read the model's weights, not by how much arithmetic it does. That is why a 235B model with 22B active parameters and a dense 31B model both write at about 40 tokens per second on the same Mac.
 
 Two things follow. A long prompt is expensive even when the reply is one word, so keep the long prompts to the calls that need them. And the biggest speed-up for a thinking model is not a faster machine, it is `thinking: { enabled: false }` on the calls that do not need it.
+
+The MLX server also keeps the attention state of its recent prompts and matches a new prompt against them by their longest shared start. A call whose prompt begins the same way as a recent one skips reading that beginning. So put the part that stays the same first, the system prompt and the document, and the part that changes last, the question. Ten questions about one 22,000-token document then pay the 28 seconds once. A conversation gets this for free, because each turn starts with all the turns before it.
 
 ### Speculative decoding
 
@@ -411,13 +454,13 @@ The MLX server reads a long prompt in chunks. A bigger chunk keeps the GPU busie
 
 ### Several calls at once
 
-llama.cpp runs one reply at a time inside your process, and other calls wait their turn. The MLX server batches replies, so calls made at the same time share the GPU and finish sooner together than one after another. Each call still takes about as long as it would alone, so this helps a program with independent calls, not a single slow one. Make the calls concurrent the way you would any Agency work, with [`fork` or `parallel`](/guide/concurrency).
+llama.cpp runs one reply at a time inside your process, and other calls wait their turn. The MLX server batches replies: between one token and the next it looks for new requests, and a request that arrived joins the batch at the next token, so a call never waits for another to finish. Calls that overlap share the GPU and finish sooner together than one after another. Each call still takes about as long as it would alone, so this helps a program with independent calls, not a single slow one. A server with a draft model is the exception; it takes one request at a time. Make the calls concurrent the way you would any Agency work, with [`fork` or `parallel`](/guide/concurrency).
 
 Time to first token is not measured separately by Agency yet. A hosted model's latency includes the network round trip and the provider's queue, and a local model's does not, so a comparison of latencies alone flatters the local model on short replies.
 
 ### A type shapes the reply, but cannot make it right
 
-A typed `llm()` call on a local model gets a reply that fits the type, because a grammar forbids every token that would break it. Two things are worth knowing. A call that passes tools is not constrained, since a tool call is not JSON. And the grammar shapes the reply without judging it. Asked for a date as a string, a model can write `March 14, 2026` where you wanted `2026-03-14`, and the grammar is satisfied. Say the format you want in the prompt or in the field's description.
+A typed `llm()` call on a local model gets a reply that fits the type, because a grammar forbids every token that would break it. On a thinking model the grammar waits: the model thinks freely inside its thinking block, and only what comes after it has to fit the type. Two things are worth knowing. A call that passes tools is not constrained, since a tool call is not JSON. And the grammar shapes the reply without judging it. Asked for a date as a string, a model can write `March 14, 2026` where you wanted `2026-03-14`, and the grammar is satisfied. Say the format you want in the prompt or in the field's description.
 
 ### The context window is smaller than you think
 

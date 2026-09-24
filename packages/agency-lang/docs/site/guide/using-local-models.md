@@ -399,9 +399,11 @@ agency local serve mlx:mlx-community/Qwen3-235B-A22B-Instruct-2507-4bit --draft 
 agency run --local qwen3.5-4b --draft qwen3.5-2b hello.agency
 ```
 
-The first line drafts for an MLX model, the second for a GGUF one. The draft has to share the main model's tokenizer, which in practice means the smallest member of the same family, and both backends check the pair when the draft loads and refuse one that does not match. `--draft-tokens` on the server sets how many tokens the draft guesses at a time, four by default. A draft turns off batching on the MLX server, so calls run one at a time there while it is in use.
+The first line drafts for an MLX model, the second for a GGUF one. The draft has to share the main model's tokenizer, which in practice means the smallest member of the same family, and both backends check the pair when the draft loads and refuse one that does not match. `--draft-tokens` on the server sets how many tokens the draft guesses at a time, four by default. A draft turns off batching on the MLX server, so calls run one at a time there while it is in use. The MLX server also refuses a draft for a model whose attention cache cannot give tokens back, which is every Qwen3.5 and Qwen3-Next model; Qwen3, gpt-oss, and Gemma 4 can take one.
 
-Whether a draft pays off depends on the pair and the machine, so measure it: run the throughput case of the benchmark with and without the draft and compare the output speed. A draft that is too large gains little, because checking its guesses costs almost what it saves.
+On llama.cpp the draft runs greedy: node-llama-cpp's draft predictor never returns when the main model samples, so a drafted GGUF model gets temperature 0 unless the call names one, and a call that names a higher one is refused. In testing on Apple Silicon it reported no predictions used and ran slower than the model alone, so treat a llama.cpp draft as an experiment, not a speed-up.
+
+Whether a draft pays off depends on the pair and the machine, so measure it: run the throughput case of the benchmark with and without the draft and compare the output speed. A draft that is too large gains little, because checking its guesses costs almost what it saves. On the 235B with a 0.6B draft, prose came out slower with the draft than without.
 
 ### Long prompts and the machine's memory
 
@@ -431,7 +433,7 @@ The prompt, the thinking, and the answer all share one context window. llama.cpp
 | Abandoned reply        | stopped at once              | stopped within half a second           |
 | Thinking on, off, budget | yes, where the model's wrapper has a switch | yes                     |
 | Watches for loops      | no                           | yes                                    |
-| Speculative decoding   | `agency run --draft`         | `agency local serve --draft`           |
+| Speculative decoding   | `agency run --draft`, greedy only | `agency local serve --draft`      |
 | Output cap             | 16,384 unless the call says  | the server's `--max-tokens`            |
 | Context window         | 32,768 tokens                | the model's own                        |
 | Where it runs          | any machine                  | Apple Silicon only                     |

@@ -114,10 +114,16 @@ export function withLocalDefaults(
   if (provider === undefined) {
     return config;
   }
-  const temperature = config.temperature ?? DEFAULT_LOCAL_TEMPERATURE;
   if (provider === "llama-cpp") {
-    return { ...config, temperature, metadata: draftScopedTo(config, defaultModel) };
+    const metadata = draftScopedTo(config, defaultModel);
+    // A drafted model runs greedy unless the call says otherwise:
+    // node-llama-cpp's draft predictor only works at temperature 0, and
+    // the plugin refuses a call that samples on a drafted model.
+    const drafted = metadata?.llamaCppDraftModel !== undefined;
+    const temperature = config.temperature ?? (drafted ? 0 : DEFAULT_LOCAL_TEMPERATURE);
+    return { ...config, temperature, metadata };
   }
+  const temperature = config.temperature ?? DEFAULT_LOCAL_TEMPERATURE;
   const sampling = { ...(config.rawAttributes ?? {}) };
   if (sampling.temperature === undefined) {
     sampling.temperature = temperature;

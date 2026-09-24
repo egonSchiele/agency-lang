@@ -92,12 +92,16 @@ Do not run the whole suite for a setting. Thinking, a draft model, and the prefi
 # Thinking off everywhere, against the default policy.
 BENCH_ARGS="--cases throughput,needle,reasoning --thinking off" ./run-all.sh local:qwen3.5-27b
 
-# A draft model for a GGUF model. The draft must be the same family.
+# A draft model for a GGUF model. The draft must be the same family, and the
+# run is greedy: node-llama-cpp's draft predictor only works at temperature 0.
+# In testing it gave no speed-up; the MLX server is where a draft can pay.
 DRAFT=qwen3.5-0.8b BENCH_ARGS="--cases throughput,needle,reasoning" ./run-all.sh local:qwen3.5-27b
 
 # A draft model for an MLX model: the server takes it, and DRAFT records it.
-agency local serve qwen3.5-27b-mlx --draft qwen3.5-0.8b-mlx
-DRAFT=qwen3.5-0.8b-mlx BENCH_ARGS="--cases throughput,needle,reasoning" ./run-all.sh local:qwen3.5-27b-mlx
+# Qwen3.5 models cannot take one (their attention cache cannot be rewound);
+# Qwen3, gpt-oss, and Gemma 4 can. This pair is in the catalog and checked.
+agency local serve qwen3-235b-a22b-2507-mlx --draft qwen3-0.6b-mlx
+DRAFT=qwen3-0.6b-mlx BENCH_ARGS="--cases throughput,needle,reasoning" ./run-all.sh local:qwen3-235b-a22b-2507-mlx
 
 # A bigger prompt chunk on the MLX server. PREFILL_STEP only records it.
 agency local serve qwen3.5-27b-mlx --prefill-step 8192

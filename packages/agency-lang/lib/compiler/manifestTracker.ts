@@ -28,6 +28,10 @@ import {
 } from "./buildManifest.js";
 import type { DependencyFingerprint } from "./depFingerprint.js";
 
+/** The compile pipeline, relative to dist/lib. The build manifest's
+ *  compiler stamp covers the modules it imports. */
+export const COMPILE_PIPELINE_ENTRY = "compiler/buildSession.js";
+
 /** "incremental" consults and records the manifest; "force" recompiles
  *  everything but rewrites it (--force); "always" is internal
  *  (allowTestImports / --ts / caller-supplied importStrategy) and touches
@@ -74,17 +78,19 @@ class RealManifestTracker implements ManifestTracker {
     this.manifest = loadManifest(manifestDir);
     // The compiled compiler lives at dist/lib relative to this module
     // (dist/lib/compiler/manifestTracker.js) — works for repo dev and
-    // installed packages alike. KNOWN + load-bearing-consistent: under
-    // vitest this module runs from lib/, so distLib resolves to the source
-    // tree with ~no .js — writer and checker agree on that (empty-ish)
-    // stamp, so tests are sound. Do not "fix" one side of this.
+    // installed packages alike. The stamp covers what buildSession.js, the
+    // compile pipeline, imports. KNOWN + load-bearing-consistent: under
+    // vitest this module runs from lib/, where buildSession.js does not
+    // exist — writer and checker agree on that empty stamp, so tests are
+    // sound. Do not "fix" one side of this.
     const distLib = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    const compilePipeline = path.join(distLib, COMPILE_PIPELINE_ENTRY);
     this.ctx = {
       manifestDir,
       stdlibHash: computeStdlibHash(getStdlibDir()),
       stdlibNamesHash: computeStdlibNamesHash(getStdlibDir()),
       stdlibDir: getStdlibDir(),
-      compilerStamp: computeCompilerStamp(distLib),
+      compilerStamp: computeCompilerStamp(distLib, compilePipeline),
       configKey,
     };
   }

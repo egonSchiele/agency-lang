@@ -1,0 +1,132 @@
+import { designTool } from "std::toolbox"
+import { runDesign, cleanup, savedFiles } from "./helpers.agency"
+
+const OUT = __dirname + "/test-output/redrafts"
+const REQUEST = "{ n: number }"
+
+// The first draft exports `compute` instead of `run`, so the assembled
+// tool does not typecheck. That failure goes back to the coding agent and
+// the second draft is the one saved: the saved impl has no `compute`.
+node wrongExportGoesBackToTheCodingAgent(): boolean {
+  cleanup(OUT, "addFour")
+  const result = runDesign("addFour", OUT, ["accept"])
+  const saved = read("addFour/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/compute/)
+  }
+  cleanup(OUT, "addFour")
+  return result is success && cleanSource
+}
+
+// Four drafts in a row fail the typechecker and the fifth is clean. Drafts
+// the checker sends back have a count of their own, so all five fit in the
+// one round allowed here.
+node checkerFailuresDoNotUseUpRounds(): boolean {
+  cleanup(OUT, "addSix")
+  const result = runDesign("addSix", OUT, ["accept"], maxRounds: 1)
+  const saved = savedFiles(OUT, "addSix")
+  cleanup(OUT, "addSix")
+  return result is success && saved
+}
+
+// The first draft typechecks but declares a different Request than the
+// request text. That goes back to the coding agent, and the second
+// draft is the one saved.
+node wrongRequestGoesBackToTheCodingAgent(): boolean {
+  cleanup(OUT, "addFifteen")
+  const result = runDesign("addFifteen", OUT, ["accept"])
+  const saved = read("addFifteen/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/text/)
+  }
+  cleanup(OUT, "addFifteen")
+  return result is success && cleanSource
+}
+
+// The first draft imports a TypeScript primitive that raises no interrupt.
+// The coding agent's own typecheck accepts it; the sandboxed compile in
+// assembleTool refuses it, and the second draft is the one saved.
+node nodeImportGoesBackToTheCodingAgent(): boolean {
+  cleanup(OUT, "addThirteen")
+  const result = runDesign("addThirteen", OUT, ["accept"])
+  const saved = read("addThirteen/impl.agency", OUT) with approve
+  let cleanSource = false
+  if (saved is success(source)) {
+    cleanSource = !(source =~ re/stdlib-lib/)
+  }
+  cleanup(OUT, "addThirteen")
+  return result is success && cleanSource
+}
+
+// The toolbox's own bookkeeping raises its own effects, so a policy can
+// name them without granting writes anywhere else. Nothing it does to a
+// draft comes through as a plain std::write, std::mkdir or std::move,
+// and it reads nothing back out of staging.
+node draftRaisesOnlyToolboxEffects(): boolean {
+  cleanup(OUT, "addFifteen")
+  let generic: string[] = []
+  let sawWriteFile = false
+  let sawCreateStaging = false
+  let result: Result = failure("not run")
+  handle {
+    result = designTool(
+      name: "addFifteen",
+      purpose: "Add one to a number.",
+      request: REQUEST,
+      dir: OUT,
+      review: true,
+    )
+  } with (intr) {
+    if (intr.effect == "std::toolbox::writeFile") {
+      sawWriteFile = true
+    }
+    if (intr.effect == "std::toolbox::createStaging") {
+      sawCreateStaging = true
+    }
+    const staged = "${intr.data.dir}" =~ re/\/staging\//
+    if (intr.effect == "std::write" || intr.effect == "std::mkdir" || intr.effect == "std::move") {
+      generic.push(intr.effect)
+    }
+    if (intr.effect == "std::read" && staged) {
+      generic.push("std::read")
+    }
+    if (intr.effect == "std::toolbox::review") {
+      return approve("accept")
+    }
+    return approve()
+  }
+  cleanup(OUT, "addFifteen")
+  return result is success && sawWriteFile && sawCreateStaging && generic.length == 0
+}
+
+// A refused write is not something a new draft can fix, so designTool
+// stops after the first round instead of drafting maxRounds times. If it
+// looped, the error would read "gave up after".
+node refusedWriteStopsTheRounds(): boolean {
+  cleanup(OUT, "addFourteen")
+  let result: Result = success(null)
+  handle {
+    result = designTool(
+      name: "addFourteen",
+      purpose: "Add one.",
+      request: "{ n: number }",
+      dir: OUT,
+      review: true,
+      maxRounds: 3,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::toolbox::writeFile" => {
+        if (intr.data.filename == "impl.agency") {
+          return reject("no writes today")
+        }
+        return approve()
+      }
+      _ => approve()
+    }
+  }
+  cleanup(OUT, "addFourteen")
+  return result is failure && "${result.error}" =~ re/no writes today/ && "${result.error}" !~ re/gave up/
+}

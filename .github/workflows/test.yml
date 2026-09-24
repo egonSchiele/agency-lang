@@ -24,12 +24,17 @@ concurrency:
   cancel-in-progress: true
 
 # The test suites are split across parallel jobs to cut wall-clock time. Each
-# job is self-contained — it runs its own `pnpm install && make` (~1 min)
+# job is self-contained — it runs its own `pnpm install && make ci` (~1 min)
 # rather than sharing a build artifact, which would serialize the jobs and
-# cost about as much in upload/download as it saves. The unit, integration, and
-# agent suites used to run serially in one job, which made it the critical
-# path; they now fan out into `unit-tests`, `integration`, and `agent-tests` so
-# they run concurrently. `unit-tests` is itself split into shards.
+# cost about as much in upload/download as it saves. `make ci` skips
+# regenerating the tracked doc pages; `node23-build` runs the full `make`,
+# so the doc generators still run once per workflow. Do not cache build
+# output between runs: a poisoned cache entry saved by one run on main
+# would be restored by later runs, and nothing checks a restored dist/.
+# The unit, integration, and agent suites used to run serially in one job,
+# which made it the critical path; they now fan out into `unit-tests`,
+# `integration`, and `agent-tests` so they run concurrently. `unit-tests` is
+# itself split into shards.
 jobs:
   # `unit-tests` runs the vitest unit suite. The big agency-lang suite (~740
   # files) is split into shards that run in parallel; each shard runs one slice
@@ -72,7 +77,7 @@ jobs:
         node-version: 22.13.0
         cache: 'pnpm'
     - run: pnpm install
-    - run: make
+    - run: make ci
     # evals/agency-agent/lib/checks.test.ts grades each test's reference
     # solution with pytest and skips without it; install it so the test runs.
     - run: python3 -m pip install --user pytest==8.4.1
@@ -211,7 +216,7 @@ jobs:
         node-version: 22.x
         cache: 'pnpm'
     - run: pnpm install
-    - run: make
+    - run: make ci
     - name: Integration tests (tarball install, bundlers, CLI)
       env:
         TMPDIR: ${{ runner.temp }}
@@ -272,7 +277,7 @@ jobs:
         node-version: 22.x
         cache: 'pnpm'
     - run: pnpm install
-    - run: make
+    - run: make ci
     - name: Built-in agent tests
       working-directory: packages/agency-lang
       env:
@@ -326,7 +331,7 @@ jobs:
         node-version: 22.x
         cache: 'pnpm'
     - run: pnpm install
-    - run: make
+    - run: make ci
     - name: Agency execution tests (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
       working-directory: packages/agency-lang
       env:
@@ -425,7 +430,7 @@ jobs:
         node-version: 22.x
         cache: 'pnpm'
     - run: pnpm install
-    - run: make
+    - run: make ci
     - name: Download shard coverage
       # `merge-multiple: true` flattens every shard artifact into one dir;
       # UUID filenames guarantee no collisions.
@@ -534,7 +539,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install
-      - run: make
+      - run: make ci
       - name: Remote CLI integration test (real statelog upload)
         working-directory: packages/agency-lang
         run: node tests/integration/remote/test.mjs

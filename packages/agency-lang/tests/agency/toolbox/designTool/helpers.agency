@@ -1,0 +1,99 @@
+// Shared by the designTool test files. Each file passes its own output
+// directory, so files running in parallel never see each other's tools or
+// staging drafts.
+import { remove } from "std::fs"
+import { exists, ls } from "std::shell"
+import { designTool } from "std::toolbox"
+
+// Approve every non-review interrupt; answer the review with the scripted
+// answers in order. A null answer rejects; "bare" answers with a valueless
+// approve(). Returns designTool's result.
+export def runDesign(
+  name: string,
+  dir: string,
+  answers: any[],
+  request: string = "{ n: number }",
+  maxRounds: number = 3,
+) {
+  let reviewCount = 0
+  handle {
+    return designTool(
+      name: name,
+      purpose: "Add one to a number.",
+      request: request,
+      dir: dir,
+      review: true,
+      maxRounds: maxRounds,
+    )
+  } with (intr) {
+    return match(intr.effect) {
+      "std::toolbox::review" => {
+        const answer = answers[reviewCount]
+        reviewCount = reviewCount + 1
+        if (answer == null) {
+          return reject("cancelled by the test")
+        }
+        if (answer == "bare") {
+          return approve()
+        }
+        return approve(answer)
+      }
+      _ => approve()
+    }
+  }
+}
+
+export def cleanup(out: string, name: string) {
+  remove(out + "/${name}") with approve
+  remove(out + "/staging") with approve
+}
+
+export def savedFiles(out: string, name: string): boolean {
+  const hasImpl = exists("${name}/impl.agency", out)
+  const hasTool = exists("${name}/tool.agency", out)
+  const hasCases = exists("${name}/tool.test.json", out)
+  const hasMeta = exists("${name}/meta.json", out)
+  const staged = ls("${out}/staging") with approve
+  const stagingGone = (staged catch []).length == 0
+  return hasImpl && hasTool && hasCases && hasMeta && stagingGone
+}
+
+// The reviews a design raised, in order, so a test can read what the user
+// was shown. Filled by runDesignSeeing, read with shownReviews.
+let _reviews: any[] = []
+
+export def shownReviews(): any[] {
+  return _reviews
+}
+
+export def runDesignSeeing(
+  dir: string,
+  name: string,
+  answers: any[],
+  request: string = "{ n: number }",
+  purpose: string = "Add one to a number.",
+) {
+  _reviews = []
+  let reviewCount = 0
+  handle {
+    return designTool(
+      name: name,
+      purpose: purpose,
+      request: request,
+      dir: dir,
+      review: true,
+      maxRounds: 3,
+    )
+  } with (intr) {
+    if (intr.effect != "std::toolbox::review") {
+      return approve()
+    }
+    _reviews.push(intr.data)
+    const answer = answers[reviewCount]
+    reviewCount = reviewCount + 1
+    if (answer == null) {
+      return reject("nobody is here to review it")
+    }
+    return approve(answer)
+  }
+}

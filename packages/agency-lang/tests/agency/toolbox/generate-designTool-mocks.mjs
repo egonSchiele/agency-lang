@@ -1,9 +1,9 @@
-// Regenerates designTool.test.json. Run from packages/agency-lang:
+// Regenerates designTool/*.test.json. Run from packages/agency-lang:
 //   node tests/agency/toolbox/generate-designTool-mocks.mjs
 // The mocked drafts embed the good fixture as a string, so run this
 // whenever fixtures/tools/good/impl.agency changes; a stale copy fails the
 // coding agent's own check and silently spends the round's mocks.
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -204,4 +204,28 @@ const tests = [
   testCase("draftForAnotherRequestIsNotOfferedAgain", [...pureRound, ...modelTextRound]),
   testCase("savedToolIsForgotten", [...pureRound, ...pureRound]),
 ];
-writeFileSync(join(here, "designTool.test.json"), JSON.stringify({ tests }, null, 2) + "\n");
+// The tests are split across the files in designTool/ so the test runner,
+// which runs one file's cases one after another, can run them in parallel.
+// Each file gets the cases for the nodes it defines.
+const testsDir = join(here, "designTool");
+const unused = new Set(tests.map((test) => test.nodeName));
+for (const file of readdirSync(testsDir).filter((name) => name.endsWith(".agency"))) {
+  const source = readFileSync(join(testsDir, file), "utf8");
+  const nodeNames = [...source.matchAll(/^node (\w+)\(/gm)].map((match) => match[1]);
+  if (nodeNames.length === 0) {
+    continue;
+  }
+  const fileTests = nodeNames.map((nodeName) => {
+    const test = tests.find((candidate) => candidate.nodeName === nodeName);
+    if (!test) {
+      throw new Error(`designTool/${file} defines ${nodeName}, which has no test case here`);
+    }
+    unused.delete(nodeName);
+    return test;
+  });
+  const outFile = join(testsDir, file.replace(/\.agency$/, ".test.json"));
+  writeFileSync(outFile, JSON.stringify({ tests: fileTests }, null, 2) + "\n");
+}
+if (unused.size > 0) {
+  throw new Error(`No designTool/ file defines these nodes: ${[...unused].join(", ")}`);
+}

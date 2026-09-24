@@ -117,17 +117,13 @@ describe("withLocalDefaults", () => {
 
   it("samples a catalog model the way its card asks, on both backends", () => {
     // Qwen3.5's card: temperature 1.0, top-p 0.95, top-k 20.
-    expect(
-      withLocalDefaults({ provider: "mlx", model: "mlx-community/Qwen3.5-9B-4bit" }),
-    ).toEqual({
+    expect(withLocalDefaults({ provider: "mlx", model: "mlx-community/Qwen3.5-9B-4bit" })).toEqual({
       provider: "mlx",
       model: "mlx-community/Qwen3.5-9B-4bit",
       temperature: 1.0,
       rawAttributes: { temperature: 1.0, top_p: 0.95, top_k: 20 },
     });
-    expect(
-      withLocalDefaults({ model: "/models/hf_unsloth_Qwen3.5-2B.Q4_K_M.gguf" }),
-    ).toEqual({
+    expect(withLocalDefaults({ model: "/models/hf_unsloth_Qwen3.5-2B.Q4_K_M.gguf" })).toEqual({
       model: "/models/hf_unsloth_Qwen3.5-2B.Q4_K_M.gguf",
       temperature: 1.0,
       metadata: undefined,

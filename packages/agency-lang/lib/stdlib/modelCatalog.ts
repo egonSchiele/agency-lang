@@ -623,8 +623,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
  *  Undefined for a model the catalog does not know, or one whose entry
  *  names no sampling. */
 export function localSamplingFor(model: string): Sampling | undefined {
-  return Object.values(CURATED_LOCAL_MODELS).find((entry) => servesAs(entry.uri, model))
-    ?.sampling;
+  return Object.values(CURATED_LOCAL_MODELS).find((entry) => servesAs(entry.uri, model))?.sampling;
 }
 
 /** Whether a catalog URI is the model a local call names. An `mlx:` URI
@@ -642,4 +641,3 @@ function servesAs(uri: string, model: string): boolean {
   const file = `hf_${gguf[1]}_${gguf[2].replace(/-GGUF$/i, "")}.${gguf[3]}.gguf`;
   return model === file || model.endsWith(`/${file}`);
 }
-

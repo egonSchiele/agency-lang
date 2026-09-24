@@ -101,6 +101,20 @@ describe("withLocalDefaults", () => {
     ).toBeUndefined();
   });
 
+  it("runs a drafted llama.cpp model greedy unless the call names a temperature", () => {
+    const metadata = { llamaCppDraftModel: "/m/small.gguf" };
+    expect(
+      withLocalDefaults({ provider: "llama-cpp", model: "/m/big.gguf", metadata }, "/m/big.gguf")
+        .temperature,
+    ).toBe(0);
+    expect(
+      withLocalDefaults(
+        { provider: "llama-cpp", model: "/m/big.gguf", metadata, temperature: 0.5 },
+        "/m/big.gguf",
+      ).temperature,
+    ).toBe(0.5);
+  });
+
   it("drops a draft model from a call that names another model than the run's", () => {
     const metadata = { llamaCppDraftModel: "/m/small.gguf", llamaCppContextSize: 8192 };
     const forTheRunsModel = withLocalDefaults(

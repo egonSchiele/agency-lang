@@ -785,10 +785,6 @@ class OneSystemMessage(unittest.TestCase):
         self.assertIsNone(m.one_system_message(None))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ReasoningEffort(unittest.TestCase):
     def test_the_top_level_effort_reaches_the_template_kwargs(self):
         body = m.fold_reasoning_effort({"messages": [], "reasoning_effort": "high"})
@@ -805,3 +801,27 @@ class ReasoningEffort(unittest.TestCase):
         self.assertIs(m.fold_reasoning_effort(plain), plain)
         default = {"reasoning_effort": "default"}
         self.assertIs(m.fold_reasoning_effort(default), default, "'default' leaves the template to its own default")
+
+
+class CacheLeak(unittest.TestCase):
+    def test_every_array_in_the_caches_is_found_however_nested(self):
+        class KV:
+            state = (mx.zeros((1,)), mx.zeros((2,)))
+
+        class Arrays:
+            state = [None, mx.zeros((3,)), [mx.zeros((4,))]]
+            left_padding = mx.zeros((5,))
+            lengths = mx.zeros((6,))
+
+        class Empty:
+            state = None
+
+        found = m.cache_arrays([KV(), Arrays(), Empty()])
+        self.assertEqual(sorted(a.shape[0] for a in found), [1, 2, 3, 4, 5, 6])
+
+    def test_the_batched_step_is_the_settled_one(self):
+        self.assertIs(m.GenerationBatch._step, m.settled_step)
+
+
+if __name__ == "__main__":
+    unittest.main()

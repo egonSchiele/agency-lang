@@ -1,8 +1,8 @@
-# DraftSequenceTokenPredictor never returns when a Qwen3.5 target samples (temperature > 0), and uses no predictions on a Qwen3 pair
+# DraftSequenceTokenPredictor never returns when a Qwen3.5 target samples (temperature > 0) with the default evaluate options, and uses no predictions on a Qwen3 pair
 
 ## Summary
 
-With a `DraftSequenceTokenPredictor` attached to a Qwen3.5 sequence, `LlamaChat.generateResponse` never resolves when `temperature` is above 0. With `temperature: 0` it resolves, but `sequence.tokenPredictions` reports zero predictions used and the call is slower than the same call without the predictor.
+With a `DraftSequenceTokenPredictor` attached to a Qwen3.5 sequence, `LlamaChat.generateResponse` never resolves when `temperature` is above 0 and the predictor keeps its default `evaluateOptions`. Giving the predictor `evaluateOptions: { temperature: 0 }` lets it resolve. With `temperature: 0` on the target it resolves, but `sequence.tokenPredictions` reports zero predictions used and the call is slower than the same call without the predictor.
 
 A standard-attention pair (Qwen3 0.6B drafting for Qwen3 8B) does not hang at any temperature, so the hang looks specific to the Qwen3.5 architecture (hybrid attention, `qwen35` in the GGUF header). But that pair also reports zero predictions used, at temperature 0 and 0.7, and is slower with the predictor than without. So there are two findings: a hang on one architecture, and a predictor that never contributes on either.
 

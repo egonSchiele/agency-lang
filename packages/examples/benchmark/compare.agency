@@ -251,13 +251,15 @@ def outputSpeed(run: RunFile): string {
 }
 
 // The same rate on the throughput case alone: one short prompt and a long
-// reply, so it is the cleanest number for comparing machines.
+// reply, so it is the cleanest number for comparing machines. A file from
+// before output tokens were recorded falls back to the total count, which
+// includes the short prompt and so runs a little high.
 def storySpeed(run: RunFile): string {
-  const stories = filter(casesOf(run, "throughput")) as r { return r.error == "" && r.latencyMs > 0 && r.outputTokens != null && r.outputTokens > 0 }
+  const stories = filter(casesOf(run, "throughput")) as r { return r.error == "" && r.latencyMs > 0 }
   if (stories.length == 0) {
     return "-"
   }
-  const tokens = sumOf(map(stories) as r { return r.outputTokens })
+  const tokens = sumOf(map(stories) as r { return if r.outputTokens != null && r.outputTokens > 0 then r.outputTokens else r.tokens })
   const seconds = sumOf(map(stories) as r { return r.latencyMs }) / 1000
   return (tokens / seconds).toFixed(0)
 }

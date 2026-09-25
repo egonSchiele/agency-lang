@@ -1,7 +1,8 @@
 # Proposal: expose and explain llama.cpp's limits
 
-A local llama.cpp model runs under two limits that Agency does not let you
-set, and does not tell you about when you hit them. This note describes both
+A local llama.cpp model runs under two limits, and Agency does not tell you
+when you hit either. The output cap can be raised per call or per run; the
+context size cannot be set from Agency at all. This note describes both
 limits, shows how they fail in the benchmark, and proposes three changes.
 
 ## The two limits

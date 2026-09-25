@@ -71,8 +71,8 @@ type CaseResult = {
   cost: number,
   detail: string,
   error: string,
-  // Why the provider ended a reply early, such as "refusal" or "length",
-  // when one did. Empty when every reply in the case ended normally.
+  // Why the provider ended the case's last reply early, such as "refusal"
+  // or "length". Empty when it ended on its own.
   stopReason: string
 }
 
@@ -118,25 +118,27 @@ type RunSettings = {
 // even when the label is a nickname.
 let seenModel: string = ""
 
-// The reasons the provider gave for ending a reply early during the current
-// case: "content_filter" when it refused, "length" when the reply hit the
-// token cap. A reply that ended normally, or to call a tool, adds nothing.
-// A case that ends this way is recorded as an error, not a wrong answer:
-// the model never got to answer.
-let earlyStops: string[] = []
+// Why the provider ended the last reply of the current case, when it cut
+// the reply off: "content_filter" for a refusal, "length" for the token
+// cap. Empty when the last reply ended on its own. Only those two count:
+// smoltalk reports "other" when a provider sends no reason at all, and
+// that is not a cut-off. Only the last reply counts, too: a reply the
+// runtime retried after it hit the cap, or a tool turn in the middle of a
+// chain, does not say whether the model got to answer in the end. A case
+// whose last reply was cut off is recorded as an error, not a wrong
+// answer, since the model never got to answer.
+let lastEarlyStop = ""
 
 callback("onLLMCallEnd") as data {
   seenModel = "${data.model}"
   const reason = data.result.stopReason
-  if (reason != null && reason != "stop" && reason != "tool_use" && reason != "stop_sequence") {
+  if (reason == "length" || reason == "content_filter") {
     // The provider's own word for it when there is one: "refusal" says
     // more than "content_filter".
     const raw = data.result.rawStopReason
-    let word = "${reason}"
-    if (raw != null && raw != "") {
-      word = "${raw}"
-    }
-    earlyStops.push(word)
+    lastEarlyStop = if raw != null && raw != "" then "${raw}" else "${reason}"
+  } else {
+    lastEarlyStop = ""
   }
 }
 
@@ -781,7 +783,7 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
   const startCost = getCost()
   const startTokens = getTokens()
   const startOutput = outputTokensSoFar()
-  earlyStops = []
+  lastEarlyStop = ""
   thinkingFor(info.name)
   let result: any = null
   thread {
@@ -799,11 +801,13 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
     error = oneLine(result.error, 160)
   }
   // A reply the provider cut off is not the model's answer. When the case
-  // did not pass and no other error explains it, the stop reason is the
-  // error, so the tables show it as one.
-  const stopReason = earlyStops.join(", ")
-  if (stopReason != "" && score < 1 && error == "") {
-    error = "the provider ended a reply early: ${stopReason}"
+  // did not pass, the stop reason is the error, so the tables show it as
+  // one; an error the case already has (a reply that did not fit the
+  // type, say) keeps its text and gains the reason.
+  const stopReason = lastEarlyStop
+  if (stopReason != "" && score < 1) {
+    const cutOff = "the provider ended the reply early: ${stopReason}"
+    error = if error == "" then cutOff else "${error} (${cutOff})"
   }
   return {
     caseName: info.name,

@@ -628,15 +628,12 @@ class ReopenedThinking(unittest.TestCase):
         history.append(THINK_END)
         out = call(w, history)
         self.assertEqual(w.state.phase, "answer")
-        # The answer is free until all of the marker but its last token
-        # has been written; only that last token is refused.
+        # The marker's first token may also start something else, so it is
+        # allowed; the next one, which commits the reply to thinking, is not.
         self.assertIn(THINK_START, allowed(out))
         history.append(THINK_START)
         out = call(w, history)
-        self.assertIn(30, allowed(out))
-        history.append(30)
-        out = call(w, history)
-        self.assertNotIn(31, allowed(out))
+        self.assertNotIn(30, allowed(out))
         self.assertIn(5, allowed(out))
 
     def test_after_a_cut_a_one_token_marker_is_refused_outright(self):
@@ -676,10 +673,12 @@ class ReopenedThinking(unittest.TestCase):
         w.answer_headers = self.HARMONY_HEADERS
         _, history = drive(w, [1] * 16)
         self.assertTrue(w.state.thought_cut)
-        history += [THINK_END, 19, 20, 30]
+        history += [THINK_END, 19, 20]
         out = call(w, history)
         self.assertEqual(w.state.phase, "answer")
-        self.assertNotIn(31, allowed(out))
+        # `analysis` is refused; `final` is still open.
+        self.assertNotIn(30, allowed(out))
+        self.assertIn(21, allowed(out))
 
 
 class NoThinking(unittest.TestCase):

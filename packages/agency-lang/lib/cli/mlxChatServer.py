@@ -661,15 +661,20 @@ class Watcher:
             return apply_token_bitmask(logits, self.end_mask)
         if self.matcher is None or state.broken:
             # No schema, so the answer is free, with one exception: thinking
-            # that was cut for its budget may not be opened again, so the
-            # token that would complete the marker is refused. For a marker
-            # of one token, such as `<think>`, that is its only token, and
-            # it is refused everywhere in the answer.
+            # that was cut for its budget may not be opened again. The first
+            # token that commits the reply to thinking is refused. For a
+            # marker of one token, such as `<think>`, that is its only token,
+            # refused everywhere in the answer. For a longer one it is the
+            # second: Harmony's `<|channel|>` also starts the final and
+            # commentary headers, so only `analysis` after it is refused, and
+            # the model is left free to take one of those instead. Refusing a
+            # later token would put part of the marker in the reply's text
+            # and leave the model stuck partway through it.
             if (
                 state.phase == "answer"
                 and state.thought_cut
                 and self.think_start
-                and state.opening == len(self.think_start) - 1
+                and state.opening == min(1, len(self.think_start) - 1)
             ):
                 self.mask.fill(-1)
                 forbid(self.mask, self.think_start[state.opening])

@@ -312,5 +312,237 @@ class WatcherTests(unittest.TestCase):
         self.assertIn(WIDTH - 1, allowed(out))
 
 
+class HarmonyTokenizer:
+    """The tokens gpt-oss spells its channels with, and nothing else."""
+
+    ids = {
+        "<|channel|>": 100, "<|message|>": 101, "<|start|>": 102, "<|end|>": 103,
+        "<|call|>": 104, "<|return|>": 105, "<|constrain|>": 106,
+        "analysis": 110, "final": 111, "commentary": 112, "assistant": 113,
+    }
+
+    def __init__(self):
+        self._think_start = None
+        self._eos = {104, 105}
+
+    def get_vocab(self):
+        return dict(self.ids)
+
+    def encode(self, text, add_special_tokens=False):
+        out = []
+        while text:
+            for word, token in sorted(self.ids.items(), key=lambda kv: -len(kv[0])):
+                if text.startswith(word):
+                    out.append(token)
+                    text = text[len(word):]
+                    break
+            else:
+                raise ValueError(text)
+        return out
+
+    @property
+    def eos_token_ids(self):
+        return self._eos
+
+    def convert_ids_to_tokens(self, token):
+        return {v: k for k, v in self.ids.items()}[token]
+
+    @property
+    def think_start_tokens(self):
+        return self._think_start_tokens
+
+    @property
+    def think_end_tokens(self):
+        return self._think_end_tokens
+
+    @property
+    def think_start(self):
+        return self._think_start
+
+    @property
+    def think_end(self):
+        return self._think_end
+
+    @property
+    def tool_call_start_tokens(self):
+        return self._tool_call_start_tokens
+
+    @property
+    def tool_call_start(self):
+        return self._tool_call_start
+
+
+class HarmonyTests(unittest.TestCase):
+    def test_a_tokenizer_with_the_channel_tokens_is_taught_the_markers(self):
+        t = HarmonyTokenizer()
+        m.teach_harmony(t)
+        self.assertEqual(t.think_start_tokens, (100, 110, 101))
+        self.assertEqual(t.think_end_tokens, (103, 102, 113))
+        self.assertEqual(t.tool_call_start_tokens, (100, 112))
+        self.assertIsNone(t._tool_call_end)
+        self.assertEqual(t._harmony_final_tokens, (100, 111, 101))
+        # Once only: a second call leaves it as it is.
+        t._think_start_tokens = ()
+        m.teach_harmony(t)
+        self.assertEqual(t.think_start_tokens, ())
+
+    def test_a_tokenizer_without_the_tokens_is_left_alone(self):
+        t = HarmonyTokenizer()
+        t.ids = {"<think>": 1}
+        m.teach_harmony(t)
+        self.assertIsNone(t._think_start)
+
+    def test_a_tool_call_is_read_from_the_commentary_channel(self):
+        call = m.parse_harmony_tool_call(
+            ' to=functions.getTemperature <|constrain|>json<|message|>{"city": "Oslo"}', None
+        )
+        self.assertEqual(call, {"name": "getTemperature", "arguments": {"city": "Oslo"}})
+        # No constraint, and arguments that are not JSON, still come through.
+        call = m.parse_harmony_tool_call(" to=functions.run<|message|>ls -la", None)
+        self.assertEqual(call, {"name": "run", "arguments": {"raw": "ls -la"}})
+        with self.assertRaises(ValueError):
+            m.parse_harmony_tool_call("just some text", None)
+
+    def test_thinking_off_becomes_the_lowest_effort(self):
+        self.assertEqual(
+            m.harmony_template_kwargs({"enable_thinking": False}),
+            {"enable_thinking": False, "reasoning_effort": "low"},
+        )
+        self.assertEqual(
+            m.harmony_template_kwargs({"enable_thinking": False, "reasoning_effort": "high"}),
+            {"enable_thinking": False, "reasoning_effort": "high"},
+        )
+        self.assertEqual(m.harmony_template_kwargs(None), {})
+
+    def test_the_state_machine_drops_the_final_header_and_splits_the_channels(self):
+        t = HarmonyTokenizer()
+        gen = object.__new__(m.Generator)
+        gen._state_machine_cache = {}
+        machine, sequences = m.Generator._make_state_machine(gen, "k", t, [], "normal")
+        self.assertEqual(sequences[(100, 111, 101)], "<|channel|>final<|message|>")
+        state = machine.make_state()
+        seen = []
+        # analysis … <|end|><|start|>assistant <|channel|>final<|message|> hi <|return|>
+        for token in [100, 110, 101, 7, 103, 102, 113, 100, 111, 101, 8, 105]:
+            state, matched, current = machine.match(state, token)
+            seen.append((matched is not None, current))
+        self.assertEqual(seen[2], (True, "reasoning"))
+        self.assertEqual(seen[3], (False, "reasoning"))
+        self.assertEqual(seen[6], (True, "normal"))
+        self.assertEqual(seen[9], (True, "normal"))
+        self.assertEqual(seen[10], (False, "normal"))
+        self.assertEqual(seen[11], (True, None))
+        # A tool call: the commentary header opens the tool state, and the
+        # <|call|> stop token ends the reply there.
+        state = machine.make_state()
+        for token in [100, 112, 9, 104]:
+            state, matched, current = machine.match(state, token)
+        self.assertEqual((matched is not None, current), (True, None))
+        # A lone channel token is not yet any marker.
+        self.assertEqual(machine.match(machine.make_state(), 100)[2], "normal")
+
+    def test_a_stop_inside_a_tool_call_is_preceded_by_the_step_that_files_it(self):
+        stop = m.server.Response("", 104, None, (104,), 0.0, "stop", ())
+        steps = m.close_tool_call("tool", stop)
+        self.assertEqual(len(steps), 1)
+        self.assertEqual((steps[0].state, steps[0].text, steps[0].finish_reason, steps[0].match), ("normal", "", None, None))
+        # Not for a stop after the answer, nor for a token inside the call.
+        self.assertEqual(m.close_tool_call("normal", stop), [])
+        self.assertEqual(m.close_tool_call("tool", m.server.Response("x", 9, "tool", None, 0.0, None, ())), [])
+
+
+class MultiTokenThinkingStart(unittest.TestCase):
+    def test_a_reply_that_only_starts_like_the_marker_is_the_answer(self):
+        w = watcher(NO_LIMITS, initial="start")
+        w.think_start = (THINK_START, 5, 6)
+        w.step(THINK_START)
+        self.assertEqual(w.state.phase, "start")
+        w.step(9)
+        self.assertEqual(w.state.phase, "answer")
+        self.assertEqual(w.state.judged_from, 0)
+
+    def test_the_whole_marker_opens_thinking(self):
+        w = watcher(NO_LIMITS, initial="start")
+        w.think_start = (THINK_START, 5, 6)
+        for token in (THINK_START, 5):
+            w.step(token)
+            self.assertEqual(w.state.phase, "start")
+        w.step(6)
+        self.assertEqual(w.state.phase, "reasoning")
+
+
+class AnswerHeader(unittest.TestCase):
+    """Harmony writes a final-channel header between the thinking and the
+    answer. Under a grammar it is let through and not fed to the grammar,
+    and a reply may open with it instead of thinking."""
+
+    HEADER = (20, 21, 22)
+
+    def test_after_the_thinking_the_header_may_come_and_then_only_json(self):
+        self.matcher = FakeMatcher()
+        with with_fake_matcher(self):
+            w = watcher(NO_LIMITS, grammar=object(), initial="reasoning")
+            w.answer_header = self.HEADER
+            # Thinking closes; the header's first token is allowed beside the JSON.
+            out, history = drive(w, [1, 2, THINK_END])
+            self.assertEqual(w.state.phase, "answer")
+            self.assertEqual(w.state.header, 0)
+            self.assertIn(20, allowed(out))
+            self.assertIn(5, allowed(out))
+            # Once begun, only the rest of the header may come.
+            history.append(20)
+            out = call(w, history)
+            self.assertEqual(allowed(out), {21})
+            history += [21, 22]
+            out = call(w, history)
+            self.assertIsNone(w.state.header)
+            self.assertIn(5, allowed(out))
+            history.append(5)
+            call(w, history)
+            # Only the answer reached the grammar; the header was passed over.
+            self.assertEqual(self.matcher.fed, [5])
+            self.assertEqual(w.judged_text(), w.piece_for(5))
+
+    def test_an_answer_that_skips_the_header_is_judged_at_once(self):
+        self.matcher = FakeMatcher()
+        with with_fake_matcher(self):
+            w = watcher(NO_LIMITS, grammar=object(), initial="reasoning")
+            w.answer_header = self.HEADER
+            drive(w, [1, THINK_END, 5, 6])
+            self.assertIsNone(w.state.header)
+            self.assertEqual(self.matcher.fed, [5, 6])
+
+    def test_a_reply_may_open_with_the_header_instead_of_thinking(self):
+        self.matcher = FakeMatcher()
+        with with_fake_matcher(self):
+            w = watcher(NO_LIMITS, grammar=object(), initial="start")
+            w.think_start = (THINK_START, 30, 31)
+            w.answer_header = self.HEADER
+            out, history = drive(w, [])
+            self.assertTrue({THINK_START, 20, 5} <= allowed(out))
+            history.append(20)
+            out = call(w, history)
+            self.assertEqual(w.state.phase, "start")
+            self.assertEqual(allowed(out), {21})
+            history += [21, 22]
+            call(w, history)
+            self.assertEqual(w.state.phase, "answer")
+            self.assertIsNone(w.state.header)
+            history.append(5)
+            call(w, history)
+            self.assertEqual(self.matcher.fed, [5])
+
+    def test_a_partial_thinking_marker_may_only_be_completed(self):
+        self.matcher = FakeMatcher()
+        with with_fake_matcher(self):
+            w = watcher(NO_LIMITS, grammar=object(), initial="start")
+            w.think_start = (THINK_START, 30, 31)
+            out, history = drive(w, [THINK_START])
+            self.assertEqual(allowed(out), {30})
+            history += [30, 31]
+            call(w, history)
+            self.assertEqual(w.state.phase, "reasoning")
+
+
 if __name__ == "__main__":
     unittest.main()

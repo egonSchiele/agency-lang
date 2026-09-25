@@ -312,5 +312,40 @@ class WatcherTests(unittest.TestCase):
         self.assertIn(WIDTH - 1, allowed(out))
 
 
+class LenientToolParameters(unittest.TestCase):
+    """A parameter the parser cannot convert comes through as text."""
+
+    def test_a_value_the_parser_rejects_is_passed_as_the_text(self):
+        def strict(value, name, config):
+            if name == "count":
+                return int(value)
+            raise SyntaxError("not a literal")
+
+        lenient = m.lenient_param_value(strict)
+        self.assertEqual(lenient("3", "count", {}), 3)
+        self.assertEqual(lenient("regex.txt", "path", {}), "regex.txt")
+        self.assertEqual(lenient('{"a": 1} trailing', "body", {}), '{"a": 1} trailing')
+
+    def test_the_qwen_parser_no_longer_fails_a_request_on_a_plain_word(self):
+        from mlx_lm.tool_parsers import qwen3_coder
+
+        original = qwen3_coder._convert_param_value
+        try:
+            m.make_tool_parsers_lenient()
+            # An unknown type used to be read as a Python literal.
+            config = {"path": {"type": "filename"}}
+            self.assertEqual(qwen3_coder._convert_param_value("regex.txt", "path", config), "regex.txt")
+            # An object with text after it used to fail as JSON, then as a literal.
+            config = {"body": {"type": "object"}}
+            self.assertEqual(
+                qwen3_coder._convert_param_value('{"a": 1} and more', "body", config),
+                '{"a": 1} and more',
+            )
+            # A value that reads fine is still converted.
+            self.assertEqual(qwen3_coder._convert_param_value('{"a": 1}', "body", config), {"a": 1})
+        finally:
+            qwen3_coder._convert_param_value = original
+
+
 if __name__ == "__main__":
     unittest.main()

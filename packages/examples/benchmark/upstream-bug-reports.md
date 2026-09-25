@@ -9,6 +9,7 @@ Checked against each project's issue tracker and contributing rules on
 | Logits processor ignored after a request that had none | mlx-lm | Fixed on `main` by PR #1772 (merged 2026-08-25), not in any release; 0.31.3 (2026-04-22) is still the latest | Nothing to file. Keep the shim's workaround until a release lands, then drop it when the pin moves |
 | `mlx_lm.server` ignores `response_format` | mlx-lm | Open as issue #1007 since 2026-03-15, no maintainer reply, no linked PR | Nothing new to file. A comment there, or a PR, if you want to push it |
 | Grammar plus auto-opened `<think>` puts the JSON in the thought segment | node-llama-cpp | Not reported. Introduced by PR #636, shipped in 3.20.0; 3.21.1 still has it | File a bug. Draft below |
+| Qwen tool parser raises on a parameter it cannot evaluate, and the server answers 502 | mlx-lm | Not reported. 0.31.3, `tool_parsers/qwen3_coder.py` | File a bug. Facts below |
 | Gemma 4 wrapper spells the tool-result markers differently from the model's template | node-llama-cpp | Not reported. 3.21.1 | File a bug. Facts below |
 | JSON-schema grammar does not read `anyOf`, so a zod union becomes "any value" | node-llama-cpp | Not reported. 3.21.1 | File a bug or a PR. Facts below |
 | JSON-schema grammar's fixed indentation lets a long space token empty every array | node-llama-cpp | Not reported. 3.21.1 | File a bug. Facts below |
@@ -315,3 +316,30 @@ with `[ \t\n]{0,64}` fixes all three models. The root rule's trailing
 `"\n\n\n\n" [\n]*` has a related cost: a model that samples can write
 line breaks instead of stopping for as long as they are allowed, and Gemma
 4 spent ninety seconds on them; `[\n]{0,4}` ends the reply.
+
+## mlx-lm: the Qwen tool parser fails the request (2026-09-25)
+
+Found on the first Terminal-Bench trial against `mlx-community/Qwen3.8-27B-4bit`
+through `agency local serve`. Worked around in `lib/cli/mlxChatServer.py`
+(`make_tool_parsers_lenient`), so it does not block the benchmark; mlx-lm's
+rules on AI-written reports apply, so this is the material, not a draft.
+
+`mlx_lm/tool_parsers/qwen3_coder.py`, `_convert_param_value`, converts each
+`<parameter=…>` by the type in the tool's schema. Two paths raise out of the
+parser, and `ToolCallFormatter.__call__` in `server.py` catches only
+`ValueError` and `JSONDecodeError`, so the request ends in a 502:
+
+- A parameter whose schema type is not one it knows (anything outside its
+  string, int, float, bool, and object sets, such as a type the schema
+  spells `"filename"` or omits) is read with `ast.literal_eval`. A plain word
+  like `regex.txt` is not a Python literal, and `literal_eval` raises
+  `SyntaxError`, which nothing catches.
+- An object parameter is read with `json.loads`, and when the model wrote
+  anything after the closing brace (`{"a": 1} and more`, seen with a
+  10,000-character value) that raises `JSONDecodeError`, which the parser
+  turns into a second `ast.literal_eval` that raises again.
+
+In the trial, every tool call the agent made after its planning step hit one
+of these, the agent retried twice per call, and the task ended with nothing
+written. With a fallback that hands the text through unconverted, the same
+calls go through, since the agent's tools take strings and check them.

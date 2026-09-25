@@ -789,6 +789,36 @@ class Generator(server.ResponseGenerator):
 original_make_logits_processors = server._make_logits_processors
 
 
+def lenient_param_value(convert):
+    """A tool-call parameter that does not read as its declared type is
+    handed over as the text the model wrote, instead of failing the whole
+    request. mlx_lm 0.31.3's Qwen parser evaluates a parameter whose type
+    it does not know as a Python literal, which a plain word is not, and
+    reads an object parameter as JSON, which fails when the model wrote
+    anything after the closing brace. Either raised out of the parser,
+    and the server answered 502 to the agent's tool call. The agent's
+    tools take strings and check them, so the text is the right fallback.
+    Filed against mlx-lm in the benchmark's upstream-bug-reports.md."""
+
+    def converted(param_value, param_name, param_config):
+        try:
+            return convert(param_value, param_name, param_config)
+        except (ValueError, SyntaxError, TypeError):
+            return param_value
+
+    return converted
+
+
+def make_tool_parsers_lenient():
+    """Wrap the parser that has been seen to fail. Other parsers are left
+    alone until one is seen to."""
+    try:
+        from mlx_lm.tool_parsers import qwen3_coder
+    except ImportError:
+        return
+    qwen3_coder._convert_param_value = lenient_param_value(qwen3_coder._convert_param_value)
+
+
 def keep_logits(tokens, logits):
     return logits
 
@@ -908,4 +938,5 @@ if __name__ == "__main__":
     sys.argv = [sys.argv[0]] + rest
     server.run = run
     server._make_logits_processors = make_logits_processors
+    make_tool_parsers_lenient()
     server.main()

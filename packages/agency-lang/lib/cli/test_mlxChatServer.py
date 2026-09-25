@@ -689,5 +689,31 @@ class NoThinking(unittest.TestCase):
         self.assertEqual(len(allowed(out)), WIDTH)
 
 
+class OneSystemMessage(unittest.TestCase):
+    def test_several_system_messages_become_one_at_the_front(self):
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "system", "content": [{"type": "text", "text": "Be brief."}]},
+            {"role": "user", "content": "hi"},
+            {"role": "system", "content": "Late rule."},
+            {"role": "assistant", "content": "hello"},
+        ]
+        self.assertEqual(
+            m.one_system_message(messages),
+            [
+                {"role": "system", "content": "You are helpful.\n\nBe brief.\n\nLate rule."},
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "hello"},
+            ],
+        )
+
+    def test_a_conversation_that_is_already_right_is_left_alone(self):
+        messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}]
+        self.assertIs(m.one_system_message(messages), messages)
+        no_system = [{"role": "user", "content": "u"}]
+        self.assertIs(m.one_system_message(no_system), no_system)
+        self.assertIsNone(m.one_system_message(None))
+
+
 if __name__ == "__main__":
     unittest.main()

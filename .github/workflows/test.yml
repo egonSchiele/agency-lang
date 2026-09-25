@@ -72,8 +72,10 @@ jobs:
       with:
         # Pinned to the exact engines minimum (package.json "node": ">=22.13.0")
         # so the declared floor is the tested floor, not whatever 22.x floats to.
-        # 22.13 rather than commander v15's 22.12 because pnpm 12 requires it —
-        # this pin is what catches such contradictions.
+        # The floor was raised from commander v15's 22.12 to 22.13 for pnpm 11.
+        # pnpm 12 runs on Node 18+, so nothing requires 22.13 today; it stays
+        # the published floor until lowering it is its own change. This pin is
+        # what catches such contradictions.
         node-version: 22.13.0
         cache: 'pnpm'
     - run: pnpm install

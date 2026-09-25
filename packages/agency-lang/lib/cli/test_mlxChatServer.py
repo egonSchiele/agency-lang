@@ -452,7 +452,7 @@ class HarmonyTests(unittest.TestCase):
         self.assertEqual(t.think_end_tokens, (103,))
         self.assertEqual(t.tool_call_start_tokens, (100, 112, 114))
         self.assertIsNone(t._tool_call_end)
-        self.assertEqual(t._harmony_tool_openers, [(100, 112, 114), (114,)])
+        self.assertEqual(t._harmony_tool_openers, [(100, 112, 114), (100, 110, 114), (114,)])
         self.assertEqual(set(t._harmony_drops), {(102, 113), (100, 111, 101), (100, 112, 101), (103,)})
         self.assertEqual(t._harmony_headers, [(102, 113, 100, 111, 101), (100, 111, 101)])
         # Once only: a second call leaves it as it is.
@@ -529,6 +529,18 @@ class HarmonyTests(unittest.TestCase):
         self.assertEqual(seen[-1], (True, None))
         # A lone channel token is not yet any marker.
         self.assertEqual(self.run_machine([100])[0], (False, "normal"))
+
+    def test_a_call_made_from_the_analysis_channel_is_a_call_and_leaves_no_header_behind(self):
+        # <|channel|>analysis to=functions .Bash <|message|> … <|call|>
+        # Seen from gpt-oss-120b under Claude Code: without this opener the
+        # header reached the client as the text "<|channel|>analysis".
+        seen = self.run_machine([100, 110, 114, 9, 101, 9, 104])
+        self.assertEqual(seen[0], (False, "normal"))
+        self.assertEqual(seen[1], (False, "normal"), "analysis alone is not yet a marker")
+        self.assertEqual(seen[2], (True, "tool"), "the recipient makes it a call")
+        self.assertEqual(seen[-1], (True, None))
+        # The same two tokens followed by the message marker still open thinking.
+        self.assertEqual(self.run_machine([100, 110, 101])[2], (True, "reasoning"))
 
     def test_a_preamble_stays_in_the_text_and_the_call_after_it_is_still_a_call(self):
         # <|channel|>commentary<|message|> hi <|end|> <|start|>assistant <|channel|>commentary to=functions … <|call|>
@@ -745,6 +757,32 @@ class NoThinking(unittest.TestCase):
         out, _ = drive(w, [1, 5, THINK_START, 6])
         self.assertEqual(w.state.phase, "answer")
         self.assertEqual(len(allowed(out)), WIDTH)
+
+
+class OneSystemMessage(unittest.TestCase):
+    def test_several_system_messages_become_one_at_the_front(self):
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "system", "content": [{"type": "text", "text": "Be brief."}]},
+            {"role": "user", "content": "hi"},
+            {"role": "system", "content": "Late rule."},
+            {"role": "assistant", "content": "hello"},
+        ]
+        self.assertEqual(
+            m.one_system_message(messages),
+            [
+                {"role": "system", "content": "You are helpful.\n\nBe brief.\n\nLate rule."},
+                {"role": "user", "content": "hi"},
+                {"role": "assistant", "content": "hello"},
+            ],
+        )
+
+    def test_a_conversation_that_is_already_right_is_left_alone(self):
+        messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "u"}]
+        self.assertIs(m.one_system_message(messages), messages)
+        no_system = [{"role": "user", "content": "u"}]
+        self.assertIs(m.one_system_message(no_system), no_system)
+        self.assertIsNone(m.one_system_message(None))
 
 
 if __name__ == "__main__":

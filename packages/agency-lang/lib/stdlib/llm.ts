@@ -1,7 +1,7 @@
 import { fixedPath, resolveUnder, readText, type Located } from "./contained.js";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
-import { mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
+import { LOCAL_PROVIDERS, mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
 import {
   getAllModels,
@@ -147,11 +147,20 @@ export function _hostedModelInfo(name: string): HostedModelInfo | null {
  *  that pair, which is the same check that later rejects an unsupported
  *  request.
  *
+ *  A local provider (the MLX server, llama.cpp) never has hosted search,
+ *  whatever the model: the answer is the empty list before the catalog is
+ *  consulted. Local model names are never in the catalog, so without this
+ *  check they fell into the err-open case below, the request went out
+ *  with `web_search`, and smoltalk refused the whole call.
+ *
  *  Two cases err open, because withholding search wrongly is the invisible
  *  failure: a model unknown to the catalog (brand new, custom) and an empty
  *  model with no default anywhere. */
 export function _hostedSearchTools(model: string, provider: string = ""): string[] {
   const route = resolveLlmRoute(model, provider);
+  if (LOCAL_PROVIDERS.includes(route.provider)) {
+    return [];
+  }
   if (route.model === "") {
     return ["web_search"];
   }

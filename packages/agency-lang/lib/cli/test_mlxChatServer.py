@@ -322,6 +322,64 @@ class WatcherTests(unittest.TestCase):
         self.assertIn(WIDTH - 1, allowed(out))
 
 
+class LenientToolParameters(unittest.TestCase):
+    """A parameter the parser cannot convert comes through as text."""
+
+    def test_a_value_the_parser_rejects_is_passed_as_the_text(self):
+        def strict(value, name, config):
+            if name == "count":
+                return int(value)
+            if name == "size":
+                raise OverflowError("too large to hold")
+            raise SyntaxError("not a literal")
+
+        lenient = m.lenient_param_value(strict)
+        self.assertEqual(lenient("3", "count", {}), 3)
+        self.assertEqual(lenient("regex.txt", "path", {}), "regex.txt")
+        self.assertEqual(lenient('{"a": 1} trailing', "body", {}), '{"a": 1} trailing')
+        self.assertEqual(lenient("1e400", "size", {}), "1e400")
+
+    def test_the_qwen_parser_no_longer_fails_a_request_on_a_bad_value(self):
+        # Drive the whole parser, not _convert_param_value on its own, so
+        # this still catches the 502 if an upstream change stops the parse
+        # path from going through the wrapped function.
+        from mlx_lm.tool_parsers import qwen3_coder
+
+        tools = [
+            {
+                "function": {
+                    "name": "run",
+                    "parameters": {
+                        "properties": {
+                            "path": {"type": "filename"},
+                            "body": {"type": "object"},
+                            "size": {"type": "number"},
+                        }
+                    },
+                }
+            }
+        ]
+
+        def parse(param_name, param_value):
+            call = f"<function=run><parameter={param_name}>{param_value}</parameter></function>"
+            return qwen3_coder.parse_tool_call(call, tools)["arguments"][param_name]
+
+        original = qwen3_coder._convert_param_value
+        try:
+            m.make_tool_parsers_lenient()
+            # An unknown type used to be read as a Python literal, and a
+            # plain word is not one.
+            self.assertEqual(parse("path", "regex.txt"), "regex.txt")
+            # An object with text after it used to fail as JSON, then as a literal.
+            self.assertEqual(parse("body", '{"a": 1} and more'), '{"a": 1} and more')
+            # A number too large to hold used to overflow to infinity.
+            self.assertEqual(parse("size", "1e400"), "1e400")
+            # A value that reads fine is still converted.
+            self.assertEqual(parse("body", '{"a": 1}'), {"a": 1})
+        finally:
+            qwen3_coder._convert_param_value = original
+
+
 class HarmonyTokenizer:
     """The tokens gpt-oss spells its channels with, and nothing else."""
 

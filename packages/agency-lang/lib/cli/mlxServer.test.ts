@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
-import { startFrontDoor, type FrontDoor } from "./mlxServer.js";
+import { defaultRoute, startFrontDoor, type FrontDoor } from "./mlxServer.js";
 import { plainColor } from "../utils/termcolors.js";
 
 type Hit = {
@@ -233,6 +233,21 @@ describe("front door", () => {
       "This server is serving org/a and org/b. It is not serving org/c. Start it with: agency local serve mlx:org/c",
     );
     expect(a.hits.length + b.hits.length).toBe(before);
+  });
+
+  it("routes default_model to the one model served, and refuses it among several", async () => {
+    expect(
+      defaultRoute(
+        [{ model: "org/a", upstreamModel: "org/a", port: 1, label: "" }],
+        "default_model",
+      )?.model,
+    ).toBe("org/a");
+    expect(
+      defaultRoute([{ model: "org/a", upstreamModel: "org/a", port: 1, label: "" }], "org/b"),
+    ).toBeUndefined();
+    // This door serves org/a and org/b, so the alias names neither.
+    const res = await post("default_model");
+    expect(res.status).toBe(404);
   });
 
   it("refuses a request with no model field", async () => {

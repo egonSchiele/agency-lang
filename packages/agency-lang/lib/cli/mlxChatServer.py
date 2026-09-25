@@ -1180,10 +1180,37 @@ def one_system_message(messages):
     return [{"role": "system", "content": "\n\n".join(texts)}] + rest
 
 
+# What the OpenAI-style `reasoning_effort` field means to a template that
+# knows three levels. Effort names outside the three are the nearest one.
+EFFORT_LEVELS = {
+    "none": "low", "minimal": "low", "low": "low",
+    "medium": "medium",
+    "high": "high", "xhigh": "high", "max": "high",
+}
+
+
+def fold_reasoning_effort(body):
+    """The body with a top-level `reasoning_effort` carried into its
+    `chat_template_kwargs`, where gpt-oss's template reads it. Clients
+    send the effort as its own field, the way the OpenAI API takes it;
+    the template only sees template kwargs. An explicit kwarg wins, and
+    a level the template does not know becomes the nearest one it does.
+    Other templates ignore a kwarg they have no use for."""
+    if not isinstance(body, dict):
+        return body
+    effort = EFFORT_LEVELS.get(str(body.get("reasoning_effort") or "").lower())
+    if effort is None:
+        return body
+    kwargs = dict(body.get("chat_template_kwargs") or {})
+    kwargs.setdefault("reasoning_effort", effort)
+    return {**body, "chat_template_kwargs": kwargs}
+
+
 class Handler(server.APIHandler):
     def handle_chat_completions(self):
         if isinstance(self.body, dict):
             self.body["messages"] = one_system_message(self.body.get("messages"))
+            self.body = fold_reasoning_effort(self.body)
         request = super().handle_chat_completions()
         request.grammar = None
         # The socket the reply goes to, so `Generator.generate` can tell

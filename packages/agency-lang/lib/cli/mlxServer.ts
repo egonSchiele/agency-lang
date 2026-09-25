@@ -17,6 +17,17 @@ import {
  *  it is named in a message. */
 export type Route = { model: string; upstreamModel: string; port: number; label: string };
 
+/** mlx_lm's own name for whatever a server was started with. A client
+ *  that cannot spell a repo id (Harbor allows a self-hosted model name one
+ *  slash) can ask for this instead. It names the one model a single-model
+ *  server serves, and nothing when several are served, since it would be
+ *  a guess which. */
+export const DEFAULT_MODEL_ALIAS = "default_model";
+
+export function defaultRoute(routes: Route[], model: string): Route | undefined {
+  return model === DEFAULT_MODEL_ALIAS && routes.length === 1 ? routes[0] : undefined;
+}
+
 export type FrontDoor = { port: number; close: () => Promise<void> };
 
 /** Where the door prints what it saw, and how much of it. Absent for a door
@@ -240,7 +251,7 @@ export function startFrontDoor(
       return;
     }
     const model = parsed.model;
-    const route = routes.find((r) => r.model === model);
+    const route = routes.find((r) => r.model === model) ?? defaultRoute(routes, model);
     if (route === undefined) {
       refuse(404, notServedMessage(served, model));
       return;

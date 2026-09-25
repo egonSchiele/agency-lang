@@ -787,3 +787,21 @@ class OneSystemMessage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReasoningEffort(unittest.TestCase):
+    def test_the_top_level_effort_reaches_the_template_kwargs(self):
+        body = m.fold_reasoning_effort({"messages": [], "reasoning_effort": "high"})
+        self.assertEqual(body["chat_template_kwargs"], {"reasoning_effort": "high"})
+
+    def test_an_unknown_level_becomes_the_nearest_known_one(self):
+        self.assertEqual(m.fold_reasoning_effort({"reasoning_effort": "xhigh"})["chat_template_kwargs"]["reasoning_effort"], "high")
+        self.assertEqual(m.fold_reasoning_effort({"reasoning_effort": "minimal"})["chat_template_kwargs"]["reasoning_effort"], "low")
+
+    def test_an_explicit_kwarg_wins_and_no_effort_changes_nothing(self):
+        body = {"reasoning_effort": "high", "chat_template_kwargs": {"reasoning_effort": "low"}}
+        self.assertEqual(m.fold_reasoning_effort(body)["chat_template_kwargs"], {"reasoning_effort": "low"})
+        plain = {"messages": []}
+        self.assertIs(m.fold_reasoning_effort(plain), plain)
+        default = {"reasoning_effort": "default"}
+        self.assertIs(m.fold_reasoning_effort(default), default, "'default' leaves the template to its own default")

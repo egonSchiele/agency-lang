@@ -332,6 +332,13 @@ class WatcherState:
     # header, before the JSON), the index of its next token. None when
     # there is no header, or it has been written.
     header: int | None
+    # In the answer, how many tokens of the thinking marker the reply has
+    # just written: a format whose reply is several messages can open
+    # thinking again after the answer began.
+    opening: int
+    # Whether the thinking was cut short for its budget. A reply that was
+    # may not open thinking again.
+    thought_cut: bool
     # How many tokens the grammar has been fed, for taking them back.
     consumed: int
     # The grammar rejected a token; the rest of the reply runs unconstrained.
@@ -382,10 +389,12 @@ class Watcher:
             phase = "start"
         self.think_start = tokenizer.think_start_tokens
         self.think_end = tokenizer.think_end_tokens
-        # The tokens a reply writes between its thinking and its answer,
-        # when its format has some: Harmony's final-channel header. They
-        # are let through in front of the JSON and not fed to the grammar.
-        self.answer_header = tuple(getattr(tokenizer, "_harmony_final_tokens", None) or ())
+        # The tokens a reply may write between its thinking and its answer,
+        # when its format has some: Harmony's final-channel header, with the
+        # turn marker in front of it after thinking and without at the
+        # reply's start. They are let through in front of the JSON and not
+        # fed to the grammar.
+        self.answer_headers = [tuple(h) for h in getattr(tokenizer, "_harmony_headers", None) or []]
         self.state = WatcherState(
             phase=phase,
             reasoning_tokens=0,
@@ -398,6 +407,8 @@ class Watcher:
             broken=False,
             cut=None,
             header=None,
+            opening=0,
+            thought_cut=False,
         )
         self.initial = replace(self.state)
         self.seen = None
@@ -455,17 +466,48 @@ class Watcher:
 
     def openers(self):
         """The token sequences a reply may start with before its answer:
-        the thinking marker, and the answer header when the format has
-        one."""
-        if self.answer_header:
-            return [self.think_start, self.answer_header]
-        return [self.think_start]
+        the thinking marker, and the answer headers when the format has
+        them."""
+        return [self.think_start] + self.answer_headers
+
+    def headers_from(self, written):
+        """The answer headers that begin with `written` and go on past it."""
+        return [h for h in self.answer_headers if h[: len(written)] == written and len(h) > len(written)]
 
     def enter_answer(self, header_done=False):
         self.state.phase = "answer"
         self.state.closing = None
         self.state.judged_from = len(self.pieces)
-        self.state.header = 0 if self.answer_header and not header_done else None
+        self.state.header = 0 if self.answer_headers and not header_done else None
+        self.state.opening = 0
+
+    def enter_reasoning(self):
+        self.state.phase = "reasoning"
+        self.state.closing = None
+        self.state.opening = 0
+
+    def watch_for_thinking(self):
+        """In the answer, whether the reply has opened thinking again: a
+        format whose reply is several messages can. The reply's tail is
+        read, not the header or grammar state, because the tokens of a
+        marker can start out looking like something else. Harmony's
+        `<|start|>assistant<|channel|>analysis<|message|>` starts out
+        looking like the final header, for one. A whole marker goes back
+        to the reasoning phase, the tokens already thought still counted;
+        part of one is kept in `opening`. A model without thinking has no
+        marker to watch for."""
+        if not self.think_start:
+            return
+        state = self.state
+        width = len(self.think_start)
+        if tuple(self.reply[-width:]) == self.think_start:
+            self.enter_reasoning()
+            return
+        state.opening = 0
+        for written in range(min(width - 1, len(self.reply)), 0, -1):
+            if tuple(self.reply[-written:]) == self.think_start[:written]:
+                state.opening = written
+                return
 
     def step(self, token_id):
         """One generated token moves the phase machine. The answer is judged
@@ -482,8 +524,8 @@ class Watcher:
             self.pieces.append(self.piece_for(token_id))
             so_far = tuple(self.reply)
             if so_far == self.think_start:
-                state.phase = "reasoning"
-            elif self.answer_header and so_far == self.answer_header:
+                self.enter_reasoning()
+            elif so_far in self.answer_headers:
                 self.enter_answer(header_done=True)
             elif not any(opener[: len(so_far)] == so_far for opener in self.openers()):
                 self.enter_answer(header_done=True)
@@ -498,17 +540,24 @@ class Watcher:
             tail = tuple(self.reply[-len(self.think_end) :])
             if tail == self.think_end:
                 self.enter_answer()
-        elif state.header is not None and token_id == self.answer_header[state.header]:
-            # The header is passed over, not judged and not fed to the grammar.
+        elif state.header is not None and any(
+            token_id == h[state.header]
+            # The header's tokens before this one: the reply's tail, less
+            # this token, which step() has already appended.
+            for h in self.headers_from(tuple(self.reply[len(self.reply) - 1 - state.header : -1]))
+        ):
+            # A header is passed over, not judged and not fed to the grammar.
             self.pieces.append(self.piece_for(token_id))
             state.header += 1
-            if state.header == len(self.answer_header):
+            if tuple(self.reply[-state.header :]) in self.answer_headers:
                 state.header = None
                 state.judged_from = len(self.pieces)
+            self.watch_for_thinking()
         else:
             state.header = None
             self.pieces.append(self.piece_for(token_id))
             self.consume(token_id)
+            self.watch_for_thinking()
         if len(self.reply) % CHECK_EVERY == 0:
             self.check()
         self.states.append(replace(state))
@@ -577,6 +626,7 @@ class Watcher:
         if state.phase == "reasoning":
             logging.info(f"The reply {why}; closing its thinking.")
             state.closing = 0
+            state.thought_cut = True
         elif self.matcher is not None:
             logging.info(f"The reply {why}; closing the JSON string it is writing.")
             state.closing_string = True
@@ -610,6 +660,20 @@ class Watcher:
         if state.ending:
             return apply_token_bitmask(logits, self.end_mask)
         if self.matcher is None or state.broken:
+            # No schema, so the answer is free, with one exception: thinking
+            # that was cut for its budget may not be opened again, so the
+            # token that would complete the marker is refused. For a marker
+            # of one token, such as `<think>`, that is its only token, and
+            # it is refused everywhere in the answer.
+            if (
+                state.phase == "answer"
+                and state.thought_cut
+                and self.think_start
+                and state.opening == len(self.think_start) - 1
+            ):
+                self.mask.fill(-1)
+                forbid(self.mask, self.think_start[state.opening])
+                return apply_token_bitmask(logits, self.mask)
             return logits
         if state.phase == "start" and self.reply:
             # Part of a marker so far: only what completes one may come.
@@ -617,14 +681,16 @@ class Watcher:
             only(self.mask, [o[len(so_far)] for o in self.openers() if o[: len(so_far)] == so_far])
             return apply_token_bitmask(logits, self.mask)
         if state.phase == "answer" and state.header:
-            only(self.mask, [self.answer_header[state.header]])
+            written = tuple(self.reply[-state.header :])
+            only(self.mask, [h[state.header] for h in self.headers_from(written)])
             return apply_token_bitmask(logits, self.mask)
         fill_next_token_bitmask(self.matcher, self.mask)
         if state.phase == "start":
             for opener in self.openers():
                 allow(self.mask, opener[0])
         elif state.phase == "answer" and state.header == 0:
-            allow(self.mask, self.answer_header[0])
+            for header in self.answer_headers:
+                allow(self.mask, header[0])
         if state.closing_string:
             # The tokens that both fit the schema and close the string. None
             # of them is allowed mid-escape; then the next step tries again.
@@ -681,44 +747,62 @@ def client_gone(connection):
 # Harmony: the channel format gpt-oss writes.
 # ---------------------------------------------------------------------------
 #
-# A gpt-oss reply is a series of channels. Thinking goes in one:
+# A gpt-oss reply is a series of messages, each on a channel and each
+# ended by `<|end|>`, with `<|start|>assistant` opening the next. Thinking
+# goes on the analysis channel, the answer on the final channel, and a
+# tool call on the commentary channel, ended by `<|call|>` instead:
 #
 #   <|channel|>analysis<|message|>…thinking…<|end|><|start|>assistant
-#
-# then either the answer:
-#
 #   <|channel|>final<|message|>…answer…<|return|>
 #
-# or a tool call, which ends the reply:
-#
 #   <|channel|>commentary to=functions.NAME <|constrain|>json<|message|>{…}<|call|>
+#
+# The recipient may go in the role header instead, which is how the
+# model's own template renders past calls, so the model often writes it
+# that way after a tool round:
+#
+#   <|start|>assistant to=functions.NAME<|channel|>commentary json<|message|>{…}<|call|>
+#
+# And the model may say something to the user on the commentary channel
+# before a call, with no recipient:
+#
+#   <|channel|>commentary<|message|>Let me check.<|end|><|start|>assistant<|channel|>commentary to=…
 #
 # mlx_lm 0.31.3 knows none of this, so the whole thing came back as the
 # reply's text, thinking and markup included. It does know thinking and
 # tool calls in general, as a start marker and an end marker each, read
 # off the tokenizer, and its own state machine drops the marker text. So
 # the format is taught to the tokenizer in those terms: the analysis
-# header opens thinking, `<|end|><|start|>assistant` closes it, and the
-# commentary header opens a tool call that the `<|call|>` stop token
-# ends. The one thing left over is the final header, which is neither,
-# and the state machine gets one more rule to drop it.
+# header opens thinking and `<|end|>` closes it; `to=functions`, with or
+# without the commentary header in front of it, opens a tool call that
+# the `<|call|>` stop token ends. Everything else the format writes
+# between messages (`<|start|>assistant`, the final header, a preamble's
+# header, an `<|end|>` outside thinking) is dropped by the state machine
+# and the text between stays. That leaves a preamble in the reply's text,
+# which is what it is.
 #
 # A call that ends on a stop token needs one more thing. mlx_lm's handler
 # files a tool call when the state after it is "normal", and a stop has
 # no state, so a reply that stops inside a call would be filed as nothing.
-# `Generator.generate` below hands the handler one empty "normal" step
-# before such a stop, and the call is filed.
+# `Generator.generate` below hands the handler the stop with the state
+# "normal", and the call is filed.
 
 HARMONY_ANALYSIS = "<|channel|>analysis<|message|>"
-HARMONY_CLOSE = "<|end|><|start|>assistant"
+HARMONY_CLOSE = "<|end|>"
+HARMONY_TURN = "<|start|>assistant"
 HARMONY_FINAL = "<|channel|>final<|message|>"
-HARMONY_COMMENTARY = "<|channel|>commentary"
+HARMONY_PREAMBLE = "<|channel|>commentary<|message|>"
+# Both end at `functions`: the `.` after it is one token with what follows.
+HARMONY_TOOL = "<|channel|>commentary to=functions"
+HARMONY_RECIPIENT = " to=functions"
 HARMONY_TOKENS = ("<|channel|>", "<|message|>", "<|start|>", "<|end|>", "<|call|>")
 
-# What follows the commentary header in a tool call: the recipient, an
-# optional content-type constraint, then the arguments after `<|message|>`.
+# The text of a tool call after its opening: the function's name, then
+# the commentary header when the recipient came in the role header, then
+# an optional content type with or without `<|constrain|>`, then the
+# arguments after `<|message|>`.
 HARMONY_TOOL_CALL = re.compile(
-    r"\s*to=functions\.(?P<name>[\w.\-]+)\s*(?:<\|constrain\|>\S*)?<\|message\|>(?P<args>.*)$",
+    r"\s*\.?(?P<name>[\w\-]+)\s*(?:<\|channel\|>commentary)?\s*(?:<\|constrain\|>)?[\w/+.\-]*\s*<\|message\|>(?P<args>.*)$",
     re.DOTALL,
 )
 
@@ -730,10 +814,10 @@ def speaks_harmony(tokenizer):
 
 
 def parse_harmony_tool_call(text, tools):
-    """The tool call in the text between the commentary header and the
-    `<|call|>` that ended the reply, in the shape mlx_lm's parsers return.
-    Arguments that are not JSON are handed over as they were written, under
-    `raw`, rather than failing the request."""
+    """The tool call in the text between `to=functions` and the `<|call|>`
+    that ended the reply, in the shape mlx_lm's parsers return. Arguments
+    that are not JSON are handed over as they were written, under `raw`,
+    rather than failing the request."""
     match = HARMONY_TOOL_CALL.match(text)
     if match is None:
         raise ValueError(f"Not a Harmony tool call: {text[:80]!r}")
@@ -757,11 +841,22 @@ def teach_harmony(tokenizer):
     tokenizer._think_start_tokens = encode(HARMONY_ANALYSIS)
     tokenizer._think_end_tokens = encode(HARMONY_CLOSE)
     tokenizer._tool_parser = parse_harmony_tool_call
-    tokenizer._tool_call_start = HARMONY_COMMENTARY
-    tokenizer._tool_call_start_tokens = encode(HARMONY_COMMENTARY)
+    tokenizer._tool_call_start = HARMONY_TOOL
+    tokenizer._tool_call_start_tokens = encode(HARMONY_TOOL)
     tokenizer._tool_call_end = None
     tokenizer._tool_call_end_tokens = None
-    tokenizer._harmony_final_tokens = encode(HARMONY_FINAL)
+    # The second way a call can open, and the markers dropped between
+    # messages. The final header is also the answer's header for the
+    # reply watcher: on its own at the reply's start, after the turn
+    # marker once thinking has closed.
+    tokenizer._harmony_tool_openers = [encode(HARMONY_TOOL), encode(HARMONY_RECIPIENT)]
+    tokenizer._harmony_drops = {
+        encode(HARMONY_TURN): HARMONY_TURN,
+        encode(HARMONY_FINAL): HARMONY_FINAL,
+        encode(HARMONY_PREAMBLE): HARMONY_PREAMBLE,
+        encode(HARMONY_CLOSE): HARMONY_CLOSE,
+    }
+    tokenizer._harmony_headers = [encode(HARMONY_TURN + HARMONY_FINAL), encode(HARMONY_FINAL)]
     tokenizer._harmony = True
     logging.info("The model speaks Harmony; its channels will be split.")
 
@@ -829,10 +924,10 @@ class Generator(server.ResponseGenerator):
         return getattr(args, "vocab_size", 0) or 0
 
     def _make_state_machine(self, model_key, tokenizer, stop_words, initial_state="normal"):
-        """mlx_lm's, plus one rule for a Harmony tokenizer: the final
-        channel's header, met in the normal state, is dropped and the state
-        stays normal. mlx_lm blanks the text of any matched sequence, so the
-        rule is all it takes to keep the header out of the reply."""
+        """mlx_lm's, rebuilt for a Harmony tokenizer: a tool call can open
+        two ways, and the markers between messages are dropped, which is a
+        rule from the normal state back to itself. mlx_lm blanks the text of
+        any matched sequence, so that is all a drop takes."""
         teach_harmony(tokenizer)
         if not getattr(tokenizer, "_harmony", False):
             return super()._make_state_machine(model_key, tokenizer, stop_words, initial_state)
@@ -851,14 +946,17 @@ class Generator(server.ResponseGenerator):
             stops.append((tokens, None))
         think_start = tokenizer.think_start_tokens
         think_end = tokenizer.think_end_tokens
-        tool_start = tokenizer.tool_call_start_tokens
-        final = tokenizer._harmony_final_tokens
         sequences[think_start] = tokenizer.think_start
         sequences[think_end] = tokenizer.think_end
-        sequences[tool_start] = tokenizer.tool_call_start
-        sequences[final] = HARMONY_FINAL
+        normal = [(think_start, "reasoning")]
+        for opener in tokenizer._harmony_tool_openers:
+            sequences[opener] = tokenizer.decode(list(opener))
+            normal.append((opener, "tool"))
+        for dropped, text in tokenizer._harmony_drops.items():
+            sequences[dropped] = text
+            normal.append((dropped, "normal"))
         transitions = {
-            "normal": [(think_start, "reasoning"), (tool_start, "tool"), (final, "normal")] + stops,
+            "normal": normal + stops,
             "reasoning": [(think_end, "normal")] + stops,
             "tool": list(stops),
         }
@@ -971,23 +1069,25 @@ class Generator(server.ResponseGenerator):
                 watcher = getattr(args, "watcher", None)
                 if response.finish_reason is not None and watcher is not None and watcher.cut:
                     response = replace(response, finish_reason="length")
-                for step in close_tool_call(last_state, response):
-                    yield step
+                response = file_tool_call_on_stop(last_state, response)
                 last_state = response.state
                 yield response
 
         return ctx, server._process_control_tokens(ctx, tokens())
 
 
-def close_tool_call(last_state, response):
-    """The empty "normal" step that goes before a stop met inside a tool
-    call, so mlx_lm's handler files the call. A tool call that ends on a
-    stop token (Harmony's `<|call|>`) stops the reply while the state
-    machine is still in the tool state; the handler only files a call when
-    a "normal" token follows it. Nothing for any other token."""
+def file_tool_call_on_stop(last_state, response):
+    """A stop met inside a tool call, handed over with the state "normal"
+    so mlx_lm's handler files the call. A tool call that ends on a stop
+    token (Harmony's `<|call|>`) stops the reply while the state machine
+    is still in the tool state, and the handler only files a call when a
+    "normal" token follows it. The stop's own text is already blank, and
+    the handler reads the finish reason from the token itself, so nothing
+    else changes; in particular no token is added to the reply's count.
+    Any other token is returned as it is."""
     if response.finish_reason is None or response.state is not None or last_state != "tool":
-        return []
-    return [replace(response, text="", state="normal", match=None, finish_reason=None)]
+        return response
+    return replace(response, state="normal")
 
 
 original_make_logits_processors = server._make_logits_processors

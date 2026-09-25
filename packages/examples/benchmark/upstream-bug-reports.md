@@ -9,6 +9,12 @@ Checked against each project's issue tracker and contributing rules on
 | Logits processor ignored after a request that had none | mlx-lm | Fixed on `main` by PR #1772 (merged 2026-08-25), not in any release; 0.31.3 (2026-04-22) is still the latest | Nothing to file. Keep the shim's workaround until a release lands, then drop it when the pin moves |
 | `mlx_lm.server` ignores `response_format` | mlx-lm | Open as issue #1007 since 2026-03-15, no maintainer reply, no linked PR | Nothing new to file. A comment there, or a PR, if you want to push it |
 | Grammar plus auto-opened `<think>` puts the JSON in the thought segment | node-llama-cpp | Not reported. Introduced by PR #636, shipped in 3.20.0; 3.21.1 still has it | File a bug. Draft below |
+| Gemma 4 wrapper spells the tool-result markers differently from the model's template | node-llama-cpp | Not reported. 3.21.1 | File a bug. Facts below |
+| JSON-schema grammar does not read `anyOf`, so a zod union becomes "any value" | node-llama-cpp | Not reported. 3.21.1 | File a bug or a PR. Facts below |
+| JSON-schema grammar's fixed indentation lets a long space token empty every array | node-llama-cpp | Not reported. 3.21.1 | File a bug. Facts below |
+
+smoltalk-llama-cpp 0.7.2 works around the last three, so the benchmark no
+longer depends on them. See "Three more node-llama-cpp findings" at the end.
 
 ## mlx-lm: the two things you cannot file
 
@@ -253,3 +259,59 @@ grammar and segment handling, not in the bundled llama.cpp.
 Your call. The grammar workaround above is what smoltalk-llama-cpp 0.6.0
 ships; a fix inside `LlamaChat` would be to wrap the grammar the same way
 when the thought segment is opened on response start.
+
+## Three more node-llama-cpp findings (2026-09-25)
+
+Found while chasing the benchmark's typed and tool cases on GGUF models,
+each reproduced outside Agency with node-llama-cpp 3.21.1 alone. All three
+are worked around in smoltalk-llama-cpp 0.7.2 (`lib/grammarSchema.ts`,
+`lib/jsonWhitespace.ts`, and the Gemma 4 settings in `lib/llamaCpp.ts`), so
+these are reports for their tracker, not blockers.
+
+### Gemma 4's tool-result markers
+
+`Gemma4ChatWrapper` writes a tool result as
+`<tool_response>response:name{"…"}</tool_response>` and wraps a call's
+parameters in two pairs of braces (`call:name{{"city": "Oslo"}}`). The
+model's own chat template, and Google's prompt-format page, write
+`<|tool_response>response:name{value:…}<tool_response|>` and one pair of
+braces. Shown a result the wrapper's way, gemma-4-E4B and gemma-4-26B-A4B
+ended the turn at once or wrote a stray `<tool_call|>`. With the template's
+markers, both finish a three-call chain and answer. The wrapper's file cites
+the same page, so the markers look like a transcription slip.
+
+A second, separate cause: a chain of calls split across several `model`
+history items (one per round, which is how a tool loop naturally records
+it) breaks Gemma 4 even with the right markers. One `model` item holding
+the whole chain works. That one is arguably the caller's job, and the
+plugin now merges the items.
+
+### `anyOf` in a JSON schema
+
+`getGbnfJsonTerminalForGbnfJsonSchema` handles `oneOf`, `const`, and
+`enum`, but not `anyOf`, and a schema part it does not recognise becomes
+"any JSON value" with no warning. zod 4's `toJSONSchema` writes a union of
+literals, the usual way to spell an enum, as
+`anyOf: [{type: "string", const: "positive"}, …]`, so a field typed that
+way came back as `null` from every model. Reading `anyOf` the way `oneOf`
+is read fixes it.
+
+### Fixed indentation empties arrays
+
+The grammar for an array three levels deep is
+
+```
+rule1 ::= "[" whitespace-b-3-4-rule ( item ( comma-whitespace-b-3-4-rule item )* )? whitespace-b-2-4-rule "]"
+whitespace-b-3-4-rule ::= [\n] (" "{12} | "\t"{3}) | [ ]?
+whitespace-b-2-4-rule ::= [\n] (" "{8} | "\t\t") | [ ]?
+```
+
+Qwen3.5 writes a run of thirteen spaces after the line break as one token.
+The grammar accepts it as the twelve spaces of indentation plus the
+optional one before `]`, and then `]` is the only legal token. Every array
+from Qwen3.5-4B and 9B came back empty, at temperature 0 as well; the 2B,
+which happens to write twelve, filled them. Replacing each whitespace rule
+with `[ \t\n]{0,64}` fixes all three models. The root rule's trailing
+`"\n\n\n\n" [\n]*` has a related cost: a model that samples can write
+line breaks instead of stopping for as long as they are allowed, and Gemma
+4 spent ninety seconds on them; `[\n]{0,4}` ends the reply.

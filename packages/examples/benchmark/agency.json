@@ -1,0 +1,7 @@
+{
+  "observability": true,
+  "log": {
+    "debugMode": false,
+    "logFile": "log.jsonl"
+  }
+}

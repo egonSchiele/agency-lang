@@ -70,7 +70,10 @@ type CaseResult = {
   outputTokens: number,
   cost: number,
   detail: string,
-  error: string
+  error: string,
+  // Why the provider ended a reply early, such as "refusal" or "length",
+  // when one did. Empty when every reply in the case ended normally.
+  stopReason: string
 }
 
 /** The shape of the JSON file this script writes, and compare.agency reads. */
@@ -115,8 +118,26 @@ type RunSettings = {
 // even when the label is a nickname.
 let seenModel: string = ""
 
+// The reasons the provider gave for ending a reply early during the current
+// case: "content_filter" when it refused, "length" when the reply hit the
+// token cap. A reply that ended normally, or to call a tool, adds nothing.
+// A case that ends this way is recorded as an error, not a wrong answer:
+// the model never got to answer.
+let earlyStops: string[] = []
+
 callback("onLLMCallEnd") as data {
   seenModel = "${data.model}"
+  const reason = data.result.stopReason
+  if (reason != null && reason != "stop" && reason != "tool_use" && reason != "stop_sequence") {
+    // The provider's own word for it when there is one: "refusal" says
+    // more than "content_filter".
+    const raw = data.result.rawStopReason
+    let word = "${reason}"
+    if (raw != null && raw != "") {
+      word = "${raw}"
+    }
+    earlyStops.push(word)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -760,6 +781,7 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
   const startCost = getCost()
   const startTokens = getTokens()
   const startOutput = outputTokensSoFar()
+  earlyStops = []
   thinkingFor(info.name)
   let result: any = null
   thread {
@@ -776,6 +798,13 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
     detail = oneLine(result.detail)
     error = oneLine(result.error, 160)
   }
+  // A reply the provider cut off is not the model's answer. When the case
+  // did not pass and no other error explains it, the stop reason is the
+  // error, so the tables show it as one.
+  const stopReason = earlyStops.join(", ")
+  if (stopReason != "" && score < 1 && error == "") {
+    error = "the provider ended a reply early: ${stopReason}"
+  }
   return {
     caseName: info.name,
     category: info.category,
@@ -787,7 +816,8 @@ def runCase(info: CaseInfo, trial: number, haystackLines: number): CaseResult {
     outputTokens: outputTokensSoFar() - startOutput,
     cost: getCost() - startCost,
     detail: detail,
-    error: error
+    error: error,
+    stopReason: stopReason
   }
 }
 

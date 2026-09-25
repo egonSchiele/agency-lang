@@ -1,12 +1,9 @@
 /**
  * Read the JSON files that run-model.agency wrote, one per model, and print
- * them side by side. Also writes every run into one combined file.
+ * them side by side.
  *
  *   agency run compare.agency results/*.json
- *   agency run compare.agency results/gpt-5.4-mini.json results/qwen3.5-2b.json --out combined.json
- *
- * A combined file can be passed back in, too, so you can add a new model to
- * an old comparison without rerunning the old models.
+ *   agency run compare.agency results/gpt-5.4-mini.json results/qwen3.5-2b.json
  *
  * Three tables are printed:
  *   1. Each case, each model: trials passed, then the mean and median time.
@@ -32,7 +29,9 @@ type CaseResult = {
   outputTokens?: number,
   cost: number,
   detail: string,
-  error: string
+  error: string,
+  // Absent in files written before the benchmark recorded stop reasons.
+  stopReason?: string
 }
 
 type RunFile = {
@@ -153,7 +152,8 @@ def readRuns(path: string): RunFile[] {
     return []
   }
   const data = parsed.value
-  // A combined file written by this script holds a list of runs.
+  // An older combined file, from when this script wrote one, holds a list
+  // of runs.
   if (data.runs != null) {
     return data.runs
   }
@@ -235,28 +235,31 @@ def printCategoryTable(runs: RunFile[], categories: string[]) {
   }
 }
 
-// Tokens the model wrote per second, over every case that has the count.
-// This is the model's writing speed on this machine, thinking included, and
-// it does not depend on how long the prompts were. A file from before the
-// count was recorded shows "-".
+// Tokens the model wrote per second: every token it wrote over every
+// second it took, across the cases that finished. Pooled this way, a
+// one-word reply counts for its two tokens, not for a whole case; averaging
+// the cases' own rates would let it drag the number down by half. Thinking
+// is included. A file from before the count was recorded shows "-".
 def outputSpeed(run: RunFile): string {
   const counted = filter(run.results) as r { return r.error == "" && r.latencyMs > 0 && r.outputTokens != null && r.outputTokens > 0 }
   if (counted.length == 0) {
     return "-"
   }
-  const rates = map(counted) as r { return r.outputTokens / (r.latencyMs / 1000) }
-  return average(rates).toFixed(0)
+  const tokens = sumOf(map(counted) as r { return r.outputTokens })
+  const seconds = sumOf(map(counted) as r { return r.latencyMs }) / 1000
+  return (tokens / seconds).toFixed(0)
 }
 
-// Tokens per second on the long story. The token count includes the short
-// prompt, so this slightly overstates generation speed.
+// The same rate on the throughput case alone: one short prompt and a long
+// reply, so it is the cleanest number for comparing machines.
 def storySpeed(run: RunFile): string {
-  const stories = filter(casesOf(run, "throughput")) as r { return r.error == "" && r.latencyMs > 0 }
+  const stories = filter(casesOf(run, "throughput")) as r { return r.error == "" && r.latencyMs > 0 && r.outputTokens != null && r.outputTokens > 0 }
   if (stories.length == 0) {
     return "-"
   }
-  const rates = map(stories) as r { return r.tokens / (r.latencyMs / 1000) }
-  return average(rates).toFixed(0)
+  const tokens = sumOf(map(stories) as r { return r.outputTokens })
+  const seconds = sumOf(map(stories) as r { return r.latencyMs }) / 1000
+  return (tokens / seconds).toFixed(0)
 }
 
 def printSummaryTable(runs: RunFile[]) {
@@ -330,9 +333,7 @@ node main() {
   const args = parseArgs({
     programName: "compare",
     description: "Compare benchmark results from several run-model.agency JSON files.",
-    flags: {
-      out: { type: "string", short: "o", default: "combined.json", description: "Where to write every run as one JSON file. Pass an empty string to skip it" }
-    }
+    flags: {}
   })
 
   const paths = args.positionals
@@ -341,8 +342,8 @@ node main() {
     return null
   }
 
-  // The same run can arrive twice, once in its own file and once inside a
-  // combined file, as when comparing results/*.json after run-all.sh.
+  // The same run can arrive twice, once in its own file and once inside an
+  // older combined file.
   let runs: RunFile[] = []
   let seenKeys: string[] = []
   for (path in paths) {
@@ -374,14 +375,4 @@ node main() {
   printCaseTable(runs, inOrder(allCaseNames))
   printCategoryTable(runs, inOrder(allCategories))
   printSummaryTable(runs)
-
-  if (args.flags.out != "") {
-    const saved = write(args.flags.out, JSON.stringify({ runs: runs }, null, 2)) with approve
-    print("")
-    if (isFailure(saved)) {
-      print("Could not write ${args.flags.out}: ${saved.error}")
-    } else {
-      print("Wrote ${runs.length} runs to ${args.flags.out}")
-    }
-  }
 }

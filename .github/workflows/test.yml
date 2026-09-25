@@ -72,7 +72,7 @@ jobs:
       with:
         # Pinned to the exact engines minimum (package.json "node": ">=22.13.0")
         # so the declared floor is the tested floor, not whatever 22.x floats to.
-        # 22.13 rather than commander v15's 22.12 because pnpm 11 requires it —
+        # 22.13 rather than commander v15's 22.12 because pnpm 12 requires it —
         # this pin is what catches such contradictions.
         node-version: 22.13.0
         cache: 'pnpm'

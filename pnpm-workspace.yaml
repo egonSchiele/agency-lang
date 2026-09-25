@@ -3,7 +3,7 @@ packages:
   - "packages/agency-lang/docs/site"
 
 # Supply-chain hardening. Needs pnpm >= 10.16 — OLDER PNPM SILENTLY IGNORES
-# ALL OF THIS. The root package.json packageManager field pins pnpm@11.x;
+# ALL OF THIS. The root package.json packageManager field pins pnpm@12.x;
 # pnpm >= 10 self-switches to it natively, Corepack and CI's pnpm/action-setup
 # read the same field. A pre-10 global pnpm honors none of that: if
 # `pnpm --version` in this repo does not print the pinned version, upgrade.

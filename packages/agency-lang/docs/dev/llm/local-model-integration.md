@@ -33,7 +33,7 @@ won't write to your real `~/.agency-agent/models` or `~/agency.json`.
 # In packages/agency-lang/. Install the optional provider once. It is not in
 # package.json, so a normal `pnpm install` never pulls it. Keep both versions
 # in step with SMOLTALK_LLAMA_CPP_VERSION and NODE_LLAMA_CPP_VERSION in
-# .github/workflows/local-model.yml, which is the source of truth. (pnpm 11
+# .github/workflows/local-model.yml, which is the source of truth. (pnpm
 # refuses `--save=false` on `add`, so this edits package.json and the
 # lockfile; the last line puts them back.)
 pnpm add smoltalk-llama-cpp@0.5.0 node-llama-cpp@3.20.0

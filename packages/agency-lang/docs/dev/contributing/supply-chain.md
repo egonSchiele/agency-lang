@@ -54,7 +54,7 @@ form (`name@x.y.z`, pnpm ≥ 10.19) over lowering the global window.
 
 These settings need pnpm >= 10.16, and older pnpm **silently ignores** them.
 That is the failure mode that would quietly turn all of this off. The
-repo-root `"packageManager": "pnpm@11.20.0"` field is the single source of
+repo-root `"packageManager": "pnpm@12.4.2"` field is the single source of
 truth, and three separate mechanisms honor it. pnpm >= 10 switches to the
 pinned version natively via `managePackageManagerVersions`, which is on by
 default. Corepack shims do the same where Corepack is enabled. CI's
@@ -64,11 +64,16 @@ one, or that workflow resolves dependencies with the cooldown off.
 
 The unprotected case is a global pnpm older than 10. It ignores both the
 field and the settings, so if `pnpm --version` inside the repo does not print
-11.20.0, upgrade it.
+12.4.2, upgrade it.
 
-pnpm 11 itself requires Node ≥ 22.13, which is why the engines floor (and the
-CI job pinned to the exact floor) sits at 22.13.0 rather than commander v15's
-22.12.
+The pinned pnpm is itself subject to the cooldown in spirit: the lockfile's
+first document resolves `pnpm` and its `@pnpm/exe.*` binaries at the pinned
+version, and `pnpm` is not in `minimumReleaseAgeExclude`, so when bumping
+`packageManager` choose a release that is at least 7 days old.
+
+The engines floor of Node 22.13 was raised above commander v15's 22.12 for
+pnpm 11. pnpm 12 runs on Node 18+, so nothing requires 22.13 today; the floor
+stays there until lowering it is its own change.
 
 ## What this deliberately does not do
 

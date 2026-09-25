@@ -1,11 +1,15 @@
-
 // Both limits set. The time budget is tight (20ms) and there are no
 // LLM calls, so the time guard must trip first. Verifies that:
 //   1. `guard(cost:, time:)` pushes both guards
 //   2. either guard tripping triggers the Failure path
 //   3. the time variant produces "timeoutFailure" with maxTime set
 //      and the cost fields null.
+// The handler is race insurance, the same as in guard-time-trip.agency:
+// on a slow runner the 20ms budget can run out before the sleep starts,
+// so the trip is detected at a step boundary and raised as an interrupt
+// instead of aborting the sleep. Rejecting it gives the same Failure.
 node main() {
+  handle {
   const result = guard(cost: $1.0, time: 20ms) {
     sleep(150ms)
     sleep(1ms)
@@ -15,4 +19,10 @@ node main() {
     return "tripped:${result.data.type}:maxTime=${result.data.maxTime}:maxCost=${result.data.maxCost}"
   }
   return result.value
+  } with (i) {
+    return match(i.effect) {
+      "std::guard" => reject()
+      _ => pass()
+    }
+  }
 }

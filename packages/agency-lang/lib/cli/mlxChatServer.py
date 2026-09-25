@@ -797,8 +797,12 @@ HARMONY_CLOSE = "<|end|>"
 HARMONY_TURN = "<|start|>assistant"
 HARMONY_FINAL = "<|channel|>final<|message|>"
 HARMONY_PREAMBLE = "<|channel|>commentary<|message|>"
-# Both end at `functions`: the `.` after it is one token with what follows.
+# All end at `functions`: the `.` after it is one token with what follows.
+# The format puts function calls in the commentary channel, but gpt-oss
+# also calls them straight from the analysis channel, in the middle of
+# thinking, and a call is a call whichever channel it came from.
 HARMONY_TOOL = "<|channel|>commentary to=functions"
+HARMONY_ANALYSIS_TOOL = "<|channel|>analysis to=functions"
 HARMONY_RECIPIENT = " to=functions"
 HARMONY_TOKENS = ("<|channel|>", "<|message|>", "<|start|>", "<|end|>", "<|call|>")
 
@@ -850,11 +854,11 @@ def teach_harmony(tokenizer):
     tokenizer._tool_call_start_tokens = encode(HARMONY_TOOL)
     tokenizer._tool_call_end = None
     tokenizer._tool_call_end_tokens = None
-    # The second way a call can open, and the markers dropped between
+    # The other ways a call can open, and the markers dropped between
     # messages. The final header is also the answer's header for the
     # reply watcher: on its own at the reply's start, after the turn
     # marker once thinking has closed.
-    tokenizer._harmony_tool_openers = [encode(HARMONY_TOOL), encode(HARMONY_RECIPIENT)]
+    tokenizer._harmony_tool_openers = [encode(HARMONY_TOOL), encode(HARMONY_ANALYSIS_TOOL), encode(HARMONY_RECIPIENT)]
     tokenizer._harmony_drops = {
         encode(HARMONY_TURN): HARMONY_TURN,
         encode(HARMONY_FINAL): HARMONY_FINAL,
@@ -930,7 +934,7 @@ class Generator(server.ResponseGenerator):
 
     def _make_state_machine(self, model_key, tokenizer, stop_words, initial_state="normal"):
         """mlx_lm's, rebuilt for a Harmony tokenizer: a tool call can open
-        two ways, and the markers between messages are dropped, which is a
+        three ways, and the markers between messages are dropped, which is a
         rule from the normal state back to itself. mlx_lm blanks the text of
         any matched sequence, so that is all a drop takes."""
         teach_harmony(tokenizer)

@@ -46,6 +46,23 @@ describe("_hostedSearchTools", () => {
     expect(withAmbient(ambient, () => _hostedSearchTools("gpt-4o-mini", "openai"))).toEqual([]);
   });
 
+  test("a local provider never gets hosted search, even for a model the catalog does not know", () => {
+    // The MLX server's model names are repo ids the catalog has never
+    // heard of, which used to fall into the err-open case and send
+    // web_search to a provider that cannot offer it.
+    expect(_hostedSearchTools("mlx-community/Qwen3.8-27B-4bit", "mlx")).toEqual([]);
+    expect(_hostedSearchTools("/models/qwen3.5-2b.gguf", "llama-cpp")).toEqual([]);
+    // The same through the ambient pair, which is how `agency agent --local`
+    // routes every call.
+    expect(
+      withAmbient({ model: "mlx-community/Qwen3.8-27B-4bit", provider: "mlx" }, () =>
+        _hostedSearchTools(""),
+      ),
+    ).toEqual([]);
+    // A named local provider beats the model's catalog route.
+    expect(_hostedSearchTools("gpt-4o-mini", "llama-cpp")).toEqual([]);
+  });
+
   test("no model override: the ambient pair is the route", () => {
     expect(
       withAmbient({ model: "gpt-4o-mini", provider: "openai-responses" }, () =>

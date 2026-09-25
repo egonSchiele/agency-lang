@@ -174,4 +174,4 @@ if [ ${#files[@]} -eq 0 ]; then
   exit 1
 fi
 
-$AGENCY run compare.agency "${files[@]}" --out "$RESULTS_DIR/combined.json"
+$AGENCY run compare.agency "${files[@]}"

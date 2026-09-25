@@ -7,7 +7,7 @@ Run `agency run run-model.agency --list` to see the cases. The header of `run-al
 ## Before the first run on a machine
 
 1. Build Agency: `make` in `packages/agency-lang`.
-2. Install the local provider: `npm i -g smoltalk-llama-cpp`. It has to be 0.7.0 or later, or thinking cannot be turned off on GGUF models and the numbers will not match the other machines.
+2. Install the local provider: `npm i -g smoltalk-llama-cpp`. It has to be 0.7.2 or later. Until 0.7.2 is published, build it from the smoltalk checkout (`pnpm build` in `packages/smoltalk-llama-cpp`) and point `AGENCY_LLAMA_PROVIDER_MODULE` at its `dist/index.js` when running the benchmark. Before 0.7.0, thinking could not be turned off on GGUF models; before 0.7.2, a typed reply from a GGUF model told not to think came back as prose, an array field often came back empty, an enum field came back as `null`, and Gemma 4 stopped answering after its first tool result. Every typed and tool case on a GGUF model measured those bugs rather than the model.
 3. For MLX models, create the Python environment once, as the local models guide describes, and download the models below with `agency local download <name>`.
 4. Set the API keys for the hosted models you run: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`.
 
@@ -113,18 +113,20 @@ The lipogram case is left out of `all` on purpose: it makes small models loop, w
 
 ## Comparing
 
-Copy every machine's `results/*.json` into one directory and compare them all. A run that arrives twice, once on its own and once inside a combined file, is counted once.
+Copy every machine's `results/*.json` into one directory and compare them all. Each file's name carries its machine label, so the files from every machine can share the directory.
 
 ```bash
-agency run compare.agency results/*.json --out results/combined.json
+agency run compare.agency results/*.json
 ```
 
 When the files span more than one machine label, each column is headed `model @ machine`. Older result files, from before the machine and settings were recorded, still compare and show `-` where a value is missing.
 
 ## Reading the numbers
 
-- `out tok/s` is the tokens the model wrote per second, thinking included. It is the speed of the machine on that model, and it does not depend on how long the prompts were.
-- `story tok/s` counts the prompt too and only covers the throughput case. Prefer `out tok/s`.
+- `out tok/s` is every token the model wrote over every second it took, across the cases that finished, thinking included. The time is the whole call, so reading the prompt counts too; on the needle case, with its 17,000-token prompt, that is most of the time. It is a throughput figure for the suite, not a pure writing speed.
+- `story tok/s` is the same rate on the throughput case alone: one short prompt, one long reply, so the prompt hardly matters. It is the cleanest number for comparing machines. A file from before output tokens were recorded uses the total count, which runs a little high.
+- A case's `stopReason` is why the provider ended its last reply early: `content_filter` for a refusal, `length` for the token cap. It is empty when the reply ended on its own. These are smoltalk's names, the same for every provider, so searching for `length` finds every capped reply. The error text uses the provider's own word, such as `refusal` from Anthropic or `MAX_TOKENS` from Gemini.
+- A case whose reply the provider cut off, by refusing or by hitting the token cap, is recorded as an error that names the stop reason, not as a wrong answer. Claude Fable 5.1 refused every reasoning prompt this way in the first round.
 - Latency includes the network round trip for a hosted model and not for a local one. Time to first token is not measured separately, so a comparison of latencies alone flatters a local model on short replies.
 - OpenAI reasoning models ignore the thinking policy's off switch and think at their default effort, and Gemini keeps its own default when told off, because the Google client only sends a thinking setting when thinking is on. The settings table shows the policy that was asked for, not what each provider did with it.
 - A local model's timed-out call is not retried, so a reply that goes in circles costs one timeout, not three.

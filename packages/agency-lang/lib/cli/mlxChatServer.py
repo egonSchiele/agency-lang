@@ -795,15 +795,18 @@ def lenient_param_value(convert):
     request. mlx_lm 0.31.3's Qwen parser evaluates a parameter whose type
     it does not know as a Python literal, which a plain word is not, and
     reads an object parameter as JSON, which fails when the model wrote
-    anything after the closing brace. Either raised out of the parser,
-    and the server answered 502 to the agent's tool call. The agent's
-    tools take strings and check them, so the text is the right fallback.
-    Filed against mlx-lm in the benchmark's upstream-bug-reports.md."""
+    anything after the closing brace. A number parameter is read as
+    int(float(value)), so a value too large to hold, such as 1e400,
+    overflows to infinity and raises OverflowError. Any of these raised
+    out of the parser, and the server answered 502 to the agent's tool
+    call. The agent's tools take strings and check them, so the text is
+    the right fallback. Filed against mlx-lm in the benchmark's
+    upstream-bug-reports.md."""
 
     def converted(param_value, param_name, param_config):
         try:
             return convert(param_value, param_name, param_config)
-        except (ValueError, SyntaxError, TypeError):
+        except (ValueError, SyntaxError, TypeError, OverflowError):
             return param_value
 
     return converted

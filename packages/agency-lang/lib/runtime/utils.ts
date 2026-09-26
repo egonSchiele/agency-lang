@@ -9,6 +9,22 @@ export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
 }
 
+/** Keep a value only when it round-trips through the given schema. The reply
+ *  message's usage, cost, and thinking are validated by smoltalk's fromJSON
+ *  on restore (checkpoint resume, rewind, subthread clone), which throws on a
+ *  bad shape, so a value that would not pass is dropped here instead — the
+ *  same as before the reply carried these fields. Pass smoltalk's own schema
+ *  for the field, so a value this accepts is one fromJSON accepts. */
+export function serializableExtra<T>(
+  value: T | undefined,
+  schema: { safeParse(input: unknown): { success: boolean } },
+): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return schema.safeParse(value).success ? value : undefined;
+}
+
 export function deepFreeze<T>(obj: T, seen: WeakSet<object> = new WeakSet()): T {
   if (obj === null || obj === undefined || typeof obj !== "object") {
     return obj;

@@ -65,7 +65,7 @@ import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js"
 import { StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState } from "./types.js";
-import { extractStructuredResponse, updateTokenStats } from "./utils.js";
+import { extractStructuredResponse, serializableExtra, updateTokenStats } from "./utils.js";
 
 type Tool = {
   name: string;
@@ -641,15 +641,10 @@ async function _runPrompt({
   });
 
   // Everything the completion carried beyond its text rides on the reply
-  // message: thinking, usage, cost, and a provider's extras (a decision
-  // model's full answers with probabilities). `lastReply()` in std::thread
-  // reads them back. An unset `toolCalls` serializes exactly as before,
-  // because toJSON writes `this.toolCalls?.map(...)`. usage, cost, and
-  // thinking go through `serializableExtra` first: a value that would not
-  // survive smoltalk's fromJSON (a custom client can return a TS-typed but
-  // structurally invalid shape) is dropped rather than left to break a
-  // later checkpoint restore. rawData is untyped (`z.any()`) and never
-  // fails, so it needs no guard.
+  // message, where `lastReply()` in std::thread reads it back: thinking,
+  // usage, cost, and a provider's extras such as a decision model's answers.
+  // usage/cost/thinking go through `serializableExtra` so a shape that would
+  // not survive fromJSON on restore is dropped, not left to break a resume.
   messages.push(
     smoltalk.assistantMessage(completion.output, {
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
@@ -688,23 +683,6 @@ async function _runPrompt({
   });
 
   return { messages, toolCalls, stopReason: completion.stopReason, usageKind };
-}
-
-/** Keep a completion extra on the reply message only when it round-trips
- *  through smoltalk's message schema. `AssistantMessage.fromJSON` validates
- *  usage, cost, and thinking on restore (checkpoint resume, rewind,
- *  subthread clone) and throws on a bad shape, so a value that would not
- *  pass is dropped here instead — the same as before the reply carried
- *  these fields. `schema` is smoltalk's own schema for the field, so a
- *  value this accepts is one fromJSON accepts. */
-function serializableExtra<T>(
-  value: T | undefined,
-  schema: { safeParse(input: unknown): { success: boolean } },
-): T | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  return schema.safeParse(value).success ? value : undefined;
 }
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately

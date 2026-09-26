@@ -65,7 +65,12 @@ describe("SmoltalkClient.decide adapter", () => {
       success: false,
       error: "No TypeSafe API key provided.",
     });
-    const r = await client.decide!("s", questions, { model: "jev-1.13" }, new AbortController().signal);
+    const r = await client.decide!(
+      "s",
+      questions,
+      { model: "jev-1.13" },
+      new AbortController().signal,
+    );
     expect(r).toEqual({ success: false, error: "No TypeSafe API key provided." });
   });
 });

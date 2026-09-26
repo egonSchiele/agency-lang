@@ -152,7 +152,10 @@ describe("answersToValue", () => {
   });
 
   it("fails when an answer is missing or of the wrong type", () => {
-    const plan: DecisionPlan = { questions: {}, shape: { kind: "object", fields: { churn: "noul" } } };
+    const plan: DecisionPlan = {
+      questions: {},
+      shape: { kind: "object", fields: { churn: "noul" } },
+    };
     const missing = answersToValue(plan, {});
     expect(missing.success).toBe(false);
     if (!missing.success) expect(missing.error).toMatch(/"churn"/);

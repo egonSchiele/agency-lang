@@ -22,12 +22,7 @@ type SmoltalkTokens = NonNullable<
 >;
 
 export type ProviderUsageKind =
-  | "completion"
-  | "embedding"
-  | "image"
-  | "transcription"
-  | "speech"
-  | "decision";
+  "completion" | "embedding" | "image" | "transcription" | "speech" | "decision";
 export type UsageKind = ProviderUsageKind | "manual";
 const USAGE_KINDS: readonly UsageKind[] = [
   "completion",

@@ -54,7 +54,9 @@ describe("isDecisionCall", () => {
 
   it("is false for a text model, with or without a filled-in provider", () => {
     expect(isDecisionCall(base({ model: "gpt-4o-mini" }))).toBe(false);
-    expect(isDecisionCall(base({ model: "gpt-4o-mini", provider: "openai-responses" }))).toBe(false);
+    expect(isDecisionCall(base({ model: "gpt-4o-mini", provider: "openai-responses" }))).toBe(
+      false,
+    );
   });
 
   it("is false for an unknown model with no provider, and for no model at all", () => {
@@ -153,7 +155,9 @@ describe("dispatchDecision", () => {
       success: false as const,
       error: "Decision request failed with status 429: slow down",
     }));
-    const err = await dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })).catch((e) => e);
+    const err = await dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })).catch(
+      (e) => e,
+    );
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toMatch(/status 429/);
     expect(err.status).toBe(429);

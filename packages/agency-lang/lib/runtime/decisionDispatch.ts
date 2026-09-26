@@ -31,7 +31,10 @@ type ConfigMaps = {
 
 /** The registry's provider for a model name, or undefined for a name the
  *  registry does not know. Never throws. */
-function registryProvider(model: string | undefined, modelData: ModelDataBlob | undefined): string | undefined {
+function registryProvider(
+  model: string | undefined,
+  modelData: ModelDataBlob | undefined,
+): string | undefined {
   if (model === undefined) return undefined;
   try {
     return smoltalk.resolveProvider(model, undefined, modelData);
@@ -67,9 +70,14 @@ function promptText(config: PromptConfig): string {
 /** Everything that can refuse a decision call before a request exists: the
  *  tools check, the schema mapping, and the client capability. Runs before
  *  metering so a refusal is never counted as an attempt. */
-export function prepareDecision(ctx: RuntimeContext<GraphState>, config: PromptConfig): DecisionPlan {
+export function prepareDecision(
+  ctx: RuntimeContext<GraphState>,
+  config: PromptConfig,
+): DecisionPlan {
   if (config.tools !== undefined && config.tools.length > 0) {
-    throw new Error("A decision model cannot call tools. Remove the tools option or use a text model.");
+    throw new Error(
+      "A decision model cannot call tools. Remove the tools option or use a text model.",
+    );
   }
   const plan = planDecision(config.responseFormat, promptText(config));
   if (!plan.success) {

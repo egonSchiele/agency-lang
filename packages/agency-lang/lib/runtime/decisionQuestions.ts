@@ -127,7 +127,9 @@ export function planDecision(responseFormat: unknown, prompt: string): Result<De
   if (def.type === "object" && def.shape) {
     const names = Object.keys(def.shape);
     if (names.length === 0) {
-      return failure("A decision model needs at least one question, but the object type has no fields.");
+      return failure(
+        "A decision model needs at least one question, but the object type has no fields.",
+      );
     }
     const questions: Record<string, DecisionQuestion> = {};
     const fields: Record<string, AnswerType> = {};

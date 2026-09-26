@@ -4,7 +4,10 @@ import * as smoltalk from "smoltalk";
 
 // Count metered attempts without touching the real usage sink.
 vi.mock("./recordPaidUsage.js", () => ({
-  meteredDispatch: vi.fn((_ctx: unknown, _stack: unknown, _kind: unknown, dispatch: () => Promise<unknown>) => dispatch()),
+  meteredDispatch: vi.fn(
+    (_ctx: unknown, _stack: unknown, _kind: unknown, dispatch: () => Promise<unknown>) =>
+      dispatch(),
+  ),
 }));
 
 import { meteredDispatch } from "./recordPaidUsage.js";
@@ -72,7 +75,12 @@ describe("dispatchWithRetry with a decision call", () => {
       success: true as const,
       value: {
         answers: {
-          answer: { type: "choice", choice: "billing", confidence: 1, probabilities: { billing: 1, support: 0 } },
+          answer: {
+            type: "choice",
+            choice: "billing",
+            confidence: 1,
+            probabilities: { billing: 1, support: 0 },
+          },
         },
         usage: { inputTokens: 1, outputTokens: 0 },
         model: "jev-1.13",

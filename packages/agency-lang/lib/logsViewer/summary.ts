@@ -62,6 +62,16 @@ export function summarize(evt: EventEnvelope): string {
     }
     case "forkEnd":
       return `forkEnd ${d.mode} (${fmtDuration(d.timeTaken)})`;
+    case "decisionBatch": {
+      const groups = Array.isArray(d.groups) ? d.groups : [];
+      const questions = groups.reduce(
+        (acc: number, g: any) => acc + Number(g.questionCount ?? 0),
+        0,
+      );
+      const calls = groups.reduce((acc: number, g: any) => acc + Number(g.callCount ?? 0), 0);
+      const requests = `${groups.length} ${groups.length === 1 ? "request" : "requests"}`;
+      return `decisionBatch ${requests} · ${questions} questions · ${calls} calls (${d.reason}, ${fmtDuration(d.timeTaken)})`;
+    }
     case "threadCreated": {
       // Prefer label > session > nothing as the most informative
       // single-line tag: label is what the agent author wrote in

@@ -20,8 +20,8 @@ Agency uses a **ThreadStore** + **MessageThread** system to manage LLM conversat
 
 The reply message keeps everything the completion carried beyond its text:
 `thinkingBlocks`, `logprobs`, `usage`, `cost`, and `rawData`, a provider's
-extras such as a decision model's answers. smoltalk writes all of them in `toJSON`, so
-they survive a checkpoint and a subthread seed. `lastReply()` in
+extras such as a decision model's answers. smoltalk writes all of them in
+`toJSON`, so they survive a checkpoint and a subthread seed. `lastReply()` in
 `std::thread` (`_lastReply` in `lib/stdlib/thread.ts`) is the reader: the
 active thread's last assistant message, as a record with nulls for what
 the reply did not carry.

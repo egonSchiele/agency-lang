@@ -366,13 +366,20 @@ export type ScoreAnswer = {
   `if (answer.type == "choice") { answer.confidence }`. */
 export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 
+/** A token the model could have produced at a position, and the log of
+  its probability. */
+export type TokenAlternative = {
+  token: string;
+  logprob: number
+}
+
 /** One generated token and the log of its probability. `top` lists the
   likeliest alternatives at that position, most likely first, when the
   call asked for them with `logprobs: { top: n }`; otherwise it is empty. */
 export type TokenLogprob = {
   token: string;
   logprob: number;
-  top: { token: string; logprob: number }[]
+  top: TokenAlternative[]
 }
 
 /** What the model attached to its last reply, beyond the text. `answers`

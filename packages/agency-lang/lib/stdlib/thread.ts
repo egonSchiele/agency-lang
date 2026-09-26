@@ -360,10 +360,6 @@ export async function _threadHasSystemMessage(content: string): Promise<boolean>
 
 export type ReplyUsage = { inputTokens: number; outputTokens: number };
 
-/** What the last assistant message on the active thread carried beyond its
- *  text. `answers` is a decision model's answer per question, null for any
- *  other reply. `rawData` is whatever the provider attached, untouched.
- *  Null fields mean the reply carried nothing of that kind. */
 /** One generated token and the log of its probability, as `lastReply()`
  *  hands it back. `top` holds the likeliest alternatives at that position,
  *  or an empty array when the call did not ask for them. */
@@ -373,6 +369,10 @@ export type ReplyTokenLogprob = {
   top: TokenAlternative[];
 };
 
+/** What the last assistant message on the active thread carried beyond its
+ *  text. `answers` is a decision model's answer per question, null for any
+ *  other reply. `rawData` is whatever the provider attached, untouched.
+ *  Null fields mean the reply carried nothing of that kind. */
 export type ReplyRecord = {
   content: string;
   thinkingBlocks: ThinkingBlock[];

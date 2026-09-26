@@ -1,10 +1,10 @@
 // A text reply that carries thinking blocks, usage, and per-token logprobs
 // reaches lastReply(), and inside a parallel block each arm reads its own
-// reply, never a sibling's. Each arm calls ask()/askC(), which runs
-// lastReply() inside the arm, because the bindings escape the block but the
-// read must happen in the arm. askC() also passes a logprobs option, so the
-// test can check the option reaches the client.
-import { lastReply, TokenLogprob } from "std::thread"
+// reply, never a sibling's. Each arm calls a function that runs lastReply()
+// inside the arm, because the bindings escape the block but the read must
+// happen in the arm. One arm passes a logprobs option, so the test can check
+// that the option reaches the client.
+import { lastReply, Reply, TokenLogprob } from "std::thread"
 
 type Seen = {
   text: string;
@@ -13,9 +13,7 @@ type Seen = {
   logprobs: TokenLogprob[]
 }
 
-def ask(prompt: string): Seen {
-  const text: string = llm(prompt)
-  const reply = lastReply()
+def seen(text: string, reply: Reply | null): Seen {
   if (reply == null) {
     return { text: text, thinking: [], inputTokens: null, logprobs: [] }
   }
@@ -30,28 +28,21 @@ def ask(prompt: string): Seen {
   return { text: text, thinking: thinking, inputTokens: inputTokens, logprobs: reply.logprobs }
 }
 
-def askC(): Seen {
-  const text: string = llm("Say C", { logprobs: { top: 2 } })
-  const reply = lastReply()
-  if (reply == null) {
-    return { text: text, thinking: [], inputTokens: null, logprobs: [] }
-  }
-  let thinking: string[] = []
-  for (block in reply.thinkingBlocks) {
-    thinking.push(block.text)
-  }
-  let inputTokens: number | null = null
-  if (reply.usage != null) {
-    inputTokens = reply.usage.inputTokens
-  }
-  return { text: text, thinking: thinking, inputTokens: inputTokens, logprobs: reply.logprobs }
+def ask(prompt: string): Seen {
+  const text: string = llm(prompt)
+  return seen(text, lastReply())
+}
+
+def askWithAlternatives(prompt: string): Seen {
+  const text: string = llm(prompt, { logprobs: { top: 2 } })
+  return seen(text, lastReply())
 }
 
 node main() {
   parallel {
     const sayA = ask("Say A")
     const sayB = ask("Say B")
-    const sayC = askC()
+    const sayC = askWithAlternatives("Say C")
   }
   const outside = lastReply()
   return { sayA: sayA, sayB: sayB, sayC: sayC, outsideIsNull: outside == null }

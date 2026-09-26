@@ -109,11 +109,11 @@ the failure.
 | --- | --- | --- |
 | a union of string literals, or an enum | one `choice`, named `answer`, one option per literal, each option described by its own name | the prompt |
 | `boolean` | one `noul`, named `answer` | the prompt |
-| an object type | one question per top-level field, named after the field, each field mapped by the two rows above | the field's `@jsonSchema` description, else the field name |
+| an object type | one question per top-level field, named after the field, each field mapped by the two rows above | the prompt, then the field's `@jsonSchema` description or its name, on a second line |
 
-For an object type the prompt is not the instructions of any question. It
-is a user message in the thread, so it is part of the state, the same as
-for every `llm()` call.
+The prompt is never part of the state. It is the question, so it goes into
+the instructions of every question the call asks. The thread still records
+it as a user message, so a later call reads it as conversation.
 
 Refused, each with a failure naming the field: a number, a string that is
 not a literal union, an array, a nested object, an optional or nullable
@@ -124,11 +124,12 @@ fail before any request is sent.
 
 ## The state
 
-The state is the thread's messages as a JSON array of `{ role, content }`.
-Only text goes in. Tool result messages are left out, and so is an
-assistant message that carried only tool calls. A user message with several
-text parts arrives joined with newlines, which is smoltalk's content
-getter. Attachments are not sent.
+The state is the thread's messages before the prompt, as a JSON array of
+`{ role, content }`. A thread that holds only the prompt sends it as the
+state, so the model never sees an empty state. Only text goes in. Tool
+result messages are left out, and so is an assistant message that carried
+only tool calls. A user message with several text parts arrives joined with
+newlines, which is smoltalk's content getter. Attachments are not sent.
 
 Because the reply is appended to the thread, a later `llm()` call sees it.
 In the example, the follow-up question "should a manager call the customer

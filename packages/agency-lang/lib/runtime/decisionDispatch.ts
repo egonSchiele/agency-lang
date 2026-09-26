@@ -6,7 +6,7 @@
  * statelog) runs unchanged. See docs/dev/llm/decision-models.md.
  */
 import * as smoltalk from "smoltalk";
-import type { ModelDataBlob, PromptResult } from "smoltalk";
+import type { Message, ModelDataBlob, PromptResult } from "smoltalk";
 import type { DecideConfig, PromptConfig } from "./llmClient.js";
 import {
   answersToValue,
@@ -59,6 +59,14 @@ export function isDecisionCall(config: PromptConfig): boolean {
     return known.provider === DECISION_PROVIDER;
   }
   return config.provider === DECISION_PROVIDER;
+}
+
+/** The thread as a decision model reads it: everything before the prompt,
+ *  which `runPrompt` appended last. The prompt itself becomes the questions'
+ *  instructions. A thread that holds only the prompt sends it as the state,
+ *  so the model never sees an empty state. */
+export function stateMessages(messages: Message[]): Message[] {
+  return messages.length > 1 ? messages.slice(0, -1) : messages;
 }
 
 /** The prompt is the last message, which `runPrompt` appended just before
@@ -135,7 +143,7 @@ export async function dispatchDecision(
   const signal = config.abortSignal ?? new AbortController().signal;
   const result = await decide.call(
     ctx.llmClient,
-    messagesToState(config.messages),
+    messagesToState(stateMessages(config.messages)),
     plan.questions,
     decideConfig,
     signal,

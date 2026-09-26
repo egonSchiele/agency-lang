@@ -8,6 +8,9 @@
  *   a boolean is a noul (a yes/no question answered with a probability)
  *   an object is one question per top-level field
  * Everything else is refused with a failure naming the field.
+ *
+ * The prompt is every question's instructions. For an object field, the
+ * field's own description or name follows the prompt on a second line.
  */
 import type { Message } from "smoltalk";
 import { failure, success, type Result } from "smoltalk";
@@ -133,7 +136,12 @@ function unwrapEnvelope(schema: unknown): unknown {
   return isEnvelope ? def.shape!.response : schema;
 }
 
-function planObject(shape: Record<string, unknown>): Result<DecisionPlan> {
+/** A field's instructions: the call's prompt, then the field's own text. */
+function fieldInstructions(prompt: string, fieldText: string): string {
+  return prompt === "" ? fieldText : `${prompt}\n${fieldText}`;
+}
+
+function planObject(shape: Record<string, unknown>, prompt: string): Result<DecisionPlan> {
   const names = Object.keys(shape);
   if (names.length === 0) {
     return failure(
@@ -144,7 +152,7 @@ function planObject(shape: Record<string, unknown>): Result<DecisionPlan> {
   const fields: Record<string, AnswerType> = {};
   for (const name of names) {
     const field = shape[name];
-    const planned = questionFor(field, descriptionOf(field) ?? name);
+    const planned = questionFor(field, fieldInstructions(prompt, descriptionOf(field) ?? name));
     if (!planned.success) {
       return failure(
         `A decision model cannot answer field "${name}": it is ${planned.error}. Use a union of string literals or a boolean.`,
@@ -176,7 +184,7 @@ export function planDecision(responseFormat: unknown, prompt: string): Result<De
   const schema = unwrapEnvelope(responseFormat);
   const def = defOf(schema)!;
   if (def.type === "object" && def.shape) {
-    return planObject(def.shape);
+    return planObject(def.shape, prompt);
   }
   return planBare(schema, prompt);
 }

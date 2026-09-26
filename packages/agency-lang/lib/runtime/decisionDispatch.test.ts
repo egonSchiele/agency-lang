@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import * as smoltalk from "smoltalk";
-import { isDecisionCall, dispatchDecision } from "./decisionDispatch.js";
+import { isDecisionCall, dispatchDecision, stateMessages } from "./decisionDispatch.js";
 import type { PromptConfig } from "./llmClient.js";
 
 const dept = z.union([z.literal("billing"), z.literal("support")]);
@@ -64,6 +64,18 @@ describe("isDecisionCall", () => {
   it("is false for an unknown model with no provider, and for no model at all", () => {
     expect(isDecisionCall(base({ model: "nobody-knows-me" }))).toBe(false);
     expect(isDecisionCall(base({}))).toBe(false);
+  });
+});
+
+describe("stateMessages", () => {
+  it("is the thread before the prompt", () => {
+    const messages = [smoltalk.userMessage("ticket"), smoltalk.userMessage("Which department?")];
+    expect(stateMessages(messages)).toEqual([messages[0]]);
+  });
+
+  it("is the prompt itself when the thread holds nothing else", () => {
+    const messages = [smoltalk.userMessage("Which department?")];
+    expect(stateMessages(messages)).toEqual(messages);
   });
 });
 

@@ -45,7 +45,7 @@ describe("planDecision", () => {
     expect(r.value.shape).toEqual({ kind: "bare", answerType: "noul" });
   });
 
-  it("turns an object into one question per field, in field order, with descriptions as instructions", () => {
+  it("turns an object into one question per field, in field order, the prompt then each field's text", () => {
     const schema = envelope(
       z.object({
         department: dept.describe("Which team should handle this?"),
@@ -57,16 +57,41 @@ describe("planDecision", () => {
     expect(Object.keys(r.value.questions)).toEqual(["department", "churn"]);
     expect(r.value.questions.department).toEqual({
       type: "choice",
-      instructions: "Which team should handle this?",
+      instructions: "Triage this ticket\nWhich team should handle this?",
       criteria: { billing: "billing", support: "support" },
     });
-    // No description: the field name is the instruction. The prompt is never
-    // the instruction for an object field; it is part of the state.
-    expect(r.value.questions.churn).toEqual({ type: "noul", instructions: "churn" });
+    // No description: the field name follows the prompt on a second line.
+    expect(r.value.questions.churn).toEqual({
+      type: "noul",
+      instructions: "Triage this ticket\nchurn",
+    });
     expect(r.value.shape).toEqual({
       kind: "object",
       fields: { department: "choice", churn: "noul" },
     });
+  });
+
+  it("prefixes the prompt onto every object field's instructions", () => {
+    const schema = envelope(
+      z.object({
+        department: dept.describe("Which team should handle this?"),
+        churn: z.boolean(),
+      }),
+    );
+    const plan = planDecision(schema, "Triage this ticket: refund missing");
+    if (!plan.success) throw new Error(plan.error);
+    expect(plan.value.questions.department.instructions).toBe(
+      "Triage this ticket: refund missing\nWhich team should handle this?",
+    );
+    expect(plan.value.questions.churn.instructions).toBe(
+      "Triage this ticket: refund missing\nchurn",
+    );
+  });
+
+  it("uses the field text alone when the prompt is empty", () => {
+    const plan = planDecision(envelope(z.object({ churn: z.boolean() })), "");
+    if (!plan.success) throw new Error(plan.error);
+    expect(plan.value.questions.churn.instructions).toBe("churn");
   });
 
   it("accepts a schema without the response envelope", () => {

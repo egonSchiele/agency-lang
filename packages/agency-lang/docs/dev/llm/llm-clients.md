@@ -92,6 +92,7 @@ Your `text` and `textStream` methods receive a `PromptConfig` with these fields:
 | `responseFormat` | `ZodType` | Zod schema for structured output |
 | `thinking` | `{ enabled, budgetTokens? }` | Extended thinking configuration |
 | `reasoningEffort` | `"low" \| "medium" \| "high"` | Reasoning effort level |
+| `logprobs` | `{ top?: number }` | Ask for per-token log probabilities; forwarded to smoltalk |
 | `provider` | `string` | Provider override |
 | `abortSignal` | `AbortSignal` | Cancellation signal |
 | `metadata` | `Record<string, any>` | Additional client-specific options |
@@ -126,6 +127,7 @@ const jsonSchema = config.responseFormat.toJSONSchema();
 - `cost` — cost estimate: `{ inputCost, outputCost, totalCost, currency }`
 - `model` — the model that was used
 - `thinkingBlocks`, `hostedToolResults`, `stopReason`, `rawStopReason` — populated only by clients that support those features
+- `logprobs` — per-token log probabilities, `{ token, logprob, top? }[]`, when the call asked for them and the provider returned them
 
 ### Streaming
 

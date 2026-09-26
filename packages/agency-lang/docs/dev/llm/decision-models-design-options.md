@@ -194,13 +194,10 @@ kind.
 
 ### What logprobs need first
 
-smoltalk has no logprobs field on `PromptResult` or `AssistantMessage`, and
-none of its provider clients request them. Any Agency-level design for
-logprobs starts with that field and the provider flags to request it. Then
-either the side-channel accessor or a wrapper type exposes it. The
-decision-model work added `PromptResult.rawData` and the pass-through to
-the assistant message, so the plumbing from a completion to the thread
-exists.
+Done. smoltalk carries `logprobs` on `PromptResult` and `AssistantMessage`,
+filled by OpenAI (the Gemini Developer API refuses the request, checked
+2026-09-26); Agency forwards the `logprobs` option and `lastReply().logprobs`
+returns them.
 
 ## Batching questions into one request
 

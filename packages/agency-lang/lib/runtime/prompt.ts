@@ -640,19 +640,21 @@ async function _runPrompt({
     threadLabel: messages.label,
   });
 
-  // A provider's extras beyond the text (a decision model's full answers
-  // with probabilities) ride on the message as `rawData`.
-  if (toolCalls.length > 0) {
-    messages.push(
-      smoltalk.assistantMessage(completion.output, { toolCalls, rawData: completion.rawData }),
-      callLabel,
-    );
-  } else {
-    messages.push(
-      smoltalk.assistantMessage(completion.output, { rawData: completion.rawData }),
-      callLabel,
-    );
-  }
+  // Everything the completion carried beyond its text rides on the reply
+  // message: thinking, usage, cost, and a provider's extras (a decision
+  // model's full answers with probabilities). `lastReply()` in std::thread
+  // reads them back. An unset `toolCalls` serializes exactly as before,
+  // because toJSON writes `this.toolCalls?.map(...)`.
+  messages.push(
+    smoltalk.assistantMessage(completion.output, {
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      thinkingBlocks: completion.thinkingBlocks,
+      usage: completion.usage,
+      cost: completion.cost,
+      rawData: completion.rawData,
+    }),
+    callLabel,
+  );
 
   updateTokenStats({
     globals: ctx.globals,

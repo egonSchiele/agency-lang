@@ -65,7 +65,7 @@ import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js"
 import { StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState } from "./types.js";
-import { extractStructuredResponse, serializableExtra, updateTokenStats } from "./utils.js";
+import { buildReplyMessage, extractStructuredResponse, updateTokenStats } from "./utils.js";
 
 type Tool = {
   name: string;
@@ -640,24 +640,7 @@ async function _runPrompt({
     threadLabel: messages.label,
   });
 
-  // Everything the completion carried beyond its text rides on the reply
-  // message, where `lastReply()` in std::thread reads it back: thinking,
-  // usage, cost, and a provider's extras such as a decision model's answers.
-  // usage/cost/thinking go through `serializableExtra` so a shape that would
-  // not survive fromJSON on restore is dropped, not left to break a resume.
-  messages.push(
-    smoltalk.assistantMessage(completion.output, {
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      thinkingBlocks: serializableExtra(
-        completion.thinkingBlocks,
-        smoltalk.ThinkingBlockSchema.array(),
-      ),
-      usage: serializableExtra(completion.usage, smoltalk.TokenUsageSchema),
-      cost: serializableExtra(completion.cost, smoltalk.CostEstimateSchema),
-      rawData: completion.rawData,
-    }),
-    callLabel,
-  );
+  messages.push(buildReplyMessage(completion, toolCalls, ctx.logLevel), callLabel);
 
   updateTokenStats({
     globals: ctx.globals,

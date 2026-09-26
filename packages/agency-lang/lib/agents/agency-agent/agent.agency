@@ -10,6 +10,7 @@ import { clearMessages, pushMessage, repl, clearScreen } from "std::ui/cli"
 import { brainByName, allBrains } from "./brains/registry.agency"
 import { agentNameFor } from "./lib/agentName.agency"
 import { parseAgentArgs } from "./lib/args.agency"
+import { parseEffort } from "./lib/effort.agency"
 import { mergedPalette } from "./lib/commandPalette.agency"
 import { getHeader } from "./lib/header.agency"
 import { maybeLoadMcp } from "./lib/mcp.agency"
@@ -157,6 +158,19 @@ node main() {
   if (capsMaxTokens != null) {
     setLlmOptions({
       maxTokens: capsMaxTokens
+    })
+  }
+  // --effort sets the provider's reasoning effort on every call. Without
+  // it a reasoning model runs at the provider's default, which is not
+  // what a benchmark run under fixed conditions wants.
+  const effort = parseEffort(args.flags.effort ?? null)
+  if (effort.error != "") {
+    print(color.red(effort.error))
+    process.exit(1)
+  }
+  if (effort.level != null) {
+    setLlmOptions({
+      reasoningEffort: effort.level
     })
   }
 

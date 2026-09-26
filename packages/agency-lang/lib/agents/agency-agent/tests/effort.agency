@@ -1,0 +1,14 @@
+import { parseEffort } from "../lib/effort.agency"
+// An absent flag means the provider's default: nothing is sent.
+node absent(): string {
+  return "${parseEffort(null).level == null}|${parseEffort("").level == null}|${parseEffort(null).error}"
+}
+// The three levels, in any case and with stray spaces.
+node levels(): string {
+  return "${parseEffort("high").level}|${parseEffort("Medium").level}|${parseEffort(" low ").level}"
+}
+// Anything else is an error that names the choices, and sends nothing.
+node unknown(): string {
+  const r = parseEffort("max")
+  return "${r.level == null}|${r.error}"
+}

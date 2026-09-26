@@ -1,0 +1,26 @@
+/** @module The --effort flag: a reasoning model's thinking level, sent to
+  the provider with every call. Pure parsing so the flag's rule is
+  testable without a run. */
+/** What a --effort value means: the level to send, or null for an absent
+  flag, and an error naming the choices when the value is not a level,
+  so a typo never silently becomes the provider's default. */
+export type Effort = {
+  level: "low" | "medium" | "high" | null;
+  error: string
+}
+export def parseEffort(value: string | null): Effort {
+  if (value == null || value == "") {
+    return { level: null, error: "" }
+  }
+  const level = value.trim().toLowerCase()
+  if (level == "low") {
+    return { level: "low", error: "" }
+  }
+  if (level == "medium") {
+    return { level: "medium", error: "" }
+  }
+  if (level == "high") {
+    return { level: "high", error: "" }
+  }
+  return { level: null, error: "--effort must be low, medium, or high; got '${value}'." }
+}

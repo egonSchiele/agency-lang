@@ -126,6 +126,15 @@ describe("projectSpendSchema", () => {
     ).toBe(true);
   });
 
+  it("accepts the decision kind", () => {
+    expect(
+      projectSpendSchema.parse({
+        ...valid,
+        breakdown: [{ model: "jev-1.13", kind: "decision", cost: usd, tokens: tok }],
+      }).breakdown[0].kind,
+    ).toBe("decision");
+  });
+
   it("accepts the new transcription and speech kinds, still rejects an unknown kind", () => {
     expect(
       projectSpendSchema.parse({

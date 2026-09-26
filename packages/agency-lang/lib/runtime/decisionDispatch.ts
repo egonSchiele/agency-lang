@@ -24,17 +24,31 @@ type ConfigMaps = {
   modelData?: ModelDataBlob;
 };
 
-/** True when this call's provider resolves to `typesafe`. Never throws: an
- *  unknown model with no provider is not a decision call, and smoltalk
- *  reports it the way it always has when `text()` runs. */
-export function isDecisionCall(config: PromptConfig): boolean {
-  if (config.model === undefined && config.provider === undefined) return false;
-  const maps = (config.metadata ?? {}) as ConfigMaps;
+/** The registry's provider for a model name, or undefined for a name the
+ *  registry does not know. Never throws. */
+function registryProvider(model: string | undefined, modelData: ModelDataBlob | undefined): string | undefined {
+  if (model === undefined) return undefined;
   try {
-    return smoltalk.resolveProvider(config.model ?? "", config.provider, maps.modelData) === DECISION_PROVIDER;
+    return smoltalk.resolveProvider(model, undefined, modelData);
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+/** True when this call is for a decision model: its provider is `typesafe`,
+ *  or the registry says its model belongs to `typesafe`.
+ *
+ *  The registry is checked by model name alone, before the call's provider.
+ *  By the time a call reaches dispatch, `runPrompt` has filled in the
+ *  config's default provider (`openai-responses` unless set) on every call
+ *  that named only a model, so `config.provider` cannot tell "the user wrote
+ *  typesafe" from "the default was filled in". A registry model such as
+ *  `jev-1.13` must still be a decision call with no provider written, which
+ *  is the spec's rule for a known name. */
+export function isDecisionCall(config: PromptConfig): boolean {
+  if (config.provider === DECISION_PROVIDER) return true;
+  const maps = (config.metadata ?? {}) as ConfigMaps;
+  return registryProvider(config.model, maps.modelData) === DECISION_PROVIDER;
 }
 
 /** The prompt is the last message, which `runPrompt` appended just before
@@ -66,7 +80,8 @@ export async function dispatchDecision(
   const maps = (config.metadata ?? {}) as ConfigMaps;
   const decideConfig: DecideConfig = {
     model: config.model ?? "",
-    provider: config.provider,
+    // Always explicit: the call's provider may be the filled-in default.
+    provider: DECISION_PROVIDER,
     apiKey: config.apiKey ? { ...maps.apiKey, ...config.apiKey } : maps.apiKey,
     baseUrl: maps.baseUrl,
     modelData: maps.modelData,

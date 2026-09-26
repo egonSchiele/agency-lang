@@ -46,8 +46,15 @@ describe("isDecisionCall", () => {
     expect(isDecisionCall(base({ model: "jev-1.13" }))).toBe(true);
   });
 
-  it("is false for a text model", () => {
+  it("is true for a registry decision model even when the default provider was filled in", () => {
+    // runPrompt fills the config default provider onto every call that
+    // named only a model; the registry name still wins.
+    expect(isDecisionCall(base({ model: "jev-1.13", provider: "openai-responses" }))).toBe(true);
+  });
+
+  it("is false for a text model, with or without a filled-in provider", () => {
     expect(isDecisionCall(base({ model: "gpt-4o-mini" }))).toBe(false);
+    expect(isDecisionCall(base({ model: "gpt-4o-mini", provider: "openai-responses" }))).toBe(false);
   });
 
   it("is false for an unknown model with no provider, and for no model at all", () => {
@@ -85,7 +92,7 @@ describe("dispatchDecision", () => {
     // config map, one provider slot at a time.
     expect(config).toEqual({
       model: "jev-1.13",
-      provider: undefined,
+      provider: "typesafe",
       apiKey: { typesafe: "call-key", openAi: "o" },
       baseUrl: { typesafe: "http://localhost:8000" },
       modelData: undefined,

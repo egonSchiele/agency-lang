@@ -1,0 +1,34 @@
+// A typed llm() call pointed at a decision model. The registry knows
+// jev-1.13, so the first call needs no provider. The second names an
+// unknown model and marks it with provider: "typesafe". Both go through
+// the real dispatch branch; the test's client answers.
+import { getCost } from "std::thread"
+
+type Dept = "billing" | "support" | "sales"
+type Triage = {
+  @jsonSchema({ description: "Which team should handle this?" })
+  department: Dept,
+  @jsonSchema({ description: "Does the customer threaten to leave?" })
+  churn: boolean
+}
+
+node main() {
+  const ticket = "I cancelled two weeks ago and the refund never arrived. Fix it today or I am leaving."
+  const dept: Dept = llm("Ticket: ${ticket}\nWhich department?", { model: "jev-1.13" })
+  const t: Triage = llm("Triage this ticket: ${ticket}", { model: "my-laya", provider: "typesafe" })
+
+  // The client prices every decision at $0.000001, so a guard capped
+  // below that trips on the call inside it. A trip raises std::guard;
+  // rejecting it stops the work and makes the guard's result a failure.
+  const guarded = guard(cost: $0.0000005) {
+    const again: Dept = llm("Which department, once more?", { model: "jev-1.13" })
+    return again
+  } with reject
+
+  return {
+    dept: dept,
+    triage: t,
+    cost: getCost(),
+    guardTripped: isFailure(guarded),
+  }
+}

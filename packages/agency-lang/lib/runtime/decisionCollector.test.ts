@@ -199,6 +199,20 @@ describe("DecisionCollector", () => {
     release(success({ answers: {}, usage: { inputTokens: 1, outputTokens: 0 }, model: "m" }));
   });
 
+  it("delivers a failure to every call when the sender throws, so no arm hangs", async () => {
+    const send = vi.fn(async () => {
+      throw new Error("socket exploded");
+    });
+    const collector = new DecisionCollector(["a", "b"], send as any, hooks());
+    const [r1, r2] = await Promise.all([
+      collector.submit("a", request()),
+      collector.submit("b", request()),
+    ]);
+    expect(r1.success).toBe(false);
+    expect(r2.success).toBe(false);
+    if (!r1.success) expect(r1.error).toContain("socket exploded");
+  }, 2000);
+
   it("lets an arm submit again after its first answer, in a later round", async () => {
     const calls: any[] = [];
     const collector = new DecisionCollector(["a", "b"], sender(calls), hooks());

@@ -269,6 +269,15 @@ call in a nested `parallel` with the outer block's calls (the inner block
 has its own collector); and two arms that touched their thread differently
 before asking, since their states differ.
 
+One arm normally makes its decision calls one at a time, because its body
+awaits each `llm()` before the next. The exception is a single text-model
+call in an arm that dispatches several tools at once (`runPrompt`'s parallel
+tool loop is a nested `runBatch` that installs no collector), where each tool
+may make its own decision call, all under the one arm key. Those concurrent
+calls still each settle correctly — a decision call is never lost — but they
+usually do not batch with each other, and the arm's status tracks them only
+approximately. Batching that case is not a goal.
+
 ## What is deferred
 
 `Choice<T>` and `Score<...>` wrapper types, per-member `@jsonSchema`

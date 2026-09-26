@@ -6,7 +6,7 @@
  * cost. See docs/dev/llm/decision-models.md, "Batching inside parallel".
  */
 import { createHash } from "crypto";
-import { success, type CostEstimate, type Result } from "smoltalk";
+import { failure, success, type CostEstimate, type Result } from "smoltalk";
 import type {
   DecideConfig,
   DecideResult,
@@ -242,7 +242,20 @@ export class DecisionCollector {
     }
 
     const first = group.calls[0].request;
-    const result = await this.send(first.state, merged, first.config, controller.signal);
+    // A sender that throws (a rejected promise, not a returned Failure) must
+    // not strand the group: deliver the error as a failure to every live call
+    // so each arm's own retry loop runs, exactly as a returned Failure would.
+    let result: Result<DecideResult>;
+    try {
+      result = await this.send(first.state, merged, first.config, controller.signal);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      for (const call of live) {
+        this.arms[call.armKey] = "running";
+        call.resolve(failure(message));
+      }
+      return;
+    }
     if (!result.success) {
       for (const call of live) {
         // The arm's body resumes to run its own retry loop.

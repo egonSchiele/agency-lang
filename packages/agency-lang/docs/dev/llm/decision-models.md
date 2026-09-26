@@ -217,10 +217,61 @@ picks `support` where Jev and the default model pick `billing`.
   fixture pins the state, the questions, and the config for a bare call, an
   object call, and a call under a cost guard.
 
+## Batching inside `parallel`
+
+Inside a `parallel` or `fork` block, decision calls that share a
+conversation go out together. The rule from the user's side: once every arm
+is either finished or waiting on the decision model, the waiting calls
+that share the same conversation and model are one request.
+
+The pieces:
+
+- `Runner.runForkAll` builds one `DecisionCollector`
+  (`lib/runtime/decisionCollector.ts`) per block and passes it to
+  `runBatch`, which puts `{ collector, armKey }` on each arm's async-context
+  frame as `decisions`. The three frame builders that copy fields by name
+  (`Runner.runInScope`, `withResumableScope`, `runInBranchAlsFrame`)
+  forward it; the builders that spread the outer frame carry it for free.
+  A `race` block installs none.
+- `dispatchDecision` reads the frame. With a scope it submits
+  `{ state, questions, config, questionCap, signal }` to the collector and
+  awaits a `Result<DecideResult>`; without one it sends as before. Nothing
+  else in the call path knows about batching.
+- The collector keeps each arm's status: running (body executing between
+  decision calls), waiting (holds an unsent call), inflight (its call was
+  sent), or settled. Only a running arm blocks a quiescent round, so a call
+  that is on the wire, and an arm whose waiting call was cancelled, both step
+  out of the way instead of deadlocking the block. `runBatch` reports settles
+  through the `onBranchSettled` hook, which fires as each branch settles, and
+  at once for a cached branch on resume. The collector meters nothing itself;
+  each arm meters its split share, so the shares sum to the one request's
+  real usage and cost.
+- A group is the calls whose `sha256` of `{ model, baseUrl, state }`
+  match. A round sends every group at once when no arm is running, or one
+  group alone when it reaches the model's question cap (the registry's
+  `maxQuestions`, 64 for Jev, or 64 for an unknown model). A cap round
+  logs a `warn` with `warnType: "decisionBatchCap"`.
+- A merged request names each question `c<callId>_<name>`. Answers come
+  back under their original names. Input and output tokens are split
+  across the group's calls in proportion to their question counts, the
+  remainder to the first call; cost is split by the same proportions.
+- A failed request resolves every call in the group with the failure and
+  its status, so each arm's retry loop runs as it would for its own
+  request, and the retries form a new round. A call whose arm is cancelled
+  while waiting leaves the group; a request is cancelled only when every
+  call in it is.
+- Each round is a `decisionBatch` span holding one `decisionBatch` event
+  with the groups, the reason, and the time. The logs viewer summarizes it
+  as `decisionBatch 2 requests · 4 questions · 3 calls (quiescent, 120ms)`.
+
+What does not batch: a call outside any block; the arms of a `race`; a
+call in a nested `parallel` with the outer block's calls (the inner block
+has its own collector); and two arms that touched their thread differently
+before asking, since their states differ.
+
 ## What is deferred
 
 `Choice<T>` and `Score<...>` wrapper types, per-member `@jsonSchema`
 descriptions so an option can be described rather than only named, a way
-for Agency code to read an assistant message's `rawData`, batching several
-decision calls in a `parallel` block into one request, and an in-process
+for Agency code to read an assistant message's `rawData`, and an in-process
 Laya backend.

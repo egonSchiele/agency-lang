@@ -6319,6 +6319,57 @@ describe("TypeChecker", () => {
       expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
     });
 
+    it("accepts llm()'s logprobs option as an object with a numeric top", () => {
+      // llm("hi", { logprobs: { top: 3 } })
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              {
+                type: "agencyObject",
+                entries: [
+                  {
+                    key: "logprobs",
+                    value: {
+                      type: "agencyObject",
+                      entries: [{ key: "top", value: { type: "number", value: "3" } }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      expect(typeCheck(program).errors).toEqual([]);
+    });
+
+    it("rejects a non-object llm() logprobs option", () => {
+      // llm("hi", { logprobs: true })  ← must be { top?: number }
+      const program: AgencyProgram = {
+        type: "agencyProgram",
+        nodes: [
+          {
+            type: "functionCall",
+            functionName: "llm",
+            arguments: [
+              { type: "string", segments: [{ type: "text", value: "hi" }] },
+              {
+                type: "agencyObject",
+                entries: [{ key: "logprobs", value: { type: "boolean", value: true } }],
+              },
+            ],
+          },
+        ],
+      };
+      const errors = typeCheck(program).errors;
+      expect(errors.some((e) => /not assignable/i.test(e.message))).toBe(true);
+    });
+
     it("still type-checks the value of an optional property when present", () => {
       // type Opts = { model?: string }; use({ model: 123 })  ← number, not string
       const opts: VariableType = {

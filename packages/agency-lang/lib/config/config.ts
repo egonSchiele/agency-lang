@@ -163,6 +163,8 @@ export interface AgencyConfig {
       deepInfra?: string;
       liteLlm?: string;
       openAiCompat?: string;
+      /** For a decision model (Jev). Through OpenRouter, this is the OpenRouter key. */
+      typesafe?: string;
     };
     baseUrl: {
       openRouter?: string;
@@ -171,6 +173,8 @@ export interface AgencyConfig {
       openAiCompat?: string;
       /** Where the MLX server listens. Default `http://127.0.0.1:8080/v1`. */
       mlx?: string;
+      /** Where a decision model answers: TypeSafe, a gateway, or a local Laya server. */
+      typesafe?: string;
     };
     /**
      * Max characters of a single tool result fed back to the LLM.
@@ -586,6 +590,7 @@ export const AgencyConfigSchema = z
             deepInfra: z.string(),
             liteLlm: z.string(),
             openAiCompat: z.string(),
+            typesafe: z.string(),
           })
           .partial(),
         baseUrl: z
@@ -595,6 +600,7 @@ export const AgencyConfigSchema = z
             liteLlm: z.string(),
             openAiCompat: z.string(),
             mlx: z.string(),
+            typesafe: z.string(),
           })
           .partial(),
         maxToolResultChars: z.number(),

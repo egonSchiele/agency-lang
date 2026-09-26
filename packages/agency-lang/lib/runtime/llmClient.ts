@@ -77,6 +77,14 @@ export type ImageRef = smoltalk.ImageRef;
 // never fall back to its own defaults (see plan §8). Cancellation travels as a
 // separate `signal` argument on the methods below, never inside the config, so
 // there is exactly one authoritative cancellation channel.
+// The decision-model surface (Jev, Laya). Types come from smoltalk unchanged;
+// the runtime imports them from here, never from smoltalk directly.
+export type DecisionState = smoltalk.DecisionState;
+export type DecisionQuestion = smoltalk.DecisionQuestion;
+export type DecisionAnswer = smoltalk.DecisionAnswer;
+export type DecideConfig = smoltalk.DecideConfig;
+export type DecideResult = smoltalk.DecideResult;
+
 export type TranscriptionResult = smoltalk.TranscriptionResult;
 export type SpeechResult = smoltalk.SpeechResult;
 /** A source for audio bytes: a local path, a URL, or inline bytes/base64. */

@@ -644,13 +644,21 @@ async function _runPrompt({
   // message: thinking, usage, cost, and a provider's extras (a decision
   // model's full answers with probabilities). `lastReply()` in std::thread
   // reads them back. An unset `toolCalls` serializes exactly as before,
-  // because toJSON writes `this.toolCalls?.map(...)`.
+  // because toJSON writes `this.toolCalls?.map(...)`. usage, cost, and
+  // thinking go through `serializableExtra` first: a value that would not
+  // survive smoltalk's fromJSON (a custom client can return a TS-typed but
+  // structurally invalid shape) is dropped rather than left to break a
+  // later checkpoint restore. rawData is untyped (`z.any()`) and never
+  // fails, so it needs no guard.
   messages.push(
     smoltalk.assistantMessage(completion.output, {
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      thinkingBlocks: completion.thinkingBlocks,
-      usage: completion.usage,
-      cost: completion.cost,
+      thinkingBlocks: serializableExtra(
+        completion.thinkingBlocks,
+        smoltalk.ThinkingBlockSchema.array(),
+      ),
+      usage: serializableExtra(completion.usage, smoltalk.TokenUsageSchema),
+      cost: serializableExtra(completion.cost, smoltalk.CostEstimateSchema),
       rawData: completion.rawData,
     }),
     callLabel,
@@ -680,6 +688,23 @@ async function _runPrompt({
   });
 
   return { messages, toolCalls, stopReason: completion.stopReason, usageKind };
+}
+
+/** Keep a completion extra on the reply message only when it round-trips
+ *  through smoltalk's message schema. `AssistantMessage.fromJSON` validates
+ *  usage, cost, and thinking on restore (checkpoint resume, rewind,
+ *  subthread clone) and throws on a bad shape, so a value that would not
+ *  pass is dropped here instead — the same as before the reply carried
+ *  these fields. `schema` is smoltalk's own schema for the field, so a
+ *  value this accepts is one fromJSON accepts. */
+function serializableExtra<T>(
+  value: T | undefined,
+  schema: { safeParse(input: unknown): { success: boolean } },
+): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return schema.safeParse(value).success ? value : undefined;
 }
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately

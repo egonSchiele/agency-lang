@@ -1,0 +1,54 @@
+# The MLX chat server shim (lib/cli/mlxChatServer.py) reaches into mlx_lm's
+# internals, so it has its own Python unit tests. They import mlx and use a
+# real Metal device for token-bitmask masking, which the ubuntu unit shards
+# cannot provide — hence a dedicated Apple-silicon job. It is path-filtered so
+# the macOS runner is only spent when the shim, its tests, or the version pins
+# change, not on every PR.
+name: MLX server tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/agency-lang/lib/cli/mlxChatServer.py
+      - packages/agency-lang/lib/cli/test_mlxChatServer.py
+      - packages/agency-lang/lib/cli/localServe.ts
+      - .github/workflows/mlx-server-tests.yml
+  pull_request:
+    paths:
+      - packages/agency-lang/lib/cli/mlxChatServer.py
+      - packages/agency-lang/lib/cli/test_mlxChatServer.py
+      - packages/agency-lang/lib/cli/localServe.ts
+      - .github/workflows/mlx-server-tests.yml
+
+concurrency:
+  group: mlx-server-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mlx-server-tests:
+    # macos-14 is Apple silicon (arm64) with a Metal device, which the tests need.
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          # This job runs PR-controlled Python; don't persist the token into
+          # .git/config where that code could read it.
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      # Keep these pins in sync with MLX_LM_VERSION and LLGUIDANCE_VERSION in
+      # packages/agency-lang/lib/cli/localServe.ts (what `agency local serve`
+      # installs into the user's mlx-env). No model is downloaded: the tests
+      # use fake tokenizers, grammars, and zero logits.
+      - name: Install pinned MLX deps
+        run: python -m pip install "mlx-lm==0.31.3" "llguidance==1.8.0"
+
+      - name: Run MLX chat server unit tests
+        working-directory: packages/agency-lang
+        run: python -m unittest lib/cli/test_mlxChatServer.py

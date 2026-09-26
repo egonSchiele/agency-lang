@@ -419,6 +419,30 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
       "Alibaba's current 27B, 89 on GPQA Diamond. Multimodal. The research and science default.",
     sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
   },
+  "qwen3.6-35b-a3b-mlx": {
+    backend: "mlx",
+    uri: "mlx:lmstudio-community/Qwen3.6-35B-A3B-MLX-8bit",
+    params: "35B (A3B)",
+    sizeBytes: 37700000000,
+    category: "coding",
+    contextWindow: 262144,
+    license: "apache-2.0",
+    description:
+      "Alibaba's sparse 35B with 3B active: the fastest agentic coder that fits in 40 GB. 51.5 on Terminal-Bench 2.0.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 20 },
+  },
+  "minimax-m2.7-mlx": {
+    backend: "mlx",
+    uri: "mlx:mlx-community/MiniMax-M2.7-4bit",
+    params: "230B (A10B)",
+    sizeBytes: 128700000000,
+    category: "coding",
+    contextWindow: 196608,
+    license: "modified-mit",
+    description:
+      "MiniMax's sparse 230B with 10B active, built for agents: 57.0 on Terminal-Bench 2.0. Needs about 140 GB of memory. The licence is MiniMax's own, not plain MIT.",
+    sampling: { temperature: 1.0, topP: 0.95, topK: 40 },
+  },
   "gpt-oss-120b-mlx": {
     backend: "mlx",
     uri: "mlx:mlx-community/gpt-oss-120b-MXFP4-Q8",

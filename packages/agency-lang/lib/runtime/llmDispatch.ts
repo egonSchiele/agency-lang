@@ -1,5 +1,6 @@
 import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
 import { abortableSleep } from "../stdlib/abortable.js";
+import { dispatchDecision, isDecisionCall } from "./decisionDispatch.js";
 import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { callHook } from "./hooks.js";
 import type { NormalizedLLMError, PromptConfig } from "./llmClient.js";
@@ -28,6 +29,13 @@ export async function dispatchLLMRequest({
   stream: boolean;
   stateStack?: StateStack;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
+  // A decision model (Jev, Laya) answers typed questions, not text. The
+  // branch returns a completion shaped like a text model's, so everything
+  // after this point runs unchanged. There is nothing to stream.
+  if (isDecisionCall(promptConfig)) {
+    const completion = await dispatchDecision(ctx, promptConfig);
+    return { completion, toolCalls: [] };
+  }
   if (stream) {
     const streamGen = ctx.llmClient.textStream(promptConfig);
     const response = await handleStreamingResponse({
@@ -239,9 +247,10 @@ export async function dispatchWithRetry(args: {
   };
 
   const targetStack = stateStack ?? ctx.stateStack;
+  const usageKind = isDecisionCall(promptConfig) ? "decision" : "completion";
   return runWithRetry(
     (signal) =>
-      meteredDispatch(ctx, targetStack, "completion", () =>
+      meteredDispatch(ctx, targetStack, usageKind, () =>
         dispatchLLMRequest({
           ctx,
           promptConfig: {

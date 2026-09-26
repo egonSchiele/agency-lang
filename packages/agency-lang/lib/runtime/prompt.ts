@@ -634,15 +634,20 @@ async function _runPrompt({
     threadLabel: messages.label,
   });
 
+  // A provider's extras beyond the text (a decision model's full answers
+  // with probabilities) ride on the message. Only set when present so a
+  // text call's message is unchanged.
+  const extras = completion.rawData === undefined ? {} : { rawData: completion.rawData };
   if (toolCalls.length > 0) {
     messages.push(
       smoltalk.assistantMessage(completion.output, {
         toolCalls,
+        ...extras,
       }),
       callLabel,
     );
   } else {
-    messages.push(smoltalk.assistantMessage(completion.output), callLabel);
+    messages.push(smoltalk.assistantMessage(completion.output, extras), callLabel);
   }
 
   updateTokenStats({

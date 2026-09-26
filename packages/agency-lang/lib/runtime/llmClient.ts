@@ -295,7 +295,9 @@ export class SmoltalkClient implements LLMClient {
     signal: AbortSignal,
   ): Promise<Result<DecideResult>> {
     const result = await smoltalk.decide(state, questions, { ...config, abortSignal: signal });
-    if (!result.success) rejectIfAborted(signal);
+    if (!result.success) {
+      rejectIfAborted(signal);
+    }
     return result;
   }
 

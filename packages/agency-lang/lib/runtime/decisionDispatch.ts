@@ -17,8 +17,8 @@ import {
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState } from "./types.js";
 
-/** The one decision provider. It names the wire protocol, so an unknown
- *  model or endpoint that speaks it is marked with `provider: "typesafe"`. */
+/** The one decision provider. It names the wire protocol, so a model or
+ *  endpoint the registry does not know is marked with `provider: "typesafe"`. */
 export const DECISION_PROVIDER = "typesafe";
 
 /** The per-provider maps `runPrompt` leaves on `metadata`, the same place
@@ -29,49 +29,35 @@ type ConfigMaps = {
   modelData?: ModelDataBlob;
 };
 
-/** The registry's provider for a model name, or undefined for a name the
- *  registry does not know. Never throws. */
-function registryProvider(
+/** The registry's record for a model name, or undefined for a name the
+ *  registry does not know. */
+function registryRecord(
   model: string | undefined,
   modelData: ModelDataBlob | undefined,
-): string | undefined {
-  if (model === undefined) return undefined;
-  try {
-    return smoltalk.resolveProvider(model, undefined, modelData);
-  } catch {
+): smoltalk.ModelType | undefined {
+  if (model === undefined) {
     return undefined;
   }
-}
-
-/** The registry's per-request question cap for a model, if it has one. */
-function registryMaxQuestions(
-  model: string | undefined,
-  modelData: ModelDataBlob | undefined,
-): number | undefined {
-  if (model === undefined) return undefined;
-  const record = smoltalk.getModel(model as smoltalk.ModelName, modelData);
-  return record?.type === "decision" ? record.maxQuestions : undefined;
+  return smoltalk.getModel(model as smoltalk.ModelName, modelData);
 }
 
 /** True when this call is for a decision model.
  *
- *  Two rules, and which one applies depends on whether the registry knows
- *  the model name. A known name belongs to one provider, and only the
+ *  A name the registry knows belongs to one provider, and only the
  *  registry's word counts: `jev-1.13` is a decision call whatever provider
- *  is on the call, and `gpt-5-mini` never is. An unknown name (a local Laya
- *  server, say) is a decision call when the call's provider is `typesafe`.
+ *  is on the call, and `gpt-5-mini` never is. A name the registry does not
+ *  know (a local Laya server, say) is a decision call when the call's
+ *  provider is `typesafe`.
  *
- *  The call's provider is not trusted for a known name because it may not
- *  have been written by the user. The compiler bakes the config's default
- *  provider into every generated call that named only a model, so at
- *  dispatch `config.provider` cannot tell "written" from "defaulted". With
- *  an explicit-provider-wins rule, `jev-1.13` with no provider written
- *  went to `text()`, and a default provider of `typesafe` captured every
- *  call in the run, including stdlib calls that name a text model. */
+ *  The call's provider is not trusted for a known name because the user
+ *  may not have written it: the compiler bakes the config's default
+ *  provider into every generated call that named only a model. */
 export function isDecisionCall(config: PromptConfig): boolean {
   const maps = (config.metadata ?? {}) as ConfigMaps;
-  const known = registryProvider(config.model, maps.modelData);
-  if (known !== undefined) return known === DECISION_PROVIDER;
+  const known = registryRecord(config.model, maps.modelData);
+  if (known !== undefined) {
+    return known.provider === DECISION_PROVIDER;
+  }
   return config.provider === DECISION_PROVIDER;
 }
 
@@ -100,7 +86,8 @@ export function prepareDecision(
     throw new Error(plan.error);
   }
   const maps = (config.metadata ?? {}) as ConfigMaps;
-  const maxQuestions = registryMaxQuestions(config.model, maps.modelData);
+  const record = registryRecord(config.model, maps.modelData);
+  const maxQuestions = record?.type === "decision" ? record.maxQuestions : undefined;
   const count = Object.keys(plan.value.questions).length;
   if (maxQuestions !== undefined && count > maxQuestions) {
     throw new Error(
@@ -134,12 +121,12 @@ export async function dispatchDecision(
     throw new Error("The active LLM client does not support decision models.");
   }
 
-  // The same key rule a text call gets from toSmolConfig: the per-call map
-  // merges over the config map, one provider slot at a time.
+  // The same key rule `toSmolConfig` applies to a text call: the per-call
+  // map merges over the config map.
   const maps = (config.metadata ?? {}) as ConfigMaps;
   const decideConfig: DecideConfig = {
     model: config.model ?? "",
-    // Always explicit: the call's provider may be the filled-in default.
+    // Never the call's own provider, which may be the baked-in default.
     provider: DECISION_PROVIDER,
     apiKey: config.apiKey ? { ...maps.apiKey, ...config.apiKey } : maps.apiKey,
     baseUrl: maps.baseUrl,

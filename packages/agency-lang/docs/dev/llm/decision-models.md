@@ -13,17 +13,14 @@ const dept: Dept = llm("Which department should handle this ticket?")
 
 Run that against the default text model and it goes through structured
 output. Run it with `--model typesafe/jev-1.13` and it goes to Jev. The file
-does not change. That was the claim the design was built to test, and the
-example in `packages/examples/decision-triage.agency` is the proof: it ran
-unchanged against Jev, a local Laya server, and the default model.
+does not change. `packages/examples/decision-triage.agency` runs unchanged
+against Jev, a local Laya server, and the default model.
 
-The rule: **the provider is the switch.** A call is a decision
-call when its provider is `typesafe`, either written on the call, or looked
-up from the registry for a model name it knows.
+The rule: **the provider is the switch.** A call is a decision call when
+its provider is `typesafe`, either written on the call, or looked up from
+the registry for a model name it knows.
 
-Spec: `2026-09-25-decision-models-spec.md`. Plan:
-`2026-09-26-decision-models-slice-2-plan.md`. Both at the root of this
-package. The options that were considered and set aside are in
+The options that were considered and set aside are in
 `decision-models-design-options.md` next to this file.
 
 ## The lifecycle of one call
@@ -87,12 +84,11 @@ The call's provider is not trusted for a known name because the user may
 not have written it. The compiler bakes the config's default provider,
 `openai-responses` unless set, into every generated call that named only a
 model, so at dispatch `config.provider` cannot tell "written" from
-"defaulted". An explicit-provider-wins rule sent `jev-1.13` with no
-provider written to `text()`; the execution test caught it, the unit tests
-had not, because they built the config by hand. And a plain OR of the two
-rules let `defaultProvider: "typesafe"`, which `--model typesafe/jev-1.13`
-sets, capture every call in the run, including stdlib calls that name a
-text model.
+"defaulted". Letting the call's provider win would send `jev-1.13` with no
+provider written to `text()`, and letting either rule win would make
+`defaultProvider: "typesafe"`, which `--model typesafe/jev-1.13` sets,
+capture every call in the run, including stdlib calls that name a text
+model.
 
 `dispatchDecision` always passes `provider: "typesafe"` to the client,
 never the value on the call.
@@ -143,15 +139,13 @@ thread is the state.
 ## The lossy step
 
 A bare `boolean` is `noul >= 0.5`. The probability is thrown away at the
-value level. It is kept on the assistant message's `rawData`, but nothing
-in Agency reads that yet, and it does not yet survive a checkpoint or a
-subthread: smoltalk's `AssistantMessage.toJSON` omits `rawData`, so any
-round trip through JSON drops it (smoltalk issue #61). Until that is fixed,
-the probabilities live only on the in-memory thread of the call that made
-them. A `Choice<T>` wrapper type that returns the whole
-answer record, with confidence and probabilities, is the planned fix, and
-a `Score<...>` type for the third question kind comes with it. Until then a
-score answer is never produced, since no annotation maps to one.
+value level. It is kept on the assistant message's `rawData`, which nothing
+in Agency reads yet, and which survives a checkpoint only with a smoltalk
+that writes `rawData` in `toJSON` (0.15.1 or later). A `Choice<T>` wrapper
+type that returns the whole answer record, with confidence and
+probabilities, is the planned fix, and a `Score<...>` type for the third
+question kind comes with it. Until then a score answer is never produced,
+since no annotation maps to one.
 
 ## Cost
 
@@ -203,16 +197,8 @@ TYPESAFE_API_KEY=unused TYPESAFE_BASE_URL="http://localhost:8000" \
 **The default model.** Run the same file with no flag. It goes through
 structured output.
 
-Results of the three runs on 2026-09-26, same file:
-
-| Backend | triage | follow-up |
-| --- | --- | --- |
-| Jev through OpenRouter | `{ department: 'billing', churn: true }` | `true` |
-| Laya, local | `{ department: 'support', churn: true }` | `true` |
-| Default model (gpt-5-mini) | `{ department: 'billing', churn: true }` | `true` |
-
-Laya's `support` is the wrong answer. Its published numbers put it well
-behind Jev on choice questions, and this is what that looks like.
+Expect Laya to answer less accurately than Jev. On the example ticket it
+picks `support` where Jev and the default model pick `billing`.
 
 ## Testing
 
@@ -228,17 +214,12 @@ behind Jev on choice questions, and this is what that looks like.
 - `tests/agency-js/decision-model/`: the compiled path end to end. The test
   uses a client of its own that records what the runtime sent, so the
   fixture pins the state, the questions, and the config for a bare call, an
-  object call, and a call under a cost guard. The deterministic client's
-  `{ decide }` mock is unit-tested but not run through a compiled program.
-
-Not covered by a test: that a full run's usage breakdown has a `decision`
-row. The unit test on `recordCompletionUsage` shows the kind reaches the
-entry; no test reads a run's breakdown.
+  object call, and a call under a cost guard.
 
 ## What is deferred
 
-The spec's Part 6 lists it: `Choice<T>` and `Score<...>` wrapper
-types, per-member `@jsonSchema` descriptions so an option can be described
-rather than only named, a way for Agency code to read an assistant
-message's `rawData`, batching several decision calls in a `parallel` block
-into one request, and an in-process Laya backend.
+`Choice<T>` and `Score<...>` wrapper types, per-member `@jsonSchema`
+descriptions so an option can be described rather than only named, a way
+for Agency code to read an assistant message's `rawData`, batching several
+decision calls in a `parallel` block into one request, and an in-process
+Laya backend.

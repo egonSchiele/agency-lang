@@ -330,7 +330,7 @@ Other process docs:
 - `docs/dev/llm/smoltalk.md` — The external library Agency routes every LLM call through.
 - `docs/dev/llm/speech-via-smoltalk.md` — Speech-to-text and text-to-speech, routed through the LLM client so they inherit cost accounting and tracing.
 - `docs/dev/llm/decision-models.md` — Decision models (Jev, Laya): the provider is the switch, how a typed `llm()` call becomes questions and the answers become the value, which calls are decision calls and why the registry outranks the provider on the call, what the state is, the `noul >= 0.5` loss, the `decision` usage kind, and how to run against OpenRouter, a local Laya server, and the default model.
-- `docs/dev/llm/decision-models-design-options.md` — The options considered for decision models and for returning a value plus metadata (probabilities, logprobs, thinking): wrapper types, a second return value, a side channel, fill-in-the-blanks, a `decision` block, batching in `parallel`, with what each costs and why the shipped one won. Read before reopening any of them, and for the logprobs discussion.
+- `docs/dev/llm/decision-models-design-options.md` — The options set aside for decision models and for returning a value plus metadata (probabilities, logprobs, thinking): wrapper types, a second return value, a side channel, fill-in-the-blanks, a `decision` block, batching in `parallel`, with what each costs. Read before reopening any of them.
 
 ### CLI and terminal UI
 

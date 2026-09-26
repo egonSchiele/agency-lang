@@ -124,3 +124,14 @@ describe("toSmolConfig — apiKey/baseUrl pass-through", () => {
     expect(out.apiKey).toEqual({ openAi: "sk-o", anthropic: "sk-percall", google: "sk-g" });
   });
 });
+
+describe("toSmolConfig — logprobs pass-through", () => {
+  it("forwards the logprobs option", () => {
+    const smol = toSmolConfig({
+      messages: [],
+      model: "gpt-4o",
+      logprobs: { top: 2 },
+    } as any);
+    expect(smol.logprobs).toEqual({ top: 2 });
+  });
+});

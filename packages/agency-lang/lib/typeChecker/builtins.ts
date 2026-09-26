@@ -91,6 +91,13 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
       ],
     }),
   },
+  {
+    key: "logprobs",
+    value: optional({
+      type: "objectType",
+      properties: [{ key: "top", value: optional(number) }],
+    }),
+  },
   // The MLX chat server's limits on a reply that goes in circles. See
   // `ReplyLimits` in lib/stdlib/llm.ts; `setLlmOptions` sets the same
   // per-branch.

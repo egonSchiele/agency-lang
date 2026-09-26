@@ -1,16 +1,21 @@
-// A text reply that carries thinking blocks and usage reaches lastReply(),
-// and inside a parallel block each arm reads its own reply, never a
-// sibling's. Each arm calls ask(), which runs lastReply() inside the arm,
-// because the bindings escape the block but the read must happen in the arm.
-import { lastReply } from "std::thread"
+// A text reply that carries thinking blocks, usage, and per-token logprobs
+// reaches lastReply(), and inside a parallel block each arm reads its own
+// reply, never a sibling's. Each arm calls a function that runs lastReply()
+// inside the arm, because the bindings escape the block but the read must
+// happen in the arm. One arm passes a logprobs option, so the test can check
+// that the option reaches the client.
+import { lastReply, Reply, TokenLogprob } from "std::thread"
 
-type Seen = { text: string; thinking: string[]; inputTokens: number | null }
+type Seen = {
+  text: string;
+  thinking: string[];
+  inputTokens: number | null;
+  logprobs: TokenLogprob[]
+}
 
-def ask(prompt: string): Seen {
-  const text: string = llm(prompt)
-  const reply = lastReply()
+def seen(text: string, reply: Reply | null): Seen {
   if (reply == null) {
-    return { text: text, thinking: [], inputTokens: null }
+    return { text: text, thinking: [], inputTokens: null, logprobs: [] }
   }
   let thinking: string[] = []
   for (block in reply.thinkingBlocks) {
@@ -20,14 +25,25 @@ def ask(prompt: string): Seen {
   if (reply.usage != null) {
     inputTokens = reply.usage.inputTokens
   }
-  return { text: text, thinking: thinking, inputTokens: inputTokens }
+  return { text: text, thinking: thinking, inputTokens: inputTokens, logprobs: reply.logprobs }
+}
+
+def ask(prompt: string): Seen {
+  const text: string = llm(prompt)
+  return seen(text, lastReply())
+}
+
+def askWithAlternatives(prompt: string): Seen {
+  const text: string = llm(prompt, { logprobs: { top: 2 } })
+  return seen(text, lastReply())
 }
 
 node main() {
   parallel {
     const sayA = ask("Say A")
     const sayB = ask("Say B")
+    const sayC = askWithAlternatives("Say C")
   }
   const outside = lastReply()
-  return { sayA: sayA, sayB: sayB, outsideIsNull: outside == null }
+  return { sayA: sayA, sayB: sayB, sayC: sayC, outsideIsNull: outside == null }
 }

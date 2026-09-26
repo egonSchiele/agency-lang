@@ -13,7 +13,7 @@ export function deepClone<T>(obj: T): T {
 }
 
 /** Keep a value only when it round-trips through the given schema. The reply
- *  message's usage, cost, and thinking are validated by smoltalk's fromJSON
+ *  message's usage, cost, thinking, and logprobs are validated by smoltalk's fromJSON
  *  on restore (checkpoint resume, rewind, subthread clone), which throws on a
  *  bad shape, so a value that would not pass is dropped here instead — the
  *  same as before the reply carried these fields. Pass smoltalk's own schema
@@ -51,8 +51,8 @@ function warnUnserializableReplyField(logLevel: LogLevel, field: string): (error
 /** The assistant message `runPrompt` appends for a completion. Everything the
  *  completion carried beyond its text rides on it, where `lastReply()` in
  *  std::thread reads it back: thinking, usage, cost, and a provider's extras
- *  such as a decision model's answers. Each of thinking/usage/cost goes through
- *  {@link serializableExtra} so a shape that would not survive smoltalk's
+ *  such as a decision model's answers. Each of thinking, logprobs, usage, and
+ *  cost goes through {@link serializableExtra} so a shape that would not survive smoltalk's
  *  fromJSON on restore is dropped rather than left to break a checkpoint. An
  *  unset `toolCalls` serializes exactly as an omitted one. */
 export function buildReplyMessage(
@@ -67,6 +67,11 @@ export function buildReplyMessage(
       completion.thinkingBlocks,
       smoltalk.ThinkingBlockSchema.array(),
       warn("thinking blocks"),
+    ),
+    logprobs: serializableExtra(
+      completion.logprobs,
+      smoltalk.TokenLogprobSchema.array(),
+      warn("logprobs"),
     ),
     usage: serializableExtra(completion.usage, smoltalk.TokenUsageSchema, warn("usage")),
     cost: serializableExtra(completion.cost, smoltalk.CostEstimateSchema, warn("cost")),

@@ -317,3 +317,60 @@ describe("DeterministicClient scoped mocks", () => {
     });
   });
 });
+
+describe("DeterministicClient.decide", () => {
+  const signal = new AbortController().signal;
+  const questions = { answer: { type: "noul" as const, instructions: "?" } };
+
+  it("returns the next mock's answers with synthetic usage and the requested model", async () => {
+    const client = new DeterministicClient([{ decide: { answer: { type: "noul", noul: 0.9 } } }]);
+    const r = await client.decide!("s", questions, { model: "m" }, signal);
+    expect(r).toEqual({
+      success: true,
+      value: {
+        answers: { answer: { type: "noul", noul: 0.9 } },
+        usage: { inputTokens: 1, outputTokens: 0 },
+        cost: { inputCost: 0.000001, outputCost: 0, totalCost: 0.000001, currency: "USD" },
+        model: "m",
+      },
+    });
+  });
+
+  it("consumes the same queue as text(), in order", async () => {
+    const client = new DeterministicClient([
+      { return: "first" },
+      { decide: { answer: { type: "noul", noul: 0.1 } } },
+    ]);
+    const t = await client.text({ messages: [] } as unknown as PromptConfig);
+    expect(t.success && t.value.output).toBe("first");
+    const d = await client.decide!("s", questions, { model: "m" }, signal);
+    expect(d.success && d.value.answers.answer).toEqual({ type: "noul", noul: 0.1 });
+  });
+
+  it("text() refuses a decide mock with a clear message", async () => {
+    const client = new DeterministicClient([{ decide: {} }]);
+    await expect(client.text({ messages: [] } as unknown as PromptConfig)).rejects.toThrow(
+      /call #1 is a text call but the mock is a decision answer/,
+    );
+  });
+
+  it("decide() refuses a text mock, and a missing mock, with clear messages", async () => {
+    const client = new DeterministicClient([{ return: "x" }]);
+    await expect(client.decide!("s", questions, { model: "m" }, signal)).rejects.toThrow(
+      /call #1 is a decision call but the mock is not a \{ decide/,
+    );
+    await expect(client.decide!("s", questions, { model: "m" }, signal)).rejects.toThrow(
+      /no mock provided for llm\(\) call #2/,
+    );
+  });
+
+  it("decide() rejects with the signal's reason when already aborted", async () => {
+    const client = new DeterministicClient([{ decide: {} }]);
+    const controller = new AbortController();
+    const reason = new AgencyCancelledError("cancelled");
+    controller.abort(reason);
+    await expect(client.decide!("s", questions, { model: "m" }, controller.signal)).rejects.toBe(
+      reason,
+    );
+  });
+});

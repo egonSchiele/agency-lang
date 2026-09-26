@@ -174,6 +174,16 @@ export type LLMClient = {
   /** Text-to-speech. Optional — same contract as `transcribe`: complete config
    *  (model/voice/format required), `signal` the sole cancellation channel. */
   speak?(text: string, config: SpeakConfig, signal: AbortSignal): Promise<Result<SpeechResult>>;
+  /** Ask a decision model (Jev, Laya) typed questions about a state. Optional:
+   *  a client with no decision model omits it, and a decision call then fails
+   *  with a clear message. Same contract as `transcribe`: complete config, and
+   *  `signal` is the only cancellation channel. */
+  decide?(
+    state: DecisionState,
+    questions: Record<string, DecisionQuestion>,
+    config: DecideConfig,
+    signal: AbortSignal,
+  ): Promise<Result<DecideResult>>;
   /** Translate an error this client threw into provider-neutral fields for
    *  agency's retry classifier. Optional — agency falls back to `{ message }`
    *  when omitted, which still works (message-pattern matching) but loses
@@ -274,6 +284,17 @@ export class SmoltalkClient implements LLMClient {
     signal: AbortSignal,
   ): Promise<Result<SpeechResult>> {
     const result = await smoltalk.speak(text, { ...config, abortSignal: signal });
+    if (!result.success) rejectIfAborted(signal);
+    return result;
+  }
+
+  async decide(
+    state: DecisionState,
+    questions: Record<string, DecisionQuestion>,
+    config: DecideConfig,
+    signal: AbortSignal,
+  ): Promise<Result<DecideResult>> {
+    const result = await smoltalk.decide(state, questions, { ...config, abortSignal: signal });
     if (!result.success) rejectIfAborted(signal);
     return result;
   }

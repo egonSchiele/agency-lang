@@ -3,6 +3,11 @@ import { ToolCall } from "smoltalk";
 import { agencyStore } from "./asyncContext.js";
 import type {
   AudioInput,
+  DecideConfig,
+  DecideResult,
+  DecisionAnswer,
+  DecisionQuestion,
+  DecisionState,
   EmbedConfig,
   EmbedResult,
   ImageConfig,
@@ -61,7 +66,14 @@ export type MultiToolCallMock = {
   toolCalls: Array<{ name: string; args?: Record<string, any>; id?: string }>;
 };
 
-export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock;
+/** A decision model's answers for one `llm()` call that resolves to a
+ *  decision provider. Keyed by question name: `answer` for a bare
+ *  annotation, the field names for an object annotation. */
+export type DecideMock = {
+  decide: Record<string, DecisionAnswer>;
+};
+
+export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock | DecideMock;
 
 /**
  * Per-agent mock queues. Keys are matched against the executing module:
@@ -209,6 +221,12 @@ export class DeterministicClient implements LLMClient {
     const mock = queue.mocks[queue.callIndex - 1];
     const callIndex = queue.callIndex;
 
+    if ("decide" in mock) {
+      throw new Error(
+        `DeterministicClient: llm() call #${callIndex} is a text call but the mock is a decision answer. Point the call at a decision model, or replace the { decide } entry in llmMocks.`,
+      );
+    }
+
     if ("return" in mock) {
       if (mock.delayMs) {
         await abortableDelay(mock.delayMs, config.abortSignal);
@@ -286,6 +304,38 @@ export class DeterministicClient implements LLMClient {
   // embedding provider when AGENCY_LLM_MOCKS is set. Tests that need to
   // exercise vector recall should register a custom client via
   // setLLMClient() with their own embed implementation.
+  async decide(
+    _state: DecisionState,
+    _questions: Record<string, DecisionQuestion>,
+    config: DecideConfig,
+    signal: AbortSignal,
+  ): Promise<Result<DecideResult>> {
+    throwIfAborted(signal);
+    const { scope, queue } = this.resolveQueue();
+    queue.callIndex++;
+    const where = this.scoped ? ` in scope "${scope}"` : "";
+    if (queue.callIndex > queue.mocks.length) {
+      throw new Error(
+        `DeterministicClient: no mock provided for llm() call #${queue.callIndex}${where}. Add a { decide: {...} } entry to llmMocks in your test.json.`,
+      );
+    }
+    const mock = queue.mocks[queue.callIndex - 1];
+    if (!("decide" in mock)) {
+      throw new Error(
+        `DeterministicClient: llm() call #${queue.callIndex}${where} is a decision call but the mock is not a { decide: {...} } entry.`,
+      );
+    }
+    return {
+      success: true,
+      value: {
+        answers: mock.decide,
+        usage: { inputTokens: 1, outputTokens: 0 },
+        cost: { inputCost: 0.000001, outputCost: 0, totalCost: 0.000001, currency: "USD" },
+        model: config.model,
+      },
+    };
+  }
+
   async embed(
     _input: string | string[],
     _config?: Partial<EmbedConfig>,

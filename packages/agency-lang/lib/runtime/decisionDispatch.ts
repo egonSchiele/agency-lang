@@ -4,6 +4,10 @@
  * thread becomes the state, and the reply is shaped as a completion so that
  * everything after dispatch (the structured parse, the thread append, cost,
  * statelog) runs unchanged. See docs/dev/llm/decision-models.md.
+ *
+ * A call inside a fork or parallel block hands its request to the block's
+ * collector (`lib/runtime/decisionCollector.ts`) on the async-context frame,
+ * which may batch it with sibling calls; a call outside one sends as before.
  */
 import * as smoltalk from "smoltalk";
 import type { Message, ModelDataBlob, PromptResult } from "smoltalk";
@@ -16,6 +20,8 @@ import {
 } from "./decisionQuestions.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState } from "./types.js";
+import { agencyStore } from "./asyncContext.js";
+import { DEFAULT_QUESTION_CAP } from "./decisionCollector.js";
 
 /** The one decision provider. It names the wire protocol, so a model or
  *  endpoint the registry does not know is marked with `provider: "typesafe"`. */
@@ -80,6 +86,17 @@ function promptText(config: PromptConfig): string {
 /** Everything that can refuse a decision call before a request exists: the
  *  tools check, the schema mapping, and the client capability. Runs before
  *  metering so a refusal is never counted as an attempt. */
+/** The most questions one request to this call's model may carry: the
+ *  registry's `maxQuestions` for a known decision model, else Jev's cap. */
+export function questionCapFor(config: PromptConfig): number {
+  const maps = (config.metadata ?? {}) as ConfigMaps;
+  const record = registryRecord(config.model, maps.modelData);
+  if (record?.type === "decision" && record.maxQuestions !== undefined) {
+    return record.maxQuestions;
+  }
+  return DEFAULT_QUESTION_CAP;
+}
+
 export function prepareDecision(
   ctx: RuntimeContext<GraphState>,
   config: PromptConfig,
@@ -93,11 +110,9 @@ export function prepareDecision(
   if (!plan.success) {
     throw new Error(plan.error);
   }
-  const maps = (config.metadata ?? {}) as ConfigMaps;
-  const record = registryRecord(config.model, maps.modelData);
-  const maxQuestions = record?.type === "decision" ? record.maxQuestions : undefined;
+  const maxQuestions = questionCapFor(config);
   const count = Object.keys(plan.value.questions).length;
-  if (maxQuestions !== undefined && count > maxQuestions) {
+  if (count > maxQuestions) {
     throw new Error(
       `A decision model accepts at most ${maxQuestions} questions per call, but the object type has ${count} fields.`,
     );
@@ -141,13 +156,22 @@ export async function dispatchDecision(
   };
 
   const signal = config.abortSignal ?? new AbortController().signal;
-  const result = await decide.call(
-    ctx.llmClient,
-    messagesToState(stateMessages(config.messages)),
-    plan.questions,
-    decideConfig,
-    signal,
-  );
+  // Inside a fork or parallel block, a collector on the frame batches this
+  // call with its siblings. Outside one, the call sends on its own. Either
+  // way the answer comes back in the same `Result<DecideResult>` shape, so
+  // nothing after the send changes.
+  const state = messagesToState(stateMessages(config.messages));
+  const scope = agencyStore.getStore()?.decisions;
+  const result =
+    scope === undefined
+      ? await decide.call(ctx.llmClient, state, plan.questions, decideConfig, signal)
+      : await scope.collector.submit(scope.armKey, {
+          state,
+          questions: plan.questions,
+          config: decideConfig,
+          questionCap: questionCapFor(config),
+          signal,
+        });
   if (!result.success) {
     throw decisionRequestError(result);
   }

@@ -40,6 +40,10 @@ export type SpanType =
   // roll-ups in the viewer don't conflate chat-completion cost with
   // embedding cost, and so embeddings are filterable on their own.
   | "embedding"
+  // One round of batched decision calls inside a fork or parallel block:
+  // every group's request, sent together. Opened by the collector's
+  // batchStarted hook and closed when the last group answers.
+  | "decisionBatch"
   // Memory-subsystem umbrella spans. Each one wraps a single
   // user-facing memory operation; the inner `llmCall`/`embedding`
   // spans nest underneath via AsyncLocalStorage so a viewer can
@@ -1296,6 +1300,28 @@ export class StatelogClient {
     });
   }
 
+  /** One round of batched decision calls. `groups` has one entry per
+   *  request sent; a round with two conversations sends two. */
+  async decisionBatch({
+    forkId,
+    reason,
+    groups,
+    timeTaken,
+  }: {
+    forkId: string;
+    reason: "quiescent" | "cap";
+    groups: Array<{ model: string; armKeys: string[]; callCount: number; questionCount: number }>;
+    timeTaken: number;
+  }): Promise<void> {
+    await this.post({
+      type: "decisionBatch",
+      forkId,
+      reason,
+      groups,
+      timeTaken,
+    });
+  }
+
   // --- Thread lifecycle ---
 
   async threadCreated({
@@ -1445,7 +1471,7 @@ export class StatelogClient {
     schemaChars,
     threshold,
   }: {
-    warnType: "failurePropagation" | "toolSchemaSize" | "failureData";
+    warnType: "failurePropagation" | "toolSchemaSize" | "failureData" | "decisionBatchCap";
     message: string;
     functionName?: string;
     param?: string;

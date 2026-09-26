@@ -1,0 +1,75 @@
+import { lastReply, userMessage } from "std::thread"
+
+type Dept = "billing" | "support" | "sales"
+
+// A decision call, then the confidence read back off the reply.
+node confidence() {
+  const dept: Dept = llm("Which team should handle a missing refund?", { model: "jev-1.13" })
+  const reply = lastReply()
+  if (reply == null || reply.answers == null) {
+    return "no decision"
+  }
+  const answer = reply.answers.answer
+  if (answer.type == "choice") {
+    return { dept: dept, confidence: answer.confidence }
+  }
+  return "not a choice"
+}
+
+// A boolean annotation becomes a yes-or-no question; the probability is `noul`.
+node probability() {
+  const urgent: boolean = llm("Is a missing refund urgent?", { model: "jev-1.13" })
+  const reply = lastReply()
+  if (reply == null || reply.answers == null) {
+    return "no decision"
+  }
+  const answer = reply.answers.answer
+  if (answer.type == "noul") {
+    return { urgent: urgent, noul: answer.noul }
+  }
+  return "not a noul"
+}
+
+// No model has replied: null.
+node beforeAnyReply() {
+  userMessage("hello")
+  return lastReply() == null
+}
+
+// A user message after the reply does not hide the reply.
+node afterUserMessage() {
+  const dept: Dept = llm("Which team?", { model: "jev-1.13" })
+  userMessage("noted")
+  const reply = lastReply()
+  if (reply == null || reply.answers == null) {
+    return "lost"
+  }
+  const answer = reply.answers.answer
+  if (answer.type == "choice") {
+    return answer.choice
+  }
+  return "not a choice"
+}
+
+// The reply survives a checkpoint: the interrupt is left unhandled here so
+// it reaches the test harness, which takes a checkpoint, approves, and
+// resumes. The read happens after the resume.
+effect test::confirm {}
+
+def confirm(): boolean {
+  return interrupt test::confirm("Continue?", {})
+}
+
+node afterResume() {
+  const dept: Dept = llm("Which team?", { model: "jev-1.13" })
+  confirm()
+  const reply = lastReply()
+  if (reply == null || reply.answers == null) {
+    return "lost"
+  }
+  const answer = reply.answers.answer
+  if (answer.type == "choice") {
+    return answer.confidence
+  }
+  return "not a choice"
+}

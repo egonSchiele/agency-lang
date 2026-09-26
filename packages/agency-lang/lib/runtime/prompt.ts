@@ -65,7 +65,7 @@ import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js"
 import { StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState } from "./types.js";
-import { extractStructuredResponse, updateTokenStats } from "./utils.js";
+import { buildReplyMessage, extractStructuredResponse, updateTokenStats } from "./utils.js";
 
 type Tool = {
   name: string;
@@ -640,19 +640,7 @@ async function _runPrompt({
     threadLabel: messages.label,
   });
 
-  // A provider's extras beyond the text (a decision model's full answers
-  // with probabilities) ride on the message as `rawData`.
-  if (toolCalls.length > 0) {
-    messages.push(
-      smoltalk.assistantMessage(completion.output, { toolCalls, rawData: completion.rawData }),
-      callLabel,
-    );
-  } else {
-    messages.push(
-      smoltalk.assistantMessage(completion.output, { rawData: completion.rawData }),
-      callLabel,
-    );
-  }
+  messages.push(buildReplyMessage(completion, toolCalls, ctx.logLevel), callLabel);
 
   updateTokenStats({
     globals: ctx.globals,

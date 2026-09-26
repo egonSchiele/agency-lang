@@ -16,6 +16,16 @@ Agency uses a **ThreadStore** + **MessageThread** system to manage LLM conversat
 - Key methods: `addMessage()`, `push()`, `getMessages()`, `cloneMessages()` (deep clone via JSON round-trip), `labelAt()`
 - Also carries the metadata a thread accumulates: `parentId`, `label`, `hidden`, `summary`, `repairs`, and `queuedMessages`. All of them round-trip through `toJSON` / `fromJSON`.
 
+#### What a reply message carries
+
+The reply message keeps everything the completion carried beyond its text:
+`thinkingBlocks`, `usage`, `cost`, and `rawData`, a provider's extras such
+as a decision model's answers. smoltalk writes all of them in `toJSON`, so
+they survive a checkpoint and a subthread seed. `lastReply()` in
+`std::thread` (`_lastReply` in `lib/stdlib/thread.ts`) is the reader: the
+active thread's last assistant message, as a record with nulls for what
+the reply did not carry.
+
 #### Per-message debug labels (`messageLabels`)
 
 `messageLabels` holds an optional debug label per message, from `llm(label:)` / `userMessage(msg, label:)` and friends. It is observability-only: labels surface in statelog (see `docs/dev/hosting/statelog.md`) and are never sent to the provider. It is **not** the same field as the thread-level `label`, which comes from `thread(label: "...")` and names the whole thread.

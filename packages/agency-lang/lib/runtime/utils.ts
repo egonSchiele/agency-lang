@@ -1,4 +1,7 @@
+import * as smoltalk from "smoltalk";
+import type { PromptResult, ToolCallJSON } from "smoltalk";
 import { color } from "@/utils/termcolors.js";
+import { createLogger, type LogLevel } from "../logger.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { ThreadStore } from "./index.js";
 import { RunNodeCoreResult } from "./types.js";
@@ -7,6 +10,68 @@ import { failure, isSuccess, success, ResultValue } from "./result.js";
 
 export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj, nativeTypeReplacer), nativeTypeReviver);
+}
+
+/** Keep a value only when it round-trips through the given schema. The reply
+ *  message's usage, cost, and thinking are validated by smoltalk's fromJSON
+ *  on restore (checkpoint resume, rewind, subthread clone), which throws on a
+ *  bad shape, so a value that would not pass is dropped here instead — the
+ *  same as before the reply carried these fields. Pass smoltalk's own schema
+ *  for the field, so a value this accepts is one fromJSON accepts. `onInvalid`
+ *  is called with the parse error when a value is dropped, so the caller can
+ *  say which client returned a shape it could not keep. */
+export function serializableExtra<T>(
+  value: T | undefined,
+  schema: { safeParse(input: unknown): { success: boolean; error?: unknown } },
+  onInvalid?: (error: unknown) => void,
+): T | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = schema.safeParse(value);
+  if (parsed.success) {
+    return value;
+  }
+  onInvalid?.(parsed.error);
+  return undefined;
+}
+
+/** The `onInvalid` handler for {@link serializableExtra}: warns that a reply
+ *  extra was left off the message, naming the field and the parse error, so a
+ *  custom client returning a bad shape is not left silent. */
+function warnUnserializableReplyField(logLevel: LogLevel, field: string): (error: unknown) => void {
+  return (error) =>
+    createLogger(logLevel).warn(
+      `[reply] the ${field} on this completion does not match smoltalk's schema, so it was left ` +
+        `off the reply message (keeping it would break a later checkpoint restore). ` +
+        `Check the LLM client. ${error}`,
+    );
+}
+
+/** The assistant message `runPrompt` appends for a completion. Everything the
+ *  completion carried beyond its text rides on it, where `lastReply()` in
+ *  std::thread reads it back: thinking, usage, cost, and a provider's extras
+ *  such as a decision model's answers. Each of thinking/usage/cost goes through
+ *  {@link serializableExtra} so a shape that would not survive smoltalk's
+ *  fromJSON on restore is dropped rather than left to break a checkpoint. An
+ *  unset `toolCalls` serializes exactly as an omitted one. */
+export function buildReplyMessage(
+  completion: PromptResult,
+  toolCalls: ToolCallJSON[],
+  logLevel: LogLevel,
+): smoltalk.AssistantMessage {
+  const warn = (field: string) => warnUnserializableReplyField(logLevel, field);
+  return smoltalk.assistantMessage(completion.output, {
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+    thinkingBlocks: serializableExtra(
+      completion.thinkingBlocks,
+      smoltalk.ThinkingBlockSchema.array(),
+      warn("thinking blocks"),
+    ),
+    usage: serializableExtra(completion.usage, smoltalk.TokenUsageSchema, warn("usage")),
+    cost: serializableExtra(completion.cost, smoltalk.CostEstimateSchema, warn("cost")),
+    rawData: completion.rawData,
+  });
 }
 
 export function deepFreeze<T>(obj: T, seen: WeakSet<object> = new WeakSet()): T {

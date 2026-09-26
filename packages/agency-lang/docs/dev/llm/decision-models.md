@@ -139,14 +139,20 @@ thread is the state.
 
 ## The lossy step
 
-A bare `boolean` is `noul >= 0.5`. The probability is thrown away at the
-value level. It is kept on the assistant message's `rawData`, which nothing
-in Agency reads yet, and which survives a checkpoint only with a smoltalk
-that writes `rawData` in `toJSON` (0.15.1 or later). A `Choice<T>` wrapper
-type that returns the whole answer record, with confidence and
-probabilities, is the planned fix, and a `Score<...>` type for the third
-question kind comes with it. Until then a score answer is never produced,
-since no annotation maps to one.
+A bare `boolean` is `noul >= 0.5`, and a choice returns only the chosen
+option. The full answer set is kept on the reply message as `rawData`, and
+`lastReply()` from `std::thread` returns it as `answers`, a
+`Record<string, DecisionAnswer>` typed the same way smoltalk types it. A
+bare annotation's answer is `answers.answer`; an object annotation's are
+`answers.<field>`. Check `type` before reading a field, and the checker
+refuses a typo.
+
+`rawData` stays on the record as the untyped original.
+`lib/stdlib/thread.test.ts` builds its fixture as smoltalk's `DecideResult`,
+so a shape change there fails here. No wrapper type on `llm()`'s return
+value is planned. Score questions are still not produced, since no
+annotation maps to one, but `ScoreAnswer` is in the union so nothing
+changes when they are.
 
 ## Cost
 
@@ -298,7 +304,6 @@ each mock is checked against its own call's question names.
 
 ## What is deferred
 
-`Choice<T>` and `Score<...>` wrapper types, per-member `@jsonSchema`
-descriptions so an option can be described rather than only named, a way
-for Agency code to read an assistant message's `rawData`, and an in-process
-Laya backend.
+Per-member `@jsonSchema` descriptions so an option can be described rather
+than only named, and an in-process Laya backend. `Choice<T>` and
+`Score<...>` wrapper types were set aside in favour of `lastReply()`.

@@ -1,0 +1,17 @@
+{
+  "sayA": {
+    "text": "A",
+    "thinking": [
+      "thinking about A"
+    ],
+    "inputTokens": 11
+  },
+  "sayB": {
+    "text": "B",
+    "thinking": [
+      "thinking about B"
+    ],
+    "inputTokens": 22
+  },
+  "outsideIsNull": true
+}

@@ -100,15 +100,14 @@ export function prepareDecision(
   return plan.value;
 }
 
-/** smoltalk reports an HTTP error as a failure whose text names the status.
- *  Lift it onto the thrown error so the retry classifier can read it. */
-function decisionRequestError(message: string): Error {
-  const match = /\bstatus (\d{3})\b/.exec(message);
-  const err = new Error(message);
-  if (match) {
-    return Object.assign(err, { status: Number(match[1]) });
+/** A failed request as a thrown error. The HTTP status, when the failure
+ *  came from one, rides along so the retry classifier can read it. */
+function decisionRequestError(failed: { error: string; status?: number }): Error {
+  const err = new Error(failed.error);
+  if (failed.status === undefined) {
+    return err;
   }
-  return err;
+  return Object.assign(err, { status: failed.status });
 }
 
 export async function dispatchDecision(
@@ -142,7 +141,7 @@ export async function dispatchDecision(
     signal,
   );
   if (!result.success) {
-    throw decisionRequestError(result.error);
+    throw decisionRequestError(result);
   }
   const value = answersToValue(plan, result.value.answers);
   if (!value.success) {

@@ -152,17 +152,27 @@ describe("dispatchDecision", () => {
     );
   });
 
-  it("throws an error carrying the HTTP status when the client reports one, so retry can classify it", async () => {
+  it("carries the failure's HTTP status onto the thrown error", async () => {
     const decide = vi.fn(async () => ({
       success: false as const,
-      error: "Decision request failed with status 429: slow down",
+      error: "Decision request failed: rate limited",
+      status: 429,
+    }));
+    await expect(
+      dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+
+  it("throws a plain error when the failure has no status", async () => {
+    const decide = vi.fn(async () => ({
+      success: false as const,
+      error: "Decision request failed: socket hang up",
     }));
     const err = await dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })).catch(
       (e) => e,
     );
     expect(err).toBeInstanceOf(Error);
-    expect(err.message).toMatch(/status 429/);
-    expect(err.status).toBe(429);
+    expect("status" in err).toBe(false);
   });
 
   it("throws when the answers do not fit the schema", async () => {

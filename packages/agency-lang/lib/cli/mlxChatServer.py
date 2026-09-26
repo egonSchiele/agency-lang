@@ -111,7 +111,9 @@ from llguidance import LLMatcher
 from llguidance.hf import from_tokenizer
 from llguidance.mlx import apply_token_bitmask
 from llguidance.numpy import allocate_token_bitmask, fill_next_token_bitmask
+import mlx.core as mx
 from mlx_lm import server
+from mlx_lm.generate import GenerationBatch
 from mlx_lm.models.cache import can_trim_prompt_cache
 
 
@@ -1097,6 +1099,65 @@ def file_tool_call_on_stop(last_state, response):
     if response.finish_reason is None or response.state is not None or last_state != "tool":
         return response
     return replace(response, state="normal")
+
+
+# ---------------------------------------------------------------------------
+# A Metal buffer leak in mlx_lm 0.31.3's batched decoding.
+# ---------------------------------------------------------------------------
+#
+# Models with layers that keep state other than keys and values (mlx_lm's
+# `ArraysCache`: Qwen3.5 and its descendants, Qwen3-Next, Mamba, LFM2,
+# Kimi Linear and others) advance that cache each step with a lazy
+# subtraction on its padding and length counters, so each step's counter
+# keeps the graph that made it, and every Metal buffer in that chain
+# stays alive: one per such layer per token. Metal allows 499,000 live
+# buffers per process, which a reply reaches after about 10,000 generated
+# tokens; the generation thread then dies with
+# `[metal::malloc] Resource limit (499000) exceeded` and the server answers
+# every later request with a 404 (ml-explore/mlx-lm #1641, #1332, #1672;
+# fixed upstream in #1642, unreleased as of 0.31.3). Evaluating the
+# counters, and the state beside them, after each step collapses the
+# chain. They are already computed by the step, so this costs a
+# synchronisation, not work.
+
+
+def cache_arrays(caches):
+    """Every array a cache keeps: its state, however nested, and the
+    padding and length counters an `ArraysCache` advances lazily."""
+    found = []
+
+    def collect(value):
+        if isinstance(value, mx.array):
+            found.append(value)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                collect(item)
+
+    for cache in caches:
+        collect(getattr(cache, "state", None))
+        collect(getattr(cache, "left_padding", None))
+        collect(getattr(cache, "lengths", None))
+    return found
+
+
+# Remove this shim once a released mlx_lm carries the upstream fix (#1642);
+# the extra per-step eval is redundant after that. Unwrap before capturing so
+# that if this module is ever re-executed, `original_batch_step` is the true
+# original and `settled_step` never wraps itself into infinite recursion.
+_installed = GenerationBatch._step
+original_batch_step = getattr(_installed, "__cache_leak_original__", _installed)
+
+
+def settled_step(self):
+    result = original_batch_step(self)
+    arrays = cache_arrays(self.prompt_cache)
+    if arrays:
+        mx.eval(arrays)
+    return result
+
+
+settled_step.__cache_leak_original__ = original_batch_step
+GenerationBatch._step = settled_step
 
 
 original_make_logits_processors = server._make_logits_processors

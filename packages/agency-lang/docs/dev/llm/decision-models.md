@@ -33,19 +33,25 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
 1. **The compiler** (`lib/backends/typescriptBuilder.ts`, the `llm` case)
    emits one `runPrompt({...})` call. The type annotation becomes
    `responseFormat`, always wrapped as `z.object({ response: <schema> })`.
-   The options object becomes `clientConfig`, passed through as written.
+   The options object becomes `clientConfig`, passed through as written,
+   except that the compiler bakes the config's default provider into every
+   call that named only a model. (When only `defaultModel` is configured
+   and no `defaultProvider`, nothing is baked, and smoltalk's registry
+   picks the provider.)
 2. **`runPrompt`** (`lib/runtime/prompt.ts`) appends the prompt to the
    active thread as a user message, then builds a `PromptConfig` from the
-   thread's messages, the schema, and the options. It fills in the config
-   default provider on a call that named only a model.
-3. **`dispatchLLMRequest`** (`lib/runtime/llmDispatch.ts`) asks
-   `isDecisionCall`. If yes, it calls `dispatchDecision` and returns. If no,
-   the call goes to `text()` or `textStream()` as before. The metering
-   wrapper in `dispatchWithRetry` asks the same question to pick the usage
-   kind, `decision` or `completion`.
-4. **`dispatchDecision`** (`lib/runtime/decisionDispatch.ts`) refuses a call
-   with tools, refuses a call with no schema, and then hands the schema and
-   the prompt to `planDecision`.
+   thread's messages, the schema, and the options.
+3. **`dispatchWithRetry`** (`lib/runtime/llmDispatch.ts`) asks
+   `isDecisionCall` once, before metering. If yes, `prepareDecision`
+   refuses a call with tools, with no schema, with a shape it cannot map,
+   with more questions than the model accepts, or with a client that has no
+   `decide`, and otherwise builds the plan. The plan goes down to
+   `dispatchLLMRequest`, which calls `dispatchDecision` when it has one and
+   `text()` or `textStream()` when it does not. The usage kind, `decision`
+   or `completion`, comes back up with the result, so nothing after this
+   point asks the question again.
+4. **`dispatchDecision`** (`lib/runtime/decisionDispatch.ts`) sends the
+   plan's questions and the thread as state.
 5. **`planDecision`** (`lib/runtime/decisionQuestions.ts`) strips the
    envelope and turns the schema into a map of questions. The table below
    says how. `messagesToState` turns the thread into the state.
@@ -67,27 +73,39 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
 The decision branch is the only new code on the path. Nothing in the parse,
 the thread, the guards, or statelog knows it exists.
 
-## Why the registry is checked before the provider
+## Which calls are decision calls
 
-`runPrompt` puts the configured default provider, `openai-responses`
-unless set, onto every call that named only a model. So by the time a call
-reaches dispatch, `config.provider` cannot tell "the user wrote `typesafe`"
-from "the default was filled in". An explicit-provider-wins rule sent
-`jev-1.13` with no provider written to `text()`. The execution test caught
-it; the unit tests had not, because they built the config by hand.
+`isDecisionCall` has two rules, and the registry decides which applies:
 
-So `isDecisionCall` first asks the registry what provider the model name
-belongs to, and only then looks at `config.provider`. And
-`dispatchDecision` always passes `provider: "typesafe"` to the client, never
-the filled-in value.
+- The registry knows the model name. Then only the registry's provider
+  counts: `jev-1.13` is a decision call whatever provider is on the call,
+  and `gpt-5-mini` never is.
+- The registry does not know the name (a local Laya server, say). Then the
+  call is a decision call when its provider is `typesafe`.
 
-Two consequences to know. A call that names a registry decision model with
-a different explicit provider, `{ model: "jev-1.13", provider: "openrouter" }`,
-is still a decision call; the registry wins. And `defaultProvider: "typesafe"`
-in config, which is what `--model typesafe/jev-1.13` sets, makes every call
-in the run a decision call, including any stdlib call that names a text
-model. Set the default model to a decision model only for a program whose
-every call is one.
+The call's provider is not trusted for a known name because the user may
+not have written it. The compiler bakes the config's default provider,
+`openai-responses` unless set, into every generated call that named only a
+model, so at dispatch `config.provider` cannot tell "written" from
+"defaulted". An explicit-provider-wins rule sent `jev-1.13` with no
+provider written to `text()`; the execution test caught it, the unit tests
+had not, because they built the config by hand. And a plain OR of the two
+rules let `defaultProvider: "typesafe"`, which `--model typesafe/jev-1.13`
+sets, capture every call in the run, including stdlib calls that name a
+text model.
+
+`dispatchDecision` always passes `provider: "typesafe"` to the client,
+never the value on the call.
+
+## Validation
+
+`answersToValue` builds the value from the answers, so through
+`SmoltalkClient` the structured parse always accepts it. A custom client
+can still return a choice outside the union. A text model would then get
+the feedback message and another attempt; a decision model cannot act on
+feedback, and re-asking would send the feedback text as the question. So
+`runPrompt` gives a decision call no validation retries: the first miss is
+the failure.
 
 ## From a type to questions
 

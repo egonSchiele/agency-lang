@@ -46,17 +46,19 @@ describe("isDecisionCall", () => {
     expect(isDecisionCall(base({ model: "jev-1.13" }))).toBe(true);
   });
 
-  it("is true for a registry decision model even when the default provider was filled in", () => {
-    // runPrompt fills the config default provider onto every call that
+  it("is true for a registry decision model even when the default provider was baked in", () => {
+    // The compiler bakes the config default provider onto every call that
     // named only a model; the registry name still wins.
     expect(isDecisionCall(base({ model: "jev-1.13", provider: "openai-responses" }))).toBe(true);
   });
 
-  it("is false for a text model, with or without a filled-in provider", () => {
+  it("is false for a registry text model, whatever provider is on the call", () => {
     expect(isDecisionCall(base({ model: "gpt-4o-mini" }))).toBe(false);
     expect(isDecisionCall(base({ model: "gpt-4o-mini", provider: "openai-responses" }))).toBe(
       false,
     );
+    // A default provider of typesafe must not capture a stdlib text call.
+    expect(isDecisionCall(base({ model: "gpt-4o-mini", provider: "typesafe" }))).toBe(false);
   });
 
   it("is false for an unknown model with no provider, and for no model at all", () => {

@@ -86,7 +86,7 @@ describe("dispatchWithRetry with a decision call", () => {
         model: "jev-1.13",
       },
     }));
-    const { completion } = await dispatchWithRetry({
+    const { completion, usageKind } = await dispatchWithRetry({
       ctx: ctxWith({ decide }),
       promptConfig: config({}),
       prompt: "Which department?",
@@ -95,6 +95,7 @@ describe("dispatchWithRetry with a decision call", () => {
       parentSignal: undefined,
     });
     expect(JSON.parse(completion.output!)).toEqual({ response: "billing" });
+    expect(usageKind).toBe("decision");
     expect(vi.mocked(meteredDispatch).mock.calls[0][2]).toBe("decision");
   });
 });

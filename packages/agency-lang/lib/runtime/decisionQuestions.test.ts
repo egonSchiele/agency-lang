@@ -87,6 +87,17 @@ describe("planDecision", () => {
     ["a nested object", z.object({ triage: z.object({ d: dept }) }), /"triage".*nested object/],
     ["an optional field", z.object({ d: dept.optional() }), /"d".*optional/],
     ["a nullable field", z.object({ d: dept.nullable() }), /"d".*nullable/],
+    [
+      "a field typed T | null, which compiles to a union with a null member",
+      z.object({ d: z.union([z.literal("a"), z.literal("b"), z.null()]) }),
+      /"d".*nullable/,
+    ],
+    [
+      "a union with one literal",
+      z.object({ d: z.union([z.literal("only")]) }),
+      /"d".*only one literal/,
+    ],
+    ["an enum with one member", z.object({ d: z.enum(["only"]) }), /"d".*only one literal/],
     ["an array field", z.object({ d: z.array(dept) }), /"d".*an array/],
     [
       "a union with a non-literal member",

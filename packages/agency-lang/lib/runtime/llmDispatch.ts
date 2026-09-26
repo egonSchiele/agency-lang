@@ -4,6 +4,7 @@ import { dispatchDecision, isDecisionCall, prepareDecision } from "./decisionDis
 import type { DecisionPlan } from "./decisionQuestions.js";
 import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { callHook } from "./hooks.js";
+import type { ProviderUsageKind as UsageKind } from "./invocationUsage.js";
 import type { NormalizedLLMError, PromptConfig } from "./llmClient.js";
 import { decideRetry, enrichSchemaLimitationError } from "./llmRetry.js";
 import type { LLMRetryReason, RetryPolicy } from "./llmRetry.js";
@@ -30,14 +31,14 @@ export async function dispatchLLMRequest({
   prompt: string | UserContentInput;
   stream: boolean;
   stateStack?: StateStack;
-  /** The prepared decision plan when this is a decision call. A direct
-   *  caller may omit it; the plan is then built here, after metering. */
+  /** Present when this is a decision call. `dispatchWithRetry` decides
+   *  that once, before metering, and the plan is the only signal here. */
   decisionPlan?: DecisionPlan;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
   // A decision model (Jev, Laya) answers typed questions, not text. The
   // branch returns a completion shaped like a text model's, so everything
   // after this point runs unchanged. There is nothing to stream.
-  if (isDecisionCall(promptConfig)) {
+  if (decisionPlan !== undefined) {
     const completion = await dispatchDecision(ctx, promptConfig, decisionPlan);
     return { completion, toolCalls: [] };
   }
@@ -226,7 +227,7 @@ export async function dispatchWithRetry(args: {
   retryPolicy: RetryPolicy;
   parentSignal: AbortSignal | undefined;
   stateStack?: StateStack;
-}): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
+}): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[]; usageKind: UsageKind }> {
   const { ctx, promptConfig, prompt, stream, retryPolicy, parentSignal, stateStack } = args;
 
   const normalizeError = (err: unknown): NormalizedLLMError => {
@@ -252,13 +253,16 @@ export async function dispatchWithRetry(args: {
   };
 
   const targetStack = stateStack ?? ctx.stateStack;
-  const decision = isDecisionCall(promptConfig);
-  // A decision call's refusals (no schema, tools, no client support) happen
-  // here, before any metered attempt, so a refused call is never counted as
-  // a request that might have been paid for.
-  const decisionPlan = decision ? prepareDecision(ctx, promptConfig) : undefined;
-  const usageKind = decision ? "decision" : "completion";
-  return runWithRetry(
+  // Whether this is a decision call is decided once, here. The plan carries
+  // the answer down to dispatch, and the usage kind carries it back up. A
+  // decision call's refusals (no schema, tools, no client support) happen
+  // before any metered attempt, so a refused call is never counted as a
+  // request that might have been paid for.
+  const decisionPlan = isDecisionCall(promptConfig)
+    ? prepareDecision(ctx, promptConfig)
+    : undefined;
+  const usageKind: UsageKind = decisionPlan === undefined ? "completion" : "decision";
+  const result = await runWithRetry(
     (signal) =>
       meteredDispatch(ctx, targetStack, usageKind, () =>
         dispatchLLMRequest({
@@ -278,4 +282,5 @@ export async function dispatchWithRetry(args: {
     retryHooks,
     normalizeError,
   );
+  return { ...result, usageKind };
 }

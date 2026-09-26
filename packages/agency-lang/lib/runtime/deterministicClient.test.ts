@@ -347,6 +347,26 @@ describe("DeterministicClient.decide", () => {
     expect(d.success && d.value.answers.answer).toEqual({ type: "noul", noul: 0.1 });
   });
 
+  it("decide() refuses a mock whose answers do not fit the questions", async () => {
+    const choice = {
+      d: { type: "choice", instructions: "?", criteria: { a: "a", b: "b" } },
+    } as any;
+    const missing = new DeterministicClient([{ decide: {} }]);
+    await expect(missing.decide!("s", choice, { model: "m" }, signal)).rejects.toThrow(
+      /call #1 has no answer for question "d"/,
+    );
+    const wrongType = new DeterministicClient([{ decide: { d: { type: "noul", noul: 1 } } }]);
+    await expect(wrongType.decide!("s", choice, { model: "m" }, signal)).rejects.toThrow(
+      /answers "d" as a noul, but the question is a choice/,
+    );
+    const outside = new DeterministicClient([
+      { decide: { d: { type: "choice", choice: "z", confidence: 1, probabilities: { z: 1 } } } },
+    ]);
+    await expect(outside.decide!("s", choice, { model: "m" }, signal)).rejects.toThrow(
+      /answers "d" with "z", which is not one of its options: a, b/,
+    );
+  });
+
   it("text() refuses a decide mock with a clear message", async () => {
     const client = new DeterministicClient([{ decide: {} }]);
     await expect(client.text({ messages: [] } as unknown as PromptConfig)).rejects.toThrow(

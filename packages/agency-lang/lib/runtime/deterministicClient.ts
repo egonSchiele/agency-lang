@@ -148,6 +148,31 @@ type MockQueue = {
   callIndex: number;
 };
 
+/** Why a mock's answers do not fit the questions asked, or undefined. */
+function checkMockAnswers(
+  questions: Record<string, DecisionQuestion>,
+  answers: Record<string, DecisionAnswer>,
+): string | undefined {
+  for (const name of Object.keys(questions)) {
+    const question = questions[name];
+    const answer = answers[name];
+    if (answer === undefined) {
+      return `has no answer for question "${name}". The questions asked were: ${Object.keys(questions).join(", ")}.`;
+    }
+    if (answer.type !== question.type) {
+      return `answers "${name}" as a ${answer.type}, but the question is a ${question.type}.`;
+    }
+    if (
+      answer.type === "choice" &&
+      question.type === "choice" &&
+      !(answer.choice in question.criteria)
+    ) {
+      return `answers "${name}" with "${answer.choice}", which is not one of its options: ${Object.keys(question.criteria).join(", ")}.`;
+    }
+  }
+  return undefined;
+}
+
 export class DeterministicClient implements LLMClient {
   private queues: Record<string, MockQueue>;
   /** Array form: one anonymous queue, original error messages. */
@@ -306,7 +331,7 @@ export class DeterministicClient implements LLMClient {
   // setLLMClient() with their own embed implementation.
   async decide(
     _state: DecisionState,
-    _questions: Record<string, DecisionQuestion>,
+    questions: Record<string, DecisionQuestion>,
     config: DecideConfig,
     signal: AbortSignal,
   ): Promise<Result<DecideResult>> {
@@ -323,6 +348,14 @@ export class DeterministicClient implements LLMClient {
     if (!("decide" in mock)) {
       throw new Error(
         `DeterministicClient: llm() call #${queue.callIndex}${where} is a decision call but the mock is not a { decide: {...} } entry.`,
+      );
+    }
+    // The same checks smoltalk's decide() makes, so a wrong fixture fails
+    // here with the mock named, not later as a model error or a retry loop.
+    const problem = checkMockAnswers(questions, mock.decide);
+    if (problem !== undefined) {
+      throw new Error(
+        `DeterministicClient: the { decide } mock for llm() call #${queue.callIndex}${where} ${problem}`,
       );
     }
     return {

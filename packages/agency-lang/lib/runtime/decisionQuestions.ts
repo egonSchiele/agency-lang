@@ -47,21 +47,30 @@ function descriptionOf(schema: unknown): string | undefined {
 }
 
 const NOT_ALL_LITERALS = "a union whose members are not all string literals";
+const ONE_LITERAL = "a union with only one literal, and a choice needs at least two options";
 
 /** The option keys when `schema` is a choice, else why it is not. */
 function choiceKeys(schema: unknown, def: ZodDef): { keys: string[] } | { reason: string } {
   if (def.type === "enum" && def.entries) {
-    return { keys: Object.keys(def.entries) };
+    const keys = Object.keys(def.entries);
+    return keys.length < 2 ? { reason: ONE_LITERAL } : { keys };
   }
   if (def.type === "union" && def.options) {
     const keys: string[] = [];
     for (const option of def.options) {
       const od = defOf(option);
+      // `T | null` compiles to a union with a null member, not to `.nullable()`.
+      if (od?.type === "null") {
+        return { reason: "nullable" };
+      }
       const value = od?.type === "literal" && od.values?.length === 1 ? od.values[0] : undefined;
       if (typeof value !== "string") {
         return { reason: NOT_ALL_LITERALS };
       }
       keys.push(value);
+    }
+    if (keys.length < 2) {
+      return { reason: ONE_LITERAL };
     }
     return { keys };
   }

@@ -43,20 +43,36 @@ function registryProvider(
   }
 }
 
-/** True when this call is for a decision model: its provider is `typesafe`,
- *  or the registry says its model belongs to `typesafe`.
+/** The registry's per-request question cap for a model, if it has one. */
+function registryMaxQuestions(
+  model: string | undefined,
+  modelData: ModelDataBlob | undefined,
+): number | undefined {
+  if (model === undefined) return undefined;
+  const record = smoltalk.getModel(model as smoltalk.ModelName, modelData);
+  return record?.type === "decision" ? record.maxQuestions : undefined;
+}
+
+/** True when this call is for a decision model.
  *
- *  The registry is checked by model name alone, before the call's provider.
- *  By the time a call reaches dispatch, `runPrompt` has filled in the
- *  config's default provider (`openai-responses` unless set) on every call
- *  that named only a model, so `config.provider` cannot tell "the user wrote
- *  typesafe" from "the default was filled in". A registry model such as
- *  `jev-1.13` must still be a decision call with no provider written, which
- *  is the spec's rule for a known name. */
+ *  Two rules, and which one applies depends on whether the registry knows
+ *  the model name. A known name belongs to one provider, and only the
+ *  registry's word counts: `jev-1.13` is a decision call whatever provider
+ *  is on the call, and `gpt-5-mini` never is. An unknown name (a local Laya
+ *  server, say) is a decision call when the call's provider is `typesafe`.
+ *
+ *  The call's provider is not trusted for a known name because it may not
+ *  have been written by the user. The compiler bakes the config's default
+ *  provider into every generated call that named only a model, so at
+ *  dispatch `config.provider` cannot tell "written" from "defaulted". With
+ *  an explicit-provider-wins rule, `jev-1.13` with no provider written
+ *  went to `text()`, and a default provider of `typesafe` captured every
+ *  call in the run, including stdlib calls that name a text model. */
 export function isDecisionCall(config: PromptConfig): boolean {
-  if (config.provider === DECISION_PROVIDER) return true;
   const maps = (config.metadata ?? {}) as ConfigMaps;
-  return registryProvider(config.model, maps.modelData) === DECISION_PROVIDER;
+  const known = registryProvider(config.model, maps.modelData);
+  if (known !== undefined) return known === DECISION_PROVIDER;
+  return config.provider === DECISION_PROVIDER;
 }
 
 /** The prompt is the last message, which `runPrompt` appended just before
@@ -82,6 +98,14 @@ export function prepareDecision(
   const plan = planDecision(config.responseFormat, promptText(config));
   if (!plan.success) {
     throw new Error(plan.error);
+  }
+  const maps = (config.metadata ?? {}) as ConfigMaps;
+  const maxQuestions = registryMaxQuestions(config.model, maps.modelData);
+  const count = Object.keys(plan.value.questions).length;
+  if (maxQuestions !== undefined && count > maxQuestions) {
+    throw new Error(
+      `A decision model accepts at most ${maxQuestions} questions per call, but the object type has ${count} fields.`,
+    );
   }
   if (ctx.llmClient.decide === undefined) {
     throw new Error("The active LLM client does not support decision models.");

@@ -8,7 +8,12 @@
 import * as smoltalk from "smoltalk";
 import type { ModelDataBlob, PromptResult } from "smoltalk";
 import type { DecideConfig, PromptConfig } from "./llmClient.js";
-import { answersToValue, messagesToState, planDecision } from "./decisionQuestions.js";
+import {
+  answersToValue,
+  messagesToState,
+  planDecision,
+  type DecisionPlan,
+} from "./decisionQuestions.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { GraphState } from "./types.js";
 
@@ -59,10 +64,10 @@ function promptText(config: PromptConfig): string {
   return typeof content === "string" ? content : "";
 }
 
-export async function dispatchDecision(
-  ctx: RuntimeContext<GraphState>,
-  config: PromptConfig,
-): Promise<PromptResult> {
+/** Everything that can refuse a decision call before a request exists: the
+ *  tools check, the schema mapping, and the client capability. Runs before
+ *  metering so a refusal is never counted as an attempt. */
+export function prepareDecision(ctx: RuntimeContext<GraphState>, config: PromptConfig): DecisionPlan {
   if (config.tools !== undefined && config.tools.length > 0) {
     throw new Error("A decision model cannot call tools. Remove the tools option or use a text model.");
   }
@@ -70,6 +75,28 @@ export async function dispatchDecision(
   if (!plan.success) {
     throw new Error(plan.error);
   }
+  if (ctx.llmClient.decide === undefined) {
+    throw new Error("The active LLM client does not support decision models.");
+  }
+  return plan.value;
+}
+
+/** smoltalk reports an HTTP error as a failure whose text names the status.
+ *  Lift it onto the thrown error so the retry classifier can read it. */
+function decisionRequestError(message: string): Error {
+  const match = /\bstatus (\d{3})\b/.exec(message);
+  const err = new Error(message);
+  if (match) {
+    return Object.assign(err, { status: Number(match[1]) });
+  }
+  return err;
+}
+
+export async function dispatchDecision(
+  ctx: RuntimeContext<GraphState>,
+  config: PromptConfig,
+  plan: DecisionPlan = prepareDecision(ctx, config),
+): Promise<PromptResult> {
   const decide = ctx.llmClient.decide;
   if (decide === undefined) {
     throw new Error("The active LLM client does not support decision models.");
@@ -91,14 +118,14 @@ export async function dispatchDecision(
   const result = await decide.call(
     ctx.llmClient,
     messagesToState(config.messages),
-    plan.value.questions,
+    plan.questions,
     decideConfig,
     signal,
   );
   if (!result.success) {
-    throw new Error(result.error);
+    throw decisionRequestError(result.error);
   }
-  const value = answersToValue(plan.value, result.value.answers);
+  const value = answersToValue(plan, result.value.answers);
   if (!value.success) {
     throw new Error(value.error);
   }

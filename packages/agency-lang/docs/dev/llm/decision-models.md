@@ -81,6 +81,14 @@ belongs to, and only then looks at `config.provider`. And
 `dispatchDecision` always passes `provider: "typesafe"` to the client, never
 the filled-in value.
 
+Two consequences to know. A call that names a registry decision model with
+a different explicit provider, `{ model: "jev-1.13", provider: "openrouter" }`,
+is still a decision call; the registry wins. And `defaultProvider: "typesafe"`
+in config, which is what `--model typesafe/jev-1.13` sets, makes every call
+in the run a decision call, including any stdlib call that names a text
+model. Set the default model to a decision model only for a program whose
+every call is one.
+
 ## From a type to questions
 
 | Annotation | Question | Instructions |
@@ -117,8 +125,12 @@ thread is the state.
 ## The lossy step
 
 A bare `boolean` is `noul >= 0.5`. The probability is thrown away at the
-value level. It survives on the assistant message's `rawData`, but nothing
-in Agency reads that yet. A `Choice<T>` wrapper type that returns the whole
+value level. It is kept on the assistant message's `rawData`, but nothing
+in Agency reads that yet, and it does not yet survive a checkpoint or a
+subthread: smoltalk's `AssistantMessage.toJSON` omits `rawData`, so any
+round trip through JSON drops it (smoltalk issue #61). Until that is fixed,
+the probabilities live only on the in-memory thread of the call that made
+them. A `Choice<T>` wrapper type that returns the whole
 answer record, with confidence and probabilities, is the planned fix, and
 a `Score<...>` type for the third question kind comes with it. Until then a
 score answer is never produced, since no annotation maps to one.
@@ -189,17 +201,21 @@ behind Jev on choice questions, and this is what that looks like.
 - `lib/runtime/decisionQuestions.test.ts`: every accepted shape and every
   refused shape, the answer mapping, and the state.
 - `lib/runtime/decisionDispatch.test.ts`: the routing rule, the completion
-  shape, the key-merge rule, and the four refusals.
+  shape, the key-merge rule, the four refusals, and the HTTP status carried
+  on a failed request so a 429 or 5xx retries.
+- `lib/runtime/llmDispatch.decision.test.ts`: a refusal happens before any
+  metered attempt, and a sent call is metered under the `decision` kind.
 - `lib/runtime/llmClient.decide.test.ts` and the `DeterministicClient.decide`
   cases in `deterministicClient.test.ts`: the client contract.
-- `tests/agency-js/decision-model/`: the compiled path end to end. The test's client
-  records what the runtime sent, so the fixture pins the state, the
-  questions, and the config for a bare call, an object call, and a call
-  under a cost guard.
+- `tests/agency-js/decision-model/`: the compiled path end to end. The test
+  uses a client of its own that records what the runtime sent, so the
+  fixture pins the state, the questions, and the config for a bare call, an
+  object call, and a call under a cost guard. The deterministic client's
+  `{ decide }` mock is unit-tested but not run through a compiled program.
 
-Not covered by a test: that the usage breakdown has a `decision` row after
-a run. The guard trip shows the cost reached the branch, but no test reads
-the breakdown.
+Not covered by a test: that a full run's usage breakdown has a `decision`
+row. The unit test on `recordCompletionUsage` shows the kind reaches the
+entry; no test reads a run's breakdown.
 
 ## What is deferred
 

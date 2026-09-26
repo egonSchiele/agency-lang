@@ -307,6 +307,13 @@ export class SmoltalkClient implements LLMClient {
       } else {
         message = String(err);
       }
+      // A plain error may still carry an HTTP status (the decision branch
+      // sets one from smoltalk's failure text), which lets a 429 or 5xx from
+      // a decision endpoint retry the way a text call's does.
+      const status = (err as { status?: unknown } | null)?.status;
+      if (typeof status === "number") {
+        return { message, status };
+      }
       return { message };
     }
 

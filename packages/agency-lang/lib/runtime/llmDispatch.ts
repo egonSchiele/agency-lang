@@ -1,6 +1,7 @@
 import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
 import { abortableSleep } from "../stdlib/abortable.js";
-import { dispatchDecision, isDecisionCall } from "./decisionDispatch.js";
+import { dispatchDecision, isDecisionCall, prepareDecision } from "./decisionDispatch.js";
+import type { DecisionPlan } from "./decisionQuestions.js";
 import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { callHook } from "./hooks.js";
 import type { NormalizedLLMError, PromptConfig } from "./llmClient.js";
@@ -22,18 +23,22 @@ export async function dispatchLLMRequest({
   prompt,
   stream,
   stateStack,
+  decisionPlan,
 }: {
   ctx: RuntimeContext<GraphState>;
   promptConfig: PromptConfig;
   prompt: string | UserContentInput;
   stream: boolean;
   stateStack?: StateStack;
+  /** The prepared decision plan when this is a decision call. A direct
+   *  caller may omit it; the plan is then built here, after metering. */
+  decisionPlan?: DecisionPlan;
 }): Promise<{ completion: PromptResult; toolCalls: ToolCallJSON[] }> {
   // A decision model (Jev, Laya) answers typed questions, not text. The
   // branch returns a completion shaped like a text model's, so everything
   // after this point runs unchanged. There is nothing to stream.
   if (isDecisionCall(promptConfig)) {
-    const completion = await dispatchDecision(ctx, promptConfig);
+    const completion = await dispatchDecision(ctx, promptConfig, decisionPlan);
     return { completion, toolCalls: [] };
   }
   if (stream) {
@@ -247,7 +252,12 @@ export async function dispatchWithRetry(args: {
   };
 
   const targetStack = stateStack ?? ctx.stateStack;
-  const usageKind = isDecisionCall(promptConfig) ? "decision" : "completion";
+  const decision = isDecisionCall(promptConfig);
+  // A decision call's refusals (no schema, tools, no client support) happen
+  // here, before any metered attempt, so a refused call is never counted as
+  // a request that might have been paid for.
+  const decisionPlan = decision ? prepareDecision(ctx, promptConfig) : undefined;
+  const usageKind = decision ? "decision" : "completion";
   return runWithRetry(
     (signal) =>
       meteredDispatch(ctx, targetStack, usageKind, () =>
@@ -260,6 +270,7 @@ export async function dispatchWithRetry(args: {
           prompt,
           stream,
           stateStack,
+          decisionPlan,
         }),
       ),
     retryPolicy,

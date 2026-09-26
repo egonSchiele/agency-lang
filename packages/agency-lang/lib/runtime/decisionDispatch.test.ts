@@ -148,6 +148,17 @@ describe("dispatchDecision", () => {
     );
   });
 
+  it("throws an error carrying the HTTP status when the client reports one, so retry can classify it", async () => {
+    const decide = vi.fn(async () => ({
+      success: false as const,
+      error: "Decision request failed with status 429: slow down",
+    }));
+    const err = await dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toMatch(/status 429/);
+    expect(err.status).toBe(429);
+  });
+
   it("throws when the answers do not fit the schema", async () => {
     const decide = vi.fn(async () => ({
       success: true as const,

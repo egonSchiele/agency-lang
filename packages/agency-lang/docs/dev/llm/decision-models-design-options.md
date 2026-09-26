@@ -218,8 +218,10 @@ warning. Not chosen for decisions; not ruled out for logprobs.
 
 smoltalk's `AssistantMessage` already has `thinkingBlocks`, `usage`,
 `cost`, and `rawData`. The decision branch now puts the full `DecideResult`
-in `rawData`. What is missing is a way for Agency code to read the last
-assistant message's extras, something like a `lastReply()` in `std::thread`
+in `rawData`. Two things are missing. smoltalk's `toJSON` omits `rawData`,
+so it does not survive a checkpoint or a subthread yet (smoltalk issue
+#61). And there is no way for Agency code to read the last assistant
+message's extras, something like a `lastReply()` in `std::thread`
 returning the message with those fields. That one accessor would expose
 thinking, usage, and decision probabilities at once, and logprobs the day
 smoltalk carries them. This is the cheapest path to "expose all the

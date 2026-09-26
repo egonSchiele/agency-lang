@@ -69,10 +69,11 @@ export function recordCompletionUsage(
   stack: StateStack,
   completion: Pick<PromptResult, "model" | "cost" | "usage">,
   configuredModel: string | null | undefined,
+  kind: ProviderUsageKind = "completion",
 ): void {
   recordUsage(ctx, stack, {
     type: "provider",
-    kind: "completion",
+    kind,
     reportedModel: completion.model,
     configuredModel,
     cost: completion.cost,

@@ -49,6 +49,17 @@ describe("SmoltalkClient.decide adapter", () => {
     ).rejects.toBe(reason);
   });
 
+  it("normalizeError reads a status off a plain error, so a decision 429 is retried like a text 429", () => {
+    const err = Object.assign(new Error("Decision request failed with status 429: slow down"), {
+      status: 429,
+    });
+    expect(client.normalizeError!(err)).toEqual({
+      message: "Decision request failed with status 429: slow down",
+      status: 429,
+    });
+    expect(client.normalizeError!(new Error("plain"))).toEqual({ message: "plain" });
+  });
+
   it("returns a non-abort failure as a failure", async () => {
     vi.mocked(smoltalk.decide).mockResolvedValue({
       success: false,

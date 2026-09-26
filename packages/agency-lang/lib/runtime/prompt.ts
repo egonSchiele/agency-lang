@@ -17,6 +17,7 @@ import {
 } from "./turnBoundary.js";
 import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } from "./errors.js";
 import { recordCompletionUsage } from "./recordPaidUsage.js";
+import { isDecisionCall } from "./decisionDispatch.js";
 import { projectProviderTokenUsage } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
@@ -613,7 +614,9 @@ async function _runPrompt({
 
   const modelName = resolveCompletionModel(completion.model, clientConfig.model);
 
-  const projectedUsage = projectProviderTokenUsage(completion.usage, "completion").usage;
+  // A decision model's call is booked under its own kind; see decisionDispatch.ts.
+  const usageKind = isDecisionCall(promptConfig) ? "decision" : "completion";
+  const projectedUsage = projectProviderTokenUsage(completion.usage, usageKind).usage;
 
   ctx.statelogClient.promptCompletion({
     messages: withMessageLabels(messages),
@@ -657,7 +660,7 @@ async function _runPrompt({
     model: modelName,
   });
 
-  recordCompletionUsage(ctx, targetStack, completion, clientConfig.model);
+  recordCompletionUsage(ctx, targetStack, completion, clientConfig.model, usageKind);
   await runPostTurnMemory(ctx, targetStack, messages);
 
   await callHook({

@@ -21,7 +21,8 @@ type SmoltalkTokens = NonNullable<
   PromptResult["usage"] | EmbedResult["tokenUsage"] | ImageGenResult["tokenUsage"]
 >;
 
-export type ProviderUsageKind = "completion" | "embedding" | "image" | "transcription" | "speech";
+export type ProviderUsageKind =
+  "completion" | "embedding" | "image" | "transcription" | "speech" | "decision";
 export type UsageKind = ProviderUsageKind | "manual";
 const USAGE_KINDS: readonly UsageKind[] = [
   "completion",
@@ -29,6 +30,7 @@ const USAGE_KINDS: readonly UsageKind[] = [
   "image",
   "transcription",
   "speech",
+  "decision",
   "manual",
 ];
 
@@ -470,6 +472,7 @@ function emptyIndex(): Record<UsageKind, Record<string, number>> {
     image: Object.create(null),
     transcription: Object.create(null),
     speech: Object.create(null),
+    decision: Object.create(null),
     manual: Object.create(null),
   };
 }

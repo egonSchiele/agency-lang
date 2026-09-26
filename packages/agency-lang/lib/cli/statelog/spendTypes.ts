@@ -49,6 +49,7 @@ export const usageKindSchema = z.enum([
   "image",
   "transcription",
   "speech",
+  "decision",
   "manual",
 ]);
 export type UsageKind = z.infer<typeof usageKindSchema>;

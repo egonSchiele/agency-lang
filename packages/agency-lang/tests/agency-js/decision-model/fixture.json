@@ -1,0 +1,35 @@
+{
+  "data": {
+    "dept": "billing",
+    "triage": {
+      "department": "billing",
+      "churn": true
+    },
+    "cost": 0.000003,
+    "guardTripped": true
+  },
+  "firstCall": {
+    "stateRoles": ["user"],
+    "lastStateIsPrompt": true,
+    "questions": {
+      "answer": {
+        "type": "choice",
+        "instructions": "Ticket: I cancelled two weeks ago and the refund never arrived. Fix it today or I am leaving.\nWhich department?",
+        "criteria": { "billing": "billing", "support": "support", "sales": "sales" }
+      }
+    },
+    "config": { "model": "jev-1.13", "provider": "typesafe" }
+  },
+  "secondCall": {
+    "assistantInState": true,
+    "questions": {
+      "department": {
+        "type": "choice",
+        "instructions": "Which team should handle this?",
+        "criteria": { "billing": "billing", "support": "support", "sales": "sales" }
+      },
+      "churn": { "type": "noul", "instructions": "Does the customer threaten to leave?" }
+    },
+    "config": { "model": "my-laya", "provider": "typesafe" }
+  }
+}

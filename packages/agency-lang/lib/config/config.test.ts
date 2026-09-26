@@ -32,6 +32,19 @@ describe("AgencyConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("keeps the typesafe key and base URL, so a decision model can be configured", () => {
+    const result = AgencyConfigSchema.safeParse({
+      client: {
+        apiKey: { typesafe: "k" },
+        baseUrl: { typesafe: "http://localhost:8000" },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.client?.apiKey?.typesafe).toBe("k");
+    expect(result.data.client?.baseUrl?.typesafe).toBe("http://localhost:8000");
+  });
+
   it("accepts a budget with a finite maxCost and a duration maxTime", () => {
     const result = AgencyConfigSchema.safeParse({
       budget: { maxCost: 0.5, maxTime: "30m" },

@@ -77,6 +77,14 @@ export type ImageRef = smoltalk.ImageRef;
 // never fall back to its own defaults (see plan §8). Cancellation travels as a
 // separate `signal` argument on the methods below, never inside the config, so
 // there is exactly one authoritative cancellation channel.
+// The decision-model surface (Jev, Laya). Types come from smoltalk unchanged;
+// the runtime imports them from here, never from smoltalk directly.
+export type DecisionState = smoltalk.DecisionState;
+export type DecisionQuestion = smoltalk.DecisionQuestion;
+export type DecisionAnswer = smoltalk.DecisionAnswer;
+export type DecideConfig = smoltalk.DecideConfig;
+export type DecideResult = smoltalk.DecideResult;
+
 export type TranscriptionResult = smoltalk.TranscriptionResult;
 export type SpeechResult = smoltalk.SpeechResult;
 /** A source for audio bytes: a local path, a URL, or inline bytes/base64. */
@@ -166,6 +174,16 @@ export type LLMClient = {
   /** Text-to-speech. Optional — same contract as `transcribe`: complete config
    *  (model/voice/format required), `signal` the sole cancellation channel. */
   speak?(text: string, config: SpeakConfig, signal: AbortSignal): Promise<Result<SpeechResult>>;
+  /** Ask a decision model (Jev, Laya) typed questions about a state. Optional:
+   *  a client with no decision model omits it, and a decision call then fails
+   *  with a clear message. Same contract as `transcribe`: complete config, and
+   *  `signal` is the only cancellation channel. */
+  decide?(
+    state: DecisionState,
+    questions: Record<string, DecisionQuestion>,
+    config: DecideConfig,
+    signal: AbortSignal,
+  ): Promise<Result<DecideResult>>;
   /** Translate an error this client threw into provider-neutral fields for
    *  agency's retry classifier. Optional — agency falls back to `{ message }`
    *  when omitted, which still works (message-pattern matching) but loses
@@ -270,6 +288,19 @@ export class SmoltalkClient implements LLMClient {
     return result;
   }
 
+  async decide(
+    state: DecisionState,
+    questions: Record<string, DecisionQuestion>,
+    config: DecideConfig,
+    signal: AbortSignal,
+  ): Promise<Result<DecideResult>> {
+    const result = await smoltalk.decide(state, questions, { ...config, abortSignal: signal });
+    if (!result.success) {
+      rejectIfAborted(signal);
+    }
+    return result;
+  }
+
   normalizeError(err: unknown): NormalizedLLMError {
     if (!(err instanceof smoltalk.SmolError)) {
       let message: string;
@@ -277,6 +308,13 @@ export class SmoltalkClient implements LLMClient {
         message = err.message;
       } else {
         message = String(err);
+      }
+      // A plain error may still carry an HTTP status (the decision branch
+      // sets one from smoltalk's failure text), which lets a 429 or 5xx from
+      // a decision endpoint retry the way a text call's does.
+      const status = (err as { status?: unknown } | null)?.status;
+      if (typeof status === "number") {
+        return { message, status };
       }
       return { message };
     }

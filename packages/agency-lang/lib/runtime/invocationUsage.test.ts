@@ -130,6 +130,19 @@ describe("normalizeObservation — audio (transcription/speech) kinds", () => {
     expect(d.tokens.totalTokens).toBe(0);
     expect(d.attributionLost).toBe(false);
   });
+  it("prices a decision observation as its own kind, with only input tokens", () => {
+    const d = normalizeObservation({
+      type: "provider",
+      kind: "decision",
+      configuredModel: "jev-1.13",
+      cost: { totalCost: 0.000002, currency: "USD" } as any,
+      tokens: { inputTokens: 42, outputTokens: 0 } as any,
+    });
+    expect(d.unpricedCallCount).toBe(0);
+    expect(d.cost.totalCost).toBe(0.000002);
+    expect(d.entry).toMatchObject({ kind: "decision", model: "jev-1.13" });
+    expect(d.tokens.totalTokens).toBe(42);
+  });
   it("authoritative totalTokens already includes audio tokens — used verbatim, no separate buckets", () => {
     const d = normalizeObservation({
       type: "provider",

@@ -143,10 +143,11 @@ Errors must be signaled as chunks, not thrown exceptions. Agency's streaming han
 
 ### Optional methods
 
-Four more methods are optional. Omit any your provider cannot serve.
+Five more methods are optional. Omit any your provider cannot serve.
 
 - `image(input, config?)` — image generation. `std::image` surfaces a failure Result when the method is missing.
 - `transcribe(source, config, signal)` — speech to text.
+- `decide(state, questions, config, signal)` — a decision model (Jev, Laya) answering typed questions about a state. A typed `llm()` call routed to a decision model goes through this method instead of `text()`; without it, such a call fails with a clear message. See `decision-models.md`.
 - `speak(text, config, signal)` — text to speech. Both speech methods get a complete config (model, and for `speak` voice and format), so a client must never inject its own defaults. The `signal` argument is the only cancellation channel, and an abort must reject promptly with `signal.reason`.
 - `normalizeError(err)` — translate an error your client threw into the provider-neutral `NormalizedLLMError` shape (`status`, `retryAfterMs`, `kind`, `message`). Without it agency's retry layer only sees `{ message: String(err) }` and can classify by keyword alone. The retry policy itself lives in `lib/runtime/llmRetry.ts`.
 

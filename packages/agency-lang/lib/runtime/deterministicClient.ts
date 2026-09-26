@@ -3,6 +3,11 @@ import { ToolCall } from "smoltalk";
 import { agencyStore } from "./asyncContext.js";
 import type {
   AudioInput,
+  DecideConfig,
+  DecideResult,
+  DecisionAnswer,
+  DecisionQuestion,
+  DecisionState,
   EmbedConfig,
   EmbedResult,
   ImageConfig,
@@ -61,7 +66,14 @@ export type MultiToolCallMock = {
   toolCalls: Array<{ name: string; args?: Record<string, any>; id?: string }>;
 };
 
-export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock;
+/** A decision model's answers for one `llm()` call that resolves to a
+ *  decision provider. Keyed by question name: `answer` for a bare
+ *  annotation, the field names for an object annotation. */
+export type DecideMock = {
+  decide: Record<string, DecisionAnswer>;
+};
+
+export type LLMMock = ReturnMock | ToolCallMock | MultiToolCallMock | DecideMock;
 
 /**
  * Per-agent mock queues. Keys are matched against the executing module:
@@ -136,6 +148,31 @@ type MockQueue = {
   callIndex: number;
 };
 
+/** Why a mock's answers do not fit the questions asked, or undefined. */
+function checkMockAnswers(
+  questions: Record<string, DecisionQuestion>,
+  answers: Record<string, DecisionAnswer>,
+): string | undefined {
+  for (const name of Object.keys(questions)) {
+    const question = questions[name];
+    const answer = answers[name];
+    if (answer === undefined) {
+      return `has no answer for question "${name}". The questions asked were: ${Object.keys(questions).join(", ")}.`;
+    }
+    if (answer.type !== question.type) {
+      return `answers "${name}" as a ${answer.type}, but the question is a ${question.type}.`;
+    }
+    if (
+      answer.type === "choice" &&
+      question.type === "choice" &&
+      !(answer.choice in question.criteria)
+    ) {
+      return `answers "${name}" with "${answer.choice}", which is not one of its options: ${Object.keys(question.criteria).join(", ")}.`;
+    }
+  }
+  return undefined;
+}
+
 export class DeterministicClient implements LLMClient {
   private queues: Record<string, MockQueue>;
   /** Array form: one anonymous queue, original error messages. */
@@ -208,6 +245,12 @@ export class DeterministicClient implements LLMClient {
 
     const mock = queue.mocks[queue.callIndex - 1];
     const callIndex = queue.callIndex;
+
+    if ("decide" in mock) {
+      throw new Error(
+        `DeterministicClient: llm() call #${callIndex} is a text call but the mock is a decision answer. Point the call at a decision model, or replace the { decide } entry in llmMocks.`,
+      );
+    }
 
     if ("return" in mock) {
       if (mock.delayMs) {
@@ -286,6 +329,46 @@ export class DeterministicClient implements LLMClient {
   // embedding provider when AGENCY_LLM_MOCKS is set. Tests that need to
   // exercise vector recall should register a custom client via
   // setLLMClient() with their own embed implementation.
+  async decide(
+    _state: DecisionState,
+    questions: Record<string, DecisionQuestion>,
+    config: DecideConfig,
+    signal: AbortSignal,
+  ): Promise<Result<DecideResult>> {
+    throwIfAborted(signal);
+    const { scope, queue } = this.resolveQueue();
+    queue.callIndex++;
+    const where = this.scoped ? ` in scope "${scope}"` : "";
+    if (queue.callIndex > queue.mocks.length) {
+      throw new Error(
+        `DeterministicClient: no mock provided for llm() call #${queue.callIndex}${where}. Add a { decide: {...} } entry to llmMocks in your test.json.`,
+      );
+    }
+    const mock = queue.mocks[queue.callIndex - 1];
+    if (!("decide" in mock)) {
+      throw new Error(
+        `DeterministicClient: llm() call #${queue.callIndex}${where} is a decision call but the mock is not a { decide: {...} } entry.`,
+      );
+    }
+    // The same checks smoltalk's decide() makes, so a wrong fixture fails
+    // here with the mock named, not later as a model error or a retry loop.
+    const problem = checkMockAnswers(questions, mock.decide);
+    if (problem !== undefined) {
+      throw new Error(
+        `DeterministicClient: the { decide } mock for llm() call #${queue.callIndex}${where} ${problem}`,
+      );
+    }
+    return {
+      success: true,
+      value: {
+        answers: mock.decide,
+        usage: { inputTokens: 1, outputTokens: 0 },
+        cost: { inputCost: 0.000001, outputCost: 0, totalCost: 0.000001, currency: "USD" },
+        model: config.model,
+      },
+    };
+  }
+
   async embed(
     _input: string | string[],
     _config?: Partial<EmbedConfig>,

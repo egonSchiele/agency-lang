@@ -17,7 +17,7 @@ import {
 } from "./turnBoundary.js";
 import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } from "./errors.js";
 import { recordCompletionUsage } from "./recordPaidUsage.js";
-import { projectProviderTokenUsage } from "./invocationUsage.js";
+import { projectProviderTokenUsage, type ProviderUsageKind } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
 import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
@@ -81,6 +81,9 @@ export type RunPromptResult = {
   toolCalls: smoltalk.ToolCallJSON[];
   /** Why this round ended, normalized by smoltalk across providers. */
   stopReason?: smoltalk.StopReason;
+  /** How the round was booked: a text model's completion, or a decision
+   *  model's answer. Set by `_runPrompt`; a direct-return path may omit it. */
+  usageKind?: ProviderUsageKind;
 };
 
 /** Flatten a prompt (a string, or an array of text/attachment parts) to plain
@@ -595,8 +598,11 @@ async function _runPrompt({
 
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
+  // "completion" for a text model; "decision" for a decision model, whose
+  // call is booked under its own kind. See decisionDispatch.ts.
+  let usageKind: ProviderUsageKind;
   try {
-    ({ completion, toolCalls } = await dispatchWithRetry({
+    ({ completion, toolCalls, usageKind } = await dispatchWithRetry({
       ctx,
       promptConfig,
       prompt,
@@ -613,7 +619,7 @@ async function _runPrompt({
 
   const modelName = resolveCompletionModel(completion.model, clientConfig.model);
 
-  const projectedUsage = projectProviderTokenUsage(completion.usage, "completion").usage;
+  const projectedUsage = projectProviderTokenUsage(completion.usage, usageKind).usage;
 
   ctx.statelogClient.promptCompletion({
     messages: withMessageLabels(messages),
@@ -634,15 +640,18 @@ async function _runPrompt({
     threadLabel: messages.label,
   });
 
+  // A provider's extras beyond the text (a decision model's full answers
+  // with probabilities) ride on the message as `rawData`.
   if (toolCalls.length > 0) {
     messages.push(
-      smoltalk.assistantMessage(completion.output, {
-        toolCalls,
-      }),
+      smoltalk.assistantMessage(completion.output, { toolCalls, rawData: completion.rawData }),
       callLabel,
     );
   } else {
-    messages.push(smoltalk.assistantMessage(completion.output), callLabel);
+    messages.push(
+      smoltalk.assistantMessage(completion.output, { rawData: completion.rawData }),
+      callLabel,
+    );
   }
 
   updateTokenStats({
@@ -652,7 +661,7 @@ async function _runPrompt({
     model: modelName,
   });
 
-  recordCompletionUsage(ctx, targetStack, completion, clientConfig.model);
+  recordCompletionUsage(ctx, targetStack, completion, clientConfig.model, usageKind);
   await runPostTurnMemory(ctx, targetStack, messages);
 
   await callHook({
@@ -668,7 +677,7 @@ async function _runPrompt({
     },
   });
 
-  return { messages, toolCalls, stopReason: completion.stopReason };
+  return { messages, toolCalls, stopReason: completion.stopReason, usageKind };
 }
 
 // eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
@@ -997,6 +1006,7 @@ export async function runPrompt(args: {
   // Not on `self`: it only decorates an error message, and a resume re-runs
   // the round that would set it.
   let lastStopReason: smoltalk.StopReason | undefined;
+  let lastUsageKind: ProviderUsageKind | undefined;
 
   let shouldPop = true;
   // Open the single llmCall span before the round-trip loop. Done here
@@ -1125,6 +1135,7 @@ export async function runPrompt(args: {
         messages = result.messages;
         toolCalls = result.toolCalls;
         lastStopReason = result.stopReason;
+        lastUsageKind = result.usageKind;
       } finally {
         if (injectedFactsContent !== null) {
           const injectedIndex = messages
@@ -1906,6 +1917,7 @@ export async function runPrompt(args: {
           messages = nextResult.messages;
           toolCalls = nextResult.toolCalls;
           lastStopReason = nextResult.stopReason;
+          lastUsageKind = nextResult.usageKind;
           // Increment the round counter only after a successful LLM round,
           // so resume after a tool-batch interrupt re-enters the SAME round.
           self.toolCallRound = round + 1;
@@ -1932,11 +1944,15 @@ export async function runPrompt(args: {
         .find((m) => m.role === "assistant");
       const validationExtract = extractStructuredResponse(lastAssistant?.content, responseFormat);
       const validationAttempt = self.validationAttempt as number;
+      // A decision model cannot act on feedback text: re-asking would send
+      // the feedback as the question. Its first validation miss is final.
+      const validationPolicy =
+        lastUsageKind === "decision" ? { ...retryPolicy, validationRetries: 0 } : retryPolicy;
       const decision = decideValidationRetry(
         validationExtract,
         lastAssistant?.content,
         validationAttempt,
-        retryPolicy,
+        validationPolicy,
         lastStopReason,
       );
 
@@ -2006,6 +2022,7 @@ export async function runPrompt(args: {
         messages = nextResult.messages;
         toolCalls = nextResult.toolCalls;
         lastStopReason = nextResult.stopReason;
+        lastUsageKind = nextResult.usageKind;
         // Advance ONLY here, like nextLlmCall advances toolCallRound: a
         // bailout before this step completes leaves the counter unchanged,
         // so resume re-enters the SAME attempt with the same step keys.

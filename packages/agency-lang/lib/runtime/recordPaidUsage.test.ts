@@ -118,6 +118,30 @@ describe("recordUsage (provider + manual observations)", () => {
   });
 });
 
+describe("recordCompletionUsage — usage kind", () => {
+  it("books a decision completion under the decision kind, not completion", () => {
+    const ctx = makeCtx();
+    const branch = new StateStack();
+    recordCompletionUsage(
+      ctx,
+      branch,
+      {
+        model: "typesafe/jev-1.13-20260917" as any,
+        cost: { inputCost: 0.000002, outputCost: 0, totalCost: 0.000002, currency: "USD" },
+        usage: { inputTokens: 42, outputTokens: 0 },
+      },
+      "jev-1.13",
+      "decision",
+    );
+    const usage = ctx.invocationUsage.snapshot();
+    // The entry names the model the server reported, as it does for a text call.
+    expect(usage.entries.map((e) => `${e.kind}:${e.model}`)).toEqual([
+      "decision:typesafe/jev-1.13-20260917",
+    ]);
+    expect(branch.localCost).toBeCloseTo(0.000002);
+  });
+});
+
 describe("recordCompletionUsage — audio-token projection consistency", () => {
   it("branch total matches the meter total for an audio completion with no authoritative totalTokens", () => {
     // {text-sum 5, audio-sum 44} with no totalTokens → projected total 44.

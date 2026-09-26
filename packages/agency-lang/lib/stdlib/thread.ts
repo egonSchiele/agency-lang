@@ -1,5 +1,11 @@
 import * as smoltalk from "smoltalk";
-import type { DecideResult, DecisionAnswer, ThinkingBlock, TokenUsage } from "smoltalk";
+import type {
+  DecideResult,
+  DecisionAnswer,
+  ThinkingBlock,
+  TokenAlternative,
+  TokenUsage,
+} from "smoltalk";
 import { nanoid } from "nanoid";
 import * as path from "node:path";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
@@ -358,9 +364,19 @@ export type ReplyUsage = { inputTokens: number; outputTokens: number };
  *  text. `answers` is a decision model's answer per question, null for any
  *  other reply. `rawData` is whatever the provider attached, untouched.
  *  Null fields mean the reply carried nothing of that kind. */
+/** One generated token and the log of its probability, as `lastReply()`
+ *  hands it back. `top` holds the likeliest alternatives at that position,
+ *  or an empty array when the call did not ask for them. */
+export type ReplyTokenLogprob = {
+  token: string;
+  logprob: number;
+  top: TokenAlternative[];
+};
+
 export type ReplyRecord = {
   content: string;
   thinkingBlocks: ThinkingBlock[];
+  logprobs: ReplyTokenLogprob[];
   usage: ReplyUsage | null;
   cost: number | null;
   answers: Record<string, DecisionAnswer> | null;
@@ -411,6 +427,11 @@ export async function _lastReply(): Promise<ReplyRecord | null> {
   return {
     content: last.content,
     thinkingBlocks: last.thinkingBlocks ?? [],
+    logprobs: (last.logprobs ?? []).map((entry) => ({
+      token: entry.token,
+      logprob: entry.logprob,
+      top: entry.top ?? [],
+    })),
     usage: replyUsage(last.usage),
     cost: last.cost?.totalCost ?? null,
     answers: decisionAnswers(last.rawData),

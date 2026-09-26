@@ -366,6 +366,15 @@ export type ScoreAnswer = {
   `if (answer.type == "choice") { answer.confidence }`. */
 export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 
+/** One generated token and the log of its probability. `top` lists the
+  likeliest alternatives at that position, most likely first, when the
+  call asked for them with `logprobs: { top: n }`; otherwise it is empty. */
+export type TokenLogprob = {
+  token: string;
+  logprob: number;
+  top: { token: string; logprob: number }[]
+}
+
 /** What the model attached to its last reply, beyond the text. `answers`
   is filled only by a decision model such as Jev: one answer per question,
   with a probability per option. `rawData` is whatever the provider put
@@ -373,6 +382,7 @@ export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 export type Reply = {
   content: string;
   thinkingBlocks: ThinkingBlock[];
+  logprobs: TokenLogprob[];
   usage: ReplyUsage | null;
   cost: number | null;
   answers: Record<string, DecisionAnswer> | null;
@@ -394,6 +404,12 @@ export def lastReply(): Reply | null {
   cost. For a decision model, `answers` holds one answer per question —
   `answers.answer` for a bare annotation, `answers.<field>` for an object one;
   check an answer's `type` before reading its fields.
+
+  For a text model, `logprobs` holds one entry per generated token when the
+  call asked for them with `llm(prompt, { logprobs: { top: 3 } })`. Only
+  OpenAI models return them today; other providers leave the list empty. Each
+  value is the natural log of the token's probability, so a value near 0
+  means near certainty and -2.3 means about one chance in ten.
 
   ```ts
   type Dept = "billing" | "support" | "sales"

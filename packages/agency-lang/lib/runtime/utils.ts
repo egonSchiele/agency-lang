@@ -68,6 +68,11 @@ export function buildReplyMessage(
       smoltalk.ThinkingBlockSchema.array(),
       warn("thinking blocks"),
     ),
+    logprobs: serializableExtra(
+      completion.logprobs,
+      smoltalk.TokenLogprobSchema.array(),
+      warn("logprobs"),
+    ),
     usage: serializableExtra(completion.usage, smoltalk.TokenUsageSchema, warn("usage")),
     cost: serializableExtra(completion.cost, smoltalk.CostEstimateSchema, warn("cost")),
     rawData: completion.rawData,

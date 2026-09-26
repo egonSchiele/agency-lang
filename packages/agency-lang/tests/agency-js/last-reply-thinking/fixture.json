@@ -4,14 +4,51 @@
     "thinking": [
       "thinking about A"
     ],
-    "inputTokens": 11
+    "inputTokens": 11,
+    "logprobs": [
+      {
+        "token": "A",
+        "logprob": -0.05,
+        "top": [
+          {
+            "token": "A",
+            "logprob": -0.05
+          },
+          {
+            "token": "B",
+            "logprob": -3.0
+          }
+        ]
+      }
+    ]
   },
   "sayB": {
     "text": "B",
     "thinking": [
       "thinking about B"
     ],
-    "inputTokens": 22
+    "inputTokens": 22,
+    "logprobs": [
+      {
+        "token": "B",
+        "logprob": -0.1,
+        "top": []
+      }
+    ]
+  },
+  "sayC": {
+    "text": "C",
+    "thinking": [
+      "thinking about C"
+    ],
+    "inputTokens": 33,
+    "logprobs": [
+      {
+        "token": "C",
+        "logprob": -0.2,
+        "top": []
+      }
+    ]
   },
   "outsideIsNull": true
 }

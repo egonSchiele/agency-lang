@@ -168,6 +168,7 @@ describe("_lastReply", () => {
     expect(await lastReplyOn(threads)).toEqual({
       content: JSON.stringify({ response: "billing" }),
       thinkingBlocks: [],
+      logprobs: [],
       usage: { inputTokens: 5, outputTokens: 0 },
       cost: 0.001,
       answers: decision.answers,
@@ -180,6 +181,7 @@ describe("_lastReply", () => {
     expect(reply).toEqual({
       content: "plain",
       thinkingBlocks: [],
+      logprobs: [],
       usage: null,
       cost: null,
       answers: null,
@@ -208,5 +210,26 @@ describe("_lastReply", () => {
     const reply = await lastReplyOn(threads);
     expect(reply?.answers).toBeNull();
     expect(reply?.rawData).toEqual({ answers: "explanation" });
+  });
+
+  it("returns the reply's logprobs, with an empty top when there were no alternatives", async () => {
+    const threads = threadsWith([
+      smoltalk.assistantMessage("Hi!", {
+        logprobs: [
+          { token: "Hi", logprob: -0.1, top: [{ token: "Hey", logprob: -1.9 }] },
+          { token: "!", logprob: -0.5 },
+        ],
+      }),
+    ]);
+    const reply = await lastReplyOn(threads);
+    expect(reply?.logprobs).toEqual([
+      { token: "Hi", logprob: -0.1, top: [{ token: "Hey", logprob: -1.9 }] },
+      { token: "!", logprob: -0.5, top: [] },
+    ]);
+  });
+
+  it("returns an empty logprobs array for a reply without them", async () => {
+    const reply = await lastReplyOn(threadsWith([smoltalk.assistantMessage("plain")]));
+    expect(reply?.logprobs).toEqual([]);
   });
 });

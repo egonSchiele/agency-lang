@@ -65,10 +65,13 @@ export function summarize(evt: EventEnvelope): string {
     case "decisionBatch": {
       const groups = Array.isArray(d.groups) ? d.groups : [];
       const questions = groups.reduce(
-        (acc: number, g: any) => acc + Number(g.questionCount ?? 0),
+        (acc: number, group: any) => acc + Number(group.questionCount ?? 0),
         0,
       );
-      const calls = groups.reduce((acc: number, g: any) => acc + Number(g.callCount ?? 0), 0);
+      const calls = groups.reduce(
+        (acc: number, group: any) => acc + Number(group.callCount ?? 0),
+        0,
+      );
       const requests = `${groups.length} ${groups.length === 1 ? "request" : "requests"}`;
       return `decisionBatch ${requests} · ${questions} questions · ${calls} calls (${d.reason}, ${fmtDuration(d.timeTaken)})`;
     }

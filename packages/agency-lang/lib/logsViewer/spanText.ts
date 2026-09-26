@@ -64,10 +64,13 @@ export function spanDetail(node: TreeNode): string | undefined {
       if (!e) return undefined;
       const groups = Array.isArray(e.data.groups) ? e.data.groups : [];
       const questions = groups.reduce(
-        (acc: number, g: any) => acc + Number(g.questionCount ?? 0),
+        (acc: number, group: any) => acc + Number(group.questionCount ?? 0),
         0,
       );
-      const calls = groups.reduce((acc: number, g: any) => acc + Number(g.callCount ?? 0), 0);
+      const calls = groups.reduce(
+        (acc: number, group: any) => acc + Number(group.callCount ?? 0),
+        0,
+      );
       return `${questions} questions · ${calls} calls`;
     }
     case "llmCall":

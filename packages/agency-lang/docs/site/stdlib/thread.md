@@ -224,7 +224,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L416))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L417))
 
 ### ThreadMessage
 
@@ -235,7 +235,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L439))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L440))
 
 ### ThreadInfo
 
@@ -251,7 +251,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L444))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L445))
 
 ## Effects
 
@@ -595,17 +595,12 @@ lastReply(): Reply | null
 ```
 
 Return what the model attached to its last reply on the current thread,
-  or null if no model has replied yet. Use it right after an `llm()` call
-  to read what the call's return value leaves out: a decision model's
-  probabilities, a reasoning model's thinking, and the reply's tokens and
-  cost.
-
-  For a decision model, `answers` holds one answer per question. A bare
-  annotation asks one question named `answer`; an object annotation asks
-  one per field, named after the field. Each answer says which kind it is
-  in `type`, so check that first: a choice answer has `choice`,
-  `confidence`, and `probabilities` (option to probability); a boolean
-  answer has `noul`, the probability that it is true.
+  or null if the thread has no reply yet. Use it right after an `llm()` call
+  to read what the call's return value leaves out: a decision model's answers
+  and probabilities, a reasoning model's thinking, and the reply's tokens and
+  cost. For a decision model, `answers` holds one answer per question —
+  `answers.answer` for a bare annotation, `answers.<field>` for an object one;
+  check an answer's `type` before reading its fields.
 
   ```ts
   type Dept = "billing" | "support" | "sales"
@@ -620,9 +615,14 @@ Return what the model attached to its last reply on the current thread,
   }
   ```
 
+Reads the last assistant message on the active thread. A message a program
+pushed with `assistantMessage()` counts as a reply here too — to the thread
+it is an assistant message like any other — so this returns the most recent
+one either way.
+
 **Returns:** `Reply | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L382))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L388))
 
 ### listThreads
 
@@ -655,7 +655,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L516))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L517))
 
 ### sessionThreadId
 
@@ -674,7 +674,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L569))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L570))
 
 ### currentThreadId
 
@@ -689,7 +689,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L577))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L578))
 
 ### getThread
 
@@ -721,4 +721,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L587))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L588))

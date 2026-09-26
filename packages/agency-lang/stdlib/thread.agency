@@ -379,20 +379,21 @@ export type Reply = {
   rawData: any
 }
 
+/**
+Reads the last assistant message on the active thread. A message a program
+pushed with `assistantMessage()` counts as a reply here too — to the thread
+it is an assistant message like any other — so this returns the most recent
+one either way.
+*/
 export def lastReply(): Reply | null {
   """
   Return what the model attached to its last reply on the current thread,
-  or null if no model has replied yet. Use it right after an `llm()` call
-  to read what the call's return value leaves out: a decision model's
-  probabilities, a reasoning model's thinking, and the reply's tokens and
-  cost.
-
-  For a decision model, `answers` holds one answer per question. A bare
-  annotation asks one question named `answer`; an object annotation asks
-  one per field, named after the field. Each answer says which kind it is
-  in `type`, so check that first: a choice answer has `choice`,
-  `confidence`, and `probabilities` (option to probability); a boolean
-  answer has `noul`, the probability that it is true.
+  or null if the thread has no reply yet. Use it right after an `llm()` call
+  to read what the call's return value leaves out: a decision model's answers
+  and probabilities, a reasoning model's thinking, and the reply's tokens and
+  cost. For a decision model, `answers` holds one answer per question —
+  `answers.answer` for a bare annotation, `answers.<field>` for an object one;
+  check an answer's `type` before reading its fields.
 
   ```ts
   type Dept = "billing" | "support" | "sales"

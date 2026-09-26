@@ -1,0 +1,33 @@
+// A text reply that carries thinking blocks and usage reaches lastReply(),
+// and inside a parallel block each arm reads its own reply, never a
+// sibling's. Each arm calls ask(), which runs lastReply() inside the arm,
+// because the bindings escape the block but the read must happen in the arm.
+import { lastReply } from "std::thread"
+
+type Seen = { text: string; thinking: string[]; inputTokens: number | null }
+
+def ask(prompt: string): Seen {
+  const text: string = llm(prompt)
+  const reply = lastReply()
+  if (reply == null) {
+    return { text: text, thinking: [], inputTokens: null }
+  }
+  let thinking: string[] = []
+  for (block in reply.thinkingBlocks) {
+    thinking.push(block.text)
+  }
+  let inputTokens: number | null = null
+  if (reply.usage != null) {
+    inputTokens = reply.usage.inputTokens
+  }
+  return { text: text, thinking: thinking, inputTokens: inputTokens }
+}
+
+node main() {
+  parallel {
+    const sayA = ask("Say A")
+    const sayB = ask("Say B")
+  }
+  const outside = lastReply()
+  return { sayA: sayA, sayB: sayB, outsideIsNull: outside == null }
+}

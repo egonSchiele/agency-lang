@@ -4,7 +4,7 @@
       "nodeName": "main",
       "input": "",
       "useTestLLMProvider": true,
-      "expectedOutput": "[{\"role\":\"user\",\"content\":\"What are the first 5 prime numbers?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[2,3,5,7,11]}\"},{\"role\":\"user\",\"content\":\"What are the next 2 prime numbers after those?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":[13,17]}\"},{\"role\":\"user\",\"content\":\"And what is the sum of all those numbers combined?\"},{\"role\":\"assistant\",\"content\":\"{\\\"response\\\":58}\"}]",
+      "expectedOutput": "[{\"content\":\"What are the first 5 prime numbers?\",\"role\":\"user\"},{\"content\":\"{\\\"response\\\":[2,3,5,7,11]}\",\"cost\":{\"currency\":\"USD\",\"inputCost\":0.000001,\"outputCost\":0.000001,\"totalCost\":0.000002},\"role\":\"assistant\",\"usage\":{\"cachedInputTokens\":0,\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}},{\"content\":\"What are the next 2 prime numbers after those?\",\"role\":\"user\"},{\"content\":\"{\\\"response\\\":[13,17]}\",\"cost\":{\"currency\":\"USD\",\"inputCost\":0.000001,\"outputCost\":0.000001,\"totalCost\":0.000002},\"role\":\"assistant\",\"usage\":{\"cachedInputTokens\":0,\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}},{\"content\":\"And what is the sum of all those numbers combined?\",\"role\":\"user\"},{\"content\":\"{\\\"response\\\":58}\",\"cost\":{\"currency\":\"USD\",\"inputCost\":0.000001,\"outputCost\":0.000001,\"totalCost\":0.000002},\"role\":\"assistant\",\"usage\":{\"cachedInputTokens\":0,\"inputTokens\":1,\"outputTokens\":1,\"totalTokens\":2}}]",
       "evaluationCriteria": [
         {
           "type": "exact"

@@ -1,4 +1,5 @@
 import * as smoltalk from "smoltalk";
+import type { DecideResult, DecisionAnswer, ThinkingBlock, TokenUsage } from "smoltalk";
 import { nanoid } from "nanoid";
 import * as path from "node:path";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
@@ -349,6 +350,63 @@ export async function _threadHasSystemMessage(content: string): Promise<boolean>
   return active.messages.some(
     (message) => message.role === "system" && message.content === content,
   );
+}
+
+export type ReplyUsage = { inputTokens: number; outputTokens: number };
+
+/** What the last assistant message on the active thread carried beyond its
+ *  text. `answers` is a decision model's answer per question, null for any
+ *  other reply. `rawData` is whatever the provider attached, untouched.
+ *  Null fields mean the reply carried nothing of that kind. */
+export type ReplyRecord = {
+  content: string;
+  thinkingBlocks: ThinkingBlock[];
+  usage: ReplyUsage | null;
+  cost: number | null;
+  answers: Record<string, DecisionAnswer> | null;
+  rawData: unknown;
+};
+
+function replyUsage(usage: TokenUsage | undefined): ReplyUsage | null {
+  if (usage === undefined) {
+    return null;
+  }
+  return { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens };
+}
+
+/** The decision answers in a reply's rawData, or null when the reply did
+ *  not come from a decision model. The runtime's own decision dispatch is
+ *  the only thing that puts a `DecideResult` there, so the check is on the
+ *  one field it always has; smoltalk exports no schema for the shape. */
+function decisionAnswers(rawData: unknown): Record<string, DecisionAnswer> | null {
+  const isDecideResult = typeof rawData === "object" && rawData !== null && "answers" in rawData;
+  if (!isDecideResult) {
+    return null;
+  }
+  return (rawData as DecideResult).answers;
+}
+
+/** The active thread's last assistant message as a `ReplyRecord`, or null
+ *  when no assistant has replied on it yet. Reads the messages in place, so
+ *  after a resume it sees what the checkpoint restored. */
+export async function _lastReply(): Promise<ReplyRecord | null> {
+  const { threads } = getRuntimeContext();
+  const messages = threads.active()?.messages ?? [];
+  const replies = messages.filter(
+    (message): message is smoltalk.AssistantMessage => message.role === "assistant",
+  );
+  const last = replies[replies.length - 1];
+  if (last === undefined) {
+    return null;
+  }
+  return {
+    content: last.content,
+    thinkingBlocks: last.thinkingBlocks ?? [],
+    usage: replyUsage(last.usage),
+    cost: last.cost?.totalCost ?? null,
+    answers: decisionAnswers(last.rawData),
+    rawData: last.rawData ?? null,
+  };
 }
 
 export type ModelCost = ModelUsage & { kind: UsageKind };

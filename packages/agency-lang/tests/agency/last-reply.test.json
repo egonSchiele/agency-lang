@@ -1,0 +1,58 @@
+{
+  "tests": [
+    {
+      "nodeName": "confidence",
+      "description": "lastReply exposes a decision model's confidence for the bare question.",
+      "input": "",
+      "expectedOutput": "{\"dept\":\"billing\",\"confidence\":0.9}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "billing", "confidence": 0.9, "probabilities": { "billing": 0.9, "support": 0.05, "sales": 0.05 } } } }
+      ]
+    },
+    {
+      "nodeName": "probability",
+      "description": "A boolean annotation's answer carries noul, the probability of yes.",
+      "input": "",
+      "expectedOutput": "{\"urgent\":true,\"noul\":0.8}",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "noul", "noul": 0.8 } } }
+      ]
+    },
+    {
+      "nodeName": "beforeAnyReply",
+      "description": "lastReply is null before any model has replied.",
+      "input": "",
+      "expectedOutput": "true",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": []
+    },
+    {
+      "nodeName": "afterUserMessage",
+      "description": "lastReply finds the last assistant message, not the last message.",
+      "input": "",
+      "expectedOutput": "\"support\"",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "support", "confidence": 0.7, "probabilities": { "billing": 0.2, "support": 0.7, "sales": 0.1 } } } }
+      ]
+    },
+    {
+      "nodeName": "afterResume",
+      "description": "The reply's extras survive the checkpoint an interrupt takes.",
+      "input": "",
+      "expectedOutput": "0.9",
+      "evaluationCriteria": [{ "type": "exact" }],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        { "decide": { "answer": { "type": "choice", "choice": "billing", "confidence": 0.9, "probabilities": { "billing": 0.9, "support": 0.05, "sales": 0.05 } } } }
+      ],
+      "interruptHandlers": [{ "action": "approve" }]
+    }
+  ]
+}

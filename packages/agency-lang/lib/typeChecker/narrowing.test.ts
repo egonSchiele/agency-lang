@@ -989,6 +989,30 @@ node main() {
     // {kind:string} can't be proven disjoint → kept → no narrowing → m.y fine.
     expect(errs.filter((e) => /does not exist/.test(e)).length).toBe(0);
   });
+
+  it("narrows a Record value by its `type` field, so a typo in a branch is refused", () => {
+    // This is what makes `lastReply().answers` a typed field rather than an
+    // escape hatch: a value read out of a `Record<string, DecisionAnswer>`
+    // narrows on `answer.type == "choice"`, so `answer.confidnce` (a typo)
+    // must be refused, while the correctly-spelled fields on each branch are
+    // fine. If the checker ever stops narrowing a Record value by a member
+    // path, this is the test that fails.
+    const errs = check(`
+type ChoiceAnswer = { type: "choice"; choice: string; confidence: number; probabilities: Record<string, number> }
+type NoulAnswer = { type: "noul"; noul: number }
+type DecisionAnswer = NoulAnswer | ChoiceAnswer
+
+def read(answers: Record<string, DecisionAnswer>): number {
+  const answer = answers.answer
+  if (answer.type == "choice") {
+    return answer.confidnce
+  }
+  return answer.noul
+}`);
+    expect(has(errs, /Property 'confidnce' does not exist/)).toBe(1);
+    // Only the typo errors; the narrowed `answer.noul` in the else branch is fine.
+    expect(errs.filter((e) => /does not exist/.test(e)).length).toBe(1);
+  });
 });
 
 describe("discriminated-union narrowing — match arms", () => {

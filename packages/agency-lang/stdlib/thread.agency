@@ -38,6 +38,7 @@ import {
   _getCost,
   _getTokens,
   _getModelCosts,
+  _lastReply,
   _threadIsNew,
   _threadHasSystemMessage,
  } from "agency-lang/stdlib-lib/thread.js"
@@ -319,6 +320,94 @@ export def getModelCosts(): ModelCost[] {
   usage entries.
   """
   return _getModelCosts()
+}
+
+/** One block of a reasoning model's visible thinking. `signature` is the
+  provider's token for it, opaque to you. */
+export type ThinkingBlock = {
+  text: string;
+  signature: string
+}
+
+/** The tokens one reply consumed. */
+export type ReplyUsage = {
+  inputTokens: number;
+  outputTokens: number
+}
+
+/** A decision model's answer to a yes-or-no question. `noul` is the
+  probability that the answer is yes, from 0 to 1. */
+export type NoulAnswer = {
+  type: "noul";
+  noul: number
+}
+
+/** A decision model's answer to a pick-one question: the option picked,
+  the probability behind it, and the probability of every option. */
+export type ChoiceAnswer = {
+  type: "choice";
+  choice: string;
+  confidence: number;
+  probabilities: Record<string, number>
+}
+
+/** A decision model's answer on an ordered scale. `score` is the expected
+  level and may be fractional; `legend` maps each level to its description.
+  No Agency annotation produces a score question yet. */
+export type ScoreAnswer = {
+  type: "score";
+  score: number;
+  confidence: number;
+  legend: Record<string, string>;
+  probabilities: Record<string, number>
+}
+
+/** One answer from a decision model. Check `type` before reading the rest:
+  `if (answer.type == "choice") { answer.confidence }`. */
+export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
+
+/** What the model attached to its last reply, beyond the text. `answers`
+  is filled only by a decision model such as Jev: one answer per question,
+  with a probability per option. `rawData` is whatever the provider put
+  there, untyped. Null fields mean the reply carried nothing of that kind. */
+export type Reply = {
+  content: string;
+  thinkingBlocks: ThinkingBlock[];
+  usage: ReplyUsage | null;
+  cost: number | null;
+  answers: Record<string, DecisionAnswer> | null;
+  rawData: any
+}
+
+export def lastReply(): Reply | null {
+  """
+  Return what the model attached to its last reply on the current thread,
+  or null if no model has replied yet. Use it right after an `llm()` call
+  to read what the call's return value leaves out: a decision model's
+  probabilities, a reasoning model's thinking, and the reply's tokens and
+  cost.
+
+  For a decision model, `answers` holds one answer per question. A bare
+  annotation asks one question named `answer`; an object annotation asks
+  one per field, named after the field. Each answer says which kind it is
+  in `type`, so check that first: a choice answer has `choice`,
+  `confidence`, and `probabilities` (option to probability); a boolean
+  answer has `noul`, the probability that it is true.
+
+  ```ts
+  type Dept = "billing" | "support" | "sales"
+  const dept: Dept = llm("Which team should handle this?", { model: "jev-1.13" })
+  const reply = lastReply()
+  if (reply == null || reply.answers == null) {
+    return dept
+  }
+  const answer = reply.answers.answer
+  if (answer.type == "choice" && answer.confidence < 0.6) {
+    // not sure enough: hand it to a person
+  }
+  ```
+  """
+  return _lastReply()
 }
 
 /** The structured detail on a tripped guard's failure. It is the failure's

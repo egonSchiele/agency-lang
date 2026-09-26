@@ -1,0 +1,24 @@
+// Triage a support ticket with a decision model, then ask a follow-up that
+// reads the triage from the thread.
+//
+// This file does not name a model. Point it at a decision model in
+// agency.local.json (see docs/dev/llm/decision-models.md), or leave the
+// config alone and the same file runs against the default text model
+// through structured output.
+
+type Dept = "billing" | "support" | "sales"
+
+type Triage = {
+  @jsonSchema({ description: "Which team should handle this?" })
+  department: Dept,
+  @jsonSchema({ description: "Does the customer threaten to cancel or leave?" })
+  churn: boolean
+}
+
+node main() {
+  const ticket = "I cancelled two weeks ago and the refund never arrived. If this is not fixed today I am leaving."
+  const t: Triage = llm("Triage this support ticket:\n${ticket}")
+  print(t)
+  const callToday: boolean = llm("Given the triage above, should a manager call the customer today?")
+  print(callToday)
+}

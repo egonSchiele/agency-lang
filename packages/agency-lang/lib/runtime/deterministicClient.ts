@@ -1,6 +1,7 @@
 import type { PromptResult, StreamChunk, Result } from "smoltalk";
 import { ToolCall } from "smoltalk";
 import { agencyStore } from "./asyncContext.js";
+import { questionCallId, unprefixedQuestionName } from "./decision/collector.js";
 import type {
   AudioInput,
   DecideConfig,
@@ -149,6 +150,26 @@ type MockQueue = {
 };
 
 /** Why a mock's answers do not fit the questions asked, or undefined. */
+/** One llm() call's questions within a request: its prefix (empty for a
+ *  request that was not merged) and its questions under their own names. */
+type MergedCall = { prefix: string; questions: Record<string, DecisionQuestion> };
+
+/** Split a request into the calls it carries, in call order. A request the
+ *  collector did not merge is one call with an empty prefix. */
+function splitMergedQuestions(questions: Record<string, DecisionQuestion>): MergedCall[] {
+  const byId: Record<string, MergedCall> = {};
+  for (const name of Object.keys(questions)) {
+    const callId = questionCallId(name);
+    const key = callId === undefined ? "" : String(callId);
+    const call = byId[key] ?? { prefix: callId === undefined ? "" : `c${callId}_`, questions: {} };
+    call.questions[unprefixedQuestionName(name)] = questions[name];
+    byId[key] = call;
+  }
+  return Object.keys(byId)
+    .sort((left, right) => Number(left) - Number(right))
+    .map((key) => byId[key]);
+}
+
 function checkMockAnswers(
   questions: Record<string, DecisionQuestion>,
   answers: Record<string, DecisionAnswer>,
@@ -329,6 +350,10 @@ export class DeterministicClient implements LLMClient {
   // embedding provider when AGENCY_LLM_MOCKS is set. Tests that need to
   // exercise vector recall should register a custom client via
   // setLLMClient() with their own embed implementation.
+  /** Answers one request. Inside a parallel block the collector merges
+   *  several llm() calls into one request, each call's questions under a
+   *  `c<id>_` prefix; those consume one mock per call, in call order, and
+   *  each mock is checked against its own call's names. */
   async decide(
     _state: DecisionState,
     questions: Record<string, DecisionQuestion>,
@@ -336,6 +361,28 @@ export class DeterministicClient implements LLMClient {
     signal: AbortSignal,
   ): Promise<Result<DecideResult>> {
     throwIfAborted(signal);
+    const answers: Record<string, DecisionAnswer> = {};
+    for (const call of splitMergedQuestions(questions)) {
+      const mock = this.nextDecideMock(call.questions);
+      for (const name of Object.keys(mock)) {
+        answers[call.prefix + name] = mock[name];
+      }
+    }
+    return {
+      success: true,
+      value: {
+        answers,
+        usage: { inputTokens: 1, outputTokens: 0 },
+        cost: { inputCost: 0.000001, outputCost: 0, totalCost: 0.000001, currency: "USD" },
+        model: config.model,
+      },
+    };
+  }
+
+  /** The next mock as one llm() call's answers, checked against its questions. */
+  private nextDecideMock(
+    questions: Record<string, DecisionQuestion>,
+  ): Record<string, DecisionAnswer> {
     const { scope, queue } = this.resolveQueue();
     queue.callIndex++;
     const where = this.scoped ? ` in scope "${scope}"` : "";
@@ -358,15 +405,7 @@ export class DeterministicClient implements LLMClient {
         `DeterministicClient: the { decide } mock for llm() call #${queue.callIndex}${where} ${problem}`,
       );
     }
-    return {
-      success: true,
-      value: {
-        answers: mock.decide,
-        usage: { inputTokens: 1, outputTokens: 0 },
-        cost: { inputCost: 0.000001, outputCost: 0, totalCost: 0.000001, currency: "USD" },
-        model: config.model,
-      },
-    };
+    return mock.decide;
   }
 
   async embed(

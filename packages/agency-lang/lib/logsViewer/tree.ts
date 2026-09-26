@@ -29,6 +29,7 @@ const STRONG_LABEL_EVENTS = new Set<string>([
   "toolCall",
   "forkStart",
   "forkEnd",
+  "decisionBatch",
   "subprocessStarted",
   "subprocessEnd",
   "handlerDecision",

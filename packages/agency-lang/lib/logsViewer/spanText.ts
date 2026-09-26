@@ -59,6 +59,20 @@ export function spanDetail(node: TreeNode): string | undefined {
       const parts = [phase, dims].filter((p): p is string => !!p);
       return parts.length > 0 ? parts.join(" · ") : undefined;
     }
+    case "decisionBatch": {
+      const e = childEvent(node, "decisionBatch");
+      if (!e) return undefined;
+      const groups = Array.isArray(e.data.groups) ? e.data.groups : [];
+      const questions = groups.reduce(
+        (acc: number, group: any) => acc + Number(group.questionCount ?? 0),
+        0,
+      );
+      const calls = groups.reduce(
+        (acc: number, group: any) => acc + Number(group.callCount ?? 0),
+        0,
+      );
+      return `${questions} questions · ${calls} calls`;
+    }
     case "llmCall":
       return llmCallDetail(node);
     default:

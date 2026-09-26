@@ -367,6 +367,41 @@ describe("DeterministicClient.decide", () => {
     );
   });
 
+  it("answers a merged request one mock per call, in call order", async () => {
+    const merged = {
+      c2_answer: { type: "noul", instructions: "second?" },
+      c1_department: { type: "choice", instructions: "?", criteria: { a: "a", b: "b" } },
+      c1_churn: { type: "noul", instructions: "?" },
+    } as any;
+    const client = new DeterministicClient([
+      {
+        decide: {
+          department: { type: "choice", choice: "b", confidence: 1, probabilities: { b: 1 } },
+          churn: { type: "noul", noul: 0.2 },
+        },
+      },
+      { decide: { answer: { type: "noul", noul: 0.9 } } },
+    ]);
+    const r = await client.decide!("s", merged, { model: "m" }, signal);
+    if (!r.success) throw new Error(r.error);
+    expect(Object.keys(r.value.answers).sort()).toEqual(["c1_churn", "c1_department", "c2_answer"]);
+    expect(r.value.answers.c2_answer).toEqual({ type: "noul", noul: 0.9 });
+  });
+
+  it("names the call whose mock does not fit inside a merged request", async () => {
+    const merged = {
+      c1_answer: { type: "noul", instructions: "?" },
+      c2_answer: { type: "noul", instructions: "?" },
+    } as any;
+    const client = new DeterministicClient([
+      { decide: { answer: { type: "noul", noul: 0.9 } } },
+      { decide: { wrong: { type: "noul", noul: 0.1 } } },
+    ]);
+    await expect(client.decide!("s", merged, { model: "m" }, signal)).rejects.toThrow(
+      /call #2 has no answer for question "answer"/,
+    );
+  });
+
   it("text() refuses a decide mock with a clear message", async () => {
     const client = new DeterministicClient([{ decide: {} }]);
     await expect(client.text({ messages: [] } as unknown as PromptConfig)).rejects.toThrow(

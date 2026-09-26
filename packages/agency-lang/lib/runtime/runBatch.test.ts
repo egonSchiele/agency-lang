@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { TimeGuard } from "./guard.js";
-import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext, runInTestContext } from "./asyncContext.js";
+import { DecisionCollector } from "./decision/collector.js";
 import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
@@ -922,5 +923,138 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
     expect(serialized).not.toContain("small-branch-blob");
     expect(serialized).not.toContain("BBBB");
     expect(serialized).not.toContain("default-marker-secret");
+  });
+});
+
+function collectorFor(keys: string[]): DecisionCollector {
+  return new DecisionCollector(keys, async () => ({ success: false, error: "unused" }), {
+    runRound: (_report, work) => work(),
+    capReached: () => {},
+  });
+}
+
+describe("runBatch and the decision scope", () => {
+  function frameCtx() {
+    const { ctx } = makeCtx();
+    ctx.globals = new GlobalStore();
+    return ctx;
+  }
+
+  it("puts the collector and the arm key on each branch's frame", async () => {
+    const ctx = frameCtx();
+    const { parentStack, parentFrame } = makeParent();
+    const collector = collectorFor(["k0", "k1"]);
+    const seen: Array<{ key: string; sameCollector: boolean }> = [];
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      runBatch({
+        ctx,
+        parentStack,
+        parentFrame,
+        checkpointLocation: cpLoc,
+        mode: "all",
+        decisionCollector: collector,
+        children: ["k0", "k1"].map((key) => ({
+          key,
+          invoke: async () => {
+            const scope = agencyStore.getStore()?.decisions;
+            seen.push({
+              key: scope?.armKey ?? "none",
+              sameCollector: scope?.collector === collector,
+            });
+            return key;
+          },
+        })),
+      }),
+    );
+    expect(seen.sort((a, b) => a.key.localeCompare(b.key))).toEqual([
+      { key: "k0", sameCollector: true },
+      { key: "k1", sameCollector: true },
+    ]);
+  });
+
+  it("forwards the outer scope into a nested batch that installs none", async () => {
+    // A tool-dispatch runBatch inside an arm passes no collector; the
+    // tools it runs must still register under the arm.
+    const ctx = frameCtx();
+    const { parentStack, parentFrame } = makeParent();
+    const collector = collectorFor(["outer"]);
+    let innerKey = "none";
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      runBatch({
+        ctx,
+        parentStack,
+        parentFrame,
+        checkpointLocation: cpLoc,
+        mode: "all",
+        decisionCollector: collector,
+        children: [
+          {
+            key: "outer",
+            invoke: async (branchStack) => {
+              const innerFrame = new State();
+              await runBatch({
+                ctx,
+                parentStack: branchStack,
+                parentFrame: innerFrame,
+                checkpointLocation: cpLoc,
+                mode: "all",
+                recordBranchOutcomes: false,
+                shareThreads: true,
+                children: [
+                  {
+                    key: "tool",
+                    invoke: async () => {
+                      innerKey = agencyStore.getStore()?.decisions?.armKey ?? "none";
+                      return 1;
+                    },
+                  },
+                ],
+              });
+              return 0;
+            },
+          },
+        ],
+      }),
+    );
+    expect(innerKey).toBe("outer");
+  });
+
+  it("reports each branch settled as it settles, and a cached branch at once", async () => {
+    const ctx = frameCtx();
+    const { parentStack, parentFrame } = makeParent();
+    // Pre-set k0 as a finished branch, the shape resume leaves behind.
+    parentFrame.getOrCreateBranch("k0");
+    parentFrame.setResultOnBranch("k0", "done");
+    const settled: string[] = [];
+    let releaseK1: () => void = () => {};
+    const k1Blocks = new Promise<void>((resolve) => {
+      releaseK1 = resolve;
+    });
+    const run = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+      runBatch({
+        ctx,
+        parentStack,
+        parentFrame,
+        checkpointLocation: cpLoc,
+        mode: "all",
+        children: [
+          { key: "k0", invoke: async () => "never runs" },
+          {
+            key: "k1",
+            invoke: async () => {
+              await k1Blocks;
+              return "k1";
+            },
+          },
+          { key: "k2", invoke: async () => "k2" },
+        ],
+        hooks: { onBranchSettled: (key) => settled.push(key) },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toEqual(["k0", "k2"]);
+    releaseK1();
+    await run;
+    expect(settled).toEqual(["k0", "k2", "k1"]);
   });
 });

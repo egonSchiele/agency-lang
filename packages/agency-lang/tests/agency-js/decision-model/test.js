@@ -66,8 +66,9 @@ if (calls.length !== 3) throw new Error(`expected 3 decision calls, got ${calls.
 
 const [first, second] = calls;
 
-// Call 1: the prompt is the last user message in the state, and it is the
-// bare question's instructions.
+// Call 1 is the first message on the thread, so the state is only the prompt:
+// the one case where the prompt stays in the state, rather than moving into
+// the question's instructions, so the model never sees an empty state.
 const firstLast = first.state[first.state.length - 1];
 const out = {
   data: result.data,
@@ -78,8 +79,10 @@ const out = {
     config: { model: first.config.model, provider: first.config.provider },
   },
   secondCall: {
-    // The first call's reply is on the thread, so the second call's state
-    // carries it as an assistant message with the JSON value.
+    // The prompt has left the state: the state ends with the first call's
+    // reply (an assistant message), not with the second call's own prompt,
+    // which is now the questions' instructions.
+    stateRoles: second.state.map((m) => m.role),
     assistantInState: second.state.some(
       (m) => m.role === "assistant" && m.content === JSON.stringify({ response: "billing" }),
     ),

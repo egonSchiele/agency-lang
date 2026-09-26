@@ -1,0 +1,48 @@
+// Batching decision calls: the arms of one parallel block that share a
+// conversation go to the decision model as one request.
+//
+// Run against Jev through OpenRouter:
+//
+//   TYPESAFE_API_KEY="$OPENROUTER_API_KEY" TYPESAFE_BASE_URL="https://openrouter.ai/api" \
+//     pnpm run agency run --model typesafe/jev-1.13 ../examples/decision-batch.agency
+//
+// Expected in the logs: one decisionBatch round carrying four questions
+// (department, churn, urgent, tone) sent as one request, then a second
+// round with the one follow-up question, then one unbatched call after the
+// block. Open the run with `agency logs` to see the two decisionBatch bars.
+
+import { getCost, userMessage } from "std::thread"
+
+type Dept = "billing" | "support" | "sales"
+type Tone = "calm" | "frustrated" | "angry"
+
+node main() {
+  const ticket = "I cancelled two weeks ago and the refund never arrived. If this is not fixed today I am leaving."
+  userMessage("Support ticket:\n${ticket}")
+
+  // Four arms, one conversation. The first three ask once. The fourth asks
+  // twice in sequence, so its second question goes out in a later round.
+  parallel {
+    const department: Dept = llm("Which team should handle this ticket?")
+    const churn: boolean = llm("Does the customer threaten to cancel or leave?")
+    const urgent: boolean = llm("Does the customer need an answer today?")
+    seq {
+      const tone: Tone = llm("What is the customer's tone?")
+      const escalate: boolean = llm("The tone was ${tone}. Should a manager take this over?")
+    }
+  }
+
+  // Outside the block: one request on its own, reading the answers above
+  // from the thread.
+  const callToday: boolean = llm("Given everything decided above, should someone call the customer today?")
+
+  print({
+    department: department,
+    churn: churn,
+    urgent: urgent,
+    tone: tone,
+    escalate: escalate,
+    callToday: callToday,
+    cost: getCost(),
+  })
+}

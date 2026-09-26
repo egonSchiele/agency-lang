@@ -47,9 +47,9 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
    `text()` or `textStream()` when it does not. The usage kind, `decision`
    or `completion`, comes back up with the result, so nothing after this
    point asks the question again.
-4. **`dispatchDecision`** (`lib/runtime/decisionDispatch.ts`) sends the
+4. **`dispatchDecision`** (`lib/runtime/decision/dispatch.ts`) sends the
    plan's questions and the thread as state.
-5. **`planDecision`** (`lib/runtime/decisionQuestions.ts`) strips the
+5. **`planDecision`** (`lib/runtime/decision/questions.ts`) strips the
    envelope and turns the schema into a map of questions. The table below
    says how. `messagesToState` turns the thread into the state.
 6. **The client's `decide()`** (`lib/runtime/llmClient.ts`) sends the state
@@ -109,11 +109,11 @@ the failure.
 | --- | --- | --- |
 | a union of string literals, or an enum | one `choice`, named `answer`, one option per literal, each option described by its own name | the prompt |
 | `boolean` | one `noul`, named `answer` | the prompt |
-| an object type | one question per top-level field, named after the field, each field mapped by the two rows above | the field's `@jsonSchema` description, else the field name |
+| an object type | one question per top-level field, named after the field, each field mapped by the two rows above | the prompt, then the field's `@jsonSchema` description or its name, on a second line |
 
-For an object type the prompt is not the instructions of any question. It
-is a user message in the thread, so it is part of the state, the same as
-for every `llm()` call.
+The prompt is never part of the state. It is the question, so it goes into
+the instructions of every question the call asks. The thread still records
+it as a user message, so a later call reads it as conversation.
 
 Refused, each with a failure naming the field: a number, a string that is
 not a literal union, an array, a nested object, an optional or nullable
@@ -124,11 +124,12 @@ fail before any request is sent.
 
 ## The state
 
-The state is the thread's messages as a JSON array of `{ role, content }`.
-Only text goes in. Tool result messages are left out, and so is an
-assistant message that carried only tool calls. A user message with several
-text parts arrives joined with newlines, which is smoltalk's content
-getter. Attachments are not sent.
+The state is the thread's messages before the prompt, as a JSON array of
+`{ role, content }`. A thread that holds only the prompt sends it as the
+state, so the model never sees an empty state. Only text goes in. Tool
+result messages are left out, and so is an assistant message that carried
+only tool calls. A user message with several text parts arrives joined with
+newlines, which is smoltalk's content getter. Attachments are not sent.
 
 Because the reply is appended to the thread, a later `llm()` call sees it.
 In the example, the follow-up question "should a manager call the customer
@@ -202,9 +203,9 @@ picks `support` where Jev and the default model pick `billing`.
 
 ## Testing
 
-- `lib/runtime/decisionQuestions.test.ts`: every accepted shape and every
+- `lib/runtime/decision/questions.test.ts`: every accepted shape and every
   refused shape, the answer mapping, and the state.
-- `lib/runtime/decisionDispatch.test.ts`: the routing rule, the completion
+- `lib/runtime/decision/dispatch.test.ts`: the routing rule, the completion
   shape, the key-merge rule, the four refusals, and the HTTP status carried
   on a failed request so a 429 or 5xx retries.
 - `lib/runtime/llmDispatch.decision.test.ts`: a refusal happens before any
@@ -216,10 +217,88 @@ picks `support` where Jev and the default model pick `billing`.
   fixture pins the state, the questions, and the config for a bare call, an
   object call, and a call under a cost guard.
 
+## Batching inside `parallel`
+
+Inside a `parallel` or `fork` block, decision calls that share a
+conversation go out together. The rule from the user's side: once every arm
+is either finished or waiting on the decision model, the waiting calls
+that share the same conversation and model are one request.
+
+The pieces:
+
+- `Runner.runForkAll` builds one `DecisionCollector`
+  (`lib/runtime/decision/collector.ts`) per block and passes it to
+  `runBatch`, which puts `{ collector, armKey }` on each arm's async-context
+  frame as `decisions`. The three frame builders that copy fields by name
+  (`Runner.runInScope`, `withResumableScope`, `runInBranchAlsFrame`)
+  forward it; the builders that spread the outer frame carry it for free.
+  A `race` block installs none.
+- `dispatchDecision` reads the frame. With a scope it submits
+  `{ state, questions, config, questionCap, signal }` to the collector and
+  awaits a `Result<DecideResult>`; without one it sends as before. Nothing
+  else in the call path knows about batching.
+- The collector derives each arm's status from its calls: settled when its
+  branch is done, waiting when it has a call not yet sent, inflight when its
+  calls are all on the wire, else running. Only a running arm holds up a
+  round. `runBatch` reports settles through the `onBranchSettled` hook,
+  which fires as each branch settles, and at once for a cached branch on
+  resume. The collector meters nothing itself; each arm meters its share of
+  the answer, so the shares sum to the one request's usage and cost.
+- A group is the calls whose `sha256` of `{ model, baseUrl, state }`
+  match. A round sends every group at once when the block is idle, meaning
+  no arm is running, or one group alone when it reaches the model's
+  question cap (the registry's `maxQuestions`, 64 for Jev, or 64 for an
+  unknown model). A cap round logs a `warn` with
+  `warnType: "decisionBatchCap"`.
+- A merged request names each question `c<callId>_<name>`. Answers come
+  back under their original names. Input and output tokens are split
+  across the group's calls in proportion to their question counts, the
+  remainder to the first call; cost is split by the same proportions.
+- A failed request resolves every call in the group with the failure and
+  its status, so each arm's retry loop runs as it would for its own
+  request, and the retries form a new round. A call cancelled while it
+  waits leaves the group, and its arm counts as running until it asks again
+  or settles. A request is cancelled only when every call in it is.
+- Interrupts and resume need nothing extra. An arm that interrupts settles
+  with its interrupt list, so it stops holding up the round. The collector
+  lives only in memory: it is not part of any checkpoint, and `runForkAll`
+  builds a new one each time the block runs. On resume, an arm that had
+  finished is cached and reported settled at once, and a decision call that
+  had completed inside a re-run arm is a completed step, so it is not sent
+  again. State isolation is untouched: the collector reads each arm's own
+  thread view to build the state, writes nothing shared, and each arm's
+  answer is appended to that arm's thread and metered on that arm's stack.
+- Each round is a `decisionBatch` span holding one `decisionBatch` event
+  with the groups, the reason, and the time. The logs viewer summarizes it
+  as `decisionBatch 2 requests · 4 questions · 3 calls (idle, 120ms)`. The
+  span opens in the block's own span context, not the triggering arm's.
+
+What does not batch: a call outside any block; the arms of a `race`; a
+call in a nested `parallel` with the outer block's calls (the inner block
+has its own collector); and two arms that touched their thread differently
+before asking, since their states differ.
+
+Nothing here is specific to Jev. The collector works over smoltalk's
+`DecisionState`, `DecisionQuestion`, and `DecideResult` types, which any
+decision model in the registry shares; a call is a decision call when its
+registry entry has `type: "decision"`, whichever provider serves it, and
+the per-request cap comes from that entry. The two Jev-shaped numbers are
+the default cap of 64 for a model the registry does not know and the
+`typesafe` provider name for such a model, which is the one wire protocol
+smoltalk speaks today.
+
+An arm can hold several calls at once when a text-model call inside it
+dispatches several tools that each ask a decision model. They register
+under the arm's key, batch together when they are pending in the same
+round, and the arm stays waiting until its last one is sent.
+
+Under the deterministic client, a merged request still consumes one
+`{ decide }` mock per call, in the order the calls were submitted, and
+each mock is checked against its own call's question names.
+
 ## What is deferred
 
 `Choice<T>` and `Score<...>` wrapper types, per-member `@jsonSchema`
 descriptions so an option can be described rather than only named, a way
-for Agency code to read an assistant message's `rawData`, batching several
-decision calls in a `parallel` block into one request, and an in-process
+for Agency code to read an assistant message's `rawData`, and an in-process
 Laya backend.

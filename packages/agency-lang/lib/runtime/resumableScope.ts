@@ -188,6 +188,9 @@ export async function withResumableScope<T>(
         // clone instead of the canonical store. Fall back to
         // `ctx.globals` when no outer frame exists.
         globals: outer?.globals ?? ctx.globals,
+        // Keep the enclosing arm's decision scope so a resumable scope
+        // nested inside a fork branch still batches with the block.
+        decisions: outer?.decisions,
         callsite: { moduleId, scopeName: opts.name, stepPath: "" },
       },
       () => body(scope),

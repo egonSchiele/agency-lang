@@ -39,6 +39,28 @@ describe("summarize (leaf events)", () => {
     expect(s).toContain("tool blew up");
   });
 
+  it("decisionBatch shows requests, questions, calls, reason, and duration", () => {
+    const s = summarize({
+      format_version: 1,
+      trace_id: "",
+      project_id: "",
+      span_id: null,
+      parent_span_id: null,
+      data: {
+        type: "decisionBatch",
+        timestamp: "",
+        forkId: "f1",
+        reason: "idle",
+        groups: [
+          { model: "jev-1.13", armKeys: ["a", "b"], callCount: 2, questionCount: 3 },
+          { model: "jev-1.13", armKeys: ["c"], callCount: 1, questionCount: 1 },
+        ],
+        timeTaken: 120,
+      },
+    });
+    expect(s).toBe("decisionBatch 2 requests · 4 questions · 3 calls (idle, 120ms)");
+  });
+
   it("forkBranchEnd shows the returned value on success", () => {
     const s = summarize({
       format_version: 1,

@@ -97,6 +97,20 @@ Future adopters should re-run the audit on their code path
   Catches caller bugs where a frame previously ran a race batch and
   was then re-entered with a different mode.
 
+## `onBranchSettled` and `decisionCollector`
+
+`hooks.onBranchSettled(key, index)` fires the moment a branch's body settles,
+and at once for a cached branch. `onBranchEnd` fires at the join, which is
+too late for anyone who has to act while siblings are still running: the
+decision-call collector needs to know when a block is idle, and a branch
+waiting on the collector never reaches the join.
+
+`opts.decisionCollector` is that collector. Each branch's frame carries it as
+`decisions: { collector, armKey }`. A batch that passes none forwards the
+outer frame's scope, so a tool-dispatch batch inside a fork arm keeps its
+tools registered under the arm. `Runner.runForkAll` is the one caller that
+passes it; see `docs/dev/llm/decision-models.md`.
+
 ## `recordBranchOutcomes`
 
 Default `true`: `runBatch` records the per-branch outcome via

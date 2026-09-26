@@ -237,7 +237,7 @@ so decision calls in different arms see the same state. The mechanism:
 2. A decision call that finds a collector registers its questions and
    state and waits on a promise, instead of sending.
 3. The collector groups pending calls by state, hashed once per call.
-4. A group is sent when the block is quiescent: every arm has either
+4. A group is sent when the block is idle: every arm has either
    settled or is waiting on the collector. Pending calls plus settled arms
    equals arms started.
 5. A `seq` arm with two decision calls registers the first, gets its

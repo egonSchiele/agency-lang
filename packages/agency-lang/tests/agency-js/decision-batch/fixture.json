@@ -1,0 +1,39 @@
+{
+  "data": {
+    "dept": "billing",
+    "churn": true,
+    "urgent": true,
+    "escalate": false
+  },
+  "requests": 2,
+  "first": {
+    "questionNames": [
+      "answer",
+      "answer",
+      "answer"
+    ],
+    "instructions": [
+      "Is it urgent?",
+      "Which department?",
+      "Will the customer leave?"
+    ],
+    "stateRoles": [
+      "user"
+    ],
+    "stateEndsWithTicket": true
+  },
+  "second": {
+    "questionNames": [
+      "answer"
+    ],
+    "instructions": [
+      "Escalate? Urgent was true"
+    ],
+    "stateRoles": [
+      "user",
+      "user",
+      "assistant"
+    ],
+    "stateEndsWithTicket": false
+  }
+}

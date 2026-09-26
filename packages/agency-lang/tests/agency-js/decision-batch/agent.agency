@@ -1,0 +1,20 @@
+// Three arms of one parallel block ask a decision model about the same
+// ticket. The first two ask once; the third asks twice in sequence. The
+// collector sends the first three questions as one request, then the
+// fourth alone once the other arms have settled.
+import { userMessage } from "std::thread"
+
+type Dept = "billing" | "support" | "sales"
+
+node main() {
+  userMessage("Ticket: I cancelled two weeks ago and the refund never arrived.")
+  parallel {
+    const dept: Dept = llm("Which department?", { model: "jev-1.13" })
+    const churn: boolean = llm("Will the customer leave?", { model: "jev-1.13" })
+    seq {
+      const urgent: boolean = llm("Is it urgent?", { model: "jev-1.13" })
+      const escalate: boolean = llm("Escalate? Urgent was ${urgent}", { model: "jev-1.13" })
+    }
+  }
+  return { dept: dept, churn: churn, urgent: urgent, escalate: escalate }
+}

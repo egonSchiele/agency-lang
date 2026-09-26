@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import * as smoltalk from "smoltalk";
-import { isDecisionCall, dispatchDecision } from "./decisionDispatch.js";
-import type { PromptConfig } from "./llmClient.js";
+import { isDecisionCall, dispatchDecision, stateMessages, questionCapFor } from "./dispatch.js";
+import { agencyStore } from "../asyncContext.js";
+import { DecisionCollector, DEFAULT_QUESTION_CAP } from "./collector.js";
+import type { PromptConfig } from "../llmClient.js";
 
 const dept = z.union([z.literal("billing"), z.literal("support")]);
 
@@ -64,6 +66,18 @@ describe("isDecisionCall", () => {
   it("is false for an unknown model with no provider, and for no model at all", () => {
     expect(isDecisionCall(base({ model: "nobody-knows-me" }))).toBe(false);
     expect(isDecisionCall(base({}))).toBe(false);
+  });
+});
+
+describe("stateMessages", () => {
+  it("is the thread before the prompt", () => {
+    const messages = [smoltalk.userMessage("ticket"), smoltalk.userMessage("Which department?")];
+    expect(stateMessages(messages)).toEqual([messages[0]]);
+  });
+
+  it("is the prompt itself when the thread holds nothing else", () => {
+    const messages = [smoltalk.userMessage("Which department?")];
+    expect(stateMessages(messages)).toEqual(messages);
   });
 });
 
@@ -152,17 +166,27 @@ describe("dispatchDecision", () => {
     );
   });
 
-  it("throws an error carrying the HTTP status when the client reports one, so retry can classify it", async () => {
+  it("carries the failure's HTTP status onto the thrown error", async () => {
     const decide = vi.fn(async () => ({
       success: false as const,
-      error: "Decision request failed with status 429: slow down",
+      error: "Decision request failed: rate limited",
+      status: 429,
+    }));
+    await expect(
+      dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+
+  it("throws a plain error when the failure has no status", async () => {
+    const decide = vi.fn(async () => ({
+      success: false as const,
+      error: "Decision request failed: socket hang up",
     }));
     const err = await dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })).catch(
       (e) => e,
     );
     expect(err).toBeInstanceOf(Error);
-    expect(err.message).toMatch(/status 429/);
-    expect(err.status).toBe(429);
+    expect("status" in err).toBe(false);
   });
 
   it("throws when the answers do not fit the schema", async () => {
@@ -176,6 +200,67 @@ describe("dispatchDecision", () => {
     }));
     await expect(dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" }))).rejects.toThrow(
       /answered "answer" as a noul, but a choice was asked/,
+    );
+  });
+});
+
+describe("dispatchDecision inside a block", () => {
+  it("submits to the frame's collector instead of the client", async () => {
+    const decide = vi.fn(); // must never be called directly
+    const sent: Array<{ state: unknown; questions: Record<string, unknown> }> = [];
+    const collector = new DecisionCollector(
+      ["arm"],
+      async (state, questions) => {
+        sent.push({ state, questions });
+        return {
+          success: true as const,
+          value: {
+            answers: {
+              c1_answer: {
+                type: "choice" as const,
+                choice: "billing",
+                confidence: 1,
+                probabilities: { billing: 1 },
+              },
+            },
+            usage: { inputTokens: 4, outputTokens: 0 },
+            model: "jev-1.13",
+          },
+        };
+      },
+      { runRound: (_report, work) => work(), capReached: () => {} },
+    );
+    const ctx = ctxWith(decide);
+    const frame = {
+      ctx,
+      stack: {} as any,
+      threads: {} as any,
+      globals: {} as any,
+      decisions: { collector, armKey: "arm" },
+    };
+    const completion = await agencyStore.run(frame as any, () =>
+      dispatchDecision(ctx, base({ model: "jev-1.13" })),
+    );
+    expect(decide).not.toHaveBeenCalled();
+    expect(sent).toHaveLength(1);
+    expect(Object.keys(sent[0].questions)).toEqual(["c1_answer"]);
+    expect(JSON.parse(completion.output!)).toEqual({ response: "billing" });
+  });
+
+  it("sends directly when the frame has no collector", async () => {
+    const decide = okDecide(); // the file's existing helper
+    const ctx = ctxWith(decide);
+    const frame = { ctx, stack: {} as any, threads: {} as any, globals: {} as any };
+    await agencyStore.run(frame as any, () => dispatchDecision(ctx, base({ model: "jev-1.13" })));
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("questionCapFor", () => {
+  it("is the registry cap for a known model and the default otherwise", () => {
+    expect(questionCapFor(base({ model: "jev-1.13" }))).toBe(64);
+    expect(questionCapFor(base({ model: "my-laya", provider: "typesafe" }))).toBe(
+      DEFAULT_QUESTION_CAP,
     );
   });
 });

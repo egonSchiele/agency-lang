@@ -599,7 +599,7 @@ async function _runPrompt({
   let completion: PromptResult;
   let toolCalls: ToolCallJSON[];
   // "completion" for a text model; "decision" for a decision model, whose
-  // call is booked under its own kind. See decisionDispatch.ts.
+  // call is booked under its own kind. See decision/dispatch.ts.
   let usageKind: ProviderUsageKind;
   try {
     ({ completion, toolCalls, usageKind } = await dispatchWithRetry({

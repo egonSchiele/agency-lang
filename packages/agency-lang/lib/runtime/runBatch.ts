@@ -61,6 +61,7 @@
  *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { agencyStore } from "./asyncContext.js";
+import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
@@ -95,6 +96,11 @@ export type BatchHooks = {
   propagateWinnerCost?: (winnerBranch: BranchState, parentStack: StateStack) => void;
   /** Called once per branch start (statelog). */
   onBranchStart?: (key: string, index: number) => void;
+  /** Called the moment one branch's body settles, fulfilled or rejected,
+   *  and at once for a cached branch that never runs. Unlike
+   *  `onBranchEnd`, this fires before the join, which a branch waiting
+   *  on a sibling would otherwise hold up forever. */
+  onBranchSettled?: (key: string, index: number) => void;
   /** Called once per branch end with its outcome and elapsed time in ms.
    *  On a `success` outcome `value` is the branch's return value; for
    *  every other outcome it is `undefined` (there is no value to report). */
@@ -181,6 +187,11 @@ export type RunBatchOpts<T> = {
    * `shared: true` does NOT set this — concurrent branches pushing/
    * popping the same active thread would corrupt the conversation. */
   shareThreads?: boolean;
+  /** The block's decision-call collector. Each branch's frame carries it
+   * with the branch's own key as `decisions`. When absent, branches
+   * inherit the outer frame's scope, so a nested batch inside an arm
+   * (a tool-dispatch batch, say) keeps registering under that arm. */
+  decisionCollector?: DecisionCollector;
   hooks?: BatchHooks;
 };
 
@@ -338,6 +349,7 @@ function startInvoke<T>(
 ): Promise<T | Interrupt[]> {
   const { ctx, parentStack, hooks } = opts;
   if (t.cached) {
+    hooks?.onBranchSettled?.(t.child.key, i);
     return Promise.resolve(t.branch.result!.result);
   }
   // Rehydrate inherited guards BEFORE composing the abort signal, and
@@ -363,9 +375,13 @@ function startInvoke<T>(
   t.startedAt = performance.now();
   const shareGlobals = opts.shareGlobals ?? false;
   const shareThreads = opts.shareThreads ?? false;
+  const decisions: DecisionScope | undefined =
+    opts.decisionCollector === undefined
+      ? undefined
+      : { collector: opts.decisionCollector, armKey: t.child.key };
   return ctx.statelogClient
     .runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, () =>
+      runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, decisions, () =>
         t.child.invoke(t.branch.stack, signal),
       ),
     )
@@ -388,7 +404,10 @@ function startInvoke<T>(
       }
       return value;
     })
-    .finally(() => pauseBranchTimeGuards(t.branch.stack));
+    .finally(() => {
+      pauseBranchTimeGuards(t.branch.stack);
+      hooks?.onBranchSettled?.(t.child.key, i);
+    });
 }
 
 /** Wrap `fn` in an `agencyStore.run` frame whose `stack` is the branch's
@@ -413,6 +432,7 @@ function runInBranchAlsFrame<T>(
   branch: BranchState,
   shareGlobals: boolean,
   shareThreads: boolean,
+  decisions: DecisionScope | undefined,
   fn: () => Promise<T>,
 ): Promise<T> {
   const parent = agencyStore.getStore();
@@ -454,6 +474,10 @@ function runInBranchAlsFrame<T>(
       stack: branch.stack,
       threads: branchThreads,
       globals: branchGlobals,
+      // The block's collector installs this branch's scope. A nested batch
+      // that installs none (a tool-dispatch batch) inherits the outer
+      // frame's scope, so its tools keep registering under this arm.
+      decisions: decisions ?? parent.decisions,
     },
     async () => {
       try {
@@ -894,7 +918,7 @@ async function runRaceResume<T>(
     const shareGlobals = opts.shareGlobals ?? false;
     const shareThreads = opts.shareThreads ?? false;
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, branch, shareGlobals, shareThreads, () =>
+      runInBranchAlsFrame(ctx, branch, shareGlobals, shareThreads, undefined, () =>
         child.invoke(branch.stack, signal),
       ),
     );

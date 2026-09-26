@@ -1,7 +1,7 @@
 import { PromptResult, ToolCallJSON, UserContentInput } from "smoltalk";
 import { abortableSleep } from "../stdlib/abortable.js";
-import { dispatchDecision, isDecisionCall, prepareDecision } from "./decisionDispatch.js";
-import type { DecisionPlan } from "./decisionQuestions.js";
+import { dispatchDecision, isDecisionCall, prepareDecision } from "./decision/dispatch.js";
+import type { DecisionPlan } from "./decision/questions.js";
 import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
 import { callHook } from "./hooks.js";
 import type { ProviderUsageKind as UsageKind } from "./invocationUsage.js";

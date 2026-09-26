@@ -102,7 +102,7 @@ Future adopters should re-run the audit on their code path
 `hooks.onBranchSettled(key, index)` fires the moment a branch's body settles,
 and at once for a cached branch. `onBranchEnd` fires at the join, which is
 too late for anyone who has to act while siblings are still running: the
-decision-call collector needs to know when a block is quiescent, and a branch
+decision-call collector needs to know when a block is idle, and a branch
 waiting on the collector never reaches the join.
 
 `opts.decisionCollector` is that collector. Each branch's frame carries it as

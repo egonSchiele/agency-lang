@@ -1,9 +1,10 @@
 /**
  * Batches the decision calls of one fork or parallel block. Each arm hands
- * its call to the collector and waits. When no arm is still running, or a
- * group reaches the model's question cap, the collector sends every group
- * at once and gives each call its own slice of the answers, usage, and
- * cost. See docs/dev/llm/decision-models.md, "Batching inside parallel".
+ * its call to the collector and waits. When the block is idle, meaning no
+ * arm is still running, or when a group reaches the model's question cap,
+ * the collector sends every group at once and gives each call its own
+ * slice of the answers, usage, and cost. See
+ * docs/dev/llm/decision-models.md, "Batching inside parallel".
  */
 import { createHash } from "crypto";
 import { failure, success, type CostEstimate, type Result } from "smoltalk";
@@ -13,9 +14,9 @@ import type {
   DecisionAnswer,
   DecisionQuestion,
   DecisionState,
-} from "./llmClient.js";
+} from "../llmClient.js";
 
-/** The cap used for a model the registry does not know. Jev's own. */
+/** The cap used for a model the registry does not know. */
 export const DEFAULT_QUESTION_CAP = 64;
 
 export type DecisionRequest = {
@@ -41,15 +42,19 @@ export type BatchGroupReport = {
   questionCount: number;
 };
 
+/** Why a round was sent: the block went idle, or a group reached the cap. */
+export type BatchReason = "idle" | "cap";
+
 export type DecisionBatchReport = {
-  reason: "quiescent" | "cap";
+  reason: BatchReason;
   groups: BatchGroupReport[];
 };
 
 export type CollectorHooks = {
-  /** A round is about to be sent. Returns the callback to run once every
-   *  group in it has answered. */
-  batchStarted: (report: DecisionBatchReport) => () => void;
+  /** Runs one round. `work` sends every group and resolves when all have
+   *  answered; the hook wraps it, so a span opened before `work` and closed
+   *  after it encloses the whole round. */
+  runRound: (report: DecisionBatchReport, work: () => Promise<void>) => Promise<void>;
   /** A group reached the model's cap and was sent early. */
   capReached: (model: string, cap: number) => void;
 };
@@ -57,9 +62,10 @@ export type CollectorHooks = {
 /** What an arm's frame carries: the block's collector and the arm's key. */
 export type DecisionScope = { collector: DecisionCollector; armKey: string };
 
-// running: body executing between decision calls (the only status that blocks
-//   a quiescent round). waiting: holds a pending call not yet sent. inflight:
-//   its call was sent and awaits a response. settled: its branch is done.
+/** An arm is `running` while its body executes between decision calls.
+ *  Only a running arm holds up a round. `waiting` means it has a call the
+ *  collector has not sent; `inflight` means its calls are all on the wire;
+ *  `settled` means its branch is done. */
 type ArmStatus = "running" | "waiting" | "inflight" | "settled";
 
 type PendingCall = {
@@ -83,6 +89,18 @@ export function questionKey(callId: number, name: string): string {
 
 const QUESTION_KEY = /^c(\d+)_(.*)$/s;
 
+/** The call id a merged question name carries, or undefined for a plain name. */
+export function questionCallId(name: string): number | undefined {
+  const match = QUESTION_KEY.exec(name);
+  return match === null ? undefined : Number(match[1]);
+}
+
+/** A merged question name without its call prefix. */
+export function unprefixedQuestionName(name: string): string {
+  const match = QUESTION_KEY.exec(name);
+  return match === null ? name : match[2];
+}
+
 /** Split `total` in proportion to `weights`, integer parts, remainder to the first. */
 export function splitCounts(total: number, weights: number[]): number[] {
   const sum = weights.reduce((acc, weight) => acc + weight, 0);
@@ -92,6 +110,9 @@ export function splitCounts(total: number, weights: number[]): number[] {
   return parts;
 }
 
+/** Calls share a request when they share a model, an endpoint, and a
+ *  state. The rest of a `DecideConfig` (keys, model data) comes from the
+ *  run's config, never from one call, so it cannot differ between arms. */
 function groupKeyFor(request: DecisionRequest): string {
   const identity = {
     model: request.config.model,
@@ -102,8 +123,10 @@ function groupKeyFor(request: DecisionRequest): string {
 }
 
 export class DecisionCollector {
-  private arms: Record<string, ArmStatus> = {};
+  private settledArms: Record<string, true> = {};
+  private armKeys: string[];
   private pending: PendingCall[] = [];
+  private inflight: PendingCall[] = [];
   private nextId = 1;
 
   constructor(
@@ -111,14 +134,12 @@ export class DecisionCollector {
     private readonly send: DecisionSender,
     private readonly hooks: CollectorHooks,
   ) {
-    for (const key of armKeys) {
-      this.arms[key] = "running";
-    }
+    this.armKeys = [...armKeys];
   }
 
   armSettled(armKey: string): void {
-    this.arms[armKey] = "settled";
-    this.fireIfQuiescent();
+    this.settledArms[armKey] = true;
+    this.fireIfIdle();
   }
 
   submit(armKey: string, request: DecisionRequest): Promise<Result<DecideResult>> {
@@ -135,13 +156,9 @@ export class DecisionCollector {
         resolve,
         reject,
         onAbort: () => {
-          // The call was never sent, so this arm no longer owes the round
-          // anything. Mark it settled so it stops blocking quiescence; if its
-          // body resumes and asks again, submit revives it to waiting.
           this.pending = this.pending.filter((other) => other !== call);
-          this.arms[armKey] = "settled";
           reject(request.signal.reason);
-          this.fireIfQuiescent();
+          this.fireIfIdle();
         },
       };
       request.signal.addEventListener("abort", call.onAbort, { once: true });
@@ -155,7 +172,6 @@ export class DecisionCollector {
         this.fire([existing], "cap");
       }
       this.pending.push(call);
-      this.arms[armKey] = "waiting";
 
       const group = this.groupOf(call.groupKey)!;
       if (group.questionCount >= request.questionCap) {
@@ -163,8 +179,23 @@ export class DecisionCollector {
         this.fire([group], "cap");
         return;
       }
-      this.fireIfQuiescent();
+      this.fireIfIdle();
     });
+  }
+
+  /** An arm's status follows its calls, so no delivery can leave an arm
+   *  marked running while a second call of its still waits. */
+  private statusOf(armKey: string): ArmStatus {
+    if (this.settledArms[armKey] === true) {
+      return "settled";
+    }
+    if (this.pending.some((call) => call.armKey === armKey)) {
+      return "waiting";
+    }
+    if (this.inflight.some((call) => call.armKey === armKey)) {
+      return "inflight";
+    }
+    return "running";
   }
 
   private groups(): Group[] {
@@ -182,25 +213,23 @@ export class DecisionCollector {
     return this.groups().find((group) => group.key === key);
   }
 
-  private fireIfQuiescent(): void {
+  private fireIfIdle(): void {
     if (this.pending.length === 0) {
       return;
     }
-    const running = Object.values(this.arms).some((status) => status === "running");
+    const running = this.armKeys.some((armKey) => this.statusOf(armKey) === "running");
     if (running) {
       return;
     }
-    this.fire(this.groups(), "quiescent");
+    this.fire(this.groups(), "idle");
   }
 
-  private fire(groups: Group[], reason: DecisionBatchReport["reason"]): void {
+  private fire(groups: Group[], reason: BatchReason): void {
     const firing = groups.flatMap((group) => group.calls);
     this.pending = this.pending.filter((call) => !firing.includes(call));
+    this.inflight.push(...firing);
     for (const call of firing) {
       call.request.signal.removeEventListener("abort", call.onAbort);
-      // The call is on the wire now, not blocking siblings, but not yet
-      // resumable either. Its arm becomes running again when the answer lands.
-      this.arms[call.armKey] = "inflight";
     }
     const report: DecisionBatchReport = {
       reason,
@@ -211,82 +240,90 @@ export class DecisionCollector {
         questionCount: group.questionCount,
       })),
     };
-    const ended = this.hooks.batchStarted(report);
-    void Promise.all(groups.map((group) => this.sendGroup(group))).finally(ended);
+    void this.hooks.runRound(report, async () => {
+      await Promise.all(groups.map((group) => this.sendGroup(group)));
+    });
   }
 
+  /** Send one group's merged request and deliver each call its share.
+   *  Every exit, including a throw anywhere in here, resolves or rejects
+   *  every call in the group, so no arm is ever left waiting. */
   private async sendGroup(group: Group): Promise<void> {
-    const merged: Record<string, DecisionQuestion> = {};
-    for (const call of group.calls) {
-      for (const name of Object.keys(call.request.questions)) {
-        merged[questionKey(call.id, name)] = call.request.questions[name];
-      }
-    }
-
-    // One request for the group. It is cancelled only when every call in it
-    // has aborted; a single aborted call just loses its answers.
-    const controller = new AbortController();
     const live: PendingCall[] = [...group.calls];
-    for (const call of group.calls) {
-      call.request.signal.addEventListener(
-        "abort",
-        () => {
-          live.splice(live.indexOf(call), 1);
-          call.reject(call.request.signal.reason);
-          if (live.length === 0) {
-            controller.abort(call.request.signal.reason);
-          }
-        },
-        { once: true },
-      );
-    }
+    const controller = new AbortController();
+    const abortListeners = group.calls.map((call) => {
+      const listener = () => {
+        live.splice(live.indexOf(call), 1);
+        call.reject(call.request.signal.reason);
+        if (live.length === 0) {
+          controller.abort(call.request.signal.reason);
+        }
+      };
+      call.request.signal.addEventListener("abort", listener, { once: true });
+      return listener;
+    });
 
-    const first = group.calls[0].request;
-    // A sender that throws (a rejected promise, not a returned Failure) must
-    // not strand the group: deliver the error as a failure to every live call
-    // so each arm's own retry loop runs, exactly as a returned Failure would.
-    let result: Result<DecideResult>;
     try {
-      result = await this.send(first.state, merged, first.config, controller.signal);
+      const result = await this.send(
+        group.calls[0].request.state,
+        mergedQuestions(group),
+        group.calls[0].request.config,
+        controller.signal,
+      );
+      if (result.success) {
+        deliverAnswers(group, live, result.value);
+      } else {
+        for (const call of live) {
+          call.resolve(result);
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       for (const call of live) {
-        this.arms[call.armKey] = "running";
         call.resolve(failure(message));
       }
-      return;
+    } finally {
+      group.calls.forEach((call, index) => {
+        call.request.signal.removeEventListener("abort", abortListeners[index]);
+      });
+      this.inflight = this.inflight.filter((call) => !group.calls.includes(call));
+      // A delivered arm may already hold its next call. If nothing else is
+      // running, that call is the next round.
+      this.fireIfIdle();
     }
-    if (!result.success) {
-      for (const call of live) {
-        // The arm's body resumes to run its own retry loop.
-        this.arms[call.armKey] = "running";
-        call.resolve(result);
-      }
-      return;
-    }
-
-    const weights = group.calls.map((call) => call.questionCount);
-    const inputTokens = splitCounts(result.value.usage.inputTokens, weights);
-    const outputTokens = splitCounts(result.value.usage.outputTokens, weights);
-    group.calls.forEach((call, index) => {
-      if (!live.includes(call)) {
-        return;
-      }
-      // The answer is in; the arm's body resumes.
-      this.arms[call.armKey] = "running";
-      const share = call.questionCount / group.questionCount;
-      const cost =
-        result.value.cost === undefined ? undefined : scaleCost(result.value.cost, share);
-      call.resolve(
-        success({
-          answers: answersFor(call.id, result.value.answers),
-          usage: { inputTokens: inputTokens[index], outputTokens: outputTokens[index] },
-          cost,
-          model: result.value.model,
-        }),
-      );
-    });
   }
+}
+
+function mergedQuestions(group: Group): Record<string, DecisionQuestion> {
+  const merged: Record<string, DecisionQuestion> = {};
+  for (const call of group.calls) {
+    for (const name of Object.keys(call.request.questions)) {
+      merged[questionKey(call.id, name)] = call.request.questions[name];
+    }
+  }
+  return merged;
+}
+
+/** Give each live call its answers and its share of the tokens and cost. */
+function deliverAnswers(group: Group, live: PendingCall[], result: DecideResult): void {
+  const weights = group.calls.map((call) => call.questionCount);
+  const inputTokens = splitCounts(result.usage.inputTokens, weights);
+  const outputTokens = splitCounts(result.usage.outputTokens, weights);
+  group.calls.forEach((call, index) => {
+    if (!live.includes(call)) {
+      return;
+    }
+    const share = call.questionCount / group.questionCount;
+    const cost = result.cost === undefined ? undefined : scaleCost(result.cost, share);
+    call.resolve(
+      success({
+        answers: answersFor(call.id, result.answers),
+        usage: { inputTokens: inputTokens[index], outputTokens: outputTokens[index] },
+        cost,
+        model: result.model,
+      }),
+    );
+  });
 }
 
 /** A cost estimate scaled to one call's share. Every numeric field is a
@@ -306,9 +343,8 @@ function answersFor(
 ): Record<string, DecisionAnswer> {
   const answers: Record<string, DecisionAnswer> = {};
   for (const key of Object.keys(merged)) {
-    const match = QUESTION_KEY.exec(key);
-    if (match !== null && Number(match[1]) === callId) {
-      answers[match[2]] = merged[key];
+    if (questionCallId(key) === callId) {
+      answers[unprefixedQuestionName(key)] = merged[key];
     }
   }
   return answers;

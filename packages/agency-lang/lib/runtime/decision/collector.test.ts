@@ -6,8 +6,9 @@ import {
   splitCounts,
   type DecisionRequest,
   type CollectorHooks,
-} from "./decisionCollector.js";
-import type { DecideResult, DecisionAnswer } from "./llmClient.js";
+  type DecisionBatchReport,
+} from "./collector.js";
+import type { DecideResult, DecisionAnswer } from "../llmClient.js";
 
 const choice = (value: string): DecisionAnswer => ({
   type: "choice",
@@ -48,7 +49,8 @@ function hooks(): CollectorHooks & { ended: number; caps: number } {
   const h = {
     ended: 0,
     caps: 0,
-    batchStarted: () => () => {
+    runRound: async (_report: DecisionBatchReport, work: () => Promise<void>) => {
+      await work();
       h.ended++;
     },
     capReached: () => {
@@ -132,7 +134,7 @@ describe("DecisionCollector", () => {
     await Promise.all([first, second]);
     expect(calls).toHaveLength(1);
     expect(h.caps).toBe(1);
-    // Arm c has not settled, so the round fired for the cap, not quiescence.
+    // Arm c has not settled, so the round fired for the cap, not because the block was idle.
   });
 
   it("starts a new group when a call would overflow the cap", async () => {
@@ -166,7 +168,7 @@ describe("DecisionCollector", () => {
     expect(r2).toMatchObject({ success: false, status: 500 });
   });
 
-  it("drops an aborted call and still fires for the rest", async () => {
+  it("drops an aborted call, and its arm counts as running until it settles or asks again", async () => {
     const calls: any[] = [];
     const collector = new DecisionCollector(["a", "b"], sender(calls), hooks());
     const controller = new AbortController();
@@ -174,8 +176,13 @@ describe("DecisionCollector", () => {
     const aborted = collector.submit("a", request({ signal: controller.signal }));
     controller.abort(reason);
     await expect(aborted).rejects.toBe(reason);
-    const other = await collector.submit("b", request());
-    expect(other.success).toBe(true);
+    const other = collector.submit("b", request());
+    await tick();
+    // Arm a may retry or be torn down; either way it has not settled yet.
+    expect(calls).toHaveLength(0);
+    collector.armSettled("a");
+    const result = await other;
+    expect(result.success).toBe(true);
     expect(calls).toHaveLength(1);
     expect(Object.keys(calls[0].questions)).toEqual([questionKey(2, "answer")]);
   });
@@ -225,6 +232,60 @@ describe("DecisionCollector", () => {
     const again = await collector.submit("a", request());
     expect(again.success).toBe(true);
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe("DecisionCollector with two calls pending from one arm", () => {
+  it("sends the second call once its first answer lands and the block is idle", async () => {
+    const calls: any[] = [];
+    const collector = new DecisionCollector(["x", "z"], sender(calls), hooks());
+    // x's two tools submit; the first alone reaches the cap of 1 and fires.
+    const first = collector.submit("x", request({ questionCap: 1 }));
+    const second = collector.submit("x", request({ state: [{ role: "user", content: "other" }] }));
+    await first;
+    const last = collector.submit("z", request());
+    const outcome = await Promise.race([
+      Promise.all([second, last]).then(() => "sent"),
+      new Promise((resolve) => setTimeout(() => resolve("hung"), 300)),
+    ]);
+    expect(outcome).toBe("sent");
+    // The second round is two requests: x's second call and z's call have
+    // different states.
+    expect(calls).toHaveLength(3);
+  });
+
+  it("does not send a second call from the same arm while a sibling is still running", async () => {
+    const calls: any[] = [];
+    const collector = new DecisionCollector(["x", "z"], sender(calls), hooks());
+    const first = collector.submit("x", request({ questionCap: 1 }));
+    await first;
+    const second = collector.submit("x", request());
+    await tick();
+    expect(calls).toHaveLength(1);
+    collector.armSettled("z");
+    await second;
+    expect(calls).toHaveLength(2);
+  });
+
+  it("delivers a failure when the sender throws after the request, and frees the arm", async () => {
+    let attempts = 0;
+    const send = vi.fn(async () => {
+      attempts++;
+      if (attempts === 1) {
+        // A malformed result: no usage. Delivery throws after the send.
+        return success({ answers: {}, model: "m" } as any);
+      }
+      return success({
+        answers: { c2_answer: choice("a") },
+        usage: { inputTokens: 1, outputTokens: 0 },
+        model: "m",
+      });
+    });
+    const collector = new DecisionCollector(["a"], send, hooks());
+    const first = await collector.submit("a", request());
+    expect(first.success).toBe(false);
+    const second = await collector.submit("a", request());
+    expect(second.success).toBe(true);
   });
 });
 

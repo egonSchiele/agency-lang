@@ -11,7 +11,7 @@ import { pauseAtStep } from "./pause.js";
 import { __pipeBind } from "./result.js";
 import { nativeTypeReplacer, nativeTypeReviver } from "./revivers/index.js";
 import { runBatch } from "./runBatch.js";
-import { DecisionCollector } from "./decisionCollector.js";
+import { DecisionCollector } from "./decision/collector.js";
 import { repairReopenedThread } from "./threadRepair.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -1311,14 +1311,13 @@ export class Runner {
     shared: boolean,
   ): Promise<any> {
     // One collector per block. A decision call inside any arm submits to it
-    // through the arm's frame; it groups calls that share a conversation and
-    // model and sends each round at once. See docs/dev/llm/decision-models.md.
+    // through the arm's frame. See docs/dev/llm/decision-models.md.
     const armKeys = items.map((_item, index) => this.forkBranchKey(id, index));
+    const blockSpanStack = this.ctx.statelogClient.snapshotStack();
     const collector = new DecisionCollector(
       armKeys,
       (state, questions, config, signal) => {
-        // The collector's send bypasses meteredDispatch; each arm meters its
-        // own split share, so the shares sum to this request's real total.
+        // Not metered here: each arm meters its own share of the answer.
         const decide = this.ctx.llmClient.decide;
         if (decide === undefined) {
           throw new Error("The active LLM client does not support decision models.");
@@ -1326,19 +1325,25 @@ export class Runner {
         return decide.call(this.ctx.llmClient, state, questions, config, signal);
       },
       {
-        batchStarted: (report) => {
-          const spanId = this.ctx.statelogClient.startSpan("decisionBatch");
-          const startedAt = performance.now();
-          return () => {
-            this.ctx.statelogClient.decisionBatch({
-              forkId,
-              reason: report.reason,
-              groups: report.groups,
-              timeTaken: performance.now() - startedAt,
-            });
-            this.ctx.statelogClient.endSpan(spanId);
-          };
-        },
+        // The round's span opens in the block's own span context, captured
+        // here, so it does not depend on which arm happened to trigger the
+        // round and cannot be cut short when that arm ends its own span.
+        runRound: (report, work) =>
+          this.ctx.statelogClient.runInBranchContext(blockSpanStack, async () => {
+            const spanId = this.ctx.statelogClient.startSpan("decisionBatch");
+            const startedAt = performance.now();
+            try {
+              await work();
+            } finally {
+              this.ctx.statelogClient.decisionBatch({
+                forkId,
+                reason: report.reason,
+                groups: report.groups,
+                timeTaken: performance.now() - startedAt,
+              });
+              this.ctx.statelogClient.endSpan(spanId);
+            }
+          }),
         capReached: (model, cap) => {
           this.ctx.statelogClient.warn({
             warnType: "decisionBatchCap",

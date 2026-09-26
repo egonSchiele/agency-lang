@@ -61,7 +61,7 @@
  *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { agencyStore } from "./asyncContext.js";
-import type { DecisionCollector, DecisionScope } from "./decisionCollector.js";
+import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";

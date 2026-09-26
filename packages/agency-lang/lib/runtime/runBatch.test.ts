@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { TimeGuard } from "./guard.js";
 import { agencyStore, getRuntimeContext, runInTestContext } from "./asyncContext.js";
-import { DecisionCollector } from "./decisionCollector.js";
+import { DecisionCollector } from "./decision/collector.js";
 import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
@@ -928,7 +928,7 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
 
 function collectorFor(keys: string[]): DecisionCollector {
   return new DecisionCollector(keys, async () => ({ success: false, error: "unused" }), {
-    batchStarted: () => () => {},
+    runRound: (_report, work) => work(),
     capReached: () => {},
   });
 }

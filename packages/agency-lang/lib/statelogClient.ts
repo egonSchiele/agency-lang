@@ -41,8 +41,8 @@ export type SpanType =
   // embedding cost, and so embeddings are filterable on their own.
   | "embedding"
   // One round of batched decision calls inside a fork or parallel block:
-  // every group's request, sent together. Opened by the collector's
-  // batchStarted hook and closed when the last group answers.
+  // every group's request, sent together. Opened before the round's
+  // requests go out and closed when the last group answers.
   | "decisionBatch"
   // Memory-subsystem umbrella spans. Each one wraps a single
   // user-facing memory operation; the inner `llmCall`/`embedding`
@@ -1309,7 +1309,7 @@ export class StatelogClient {
     timeTaken,
   }: {
     forkId: string;
-    reason: "quiescent" | "cap";
+    reason: "idle" | "cap";
     groups: Array<{ model: string; armKeys: string[]; callCount: number; questionCount: number }>;
     timeTaken: number;
   }): Promise<void> {

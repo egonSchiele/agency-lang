@@ -6,25 +6,20 @@
  * statelog) runs unchanged. See docs/dev/llm/decision-models.md.
  *
  * A call inside a fork or parallel block hands its request to the block's
- * collector (`lib/runtime/decisionCollector.ts`) on the async-context frame,
+ * collector (`lib/runtime/decision/collector.ts`) on the async-context frame,
  * which may batch it with sibling calls; a call outside one sends as before.
  */
 import * as smoltalk from "smoltalk";
 import type { Message, ModelDataBlob, PromptResult } from "smoltalk";
-import type { DecideConfig, PromptConfig } from "./llmClient.js";
-import {
-  answersToValue,
-  messagesToState,
-  planDecision,
-  type DecisionPlan,
-} from "./decisionQuestions.js";
-import type { RuntimeContext } from "./state/context.js";
-import type { GraphState } from "./types.js";
-import { agencyStore } from "./asyncContext.js";
-import { DEFAULT_QUESTION_CAP } from "./decisionCollector.js";
+import type { DecideConfig, PromptConfig } from "../llmClient.js";
+import { answersToValue, messagesToState, planDecision, type DecisionPlan } from "./questions.js";
+import type { RuntimeContext } from "../state/context.js";
+import type { GraphState } from "../types.js";
+import { agencyStore } from "../asyncContext.js";
+import { DEFAULT_QUESTION_CAP } from "./collector.js";
 
-/** The one decision provider. It names the wire protocol, so a model or
- *  endpoint the registry does not know is marked with `provider: "typesafe"`. */
+/** The provider of a decision model the registry does not know. It names
+ *  the wire protocol Jev and Laya speak; a registry model carries its own. */
 export const DECISION_PROVIDER = "typesafe";
 
 /** The per-provider maps `runPrompt` leaves on `metadata`, the same place
@@ -49,11 +44,11 @@ function registryRecord(
 
 /** True when this call is for a decision model.
  *
- *  A name the registry knows belongs to one provider, and only the
- *  registry's word counts: `jev-1.13` is a decision call whatever provider
- *  is on the call, and `gpt-5-mini` never is. A name the registry does not
- *  know (a local Laya server, say) is a decision call when the call's
- *  provider is `typesafe`.
+ *  A name the registry knows is a decision call when its registry entry is
+ *  a decision model, whatever provider is on the call and whichever
+ *  provider serves it: `jev-1.13` always is, and `gpt-5-mini` never is. A
+ *  name the registry does not know (a local Laya server, say) is a decision
+ *  call when the call's provider is `typesafe`.
  *
  *  The call's provider is not trusted for a known name because the user
  *  may not have written it: the compiler bakes the config's default
@@ -62,7 +57,7 @@ export function isDecisionCall(config: PromptConfig): boolean {
   const maps = (config.metadata ?? {}) as ConfigMaps;
   const known = registryRecord(config.model, maps.modelData);
   if (known !== undefined) {
-    return known.provider === DECISION_PROVIDER;
+    return known.type === "decision";
   }
   return config.provider === DECISION_PROVIDER;
 }
@@ -146,10 +141,13 @@ export async function dispatchDecision(
   // The same key rule `toSmolConfig` applies to a text call: the per-call
   // map merges over the config map.
   const maps = (config.metadata ?? {}) as ConfigMaps;
+  const known = registryRecord(config.model, maps.modelData);
   const decideConfig: DecideConfig = {
     model: config.model ?? "",
-    // Never the call's own provider, which may be the baked-in default.
-    provider: DECISION_PROVIDER,
+    // The registry's provider for a known model; else the one decision
+    // protocol. Never the call's own provider, which may be the baked-in
+    // default.
+    provider: known?.provider ?? DECISION_PROVIDER,
     apiKey: config.apiKey ? { ...maps.apiKey, ...config.apiKey } : maps.apiKey,
     baseUrl: maps.baseUrl,
     modelData: maps.modelData,

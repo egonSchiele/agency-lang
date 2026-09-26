@@ -7,7 +7,7 @@ import {
   messagesToState,
   BARE_QUESTION_NAME,
   type DecisionPlan,
-} from "./decisionQuestions.js";
+} from "./questions.js";
 
 const envelope = (inner: z.ZodType) => z.object({ response: inner });
 const dept = z.union([z.literal("billing"), z.literal("support")]);

@@ -1,15 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import * as smoltalk from "smoltalk";
-import {
-  isDecisionCall,
-  dispatchDecision,
-  stateMessages,
-  questionCapFor,
-} from "./decisionDispatch.js";
-import { agencyStore } from "./asyncContext.js";
-import { DecisionCollector, DEFAULT_QUESTION_CAP } from "./decisionCollector.js";
-import type { PromptConfig } from "./llmClient.js";
+import { isDecisionCall, dispatchDecision, stateMessages, questionCapFor } from "./dispatch.js";
+import { agencyStore } from "../asyncContext.js";
+import { DecisionCollector, DEFAULT_QUESTION_CAP } from "./collector.js";
+import type { PromptConfig } from "../llmClient.js";
 
 const dept = z.union([z.literal("billing"), z.literal("support")]);
 
@@ -233,7 +228,7 @@ describe("dispatchDecision inside a block", () => {
           },
         };
       },
-      { batchStarted: () => () => {}, capReached: () => {} },
+      { runRound: (_report, work) => work(), capReached: () => {} },
     );
     const ctx = ctxWith(decide);
     const frame = {

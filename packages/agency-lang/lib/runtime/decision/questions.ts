@@ -14,7 +14,7 @@
  */
 import type { Message } from "smoltalk";
 import { failure, success, type Result } from "smoltalk";
-import type { DecisionAnswer, DecisionQuestion } from "./llmClient.js";
+import type { DecisionAnswer, DecisionQuestion } from "../llmClient.js";
 
 /** The question name used when the annotation is a single value. */
 export const BARE_QUESTION_NAME = "answer";

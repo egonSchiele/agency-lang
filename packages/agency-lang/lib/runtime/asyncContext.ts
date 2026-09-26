@@ -54,7 +54,7 @@ import type { StateStack } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { Runner } from "./runner.js";
 import type { HandlerFn } from "./types.js";
-import type { DecisionScope } from "./decisionCollector.js";
+import type { DecisionScope } from "./decision/collector.js";
 
 export type CallsiteLocation = {
   moduleId: string;
@@ -102,7 +102,7 @@ export type AgencyStore = {
   /**
    * The decision-call collector of the enclosing fork or parallel block
    * and the key of the arm this frame runs in. Absent outside a block.
-   * See lib/runtime/decisionCollector.ts.
+   * See lib/runtime/decision/collector.ts.
    */
   decisions?: DecisionScope;
 };

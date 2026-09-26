@@ -779,13 +779,13 @@ describe("StatelogClient", () => {
       const client = fileClient(file);
       await client.decisionBatch({
         forkId: "f1",
-        reason: "quiescent",
+        reason: "idle",
         groups: [{ model: "jev-1.13", armKeys: ["a", "b"], callCount: 2, questionCount: 3 }],
         timeTaken: 5,
       });
       const events = readEvents(file).map((e) => e.data);
       expect(events[0].type).toBe("decisionBatch");
-      expect(events[0].reason).toBe("quiescent");
+      expect(events[0].reason).toBe("idle");
       expect(events[0].groups).toHaveLength(1);
       expect(events[0].groups[0].questionCount).toBe(3);
     });

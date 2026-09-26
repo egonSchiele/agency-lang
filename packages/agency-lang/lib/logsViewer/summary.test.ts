@@ -50,7 +50,7 @@ describe("summarize (leaf events)", () => {
         type: "decisionBatch",
         timestamp: "",
         forkId: "f1",
-        reason: "quiescent",
+        reason: "idle",
         groups: [
           { model: "jev-1.13", armKeys: ["a", "b"], callCount: 2, questionCount: 3 },
           { model: "jev-1.13", armKeys: ["c"], callCount: 1, questionCount: 1 },
@@ -58,7 +58,7 @@ describe("summarize (leaf events)", () => {
         timeTaken: 120,
       },
     });
-    expect(s).toBe("decisionBatch 2 requests · 4 questions · 3 calls (quiescent, 120ms)");
+    expect(s).toBe("decisionBatch 2 requests · 4 questions · 3 calls (idle, 120ms)");
   });
 
   it("forkBranchEnd shows the returned value on success", () => {

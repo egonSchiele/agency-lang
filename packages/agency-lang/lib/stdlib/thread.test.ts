@@ -197,4 +197,16 @@ describe("_lastReply", () => {
     expect(reply?.answers).toBeNull();
     expect(reply?.rawData).toEqual({ id: "chatcmpl-1", object: "chat.completion" });
   });
+
+  it("gives null answers when rawData carries a non-object `answers`", async () => {
+    // A provider whose rawData happens to have an `answers` field that is not a
+    // record must not be handed back as decision answers — a caller reading
+    // `reply.answers.answer` would crash. rawData itself is preserved.
+    const threads = threadsWith([
+      smoltalk.assistantMessage("plain", { rawData: { answers: "explanation" } }),
+    ]);
+    const reply = await lastReplyOn(threads);
+    expect(reply?.answers).toBeNull();
+    expect(reply?.rawData).toEqual({ answers: "explanation" });
+  });
 });

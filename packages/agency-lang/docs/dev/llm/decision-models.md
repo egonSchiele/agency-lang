@@ -145,12 +145,14 @@ option. The full answer set is kept on the reply message as `rawData`, and
 `Record<string, DecisionAnswer>` typed the same way smoltalk types it. A
 bare annotation's answer is `answers.answer`; an object annotation's are
 `answers.<field>`. Check `type` before reading a field, and the checker
-refuses a typo. `rawData` stays on the record as the untyped original.
-`lib/stdlib/thread.test.ts` builds its fixture as smoltalk's
-`DecideResult`, so a shape change there fails here. No wrapper type on
-`llm()`'s return value is planned. `lastReply()` is how the answers are
-read. Score questions are still not produced, since no annotation maps to
-one. `ScoreAnswer` is in the union so nothing changes when they are.
+refuses a typo.
+
+`rawData` stays on the record as the untyped original.
+`lib/stdlib/thread.test.ts` builds its fixture as smoltalk's `DecideResult`,
+so a shape change there fails here. No wrapper type on `llm()`'s return
+value is planned. Score questions are still not produced, since no
+annotation maps to one, but `ScoreAnswer` is in the union so nothing
+changes when they are.
 
 ## Cost
 

@@ -379,11 +379,20 @@ function replyUsage(usage: TokenUsage | undefined): ReplyUsage | null {
  *  the only thing that puts a `DecideResult` there, so the check is on the
  *  one field it always has; smoltalk exports no schema for the shape. */
 function decisionAnswers(rawData: unknown): Record<string, DecisionAnswer> | null {
-  const isDecideResult = typeof rawData === "object" && rawData !== null && "answers" in rawData;
-  if (!isDecideResult) {
+  const hasAnswers = typeof rawData === "object" && rawData !== null && "answers" in rawData;
+  if (!hasAnswers) {
     return null;
   }
-  return (rawData as DecideResult).answers;
+  // Guard the value, not just the key: another provider could put a non-object
+  // `answers` on its rawData, and handing that back as a Record would crash a
+  // caller reading `reply.answers.answer`. We do not validate each answer
+  // variant — smoltalk exports no schema for it, and the runtime's own decision
+  // dispatch is the only thing that writes a real DecideResult here.
+  const answers = (rawData as { answers: unknown }).answers;
+  if (typeof answers !== "object" || answers === null) {
+    return null;
+  }
+  return answers as DecideResult["answers"];
 }
 
 /** The active thread's last assistant message as a `ReplyRecord`, or null

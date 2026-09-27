@@ -1,0 +1,24 @@
+import { outputCapForModel } from "../lib/outputCap.agency"
+static const KNOWN = { name: "m", provider: "openai", openWeights: false, inputCost: 0, outputCost: 0, contextWindow: 200000, outputLimit: 32768, family: "" }
+static const BIG = { name: "m", provider: "openai", openWeights: false, inputCost: 0, outputCost: 0, contextWindow: 200000, outputLimit: 128000, family: "" }
+static const UNSAID = { name: "m", provider: "openai", openWeights: false, inputCost: 0, outputCost: 0, contextWindow: 200000, outputLimit: 0, family: "" }
+// A cap the user set is theirs, whatever the model.
+node userSetting(): number {
+  return outputCapForModel(20000, "user-global", "openai", BIG)
+}
+// The built-in default gives way to the model's own limit.
+node knownModel(): number {
+  return outputCapForModel(20000, "default", "openai", KNOWN)
+}
+// ... bounded by the ceiling.
+node bigModel(): number {
+  return outputCapForModel(20000, "default", "openai", BIG)
+}
+// Anthropic keeps the default: the non-streaming cutoff.
+node anthropic(): number {
+  return outputCapForModel(20000, "default", "anthropic", BIG)
+}
+// An unknown model, or one whose limit the catalog does not give, keeps it too.
+node unknown(): string {
+  return "${outputCapForModel(20000, "default", "openai", null)}|${outputCapForModel(20000, "default", "openai", UNSAID)}"
+}

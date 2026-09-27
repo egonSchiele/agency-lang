@@ -111,6 +111,9 @@ export type HostedModelInfo = {
   inputCost: number;
   outputCost: number;
   contextWindow: number;
+  /** The most output tokens one reply may have, per the catalog; 0 when
+   *  the catalog does not say. */
+  outputLimit: number;
   family: string;
 };
 
@@ -122,6 +125,7 @@ function toHostedInfo(model: any): HostedModelInfo {
     inputCost: model.inputTokenCost ?? 0,
     outputCost: model.outputTokenCost ?? 0,
     contextWindow: model.maxInputTokens ?? 0,
+    outputLimit: model.maxOutputTokens ?? 0,
     family: model.family ?? "",
   };
 }

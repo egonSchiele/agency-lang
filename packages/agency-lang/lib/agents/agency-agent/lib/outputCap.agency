@@ -1,0 +1,32 @@
+/** @module The output cap the agent gives each model call when the
+  capability profile left it at the built-in default. Pure, so the rule
+  is testable without a model. */
+import { HostedModelInfo } from "std::llm"
+
+/** The built-in default, 20,000, was chosen for small local models and
+  to stay under Anthropic's non-streaming cutoff (21,333). For any other
+  hosted model whose output limit the catalog knows, the cap is that
+  limit, bounded by this ceiling: a reasoning model at high effort thinks
+  past 20,000 tokens on hard tasks and returns nothing visible when cut. */
+export static const HOSTED_OUTPUT_CEILING = 65536
+
+/** The cap to use: `defaultCap` when the user set one, when the provider
+  is Anthropic, or when the catalog does not know the model; otherwise the
+  model's own output limit, bounded by the ceiling. */
+export def outputCapForModel(
+  defaultCap: number,
+  capSource: string,
+  provider: string,
+  info: HostedModelInfo | null,
+): number {
+  if (capSource != "default") {
+    return defaultCap
+  }
+  if (provider == "anthropic" || info == null || info.outputLimit <= 0) {
+    return defaultCap
+  }
+  if (info.outputLimit < HOSTED_OUTPUT_CEILING) {
+    return info.outputLimit
+  }
+  return HOSTED_OUTPUT_CEILING
+}

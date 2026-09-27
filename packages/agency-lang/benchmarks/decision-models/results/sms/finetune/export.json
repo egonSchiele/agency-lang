@@ -1,0 +1,15 @@
+{
+  "bestEpoch": 3,
+  "validation": {
+    "accuracy": 0.9539999961853027,
+    "macroF1": 0.9027327858175944,
+    "logLoss": 0.11803685873746872,
+    "brier": 0.07437451183795929,
+    "falsePositives": 18,
+    "falseNegatives": 5
+  },
+  "checkpoint": "/Users/adityabhargava/agency-lang/packages/agency-lang/data/uci-sms-spam/finetune/head-v1/checkpoint",
+  "stoppedByUser": true,
+  "temperature": 1.0,
+  "postTrainingCalibrationPerformed": false
+}

@@ -11,7 +11,7 @@
     // .agency-build/ (gitignored, wiped by `make clean`).
     "tsBuildInfoFile": "./.agency-build/tsc-tests.tsbuildinfo"
   },
-  "include": ["lib", "scripts"],
+  "include": ["lib", "scripts", "benchmarks/decision-models"],
   "exclude": [
     "node_modules",
     "references",

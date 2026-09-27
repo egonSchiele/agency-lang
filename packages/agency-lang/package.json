@@ -4,7 +4,7 @@
   "description": "The Agency language",
   "main": "./dist/lib/index.js",
   "scripts": {
-    "benchmark:decisions": "node dist/scripts/decision-benchmark.js",
+    "benchmark:decisions": "node dist/benchmarks/decision-models/run.js",
     "test": "vitest --test-timeout=1000",
     "test:run": "vitest run",
     "test:integration": "vitest run -c vitest.integration.config.ts",

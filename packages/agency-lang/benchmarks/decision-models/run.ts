@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { main, convertSms } from "./decisionBenchmark/cli.js";
+import { main, convertSms } from "./src/cli.js";
 
 try {
   const args = process.argv.slice(2);

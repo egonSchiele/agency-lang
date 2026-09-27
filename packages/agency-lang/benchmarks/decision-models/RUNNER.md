@@ -11,7 +11,7 @@ pnpm install --frozen-lockfile
 pnpm exec tsc
 pnpm exec tsc-alias
 pnpm benchmark:decisions --help
-pnpm benchmark:decisions --data scripts/decisionBenchmark/smoke.jsonl --backend laya --dry-run
+pnpm benchmark:decisions --data benchmarks/decision-models/smoke.jsonl --backend laya --dry-run
 ```
 
 The four authored cases in `smoke.jsonl` check the plumbing. They are too small and easy to rank models. `--dry-run` validates the input and settings without contacting a provider or needing keys.
@@ -57,7 +57,7 @@ export TYPESAFE_API_KEY='your-key'
 pnpm benchmark:decisions --data sms.jsonl --backend jev --limit 500 --repeats 3 --out jev.jsonl
 
 # Start laya-serve separately; its installation is outside this runner.
-pnpm benchmark:decisions --data sms.jsonl --backend laya --limit 500 --repeats 3 --machine m5-ultra-local-laya --out laya.jsonl
+pnpm benchmark:decisions --data sms.jsonl --backend laya --limit 500 --repeats 3 --machine local-laya-server --out laya.jsonl
 
 export OPENAI_API_KEY='your-key'
 pnpm benchmark:decisions --data sms.jsonl --backend logprobs --model gpt-4o-mini --limit 500 --repeats 3 --out text.jsonl
@@ -107,7 +107,7 @@ The runner reports each model independently. For close rankings, inspect paired 
 ## Tests
 
 ```bash
-pnpm exec vitest run scripts/decisionBenchmark > /tmp/decision-benchmark-tests.log 2>&1
+pnpm exec vitest run benchmarks/decision-models/src > /tmp/decision-benchmark-tests.log 2>&1
 ```
 
 Tests include a local HTTP server exercising the actual smoltalk decision and OpenAI clients, alongside dataset, metric, and scheduling tests.

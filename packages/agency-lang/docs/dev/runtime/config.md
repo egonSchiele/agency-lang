@@ -209,6 +209,7 @@ asserts the key is absent, so that contract cannot drift unnoticed.
 
 **A stated provider survives model-only changes to text models.** The layers
 merge field by field (`lib/runtime/state/context.ts` `getSmoltalkConfig`).
+
 For example, a provider set by the flag survives a later `setModel("other")`
 when `other` is a text model. To change the provider too, use
 `setLlmOptions({ model, provider })`, or pass both per call. The precedence
@@ -217,6 +218,12 @@ cases in `lib/runtime/agencyLlm.test.ts` cover these combinations.
 A model-only switch to a known decision model selects the registry provider.
 Repeating the current model keeps its provider. See
 [decision models](../llm/decision-models.md).
+
+`baseUrl` merges by provider within each layer. A call with
+`baseUrl: { openAiCompat: "http://localhost:8000/v1" }` overrides that
+provider's URL and preserves other providers' URLs. The merge creates a
+new object, so the call does not change the defaults for subsequent calls.
+The same option is available on the TypeScript `agency.llm()` helper.
 
 **Only a bare name is validated.** It is checked against the hosted **text**
 models from `_listHostedModels()` — not smoltalk's `getAllModels()`, which also

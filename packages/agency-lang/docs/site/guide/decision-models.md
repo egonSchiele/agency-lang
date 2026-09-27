@@ -75,12 +75,14 @@ node main() {
   const spam: boolean = llm("Is this message unsolicited spam?", {
     model: "english",
     provider: "typesafe",
+    baseUrl: { typesafe: "http://127.0.0.1:8000" },
+    apiKey: { typesafe: "unused" },
   })
   print(spam)
 }
 ```
 
-This call uses the same environment variables as the local Laya command. For local or custom checkpoint names, include `provider: "typesafe"`. For Jev through OpenRouter, use `model: "jev-1.13", provider: "openrouter"` in the options object.
+This call supplies the local Laya URL and dummy key directly, so it needs no environment variables. The URL applies only to this call. `baseUrl.typesafe` is the server root; the client appends `/v1/systemone`. Any server implementing that API can be used here. For local or custom checkpoint names, include `provider: "typesafe"`. For Jev through OpenRouter, use `model: "jev-1.13", provider: "openrouter"` in the options object.
 
 Keep model selection outside the call when you want to compare backends by changing only `--model`.
 

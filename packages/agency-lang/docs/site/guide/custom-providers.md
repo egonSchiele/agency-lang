@@ -35,6 +35,8 @@ these model names aren't in smoltalk's model registry, you must always **name
 the provider explicitly** — either globally via `client.defaultProvider`, or
 per call: `llm("...", { provider: "openrouter", model: "z-ai/glm-5.2" })`.
 
+You can also supply a URL in the call's options, such as `baseUrl: { openAiCompat: "http://localhost:8000/v1" }`. See [per-call URL configuration](/guide/llm-part-2#model-sampling).
+
 ```jsonc
 // agency.json — set OpenRouter as the default provider + model
 {

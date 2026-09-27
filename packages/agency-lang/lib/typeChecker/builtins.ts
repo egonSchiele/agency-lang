@@ -51,6 +51,21 @@ const apiKeyObject: VariableType = {
     { key: "deepInfra", value: optional(string) },
     { key: "liteLlm", value: optional(string) },
     { key: "openAiCompat", value: optional(string) },
+    { key: "typesafe", value: optional(string) },
+  ],
+};
+
+/** Provider URLs accepted by text and decision clients. */
+const baseUrlObject: VariableType = {
+  type: "objectType",
+  properties: [
+    { key: "ollama", value: optional(string) },
+    { key: "openRouter", value: optional(string) },
+    { key: "deepInfra", value: optional(string) },
+    { key: "liteLlm", value: optional(string) },
+    { key: "openAiCompat", value: optional(string) },
+    { key: "mlx", value: optional(string) },
+    { key: "typesafe", value: optional(string) },
   ],
 };
 
@@ -67,6 +82,7 @@ const llmOptionProperties: { key: string; value: VariableType }[] = [
   // shorthand, so a key is never silently routed to the wrong provider.
   // Runtime: `toSmolConfig`.
   { key: "apiKey", value: optional(apiKeyObject) },
+  { key: "baseUrl", value: optional(baseUrlObject) },
   { key: "maxTokens", value: optional(number) },
   { key: "temperature", value: optional(number) },
   { key: "stream", value: optional(boolean) },

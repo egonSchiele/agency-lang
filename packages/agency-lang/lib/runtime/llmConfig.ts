@@ -1,4 +1,14 @@
-import { getModel, resolveModelForProvider, type ModelType, type SmolConfig } from "smoltalk";
+import {
+  getModel,
+  resolveModelForProvider,
+  type DecideConfig,
+  type ModelType,
+  type SmolConfig,
+} from "smoltalk";
+
+/** URL settings shared by text and decision calls. */
+export type LlmBaseUrls = NonNullable<SmolConfig["baseUrl"]> &
+  Pick<NonNullable<DecideConfig["baseUrl"]>, "typesafe">;
 
 /** Prefer the selected provider's record when several providers share a name. */
 export function modelRecord(config: Partial<SmolConfig>): ModelType | undefined {
@@ -36,6 +46,9 @@ export function mergeLlmConfig(
   override: Partial<SmolConfig>,
 ): Partial<SmolConfig> {
   const merged = { ...defaults, ...override };
+  if (override.baseUrl !== undefined) {
+    merged.baseUrl = { ...defaults.baseUrl, ...override.baseUrl };
+  }
   const provider = decisionProviderOverride(defaults, override);
   if (provider !== undefined) {
     merged.provider = provider;

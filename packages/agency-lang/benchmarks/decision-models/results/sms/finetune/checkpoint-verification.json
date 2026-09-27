@@ -1,0 +1,8 @@
+{
+  "frozenEncoderTensorsVerified": 170,
+  "changedHeadTensors": 31,
+  "nativeValidationExamplesChecked": 16,
+  "maxProbabilityDifference": 0,
+  "checkpointSha256": "465331dd7b3613d9e2c08f27232787938d2eab2d65182d488a34ba64ab8335f5",
+  "temperature": 1.0
+}

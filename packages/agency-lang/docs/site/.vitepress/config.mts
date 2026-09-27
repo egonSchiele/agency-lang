@@ -104,6 +104,10 @@ export default defineConfig({
               link: "/guide/llm-part-2",
             },
             {
+              text: "Decision Models",
+              link: "/guide/decision-models",
+            },
+            {
               text: "Streaming",
               link: "/guide/streaming",
             },

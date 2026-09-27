@@ -1,0 +1,15 @@
+{
+  "python": "3.11.9",
+  "packages": {
+    "laya": "0.3.20",
+    "torch": "2.14.0",
+    "transformers": "5.17.0",
+    "safetensors": "0.8.0",
+    "numpy": "2.4.6",
+    "fastapi": "0.141.1",
+    "uvicorn": "0.54.0"
+  },
+  "referenceNotebook": "https://github.com/NandhaKishorM/laya/blob/main/notebooks/laya_finetune_typed_decisions_2xT4_kaggle.ipynb",
+  "referenceNotebookSha256": "6b81f290bbd213008d3e79c80d207b9abc1d1b5ab0a23f3f4bd9a289611433ed",
+  "trainingScriptSha256": "826242b51a372d2c741d1da3d4c8ef5d19959aed7b3b2a573e76e741739c4767"
+}

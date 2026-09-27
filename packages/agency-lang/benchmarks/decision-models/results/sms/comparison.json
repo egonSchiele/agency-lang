@@ -1,0 +1,305 @@
+{
+  "reports": {
+    "jev": {
+      "file": "jev-openrouter-sms.jsonl",
+      "summary": {
+        "cases": 1500,
+        "errors": 0,
+        "decisions": 1500,
+        "completedDecisions": 1500,
+        "requests": 1500,
+        "elapsedMs": 296526.613958,
+        "successfulDecisionsPerSecond": 5.0585678633637245,
+        "latencyMs": {
+          "unit": "complete case",
+          "p50": 184.27658299996983,
+          "p95": 293.54641699999047,
+          "mean": 197.23346958933308
+        },
+        "failedLatencyMs": {
+          "p50": null
+        },
+        "tasks": {
+          "spam": {
+            "examples": 1500,
+            "uniqueCases": 500,
+            "accuracy": 0.9646666666666667,
+            "accuracyInterval": [
+              0.9486666666666667,
+              0.9793333333333333
+            ],
+            "successfulAccuracy": 0.9646666666666667,
+            "coverage": 1,
+            "macroF1": 0.9217272386255894,
+            "confusion": [
+              {
+                "actual": "false",
+                "predicted": {
+                  "false": 1279,
+                  "true": 32
+                },
+                "failed": 0
+              },
+              {
+                "actual": "true",
+                "predicted": {
+                  "false": 21,
+                  "true": 168
+                },
+                "failed": 0
+              }
+            ],
+            "brier": 0.0699518666666666,
+            "probabilityCoverage": 1,
+            "meanLabelMass": null,
+            "scoreMAE": null,
+            "scoreCoverage": null
+          }
+        }
+      },
+      "precision": 0.84,
+      "recall": 0.8888888888888888,
+      "falsePositives": 32,
+      "falseNegatives": 21,
+      "changedCases": 5
+    },
+    "laya": {
+      "file": "laya-english-sms.jsonl",
+      "summary": {
+        "cases": 1500,
+        "errors": 0,
+        "decisions": 1500,
+        "completedDecisions": 1500,
+        "requests": 1500,
+        "elapsedMs": 67649.748834,
+        "successfulDecisionsPerSecond": 22.173031324635414,
+        "latencyMs": {
+          "unit": "complete case",
+          "p50": 39.94683299999451,
+          "p95": 62.75099999998929,
+          "mean": 44.925445195999934
+        },
+        "failedLatencyMs": {
+          "p50": null
+        },
+        "tasks": {
+          "spam": {
+            "examples": 1500,
+            "uniqueCases": 500,
+            "accuracy": 0.862,
+            "accuracyInterval": [
+              0.83,
+              0.89
+            ],
+            "successfulAccuracy": 0.862,
+            "coverage": 1,
+            "macroF1": 0.7767264867103723,
+            "confusion": [
+              {
+                "actual": "false",
+                "predicted": {
+                  "false": 1110,
+                  "true": 201
+                },
+                "failed": 0
+              },
+              {
+                "actual": "true",
+                "predicted": {
+                  "false": 6,
+                  "true": 183
+                },
+                "failed": 0
+              }
+            ],
+            "brier": 0.2004066861199998,
+            "probabilityCoverage": 1,
+            "meanLabelMass": null,
+            "scoreMAE": null,
+            "scoreCoverage": null
+          }
+        }
+      },
+      "precision": 0.4765625,
+      "recall": 0.9682539682539683,
+      "falsePositives": 201,
+      "falseNegatives": 6,
+      "changedCases": 0
+    },
+    "fineTuned": {
+      "file": "laya-finetuned-sms.jsonl",
+      "summary": {
+        "cases": 1500,
+        "errors": 0,
+        "decisions": 1500,
+        "completedDecisions": 1500,
+        "requests": 1500,
+        "elapsedMs": 64484.43550000001,
+        "successfulDecisionsPerSecond": 23.26142717028204,
+        "latencyMs": {
+          "unit": "complete case",
+          "p50": 40.47966599999927,
+          "p95": 58.932958000004874,
+          "mean": 42.84339018200008
+        },
+        "failedLatencyMs": {
+          "p50": null
+        },
+        "tasks": {
+          "spam": {
+            "examples": 1500,
+            "uniqueCases": 500,
+            "accuracy": 0.942,
+            "accuracyInterval": [
+              0.92,
+              0.962
+            ],
+            "successfulAccuracy": 0.942,
+            "coverage": 1,
+            "macroF1": 0.8856457858500462,
+            "confusion": [
+              {
+                "actual": "false",
+                "predicted": {
+                  "false": 1233,
+                  "true": 78
+                },
+                "failed": 0
+              },
+              {
+                "actual": "true",
+                "predicted": {
+                  "false": 9,
+                  "true": 180
+                },
+                "failed": 0
+              }
+            ],
+            "brier": 0.09208993700000012,
+            "probabilityCoverage": 1,
+            "meanLabelMass": null,
+            "scoreMAE": null,
+            "scoreCoverage": null
+          }
+        }
+      },
+      "precision": 0.6976744186046512,
+      "recall": 0.9523809523809523,
+      "falsePositives": 78,
+      "falseNegatives": 9,
+      "changedCases": 0
+    },
+    "logprobs": {
+      "file": "logprobs-sms.jsonl",
+      "summary": {
+        "cases": 1500,
+        "errors": 0,
+        "decisions": 1500,
+        "completedDecisions": 1500,
+        "requests": 1500,
+        "elapsedMs": 805621.7555419999,
+        "successfulDecisionsPerSecond": 1.8619159545795056,
+        "latencyMs": {
+          "unit": "complete case",
+          "p50": 481.63062499999796,
+          "p95": 925.429375000007,
+          "mean": 536.4444194219991
+        },
+        "failedLatencyMs": {
+          "p50": null
+        },
+        "tasks": {
+          "spam": {
+            "examples": 1500,
+            "uniqueCases": 500,
+            "accuracy": 0.912,
+            "accuracyInterval": [
+              0.8893333333333333,
+              0.934
+            ],
+            "successfulAccuracy": 0.912,
+            "coverage": 1,
+            "macroF1": 0.8334875115633673,
+            "confusion": [
+              {
+                "actual": "false",
+                "predicted": {
+                  "false": 1199,
+                  "true": 112
+                },
+                "failed": 0
+              },
+              {
+                "actual": "true",
+                "predicted": {
+                  "false": 20,
+                  "true": 169
+                },
+                "failed": 0
+              }
+            ],
+            "brier": 0.13723650106820415,
+            "probabilityCoverage": 1,
+            "meanLabelMass": 0.9999999740363457,
+            "scoreMAE": null,
+            "scoreCoverage": null
+          }
+        }
+      },
+      "precision": 0.6014234875444839,
+      "recall": 0.8941798941798942,
+      "falsePositives": 112,
+      "falseNegatives": 20,
+      "changedCases": 28
+    }
+  },
+  "comparisons": [
+    {
+      "other": "laya",
+      "accuracyDifference": 0.08,
+      "paired95Interval": [
+        0.056,
+        0.106
+      ]
+    },
+    {
+      "other": "jev",
+      "accuracyDifference": -0.022666666666666665,
+      "paired95Interval": [
+        -0.042,
+        -0.003999999999999996
+      ]
+    },
+    {
+      "other": "logprobs",
+      "accuracyDifference": 0.030000000000000006,
+      "paired95Interval": [
+        0.005333333333333334,
+        0.055333333333333345
+      ]
+    }
+  ],
+  "export": {
+    "bestEpoch": 3,
+    "validation": {
+      "accuracy": 0.9539999961853027,
+      "macroF1": 0.9027327858175944,
+      "logLoss": 0.11803685873746872,
+      "brier": 0.07437451183795929,
+      "falsePositives": 18,
+      "falseNegatives": 5
+    },
+    "checkpoint": "/Users/adityabhargava/agency-lang/packages/agency-lang/data/uci-sms-spam/finetune/head-v1/checkpoint",
+    "stoppedByUser": true,
+    "temperature": 1,
+    "postTrainingCalibrationPerformed": false
+  },
+  "verification": {
+    "frozenEncoderTensorsVerified": 170,
+    "changedHeadTensors": 31,
+    "nativeValidationExamplesChecked": 16,
+    "maxProbabilityDifference": 0,
+    "checkpointSha256": "465331dd7b3613d9e2c08f27232787938d2eab2d65182d488a34ba64ab8335f5",
+    "temperature": 1
+  }
+}

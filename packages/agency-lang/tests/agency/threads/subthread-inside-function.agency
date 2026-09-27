@@ -1,3 +1,5 @@
+import { withoutReplyStats } from "../../helpers/withoutReplyStats.js"
+
 def nextTwo(): number[] {
   const subMsgs = subthread {
     const foo: number[] = llm("What are the next 2 prime numbers after that?")
@@ -14,10 +16,11 @@ node main() {
     const res2 = nextTwo()
     const res3 = nextTwo()
   }
-  return {
+  // Token counts and costs change on every real run, so drop them.
+  return withoutReplyStats({
     res1: res1,
     res2: res2,
     res3: res3,
     msgs: msgs
-  }
+  })
 }

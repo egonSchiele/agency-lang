@@ -1,3 +1,49 @@
+## Sep 26 2026 — v0.24.0
+
+### LLM
+
+- **Decision models.** Typed `llm()` calls can use Jev or local Laya for booleans, label choices, and objects of those types. Jev works through TypeSafe or with `agency run --model openrouter/jev-1.13` and an OpenRouter key.
+- **Batched decisions.** Compatible decision calls in `parallel` and `fork` share a request when they use the same conversation. Usage and cost are split between the calls, and the logs viewer shows each batch.
+- **Token logprobs.** Pass `logprobs: { top: 3 }` to `llm()` to request token probabilities and alternatives from a supported text model, then read them through `lastReply()`.
+- **Per-call server URLs.** `llm()` accepts `baseUrl`, including `openAiCompat` for a custom text server and `typesafe` for Laya, without changing later calls. The TypeScript `agency.llm()` helper also accepts `provider` and `baseUrl`.
+- Bug fix: switching from a decision model back to a known text model selects the text model's provider instead of keeping TypeSafe. Explicit providers and repeated model selections retain their chosen route.
+
+### Standard Library
+
+- **`lastReply()` in `std::thread`.** Read the last reply's decision probabilities, thinking, token logprobs, usage, cost, and original provider data. It returns `null` when the current thread has no assistant reply.
+
+### Runtime
+
+- **Literal policy values.** `escapeGlob` is exported from `agency-lang/runtime` for constructing policy matches from literal strings. Escaping now handles quotes, and an empty pattern matches only an empty value.
+
+### Local models
+
+- **Sampling from model cards.** Local catalog models use their recommended sampling settings when a call supplies none, instead of one shared temperature and top-p.
+- **Reply limits from code.** `setLlmOptions` and individual `llm()` calls accept `replyLimits` to adjust hedging and repetition limits on the MLX server. Omitted fields keep the existing limits.
+- **Choose a chat wrapper.** Set `client.llamaCpp.chatWrapper` when llama.cpp picks the wrong template for a model, such as a fine-tune with a changed template.
+- Bug fix: the MLX server separates gpt-oss thinking, final answers, and tool calls instead of returning Harmony markers as text. It also recognizes tool calls made from the analysis channel.
+- Bug fix: the MLX server combines multiple system messages into one leading message for templates that require it, allowing clients such as Claude Code to send their system prompt in blocks.
+- Bug fix: a Qwen tool argument that cannot be converted to its declared type is passed through as text instead of failing the whole request with a 502.
+- The MLX server honours OpenAI-style `reasoning_effort` requests and accepts `default_model` as an alias when serving a single model.
+- Bug fix: batched decoding no longer leaks Metal buffers on Qwen3.5-family models and other models with recurrent caches, which could kill generation and leave later requests returning 404.
+
+### Agents
+
+- **`agency agent --effort low|medium|high`.** Set the reasoning effort for the agent's model calls. Invalid values report an error.
+- Bug fix: local providers no longer receive hosted web-search tools that they cannot support.
+
+### Docs and benchmarks
+
+- Added a guide to Jev, Laya, probabilities, batching, and logprobs.
+- Added an SMS benchmark with accuracy and latency results and Laya fine-tuning scripts.
+- The local-model guide explains model-card sampling, per-call reply limits, memory sizing, and enabling agent memory with an MLX embedding server.
+
+### Build
+
+- The workspace now uses pnpm 12.4.2, and smoltalk is updated to 0.15.3 for OpenRouter decision support.
+- CI runs the MLX chat server's Python tests on Apple silicon.
+- Kokoro tests run serially so tests that compile the same Agency file cannot overwrite each other's generated output.
+
 ## Sep 24 2026 — v0.23.0
 
 ### Local models

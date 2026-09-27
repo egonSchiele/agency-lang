@@ -86,6 +86,27 @@ This call supplies the local Laya URL and dummy key directly, so it needs no env
 
 Keep model selection outside the call when you want to compare backends by changing only `--model`.
 
+### Switch between decision and text models
+
+```ts
+import { setLlmOptions, setModel } from "std::llm"
+import { userMessage } from "std::thread"
+
+node main() {
+  userMessage("Congratulations! Claim your free prize now.")
+  setLlmOptions({ model: "jev-1.13", provider: "openrouter" })
+  const spam: boolean = llm("Is this message unsolicited spam?")
+
+  setModel("gpt-5-mini")
+  const explanation: string = llm("Explain the classification in one sentence.")
+  print({ spam: spam, explanation: explanation })
+}
+```
+
+This example needs `OPENROUTER_API_KEY` for Jev and `OPENAI_API_KEY` for the explanation. Switching from Jev to `gpt-5-mini` selects the text model's registry provider, OpenAI. You can also switch for one call with `llm("Explain the classification.", model: "gpt-5-mini")`. The next call still uses the branch's default model.
+
+When switching from a text model to a decision model, a model-only change selects its registry provider too: `setModel("jev-1.13")` selects TypeSafe. Include `provider: "openrouter"` when you want Jev through OpenRouter. Repeating the current model keeps its selected provider, and an explicit provider on a call takes precedence over the defaults.
+
 ## Choose between labels
 
 ```ts
@@ -208,7 +229,7 @@ node main() {
 }
 ```
 
-When run against a decision model, these calls share a conversation, model, and endpoint, so Agency can send their questions together. This also works inside `fork`. A model's question limit can split a group into multiple requests; Jev accepts up to 64 questions per request.
+When run against a decision model, these calls share a conversation, model, provider, credentials, and endpoint, so Agency can send their questions together. This also works inside `fork`. A model's question limit can split a group into multiple requests; Jev accepts up to 64 questions per request.
 
 Batching combines questions about the **same state**. It does not combine unrelated messages into one state. Calls that change their conversation before asking, use different models, or run in separate nested parallel blocks form separate groups. `race` does not batch decision calls.
 

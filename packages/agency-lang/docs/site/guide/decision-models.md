@@ -34,14 +34,16 @@ The same file works with a text model through [structured output](/guide/llm#str
 With your OpenRouter key in `OPENROUTER_API_KEY`, run:
 
 ```bash
-TYPESAFE_API_KEY="$OPENROUTER_API_KEY" \
-TYPESAFE_BASE_URL="https://openrouter.ai/api" \
-  agency run --model typesafe/jev-1.13 spam.agency
+agency run --model openrouter/jev-1.13 spam.agency
 ```
 
-The `typesafe` provider selects the decision API protocol. The base URL chooses the server that handles it. For this route, `TYPESAFE_API_KEY` must contain an **OpenRouter-issued key**. Setting that key without the OpenRouter base URL sends it to the wrong server and can produce a 401 authentication error.
+The `openrouter/` prefix selects OpenRouter's credentials and endpoint. Agency recognizes Jev as a decision model and sends the questions to OpenRouter's decision API. You can also set the key through `client.apiKey.openRouter` in `agency.json`.
 
-If you use TypeSafe directly, use its key and omit the OpenRouter base URL. On the command line, the `typesafe/` prefix lets Agency select a decision model outside its text-model catalog.
+If you use TypeSafe directly, set `TYPESAFE_API_KEY` to your TypeSafe key and run:
+
+```bash
+agency run --model typesafe/jev-1.13 spam.agency
+```
 
 ### Laya locally
 
@@ -73,12 +75,14 @@ node main() {
   const spam: boolean = llm("Is this message unsolicited spam?", {
     model: "english",
     provider: "typesafe",
+    baseUrl: { typesafe: "http://127.0.0.1:8000" },
+    apiKey: { typesafe: "unused" },
   })
   print(spam)
 }
 ```
 
-This call uses the same environment variables as the command-line example. For local or custom checkpoint names, include `provider: "typesafe"`. Agency already recognizes the registered Jev name `jev-1.13` as a decision model.
+This call supplies the local Laya URL and dummy key directly, so it needs no environment variables. The URL applies only to this call. `baseUrl.typesafe` is the server root; the client appends `/v1/systemone`. Any server implementing that API can be used here. For local or custom checkpoint names, include `provider: "typesafe"`. For Jev through OpenRouter, use `model: "jev-1.13", provider: "openrouter"` in the options object.
 
 Keep model selection outside the call when you want to compare backends by changing only `--model`.
 

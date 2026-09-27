@@ -119,12 +119,28 @@ You can pass an options object as the second parameter, or use named arguments. 
 |---|---|
 | `model` | `string` |
 | `provider` | `string` |
-| `apiKey` | `{ openAi?, google?, anthropic?, ollama?, openRouter?, deepInfra?, liteLlm?, openAiCompat? }` |
+| `apiKey` | `{ openAi?, google?, anthropic?, ollama?, openRouter?, deepInfra?, liteLlm?, openAiCompat?, typesafe? }` |
+| `baseUrl` | `{ ollama?, openRouter?, deepInfra?, liteLlm?, openAiCompat?, mlx?, typesafe? }`, with a string URL for each provider you override. |
 | `maxTokens` | `number` |
 | `temperature` | `number` |
 | `reasoningEffort` | `"low" \| "medium" \| "high"` |
 | `thinking` | `{ enabled: boolean, budgetTokens?: number }` |
 | `stream` | `boolean` |
+
+You can choose a server for one call:
+
+```ts
+node main() {
+  const reply = llm("Hello", {
+    model: "my-model",
+    provider: "openai-compat",
+    baseUrl: { openAiCompat: "http://localhost:8000/v1" },
+  })
+  print(reply)
+}
+```
+
+`baseUrl` overrides the named providers' configured URLs for this call. Other providers keep their configured URLs, and later calls without `baseUrl` use their defaults. You can also write it as a named argument: `llm("Hello", baseUrl: { openAiCompat: "http://localhost:8000/v1" })` when the provider and model are already configured.
 
 ### Tools & context
 

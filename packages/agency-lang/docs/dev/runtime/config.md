@@ -207,12 +207,22 @@ satisfy the generator; removing it keeps the resolved config free of dangling
 fields, which is what `agency config show` and any other consumer sees. The test
 asserts the key is absent, so that contract cannot drift unnoticed.
 
-**A stated provider is sticky.** The layers merge field by field
-(`lib/runtime/state/context.ts` `getSmoltalkConfig`), so a provider set by the
-flag survives a later `setModel("other")` in Agency code — the pair becomes that
-provider plus the new model. Code that wants to move provider too must say
-`setLlmOptions({ model, provider })`, or pass both per call. The precedence
-cases in `lib/runtime/agencyLlm.test.ts` pin all four combinations.
+**Model-only changes between text models keep the provider.** For example,
+a run using `openai-responses` keeps that provider when
+`setModel("gpt-5-mini")` replaces another text model.
+
+Switching to a known decision model, or from a decision model to a known
+text model, selects the new model's registry provider. Repeating the current
+model keeps its provider. An explicit provider in
+`setLlmOptions({ model, provider })` or per-call options takes precedence.
+The shared selection rules live in `lib/runtime/llmConfig.ts`; see
+[decision models](../llm/decision-models.md).
+
+`baseUrl` merges by provider within each layer. A call with
+`baseUrl: { openAiCompat: "http://localhost:8000/v1" }` overrides that
+provider's URL and preserves other providers' URLs. The merge creates a
+new object, so the call does not change the defaults for subsequent calls.
+The same option is available on the TypeScript `agency.llm()` helper.
 
 **Only a bare name is validated.** It is checked against the hosted **text**
 models from `_listHostedModels()` — not smoltalk's `getAllModels()`, which also

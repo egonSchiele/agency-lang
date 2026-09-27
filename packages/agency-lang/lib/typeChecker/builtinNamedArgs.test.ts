@@ -85,6 +85,40 @@ describe("builtin named-arg validation (fork/race shared:)", () => {
 });
 
 describe("builtin named-arg validation (llm options)", () => {
+  it.each(["openAiCompat", "openRouter", "deepInfra", "liteLlm", "mlx", "ollama", "typesafe"])(
+    "accepts a per-call %s base URL in an options object and named argument",
+    (provider) => {
+      for (const options of [
+        `{ baseUrl: { ${provider}: "http://localhost:8000/v1" } }`,
+        `baseUrl: { ${provider}: "http://localhost:8000/v1" }`,
+      ]) {
+        expect(errorsFrom(`node main() { let r = llm("hi", ${options})\n print(r) }`)).toEqual([]);
+      }
+    },
+  );
+
+  it.each(['"http://localhost:8000/v1"', "{ openAiCompat: 42 }"])(
+    "rejects an invalid baseUrl value: %s",
+    (value) => {
+      expect(
+        errorsFrom(`node main() { let r = llm("hi", { baseUrl: ${value} }) }`).length,
+      ).toBeGreaterThan(0);
+    },
+  );
+
+  it("accepts the key and URL for a local decision server on one call", () => {
+    expect(
+      errorsFrom(`node main() {
+      const spam: boolean = llm("Is this spam?", {
+        model: "english", provider: "typesafe",
+        baseUrl: { typesafe: "http://localhost:8000" },
+        apiKey: { typesafe: "unused" }
+      })
+      print(spam)
+    }`),
+    ).toEqual([]);
+  });
+
   it("accepts a known option as a named arg", () => {
     const errors = errorsFrom(`node main() { let r = llm("hi", model: "gpt-4o-mini")\n print(r) }`);
     expect(errors).toHaveLength(0);

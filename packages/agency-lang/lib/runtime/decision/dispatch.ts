@@ -1,13 +1,11 @@
 /**
- * The decision branch of an LLM dispatch. A call whose provider resolves to
- * `typesafe` does not go to `text()`. Its schema becomes questions, the
- * thread becomes the state, and the reply is shaped as a completion so that
- * everything after dispatch (the structured parse, the thread append, cost,
- * statelog) runs unchanged. See docs/dev/llm/decision-models.md.
+ * Converts a typed LLM call into decision questions and its thread into state.
+ * Returns a completion for schema validation, conversation history, and metering.
+ * See docs/dev/llm/decision-models.md.
  *
  * A call inside a fork or parallel block hands its request to the block's
  * collector (`lib/runtime/decision/collector.ts`) on the async-context frame,
- * which may batch it with sibling calls; a call outside one sends as before.
+ * which may batch it with sibling calls. Other calls send individually.
  */
 import * as smoltalk from "smoltalk";
 import type { Message, ModelDataBlob, PromptResult } from "smoltalk";
@@ -17,6 +15,7 @@ import type { RuntimeContext } from "../state/context.js";
 import type { GraphState } from "../types.js";
 import { agencyStore } from "../asyncContext.js";
 import { DEFAULT_QUESTION_CAP } from "./collector.js";
+import { modelRecord } from "../llmConfig.js";
 
 /** The provider of a decision model the registry does not know. It names
  *  the wire protocol Jev and Laya speak; a registry model carries its own. */
@@ -30,32 +29,19 @@ type ConfigMaps = {
   modelData?: ModelDataBlob;
 };
 
-/** The registry's record for a model name, or undefined for a name the
- *  registry does not know. */
-function registryRecord(
-  model: string | undefined,
-  modelData: ModelDataBlob | undefined,
-): smoltalk.ModelType | undefined {
-  if (model === undefined) {
-    return undefined;
-  }
-  return smoltalk.getModel(model as smoltalk.ModelName, modelData);
+function registryRecord(config: PromptConfig): smoltalk.ModelType | undefined {
+  const maps = (config.metadata ?? {}) as ConfigMaps;
+  return modelRecord({
+    model: config.model,
+    provider: config.provider,
+    modelData: maps.modelData,
+  });
 }
 
-/** True when this call is for a decision model.
- *
- *  A name the registry knows is a decision call when its registry entry is
- *  a decision model, whatever provider is on the call and whichever
- *  provider serves it: `jev-1.13` always is, and `gpt-5-mini` never is. A
- *  name the registry does not know (a local Laya server, say) is a decision
- *  call when the call's provider is `typesafe`.
- *
- *  The call's provider is not trusted for a known name because the user
- *  may not have written it: the compiler bakes the config's default
- *  provider into every generated call that named only a model. */
+/** Known models use their registry type. An unknown local decision model
+ * can opt into the TypeSafe protocol with provider: "typesafe". */
 export function isDecisionCall(config: PromptConfig): boolean {
-  const maps = (config.metadata ?? {}) as ConfigMaps;
-  const known = registryRecord(config.model, maps.modelData);
+  const known = registryRecord(config);
   if (known !== undefined) {
     return known.type === "decision";
   }
@@ -84,8 +70,7 @@ function promptText(config: PromptConfig): string {
 /** The most questions one request to this call's model may carry: the
  *  registry's `maxQuestions` for a known decision model, else Jev's cap. */
 export function questionCapFor(config: PromptConfig): number {
-  const maps = (config.metadata ?? {}) as ConfigMaps;
-  const record = registryRecord(config.model, maps.modelData);
+  const record = registryRecord(config);
   if (record?.type === "decision" && record.maxQuestions !== undefined) {
     return record.maxQuestions;
   }
@@ -141,13 +126,10 @@ export async function dispatchDecision(
   // The same key rule `toSmolConfig` applies to a text call: the per-call
   // map merges over the config map.
   const maps = (config.metadata ?? {}) as ConfigMaps;
-  const known = registryRecord(config.model, maps.modelData);
+  const known = registryRecord(config);
   const decideConfig: DecideConfig = {
     model: config.model ?? "",
-    // The registry's provider for a known model; else the one decision
-    // protocol. Never the call's own provider, which may be the baked-in
-    // default.
-    provider: known?.provider ?? DECISION_PROVIDER,
+    provider: config.provider ?? known?.provider ?? DECISION_PROVIDER,
     apiKey: config.apiKey ? { ...maps.apiKey, ...config.apiKey } : maps.apiKey,
     baseUrl: maps.baseUrl,
     modelData: maps.modelData,

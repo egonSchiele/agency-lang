@@ -8,6 +8,7 @@ import { RuntimeContext } from "./state/context.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { _setLlmOptions } from "../stdlib/llm.js";
 import { runPrompt } from "./prompt.js";
+import { toSmolConfig } from "./llmClient.js";
 
 function makeCtx(
   smoltalkDefaults: Partial<SmolConfig> = { model: "default-model" },
@@ -131,6 +132,38 @@ describe("agency.llm — basic behavior", () => {
 });
 
 describe("agency.llm — options mapping", () => {
+  it("overrides one provider URL for one call and preserves the other defaults", async () => {
+    const defaults = {
+      model: "default-model",
+      provider: "openrouter",
+      baseUrl: {
+        openAiCompat: "https://default.example/v1",
+        openRouter: "https://router.example/v1",
+      },
+    };
+    const ctx = makeCtx(defaults);
+    const client = new RecordingClient();
+    ctx.setLLMClient(client);
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, async () => {
+      await agency.llm("first", {
+        model: "local-model",
+        provider: "openai-compat",
+        baseUrl: { openAiCompat: "http://localhost:8000/v1" },
+      });
+      await agency.llm("second");
+    });
+    const [first, second] = client.configs.map(toSmolConfig);
+    expect(first.provider).toBe("openai-compat");
+    expect(first.baseUrl).toEqual({
+      ...defaults.baseUrl,
+      openAiCompat: "http://localhost:8000/v1",
+    });
+    expect(second.provider).toBe("openrouter");
+    expect(second.baseUrl).toEqual(defaults.baseUrl);
+    expect(ctx.getSmoltalkConfig().baseUrl).toEqual(defaults.baseUrl);
+  });
+
   it("opts.thread routes the prompt + response to the override thread, not the active one", async () => {
     const ctx = makeCtx();
     ctx.setLLMClient(new DeterministicClient([{ return: "aux-response" }]));
@@ -280,6 +313,19 @@ describe("model and provider precedence", () => {
       agency.llm("hi", { model: "call-model" }),
     );
     expect(pair).toEqual({ model: "call-model", provider: "openrouter" });
+  });
+
+  it("keeps baked reply limits when a call has no reply limit override", async () => {
+    const ctx = makeCtx({
+      model: "local-model",
+      provider: "mlx",
+      replyLimits: { hedgeLimit: 123 },
+    } as Partial<SmolConfig>);
+    const client = new RecordingClient();
+    ctx.setLLMClient(client);
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, () => agency.llm("hi"));
+    expect(client.configs[0].metadata?.rawAttributes.hedge_limit).toBe(123);
   });
 
   it("per-call model and provider replace the baked pair", async () => {

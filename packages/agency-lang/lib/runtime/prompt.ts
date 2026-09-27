@@ -896,8 +896,7 @@ export async function runPrompt(args: {
     restClientConfig.replyLimits,
   );
   const clientConfig = withLocalDefaults(
-    ctx.getSmoltalkConfig({
-      ...stackSmolDefaults,
+    ctx.getSmoltalkConfig(stackSmolDefaults, {
       ...restClientConfig,
       ...(replyLimits === undefined ? {} : { replyLimits }),
     }),

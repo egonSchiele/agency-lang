@@ -110,13 +110,16 @@ export function splitCounts(total: number, weights: number[]): number[] {
   return parts;
 }
 
-/** Calls share a request when they share a model, an endpoint, and a
- *  state. The rest of a `DecideConfig` (keys, model data) comes from the
- *  run's config, never from one call, so it cannot differ between arms. */
+/** Credentials participate in grouping through a hash so batch reports
+ * cannot expose API keys. */
 function groupKeyFor(request: DecisionRequest): string {
   const identity = {
     model: request.config.model,
+    provider: request.config.provider,
+    apiKey: request.config.apiKey,
     baseUrl: request.config.baseUrl,
+    modelData: request.config.modelData,
+    questionCap: request.questionCap,
     state: request.state,
   };
   return createHash("sha256").update(JSON.stringify(identity)).digest("hex");

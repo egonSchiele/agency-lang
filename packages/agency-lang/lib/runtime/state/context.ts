@@ -16,6 +16,7 @@ import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
 import type { AgencyCallbacks } from "../hooks.js";
 import type { InterruptResponse } from "../interrupts.js";
 import { LLMClient, SmoltalkClient } from "../llmClient.js";
+import { mergeLlmConfig } from "../llmConfig.js";
 import { MemoryManager } from "../memory/manager.js";
 import { MemoryFrame } from "../memory/frame.js";
 import { getOrCreateStore } from "../memory/registry.js";
@@ -813,8 +814,8 @@ export class RuntimeContext<T> {
     };
   }
   /* Get smoltalk config with missing keys populated with defaults */
-  getSmoltalkConfig(config: Partial<SmolConfig> = {}): Partial<SmolConfig> {
-    return { ...this.smoltalkDefaults, ...config };
+  getSmoltalkConfig(...configs: Partial<SmolConfig>[]): Partial<SmolConfig> {
+    return configs.reduce(mergeLlmConfig, { ...this.smoltalkDefaults });
   }
 
   async pauseTraceWriter(): Promise<void> {

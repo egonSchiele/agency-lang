@@ -32,7 +32,8 @@
  * wrapped explicitly with `agency.withTestContext` in unit tests).
  */
 import type { z } from "zod";
-import type { UserContentInput } from "smoltalk";
+import type { SmolConfig, UserContentInput } from "smoltalk";
+import type { LlmBaseUrls } from "./llmConfig.js";
 import { agencyStore } from "./asyncContext.js";
 import { runPrompt } from "./prompt.js";
 import type { RetryConfig } from "./llmRetry.js";
@@ -51,6 +52,10 @@ export type LlmOpts<S extends z.ZodSchema = z.ZodSchema> = RetryConfig & {
    *  prompt. Subsequent `agency.llm` calls without `opts.model` use
    *  the client's default. */
   model?: string;
+  /** Provider for this call, such as "openai-compat" or "typesafe". */
+  provider?: string;
+  /** Override only the named providers' URLs for this call. */
+  baseUrl?: LlmBaseUrls;
   /** Cap on generated output tokens for this call. Maps to the
    *  provider's `maxTokens`. Set it whenever the expected output is
    *  small and bounded (labels, summaries): without a cap, a model
@@ -87,8 +92,10 @@ export async function llm(prompt: string | UserContentInput, opts: LlmOpts = {})
   // Passing `{ model: undefined }` would still let `runPrompt`'s merge
   // with smoltalkDefaults pick up the default, but being explicit keeps
   // the contract obvious: omit means "don't touch the model".
-  const clientConfig: { model?: string; maxTokens?: number } = {};
+  const clientConfig: Partial<SmolConfig> = {};
   if (opts.model !== undefined) clientConfig.model = opts.model;
+  if (opts.provider !== undefined) clientConfig.provider = opts.provider;
+  if (opts.baseUrl !== undefined) clientConfig.baseUrl = opts.baseUrl;
   if (opts.maxTokens !== undefined) clientConfig.maxTokens = opts.maxTokens;
 
   // Resilience options ride a dedicated `retryConfig` parameter (cleanly

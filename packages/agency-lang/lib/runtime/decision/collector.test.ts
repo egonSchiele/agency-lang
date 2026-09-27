@@ -125,6 +125,37 @@ describe("DecisionCollector", () => {
     expect(h.ended).toBe(1);
   });
 
+  it.each([
+    ["provider", { config: { model: "jev-1.13", provider: "openrouter" } }],
+    [
+      "credentials",
+      { config: { model: "jev-1.13", provider: "typesafe", apiKey: { typesafe: "other-key" } } },
+    ],
+    [
+      "model data",
+      {
+        config: {
+          model: "jev-1.13",
+          provider: "typesafe",
+          modelData: { schemaVersion: 1, generatedAt: "2026-09-26", models: [], hostedTools: [] },
+        },
+      },
+    ],
+    ["question cap", { questionCap: 32 }],
+  ] satisfies Array<[string, Partial<DecisionRequest>]>)(
+    "keeps different %s in separate requests",
+    async (_name, override) => {
+      const calls: any[] = [];
+      const collector = new DecisionCollector(["a", "b"], sender(calls), hooks());
+      await Promise.all([
+        collector.submit("a", request()),
+        collector.submit("b", request(override)),
+      ]);
+      expect(calls).toHaveLength(2);
+      expect(calls.map((call) => Object.keys(call.questions).length)).toEqual([1, 1]);
+    },
+  );
+
   it("fires a group early at the cap and warns", async () => {
     const calls: any[] = [];
     const h = hooks();

@@ -48,9 +48,7 @@ describe("isDecisionCall", () => {
     expect(isDecisionCall(base({ model: "jev-1.13" }))).toBe(true);
   });
 
-  it("is true for a registry decision model even when the default provider was baked in", () => {
-    // The compiler bakes the config default provider onto every call that
-    // named only a model; the registry name still wins.
+  it("falls back to the model name when the provider has no registry entry", () => {
     expect(isDecisionCall(base({ model: "jev-1.13", provider: "openai-responses" }))).toBe(true);
   });
 
@@ -66,6 +64,36 @@ describe("isDecisionCall", () => {
   it("is false for an unknown model with no provider, and for no model at all", () => {
     expect(isDecisionCall(base({ model: "nobody-knows-me" }))).toBe(false);
     expect(isDecisionCall(base({}))).toBe(false);
+  });
+});
+
+describe("provider-specific decision records", () => {
+  const modelData: smoltalk.ModelDataBlob = {
+    schemaVersion: 1,
+    generatedAt: "2026-09-26T00:00:00Z",
+    hostedTools: [],
+    models: [
+      { type: "decision", modelName: "gpt-4o-mini", provider: "decision-host", maxQuestions: 2 },
+      { type: "decision", modelName: "jev-1.13", provider: "openrouter", maxQuestions: 3 },
+      { ...smoltalk.getModel("gpt-4o-mini")!, modelName: "jev-1.13", provider: "text-host" },
+    ],
+  };
+
+  it("uses the selected provider's model type when names collide", () => {
+    expect(
+      isDecisionCall(
+        base({ model: "gpt-4o-mini", provider: "decision-host", metadata: { modelData } }),
+      ),
+    ).toBe(true);
+    expect(
+      isDecisionCall(base({ model: "jev-1.13", provider: "text-host", metadata: { modelData } })),
+    ).toBe(false);
+  });
+
+  it("uses the selected provider's question cap", () => {
+    expect(
+      questionCapFor(base({ model: "jev-1.13", provider: "openrouter", metadata: { modelData } })),
+    ).toBe(3);
   });
 });
 
@@ -116,6 +144,29 @@ describe("dispatchDecision", () => {
       modelData: undefined,
     });
     expect(sig).toBe(signal);
+  });
+
+  it("preserves OpenRouter routing and merges its per-call key over the configured keys", async () => {
+    const decide = okDecide();
+    await dispatchDecision(
+      ctxWith(decide),
+      base({
+        model: "jev-1.13",
+        provider: "openrouter",
+        apiKey: { openRouter: "call-key" },
+        metadata: {
+          apiKey: { openRouter: "configured-key", typesafe: "typesafe-key" },
+          baseUrl: { openRouter: "https://gateway.example/api" },
+        },
+      }),
+    );
+    expect((decide.mock.calls[0] as unknown[])[2]).toEqual({
+      model: "jev-1.13",
+      provider: "openrouter",
+      apiKey: { openRouter: "call-key", typesafe: "typesafe-key" },
+      baseUrl: { openRouter: "https://gateway.example/api" },
+      modelData: undefined,
+    });
   });
 
   it("returns a completion with the enveloped JSON value, the usage, the cost, and the raw answers", async () => {

@@ -45,7 +45,8 @@ vi.mock("smoltalk", () => ({
 // _setLlmOptions writes the ACTIVE stack's `other.llmDefaults`. A bare
 // `{ other: {} }` stand-in stack is enough to exercise the merge.
 function withStack<T>(stack: any, fn: () => T): T {
-  return agencyStore.run({ stack } as any, fn);
+  const ctx = { getSmoltalkConfig: (config: unknown) => config };
+  return agencyStore.run({ stack, ctx } as any, fn);
 }
 
 describe("_setLlmOptions", () => {

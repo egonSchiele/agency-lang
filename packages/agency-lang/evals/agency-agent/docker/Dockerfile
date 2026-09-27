@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # The tarball is the last layer: an agent change rebuilds only this step.
 COPY agency-lang.tgz /tmp/agency-lang.tgz
-RUN npm i -g /tmp/agency-lang.tgz && rm /tmp/agency-lang.tgz && agency --version
+RUN npm i --prefix /work /tmp/agency-lang.tgz && rm /tmp/agency-lang.tgz
+ENV PATH="/work/node_modules/.bin:${PATH}"
+RUN agency --version
 
 WORKDIR /work

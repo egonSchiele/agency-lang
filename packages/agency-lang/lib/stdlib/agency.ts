@@ -167,12 +167,12 @@ export function resolveInSandbox(
 // stdlib-only restriction as _compile. The (dir, filename) split mirrors
 // std::read / std::write so callers can use partial application to bind
 // `dir` to a sandbox path: `runFile.bind(dir: "/safe/dir")`.
-export function _compileFile(dir: string, filename: string): CompiledProgramValue {
+export function _compileFile(dir: string, filename: string, strict = false): CompiledProgramValue {
   // Containment + existence check up front for a precise error; the
   // sandboxed compile then reads the file itself as part of validation.
   // No interrupt precedes this, so the caller's spelling resolves.
   resolveInSandbox(dir, filename, root);
-  return compileToProgram({ file: filename }, dir);
+  return compileToProgram({ file: filename }, dir, strict);
 }
 
 /** The current process's subprocess nesting depth (0 = root). Backs the

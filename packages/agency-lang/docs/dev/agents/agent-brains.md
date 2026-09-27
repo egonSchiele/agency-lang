@@ -168,3 +168,23 @@ Both are worked around in the agent and worth their own issues:
   success(r))` instead.
 - `record.field(args) with approve` produces invalid JavaScript. Tests bind
   the field to a local first.
+
+## Code tasks and verification
+
+The coordinator's `codeAgent` always uses a worker that can read, edit,
+compile, and test. `agencyTask: true` adds language guidance; it does not
+route the request to the Agency source generator. A request to compile an
+existing project and save test results needs command results, not a new
+source file. The `verify-agency-project` eval covers this distinction.
+
+One-shot code tasks return the supervised coding worker's result. They no
+longer require a classification call, expert consultation, brainstorming,
+and a separate verification/repair loop for every request. The interactive
+worker retains its explicit planner escalation and written-file review.
+The worker's budget, supervisor, and enclosing permission handlers remain
+in effect.
+
+`agencyCli` exposes the supported commands from `cli` in `std::agency` to the worker.
+It returns actual stdout, stderr, and exit status, which the worker can save
+as requested artifacts. Compilation writes each output through `std::write`;
+test execution inherits the caller's handlers across the subprocess boundary.

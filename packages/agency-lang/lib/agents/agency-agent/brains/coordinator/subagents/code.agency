@@ -12,13 +12,7 @@
  */
 import { question } from "std::agent"
 import { cli, cliHandles, CLI_NOT_AVAILABLE } from "std::agency"
-import { filter } from "std::array"
-import { agencyCodingAgent } from "std::agents/agency/coding"
-import { agencyExpertAgent } from "std::agents/agency/expert"
 import { codingAgent, buildTools as codingAgentTools } from "std::agents/coding"
-import { expertAgent } from "std::agents/expert"
-import { verifierAgent } from "std::agents/verifier"
-import { ExpertGuidance, guidanceOrEmpty, renderGuidance } from "std::agents/lib/expertGuidance"
 import { Feedback, feedbackHasErrors, renderFeedback } from "std::agents/lib/feedback"
 import { plannerAgent } from "std::agents/planner"
 import { setAgentCwd, getAgentCwd } from "std::index"
@@ -32,17 +26,11 @@ import { systemMessage } from "std::thread"
 
 import { projectContextText } from "../../../lib/projectContext.agency"
 import { withWebSearch, getSearchBackend } from "../../../lib/search.agency"
-import { getSlowModel, getSlowProvider } from "../../../shared.agency"
 import { announce } from "../lib/announce.agency"
 import { oracleAgent } from "./oracle.agency"
 import {
   reviewWrittenFiles,
  } from "./review.agency"
-import {
-  brainstormApproaches,
-  renderChosen,
-  renderAlternatives,
- } from "./brainstorm.agency"
 import {
   progressCheck,
   pushSupervisorFrame,
@@ -61,10 +49,12 @@ export static const superpowersSkill = skillsDir(
 export def agencyCli(args: string[]): any {
   """
   Run the `agency` CLI with the given arguments. Returns an object with
-  `stdout`, `stderr`, and `exitCode` (same shape as `bash`). `test`,
+  `stdout`, `stderr`, and `exitCode` (same shape as `bash`). `compile`, `test`,
   `typecheck`, `ast`, `fmt`, and `run <file>` run in-process through the
   matching std::agency function (testFile, typecheckFile, parseAST,
-  format, runFile), which you can also call directly. Other subcommands
+  format, runFile), which you can also call directly. `test` accepts
+  --agency-only and --json. Compilation writes and test effects require
+  the caller's permission; rejection is returned as a failed command. Other subcommands
   run the executable, which may not be installed. Arguments are passed
   directly (no shell interpretation).
 
@@ -153,29 +143,6 @@ static const ESCALATE_MAX_TIME = 15m
 // How often a supervised solve pauses for the supervisor's progress check.
 static const SUPERVISE_EVERY = 5m
 
-type TriageResult = {
-  path: "simple" | "complex";
-  plan: string[]
-}
-
-def triage(task: string): TriageResult {
-  const prompt = """
-Classify this coding task. If it is a single, straightforward change, set path to "simple" and leave plan empty. If it is multi-part or needs decomposition, set path to "complex" and outline the plan in 2 to 4 short bullets.
-
-<task>
-${task}
-</task>
-"""
-
-  const result: TriageResult = llm(prompt)
-  return result
-}
-
-/** Pure routing decision, testable without the classifier: "planner" or "direct". */
-export def routeFor(decision: TriageResult): string {
-  return if decision.path == "complex" then "planner" else "direct"
-}
-
 def escalate(task: string, reason: string, plan: string): string {
   """
   Switch this task to plan-as-code: writes and runs a purpose-built agent for a
@@ -194,96 +161,20 @@ def escalate(task: string, reason: string, plan: string): string {
   return planned.value
 }
 
-/* The expert consult runs once and sets the whole direction, so it gets the
-   slow model slot. The solve loop stays on the ambient one. */
-def consultExpert(task: string, agencyTask: boolean): Result<ExpertGuidance> {
-  if (agencyTask) {
-    return agencyExpertAgent(
-      task: task,
-      maxCost: ESCALATE_MAX_COST,
-      maxTime: 5m,
-      model: getSlowModel(),
-      provider: getSlowProvider(),
-      extraTools: [question],
-    )
-  }
-  return expertAgent(
-    task: task,
-    maxCost: ESCALATE_MAX_COST,
-    maxTime: 5m,
-    model: getSlowModel(),
-    provider: getSlowProvider(),
-    extraTools: [question],
-  )
-}
-
-/* Where generated Agency source should land: the file the task names, or
-   nowhere ("" — hand the source back as the reply). */
-type SaveTarget = {
-  filename: string
-}
-
-def saveTargetFor(task: string): string {
-  const prompt = """
-Does this task ask for code to be saved to a specific file? Reply with that filename (a relative path) in the filename field, or an empty string if the task does not name a file to save to.
-
-<task>
-${task}
-</task>
-"""
-
-  const target: SaveTarget = llm(prompt)
-  return target.filename
-}
-
-
-/* agencyCodingAgent returns source rather than writing files — its contract
-   ends at valid code. Placing that code is this caller's job: when the task
-   names a file, write the source there; otherwise hand it back as the reply
-   for the caller to place. */
+/* A language hint supplies context; every task still goes to a worker that
+   can read, edit, compile, and test. A source generator cannot perform a
+   verification request (regression: idCkNs33 / verify-agency-project). */
 def solve(task: string, context: string, agencyTask: boolean): Result<string> {
+  let workerContext = context
   if (agencyTask) {
-    // The target is decided BEFORE generation so the writer knows what kind
-    // of source to produce. Without this, "create fib.agency containing a
-    // fib function" reads as a task to perform, and the writer delivers a
-    // program that writes the file at runtime — which is then saved AS the
-    // file, instead of the module the task actually wanted.
-    const target = saveTargetFor(task)
-    let writerTask = task
-    if (target != "") {
-      writerTask = """
-${task}
-
-Deliverable: ONLY the Agency module source that will be saved as ${target}. The caller saves the file — do NOT write a program that creates files, runs shell commands, or performs the task at runtime. If the task asks for a function, produce the module that defines and exports that function.
-"""
-    }
-    const written = agencyCodingAgent(
-      task: writerTask,
-      context: context,
-      requireMain: target == "",
-      maxCost: ESCALATE_MAX_COST,
-      maxTime: ESCALATE_MAX_TIME,
-      extraTools: [question],
-    )
-    if (isFailure(written)) {
-      return failure("could not write valid Agency code: ${written.error}")
-    }
-    if (target != "") {
-      const saved = write(target, written.value, useAgentCwd: true)
-      if (isFailure(saved)) {
-        return failure(
-          "wrote valid Agency source but could not save it to ${target}: ${saved.error}",
-        )
-      }
-      return success("Wrote the generated Agency program to ${target}:\n\n${written.value}")
-    }
-    return success(written.value)
+    workerContext = "${context}\nThis task concerns Agency code. Consult the Agency docs for syntax. Use agencyCli for compile and test commands; it returns actual stdout, stderr, and exitCode. Save requested logs from those results."
   }
   return codingAgent(
     task: task,
-    context: context,
+    context: workerContext,
     maxCost: ESCALATE_MAX_COST,
     maxTime: ESCALATE_MAX_TIME,
+    extraTools: [agencyCli],
   )
 }
 
@@ -386,149 +277,26 @@ export def codeAgent(userMsg: string, agencyTask: boolean = false) {
   such as questions related to the Agency syntax or CLI tool.
 
   @param userMsg - a message describing what help is needed.
-  @param agencyTask - true when the code in question is Agency code, which
-    routes to the agents that know the language. Leave it false for every
-    other language.
+  @param agencyTask - True adds Agency language context. In either mode the
+    worker performs the task with tools, including compilation and tests.
   """
   announce("code agent", userMsg)
   const originalUserMsg = userMsg
-  const decision = triage(userMsg)
-  if (routeFor(decision) == "planner") {
-    return escalateToExpert(task: userMsg, agencyTask: agencyTask)
-  }
   if (_oneShot) {
     return solveUnattended(task: userMsg, agencyTask: agencyTask)
   }
   return converse(userMsg: userMsg, originalUserMsg: originalUserMsg, agencyTask: agencyTask)
 }
 
-/* A multi-part task acquires domain expertise first, brainstorms several
-   genuinely different directions and commits to one, solves with both in
-   context, then verifies against the expert's checklist and gets one round
-   to fix what failed. The set-aside directions travel to the supervisor,
-   so a mid-run redirect can name a specific alternative when the chosen
-   path is not working. `escalate`, the mid-flight tool, still uses
-   plannerAgent. */
-def escalateToExpert(task: string, agencyTask: boolean): string {
-  const guidance = guidanceOrEmpty(consultExpert(task: task, agencyTask: agencyTask))
-  const ideas = brainstormApproaches(task: task, guidance: renderGuidance(guidance))
-  const alternatives = renderAlternatives(ideas)
-  // Join only the non-empty parts: both renderings return "" on their
-  // fail-open paths, and a bare "\n" would defeat withContext's
-  // empty-context gate — the solver must run untouched when there is
-  // genuinely no context.
-  const contextParts = filter(
-    [renderGuidance(guidance), renderChosen(ideas)],
-    \part -> part != "",
-  )
-  const solved = supervisedSolve(
-    task: task,
-    context: contextParts.join("\n"),
-    agencyTask: agencyTask,
-    alternatives: alternatives,
-  )
-  let summary = ""
-  let solvedOk = false
-  if (isFailure(solved)) {
-    summary = "Coding agent stopped: ${solved.error}"
-  } else {
-    solvedOk = true
-    summary = solved.value
-    // Milestone draft: a completed solve is worth keeping even if the
-    // verify or fix round below is cut short by an outer budget guard —
-    // salvage-on-abort then returns this instead of nothing.
-    saveDraft(summary)
-  }
-  const checked = verifierAgent(
-    task: task,
-    criteria: guidance.checklist,
-    maxCost: $5.00,
-    maxTime: 5m,
-  )
-  if (feedbackHasErrors(checked)) {
-    const fixMsg = """
-${task}
-
-A strict review found these problems:
-
-${renderFeedback(checked)}
-
-Fix each problem exactly.
-"""
-    const fixed = supervisedSolve(task: fixMsg, context: "", agencyTask: agencyTask, alternatives: alternatives)
-    if (isFailure(fixed)) {
-      return summary
-    }
-    summary = fixed.value
-    saveDraft(summary)
-    // The repair is re-checked, and its findings travel back too.
-    const rechecked = verifierAgent(
-      task: task,
-      criteria: guidance.checklist,
-      maxCost: $5.00,
-      maxTime: 5m,
-    )
-    return withVerification(summary, rechecked)
-  }
-  // Only a completed solve gets its findings attached: after a failed one
-  // the verifier has judged whatever was already on disk, and "stopped"
-  // followed by "Verified:" would report that as this attempt's work.
-  if (solvedOk) {
-    return withVerification(summary, checked)
-  }
-  return summary
-}
-
-/* The verifier's findings travel back with the result. Without them the
-   reply to "write fib.agency and report the test results" was only the
-   file contents, and a coordinator that had asked for results kept asking:
-   four codeAgent rounds, an oracle, and two reviews for work that had
-   passed in the first minute. A re-check that still finds problems says
-   so instead of claiming verification. */
-def withVerification(summary: string, checked: Result<Feedback[]>): string {
-  const findings = renderFeedback(checked)
-  if (findings == "") {
-    return summary
-  }
-  if (feedbackHasErrors(checked)) {
-    return "${summary}\n\nRe-check found these problems:\n${findings}"
-  }
-  return "${summary}\n\nVerified:\n${findings}"
-}
-
-/* `agency agent -p`: nobody is here to answer a question and there is no next
-   turn, which is what the stdlib coding agent already does. The rules for
-   working that way are the whole of ONE_SHOT_NOTE, so they travel as context
-   rather than as a second copy of the loop. */
+/* One-shot work already runs under the coding worker's budget. Return its
+   tool-backed result. Automatic fresh reviews used to regenerate code for
+   build/test requests, even after a command had produced the needed result. */
 def solveUnattended(task: string, agencyTask: boolean): string {
   const solved = supervisedSolve(task: task, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
   if (isFailure(solved)) {
     return "The task did not complete: ${solved.error}"
   }
-  // Milestone draft: the verify and fix rounds below can be cut short by
-  // an outer budget guard; the completed solve must survive that.
-  saveDraft(solved.value)
-  const checked = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
-  if (!feedbackHasErrors(checked)) {
-    return withVerification(solved.value, checked)
-  }
-  const fixMsg = """
-${task}
-
-A fresh review found these gaps:
-
-${renderFeedback(checked)}
-
-Fix each one; your work will be re-checked.
-"""
-  const fixed = supervisedSolve(task: fixMsg, context: ONE_SHOT_NOTE, agencyTask: agencyTask)
-  if (isFailure(fixed)) {
-    return solved.value
-  }
-  saveDraft(fixed.value)
-  // The prompt above promised a re-check; its findings travel back too.
-  const rechecked = verifierAgent(task: task, maxCost: $5.00, maxTime: 5m)
-  return withVerification(fixed.value, rechecked)
+  return solved.value
 }
 
 /* The interactive turn, which is the part that is genuinely this agent's own:

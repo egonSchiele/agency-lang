@@ -114,3 +114,23 @@ fallback for expectedOutput that is not JSON; the sandbox profile refuses
 those files). Execution deliberately stays split by trust posture:
 `agency test` runs YOUR code with authoritative scripted answers; `test()`
 runs someone else's under the handler chain.
+
+## Commands exposed to agents
+
+`cli(["compile", "src/main.agency"], dir)` compiles an Agency-only import
+closure, then writes each generated JavaScript file through `std::write`.
+The source read is approved first; the compiler refuses a symlink planted
+at the approved directory before it reads. Local imports retain their
+relative paths in the output. This command does not execute generated code.
+
+`cli(["test", "main.test.json", "--agency-only", "--json"], dir)` uses
+`testFile` with strict name checks. Execution still uses the sandbox test
+format and the caller's handlers. Other test flags are refused. JSON output
+uses the CLI's shared report schema and counters; human output goes to
+stderr. Compilation failures report the declared cases as failed, while a
+rejected permission remains a failure of the tool call.
+
+`test` and `testFile` accept a final optional `strict` argument. Reports
+include `sourceFile` and each case's `durationMs`. Compilation failures remain
+whole-call failures, with the source and cases in failure data so the command
+wrapper can report their denominator without re-reading the test file.

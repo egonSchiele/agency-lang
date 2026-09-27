@@ -1,0 +1,10 @@
+{
+  "sourceFile": "tool-wiring.agency",
+  "tests": [
+    {
+      "nodeName": "registeredTools",
+      "expectedOutput": "\"read,ls,ghPrGet,ghPrReviewComment\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

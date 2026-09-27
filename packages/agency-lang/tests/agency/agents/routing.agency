@@ -1,12 +1,11 @@
-import { routeFor } from "../../../lib/agents/agency-agent/brains/coordinator/subagents/code.agency"
+import { codeAgent, setCodeOneShot } from "../../../lib/agents/agency-agent/brains/coordinator/subagents/code.agency"
 
-// The routing LOGIC, tested without the (non-deterministic) classifier: given a
-// TriageResult, does codeAgent route correctly? "complex" -> plannerAgent,
-// anything else -> the direct loop.
-node complexRoutesToPlanner(): boolean {
-  return routeFor({ path: "complex", plan: ["outline"] }) == "planner"
+node agencyTaskUsesWorker(): string {
+  setCodeOneShot(true)
+  return codeAgent("Compile and test this Agency project", agencyTask: true) with approve
 }
 
-node simpleRoutesToDirect(): boolean {
-  return routeFor({ path: "simple", plan: [] }) == "direct"
+node otherTaskUsesWorker(): string {
+  setCodeOneShot(true)
+  return codeAgent("Inspect the build output and report the result") with approve
 }

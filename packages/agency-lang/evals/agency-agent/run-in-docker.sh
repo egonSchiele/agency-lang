@@ -19,15 +19,20 @@ rundir="$(dirname "$workdir")"
 
 # The container runs as the invoking user so what the agent writes into the
 # mounted run directory is owned by the host user, not root.
+# The second mount puts the project below the image's local Agency install,
+# so compiled programs can resolve agency-lang/runtime. The first mount keeps
+# the host statelog path valid for the eval harness.
 exec docker run --rm \
   --user "$(id -u):$(id -g)" \
   -e HOME=/tmp \
   -v "$rundir:$rundir" \
-  -w "$workdir" \
+  -v "$workdir:/work/project" \
+  -w /work/project \
   -e AGENCY_CONFIG_OVERRIDES \
   -e AGENCY_TRACE_ID \
   -e ANTHROPIC_API_KEY \
   -e OPENAI_API_KEY \
+  -e OPENROUTER_API_KEY \
   --network "$NETWORK" \
   "$IMAGE" \
   agency agent "$@"

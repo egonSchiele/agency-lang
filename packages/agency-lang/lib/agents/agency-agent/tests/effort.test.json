@@ -1,8 +1,9 @@
 {
   "sourceFile": "effort.agency",
   "tests": [
-    { "nodeName": "absent", "input": "", "expectedOutput": "\"true|true|\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "absent", "input": "", "expectedOutput": "\"true|\"", "evaluationCriteria": [{ "type": "exact" }] },
     { "nodeName": "levels", "input": "", "expectedOutput": "\"high|medium|low\"", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "unknown", "input": "", "expectedOutput": "\"true|--effort must be low, medium, or high; got 'max'.\"", "evaluationCriteria": [{ "type": "exact" }] }
+    { "nodeName": "unknown", "input": "", "expectedOutput": "\"true|--effort must be low, medium, or high; got 'max'.\"", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "empty", "input": "", "expectedOutput": "\"true|--effort must be low, medium, or high; got ''.\"", "evaluationCriteria": [{ "type": "exact" }] }
   ]
 }

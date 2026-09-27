@@ -121,7 +121,6 @@ export def parseAgentArgs() {
         },
         effort: {
           type: "string",
-          optional: true,
           description: "How hard a reasoning model thinks on every call: low, medium, or high. Sent to the provider as its reasoning effort; omit for the provider's default."
         },
         "max-time": {

@@ -9,7 +9,7 @@ export type Effort = {
   error: string
 }
 export def parseEffort(value: string | null): Effort {
-  if (value == null || value == "") {
+  if (value == null) {
     return { level: null, error: "" }
   }
   const level = value.trim().toLowerCase()

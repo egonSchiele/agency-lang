@@ -97,7 +97,7 @@ export {
 } from "./interrupts.js";
 export type { ResumeCliFromCheckpointArgs, ResumeFromCheckpointArgs } from "./interrupts.js";
 
-export { checkPolicy, checkPolicyExplicit, validatePolicy } from "./policy.js";
+export { checkPolicy, checkPolicyExplicit, validatePolicy, escapeGlob } from "./policy.js";
 
 export { resolveCliInterrupts } from "./cliInterruptResolution.js";
 export { runCliEntry } from "./cliEntry.js";

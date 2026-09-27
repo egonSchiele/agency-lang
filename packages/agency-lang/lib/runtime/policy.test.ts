@@ -1,3 +1,4 @@
+import { escapeGlob } from "./index.js";
 import { describe, it, expect, vi } from "vitest";
 import {
   checkPolicy,
@@ -5,7 +6,6 @@ import {
   expandAgencyInstallDir,
   expandAgentHomeDir,
   validatePolicy,
-  escapeGlob,
 } from "./policy.js";
 import { getStdlibDir } from "../importPaths.js";
 import path from "path";

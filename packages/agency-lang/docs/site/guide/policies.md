@@ -111,3 +111,15 @@ Notes:
 
 By default, any interrupts that aren't addressed by your policy, and aren't handled by your agent, will cause a crash. Run with the `--interactive` flag if you want to be prompted to approve or reject those interrupts instead.
 
+
+## Literal values from TypeScript
+
+```typescript
+import { escapeGlob } from "agency-lang/runtime";
+
+const match = { listId: escapeGlob("groceries[1]") };
+```
+
+Use `escapeGlob` when a rule should match an exact payload value. It escapes
+pattern characters such as `*`, `?`, and brackets using the same helper as
+Agency's built-in scoped policies.

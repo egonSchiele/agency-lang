@@ -102,11 +102,7 @@ export default defineConfig({
             {
               text: "LLM Calls, Part 2",
               link: "/guide/llm-part-2",
-            },
-            {
-              text: "Decision Models",
-              link: "/guide/decision-models",
-            },
+            },            
             {
               text: "Streaming",
               link: "/guide/streaming",
@@ -174,6 +170,10 @@ export default defineConfig({
               link: "/guide/value-parameterized-types",
             },
             { text: "Tags and Redaction", link: "/guide/tags" },
+            {
+              text: "Decision Models",
+              link: "/guide/decision-models",
+            },            
             { text: "Template Agency", link: "/guide/template-agency" },
             { text: "Splices", link: "/guide/splices" },
             { text: "Memory", link: "/guide/memory" },

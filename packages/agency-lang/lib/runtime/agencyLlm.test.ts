@@ -282,6 +282,19 @@ describe("model and provider precedence", () => {
     expect(pair).toEqual({ model: "call-model", provider: "openrouter" });
   });
 
+  it("keeps baked reply limits when a call has no reply limit override", async () => {
+    const ctx = makeCtx({
+      model: "local-model",
+      provider: "mlx",
+      replyLimits: { hedgeLimit: 123 },
+    } as Partial<SmolConfig>);
+    const client = new RecordingClient();
+    ctx.setLLMClient(client);
+    const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    await inFrame(ctx, threads, () => agency.llm("hi"));
+    expect(client.configs[0].metadata?.rawAttributes.hedge_limit).toBe(123);
+  });
+
   it("per-call model and provider replace the baked pair", async () => {
     // The TypeScript `agency.llm` facade forwards only model and maxTokens,
     // not provider. Generated Agency code passes its options object through

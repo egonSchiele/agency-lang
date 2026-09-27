@@ -207,12 +207,16 @@ satisfy the generator; removing it keeps the resolved config free of dangling
 fields, which is what `agency config show` and any other consumer sees. The test
 asserts the key is absent, so that contract cannot drift unnoticed.
 
-**A stated provider is sticky.** The layers merge field by field
-(`lib/runtime/state/context.ts` `getSmoltalkConfig`), so a provider set by the
-flag survives a later `setModel("other")` in Agency code — the pair becomes that
-provider plus the new model. Code that wants to move provider too must say
+**A stated provider survives model-only changes to text models.** The layers
+merge field by field (`lib/runtime/state/context.ts` `getSmoltalkConfig`).
+For example, a provider set by the flag survives a later `setModel("other")`
+when `other` is a text model. To change the provider too, use
 `setLlmOptions({ model, provider })`, or pass both per call. The precedence
-cases in `lib/runtime/agencyLlm.test.ts` pin all four combinations.
+cases in `lib/runtime/agencyLlm.test.ts` cover these combinations.
+
+A model-only switch to a known decision model selects the registry provider.
+Repeating the current model keeps its provider. See
+[decision models](../llm/decision-models.md).
 
 **Only a bare name is validated.** It is checked against the hosted **text**
 models from `_listHostedModels()` — not smoltalk's `getAllModels()`, which also

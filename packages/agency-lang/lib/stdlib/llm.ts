@@ -1,5 +1,6 @@
 import { fixedPath, resolveUnder, readText, type Located } from "./contained.js";
 import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
+import { decisionProviderOverride } from "../runtime/llmConfig.js";
 import type { RetryConfig } from "../runtime/llmRetry.js";
 import { LOCAL_PROVIDERS, mergedReplyLimits, type ReplyLimits } from "../runtime/localDefaults.js";
 import { loadProviderModuleByPath } from "../runtime/providerModules.js";
@@ -49,7 +50,8 @@ export type LlmDefaults = RetryConfig & {
 /**
  * Merge `opts` into the ACTIVE branch stack's LLM defaults
  * (`stack.other.llmDefaults`). Only present (non-undefined) keys are
- * written, so a partial update never clears an existing default.
+ * written. A model-only change to a decision model selects its registry
+ * provider instead of retaining the previous model's provider.
  *
  * Branch-scoped: inside a fork/race/tool branch this writes that
  * branch's own slice (seeded from the parent at fork time by
@@ -60,11 +62,12 @@ export type LlmDefaults = RetryConfig & {
  * `llm({...})` option.
  */
 export function _setLlmOptions(opts: LlmDefaults): void {
-  const { stack } = getRuntimeContext();
+  const { ctx, stack } = getRuntimeContext();
   if (!stack) return;
   // The branch's own llmDefaults object (seeded as a shallow copy of the
   // parent's at fork time), so mutating it here never touches the parent.
   const current = (stack.other.llmDefaults ?? {}) as Record<string, unknown>;
+  const provider = decisionProviderOverride(ctx.getSmoltalkConfig(current), opts);
   for (const key of Object.keys(opts)) {
     const value = (opts as Record<string, unknown>)[key];
     if (value === undefined) {
@@ -75,6 +78,9 @@ export function _setLlmOptions(opts: LlmDefaults): void {
       key === "replyLimits"
         ? mergedReplyLimits(current.replyLimits as ReplyLimits | undefined, value as ReplyLimits)
         : value;
+  }
+  if (provider !== undefined) {
+    current.provider = provider;
   }
   stack.other.llmDefaults = current;
 }

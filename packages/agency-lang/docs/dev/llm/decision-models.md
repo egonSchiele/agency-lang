@@ -16,9 +16,10 @@ output. Run it with `--model typesafe/jev-1.13` and it goes to Jev. The file
 does not change. `packages/examples/decision-triage.agency` runs unchanged
 against Jev, a local Laya server, and the default model.
 
-The rule: **the provider is the switch.** A call is a decision call when
-its provider is `typesafe`, either written on the call, or looked up from
-the registry for a model name it knows.
+A known model is a decision call when its registry entry has
+`type: "decision"`. The selected provider can be TypeSafe, OpenRouter, or
+another provider serving a decision model. An unknown model opts into the
+TypeSafe protocol with `provider: "typesafe"`.
 
 The options that were considered and set aside are in
 `decision-models-design-options.md` next to this file.
@@ -30,14 +31,11 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
 1. **The compiler** (`lib/backends/typescriptBuilder.ts`, the `llm` case)
    emits one `runPrompt({...})` call. The type annotation becomes
    `responseFormat`, always wrapped as `z.object({ response: <schema> })`.
-   The options object becomes `clientConfig`, passed through as written,
-   except that the compiler bakes the config's default provider into every
-   call that named only a model. (When only `defaultModel` is configured
-   and no `defaultProvider`, nothing is baked, and smoltalk's registry
-   picks the provider.)
+   The options object becomes `clientConfig`, passed through as written.
 2. **`runPrompt`** (`lib/runtime/prompt.ts`) appends the prompt to the
    active thread as a user message, then builds a `PromptConfig` from the
-   thread's messages, the schema, and the options.
+   thread's messages, the schema, and the options. Runtime defaults merge
+   below branch defaults, which merge below per-call options.
 3. **`dispatchWithRetry`** (`lib/runtime/llmDispatch.ts`) asks
    `isDecisionCall` once, before metering. If yes, `prepareDecision`
    refuses a call with tools, with no schema, with a shape it cannot map,
@@ -72,26 +70,27 @@ the thread, the guards, or statelog knows it exists.
 
 ## Which calls are decision calls
 
-`isDecisionCall` has two rules, and the registry decides which applies:
+`isDecisionCall` first looks up the model under the selected provider. If
+that entry is absent, it looks up the unqualified model name. A known
+entry selects the decision path only when its type is `decision`. This
+lets providers define different capabilities for the same model name.
+An unknown name selects the decision path when its provider is `typesafe`,
+as needed for a local Laya server.
 
-- The registry knows the model name. Then only the registry's provider
-  counts: `jev-1.13` is a decision call whatever provider is on the call,
-  and `gpt-5-mini` never is.
-- The registry does not know the name (a local Laya server, say). Then the
-  call is a decision call when its provider is `typesafe`.
+`dispatchDecision` preserves the resolved provider. If none is set, it uses
+the registry entry's provider, then `typesafe` for an unknown model. Thus
+`openrouter/jev-1.13` reaches smoltalk with `provider: "openrouter"` and
+uses OpenRouter's credentials and endpoint.
 
-The call's provider is not trusted for a known name because the user may
-not have written it. The compiler bakes the config's default provider,
-`openai-responses` unless set, into every generated call that named only a
-model, so at dispatch `config.provider` cannot tell "written" from
-"defaulted". Letting the call's provider win would send `jev-1.13` with no
-provider written to `text()`, and letting either rule win would make
-`defaultProvider: "typesafe"`, which `--model typesafe/jev-1.13` sets,
-capture every call in the run, including stdlib calls that name a text
-model.
-
-`dispatchDecision` always passes `provider: "typesafe"` to the client,
-never the value on the call.
+`RuntimeContext.getSmoltalkConfig` merges the defaults through
+`lib/runtime/llmConfig.ts`. `runPrompt` passes branch defaults and per-call
+options as separate layers. When a layer changes the model to a known
+decision model without naming a provider, it selects the registry
+provider. The stdlib setter applies the same rule to successive
+`setLlmOptions` updates. Repeating the current model keeps its provider. For example, a run using OpenRouter's Jev keeps
+OpenRouter when a call repeats `model: "jev-1.13"`. A call switching from
+an OpenAI text model to `model: "jev-1.13"` uses the registry's default
+provider. Model-only changes to text models retain their existing behavior.
 
 ## Validation
 
@@ -168,22 +167,19 @@ call; the execution test checks that.
 
 TypeSafe has paused signups, so these are the routes that work.
 
-**Jev through OpenRouter.** The registry knows `jev-1.13`, so no provider
-is needed on the call. The `--model` flag checks Agency's own catalog,
-which does not list decision models, so on the command line write the
-provider/model form:
+**Jev through OpenRouter.** Use OpenRouter's normal key and provider:
 
 ```bash
-TYPESAFE_API_KEY="$OPENROUTER_API_KEY" TYPESAFE_BASE_URL="https://openrouter.ai/api" \
-  agency run --model typesafe/jev-1.13 decision-triage.agency
+OPENROUTER_API_KEY="<OpenRouter key>" \
+  agency run --model openrouter/jev-1.13 decision-triage.agency
 ```
 
 Or in `agency.json`:
 
 ```json
 { "client": { "defaultModel": "jev-1.13",
-              "apiKey": { "typesafe": "<OpenRouter key>" },
-              "baseUrl": { "typesafe": "https://openrouter.ai/api" } } }
+              "defaultProvider": "openrouter",
+              "apiKey": { "openRouter": "<OpenRouter key>" } } }
 ```
 
 Vercel AI Gateway also serves it, at base URL
@@ -250,8 +246,10 @@ The pieces:
   which fires as each branch settles, and at once for a cached branch on
   resume. The collector meters nothing itself; each arm meters its share of
   the answer, so the shares sum to the one request's usage and cost.
-- A group is the calls whose `sha256` of `{ model, baseUrl, state }`
-  match. A round sends every group at once when the block is idle, meaning
+- A group contains calls with matching model, provider, API keys, base
+  URLs, model data, question cap, and state. The collector hashes those
+  values with `sha256`. Credentials do not appear in batch reports. A round
+  sends every group at once when the block is idle, meaning
   no arm is running, or one group alone when it reaches the model's
   question cap (the registry's `maxQuestions`, 64 for Jev, or 64 for an
   unknown model). A cap round logs a `warn` with
@@ -290,8 +288,7 @@ decision model in the registry shares; a call is a decision call when its
 registry entry has `type: "decision"`, whichever provider serves it, and
 the per-request cap comes from that entry. The two Jev-shaped numbers are
 the default cap of 64 for a model the registry does not know and the
-`typesafe` provider name for such a model, which is the one wire protocol
-smoltalk speaks today.
+`typesafe` provider name for such a model.
 
 An arm can hold several calls at once when a text-model call inside it
 dispatches several tools that each ask a decision model. They register

@@ -31,6 +31,7 @@ export type PromptConfig = {
     budgetTokens?: number;
   };
   reasoningEffort?: "low" | "medium" | "high";
+  logprobs?: { top?: number };
   /** Per-provider key map (same shape as `SmolConfig["apiKey"]`). No bare-string
    *  shorthand — that would route a key to `openAi` regardless of the actual
    *  provider. See `toSmolConfig`. */
@@ -394,6 +395,7 @@ export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
     provider,
     thinking,
     reasoningEffort,
+    logprobs,
     metadata,
     hostedTools,
   } = config;
@@ -411,6 +413,7 @@ export function toSmolConfig(config: PromptConfig): Omit<SmolConfig, "stream"> {
     provider,
     thinking,
     reasoningEffort,
+    logprobs,
     hostedTools,
     ...(apiKey ? { apiKey: { ...metaApiKey, ...apiKey } } : {}),
   } as Omit<SmolConfig, "stream">;

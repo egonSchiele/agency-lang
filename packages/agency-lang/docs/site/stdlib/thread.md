@@ -180,6 +180,41 @@ export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L367))
 
+### TokenAlternative
+
+A token the model could have produced at a position, and the log of
+  its probability.
+
+```ts
+/** A token the model could have produced at a position, and the log of
+  its probability. */
+export type TokenAlternative = {
+  token: string;
+  logprob: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L371))
+
+### TokenLogprob
+
+One generated token and the log of its probability. `top` lists the
+  likeliest alternatives at that position, most likely first, when the
+  call asked for them with `logprobs: { top: n }`; otherwise it is empty.
+
+```ts
+/** One generated token and the log of its probability. `top` lists the
+  likeliest alternatives at that position, most likely first, when the
+  call asked for them with `logprobs: { top: n }`; otherwise it is empty. */
+export type TokenLogprob = {
+  token: string;
+  logprob: number;
+  top: TokenAlternative[]
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L379))
+
 ### Reply
 
 What the model attached to its last reply, beyond the text. `answers`
@@ -195,6 +230,7 @@ What the model attached to its last reply, beyond the text. `answers`
 export type Reply = {
   content: string;
   thinkingBlocks: ThinkingBlock[];
+  logprobs: TokenLogprob[];
   usage?: ReplyUsage;
   cost?: number;
   answers?: Record<string, DecisionAnswer>;
@@ -202,7 +238,7 @@ export type Reply = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L373))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L389))
 
 ### GuardFailureData
 
@@ -224,7 +260,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L417))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L440))
 
 ### ThreadMessage
 
@@ -235,7 +271,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L440))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L463))
 
 ### ThreadInfo
 
@@ -251,7 +287,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L445))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L468))
 
 ## Effects
 
@@ -602,6 +638,12 @@ Return what the model attached to its last reply on the current thread,
   `answers.answer` for a bare annotation, `answers.<field>` for an object one;
   check an answer's `type` before reading its fields.
 
+  For a text model, `logprobs` holds one entry per generated token when the
+  call asked for them with `llm(prompt, { logprobs: { top: 3 } })`. Only
+  OpenAI models return them today; other providers leave the list empty. Each
+  value is the natural log of the token's probability, so a value near 0
+  means near certainty and -2.3 means about one chance in ten.
+
   ```ts
   type Dept = "billing" | "support" | "sales"
   const dept: Dept = llm("Which team should handle this?", { model: "jev-1.13" })
@@ -622,7 +664,7 @@ one either way.
 
 **Returns:** `Reply | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L388))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L405))
 
 ### listThreads
 
@@ -655,7 +697,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L517))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L540))
 
 ### sessionThreadId
 
@@ -674,7 +716,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L570))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L593))
 
 ### currentThreadId
 
@@ -689,7 +731,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L578))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L601))
 
 ### getThread
 
@@ -721,4 +763,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L588))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L611))

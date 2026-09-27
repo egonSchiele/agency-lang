@@ -192,15 +192,13 @@ probabilities at once, and logprobs the day smoltalk carries them. This is
 the cheapest path to "expose all the metadata" and it serves every model
 kind.
 
-### What logprobs need first
+### Logprobs
 
-smoltalk has no logprobs field on `PromptResult` or `AssistantMessage`, and
-none of its provider clients request them. Any Agency-level design for
-logprobs starts with that field and the provider flags to request it. Then
-either the side-channel accessor or a wrapper type exposes it. The
-decision-model work added `PromptResult.rawData` and the pass-through to
-the assistant message, so the plumbing from a completion to the thread
-exists.
+smoltalk carries `logprobs` on `PromptResult` and `AssistantMessage`.
+`llm(prompt, { logprobs: { top } })` forwards the option, and
+`lastReply().logprobs` returns one entry per generated token. Only OpenAI's
+APIs return token probabilities; Gemini's API refuses a request that asks
+for them, so every other provider leaves the list empty.
 
 ## Batching questions into one request
 

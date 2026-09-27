@@ -110,8 +110,8 @@ export function splitCounts(total: number, weights: number[]): number[] {
   return parts;
 }
 
-/** Calls share a request only when their routing, credentials, model data,
- * question cap, and state match. Hash credentials without recording them. */
+/** Credentials participate in grouping through a hash so batch reports
+ * cannot expose API keys. */
 function groupKeyFor(request: DecisionRequest): string {
   const identity = {
     model: request.config.model,

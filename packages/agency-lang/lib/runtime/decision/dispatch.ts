@@ -1,13 +1,11 @@
 /**
- * The decision branch of an LLM dispatch. A decision model call does not
- * go to `text()`. Its schema becomes questions, the
- * thread becomes the state, and the reply is shaped as a completion so that
- * everything after dispatch (the structured parse, the thread append, cost,
- * statelog) runs unchanged. See docs/dev/llm/decision-models.md.
+ * Converts a typed LLM call into decision questions and its thread into state.
+ * Returns a completion for schema validation, conversation history, and metering.
+ * See docs/dev/llm/decision-models.md.
  *
  * A call inside a fork or parallel block hands its request to the block's
  * collector (`lib/runtime/decision/collector.ts`) on the async-context frame,
- * which may batch it with sibling calls; a call outside one sends as before.
+ * which may batch it with sibling calls. Other calls send individually.
  */
 import * as smoltalk from "smoltalk";
 import type { Message, ModelDataBlob, PromptResult } from "smoltalk";
@@ -31,7 +29,6 @@ type ConfigMaps = {
   modelData?: ModelDataBlob;
 };
 
-/** Look up the selected provider first, then the unqualified model name. */
 function registryRecord(config: PromptConfig): smoltalk.ModelType | undefined {
   const maps = (config.metadata ?? {}) as ConfigMaps;
   return modelRecord({

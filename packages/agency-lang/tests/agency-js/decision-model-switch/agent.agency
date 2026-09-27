@@ -1,0 +1,11 @@
+import { setModel } from "std::llm"
+
+node main() {
+  setModel("jev-1.13")
+  const first: boolean = llm("Is this spam?")
+  const text: string = llm("Explain", model: "gpt-5-mini")
+  const second: boolean = llm("Is this still spam?")
+  setModel("gpt-5-mini")
+  const last: string = llm("Explain again")
+  return { first: first, text: text, second: second, last: last }
+}

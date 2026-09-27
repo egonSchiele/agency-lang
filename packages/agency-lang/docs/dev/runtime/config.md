@@ -207,16 +207,15 @@ satisfy the generator; removing it keeps the resolved config free of dangling
 fields, which is what `agency config show` and any other consumer sees. The test
 asserts the key is absent, so that contract cannot drift unnoticed.
 
-**A stated provider survives model-only changes to text models.** The layers
-merge field by field (`lib/runtime/state/context.ts` `getSmoltalkConfig`).
+**Model-only changes between text models keep the provider.** For example,
+a run using `openai-responses` keeps that provider when
+`setModel("gpt-5-mini")` replaces another text model.
 
-For example, a provider set by the flag survives a later `setModel("other")`
-when `other` is a text model. To change the provider too, use
-`setLlmOptions({ model, provider })`, or pass both per call. The precedence
-cases in `lib/runtime/agencyLlm.test.ts` cover these combinations.
-
-A model-only switch to a known decision model selects the registry provider.
-Repeating the current model keeps its provider. See
+Switching to a known decision model, or from a decision model to a known
+text model, selects the new model's registry provider. Repeating the current
+model keeps its provider. An explicit provider in
+`setLlmOptions({ model, provider })` or per-call options takes precedence.
+The shared selection rules live in `lib/runtime/llmConfig.ts`; see
 [decision models](../llm/decision-models.md).
 
 `baseUrl` merges by provider within each layer. A call with

@@ -55,7 +55,6 @@ const apiKeyObject: VariableType = {
   ],
 };
 
-/** Provider URLs accepted by text and decision clients. */
 const baseUrlObject: VariableType = {
   type: "objectType",
   properties: [

@@ -6,7 +6,6 @@ import {
   type SmolConfig,
 } from "smoltalk";
 
-/** URL settings shared by text and decision calls. */
 export type LlmBaseUrls = NonNullable<SmolConfig["baseUrl"]> &
   Pick<NonNullable<DecideConfig["baseUrl"]>, "typesafe">;
 
@@ -24,9 +23,9 @@ export function modelRecord(config: Partial<SmolConfig>): ModelType | undefined 
   return getModel(config.model, config.modelData);
 }
 
-/** A model-only switch to a decision model selects its registry provider.
- * Repeating the current model keeps its chosen provider. */
-export function decisionProviderOverride(
+/** Switching between text and decision models selects the new model's provider.
+ * An explicit provider or a repeated model keeps the selected route. */
+export function modelProviderOverride(
   defaults: Partial<SmolConfig>,
   override: Partial<SmolConfig>,
 ): string | undefined {
@@ -38,7 +37,16 @@ export function decisionProviderOverride(
     return undefined;
   }
   const record = modelRecord({ ...defaults, ...override, provider: undefined });
-  return record?.type === "decision" ? record.provider : undefined;
+  if (record?.type === "decision") {
+    return record.provider;
+  }
+  const previous = modelRecord(defaults);
+  const wasDecision =
+    previous?.type === "decision" || (previous === undefined && defaults.provider === "typesafe");
+  if (wasDecision && record?.type === "text") {
+    return record.provider;
+  }
+  return undefined;
 }
 
 export function mergeLlmConfig(
@@ -49,7 +57,7 @@ export function mergeLlmConfig(
   if (override.baseUrl !== undefined) {
     merged.baseUrl = { ...defaults.baseUrl, ...override.baseUrl };
   }
-  const provider = decisionProviderOverride(defaults, override);
+  const provider = modelProviderOverride(defaults, override);
   if (provider !== undefined) {
     merged.provider = provider;
   }

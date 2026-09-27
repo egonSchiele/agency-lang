@@ -21,9 +21,6 @@ A known model is a decision call when its registry entry has
 another provider serving a decision model. An unknown model opts into the
 TypeSafe protocol with `provider: "typesafe"`.
 
-The options that were considered and set aside are in
-`decision-models-design-options.md` next to this file.
-
 ## The lifecycle of one call
 
 Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
@@ -65,9 +62,6 @@ Follow `const dept: Dept = llm("Which department?", { model: "jev-1.13" })`.
    branch totals under the `decision` kind. Statelog gets its usual
    `promptCompletion` event.
 
-The decision branch is the only new code on the path. Nothing in the parse,
-the thread, the guards, or statelog knows it exists.
-
 ## Which calls are decision calls
 
 `isDecisionCall` first looks up the model under the selected provider. If
@@ -82,15 +76,17 @@ the registry entry's provider, then `typesafe` for an unknown model. Thus
 `openrouter/jev-1.13` reaches smoltalk with `provider: "openrouter"` and
 uses OpenRouter's credentials and endpoint.
 
-`RuntimeContext.getSmoltalkConfig` merges the defaults through
-`lib/runtime/llmConfig.ts`. `runPrompt` passes branch defaults and per-call
-options as separate layers. When a layer changes the model to a known
-decision model without naming a provider, it selects the registry
-provider. The stdlib setter applies the same rule to successive
-`setLlmOptions` updates. Repeating the current model keeps its provider. For example, a run using OpenRouter's Jev keeps
-OpenRouter when a call repeats `model: "jev-1.13"`. A call switching from
-an OpenAI text model to `model: "jev-1.13"` uses the registry's default
-provider. Model-only changes to text models retain their existing behavior.
+`mergeLlmConfig` in `lib/runtime/llmConfig.ts` applies model and provider
+selection at each config layer. A model-only switch to a decision model
+selects its registry provider. Switching from a decision model to a known
+text model also selects the new model's registry provider. For example,
+`setModel("jev-1.13")` followed by `setModel("gpt-5-mini")` selects TypeSafe,
+then OpenAI.
+
+An explicit provider wins. Repeating the current model keeps its provider,
+so `model: "jev-1.13"` in a run using OpenRouter stays on OpenRouter.
+Model-only changes between text models keep the existing provider.
+`setModel`, `setLlmOptions`, and per-call options follow these rules.
 
 ## Validation
 
@@ -148,10 +144,9 @@ refuses a typo.
 
 `rawData` stays on the record as the untyped original.
 `lib/stdlib/thread.test.ts` builds its fixture as smoltalk's `DecideResult`,
-so a shape change there fails here. No wrapper type on `llm()`'s return
-value is planned. Score questions are still not produced, since no
-annotation maps to one, but `ScoreAnswer` is in the union so nothing
-changes when they are.
+so a shape change there fails here. Agency annotations do not produce
+score questions. `DecisionAnswer` includes `ScoreAnswer` to match the
+smoltalk response type.
 
 ## Cost
 
@@ -164,8 +159,6 @@ is free. A cost guard trips on a decision call the way it trips on a text
 call; the execution test checks that.
 
 ## Running against each backend
-
-TypeSafe has paused signups, so these are the routes that work.
 
 **Jev through OpenRouter.** Use OpenRouter's normal key and provider:
 
@@ -199,9 +192,6 @@ TYPESAFE_API_KEY=unused TYPESAFE_BASE_URL="http://localhost:8000" \
 
 **The default model.** Run the same file with no flag. It goes through
 structured output.
-
-Expect Laya to answer less accurately than Jev. On the example ticket it
-picks `support` where Jev and the default model pick `billing`.
 
 ## Testing
 
@@ -298,9 +288,3 @@ round, and the arm stays waiting until its last one is sent.
 Under the deterministic client, a merged request still consumes one
 `{ decide }` mock per call, in the order the calls were submitted, and
 each mock is checked against its own call's question names.
-
-## What is deferred
-
-Per-member `@jsonSchema` descriptions so an option can be described rather
-than only named, and an in-process Laya backend. `Choice<T>` and
-`Score<...>` wrapper types were set aside in favour of `lastReply()`.

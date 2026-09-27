@@ -1,3 +1,4 @@
+import { withoutReplyStats } from "../../helpers/withoutReplyStats.js"
 import { setLlmOptions } from "std::llm"
 
 node main() {
@@ -13,5 +14,6 @@ node main() {
       const res4: number = llm("What are the next 3 after that?")
     }
   }
-  return [msgs, msgs2, msgs3]
+  // Token counts and costs change on every real run, so drop them.
+  return withoutReplyStats([msgs, msgs2, msgs3])
 }

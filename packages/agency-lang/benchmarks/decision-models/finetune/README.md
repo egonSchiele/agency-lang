@@ -1,5 +1,7 @@
 # Fine-tune Laya for SMS classification
 
+The exported checkpoint is for **SMS spam yes/no classification only**. Do not use it for choice questions, score questions, or unrelated tasks. Training changes a shared decision head using only SMS yes/no labels, and both export paths remove inherited temperature overrides for all question types. Serving it under the API name `english` does not make it a general-purpose English checkpoint.
+
 These scripts use Python 3.11 and an Apple Silicon Mac with MPS. The recorded experiment used Python 3.11.9 and an Apple M3. The dependency versions are pinned in `requirements.txt`.
 
 ## Install and start the base model
@@ -71,17 +73,18 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 .venv-laya/bin/python \
 
 Verification checks that frozen tensors did not change, the exported head matches the selected head, and native probabilities match a direct forward on 16 validation messages. It writes a new report and refuses to overwrite one. The recorded report verified 170 unchanged encoder tensors and 31 changed head tensors.
 
-In a second terminal, with the TypeScript runner built:
+In a second terminal:
 
 ```bash
 export BENCH=benchmarks/decision-models
 pnpm benchmark:decisions --data "$BENCH/data/sms/sms-unique.jsonl" \
   --backend laya --model english --base-url http://127.0.0.1:8001 \
+  --checkpoint-sha256 "$(shasum -a 256 "$BENCH/outputs/sms-head/checkpoint/model.safetensors" | cut -d ' ' -f 1)" \
   --limit 500 --seed 42 --repeats 3 \
   --out "$BENCH/outputs/laya-finetuned.jsonl"
 ```
 
-Keep the sampling settings unchanged when comparing with the archived baselines. Laya's API reports a generic model identity; retain the run manifest, export settings, and checkpoint hash alongside each benchmark output.
+Keep the sampling settings unchanged when comparing with the archived baselines. Laya's API reports a generic model identity; record the served weights' SHA-256 in the run header and retain the manifest and export settings alongside each output. The CLI records the supplied hash; it cannot attest to a remote server's loaded weights.
 
 ## References
 

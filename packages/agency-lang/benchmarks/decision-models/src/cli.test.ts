@@ -51,6 +51,37 @@ it("refuses to overwrite an imported file", () => {
   expect(readFileSync(output, "utf8")).toBe(content);
 });
 
+it("records a supplied Laya checkpoint hash and preserves it in offline summaries", async () => {
+  const file = join(directory, "checkpoint-cases.jsonl");
+  writeFileSync(file, importSms("ham\tHello!\n"));
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  const hash = "AB".repeat(32);
+  await main(["--data", file, "--backend", "laya", "--checkpoint-sha256", hash, "--dry-run"]);
+  const metadata = JSON.parse(log.mock.calls[0][0]);
+  expect(metadata.checkpointSha256).toBe(hash.toLowerCase());
+  const saved = join(directory, "checkpoint-run.jsonl");
+  writeFileSync(saved, JSON.stringify({ kind: "run", metadata }) + "\n");
+  await main(["--summary", saved]);
+  expect(JSON.parse(log.mock.calls[1][0]).run.metadata.checkpointSha256).toBe(hash.toLowerCase());
+});
+
+it.each(["", "abc", "z".repeat(64), "a".repeat(63), "a".repeat(65)])(
+  "rejects malformed checkpoint hash %j before running",
+  async (hash) => {
+    await expect(
+      main([
+        "--data",
+        "not-read.jsonl",
+        "--backend",
+        "laya",
+        "--checkpoint-sha256",
+        hash,
+        "--dry-run",
+      ]),
+    ).rejects.toThrow(/checkpoint-sha256.*64.*hexadecimal/);
+  },
+);
+
 it("rejects concatenated runs and malformed saved records", () => {
   expect(() => readRecords('{"kind":"run","metadata":{}}\n{"kind":"run","metadata":{}}')).toThrow(
     /one run header/,

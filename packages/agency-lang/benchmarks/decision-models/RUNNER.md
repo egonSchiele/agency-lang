@@ -8,11 +8,11 @@ From `packages/agency-lang`:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm exec tsc
-pnpm exec tsc-alias
 pnpm benchmark:decisions --help
 pnpm benchmark:decisions --data benchmarks/decision-models/smoke.jsonl --backend laya --dry-run
 ```
+
+The command compiles its runner into `.agency-build/decision-models/` using the benchmark tsconfig. The normal Agency build and npm package exclude it.
 
 The four authored cases in `smoke.jsonl` check the plumbing. They are too small and easy to rank models. `--dry-run` validates the input and settings without contacting a provider or needing keys.
 
@@ -79,7 +79,7 @@ pnpm benchmark:decisions --data cases.jsonl --backend logprobs --mode throughput
 
 Batch size is questions **about the same state** per decision request, capped at 64. Different cases always remain separate requests. The text adapter sends one question per request, sequentially within each case. Concurrency counts cases. On binary SMS examples, each case has only one question, so increasing batch size cannot help. Use a multi-question dataset to measure that benefit.
 
-The header records settings, client hardware, endpoint, model, and case IDs. `--machine` should identify the Laya server's hardware if it runs elsewhere. Compare one backend at a time to avoid local resource contention. Treat hosted latency as end-to-end service latency, not accelerator speed.
+The header records settings, client hardware, endpoint, model, and case IDs. For a local checkpoint, pass `--checkpoint-sha256` with the SHA-256 of the served `model.safetensors` file. The runner validates 64 hexadecimal characters and saves the lowercase value as `metadata.checkpointSha256`; it is null when omitted. This is operator-supplied provenance, not a verification of what a remote server loaded. Offline summaries preserve it. `--machine` should identify the Laya server's hardware if it runs elsewhere. Compare one backend at a time to avoid local resource contention. Treat hosted latency as end-to-end service latency, not accelerator speed.
 
 One warmup case runs by default. It may include local model loading and is recorded separately. A failed warmup stops the run. Warmups and repeated inputs may warm provider caches; the report is a warm-workload measurement. Use `--warmup 0` and a fresh server to investigate cold starts separately.
 

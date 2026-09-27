@@ -20,6 +20,14 @@ it("preserves the published source and converted dataset checksums", () => {
   }
 });
 
+it("links the fine-tuned run to its verified checkpoint without claiming capture at run time", () => {
+  const header = readRecords(read("results/sms/laya-finetuned-sms.jsonl"))[0];
+  if (header.kind !== "run") throw new Error("Missing run header");
+  const verification = JSON.parse(read("results/sms/finetune/checkpoint-verification.json"));
+  expect(header.metadata.checkpointSha256).toBe(verification.checkpointSha256);
+  expect(header.metadata.checkpointSha256Source).toContain("retrospectively");
+});
+
 it.each([
   ["jev-openrouter-sms", 1447],
   ["laya-english-sms", 1293],

@@ -99,7 +99,7 @@
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": true /* Skip type checking all .d.ts files. */
   },
-  "include": ["lib", "scripts", "benchmarks/decision-models", "test.ts"],
+  "include": ["lib", "scripts", "test.ts"],
   // Tests are excluded so they stay out of ./dist, which the npm tarball packs
   // wholesale. tsconfig.tests.json still type-checks them.
   "exclude": [

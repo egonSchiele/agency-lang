@@ -10,12 +10,18 @@ Each model answered the same 500 messages three times, for 1,500 measured reques
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Jev via OpenRouter | 96.47% | 0.922 | 84.0% | 88.9% | 184 ms | 294 ms |
 | Laya base | 86.20% | 0.777 | 47.7% | 96.8% | 40 ms | 63 ms |
-| Laya fine-tuned | 94.20% | 0.886 | 69.8% | 95.2% | 40 ms | 59 ms |
-| GPT-4o-mini logprobs | 91.20% | 0.833 | 60.1% | 89.4% | 482 ms | 925 ms |
+| Laya fine-tuned (4,159 SMS training messages; epoch 3) | 94.20% | 0.886 | 69.8% | 95.2% | 40 ms | 59 ms |
+| GPT-4o-mini logprobs (A=false, B=true) | 91.20% | 0.833 | 60.1% | 89.4% | 482 ms | 925 ms |
+
+The test sample contains 437 ham and 63 spam messages. Always predicting ham achieves **87.4% accuracy**, above base Laya's 86.2%. Jev, base Laya, and GPT-4o-mini received no task-specific training or example demonstrations in this experiment. Fine-tuned Laya received 4,159 labeled SMS training messages and used 500 more for validation.
+
+The fine-tuned 94.2% is the archived result of epoch three from an unfinished five-epoch run, stopped during epoch four. Its exact weights are not committed, so the exact model and score cannot be recreated from this repository alone. Saved responses allow the score to be recomputed offline. A fresh default training run can select different weights.
+
+The GPT-4o-mini result uses the benchmark's specific letter-code prompt: A means `false` (ham), and B means `true` (spam), with no extra class descriptions. Wording, label codes, and option order may affect accuracy. Alternative prompts were not tested.
 
 Fine-tuning improved Laya by 8.0 percentage points. Per 500 messages, its false spam flags fell from 67 to 26, while missed spam rose from two to three. Jev had the highest accuracy in this comparison. Both Laya runs used a local Apple M3 GPU through MPS; the hosted models' timings include network and service overhead.
 
-The test sample contains 437 ham and 63 spam messages. Always predicting ham would achieve 87.4% accuracy. This old public dataset may have appeared in model training, and it covers only binary SMS classification. Baseline test results were inspected before fine-tuning, although the test messages were excluded from training and validation. These results should be followed with fresh examples from the intended application.
+This old public dataset may have appeared in model training, and it covers only binary SMS classification. Baseline test results were inspected before fine-tuning, although the test messages were excluded from training and validation. These results should be followed with fresh examples from the intended application.
 
 See [the detailed comparison](results/sms/comparison.md) for probability errors and paired confidence intervals. Repetitions measure timing and response variation; there are 500 independent test cases, not 1,500.
 
@@ -28,7 +34,7 @@ See [the detailed comparison](results/sms/comparison.md) for probability errors 
 - `results/sms/finetune/`: exact splits, training history, checkpoint selection, environment versions, and verification reports.
 - `finetune/`: training, checkpoint export, local serving, and verification scripts.
 
-The JSON archives retain the original run metadata, including historical local paths. Model weights and Python environments are excluded from Git. Write new runs and checkpoints under the ignored `outputs/` directory.
+The JSON archives retain historical local paths. The fine-tuned run header now includes a retrospectively recorded checkpoint hash, explicitly marked as added from its verification report; its measured responses are unchanged. Model weights and Python environments are excluded from Git. Write new runs and checkpoints under the ignored `outputs/` directory.
 
 ## Build and check the data
 
@@ -36,8 +42,6 @@ Run these commands from `packages/agency-lang`:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm exec tsc
-pnpm exec tsc-alias
 export BENCH=benchmarks/decision-models
 mkdir -p "$BENCH/outputs"
 pnpm benchmark:decisions --help
@@ -46,7 +50,7 @@ pnpm benchmark:decisions --data "$BENCH/data/sms/sms-unique.jsonl" \
   --backend laya --limit 500 --seed 42 --repeats 3 --dry-run
 ```
 
-Dry runs validate input and sampling without contacting a model. The committed dataset has 5,171 distinct message texts. Its SHA-256 and selected case IDs are recorded in every run.
+The command builds the runner with its own tsconfig into `.agency-build/decision-models/`, outside the published package. It does not require building Agency. Dry runs validate input and sampling without contacting a model. The committed dataset has 5,171 distinct message texts. Its SHA-256 and selected case IDs are recorded in every run.
 
 ## Run the comparison
 
@@ -65,6 +69,7 @@ Start the base Laya server using the [local setup instructions](finetune/README.
 ```bash
 pnpm benchmark:decisions --data "$BENCH/data/sms/sms-unique.jsonl" \
   --backend laya --model english --base-url http://127.0.0.1:8000 \
+  --checkpoint-sha256 "$(shasum -a 256 "$BENCH/outputs/laya-base/model.safetensors" | cut -d ' ' -f 1)" \
   --limit 500 --seed 42 --repeats 3 --out "$BENCH/outputs/laya-base.jsonl"
 ```
 

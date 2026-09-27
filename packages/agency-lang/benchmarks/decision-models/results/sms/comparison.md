@@ -4,7 +4,7 @@ Training was stopped at the user’s request during epoch four. The best complet
 
 All four runs use the same 500 test messages, repeated three times. All 1,500 fine-tuned model calls succeeded. Test IDs, dataset hash, and case/trial coverage match the original runs. The fine-tuned model’s labels were identical across all three repetitions.
 
-| Metric | Jev | Laya base | Laya fine-tuned | GPT-4o-mini logprobs |
+| Metric | Jev | Laya base | Laya fine-tuned (4,159 SMS training messages; epoch 3) | GPT-4o-mini logprobs (A=false, B=true) |
 |---|---:|---:|---:|---:|
 | Accuracy | 96.47% | 86.20% | 94.20% | 91.20% |
 | Macro-F1 | 0.922 | 0.777 | 0.886 | 0.833 |
@@ -14,7 +14,11 @@ All four runs use the same 500 test messages, repeated three times. All 1,500 fi
 | p95 latency | 294 ms | 63 ms | 59 ms | 925 ms |
 | Brier error, lower is better | 0.0700 | 0.2004 | 0.0921 | 0.1372 |
 
-Fine-tuning improves accuracy by 8.0 percentage points while keeping latency essentially unchanged. Per 500 messages, false spam flags fall from 67 to 26, while missed spam rises from two to three. The fine-tuned model is more accurate than the tested GPT-4o-mini setup and remains less accurate overall than Jev; it catches a larger proportion of spam than Jev.
+Always predicting ham scores 87.4%, above base Laya's 86.2%. The other three setups received no task-specific training or demonstrations in this experiment. Fine-tuned Laya used 4,159 labeled SMS training messages plus 500 validation messages.
+
+The 94.2% result is from epoch three of an unfinished run. Its exact weights are not committed, so the model and score cannot be recreated from this repository alone; the saved responses reproduce the reported metrics. The GPT-4o-mini result depends on this specific prompt, label order, and A=false/B=true encoding. Alternative prompts were not tested.
+
+Fine-tuning improves accuracy by 8.0 percentage points while keeping latency essentially unchanged. Per 500 messages, false spam flags fall from 67 to 26, while missed spam rises from two to three. With that additional SMS training, the fine-tuned model is more accurate than the tested GPT-4o-mini setup and remains less accurate overall than Jev; it catches a larger proportion of spam than Jev.
 
 Paired bootstrap intervals resample the 500 cases, keeping repeated trials together. The fine-tuned accuracy advantage is 8.0 points over base Laya (95% interval 5.6–10.6 points), 3.0 points over GPT-4o-mini (0.53–5.53), and -2.27 points versus Jev (-4.2 to -0.4). These results concern this sample and task. The dataset is public and old, and baseline results were already inspected before this follow-up experiment.
 
@@ -31,6 +35,6 @@ Artifacts:
 - `finetune/checkpoint-verification.json`: frozen-weight and prediction checks.
 - The four adjacent JSONL files contain the raw benchmark results.
 
-Model weights are excluded from Git. See [fine-tuning instructions](../../finetune/README.md) to train and export a local checkpoint. Historical JSON records retain their original paths; those paths describe the original run and are not required to read its results.
+Model weights are excluded from Git. See [fine-tuning instructions](../../finetune/README.md) to train and export a local checkpoint. The fine-tuned run header was annotated retrospectively with the checkpoint hash from its verification report. Other measured records are unchanged. The base Laya run did not record a weights hash, so its exact served weights cannot be established from its header. Historical JSON records retain their original paths; those paths describe the original run and are not required to read its results.
 
 No paid API calls or cloud training were used for this fine-tuning experiment.

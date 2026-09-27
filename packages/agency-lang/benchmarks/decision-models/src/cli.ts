@@ -39,6 +39,7 @@ Options:
   --warmup N          Untimed cases before measurement, default 1
   --timeout-ms N      Timeout per provider call, default 30000
   --machine LABEL     Hardware/run label (record Laya server hardware here)
+  --checkpoint-sha256 HEX  Operator-supplied SHA-256 of the served model weights
   --dry-run           Validate and preview, without keys or provider calls
   --summary PATH      Recompute metrics from a saved results JSONL
   --help              Show this help
@@ -184,6 +185,7 @@ export async function main(args: string[]): Promise<void> {
       warmup: stringOption,
       "timeout-ms": stringOption,
       machine: stringOption,
+      "checkpoint-sha256": stringOption,
       summary: stringOption,
       "dry-run": { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -202,6 +204,12 @@ export async function main(args: string[]): Promise<void> {
     throw new Error("--data and --backend are required. See --help.");
   }
   const backend = z.enum(["jev", "laya", "logprobs"]).parse(values.backend);
+  const checkpointSha256 = z
+    .string()
+    .regex(/^[a-fA-F0-9]{64}$/, "checkpoint-sha256 must contain exactly 64 hexadecimal characters")
+    .transform((value) => value.toLowerCase())
+    .optional()
+    .parse(values["checkpoint-sha256"]);
   const defaults = {
     jev: {
       model: "jev-latest",
@@ -252,6 +260,7 @@ export async function main(args: string[]): Promise<void> {
   }
   const metadata = {
     schemaVersion: 1,
+    checkpointSha256: checkpointSha256 ?? null,
     ...options,
     ...run,
     mode,

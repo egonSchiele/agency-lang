@@ -154,7 +154,7 @@ node main() {
 
 The boolean still uses Agency's 0.5 cutoff. This example also marks uncertain cases for review using the probability that the answer is yes, `answer.noul`. The review thresholds are illustrative; choose thresholds using labeled validation examples and the costs of each kind of mistake.
 
-Call `lastReply()` immediately after the decision on the same thread. It returns `null` before any assistant reply, and `reply.answers` is `null` for a normal text reply. Check an answer's `type` before reading its fields.
+Call [`lastReply()`](/guide/message-threads#lastreply-read-a-reply-s-metadata) immediately after the decision on the same thread. It returns `null` before any assistant reply, and `reply.answers` is `null` for a normal text reply. Check an answer's `type` before reading its fields.
 
 | Answer type | Fields |
 | --- | --- |

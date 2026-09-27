@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   classifyLlmError,
   decideRetry,
+  decideTruncationRetry,
   decideValidationRetry,
+  TRUNCATION_RETRY_CEILING,
   DEFAULT_RETRY_POLICY,
   enrichSchemaLimitationError,
   resolveRetryPolicy,
@@ -279,5 +281,37 @@ describe("decideValidationRetry", () => {
     } else {
       throw new Error("expected retry");
     }
+  });
+});
+
+describe("decideTruncationRetry", () => {
+  const cut = { stopReason: "length", output: null, toolCallCount: 0, maxTokens: 20000, attempt: 0 };
+
+  it("re-issues a reply cut off with nothing visible, with four times the room", () => {
+    const d = decideTruncationRetry(cut);
+    expect(d.kind).toBe("retry");
+    if (d.kind === "retry") {
+      expect(d.maxTokens).toBe(80000);
+      expect(d.detail).toContain("20000");
+    }
+  });
+
+  it("leaves a cut reply alone when it carries text or a tool call", () => {
+    expect(decideTruncationRetry({ ...cut, output: "half an answer" }).kind).toBe("accept");
+    expect(decideTruncationRetry({ ...cut, toolCallCount: 1 }).kind).toBe("accept");
+    expect(decideTruncationRetry({ ...cut, output: "   " }).kind).toBe("retry");
+  });
+
+  it("never retries a reply that ended for any other reason", () => {
+    expect(decideTruncationRetry({ ...cut, stopReason: "stop" }).kind).toBe("accept");
+    expect(decideTruncationRetry({ ...cut, stopReason: undefined }).kind).toBe("accept");
+  });
+
+  it("retries once, and only when a cap was set and is below the ceiling", () => {
+    expect(decideTruncationRetry({ ...cut, attempt: 1 }).kind).toBe("accept");
+    expect(decideTruncationRetry({ ...cut, maxTokens: undefined }).kind).toBe("accept");
+    expect(decideTruncationRetry({ ...cut, maxTokens: TRUNCATION_RETRY_CEILING }).kind).toBe("accept");
+    const near = decideTruncationRetry({ ...cut, maxTokens: 100000 });
+    expect(near.kind === "retry" && near.maxTokens).toBe(TRUNCATION_RETRY_CEILING);
   });
 });

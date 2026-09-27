@@ -1,0 +1,10 @@
+{
+  "sourceFile": "outputCap.agency",
+  "tests": [
+    { "nodeName": "userSetting", "input": "", "expectedOutput": "20000", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "knownModel", "input": "", "expectedOutput": "32768", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "bigModel", "input": "", "expectedOutput": "65536", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "anthropic", "input": "", "expectedOutput": "20000", "evaluationCriteria": [{ "type": "exact" }] },
+    { "nodeName": "unknown", "input": "", "expectedOutput": "\"20000|20000\"", "evaluationCriteria": [{ "type": "exact" }] }
+  ]
+}

@@ -10,7 +10,8 @@ export type LLMRetryReason =
   | "rateLimit"
   | "serverError"
   | "overloaded"
-  | "invalidStructuredOutput";
+  | "invalidStructuredOutput"
+  | "truncatedThinking";
 
 export type Classification =
   | { kind: "retryable"; reason: LLMRetryReason; detail: string; retryAfterMs?: number }
@@ -346,5 +347,54 @@ export function decideValidationRetry(
     feedback: buildValidationRetryMessage(error),
     reason: "invalidStructuredOutput",
     detail: truncate(error, 500),
+  };
+}
+
+/** The most output tokens a truncation retry will ask for. Above this a
+ *  reply that is still all thinking is the model's problem, not the cap's. */
+export const TRUNCATION_RETRY_CEILING = 131072;
+
+/** How many times one call is re-issued with a larger cap. Once: the
+ *  first retry quadruples the room, which is what a reasoning model
+ *  needs; a second would mostly pay for the same thinking again. */
+export const TRUNCATION_RETRIES = 1;
+
+export type TruncationDecision =
+  | { kind: "accept" }
+  | { kind: "retry"; maxTokens: number; detail: string };
+
+/**
+ * Pure decision for a reply that ended on the token limit with nothing to
+ * show for it: no visible text and no tool call, because a reasoning
+ * model spent the whole budget thinking. Such a reply is not an answer
+ * and must not be treated as one; the call is re-issued once with the cap
+ * raised, up to a ceiling. A reply that was cut but still carries text or
+ * a tool call is left alone: the caller can use what it got, and the
+ * validation layer says when the cut mattered.
+ *
+ * `maxTokens` is the cap the call went out with; without one there is
+ * nothing to raise, and the provider's own default decided the cut.
+ */
+export function decideTruncationRetry(args: {
+  stopReason?: string;
+  output: string | null | undefined;
+  toolCallCount: number;
+  maxTokens: number | undefined;
+  attempt: number;
+}): TruncationDecision {
+  const { stopReason, output, toolCallCount, maxTokens, attempt } = args;
+  if (stopReason !== "length") return { kind: "accept" };
+  if (toolCallCount > 0 || (output ?? "").trim() !== "") return { kind: "accept" };
+  if (maxTokens === undefined || maxTokens <= 0) return { kind: "accept" };
+  if (attempt >= TRUNCATION_RETRIES || maxTokens >= TRUNCATION_RETRY_CEILING) {
+    return { kind: "accept" };
+  }
+  const raised = Math.min(maxTokens * 4, TRUNCATION_RETRY_CEILING);
+  return {
+    kind: "retry",
+    maxTokens: raised,
+    detail:
+      `The reply hit the ${maxTokens}-token limit before writing anything visible ` +
+      `(all of it was thinking). Asking again with room for ${raised} tokens.`,
   };
 }

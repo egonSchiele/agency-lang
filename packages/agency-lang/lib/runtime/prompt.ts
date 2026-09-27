@@ -19,7 +19,7 @@ import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } fro
 import { recordCompletionUsage } from "./recordPaidUsage.js";
 import { projectProviderTokenUsage, type ProviderUsageKind } from "./invocationUsage.js";
 import { resolveCompletionModel } from "./modelIdentity.js";
-import { decideValidationRetry, resolveRetryPolicy } from "./llmRetry.js";
+import { decideValidationRetry, resolveRetryPolicy, decideTruncationRetry, TRUNCATION_RETRIES } from "./llmRetry.js";
 import type { RetryPolicy, RetryConfig } from "./llmRetry.js";
 import { mergedReplyLimits, withLocalDefaults, type ReplyLimits } from "./localDefaults.js";
 // See docs/dev/agents/promptRunner.md — the dispatch + retry driver lives next door.
@@ -601,44 +601,86 @@ async function _runPrompt({
   // "completion" for a text model; "decision" for a decision model, whose
   // call is booked under its own kind. See decision/dispatch.ts.
   let usageKind: ProviderUsageKind;
-  try {
-    ({ completion, toolCalls, usageKind } = await dispatchWithRetry({
-      ctx,
-      promptConfig,
-      prompt,
+  let modelName: ReturnType<typeof resolveCompletionModel>;
+  let projectedUsage: ReturnType<typeof projectProviderTokenUsage>["usage"];
+  let endTime: number;
+  // A reply that hit the token limit while still thinking, with no text
+  // and no tool call, is re-issued once with a larger cap. Each attempt
+  // is its own promptStart/promptCompletion pair in the statelog and is
+  // charged, so a discarded attempt still shows in cost and token counts.
+  let callConfig = clientConfig;
+  let callPromptConfig = promptConfig;
+  let callStart = startTime;
+  for (let truncationAttempt = 0; ; truncationAttempt++) {
+    try {
+      ({ completion, toolCalls, usageKind } = await dispatchWithRetry({
+        ctx,
+        promptConfig: callPromptConfig,
+        prompt,
+        stream,
+        retryPolicy,
+        parentSignal: ctx.getAbortSignal(stateStack),
+        stateStack,
+      }));
+    } catch (err) {
+      throw await dispatchFailureToThrow(err, { ctx, stateStack, tools });
+    }
+
+    endTime = performance.now();
+    modelName = resolveCompletionModel(completion.model, callConfig.model);
+    projectedUsage = projectProviderTokenUsage(completion.usage, usageKind).usage;
+
+    ctx.statelogClient.promptCompletion({
+      messages: withMessageLabels(messages),
+      // Sanitize the nested usage too — the top-level `usage` alone isn't enough,
+      // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
+      completion: { ...completion, usage: projectedUsage },
+      model: JSON.stringify(modelName),
+      timeTaken: endTime - callStart,
+      tools,
+      responseFormat,
+      usage: projectedUsage,
+      cost: completion.cost,
+      // Statelog's field name; smoltalk's is `stopReason`.
+      finishReason: completion.stopReason ?? completion.rawStopReason,
       stream,
-      retryPolicy,
-      parentSignal: ctx.getAbortSignal(stateStack),
-      stateStack,
-    }));
-  } catch (err) {
-    throw await dispatchFailureToThrow(err, { ctx, stateStack, tools });
+      threadId: __threads()?.activeId() ?? null,
+      threadIdentity: messages.id,
+      threadLabel: messages.label,
+    });
+
+    const truncation = decideTruncationRetry({
+      stopReason: completion.stopReason,
+      output: completion.output,
+      toolCallCount: toolCalls.length,
+      maxTokens: callConfig.maxTokens,
+      attempt: truncationAttempt,
+    });
+    if (truncation.kind === "accept") break;
+
+    // The cut attempt was a real request: book its tokens and cost, then
+    // ask again with more room. Nothing from it enters the thread.
+    updateTokenStats({ globals: ctx.globals, usage: projectedUsage, cost: completion.cost, model: modelName });
+    recordCompletionUsage(ctx, targetStack, completion, callConfig.model, usageKind);
+    await callHook({
+      ctx,
+      name: "onLLMRetry",
+      data: {
+        attempt: truncationAttempt + 1,
+        maxRetries: TRUNCATION_RETRIES,
+        delayMs: 0,
+        reason: "truncatedThinking",
+        detail: truncation.detail,
+      },
+    });
+    if (ctx.isCancelled(stateStack)) {
+      throw new AgencyCancelledError();
+    }
+    callConfig = { ...callConfig, maxTokens: truncation.maxTokens };
+    callPromptConfig = { ...callPromptConfig, maxTokens: truncation.maxTokens, metadata: callConfig } as any;
+    callStart = performance.now();
+    emitPromptStart({ ctx, messages, tools, responseFormat, clientConfig: callConfig, callLabel });
   }
-
-  const endTime = performance.now();
-
-  const modelName = resolveCompletionModel(completion.model, clientConfig.model);
-
-  const projectedUsage = projectProviderTokenUsage(completion.usage, usageKind).usage;
-
-  ctx.statelogClient.promptCompletion({
-    messages: withMessageLabels(messages),
-    // Sanitize the nested usage too — the top-level `usage` alone isn't enough,
-    // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
-    completion: { ...completion, usage: projectedUsage },
-    model: JSON.stringify(modelName),
-    timeTaken: endTime - startTime,
-    tools,
-    responseFormat,
-    usage: projectedUsage,
-    cost: completion.cost,
-    // Statelog's field name; smoltalk's is `stopReason`.
-    finishReason: completion.stopReason ?? completion.rawStopReason,
-    stream,
-    threadId: __threads()?.activeId() ?? null,
-    threadIdentity: messages.id,
-    threadLabel: messages.label,
-  });
 
   messages.push(buildReplyMessage(completion, toolCalls, ctx.logLevel), callLabel);
 
@@ -649,7 +691,7 @@ async function _runPrompt({
     model: modelName,
   });
 
-  recordCompletionUsage(ctx, targetStack, completion, clientConfig.model, usageKind);
+  recordCompletionUsage(ctx, targetStack, completion, callConfig.model, usageKind);
   await runPostTurnMemory(ctx, targetStack, messages);
 
   await callHook({
@@ -660,7 +702,7 @@ async function _runPrompt({
       result: completion,
       usage: completion.usage,
       cost: completion.cost,
-      timeTaken: endTime - startTime,
+      timeTaken: endTime - callStart,
       messages: redactMessagesForLog(messages),
     },
   });

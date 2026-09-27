@@ -45,7 +45,7 @@ function ruleResult(rule: PolicyRule): PolicyResult {
  *  inside a pattern. Used for every value a generated rule pins, and for
  *  the base directory of the built-in scoped policies. */
 export function escapeGlob(s: string): string {
-  return s.replace(/[\\*?{}()[\]!@+|,^$]/g, "\\$&");
+  return s.replace(/[\\*?{}()[\]!@+|,^$"]/g, "\\$&");
 }
 
 export function checkPolicy(
@@ -184,6 +184,10 @@ function canonicalAgentHome(): string {
   }
 }
 
+function matchesGlob(value: string, pattern: string): boolean {
+  return pattern === "" ? value === "" : picomatch.isMatch(value, pattern);
+}
+
 function matchesRule(
   rule: PolicyRule,
   interrupt: { effect: string; message: string; data: any; origin: string },
@@ -206,16 +210,16 @@ function matchesRule(
     // The raw pattern first (relative values match relative patterns as
     // before), then the cwd-resolved form for dir patterns, so `.` gains its
     // meaning without taking any match away.
-    const raw = picomatch.isMatch(stripDotSlash(value), stripDotSlash(pattern));
+    const raw = matchesGlob(stripDotSlash(value), stripDotSlash(pattern));
     const viaDot =
       !raw &&
       key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
+      matchesGlob(stripDotSlash(value), stripDotSlash(resolveDotDirPattern(pattern)));
     const viaPlaceholders =
       !raw &&
       !viaDot &&
       key === "dir" &&
-      picomatch.isMatch(stripDotSlash(value), expandAgentHomeDir(expandAgencyInstallDir(pattern)));
+      matchesGlob(stripDotSlash(value), expandAgentHomeDir(expandAgencyInstallDir(pattern)));
     if (!raw && !viaDot && !viaPlaceholders) {
       return false;
     }

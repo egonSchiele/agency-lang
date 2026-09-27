@@ -111,3 +111,18 @@ Notes:
 
 By default, any interrupts that aren't addressed by your policy, and aren't handled by your agent, will cause a crash. Run with the `--interactive` flag if you want to be prompted to approve or reject those interrupts instead.
 
+
+## Literal values from TypeScript
+
+```typescript
+import { escapeGlob } from "agency-lang/runtime";
+
+const match = { listId: escapeGlob("groceries[1]") };
+```
+
+`escapeGlob` escapes pattern characters, including quotes, so they are treated
+as part of the value. An empty pattern matches only an empty value.
+
+Policy path normalization still applies: a leading `./` is ignored. In `dir`
+rules, `.` also matches the launch directory, and `<agency>` and `<agent-home>`
+expand to their configured directories. Escaping does not disable these aliases.

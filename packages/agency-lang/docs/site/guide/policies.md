@@ -120,6 +120,9 @@ import { escapeGlob } from "agency-lang/runtime";
 const match = { listId: escapeGlob("groceries[1]") };
 ```
 
-Use `escapeGlob` when a rule should match an exact payload value. It escapes
-pattern characters such as `*`, `?`, and brackets using the same helper as
-Agency's built-in scoped policies.
+`escapeGlob` escapes pattern characters, including quotes, so they are treated
+as part of the value. An empty pattern matches only an empty value.
+
+Policy path normalization still applies: a leading `./` is ignored. In `dir`
+rules, `.` also matches the launch directory, and `<agency>` and `<agent-home>`
+expand to their configured directories. Escaping does not disable these aliases.

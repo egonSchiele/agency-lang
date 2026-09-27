@@ -832,6 +832,33 @@ describe("escapeGlob", () => {
     expect(checkPolicy(policy, intr("std::bash", { command: "ls a.md" })).type).not.toBe("approve");
   });
 
+  it.each(["approve", "reject"] as const)("keeps quoted values literal in %s rules", (action) => {
+    for (const value of ['"a"', '"*"', 'say "hello"']) {
+      const policy = { "example::write": [{ match: { id: escapeGlob(value) }, action }] };
+      expect(checkPolicy(policy, intr("example::write", { id: value })).type).toBe(action);
+      expect(
+        checkPolicy(policy, intr("example::write", { id: value.replaceAll('"', "") })).type,
+      ).toBe("propagate");
+    }
+  });
+
+  it.each(["id", "dir", "message", "origin"])("matches an empty %s without throwing", (field) => {
+    for (const action of ["approve", "reject"] as const) {
+      const policy = { "example::write": [{ match: { [field]: escapeGlob("") }, action }] };
+      const empty = { ...intr("example::write", { id: "", dir: "" }), origin: "" };
+      expect(checkPolicy(policy, empty).type).toBe(action);
+      const nonempty = {
+        ...intr("example::write", { id: "other", dir: "other" }),
+        message: "other",
+        origin: "other",
+      };
+      expect(checkPolicy(policy, nonempty).type).toBe("propagate");
+      if (field === "id" || field === "dir") {
+        expect(checkPolicy(policy, intr("example::write", {})).type).toBe("propagate");
+      }
+    }
+  });
+
   it("keeps a brace-expanded subpath scope working around an escaped base", () => {
     const base = escapeGlob("/tmp/[x]");
     const policy = {

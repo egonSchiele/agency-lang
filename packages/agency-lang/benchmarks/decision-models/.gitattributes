@@ -1,0 +1,6 @@
+# Keep archived checksums stable across checkout platforms.
+data/** -text
+results/** -text
+# Preserve whitespace and line endings in the original UCI files.
+data/sms/SMSSpamCollection -whitespace
+data/sms/readme -whitespace

@@ -343,7 +343,8 @@ export type NoulAnswer = {
 }
 
 /** A decision model's answer to a pick-one question: the option picked,
-  the probability behind it, and the probability of every option. */
+  a provider-specific confidence score, and the probability of every option.
+  Read `probabilities[choice]` for the selected option's probability. */
 export type ChoiceAnswer = {
   type: "choice";
   choice: string;

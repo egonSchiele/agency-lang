@@ -57,7 +57,10 @@ type Response = {
 const response: Response = llm("What is the capital of France?")
 ```
 
+For yes/no questions and choosing between labels, you can also use a [decision model](/guide/decision-models). Jev and Laya answer typed `llm()` calls with probabilities that you can read through `lastReply()`.
+
 ## Tool calls
+
 
 Any function defined in Agency can automatically be used as a tool for the LLM. Pass the function in the `tools` option:
 

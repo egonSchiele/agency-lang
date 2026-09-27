@@ -4,6 +4,7 @@
   "description": "The Agency language",
   "main": "./dist/lib/index.js",
   "scripts": {
+    "benchmark:decisions": "tsc -p benchmarks/decision-models/tsconfig.json && node .agency-build/decision-models/run.js",
     "test": "vitest --test-timeout=1000",
     "test:run": "vitest run",
     "test:integration": "vitest run -c vitest.integration.config.ts",
@@ -47,6 +48,9 @@
   },
   "files": [
     "./dist",
+    "!dist/benchmarks/**",
+    "!dist/scripts/decisionBenchmark/**",
+    "!dist/scripts/decision-benchmark.*",
     "./stdlib/**/*.agency",
     "./stdlib/**/*.js",
     "./stdlib/docs/**/*.md",

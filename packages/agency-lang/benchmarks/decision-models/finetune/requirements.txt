@@ -1,0 +1,7 @@
+laya==0.3.20
+torch==2.14.0
+transformers==5.17.0
+safetensors==0.8.0
+numpy==2.4.6
+fastapi==0.141.1
+uvicorn==0.54.0

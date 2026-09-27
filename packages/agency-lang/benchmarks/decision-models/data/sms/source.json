@@ -1,0 +1,19 @@
+{
+  "source": "https://archive.ics.uci.edu/dataset/228/sms+spam+collection",
+  "download": "https://archive.ics.uci.edu/static/public/228/sms%2Bspam%2Bcollection.zip",
+  "citation": "Almeida, T. & Hidalgo, J. (2011). SMS Spam Collection. UCI Machine Learning Repository. https://doi.org/10.24432/C5CC84",
+  "license": "CC BY 4.0 (as listed by UCI)",
+  "downloadedAt": "2026-09-26",
+  "originalRows": 5574,
+  "uniqueRows": 5171,
+  "uniqueLabels": {
+    "ham": 4518,
+    "spam": 653
+  },
+  "deduplication": "Exact message text, first occurrence retained, no conflicting labels found. Original row IDs retained.",
+  "sha256": {
+    "SMSSpamCollection": "7d039a24a6083ed9ef0f806ebad56bbb976e3aeb8de05669173bfdc4996c239d",
+    "sms.jsonl": "1c22608e4f5b2d3757dd364baa19d5259f7ccc61a3c6c8bcdfea46063f6ca7a0",
+    "sms-unique.jsonl": "34a851fb7476ba23df14df94e20769cf0caaa16df8b7d1f87770fae900cf8933"
+  }
+}

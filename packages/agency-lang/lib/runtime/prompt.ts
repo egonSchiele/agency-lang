@@ -56,16 +56,38 @@ import type { SourceLocationOpts } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { LlmDefaults } from "../stdlib/llm.js";
 import {
+  closeHandoff,
   dropHandoffToolCall,
-  finishHandoff,
-  finishStoppedHandoff,
   handoffNotStartedMessage,
+  handoffOutcomeFor,
   handoffScopeKey,
+  recordTurnMark,
+  runEndTurnStep,
   stripHandoffSystemMessages,
+  type DeferredHandBack,
+  type HandoffOutcome,
+  type TurnEnded,
+  type TurnMarks,
 } from "./handoff.js";
 import { isAborted } from "./abortedResult.js";
+import {
+  assertUniqueToolNames,
+  capToolResultForLlm,
+  DEFAULT_TOOL_RESULT_CHARS,
+  dropNullDefaultedArgs,
+  failureTier,
+  invokeOnFreshThreadStore,
+  invokeOnThread,
+  MAX_TOOL_FAILURES,
+  MAX_TOOL_REJECTIONS,
+  REJECTION_REMOVAL_SUFFIX,
+  REJECTION_SUFFIX,
+  stringifyToolResult,
+  TIER_SUFFIX,
+  unwrapToolResultForLlm,
+} from "./toolInvocation.js";
 import { MessageThread, type MessageThreadJSON } from "./state/messageThread.js";
-import { StateStack, claimFrameForScope } from "./state/stateStack.js";
+import { EMPTY_TURN_MARKS, StateStack, claimFrameForScope } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { GraphState } from "./types.js";
 import { buildReplyMessage, extractStructuredResponse, updateTokenStats } from "./utils.js";
@@ -135,209 +157,11 @@ export function redactPromptForLog(p: string | UserContentInput): string | UserC
   return redactAttachments(p) as string | UserContentInput;
 }
 
-/** LLMs routinely emit an explicit `null` for an optional tool argument
- *  they chose not to set (e.g. `bash(command, cwd: null, timeout: null)`).
- *  Agency default-parameter values only fill `undefined`, so a `null` would
- *  sail past the default into the function body — `bash(cwd: null)` reaches
- *  `applyAgentCwd` → `path.resolve(base, null)` and throws. Drop any argument
- *  whose value is `null` when its parameter declares a default, so the call
- *  behaves exactly as if the LLM had omitted the key (the default applies).
- *  Params without a default keep their value untouched: a required arg passed
- *  `null` still surfaces its normal type error for the model to correct, and
- *  an intentionally-nullable param is left alone. */
-function dropNullDefaultedArgs(
-  args: Record<string, any> | null | undefined,
-  params: readonly FuncParam[],
-): Record<string, any> {
-  const out: Record<string, any> = { ...args };
-  for (const param of params) {
-    if (param.hasDefault && out[param.name] === null) {
-      delete out[param.name];
-    }
-  }
-  return out;
-}
-
-/** Default cap on characters of a single tool result fed back to the
- *  LLM. A recursive `ls`/`grep` can return megabytes; without a cap one
- *  tool call can blow the context window. The FULL result is still
- *  returned to Agency code — only what the model sees is truncated. */
-const DEFAULT_TOOL_RESULT_CHARS = 100_000;
-
-/** Coerce an arbitrary tool result to the string the LLM would see.
- *  Strings pass through; everything else is JSON-stringified, with a
- *  `String()` fallback for values JSON can't represent (e.g. circular). */
-function stringifyToolResult(result: any): string {
-  if (typeof result === "string") return result;
-  try {
-    const json = JSON.stringify(result);
-    // JSON.stringify returns undefined WITHOUT throwing for symbols,
-    // functions, and undefined itself; callers read .length off this.
-    return json === undefined ? String(result) : json;
-  } catch {
-    return String(result);
-  }
-}
-
-/** Unwrap a SUCCESS Result before it goes back to the model: the LLM
- *  should see the tool's value, not the `{__type, success, value}`
- *  envelope (a wrapped envelope makes the model re-derive `.value` and,
- *  worse, reconstruct wrapped objects when echoing them into later tool
- *  arguments — the compile→run CompiledProgram bug). Only the LLM-facing
- *  message unwraps; the Result cached on the branch for Agency code is
- *  untouched. Failures/rejections never reach this point (handled
- *  upstream in the invoke path), but pass through unchanged
- *  defensively. */
-function unwrapToolResultForLlm(result: any, toolName: string): any {
-  if (!isSuccess(result)) return result;
-  return result.value ?? `${toolName} ran successfully but did not return a value`;
-}
-
-/** A failed tool is removed only after this many failures (the circuit
- *  breaker against retry spirals), or immediately on the destructive tier. */
-const MAX_TOOL_FAILURES = 5;
-
-/** Consecutive rejections that remove a tool. Only consecutive: a
- *  successful call resets the count, so a narrow reject rule brushed
- *  against during otherwise-approved work never removes the tool, while
- *  a model rephrasing a refused call with nothing approved in between
- *  loses it quickly. */
-const MAX_TOOL_REJECTIONS = 5;
-
-const REJECTION_SUFFIX =
-  "Do not call this tool with the same arguments again; the call will not be executed.";
-const REJECTION_REMOVAL_SUFFIX =
-  "This tool has been rejected too many times and can no longer be called.";
-
-type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
-
-/**
- * Run `invoke` in a copy of the current ALS frame whose `threads` slot is
- * a fresh, empty ThreadStore. The body keeps the frame's `ctx` and
- * `stack`, which branch-aware cancellation and per-branch state depend
- * on. It must not keep `threads`: an `llm()` call in the body would push
- * onto the outer prompt's thread, whose last message is the assistant's
- * tool call, a shape OpenAI rejects ("An assistant message with
- * 'tool_calls' must be followed by tool messages"). A handoff function is
- * the exception; see runInvokeStep.
- *
- * The store is bare, not `withDefaultActive`, so a leaf tool that never
- * calls llm() does not log a phantom default thread.
- */
-async function invokeOnFreshThreadStore<T>(
-  ctx: RuntimeContext<GraphState>,
-  invoke: () => Promise<T>,
-): Promise<T> {
-  const parentFrame = agencyStore.getStore();
-  if (!parentFrame) {
-    return invoke();
-  }
-  const freshThreads = new ThreadStore();
-  freshThreads.setStatelogClient(ctx.statelogClient);
-  return agencyStore.run({ ...parentFrame, threads: freshThreads }, invoke);
-}
-
-/**
- * Run `invoke` in a copy of the current ALS frame whose `threads` slot is
- * a view of the caller's store with `thread` active. The view has its own
- * active stack, so two prompts running at once (two `async llm()` calls,
- * say) cannot interleave pushes and pops on a shared one.
- */
-async function invokeOnThread<T>(
-  thread: MessageThread,
-  scopeKey: string,
-  invoke: () => Promise<T>,
-): Promise<T> {
-  // The body's system messages are tagged with the dispatch's scope key
-  // while it runs, so the hand-back can remove them without a marker on
-  // the thread. Re-entered when a resume re-runs the dispatch.
-  thread.enterHandoffScope(scopeKey);
-  try {
-    const parentFrame = agencyStore.getStore();
-    if (!parentFrame) {
-      return await invoke();
-    }
-    const view = parentFrame.threads.viewWithActive(thread);
-    return await agencyStore.run({ ...parentFrame, threads: view }, invoke);
-  } finally {
-    thread.exitHandoffScope();
-  }
-}
-
-/** Classify a tool failure. Most-specific fact wins: a started destructive
- *  operation, then a proved-nothing-ran, then the tool's own idempotent
- *  declaration, else neutral. */
-function failureTier(
-  f: { destructiveRan?: boolean; neverStarted?: boolean },
-  markers?: { idempotent?: boolean },
-): FailureTier {
-  if (f.destructiveRan) return "destructive";
-  if (f.neverStarted) return "neverStarted";
-  if (markers?.idempotent) return "idempotent";
-  return "neutral";
-}
-
-const TIER_SUFFIX: Record<FailureTier, string> = {
-  destructive:
-    "The call failed after starting a destructive operation. This tool can no longer be called in this conversation. Verify state manually.",
-  neverStarted: "Nothing was executed. Correct the arguments and call again.",
-  idempotent: "This tool is idempotent: calling it again is safe.",
-  neutral: "The call failed. You may call this tool again.",
-};
-
-/** Truncate a tool result for the LLM if its serialized form exceeds
- *  `cap` characters. Returns the ORIGINAL value untouched when within
- *  the cap (so smoltalk serializes it exactly as before) or when the cap
- *  is disabled (`cap <= 0` or non-finite). Over the cap, returns the
- *  first `cap` characters plus a marker noting the original length, so
- *  the model knows it was cut. */
-function capToolResultForLlm(result: any, cap: number): any {
-  if (!Number.isFinite(cap) || cap <= 0) return result;
-  const text = stringifyToolResult(result);
-  if (text.length <= cap) return result;
-  return text.slice(0, cap) + `\n\n[tool result truncated: showing ${cap} of ${text.length} chars]`;
-}
-
-/** Provider APIs (Anthropic, OpenAI) reject an LLM request whose tool list
- *  contains duplicate names, and tool-call dispatch here matches handlers by
- *  name — so duplicate names are always a bug. They're easy to introduce
- *  by accident because `.partial()` / `.describe()` preserve the base
- *  function's name (e.g. `skillsDir` returns `read.partial(dir)`, so four
- *  skill tools are all named `read`). Catch it before the request hits the
- *  wire with a message that names the collision and points at `.rename()`,
- *  instead of an opaque transport-layer 400 that never reaches the statelog. */
-function assertUniqueToolNames(tools: { name: string }[]): void {
-  const counts: Record<string, number> = {};
-  for (const t of tools) {
-    counts[t.name] = (counts[t.name] || 0) + 1;
-  }
-  const dups = Object.keys(counts).filter((n) => counts[n] > 1);
-  if (dups.length > 0) {
-    const detail = dups.map((n) => `"${n}" (×${counts[n]})`).join(", ");
-    throw new Error(
-      `Duplicate tool name(s) passed to an LLM call: ${detail}. Tool names ` +
-        `must be unique. This usually happens when several tools are derived ` +
-        `from the same function via .partial() or .describe(), which preserve ` +
-        `the base name. Give each derived tool a distinct name with ` +
-        `.rename("...").`,
-    );
-  }
-}
-
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
+/** For prompt.test.ts. The tool-invocation helpers it used to hold moved
+ *  to toolInvocation.ts, which exports them directly. */
 export const _internal = {
-  DEFAULT_TOOL_RESULT_CHARS,
-  stringifyToolResult,
-  capToolResultForLlm,
-  assertUniqueToolNames,
-  unwrapToolResultForLlm,
-  failureTier,
-  TIER_SUFFIX,
-  MAX_TOOL_FAILURES,
-  MAX_TOOL_REJECTIONS,
-  REJECTION_SUFFIX,
-  REJECTION_REMOVAL_SUFFIX,
   armCallTimeout,
   runWithRetry,
   dropNullDefaultedArgs,
@@ -1135,6 +959,92 @@ export async function runPrompt(args: {
     // mutates in place. Returns the outcome so the caller can update its
     // own `toolResult` / `invokeOutcome` locals (which are then read by
     // the surrounding tool-call branch code).
+    // One invoked call, as the outcome recorders below see it: what the
+    // dispatch resolved plus the tool's result and drained marks.
+    type InvokedCall = {
+      handler: AgencyFunction;
+      toolCall: smoltalk.ToolCallJSON;
+      namedArgs: Record<string, any>;
+      callKey: string;
+      branchKey: string;
+      marks: TurnMarks;
+      toolResult: any;
+    };
+
+    // A rejection — a handler, policy, or user said no — arrives either
+    // as a Failure the interrupt codegen marked `rejected` (compiled
+    // Agency tools) or as a raw InterruptResponse returned by a TS tool
+    // (agency.interrupt). It is not a tool error: no toolErrorCounts
+    // increment, no toolError statelog event (the handler chain already
+    // emitted interruptResolved).
+    const recordRejection = (
+      call: InvokedCall,
+      reason: string,
+    ): { toolResult: any; invokeOutcome: "rejected" } => {
+      const { handler, toolCall, namedArgs, callKey, branchKey, marks, toolResult } = call;
+      const capped = String(capToolResultForLlm(reason, toolResultCap));
+      if (!rejectedCalls.includes(callKey)) {
+        rejectedCalls.push(callKey);
+      }
+      rejectionCounts[handler.name] = (rejectionCounts[handler.name] || 0) + 1;
+      const removed = rejectionCounts[handler.name] >= MAX_TOOL_REJECTIONS;
+      if (removed) {
+        removedTools.push(handler.name);
+      }
+      pushToolReply({
+        content: `Tool call rejected: ${capped}. ${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
+        toolCall,
+        handler,
+        namedArgs,
+        marks,
+        rejected: true,
+      });
+      stack.deleteBranch(branchKey);
+      return { toolResult, invokeOutcome: "rejected" };
+    };
+
+    // A failure: count it, log it, answer the model by tier, and remove the
+    // tool when the tier or the count says so.
+    const recordFailure = (
+      call: InvokedCall,
+      failed: { error: string; neverStarted?: boolean; destructiveRan?: boolean },
+    ): { toolResult: any; invokeOutcome: "failed" } => {
+      const { handler, toolCall, namedArgs, branchKey, marks, toolResult } = call;
+      const errorMessage = failed.error;
+      // Cap only what the LLM sees; statelog keeps the full message.
+      const cappedError = String(capToolResultForLlm(errorMessage, toolResultCap));
+      toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
+      ctx.statelogClient.error({
+        errorType: "toolError",
+        message: errorMessage,
+        functionName: handler.name,
+        neverStarted: !!failed.neverStarted,
+        destructiveRan: !!failed.destructiveRan,
+      });
+      const tier = failureTier(failed, handler.markers);
+      const pushMessage = (suffix: string) => {
+        pushToolReply({
+          content: `Error: ${cappedError}. ${suffix}`,
+          toolCall,
+          handler,
+          namedArgs,
+          marks,
+          stoppedReason: cappedError,
+        });
+      };
+      if (tier === "destructive") {
+        pushMessage(TIER_SUFFIX.destructive);
+        removedTools.push(handler.name);
+      } else if (toolErrorCounts[handler.name] >= MAX_TOOL_FAILURES) {
+        pushMessage("This tool has failed too many times and can no longer be called.");
+        removedTools.push(handler.name);
+      } else {
+        pushMessage(TIER_SUFFIX[tier]);
+      }
+      stack.deleteBranch(branchKey);
+      return { toolResult, invokeOutcome: "failed" };
+    };
+
     const runInvokeStep = async (args: {
       handler: AgencyFunction;
       toolCall: smoltalk.ToolCallJSON;
@@ -1146,12 +1056,15 @@ export async function runPrompt(args: {
       callKey: string;
       branchKey: string;
       branchStack: StateStack;
+      round: number;
+      /** The call's position among the round's dispatched calls. */
+      invocationIndex: number;
     }): Promise<{
       toolResult: any;
       invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed";
       interrupts?: any[];
     }> => {
-      const { handler, toolCall, namedArgs, callKey, branchKey, branchStack } = args;
+      const { handler, toolCall, namedArgs, callKey, branchKey, branchStack, round } = args;
       let toolResult: any;
       ctx.enterToolCall();
       try {
@@ -1209,6 +1122,14 @@ export async function runPrompt(args: {
         ctx.exitToolCall();
       }
 
+      // endTurn() and handBack() marks: drained here, once, and handed to
+      // every outcome path as data, so no path can skip the drain. A result
+      // that carries interrupts keeps its marks on the (serialized) stack
+      // for the invoke step's re-run on resume.
+      const marks: TurnMarks = hasInterrupts(toolResult)
+        ? EMPTY_TURN_MARKS
+        : branchStack.drainTurnMarks();
+
       // Decision 8: destructive work performed via a tool inside an llm()
       // call must propagate to the CALLING function's activation, so a later
       // failure THERE reports destructiveRan.
@@ -1236,81 +1157,34 @@ export async function runPrompt(args: {
         markDestructiveWork({ locals: destructiveSink });
       }
 
-      // A rejection — a handler, policy, or user said no — arrives either
-      // as a Failure the interrupt codegen marked `rejected` (compiled
-      // Agency tools) or as a raw InterruptResponse returned by a TS tool
-      // (agency.interrupt). It is not a tool error: no toolErrorCounts
-      // increment, no toolError statelog event (the handler chain already
-      // emitted interruptResolved).
-      const recordRejection = (reason: string): { toolResult: any; invokeOutcome: "rejected" } => {
-        const capped = String(capToolResultForLlm(reason, toolResultCap));
-        if (!rejectedCalls.includes(callKey)) {
-          rejectedCalls.push(callKey);
-        }
-        rejectionCounts[handler.name] = (rejectionCounts[handler.name] || 0) + 1;
-        const removed = rejectionCounts[handler.name] >= MAX_TOOL_REJECTIONS;
-        if (removed) {
-          removedTools.push(handler.name);
-        }
-        pushToolReply({
-          content: `Tool call rejected: ${capped}. ${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
-          toolCall,
-          handler,
-          namedArgs,
-        });
-        stack.deleteBranch(branchKey);
-        return { toolResult, invokeOutcome: "rejected" };
-      };
-
       // Only a CLEAN rejection takes the rejection path. One stamped
       // destructiveRan means the tool entered a destructive region before
       // its gate — partial work may exist — so it falls through to the
       // failure tiers, where the destructive tier removes the tool
       // immediately. (Stdlib tools gate BEFORE their destructive regions,
       // so their rejections are always clean.)
+      const call: InvokedCall = {
+        handler,
+        toolCall,
+        namedArgs,
+        callKey,
+        branchKey,
+        marks,
+        toolResult,
+      };
       if (isFailure(toolResult) && toolResult.rejected && !toolResult.destructiveRan) {
-        return recordRejection(toolResult.error);
+        return recordRejection(call, toolResult.error);
       }
 
       if (isFailure(toolResult)) {
-        const errorMessage = toolResult.error;
-        // Cap only what the LLM sees; statelog keeps the full message.
-        const cappedError = String(capToolResultForLlm(errorMessage, toolResultCap));
-        toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
-        ctx.statelogClient.error({
-          errorType: "toolError",
-          message: errorMessage,
-          functionName: handler.name,
-          neverStarted: !!toolResult.neverStarted,
-          destructiveRan: !!toolResult.destructiveRan,
-        });
-        const tier = failureTier(toolResult, handler.markers);
-        const pushMessage = (suffix: string) => {
-          pushToolReply({
-            content: `Error: ${cappedError}. ${suffix}`,
-            toolCall,
-            handler,
-            namedArgs,
-            stoppedReason: cappedError,
-          });
-        };
-        if (tier === "destructive") {
-          pushMessage(TIER_SUFFIX.destructive);
-          removedTools.push(handler.name);
-        } else if (toolErrorCounts[handler.name] >= MAX_TOOL_FAILURES) {
-          pushMessage("This tool has failed too many times and can no longer be called.");
-          removedTools.push(handler.name);
-        } else {
-          pushMessage(TIER_SUFFIX[tier]);
-        }
-        stack.deleteBranch(branchKey);
-        return { toolResult, invokeOutcome: "failed" };
+        return recordFailure(call, toolResult);
       }
 
       if (isRejected(toolResult)) {
         // `reject(reason)` takes a string, so the reason goes straight to the
         // model. Only a reasonless rejection gets the generic message.
         return recordRejection(
+          call,
           toolResult.value == null ? "Tool call rejected by policy" : String(toolResult.value),
         );
       }
@@ -1336,6 +1210,8 @@ export async function runPrompt(args: {
       // value via unwrapToolResultForLlm inside the push helper.
       // Nullish, NOT ||: legitimate falsy returns (false, 0, "") must
       // reach the model and the branch cache as-is.
+      // The answer endTurn() would give is the value BEFORE this placeholder.
+      const rawToolResult = toolResult;
       toolResult = toolResult ?? `${handler.name} ran successfully but did not return a value`;
       // An approved call is evidence the tool is not blanket-refused:
       // only CONSECUTIVE rejections remove it.
@@ -1352,11 +1228,22 @@ export async function runPrompt(args: {
           toolCall,
           handler,
           namedArgs,
+          marks,
           stoppedReason: reason,
         });
         return { toolResult, invokeOutcome: "failed" };
       }
-      pushSuccessToolMessage({ toolResult, toolCall, handler, branchStack, namedArgs });
+      pushSuccessToolMessage({
+        toolResult,
+        rawToolResult,
+        toolCall,
+        handler,
+        branchStack,
+        namedArgs,
+        marks,
+        round,
+        invocationIndex: args.invocationIndex,
+      });
       return { toolResult, invokeOutcome: "success" };
     };
 
@@ -1374,42 +1261,49 @@ export async function runPrompt(args: {
       pushToolMessage(text, toolCall);
     };
 
+    // Every endTurn()/handBack() warning goes to the statelog under one
+    // type, so a tool that marks the turn and never gets it shows in traces.
+    const warnEndTurn = (message: string): void => {
+      void ctx.statelogClient.warn({ warnType: "endTurn", message });
+    };
+
     // Answer the model for one invoked call. An ordinary tool gets a
     // tool message paired with its tool_use. A handoff has no tool_use
-    // (the .handoffDropCall step removed it), so it gets the user-role
-    // resume message instead, after the body's system messages are
-    // stripped. `content` may be structured; the resume message needs
-    // text. `stoppedReason` is set when the call failed or was aborted;
-    // a handoff's resume message then points at the work already on this
-    // thread instead of carrying the error text an ordinary tool gets.
+    // (the .handoffDropCall step removed it), so closeHandoff gives it
+    // the user-role hand-back message instead, after the body's system
+    // messages are stripped, or defers that message when the handoff
+    // asked to end the turn. `content` may be structured; the hand-back
+    // needs text. `stoppedReason` is set when the call failed or was
+    // aborted, `rejected` when a handler said no; a handoff's message
+    // then points at the work already on this thread instead of carrying
+    // the error text an ordinary tool gets. Returns the deferred hand-back
+    // for the caller to record, or null.
     const pushToolReply = (args: {
       content: any;
       toolCall: smoltalk.ToolCallJSON;
       handler: AgencyFunction;
       namedArgs: Record<string, any>;
+      marks: TurnMarks;
       stoppedReason?: string;
-    }): void => {
-      const { content, toolCall, handler, stoppedReason } = args;
+      rejected?: boolean;
+    }): DeferredHandBack | null => {
+      const { content, toolCall, handler, marks, stoppedReason, rejected } = args;
+      const finished = stoppedReason === undefined && !rejected;
+      if (!finished && marks.endTurn) {
+        warnEndTurn(`${handler.name}: endTurn ignored; the tool did not finish`);
+      }
       if (handler.markers?.handoff) {
-        const scopeKey = handoffScopeKey(messages, handler.name, toolCall.id);
-        if (stoppedReason !== undefined) {
-          finishStoppedHandoff({
-            thread: messages,
-            scopeKey,
-            toolName: handler.name,
-            reason: stoppedReason,
-          });
-          return;
-        }
-        finishHandoff({
+        return closeHandoff({
           thread: messages,
-          scopeKey,
+          scopeKey: handoffScopeKey(messages, handler.name, toolCall.id),
           toolName: handler.name,
-          body: stringifyToolResult(content),
+          outcome: handoffOutcomeFor(stringifyToolResult(content), stoppedReason, rejected),
+          marks,
+          warn: warnEndTurn,
         });
-        return;
       }
       pushToolMessage(content, toolCall);
+      return null;
     };
 
     // Push the success ToolMessage for one invocation, with any reply-
@@ -1427,12 +1321,17 @@ export async function runPrompt(args: {
     // with send. Do NOT extract/stringify the model here.
     const pushSuccessToolMessage = (args: {
       toolResult: any;
+      /** The value before the "ran successfully" placeholder: what endTurn answers with. */
+      rawToolResult: unknown;
       toolCall: smoltalk.ToolCallJSON;
       handler: AgencyFunction;
       branchStack: StateStack;
       namedArgs: Record<string, any>;
+      marks: TurnMarks;
+      round: number;
+      invocationIndex: number;
     }): void => {
-      const { toolResult, toolCall, handler, branchStack, namedArgs } = args;
+      const { toolResult, toolCall, handler, branchStack, namedArgs, marks } = args;
       const replyMarker = harvestReplyAttachments({
         queued: branchStack.drainPendingReplyAttachments(),
         runnerState: self.runnerState,
@@ -1444,7 +1343,17 @@ export async function runPrompt(args: {
         replyMarker,
         stringifyToolResult,
       );
-      pushToolReply({ content, toolCall, handler, namedArgs });
+      const deferredHandBack = pushToolReply({ content, toolCall, handler, namedArgs, marks });
+      recordTurnMark({
+        runnerState: self.runnerState,
+        round: args.round,
+        callIndex: args.invocationIndex,
+        toolName: handler.name,
+        isHandoff: !!handler.markers?.handoff,
+        marks,
+        rawToolResult: args.rawToolResult,
+        deferredHandBack,
+      });
     };
 
     // Validation-retry outer loop: each iteration drains tool calls, then
@@ -1734,6 +1643,8 @@ export async function runPrompt(args: {
                 callKey,
                 branchKey,
                 branchStack,
+                round,
+                invocationIndex: index,
               });
               toolResult = outcome.toolResult;
               invokeOutcome = outcome.invokeOutcome;
@@ -1873,6 +1784,34 @@ export async function runPrompt(args: {
             return handoffResult.interrupts;
           }
           stack.popBranches();
+        }
+
+        // Did a tool end the turn? Decided once every call has run, from
+        // runnerState alone, inside its own step, and recorded there, so a
+        // resumed pass reads the record instead of deciding again. See
+        // docs/dev/language/handoff-functions.md.
+        await pr.step(`round.${round}.endTurn`, async () => {
+          runEndTurnStep({
+            runnerState: self.runnerState,
+            round,
+            ranCallIndexes: dispatchItems
+              .filter(
+                (item) => self.runnerState.invokeOutcomes[invocationKeyFor(item)] !== undefined,
+              )
+              .map((item) => item.index),
+            responseFormat,
+            thread: messages,
+            enclosingStack: ctx.isInsideToolCall() ? stateStack : null,
+            warn: warnEndTurn,
+          });
+          self.messagesJSON = snapshotThread();
+        });
+        const turnEnded: TurnEnded = self.runnerState.turnEnded[round];
+        if (turnEnded.ended) {
+          // The last request's charge may have crossed a limit, and this
+          // call has no next round to raise it at. See guardGate.initial.
+          await pr.step("guardGate.final", guardGate);
+          return turnEnded.returnValue;
         }
         tools = tools.filter((t) => !removedTools.includes(t.name));
         toolFunctions = toolFunctions.filter((fn) => !removedTools.includes(fn.name));

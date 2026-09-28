@@ -1471,7 +1471,7 @@ export class StatelogClient {
     schemaChars,
     threshold,
   }: {
-    warnType: "failurePropagation" | "toolSchemaSize" | "failureData" | "decisionBatchCap";
+    warnType: "failurePropagation" | "toolSchemaSize" | "failureData" | "decisionBatchCap" | "endTurn";
     message: string;
     functionName?: string;
     param?: string;

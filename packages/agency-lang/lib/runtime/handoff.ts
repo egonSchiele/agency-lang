@@ -13,6 +13,7 @@ import * as smoltalk from "smoltalk";
 import type { MessageThread } from "./state/messageThread.js";
 import type { StateStack, TurnMarks, TurnScope } from "./state/stateStack.js";
 import { isSuccess } from "./result.js";
+import { BUFFER_KEY } from "./replyAttachments.js";
 import { extractStructuredResponse } from "./utils.js";
 
 export type { TurnMarks, TurnScope };
@@ -192,6 +193,39 @@ export function answerValueOf(rawToolResult: unknown): unknown {
   return rawToolResult;
 }
 
+/** Record a finished call's marks in runnerState.turnMarks[round][callIndex],
+ *  but only when something was set, and the answer value only when endTurn
+ *  is: runnerState rides in every later checkpoint of the llm() call. */
+export function recordTurnMark(args: {
+  runnerState: Record<string, any>;
+  round: number;
+  callIndex: number;
+  toolName: string;
+  isHandoff: boolean;
+  marks: TurnMarks;
+  rawToolResult: unknown;
+  deferredHandBack: DeferredHandBack | null;
+}): void {
+  const { runnerState, round, callIndex, toolName, isHandoff, marks, deferredHandBack } = args;
+  if (!marks.endTurn && marks.message === null) {
+    return;
+  }
+  const mark: TurnMark = {
+    toolName,
+    isHandoff,
+    endTurn: marks.endTurn,
+    scope: marks.scope,
+    message: marks.message,
+    deferredHandBack,
+  };
+  if (marks.endTurn) {
+    mark.value = answerValueOf(args.rawToolResult);
+  }
+  runnerState.turnMarks ??= {};
+  runnerState.turnMarks[round] ??= {};
+  runnerState.turnMarks[round][callIndex] = mark;
+}
+
 /** How a handoff's body finished, from the tool loop's point of view. */
 export type HandoffOutcome =
   | { kind: "success"; body: string }
@@ -240,7 +274,9 @@ function customHandBackMessage(
     return null;
   }
   if (outcome.kind === "rejected") {
-    warn(`${toolName}: handBack ignored; the handoff was rejected and the model must see the rejection`);
+    warn(
+      `${toolName}: handBack ignored; the handoff was rejected and the model must see the rejection`,
+    );
     return null;
   }
   return marks.message;
@@ -251,6 +287,21 @@ function defaultHandBackText(toolName: string, outcome: HandoffOutcome): string 
     return handoffStoppedText(toolName, outcome.reason);
   }
   return handoffResumeText(toolName, outcome.body);
+}
+
+/** How a handoff's body finished, for closeHandoff. */
+export function handoffOutcomeFor(
+  body: string,
+  stoppedReason: string | undefined,
+  rejected: boolean | undefined,
+): HandoffOutcome {
+  if (stoppedReason !== undefined) {
+    return { kind: "stopped", reason: stoppedReason };
+  }
+  if (rejected) {
+    return { kind: "rejected", body };
+  }
+  return { kind: "success", body };
 }
 
 export type EndTurnDecision =
@@ -321,7 +372,13 @@ export function decideEndTurn(args: {
     if (!isSuccess(extracted)) {
       return ignored("the value does not match the caller's structured output");
     }
-    return { kind: "end", callIndex, scope: mark.scope, answerText: answerTextOf(value), returnValue: extracted.value };
+    return {
+      kind: "end",
+      callIndex,
+      scope: mark.scope,
+      answerText: answerTextOf(value),
+      returnValue: extracted.value,
+    };
   }
   if (typeof value !== "string") {
     return ignored("the value is not a string");
@@ -391,4 +448,34 @@ export function endThreadWithAnswer(thread: MessageThread, answerText: string): 
 function carriesToolCalls(message: smoltalk.Message): boolean {
   const json = (message as smoltalk.AssistantMessage).toJSON();
   return (json.toolCalls ?? []).length > 0;
+}
+
+/**
+ * The body of the tool loop's `round.N.endTurn` step: decide from the
+ * round's marks, apply the decision to the thread, record the outcome in
+ * runnerState.turnEnded[round], and drop the marks, which have served.
+ * Everything it reads is in runnerState, so a resumed pass that skips the
+ * step finds the same outcome recorded.
+ */
+export function runEndTurnStep(args: {
+  runnerState: Record<string, any>;
+  round: number;
+  ranCallIndexes: number[];
+  responseFormat: unknown;
+  thread: MessageThread;
+  enclosingStack: StateStack | null;
+  warn: (message: string) => void;
+}): void {
+  const { runnerState, round, ranCallIndexes, responseFormat, thread, enclosingStack, warn } = args;
+  const marks: Record<number, TurnMark> = runnerState.turnMarks?.[round] ?? {};
+  const decision = decideEndTurn({
+    marks,
+    ranCallIndexes,
+    responseFormat,
+    pendingAttachments: ((runnerState[BUFFER_KEY] ?? []) as unknown[]).length,
+    warn,
+  });
+  runnerState.turnEnded ??= {};
+  runnerState.turnEnded[round] = applyEndTurnDecision({ thread, decision, marks, enclosingStack });
+  delete runnerState.turnMarks?.[round];
 }

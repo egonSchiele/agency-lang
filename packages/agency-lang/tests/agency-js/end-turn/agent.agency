@@ -1,0 +1,250 @@
+// endTurn() and handBack() through the real tool loop, against a scripted
+// model. Each node dispatches one round of tools and the test reads the
+// requests the model saw, the node's value, and the statelog warnings.
+import { endTurn, handBack, attachToReply, image } from "std::thread"
+
+static const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+
+def lookup(key: string): string {
+  return "value-of-${key}"
+}
+
+// An ordinary tool whose result is the answer.
+def answerer(question: string): string {
+  endTurn()
+  return "final: ${question}"
+}
+
+// Marks the turn but returns nothing, so the turn goes on.
+def silentEnder() {
+  endTurn()
+}
+
+// The mark set by a helper belongs to the tool that called it.
+def helperEnds() {
+  endTurn()
+}
+
+def viaHelper(question: string): string {
+  helperEnds()
+  return "helper: ${question}"
+}
+
+handoff def ender(question: string): string {
+  const answer = llm("brief: ${question}")
+  endTurn()
+  return answer
+}
+
+handoff def resultEnder(question: string): Result<string> {
+  endTurn()
+  return success("done")
+}
+
+type Reply = {
+  answer: string;
+  done: boolean;
+}
+
+// The body's last message is the JSON of Reply; the answer replaces it.
+handoff def jsonEnder(question: string): string {
+  const reply: Reply = llm("json brief: ${question}")
+  if (reply.done) {
+    endTurn()
+  }
+  return reply.answer
+}
+
+// A handoff with no mark and no llm() call.
+handoff def quiet(question: string): string {
+  return "quiet"
+}
+
+handoff def messenger(question: string): string {
+  handBack("Custom: carry on.")
+  return "partial"
+}
+
+handoff def failingMessenger(question: string): Result<string> {
+  handBack("Custom: it failed.")
+  return failure("nope")
+}
+
+// Raises with no handler; the test rejects, so the handoff is rejected.
+handoff def rejectedMessenger(question: string): string {
+  handBack("Custom: rejected.")
+  const _ok = interrupt("gate ${question}")
+  return "never"
+}
+
+handoff def emptyMessage(question: string): string {
+  handBack("")
+  return "x"
+}
+
+def ordinaryMessenger(question: string): string {
+  handBack("Custom: ordinary.")
+  return "plain"
+}
+
+handoff def endsThenFails(question: string): Result<string> {
+  endTurn()
+  return failure("boom")
+}
+
+def objectEnder(shape: string): any {
+  endTurn()
+  if (shape == "match") {
+    return { text: "hi" }
+  }
+  return { wrong: 1 }
+}
+
+def attacher(): string {
+  attachToReply(image("/tmp/end-turn-chart.png"))
+  return "attached"
+}
+
+// Marks the turn, then pauses: the mark must survive the checkpoint.
+def pauseAfterMark(id: string): string {
+  endTurn()
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+def pauseMe(id: string): string {
+  const _ok = interrupt("pause ${id}")
+  return "ran ${id}"
+}
+
+// Marks the turn, then pauses inside its own llm() call.
+handoff def pausingEnder(question: string): string {
+  endTurn()
+  const answer = llm("brief: ${question}", { tools: [pauseMe] })
+  return answer
+}
+
+// A handoff whose body offers a handoff that ends the body's call.
+handoff def outerHandoff(question: string): string {
+  return llm("outer brief: ${question}", { tools: [ender] })
+}
+
+handoff def turnEnder(question: string): string {
+  const answer = llm("brief: ${question}")
+  endTurn(scope: "turn")
+  return answer
+}
+
+handoff def outerTurnHandoff(question: string): string {
+  const inner = llm("outer brief: ${question}", { tools: [turnEnder] })
+  return "outer: ${inner}"
+}
+
+type Summary = {
+  text: string;
+}
+
+node handoffEndsTurn() {
+  return llm("Answer with ender.", { tools: [ender] })
+}
+
+node resultUnwrapped() {
+  return llm("Answer with resultEnder.", { tools: [resultEnder] })
+}
+
+node jsonReplaced() {
+  return llm("Answer with jsonEnder.", { tools: [jsonEnder] })
+}
+
+node toolEndsTurn() {
+  return llm("Answer with answerer.", { tools: [answerer] })
+}
+
+node silentEnderFallsBack() {
+  return llm("Answer with silentEnder.", { tools: [silentEnder] })
+}
+
+node viaHelperEnds() {
+  return llm("Answer with viaHelper.", { tools: [viaHelper] })
+}
+
+node beside() {
+  return llm("Answer with lookup and ender.", { tools: [lookup, ender] })
+}
+
+node ordinaryBesideHandoff() {
+  return llm("Answer with answerer and quiet.", { tools: [answerer, quiet] })
+}
+
+node twoMarks() {
+  return llm("Answer with answerer twice.", { tools: [answerer] })
+}
+
+node customMessageSuccess() {
+  return llm("Answer with messenger.", { tools: [messenger] })
+}
+
+node customMessageFailure() {
+  return llm("Answer with failingMessenger.", { tools: [failingMessenger] })
+}
+
+node rejectedKeepsText() {
+  return llm("Answer with rejectedMessenger.", { tools: [rejectedMessenger] })
+}
+
+node emptyMessageIgnored() {
+  return llm("Answer with emptyMessage.", { tools: [emptyMessage] })
+}
+
+node ordinaryMessengerIgnored() {
+  return llm("Answer with ordinaryMessenger.", { tools: [ordinaryMessenger] })
+}
+
+node endsThenFailsNode() {
+  return llm("Answer with endsThenFails.", { tools: [endsThenFails] })
+}
+
+node structuredMatch(): Summary {
+  const summary: Summary = llm("Answer with objectEnder match.", { tools: [objectEnder] })
+  return summary
+}
+
+node structuredMismatch(): Summary {
+  const summary: Summary = llm("Answer with objectEnder wrong.", { tools: [objectEnder] })
+  return summary
+}
+
+node nonStringFallback() {
+  return llm("Answer with objectEnder plain.", { tools: [objectEnder] })
+}
+
+node attachmentFallback() {
+  writeBinary("end-turn-chart.png", PNG, "/tmp") with approve
+  return llm("Answer with attacher and answerer.", { tools: [attacher, answerer] })
+}
+
+node attachmentAlone() {
+  writeBinary("end-turn-chart.png", PNG, "/tmp") with approve
+  return llm("Answer with attacher and ender.", { tools: [attacher, ender] })
+}
+
+node resumeEndsTurn() {
+  return llm("Answer with pauseAfterMark.", { tools: [pauseAfterMark] })
+}
+
+node resumeNestedEndsTurn() {
+  return llm("Answer with pausingEnder.", { tools: [pausingEnder] })
+}
+
+node nested() {
+  return llm("Answer with outerHandoff.", { tools: [outerHandoff] })
+}
+
+node nestedTurn() {
+  return llm("Answer with outerTurnHandoff.", { tools: [outerTurnHandoff] })
+}
+
+// endTurn() from code, outside any tool: ignored.
+node calledFromCode() {
+  return viaHelper("q")
+}

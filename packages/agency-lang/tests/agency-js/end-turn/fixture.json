@@ -1,0 +1,232 @@
+{
+  "handoffEndsTurn": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "answer to brief: q",
+    "lastRequestRoles": [
+      "user",
+      "user"
+    ],
+    "handBackMessages": 0
+  },
+  "resultUnwrapped": {
+    "requestCount": 1,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "done"
+  },
+  "jsonReplaced": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "3 events",
+    "bodySawJsonPrompt": 1
+  },
+  "toolEndsTurn": {
+    "requestCount": 1,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "final: a",
+    "toolStarts": [
+      "answerer"
+    ]
+  },
+  "silentEnderFallsBack": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "silentEnder: endTurn ignored; the value is not a string"
+    ],
+    "result": "follow-up: Answer with silentEnder.",
+    "followUpSawToolResult": [
+      "silentEnder ran successfully but did not return a value"
+    ]
+  },
+  "viaHelperEnds": {
+    "requestCount": 1,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "helper: h"
+  },
+  "beside": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "answer to brief: q",
+    "toolStarts": [
+      "lookup",
+      "ender"
+    ],
+    "bodySawSibling": true
+  },
+  "ordinaryBesideHandoff": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "answerer: endTurn ignored; it ran beside other tool calls in the same response"
+    ],
+    "result": "follow-up: [quiet finished. quiet]\nContinue with the user's request.",
+    "toolStarts": [
+      "answerer",
+      "quiet"
+    ],
+    "handBack": 1
+  },
+  "twoMarks": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "answerer: endTurn ignored; it ran beside other tool calls in the same response",
+      "answerer: endTurn ignored; it ran beside other tool calls in the same response"
+    ],
+    "result": "follow-up: Answer with answerer twice.",
+    "toolTexts": [
+      "final: one",
+      "final: two"
+    ]
+  },
+  "customMessageSuccess": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "follow-up: Custom: carry on.",
+    "handBack": "Custom: carry on.",
+    "defaultText": 0
+  },
+  "customMessageFailure": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "follow-up: Custom: it failed.",
+    "handBack": "Custom: it failed.",
+    "defaultText": 0
+  },
+  "rejectedKeepsText": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "rejectedMessenger: handBack ignored; the handoff was rejected and the model must see the rejection"
+    ],
+    "result": "follow-up: [rejectedMessenger finished. Tool call rejected: not today. Do not call this tool with the same arguments again; the call will not be executed.]\nContinue with the user's request.",
+    "handBack": "[rejectedMessenger finished. Tool call rejected: not today. Do not call this tool with the same arguments again; the call will not be executed.]\nContinue with the user's request.",
+    "customUsed": 0
+  },
+  "emptyMessageIgnored": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "emptyMessage: handBack(\"\") ignored; the hand-back message cannot be empty"
+    ],
+    "result": "follow-up: [emptyMessage finished. x]\nContinue with the user's request.",
+    "handBack": "[emptyMessage finished. x]\nContinue with the user's request."
+  },
+  "ordinaryMessengerIgnored": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "ordinaryMessenger: handBack ignored; only a handoff hands back"
+    ],
+    "result": "follow-up: Answer with ordinaryMessenger.",
+    "lastRequestRoles": [
+      "user",
+      "assistant",
+      "tool"
+    ],
+    "customUsed": 0
+  },
+  "endsThenFails": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "endsThenFails: endTurn ignored; the tool did not finish"
+    ],
+    "result": "follow-up: [endsThenFails stopped before finishing: boom]\nIts work so far is in the messages above. Continue with the user's request using that work.",
+    "handBack": "[endsThenFails stopped before finishing: boom]\nIts work so far is in the messages above. Continue with the user's request using that work."
+  },
+  "structuredMatch": {
+    "requestCount": 1,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": {
+      "text": "hi"
+    }
+  },
+  "structuredMismatch": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "objectEnder: endTurn ignored; the value does not match the caller's structured output"
+    ],
+    "result": {
+      "text": "from follow-up"
+    }
+  },
+  "nonStringFallback": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "objectEnder: endTurn ignored; the value is not a string"
+    ],
+    "result": "follow-up: Answer with objectEnder plain."
+  },
+  "attachmentFallback": {
+    "requestCount": 2,
+    "allWellFormed": true,
+    "warnings": [
+      "answerer: endTurn ignored; it ran beside other tool calls in the same response"
+    ],
+    "result": "follow-up: ",
+    "followUpCarriesImage": true
+  },
+  "attachmentAlone": {
+    "requestCount": 3,
+    "allWellFormed": true,
+    "warnings": [
+      "ender: endTurn ignored; a reply attachment is waiting to be delivered"
+    ],
+    "result": "follow-up: ",
+    "followUpCarriesImage": true,
+    "handBack": 1
+  },
+  "resumeEndsTurn": {
+    "requestCount": 1,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "ran p1",
+    "requestsAtPause": 1
+  },
+  "resumeNestedEndsTurn": {
+    "requestCount": 3,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "inner after pause",
+    "toolStarts": [
+      "pausingEnder",
+      "pauseMe"
+    ]
+  },
+  "nested": {
+    "requestCount": 4,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "follow-up: [outerHandoff finished. answer to brief: in]\nContinue with the user's request.",
+    "handBack": 1
+  },
+  "nestedTurn": {
+    "requestCount": 3,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "outer: answer to brief: in",
+    "lastRequestFirstText": "Answer with outerTurnHandoff."
+  },
+  "calledFromCode": {
+    "requestCount": 0,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "helper: q",
+    "errors": [
+      "endTurn called outside a tool invocation; mark dropped"
+    ]
+  }
+}

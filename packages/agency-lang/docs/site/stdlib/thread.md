@@ -35,7 +35,7 @@ export type AttachmentSource =
   | { kind: "base64"; base64: string; mimeType: string }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L64))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L66))
 
 ### Attachment
 
@@ -46,7 +46,7 @@ export type Attachment =
   | null }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L73))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L75))
 
 ### MessageAttachment
 
@@ -59,7 +59,7 @@ export type MessageAttachment =
   | null }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L82))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L84))
 
 ### ModelCost
 
@@ -80,7 +80,7 @@ export type ModelCost = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L297))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L327))
 
 ### ThinkingBlock
 
@@ -96,7 +96,7 @@ export type ThinkingBlock = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L327))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L357))
 
 ### ReplyUsage
 
@@ -110,7 +110,7 @@ export type ReplyUsage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L333))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L363))
 
 ### NoulAnswer
 
@@ -126,7 +126,7 @@ export type NoulAnswer = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L340))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L370))
 
 ### ChoiceAnswer
 
@@ -146,7 +146,7 @@ export type ChoiceAnswer = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L348))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L378))
 
 ### ScoreAnswer
 
@@ -167,7 +167,7 @@ export type ScoreAnswer = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L358))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L388))
 
 ### DecisionAnswer
 
@@ -180,7 +180,7 @@ One answer from a decision model. Check `type` before reading the rest:
 export type DecisionAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L368))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L398))
 
 ### TokenAlternative
 
@@ -196,7 +196,7 @@ export type TokenAlternative = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L372))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L402))
 
 ### TokenLogprob
 
@@ -215,7 +215,7 @@ export type TokenLogprob = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L380))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L410))
 
 ### Reply
 
@@ -240,7 +240,7 @@ export type Reply = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L390))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L420))
 
 ### GuardFailureData
 
@@ -262,7 +262,7 @@ export type GuardFailureData = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L441))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L471))
 
 ### ThreadMessage
 
@@ -273,7 +273,7 @@ export type ThreadMessage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L464))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L494))
 
 ### ThreadInfo
 
@@ -289,7 +289,7 @@ export type ThreadInfo = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L469))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L499))
 
 ## Effects
 
@@ -303,7 +303,7 @@ effect std::viewFile {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L201))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L231))
 
 ## Functions
 
@@ -327,7 +327,7 @@ Add a system message to the current thread's message history.
 | msg | `string` |  |
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L87))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L89))
 
 ### userMessage
 
@@ -349,7 +349,7 @@ Add a user message to the current thread's message history. Use this
 | msg | `string \| (string \| MessageAttachment)[]` |  |
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L101))
 
 ### toolMessage
 
@@ -377,7 +377,7 @@ Add a synthetic tool call and its result to the current thread, as if the
 | result | `string` |  |
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L111))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L113))
 
 ### image
 
@@ -406,7 +406,7 @@ Build an image attachment for a multimodal llm() call. The source is
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L132))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L134))
 
 ### file
 
@@ -437,7 +437,7 @@ Build a file (e.g. PDF) attachment for a multimodal llm() call.
 
 **Returns:** [Attachment](#attachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L148))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L150))
 
 ### audio
 
@@ -470,7 +470,7 @@ Build an audio attachment for a multimodal llm() call. Only usable in
 
 **Returns:** [MessageAttachment](#messageattachment)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L165))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L167))
 
 ### attachToReply
 
@@ -492,7 +492,53 @@ Queue an attachment to be shown to the model after the current tool
 |---|---|---|
 | attachment | [Attachment](#attachment) |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L184))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L186))
+
+### endTurn
+
+```ts
+endTurn(scope: "llm" | "turn" = "llm")
+```
+
+End the current llm() call when this tool returns. The tool's return
+  value becomes the answer and no follow-up LLM call is made. Only
+  meaningful while running as a tool inside an llm() call; ignored
+  elsewhere. The turn still goes on if the tool fails, if it ran beside
+  other tool calls in the same response (a handoff is exempt, since it
+  runs last), if the value is not a string (or does not match the
+  caller's structured output type), or if a reply attachment is waiting.
+
+  @param scope - "llm" ends the nearest enclosing llm() call. "turn" also ends every llm() call above it, up to the user's turn; use it only when the answer covers the whole request.
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| scope | `"llm" \| "turn"` | "llm" |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L199))
+
+### handBack
+
+```ts
+handBack(message: string)
+```
+
+For a handoff function: the message that hands control back to the
+  caller when this handoff returns, in place of the default
+  "[name finished. <result>] Continue with the user's request." Ignored
+  from an ordinary tool, when the handoff was rejected, when the message
+  is empty, and when endTurn() ends the turn.
+
+  @param message - The user-role message to put on the thread
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| message | `string` |  |
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L214))
 
 ### viewFile
 
@@ -517,7 +563,7 @@ Show an image or PDF file to yourself. The file is attached to the
 
 **Throws:** `std::viewFile`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L203))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L233))
 
 ### assistantMessage
 
@@ -539,7 +585,7 @@ Add an assistant message to the current thread's message history.
 | msg | `string` |  |
 | label | `string` | "" |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L243))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L273))
 
 ### getCost
 
@@ -558,7 +604,7 @@ Inside a fork/race branch this includes the parent's accumulated cost
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L260))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L290))
 
 ### threadIsNew
 
@@ -571,7 +617,7 @@ True when the current message thread has no messages yet. Use it inside a
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L268))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L298))
 
 ### ensureSystemMessage
 
@@ -593,7 +639,7 @@ For an agent's persona. An agent called twice from code on one thread
 |---|---|---|
 | msg | `string` |  |
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L279))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L309))
 
 ### getTokens
 
@@ -605,7 +651,7 @@ Return the cumulative token count for the current execution branch.
 
 **Returns:** `number`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L290))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L320))
 
 ### getModelCosts
 
@@ -624,7 +670,7 @@ Unlike the per-branch cost/token accessors, this covers every branch of
 
 **Returns:** `ModelCost[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L315))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L345))
 
 ### lastReply
 
@@ -666,7 +712,7 @@ one either way.
 
 **Returns:** `Reply | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L406))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L436))
 
 ### listThreads
 
@@ -699,7 +745,7 @@ Summary sourcing: threads opened with `thread(summarize: true)` are
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L541))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L571))
 
 ### sessionThreadId
 
@@ -718,7 +764,7 @@ Slug-form id of the thread that `thread(session: name)` resumes (e.g.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L594))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L624))
 
 ### currentThreadId
 
@@ -733,7 +779,7 @@ Slug-form id of the active thread (e.g. "t3"), or `""` outside any
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L602))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L632))
 
 ### getThread
 
@@ -765,4 +811,4 @@ Read a slice of a thread's messages. Returns success holding `[]`
 
 **Returns:** `Result`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L612))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/thread.agency#L642))

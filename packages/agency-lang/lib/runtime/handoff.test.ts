@@ -5,6 +5,7 @@ import {
   dropHandoffToolCall,
   finishHandoff,
   finishStoppedHandoff,
+  handoffNotStartedMessage,
   handoffResumeText,
   handoffScopeKey,
   stripHandoffSystemMessages,
@@ -217,10 +218,16 @@ describe("stripHandoffSystemMessages", () => {
 describe("message text", () => {
   it("names the tool in every message", () => {
     expect(tooManyHandoffsMessage("explorer", ["explorer", "oracle"])).toContain(
-      "explorer was not run",
+      "explorer was not run. explorer and oracle were called in the same response",
     );
-    expect(tooManyHandoffsMessage("explorer", ["explorer", "oracle"])).toContain(
-      "(explorer, oracle)",
+    expect(tooManyHandoffsMessage("explorer", ["explorer", "oracle", "coder"])).toContain(
+      "explorer, oracle, and coder were called",
+    );
+    expect(tooManyHandoffsMessage("explorer", ["explorer", "explorer"])).toContain(
+      "It was called 2 times in this response",
+    );
+    expect(handoffNotStartedMessage("explorer", "cost limit reached")).toBe(
+      "Error: explorer was not run. The run stopped before it could start: cost limit reached",
     );
     expect(handoffScopeKey(new MessageThread(), "explorer", "c1")).toBe("explorer:c1:0");
     expect(handoffResumeText("explorer", "x")).toBe(

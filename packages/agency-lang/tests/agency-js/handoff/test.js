@@ -22,6 +22,7 @@ import {
   twoAsyncHandoffs,
   cancelledHandoff,
   feedbackBeforeHandoff,
+  guardStopsHandoff,
   respondToInterrupts,
   approve,
   reject,
@@ -352,8 +353,8 @@ const results = {};
     result: result.data,
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
-    refused: count(final, "Only one of them can run per round"),
-    refusalNamesBoth: count(final, "(subagent, personaAgent)"),
+    refused: count(final, "only one of them can run per response"),
+    refusalNamesBoth: count(final, "subagent and personaAgent were called in the same response"),
     toolStarts: state.toolStarts,
     markers: count(final, "[dispatching"),
   };
@@ -658,6 +659,49 @@ const answeringClient = (rules) => ({
     feedbackBeforeBrief: feedbackAt !== -1 && feedbackAt < briefAt,
     feedbackDeliveredOnce: count(last(state), "budget raised: keep it short"),
     events,
+  };
+}
+
+// The same trip, rejected. The round ends at the gate between the
+// sibling and the handoff. The handoff's tool call gets a tool message
+// saying it was not run, so the next request on the thread is well formed.
+{
+  const PRICED = {
+    inputCost: 0.000001,
+    outputCost: 0.000001,
+    totalCost: 0.000002,
+    currency: "USD",
+  };
+  __setLLMClient(
+    answeringClient((asked) => {
+      if (asked === "Look up the key and ask the subagent.") {
+        return {
+          success: true,
+          value: {
+            output: null,
+            toolCalls: [
+              new ToolCall("call-lookup", "lookup", { key: "k10" }),
+              new ToolCall("call-subagent", "subagent", { question: "g1" }),
+            ],
+            model: "test",
+            usage: USAGE,
+            cost: PRICED,
+          },
+        };
+      }
+      return answer("after");
+    }),
+  );
+  const { state, callbacks } = makeCapture();
+  const result = await guardStopsHandoff({ callbacks });
+  const final = last(state);
+  results.guardStopsHandoff = {
+    result: result.data,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    roles: roles(final),
+    toolTexts: toolTexts(final),
+    toolStarts: state.toolStarts,
   };
 }
 

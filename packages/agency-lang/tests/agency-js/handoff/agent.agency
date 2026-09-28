@@ -245,3 +245,24 @@ node feedbackBeforeHandoff() {
     return pass()
   }
 }
+
+// The same guard trip, rejected. The round ends before the handoff
+// starts; the next llm() call on this thread must still be well formed.
+node guardStopsHandoff() {
+  let outcome = "ran"
+  handle {
+    const answer = guard(cost: $0.000001, label: "budget") {
+      return llm("Look up the key and ask the subagent.", { tools: [subagent, lookup] })
+    }
+    if (isFailure(answer)) {
+      outcome = "guard stopped"
+    }
+  } with (i) {
+    if (i.effect == "std::guard") {
+      return reject()
+    }
+    return pass()
+  }
+  const after = llm("What happened?")
+  return "${outcome} / ${after}"
+}

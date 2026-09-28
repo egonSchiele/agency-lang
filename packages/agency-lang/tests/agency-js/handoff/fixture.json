@@ -348,5 +348,24 @@
       "guard",
       "subagent"
     ]
+  },
+  "guardStopsHandoff": {
+    "result": "guard stopped / after",
+    "requestCount": 2,
+    "allWellFormed": true,
+    "roles": [
+      "user",
+      "assistant",
+      "tool",
+      "tool",
+      "user"
+    ],
+    "toolTexts": [
+      "Error: subagent was not run. The run stopped before it could start: guard \"budget\" exceeded: cost limit 0.000001, spent 0.000002",
+      "value-of-k10"
+    ],
+    "toolStarts": [
+      "lookup"
+    ]
   }
 }

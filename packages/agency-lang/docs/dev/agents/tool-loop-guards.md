@@ -119,8 +119,11 @@ A `handoff def` continues the caller's conversation
 come after every tool result in its round. The tool loop runs the other
 calls first and the handoff last, in a second batch. Two handoffs in
 one round both get the `tooManyHandoffs` verdict, as tool messages, and
-the other calls run. The text names the handoff tools the round called
-and tells the model to call one of them again in a new response.
+the other calls run. Only handoffs that pass every other check count
+(`runnableHandoffs`), so this check runs last. The model has no way to
+tell which tools are handoffs, so the text names the handoff tools the
+round called and tells the model to call one of them again in a new
+response.
 
 ## Tests
 
@@ -128,8 +131,9 @@ and tells the model to call one of them again in a new response.
   `repeatKey`, `noteRepeat`).
 - Handoffs: `tests/agency-js/handoff` scripts a handoff beside other
   calls (`notAlone`, `siblingPause`, `handoffWithDraft`), two handoffs
-  in one round (`twoHandoffs`), and a rejected handoff call
-  (`rejectHandoff`).
+  in one round (`twoHandoffs`), a guard between the batches
+  (`feedbackBeforeHandoff`, `guardStopsHandoff`), and a rejected handoff
+  call (`rejectHandoff`).
 - Rejections: `tests/agency-js/tool-rejection` scripts a handler reject
   (reason + identical-retry gate), an interactive reject with a reason,
   five consecutive rejections removing the tool, an approval resetting

@@ -21,9 +21,9 @@ the body's messages can land on the caller's thread as valid history.
 ## What happens
 
 1. The model calls a handoff tool. The `.gate` step refuses it with
-   `tooManyHandoffs` if another handoff call shares the round. Other
-   calls may share the round. They run first (see "Other calls in the
-   same round" below).
+   `tooManyHandoffs` if another handoff call that could run shares the
+   round. Other calls may share the round, and they run first (see
+   "Other calls in the same round" below).
 2. The `.handoffDropCall` step edits the assistant message carrying the
    tool call, the last assistant message on the thread. Only the
    handoff's call is dropped. The other calls stay, so their tool
@@ -91,10 +91,13 @@ the handoff runs last. The tool loop splits the round into two batches:
    verdict there. A refused handoff answers the model with a tool
    message like any refused call.
 2. Between the batches the guard gate runs and the approver's feedback
-   is delivered (`round.N.handoffGuardGate`,
-   `round.N.handoffGuardFeedback`). A guard that tripped during the
+   is delivered (`runHandoffGate`). A guard that tripped during the
    first batch stops the round before the body starts, and feedback
-   given at that approval reaches the body.
+   given at that approval reaches the body. If the gate ends the round,
+   for example because the user rejected the trip, the handoff's tool
+   call is answered with a tool message saying it was not run. The
+   handoff's call has no result at that point, and a thread that kept
+   it that way would be rejected by the provider on its next request.
 3. The second batch runs the handoff alone. Its drop step removes only
    its own call, and the thread becomes:
 
@@ -104,9 +107,6 @@ tool:      updateStatus → "ok"
 ...the explorer's work...
 user:      [explorer finished. <result>] Continue with the user's request.
 ```
-
-The order the model listed the calls in does not matter, because calls in
-one response are independent.
 
 If a call in the first batch interrupts, the round pauses before the
 handoff starts. On resume the first batch finishes and then the handoff
@@ -120,6 +120,11 @@ paused body's branch, and the body would start over.
 
 Two handoffs in one round are both refused, and the other calls still
 run. Running one of them would be a guess about which the model wanted.
+Only handoffs that pass every other check count. A handoff refused for
+another reason (removed after repeated rejections, say) would not run
+anyway, so it does not stop another handoff from running. The list of
+handoffs that count is computed once per round, in a step, because the
+checks read state that changes as calls finish.
 
 ## Threads inside the body
 
@@ -158,7 +163,8 @@ re-entering the scope on the way in. There is no orphaned tool call for
 ## Known limits
 
 - One handoff per round. A round with two refuses both and runs the
-  other calls.
+  other calls. The model cannot tell which tools are handoffs, so the
+  refusal names them.
 - A served function (`agency serve`, HTTP or MCP) is invoked outside
   the tool loop, so a served handoff function is an ordinary call. Its
   docstring's promise to continue the conversation does not apply

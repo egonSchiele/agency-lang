@@ -12,13 +12,35 @@
 import * as smoltalk from "smoltalk";
 import type { MessageThread } from "./state/messageThread.js";
 
-/** The refusal for a handoff call made in the same round as another
- *  handoff call. `names` lists every handoff tool the round called. */
+/** The refusal for a handoff call made in the same response as another
+ *  handoff call. `names` lists the round's handoff calls, one entry per
+ *  call, so a tool called twice appears twice. */
 export function tooManyHandoffsMessage(toolName: string, names: string[]): string {
+  const distinct = names.filter((name, i) => names.indexOf(name) === i);
+  if (distinct.length === 1) {
+    return (
+      `Error: ${toolName} was not run. It was called ${names.length} times in this response, and only one call can run per response. ` +
+      `Call it once in a new response.`
+    );
+  }
   return (
-    `Error: ${toolName} was not run. It continues this conversation, and this response called more than one tool that does (${names.join(", ")}). ` +
-    `Only one of them can run per round. Call one of them again in a new response. Other tools may be called alongside it.`
+    `Error: ${toolName} was not run. ${joinNames(distinct)} were called in the same response, and only one of them can run per response. ` +
+    `Call one of them again in a new response.`
   );
+}
+
+/** The text for a handoff whose round stopped before it could start,
+ *  for example when a guard trip was rejected. It answers the handoff's
+ *  tool call, which would otherwise be left without a result. */
+export function handoffNotStartedMessage(toolName: string, reason: string): string {
+  return `Error: ${toolName} was not run. The run stopped before it could start: ${reason}`;
+}
+
+function joinNames(names: string[]): string {
+  if (names.length <= 2) {
+    return names.join(" and ");
+  }
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
 /** The scope key one dispatch tags its body's system messages with. The
@@ -48,18 +70,15 @@ export function handoffStoppedText(toolName: string, reason: string): string {
 
 /**
  * Drop the handoff's tool call from the assistant message that carried
- * it. `callIndex` is the call's position in that message's tool calls.
+ * it: the last assistant message on the thread. The other calls in the
+ * round have run by now, so their tool results, and any guard feedback,
+ * may follow that message. `call.index` is the call's position in the
+ * message's tool calls.
  *
- * The handoff runs after every other call in its round, so the thread
- * may end on those calls' tool results, and on the guard feedback
- * delivered just before the handoff, rather than on the assistant
- * message itself. That message is the last assistant message on the
- * thread.
- *
- * When other calls remain, only this one is removed, so the tool
- * results that follow still pair with their calls. When it was the only
- * call, its text stays and a message that was only the call is removed,
- * so the thread reads as the user's request followed by the body's work.
+ * When other calls remain, only this one is removed, so their tool
+ * results still pair with them. When it was the only call, its text
+ * stays and a message that was only the call is removed, so the thread
+ * reads as the user's request followed by the body's work.
  * Nothing is added in its place: a model that sees dispatch narration in
  * its history learns to write it instead of calling the tool.
  */

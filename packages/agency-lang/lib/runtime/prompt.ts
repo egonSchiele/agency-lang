@@ -13,6 +13,7 @@ import {
   runInitialBoundary,
   runRoundBoundary,
   runGateAndFeedback,
+  runHandoffGate,
   type BoundaryContext,
 } from "./turnBoundary.js";
 import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } from "./errors.js";
@@ -42,6 +43,7 @@ import {
   markupArgument,
   noteRepeat,
   refusalMessage,
+  runnableHandoffs,
   repeatKey,
   resetRepeat,
   type GateState,
@@ -57,6 +59,7 @@ import {
   dropHandoffToolCall,
   finishHandoff,
   finishStoppedHandoff,
+  handoffNotStartedMessage,
   handoffScopeKey,
   stripHandoffSystemMessages,
 } from "./handoff.js";
@@ -1515,9 +1518,31 @@ export async function runPrompt(args: {
         // verdict refuses them first.
         const handlerFor = (toolCall: smoltalk.ToolCallJSON): AgencyFunction | null =>
           agencyFunctions.find((fn) => fn.name === toolCall.name) ?? null;
-        const handoffNames = dispatchCalls
-          .filter((toolCall) => handlerFor(toolCall)?.markers?.handoff)
-          .map((toolCall) => toolCall.name);
+        const gateInputFor = (toolCall: smoltalk.ToolCallJSON) => {
+          const handler = handlerFor(toolCall);
+          const namedArgs = handler
+            ? dropNullDefaultedArgs(toolCall.arguments, handler.params)
+            : {};
+          const markupArg = handler ? markupArgument(namedArgs, handler.params) : null;
+          const callKey = handler ? repeatKey(handler.name, namedArgs) : "";
+          return { toolCall, handler, namedArgs, markupArg, callKey };
+        };
+        const gateState = (): GateState => ({
+          removedTools,
+          rejectedCalls,
+          repeatStreak,
+          toolCallRound: self.toolCallRound,
+          maxToolCallRounds: effectiveMaxToolCallRounds,
+          maxRepeatedToolCalls,
+        });
+        await pr.step(`round.${round}.runnableHandoffs`, async () => {
+          self.runnerState.runnableHandoffs ??= {};
+          self.runnerState.runnableHandoffs[round] = runnableHandoffs(
+            gateState(),
+            dispatchCalls.map(gateInputFor),
+          );
+        });
+        const roundHandoffs: string[] = self.runnerState.runnableHandoffs[round];
         const dispatchItems = dispatchCalls.map((toolCall, index) => ({ toolCall, index }));
         type DispatchItem = (typeof dispatchItems)[number];
         // MUST match the branchKey the body uses below
@@ -1572,24 +1597,14 @@ export async function runPrompt(args: {
           // stale verdict.
           const invocationKey = invocationKeyFor({ toolCall, index });
 
-          const handler = handlerFor(toolCall);
-          const namedArgs = handler
-            ? dropNullDefaultedArgs(toolCall.arguments, handler.params)
-            : {};
-          const markupArg = handler ? markupArgument(namedArgs, handler.params) : null;
-          const callKey = handler ? repeatKey(handler.name, namedArgs) : "";
-
-          // What the gate reads: the call itself, and this llm() call's
-          // mutable state, read at the moment the gate step runs.
-          const gateCall = { toolCall, handler, markupArg, callKey, handoffNames };
-          const gateState = (): GateState => ({
-            removedTools,
-            rejectedCalls,
-            repeatStreak,
-            toolCallRound: self.toolCallRound,
-            maxToolCallRounds: effectiveMaxToolCallRounds,
-            maxRepeatedToolCalls,
-          });
+          const { handler, namedArgs, markupArg, callKey } = gateInputFor(toolCall);
+          const gateCall = {
+            toolCall,
+            handler,
+            markupArg,
+            callKey,
+            runnableHandoffs: roundHandoffs,
+          };
           await b.step(`${invocationKey}.gate`, async () => {
             self.runnerState.gateVerdicts[invocationKey] = computeGateVerdict(
               gateState(),
@@ -1842,10 +1857,11 @@ export async function runPrompt(args: {
             self.runnerState.gateVerdicts?.[invocationKeyFor(item)] === "proceed",
         );
         if (handoffItem !== undefined) {
-          await runGateAndFeedback(
-            `round.${round}.handoffGuardGate`,
-            `round.${round}.handoffGuardFeedback`,
-            boundaryCtx(),
+          await runHandoffGate(round, boundaryCtx(), (reason) =>
+            pushToolNotice(
+              handoffNotStartedMessage(handoffItem.toolCall.name, reason),
+              handoffItem.toolCall,
+            ),
           );
           const handoffResult = await runDispatchBatch(
             `round.${round}.handoff`,

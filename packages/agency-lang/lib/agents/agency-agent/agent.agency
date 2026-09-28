@@ -1,6 +1,7 @@
 import { parseArgs } from "std::args"
 import { map } from "std::array"
 import { setLlmOptions } from "std::llm"
+import { disableMemory } from "std::memory"
 import { evalOutput, evalValue, setAgentName } from "std::statelog"
 import { cwd, env, isTTY, readStdin, setTitle } from "std::system"
 import { getCost } from "std::thread"
@@ -18,7 +19,7 @@ import { printPolicyHelp } from "./lib/policy.agency"
 import { activePreset, startPreset } from "./lib/presets.agency"
 import { installSessionHooks, startInteractive } from "./lib/repl.agency"
 import { chooseSession, startSession } from "./lib/resume.agency"
-import { pickModelsForAgent, maybeEnableMemory } from "./lib/session.agency"
+import { pickModelsForAgent } from "./lib/session.agency"
 import { loadSettings } from "./lib/settings.agency"
 import { applyToolLimits, limitFlagsFromArgs, setStartupLimitFlags } from "./lib/toolLimits.agency"
 import { setDebug, setVerbose, setInteractive } from "./lib/trace.agency"
@@ -143,9 +144,12 @@ node main() {
   startPreset(args.flags.preset ?? "", loadSettings())
   pickModelsForAgent(args)
 
-  // Persistent knowledge graph, gated on the capability profile. Must run
+  // Memory stays off for the agent. After every model reply it ran a fact
+  // extraction and a summary on another model, and the tool calls waited
+  // for both, often a minute or more per round. The research memory also
+  // compacted the coordinator's own thread during a handoff. Must run
   // before any handler/REPL is installed.
-  maybeEnableMemory()
+  disableMemory() with approve
 
   // Connect configured MCP servers and hand their (policy-gated) tools to the
   // coordinator. Must run before the first turn (mcpTools ordering contract).

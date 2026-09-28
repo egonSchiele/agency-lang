@@ -1,0 +1,1 @@
+I want to publish a new version of this package. Please update changelog.md with all of the changes since the last version. Follow the current pattern in the changelog: keep updates short, one to two sentences per update, grouped into sections.

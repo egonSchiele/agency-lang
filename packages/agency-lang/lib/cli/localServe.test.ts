@@ -179,14 +179,32 @@ describe("memoryWarning", () => {
 
 describe("messages", () => {
   it("notServedMessage names the served models and the command", () => {
-    expect(notServedMessage(["a/one", "a/two"], "a/three")).toBe(
+    const chat = "/v1/chat/completions";
+    expect(notServedMessage(["a/one", "a/two"], "a/three", chat)).toBe(
       "This server is serving a/one and a/two. It is not serving a/three. Start it with: agency local serve mlx:a/three",
     );
-    expect(notServedMessage(["a/one"], "a/three")).toBe(
+    expect(notServedMessage(["a/one"], "a/three", chat)).toBe(
       "This server is serving a/one. It is not serving a/three. Start it with: agency local serve mlx:a/three",
     );
-    expect(notServedMessage(["a/one", "a/two", "a/four"], "/m/dir")).toBe(
+    expect(notServedMessage(["a/one", "a/two", "a/four"], "/m/dir", chat)).toBe(
       "This server is serving a/one, a/two and a/four. It is not serving /m/dir. Start it with: agency local serve /m/dir",
+    );
+  });
+
+  it("notServedMessage names the flag and the URI prefix the request path needs", () => {
+    // A bare repo id on the images path is a diffusers model: sending it to
+    // `serve mlx:...` would download the whole repo unfiltered and still not serve.
+    expect(notServedMessage(["a/chat"], "Tongyi-MAI/Z-Image-Turbo", "/v1/images/generations")).toBe(
+      "This server is serving a/chat. It is not serving Tongyi-MAI/Z-Image-Turbo. Start it with: agency local serve --image diffusers:Tongyi-MAI/Z-Image-Turbo",
+    );
+    expect(notServedMessage(["a/chat"], "/m/zimage", "/v1/images/generations")).toBe(
+      "This server is serving a/chat. It is not serving /m/zimage. Start it with: agency local serve --image /m/zimage",
+    );
+    expect(notServedMessage(["a/chat"], "mlx/tts", "/v1/audio/speech")).toBe(
+      "This server is serving a/chat. It is not serving mlx/tts. Start it with: agency local serve --speech mlx:mlx/tts",
+    );
+    expect(notServedMessage(["a/chat"], "mlx/embed", "/v1/embeddings")).toBe(
+      "This server is serving a/chat. It is not serving mlx/embed. Start it with: agency local serve --embedding mlx:mlx/embed",
     );
   });
 

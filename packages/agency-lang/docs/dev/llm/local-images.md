@@ -182,8 +182,16 @@ The name `mlx` is the server's, not the model's. `MLX_BASE_URL` and
 every kind of model sits behind it. The provider sends no key, never retries
 (a retry would queue behind the request that just failed), sends `steps`,
 `guidance`, `seed`, and `negative_prompt` from `config.metadata`, reads the
-seed back onto the image, and reports a cost of zero. Its timeout is
-`MLX_IMAGE_TIMEOUT_MS`, ten minutes.
+seed back onto the image, and reports a cost of zero.
+
+Its timeout scales with the request (`localImageTimeoutMs`): the slowest
+family's measured rate per step per megapixel, doubled for attention's
+growth, times the steps and size asked for, times two for a request that
+may be queued ahead. A request that leaves steps to the model is budgeted
+at the most any family allows, 80, which a test checks against the rules
+module. At the caps the timeout is about 53 minutes. It is there to catch a
+server that has stopped answering, not to bound a slow one; the caps on
+steps and size do that.
 
 ## generateImageLocal
 

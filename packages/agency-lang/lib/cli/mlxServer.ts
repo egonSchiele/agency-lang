@@ -255,7 +255,7 @@ export function startFrontDoor(
     const model = parsed.model;
     const route = routes.find((r) => r.model === model) ?? defaultRoute(routes, model);
     if (route === undefined) {
-      refuse(404, notServedMessage(served, model));
+      refuse(404, notServedMessage(served, model, req.url ?? ""));
       return;
     }
     forward(

@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { DIFFUSERS_VERSION, imageServerScript } from "./localServe.js";
+import { MAX_STEPS } from "../stdlib/mlxImage.js";
 
 const rulesModule = path.join(path.dirname(imageServerScript()), "diffusersImageRules.py");
 
@@ -257,6 +258,11 @@ for family in FAMILIES.values():
   it("pins the same diffusers version as localServe.ts", () => {
     const text = fs.readFileSync(rulesModule, "utf8");
     expect(text).toContain(`DIFFUSERS_VERSION = "${DIFFUSERS_VERSION}"`);
+  });
+
+  it("allows no family more steps than the provider's timeout budgets", () => {
+    const most = Number(rules("print(max(f['max_steps'] for f in FAMILIES.values()))"));
+    expect(most).toBe(MAX_STEPS);
   });
 });
 

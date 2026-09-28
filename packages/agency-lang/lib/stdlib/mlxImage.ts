@@ -14,9 +14,44 @@ import { mlxBaseUrl } from "./mlxServerModels.js";
  *  image again), sends Agency's own settings, reads back the seed the
  *  server used, and costs nothing. */
 
-/** How long one request may take. The image server caps steps and size so
- *  that its slowest request finishes well inside this. */
-export const MLX_IMAGE_TIMEOUT_MS = 600_000;
+/** What one step over one megapixel is allowed to take. Chroma, the slowest
+ *  family, measured 90 s for 40 steps at 1024x1024, which is 2.25 s per step
+ *  per megapixel; attention grows faster than the pixel count, so the
+ *  allowance is about double that. */
+const STEP_MEGAPIXEL_MS = 5_000;
+
+/** The most steps any family accepts: Chroma's max_steps in
+ *  diffusersImageRules.py, which a test checks. A request that leaves steps
+ *  to the model is budgeted as if it asked for this many. */
+export const MAX_STEPS = 80;
+
+/** The most pixels a request may ask for, from the rules module. A size
+ *  the client cannot parse is budgeted at this. */
+const MAX_MEGAPIXELS = 4;
+
+/** The server makes one image at a time, so a request may wait for one
+ *  already running before its own time starts. */
+const QUEUE_ALLOWANCE = 2;
+
+/** The megapixels of a "WxH" size, or the largest allowed when the size is
+ *  missing or not in that shape. The server refuses a bad size anyway. */
+function megapixelsOf(size: string | undefined): number {
+  const match = /^(\d+)x(\d+)$/.exec(size ?? "");
+  if (match === null) {
+    return MAX_MEGAPIXELS;
+  }
+  return Math.min(MAX_MEGAPIXELS, (Number(match[1]) * Number(match[2])) / 1_000_000);
+}
+
+/** How long one request may take: room for the slowest family at the steps
+ *  and size asked for, plus one request queued ahead of it. The server caps
+ *  both inputs, so this is bounded; at the caps it is about 53 minutes. It
+ *  guards against a server that has stopped answering, not a slow one. */
+export function localImageTimeoutMs(steps: unknown, size: string | undefined): number {
+  const budgetedSteps =
+    typeof steps === "number" && steps > 0 ? Math.min(steps, MAX_STEPS) : MAX_STEPS;
+  return Math.ceil(QUEUE_ALLOWANCE * budgetedSteps * megapixelsOf(size) * STEP_MEGAPIXEL_MS);
+}
 
 /** The settings `config.metadata` may carry, sent as request fields of the
  *  same names. Anything else in metadata is not sent: the server refuses
@@ -71,7 +106,7 @@ async function mlxImage(input: ImageInput, config: ImageConfig) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(MLX_IMAGE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(localImageTimeoutMs(body.steps, config.size)),
     });
   } catch (err) {
     const cause = (err as { cause?: { code?: string } }).cause?.code;

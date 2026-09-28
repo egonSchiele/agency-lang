@@ -4,7 +4,13 @@ import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import prompts from "prompts";
-import { isServedUri, parseServedUri, modelDirSizeBytes } from "../stdlib/modelBackend.js";
+import {
+  isServedUri,
+  parseServedUri,
+  modelDirSizeBytes,
+  type ServedBackend,
+} from "../stdlib/modelBackend.js";
+import { IMAGES_PATH } from "./serveLog.js";
 import {
   _resolveModel,
   _mlxServedName,
@@ -353,15 +359,28 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+/** How a model asked for on each path is served: the flag it needs and
+ *  the URI prefix a bare repo id takes. A path not listed here is a chat
+ *  request, which takes no flag. */
+const SERVE_FOR_PATH: Record<string, { flag: string; backend: ServedBackend }> = {
+  [IMAGES_PATH]: { flag: "--image", backend: "diffusers" },
+  "/v1/audio/speech": { flag: "--speech", backend: "mlx" },
+  "/v1/embeddings": { flag: "--embedding", backend: "mlx" },
+};
+
 /** The 404 body for a request naming a model this server was not started
- *  with. A repo id is restarted with its `mlx:` URI; a directory with its
+ *  with. The path the request came in on says which flag the model needs
+ *  and, for a bare repo id, which URI prefix; a directory is named by its
  *  path. */
-export function notServedMessage(served: string[], requested: string): string {
-  const startWith =
-    path.isAbsolute(requested) || isServedUri(requested) ? requested : `mlx:${requested}`;
+export function notServedMessage(served: string[], requested: string, requestPath: string): string {
+  const serve = SERVE_FOR_PATH[requestPath];
+  const backend = serve?.backend ?? "mlx";
+  const target =
+    path.isAbsolute(requested) || isServedUri(requested) ? requested : `${backend}:${requested}`;
+  const args = serve === undefined ? target : `${serve.flag} ${target}`;
   return (
     `This server is serving ${joinNames(served)}. It is not serving ${requested}. ` +
-    `Start it with: agency local serve ${startWith}`
+    `Start it with: agency local serve ${args}`
   );
 }
 

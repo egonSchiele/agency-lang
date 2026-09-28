@@ -19,6 +19,12 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 process.env.MLX_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
+// CI runs the suite with the deterministic LLM client, whose image() answers
+// with a fixed PNG and never reaches a provider. This test is about the real
+// path from generateImageLocal through the mlx provider to the server, so
+// the mocks are switched off before the program is imported and installs
+// its client.
+delete process.env.AGENCY_LLM_MOCKS;
 
 const { main } = await import("./agent.js");
 const result = await main();

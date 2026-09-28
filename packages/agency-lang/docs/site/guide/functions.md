@@ -151,6 +151,12 @@ Now the thread looks more like this:
 
 Note that we insert a couple of messages in there, just so it's clear from reading the thread that a handoff occurred and finished.
 
+### Handoff Tools Alongside Other Tool Calls
+
+The model can call a handoff tool in the same response as other tools. The other tools run first, and the handoff tool runs after all of them have finished, so the handoff can see their results. For example, if the model calls `updateStatus` and `getCapital` together, `updateStatus` runs, its result goes on the thread, and then `getCapital` runs.
+
+Only one handoff tool can run per response. If the model calls two, neither runs, and the model is told to call one of them again. The other tools in that response still run.
+
 ### System Messages in Handoff Tools
 
 Suppose the handoff tool includes a system message. In a non-handoff context, this is fine, but in a handoff context, having this system message in the thread is going to be confusing, especially if the main thread already had a totally different system message. That is why system messages are inserted into the thread for the duration of the tool call, but they are removed from the thread after the tool call returns.

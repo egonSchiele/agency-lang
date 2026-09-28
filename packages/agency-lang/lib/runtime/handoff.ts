@@ -12,12 +12,35 @@
 import * as smoltalk from "smoltalk";
 import type { MessageThread } from "./state/messageThread.js";
 
-/** The refusal for a handoff call that shares a round with another call. */
-export function handoffNotAloneMessage(toolName: string): string {
+/** The refusal for a handoff call made in the same response as another
+ *  handoff call. `names` lists the round's handoff calls, one entry per
+ *  call, so a tool called twice appears twice. */
+export function tooManyHandoffsMessage(toolName: string, names: string[]): string {
+  const distinct = names.filter((name, i) => names.indexOf(name) === i);
+  if (distinct.length === 1) {
+    return (
+      `Error: ${toolName} was not run. It was called ${names.length} times in this response, and only one call can run per response. ` +
+      `Call it once in a new response.`
+    );
+  }
   return (
-    `Error: ${toolName} continues this conversation, so it must be the only tool call in its round. ` +
-    `It was not run. Call it again by itself, with no other tool calls in the same response.`
+    `Error: ${toolName} was not run. ${joinNames(distinct)} were called in the same response, and only one of them can run per response. ` +
+    `Call one of them again in a new response.`
   );
+}
+
+/** The text for a handoff whose round stopped before it could start,
+ *  for example when a guard trip was rejected. It answers the handoff's
+ *  tool call, which would otherwise be left without a result. */
+export function handoffNotStartedMessage(toolName: string, reason: string): string {
+  return `Error: ${toolName} was not run. The run stopped before it could start: ${reason}`;
+}
+
+function joinNames(names: string[]): string {
+  if (names.length <= 2) {
+    return names.join(" and ");
+  }
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
 /** The scope key one dispatch tags its body's system messages with. The
@@ -46,22 +69,43 @@ export function handoffStoppedText(toolName: string, reason: string): string {
 }
 
 /**
- * Drop the tool call from the assistant message that carried the handoff
- * call. Its text stays; a message that was only the call is removed, so
- * the thread reads as the user's request followed by the body's work.
+ * Drop the handoff's tool call from the assistant message that carried
+ * it: the last assistant message on the thread. The other calls in the
+ * round have run by now, so their tool results, and any guard feedback,
+ * may follow that message. `call.index` is the call's position in the
+ * message's tool calls.
+ *
+ * When other calls remain, only this one is removed, so their tool
+ * results still pair with them. When it was the only call, its text
+ * stays and a message that was only the call is removed, so the thread
+ * reads as the user's request followed by the body's work.
  * Nothing is added in its place: a model that sees dispatch narration in
  * its history learns to write it instead of calling the tool.
  */
-export function dropHandoffToolCall(thread: MessageThread): void {
+export function dropHandoffToolCall(
+  thread: MessageThread,
+  call: { index: number; id: string; name: string },
+): void {
   const messages = thread.getMessages();
-  const index = messages.length - 1;
-  const last = messages[index];
-  if (last === undefined || last.role !== "assistant") {
+  const index = messages.findLastIndex((message) => message.role === "assistant");
+  if (index === -1) {
+    throw new Error("handoff: expected an assistant message carrying the tool call, found none");
+  }
+  const carrier = messages[index] as smoltalk.AssistantMessage;
+  const json = carrier.toJSON();
+  const calls = json.toolCalls ?? [];
+  const target = calls[call.index];
+  if (target === undefined || target.name !== call.name || target.id !== call.id) {
     throw new Error(
-      `handoff: expected the thread to end with the assistant message carrying the tool call, found ${last?.role ?? "an empty thread"}`,
+      `handoff: expected tool call ${call.index} of the last assistant message to be ${call.name} (${call.id})`,
     );
   }
-  const text = typeof last.content === "string" ? last.content.trim() : "";
+  const siblings = calls.filter((_, i) => i !== call.index);
+  if (siblings.length > 0) {
+    thread.replaceAt(index, smoltalk.AssistantMessage.fromJSON({ ...json, toolCalls: siblings }));
+    return;
+  }
+  const text = typeof carrier.content === "string" ? carrier.content.trim() : "";
   if (text === "") {
     thread.removeAt(index);
     return;

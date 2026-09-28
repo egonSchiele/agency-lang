@@ -5,13 +5,16 @@ import {
   dropHandoffToolCall,
   finishHandoff,
   finishStoppedHandoff,
-  handoffNotAloneMessage,
+  handoffNotStartedMessage,
   handoffResumeText,
   handoffScopeKey,
   stripHandoffSystemMessages,
+  tooManyHandoffsMessage,
 } from "./handoff.js";
 
 const toolCall = () => new smoltalk.ToolCall("call-1", "explorer", { question: "why" });
+const sibling = () => new smoltalk.ToolCall("call-2", "updateStatus", { status: "exploring" });
+const explorerCall = { index: 0, id: "call-1", name: "explorer" };
 // The key a top-level dispatch of `explorer` gets: depth 0, no scope open.
 const scopeKey = handoffScopeKey(new MessageThread(), "explorer", "call-1");
 
@@ -26,7 +29,7 @@ describe("dropHandoffToolCall", () => {
       smoltalk.assistantMessage("I'll ask the explorer.", { toolCalls: [toolCall()] }),
       "main",
     );
-    dropHandoffToolCall(thread);
+    dropHandoffToolCall(thread, explorerCall);
     const last = thread.getMessages()[1];
     expect(last.role).toBe("assistant");
     expect(last.content).toBe("I'll ask the explorer.");
@@ -39,14 +42,46 @@ describe("dropHandoffToolCall", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("hello"));
     thread.push(smoltalk.assistantMessage(null, { toolCalls: [toolCall()] }));
-    dropHandoffToolCall(thread);
+    dropHandoffToolCall(thread, explorerCall);
     expect(roles(thread)).toEqual(["user"]);
   });
 
-  it("refuses a thread that does not end on an assistant message", () => {
+  it("keeps a sibling's call and its tool result", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("hello"));
-    expect(() => dropHandoffToolCall(thread)).toThrow(/assistant/);
+    thread.push(
+      smoltalk.assistantMessage("Exploring.", { toolCalls: [sibling(), toolCall()] }),
+      "main",
+    );
+    thread.push(smoltalk.toolMessage("ok", { tool_call_id: "call-2", name: "updateStatus" }));
+    thread.push(smoltalk.userMessage("guard feedback"));
+    dropHandoffToolCall(thread, { ...explorerCall, index: 1 });
+    expect(roles(thread)).toEqual(["user", "assistant", "tool", "user"]);
+    const carrier = thread.getMessages()[1] as smoltalk.AssistantMessage;
+    expect(carrier.content).toBe("Exploring.");
+    expect(carrier.toolCalls?.map((call) => call.id)).toEqual(["call-2"]);
+    expect(thread.labelAt(1)).toBe("main");
+  });
+
+  it("removes a message that was only the call when feedback follows it", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("hello"));
+    thread.push(smoltalk.assistantMessage(null, { toolCalls: [toolCall()] }));
+    thread.push(smoltalk.userMessage("guard feedback"));
+    dropHandoffToolCall(thread, explorerCall);
+    expect(roles(thread)).toEqual(["user", "user"]);
+  });
+
+  it("refuses a thread with no assistant message", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.userMessage("hello"));
+    expect(() => dropHandoffToolCall(thread, explorerCall)).toThrow(/assistant/);
+  });
+
+  it("refuses a call that is not at the given position", () => {
+    const thread = new MessageThread();
+    thread.push(smoltalk.assistantMessage(null, { toolCalls: [sibling(), toolCall()] }));
+    expect(() => dropHandoffToolCall(thread, explorerCall)).toThrow(/explorer/);
   });
 });
 
@@ -182,8 +217,18 @@ describe("stripHandoffSystemMessages", () => {
 
 describe("message text", () => {
   it("names the tool in every message", () => {
-    expect(handoffNotAloneMessage("explorer")).toContain("explorer");
-    expect(handoffNotAloneMessage("explorer")).toContain("only tool call");
+    expect(tooManyHandoffsMessage("explorer", ["explorer", "oracle"])).toContain(
+      "explorer was not run. explorer and oracle were called in the same response",
+    );
+    expect(tooManyHandoffsMessage("explorer", ["explorer", "oracle", "coder"])).toContain(
+      "explorer, oracle, and coder were called",
+    );
+    expect(tooManyHandoffsMessage("explorer", ["explorer", "explorer"])).toContain(
+      "It was called 2 times in this response",
+    );
+    expect(handoffNotStartedMessage("explorer", "cost limit reached")).toBe(
+      "Error: explorer was not run. The run stopped before it could start: cost limit reached",
+    );
     expect(handoffScopeKey(new MessageThread(), "explorer", "c1")).toBe("explorer:c1:0");
     expect(handoffResumeText("explorer", "x")).toBe(
       "[explorer finished. x]\nContinue with the user's request.",

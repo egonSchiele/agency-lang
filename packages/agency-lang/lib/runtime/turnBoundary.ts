@@ -1,5 +1,6 @@
 import * as smoltalk from "smoltalk";
 import type { Interrupt } from "./interrupts.js";
+import { PromptBailout } from "./promptRunner.js";
 import type { MessageThread } from "./state/messageThread.js";
 import type { StateStack } from "./state/stateStack.js";
 import { buildReplyUserMessage, type HarvestedReplyAttachment } from "./replyAttachments.js";
@@ -141,6 +142,32 @@ export async function runGateAndFeedback(
 ): Promise<void> {
   await bctx.step(gateKey, bctx.guardGate);
   await drainProducer(guardFeedbackProducer, feedbackKey, bctx);
+}
+
+/** The gate-and-feedback figure between a round's first batch and its
+ *  handoff, so a tripped guard stops the round before the handoff body
+ *  starts, and the approver's feedback reaches the body. At this point
+ *  the handoff's tool call has no result yet. If the gate ends the round,
+ *  a rejected trip say, `onStopped` answers that call, because a thread
+ *  must not keep a tool call with no result. A pause does not end the
+ *  round: the handoff runs after the resume. */
+export async function runHandoffGate(
+  round: number,
+  bctx: BoundaryContext,
+  onStopped: (reason: string) => void,
+): Promise<void> {
+  try {
+    await runGateAndFeedback(
+      `round.${round}.handoffGuardGate`,
+      `round.${round}.handoffGuardFeedback`,
+      bctx,
+    );
+  } catch (error) {
+    if (!(error instanceof PromptBailout)) {
+      onStopped(error instanceof Error ? error.message : String(error));
+    }
+    throw error;
+  }
 }
 
 /** The full round boundary, in the one canonical order: tool artifacts

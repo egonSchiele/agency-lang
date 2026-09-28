@@ -13,6 +13,7 @@ import {
   runInitialBoundary,
   runRoundBoundary,
   runGateAndFeedback,
+  runHandoffGate,
   type BoundaryContext,
 } from "./turnBoundary.js";
 import { AgencyCancelledError, describeAbortCause, isAbortError, readCause } from "./errors.js";
@@ -31,20 +32,22 @@ import { hasInterrupts, isRejected } from "./interrupts.js";
 import type { PromptConfig } from "./llmClient.js";
 import { setupFunction } from "./node.js";
 // See docs/dev/agents/promptRunner.md for the control-flow abstraction used here.
-import { PromptBailout, PromptRunner } from "./promptRunner.js";
+import { BranchRunner, PromptBailout, PromptRunner } from "./promptRunner.js";
 import { findIntrinsic, partitionIntrinsicCalls, runIntrinsicCall } from "./intrinsicTools.js";
 import type { RunBatchResult } from "./runBatch.js";
 import { warnOnOversizedToolSchemas } from "./toolSchemaSize.js";
 import {
+  computeGateVerdict,
   DEFAULT_MAX_REPEATED_TOOL_CALLS,
   freshRepeatStreak,
   markupArgument,
-  markupArgumentMessage,
   noteRepeat,
-  repeatedCallMessage,
+  refusalMessage,
+  runnableHandoffs,
   repeatKey,
-  repeatsBefore,
   resetRepeat,
+  type GateState,
+  type GateVerdict,
   type RepeatStreak,
 } from "./toolLoopGuards.js";
 import { GuardTripRetry, raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
@@ -56,7 +59,7 @@ import {
   dropHandoffToolCall,
   finishHandoff,
   finishStoppedHandoff,
-  handoffNotAloneMessage,
+  handoffNotStartedMessage,
   handoffScopeKey,
   stripHandoffSystemMessages,
 } from "./handoff.js";
@@ -205,21 +208,6 @@ const REJECTION_SUFFIX =
   "Do not call this tool with the same arguments again; the call will not be executed.";
 const REJECTION_REMOVAL_SUFFIX =
   "This tool has been rejected too many times and can no longer be called.";
-
-/** The refusal-gate verdict for one tool invocation. Computed exactly
- *  once, inside its own step, and persisted in runnerState: most gates
- *  read frame state that mutates as sibling branches complete, so a
- *  verdict recomputed on resume could differ from the one the call
- *  originally acted on. */
-type GateVerdict =
-  | "removed"
-  | "unhandled"
-  | "tooManyRounds"
-  | "handoffNotAlone"
-  | "markup"
-  | "priorRejected"
-  | "repeated"
-  | "proceed";
 
 type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
 
@@ -1374,7 +1362,7 @@ export async function runPrompt(args: {
 
     // Push a plain notice ToolMessage for one call — the refusal gates
     // (unhandled, round cap, removed, markup, repeat, prior rejection,
-    // handoff not alone) all answer the model this way. A refusal happens
+    // too many handoffs) all answer the model this way. A refusal happens
     // before the .handoffDropCall step, so the assistant message is intact
     // and the notice pairs with its tool_use even for a handoff.
     const pushToolMessage = (content: any, toolCall: smoltalk.ToolCallJSON): void => {
@@ -1422,83 +1410,6 @@ export async function runPrompt(args: {
         return;
       }
       pushToolMessage(content, toolCall);
-    };
-
-    // The refusal-gate decision for one call, in refusal-priority order.
-    // Reads MUTABLE frame state (removedTools, rejectedCalls,
-    // repeatStreak), so callers must run it exactly once, inside the
-    // call's `.gate` step, and persist the verdict in runnerState.
-    const computeGateVerdict = (args: {
-      toolCall: smoltalk.ToolCallJSON;
-      handler: AgencyFunction | null;
-      markupArg: string | null;
-      callKey: string;
-      /** How many tool calls the model made this round, intrinsics
-       *  included. A handoff must be the round's only call. */
-      roundSize: number;
-    }): GateVerdict => {
-      const { toolCall, handler, markupArg, callKey, roundSize } = args;
-      if (removedTools.includes(toolCall.name)) {
-        return "removed";
-      }
-      if (handler === null) {
-        return "unhandled";
-      }
-      if (self.toolCallRound >= effectiveMaxToolCallRounds) {
-        return "tooManyRounds";
-      }
-      // A handoff rewrites the assistant message that carried its tool
-      // call. A sibling call in the same round still needs that message
-      // intact to pair its own tool result, so a mixed round refuses the
-      // handoff and lets the siblings run.
-      if (handler.markers?.handoff && roundSize > 1) {
-        return "handoffNotAlone";
-      }
-      if (markupArg !== null) {
-        return "markup";
-      }
-      if (rejectedCalls.includes(callKey)) {
-        // A call identical to one already rejected in this llm() call: no
-        // invoke, no re-raised interrupt, no counter movement. Checked
-        // before the repeat guard so the model hears "rejected", not
-        // "repeated".
-        return "priorRejected";
-      }
-      if (
-        maxRepeatedToolCalls > 0 &&
-        repeatsBefore(repeatStreak, callKey) >= maxRepeatedToolCalls
-      ) {
-        return "repeated";
-      }
-      return "proceed";
-    };
-
-    // The model-facing text for a refusal verdict.
-    const refusalMessage = (args: {
-      verdict: Exclude<GateVerdict, "proceed">;
-      toolCall: smoltalk.ToolCallJSON;
-      markupArg: string | null;
-      callKey: string;
-    }): string => {
-      const name = args.toolCall.name;
-      switch (args.verdict) {
-        case "removed":
-          return `Error: Tool ${name} has been removed from this conversation after repeated failures or rejections, and will not be executed.`;
-        case "unhandled":
-          return `Error: No handler found for tool call ${name}`;
-        case "handoffNotAlone":
-          return handoffNotAloneMessage(name);
-        case "tooManyRounds":
-          return `Error: Maximum number of tool call rounds (${effectiveMaxToolCallRounds}) exceeded. This tool call will not be executed.`;
-        case "markup":
-          // markupArg is non-null whenever the verdict says markup: both
-          // derive from the same replay-stable inputs.
-          return markupArgumentMessage(name, args.markupArg ?? "");
-        case "priorRejected":
-          return `This exact call to ${name} was already rejected and will not be executed. Do not retry it.`;
-        case "repeated":
-          return repeatedCallMessage(name, repeatsBefore(repeatStreak, args.callKey));
-      }
     };
 
     // Push the success ToolMessage for one invocation, with any reply-
@@ -1598,263 +1509,309 @@ export async function runPrompt(args: {
         // rejection counters share these semantics: outcomes apply in
         // branch-completion order, so a same-round mix of rejections and
         // approvals of ONE tool near the removal limit is best-effort too.
-        // An all-intrinsic round has nothing to dispatch: keep the
-        // empty values result instead of running runBatch over zero
-        // children.
-        let parallelResult: RunBatchResult<void> = {
-          kind: "values",
-          values: [],
+
+        // Resolved from the STABLE full list, not toolFunctions: on
+        // resume, runPrompt entry rebuilds toolFunctions without the
+        // names in removedTools, and a call that legitimately started
+        // before its tool was removed must still find its handler.
+        // Fresh calls to a removed tool never get here — the removed
+        // verdict refuses them first.
+        const handlerFor = (toolCall: smoltalk.ToolCallJSON): AgencyFunction | null =>
+          agencyFunctions.find((fn) => fn.name === toolCall.name) ?? null;
+        const gateInputFor = (toolCall: smoltalk.ToolCallJSON) => {
+          const handler = handlerFor(toolCall);
+          const namedArgs = handler
+            ? dropNullDefaultedArgs(toolCall.arguments, handler.params)
+            : {};
+          const markupArg = handler ? markupArgument(namedArgs, handler.params) : null;
+          const callKey = handler ? repeatKey(handler.name, namedArgs) : "";
+          return { toolCall, handler, namedArgs, markupArg, callKey };
         };
-        if (dispatchCalls.length > 0) {
-          parallelResult = await pr.parallel(
-            `round.${round}.tools`,
-            dispatchCalls,
-            // keyFor: MUST match the branchKey the body uses below
-            // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
-            // operate on the same branch. Keyed by the tool call's POSITION in
-            // the round, not its id: some providers (notably Google Gemini)
-            // return tool calls with no id — Gemini matches responses to calls
-            // by function name + position, so smoltalk defaults the missing id
-            // to "". Two id-less parallel calls would otherwise collide on the
-            // branch key ("tool_") and trip `runBatch: duplicate child key`.
-            // The id is folded in after the index only for readability; the
-            // index alone guarantees uniqueness within the round.
-            (toolCall, i) => `tool_${i}_${toolCall.id}`,
-            async (toolCall, b, index) => {
-              if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
-
-              // Per-call slug used for the branch key, every resume-idempotency
-              // step path, and the per-tool timing key below. Position-based so
-              // it stays unique even when `toolCall.id` is "" (see keyFor). Must
-              // NOT leak into message `tool_call_id` fields — those keep the
-              // real (possibly empty) id so provider pairing / threadRepair are
-              // byte-for-byte unchanged.
-              const callSlug = `${index}_${toolCall.id}`;
-
-              // The refusal gates below (removed, priorRejected, repeated)
-              // decide from MUTABLE frame state: removedTools,
-              // rejectedCalls, and repeatStreak change as sibling branches
-              // and later rounds complete. Plain code between steps re-runs
-              // on resume, so an inline `if` on that state could steer a
-              // replayed call down a path it never took: a gate firing late
-              // would push a second tool message for the same tool_call_id,
-              // and a sibling's fifth rejection would refuse a paused call
-              // the user just approved. So the verdict is durable: computed
-              // once inside its own step, persisted in runnerState, and
-              // read back on every later pass. See
-              // docs/dev/agents/promptRunner.md.
-              self.runnerState.gateVerdicts ??= {};
-              self.runnerState.invokeOutcomes ??= {};
-              // Keyed by round + slug, NOT slug alone: the slug is unique
-              // only within a round (providers like Gemini return empty
-              // tool-call ids, so index-0 calls in every round share "0_"),
-              // and a cross-round collision would hand a fresh call a
-              // stale verdict.
-              const invocationKey = `round.${round}.tool.${callSlug}`;
-
-              // Resolved from the STABLE full list, not toolFunctions: on
-              // resume, runPrompt entry rebuilds toolFunctions without the
-              // names in removedTools, and a call that legitimately started
-              // before its tool was removed must still find its handler.
-              // Fresh calls to a removed tool never get here — the removed
-              // verdict refuses them first.
-              const handler = agencyFunctions.find((fn) => fn.name === toolCall.name) ?? null;
-              const namedArgs = handler
-                ? dropNullDefaultedArgs(toolCall.arguments, handler.params)
-                : {};
-              const markupArg = handler ? markupArgument(namedArgs, handler.params) : null;
-              const callKey = handler ? repeatKey(handler.name, namedArgs) : "";
-
-              await b.step(`${invocationKey}.gate`, async () => {
-                self.runnerState.gateVerdicts[invocationKey] = computeGateVerdict({
-                  toolCall,
-                  handler,
-                  markupArg,
-                  callKey,
-                  roundSize: toolCalls.length,
-                });
-              });
-              const verdict: GateVerdict = self.runnerState.gateVerdicts[invocationKey];
-
-              // Recorded inside the invoke step. A completed non-success
-              // invocation (failed, rejected, crashed) already answered the
-              // model, so on replay there is nothing left to run. A success
-              // falls through: its remaining steps no-op via completedSteps.
-              // An interrupted invocation records nothing — its invoke step
-              // re-runs on resume to consume the user's response.
-              const priorOutcome: string | undefined =
-                self.runnerState.invokeOutcomes[invocationKey];
-              if (priorOutcome !== undefined && priorOutcome !== "success") {
-                return;
-              }
-
-              // A refused call never reaches the tool: no start/end hooks,
-              // no failure count, one notice message in its own step (the
-              // step key matches the verdict, e.g. `.removed`).
-              if (verdict !== "proceed") {
-                await b.step(`${invocationKey}.${verdict}`, async () => {
-                  const notice = refusalMessage({ verdict, toolCall, markupArg, callKey });
-                  if (verdict === "unhandled") {
-                    console.error(
-                      `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
-                    );
-                  }
-                  if (verdict === "repeated") {
-                    resetRepeat(repeatStreak);
-                  }
-                  pushToolNotice(notice, toolCall);
-                });
-                return;
-              }
-              if (handler === null) {
-                // Unreachable: a missing handler yields the "unhandled" verdict.
-                return;
-              }
-
-              // A handoff drops the tool call from the assistant message
-              // that carried it, so the body's messages can follow. The
-              // rewritten thread is in the checkpoint, so a resumed pass
-              // does not rewrite again. The thread ends on that assistant
-              // message here because the handoff is the round's only call
-              // and the round boundary runs after the tools.
-              if (handler.markers?.handoff) {
-                await b.step(`${invocationKey}.handoffDropCall`, async () => {
-                  dropHandoffToolCall(messages);
-                });
-              }
-
-              const branchKey = `tool_${callSlug}`;
-              // Note: a "cached result" short-circuit used to live here for
-              // resume after a sibling interrupt; idempotency is now handled
-              // uniformly by completedSteps inside b.step (start/invoke/end
-              // each get marked done on success and skipped on resume).
-              const branchStack = stack.getOrCreateBranch(branchKey).stack;
-
-              await b.step(`round.${round}.tool.${callSlug}.start`, async () => {
-                // Pass `branchStack` so scoped callbacks registered inside
-                // the branch's frame chain are discovered by
-                // `gatherCallbacks`. Callback bodies cannot interrupt
-                // (typechecker-enforced), so this is purely about scope
-                // discovery, not interrupt routing.
-                await invokeCallbacks({
-                  ctx,
-                  name: "onToolCallStart",
-                  data: { toolName: handler.name, args: namedArgs },
-                  stateStack: branchStack,
-                });
-              });
-              if (b.interrupts) return;
-
-              const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
-              let toolResult: any;
-              let invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed" =
-                "success";
-
-              // Persist the measured tool execution duration in
-              // self.runnerState so resume (where the invoke step is
-              // skipped) doesn't report ~0ms to onToolCallEnd /
-              // statelogClient.toolCall. Keyed per tool call id; rides
-              // along with completedSteps on the same frame.
-              self.runnerState.toolTimings ??= {};
-              // IMPORTANT: keep the toolExecution span open across the
-              // invoke + end-hook + log steps so the toolCall event inherits
-              // the toolExecution span_id (logsViewer aggregates tool
-              // duration off that). try/finally guarantees we close it even
-              // on bailout / unexpected throw.
-              try {
-                const toolCallStartTime = performance.now();
-                // Emit toolCallStart inside the same toolExecution span as
-                // the (later) toolCall end event so consumers can pair the
-                // two by span_id. Wrap in b.step so resume-replay doesn't
-                // duplicate the event. Designed to leave a trace of every
-                // tool that began even when the run is killed before it
-                // completes (the matching toolCall event won't fire).
-                await b.step(`round.${round}.tool.${callSlug}.logStart`, async () => {
-                  ctx.statelogClient.toolCallStart({
-                    toolName: handler.name,
-                    args: namedArgs,
-                    model: JSON.stringify(clientConfig.model),
-                    threadId: __threads()?.activeId() ?? null,
-                  });
-                });
-                // Invoke step: returns the interrupts when the tool halts
-                // with them so BranchRunner.step can collect. All other
-                // outcomes (success, failure, reject, crash) update outer
-                // state in place via runInvokeStep; the step completes
-                // (returns void unless interrupted) and is marked done so
-                // resume skips this whole block.
-                await b.step(`round.${round}.tool.${callSlug}.invoke`, async () => {
-                  const outcome = await runInvokeStep({
-                    handler,
-                    toolCall,
-                    namedArgs,
-                    callKey,
-                    branchKey,
-                    branchStack,
-                  });
-                  toolResult = outcome.toolResult;
-                  invokeOutcome = outcome.invokeOutcome;
-                  if (outcome.invokeOutcome === "success") {
-                    self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
-                  }
-                  // Inside the idempotent invoke step, so a resume does not
-                  // count the same run twice. The interrupted outcome is
-                  // never recorded: its invoke step re-runs on resume, and a
-                  // recorded outcome would short-circuit that re-run.
-                  if (outcome.invokeOutcome !== "interrupted") {
-                    noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
-                    self.runnerState.invokeOutcomes[invocationKey] = outcome.invokeOutcome;
-                  }
-                  return outcome.interrupts;
-                });
-
-                if (b.interrupts || invokeOutcome !== "success") return;
-
-                // On resume after an end-hook bailout, the `invoke` step is
-                // skipped and `toolResult` is undefined. Restore it from the
-                // per-branch result that `setResultOnBranch` persisted before
-                // the bailout, so the end-hook sees the actual tool output.
-                if (toolResult === undefined) {
-                  toolResult = stack.getBranch(branchKey)?.result?.result;
-                }
-
-                // Reuse the persisted duration so onToolCallEnd /
-                // statelogClient.toolCall always report the real exec time,
-                // not the resume pass's overhead.
-                const timeTaken: number = self.runnerState.toolTimings[callSlug] ?? 0;
-                await b.step(`round.${round}.tool.${callSlug}.end`, async () => {
-                  // Same scope-discovery rationale as the .start hook.
-                  await invokeCallbacks({
-                    ctx,
-                    name: "onToolCallEnd",
-                    data: {
-                      toolName: handler.name,
-                      result: toolResult,
-                      timeTaken,
-                    },
-                    stateStack: branchStack,
-                  });
-                });
-                // Wrap the toolCall log in its own b.step so it's idempotent
-                // when pr.parallel re-runs a fully-completed branch on resume
-                // (e.g. after a later `nextLlmCall` step bails). Without this
-                // guard, every re-entry would emit a duplicate toolCall event.
-                await b.step(`round.${round}.tool.${callSlug}.log`, async () => {
-                  ctx.statelogClient.toolCall({
-                    toolName: handler.name,
-                    args: namedArgs,
-                    output: toolResult,
-                    model: JSON.stringify(clientConfig.model),
-                    timeTaken,
-                    threadId: __threads()?.activeId() ?? null,
-                  });
-                });
-              } finally {
-                ctx.statelogClient.endSpan(toolSpanId);
-              }
-            },
+        const gateState = (): GateState => ({
+          removedTools,
+          rejectedCalls,
+          repeatStreak,
+          toolCallRound: self.toolCallRound,
+          maxToolCallRounds: effectiveMaxToolCallRounds,
+          maxRepeatedToolCalls,
+        });
+        await pr.step(`round.${round}.runnableHandoffs`, async () => {
+          self.runnerState.runnableHandoffs ??= {};
+          self.runnerState.runnableHandoffs[round] = runnableHandoffs(
+            gateState(),
+            dispatchCalls.map(gateInputFor),
           );
-        }
+        });
+        const roundHandoffs: string[] = self.runnerState.runnableHandoffs[round];
+        const dispatchItems = dispatchCalls.map((toolCall, index) => ({ toolCall, index }));
+        type DispatchItem = (typeof dispatchItems)[number];
+        // MUST match the branchKey the body uses below
+        // (`stack.getOrCreateBranch(branchKey)`) so runBatch and the body
+        // operate on the same branch. Keyed by the tool call's POSITION in
+        // the round, not its id: some providers (notably Google Gemini)
+        // return tool calls with no id — Gemini matches responses to calls
+        // by function name + position, so smoltalk defaults the missing id
+        // to "". Two id-less parallel calls would otherwise collide on the
+        // branch key ("tool_") and trip `runBatch: duplicate child key`.
+        // The id is folded in after the index only for readability; the
+        // index alone guarantees uniqueness within the round.
+        const branchKeyFor = (item: DispatchItem): string =>
+          `tool_${item.index}_${item.toolCall.id}`;
+        const invocationKeyFor = (item: DispatchItem): string =>
+          `round.${round}.tool.${item.index}_${item.toolCall.id}`;
+
+        const dispatchToolCall = async (
+          toolCall: smoltalk.ToolCallJSON,
+          b: BranchRunner,
+          index: number,
+          batch: "first" | "handoff",
+        ): Promise<void> => {
+          if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
+
+          // Per-call slug used for the branch key, every resume-idempotency
+          // step path, and the per-tool timing key below. Position-based so
+          // it stays unique even when `toolCall.id` is "" (see branchKeyFor). Must
+          // NOT leak into message `tool_call_id` fields — those keep the
+          // real (possibly empty) id so provider pairing / threadRepair are
+          // byte-for-byte unchanged.
+          const callSlug = `${index}_${toolCall.id}`;
+
+          // The refusal gates below (removed, priorRejected, repeated)
+          // decide from MUTABLE frame state: removedTools,
+          // rejectedCalls, and repeatStreak change as sibling branches
+          // and later rounds complete. Plain code between steps re-runs
+          // on resume, so an inline `if` on that state could steer a
+          // replayed call down a path it never took: a gate firing late
+          // would push a second tool message for the same tool_call_id,
+          // and a sibling's fifth rejection would refuse a paused call
+          // the user just approved. So the verdict is durable: computed
+          // once inside its own step, persisted in runnerState, and
+          // read back on every later pass. See
+          // docs/dev/agents/promptRunner.md.
+          self.runnerState.gateVerdicts ??= {};
+          self.runnerState.invokeOutcomes ??= {};
+          // Keyed by round + slug, NOT slug alone: the slug is unique
+          // only within a round (providers like Gemini return empty
+          // tool-call ids, so index-0 calls in every round share "0_"),
+          // and a cross-round collision would hand a fresh call a
+          // stale verdict.
+          const invocationKey = invocationKeyFor({ toolCall, index });
+
+          const { handler, namedArgs, markupArg, callKey } = gateInputFor(toolCall);
+          const gateCall = {
+            toolCall,
+            handler,
+            markupArg,
+            callKey,
+            runnableHandoffs: roundHandoffs,
+          };
+          await b.step(`${invocationKey}.gate`, async () => {
+            self.runnerState.gateVerdicts[invocationKey] = computeGateVerdict(
+              gateState(),
+              gateCall,
+            );
+          });
+          const verdict: GateVerdict = self.runnerState.gateVerdicts[invocationKey];
+
+          // Recorded inside the invoke step. A completed non-success
+          // invocation (failed, rejected, crashed) already answered the
+          // model, so on replay there is nothing left to run. A success
+          // falls through: its remaining steps no-op via completedSteps.
+          // An interrupted invocation records nothing — its invoke step
+          // re-runs on resume to consume the user's response.
+          const priorOutcome: string | undefined = self.runnerState.invokeOutcomes[invocationKey];
+          if (priorOutcome !== undefined && priorOutcome !== "success") {
+            return;
+          }
+
+          // A refused call never reaches the tool: no start/end hooks,
+          // no failure count, one notice message in its own step (the
+          // step key matches the verdict, e.g. `.removed`).
+          if (verdict !== "proceed") {
+            await b.step(`${invocationKey}.${verdict}`, async () => {
+              const notice = refusalMessage(gateState(), verdict, gateCall);
+              if (verdict === "unhandled") {
+                console.error(
+                  `No handler found for tool call: ${toolCall.name}. This error will be sent back to the LLM.`,
+                );
+              }
+              if (verdict === "repeated") {
+                resetRepeat(repeatStreak);
+              }
+              pushToolNotice(notice, toolCall);
+            });
+            return;
+          }
+          if (handler === null) {
+            // Unreachable: a missing handler yields the "unhandled" verdict.
+            return;
+          }
+
+          // A handoff that passed its gate waits for the second batch.
+          if (handler.markers?.handoff && batch === "first") {
+            return;
+          }
+
+          // A handoff drops the tool call from the assistant message
+          // that carried it, so the body's messages can follow. The
+          // rewritten thread is in the checkpoint, so a resumed pass
+          // does not rewrite again.
+          if (handler.markers?.handoff) {
+            await b.step(`${invocationKey}.handoffDropCall`, async () => {
+              dropHandoffToolCall(messages, {
+                index: toolCalls.indexOf(toolCall),
+                id: toolCall.id,
+                name: toolCall.name,
+              });
+            });
+          }
+
+          const branchKey = `tool_${callSlug}`;
+          // Note: a "cached result" short-circuit used to live here for
+          // resume after a sibling interrupt; idempotency is now handled
+          // uniformly by completedSteps inside b.step (start/invoke/end
+          // each get marked done on success and skipped on resume).
+          const branchStack = stack.getOrCreateBranch(branchKey).stack;
+
+          await b.step(`round.${round}.tool.${callSlug}.start`, async () => {
+            // Pass `branchStack` so scoped callbacks registered inside
+            // the branch's frame chain are discovered by
+            // `gatherCallbacks`. Callback bodies cannot interrupt
+            // (typechecker-enforced), so this is purely about scope
+            // discovery, not interrupt routing.
+            await invokeCallbacks({
+              ctx,
+              name: "onToolCallStart",
+              data: { toolName: handler.name, args: namedArgs },
+              stateStack: branchStack,
+            });
+          });
+          if (b.interrupts) return;
+
+          const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
+          let toolResult: any;
+          let invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed" =
+            "success";
+
+          // Persist the measured tool execution duration in
+          // self.runnerState so resume (where the invoke step is
+          // skipped) doesn't report ~0ms to onToolCallEnd /
+          // statelogClient.toolCall. Keyed per tool call id; rides
+          // along with completedSteps on the same frame.
+          self.runnerState.toolTimings ??= {};
+          // IMPORTANT: keep the toolExecution span open across the
+          // invoke + end-hook + log steps so the toolCall event inherits
+          // the toolExecution span_id (logsViewer aggregates tool
+          // duration off that). try/finally guarantees we close it even
+          // on bailout / unexpected throw.
+          try {
+            const toolCallStartTime = performance.now();
+            // Emit toolCallStart inside the same toolExecution span as
+            // the (later) toolCall end event so consumers can pair the
+            // two by span_id. Wrap in b.step so resume-replay doesn't
+            // duplicate the event. Designed to leave a trace of every
+            // tool that began even when the run is killed before it
+            // completes (the matching toolCall event won't fire).
+            await b.step(`round.${round}.tool.${callSlug}.logStart`, async () => {
+              ctx.statelogClient.toolCallStart({
+                toolName: handler.name,
+                args: namedArgs,
+                model: JSON.stringify(clientConfig.model),
+                threadId: __threads()?.activeId() ?? null,
+              });
+            });
+            // Invoke step: returns the interrupts when the tool halts
+            // with them so BranchRunner.step can collect. All other
+            // outcomes (success, failure, reject, crash) update outer
+            // state in place via runInvokeStep; the step completes
+            // (returns void unless interrupted) and is marked done so
+            // resume skips this whole block.
+            await b.step(`round.${round}.tool.${callSlug}.invoke`, async () => {
+              const outcome = await runInvokeStep({
+                handler,
+                toolCall,
+                namedArgs,
+                callKey,
+                branchKey,
+                branchStack,
+              });
+              toolResult = outcome.toolResult;
+              invokeOutcome = outcome.invokeOutcome;
+              if (outcome.invokeOutcome === "success") {
+                self.runnerState.toolTimings[callSlug] = performance.now() - toolCallStartTime;
+              }
+              // Inside the idempotent invoke step, so a resume does not
+              // count the same run twice. The interrupted outcome is
+              // never recorded: its invoke step re-runs on resume, and a
+              // recorded outcome would short-circuit that re-run.
+              if (outcome.invokeOutcome !== "interrupted") {
+                noteRepeat(repeatStreak, callKey, stringifyToolResult(toolResult));
+                self.runnerState.invokeOutcomes[invocationKey] = outcome.invokeOutcome;
+              }
+              return outcome.interrupts;
+            });
+
+            if (b.interrupts || invokeOutcome !== "success") return;
+
+            // On resume after an end-hook bailout, the `invoke` step is
+            // skipped and `toolResult` is undefined. Restore it from the
+            // per-branch result that `setResultOnBranch` persisted before
+            // the bailout, so the end-hook sees the actual tool output.
+            if (toolResult === undefined) {
+              toolResult = stack.getBranch(branchKey)?.result?.result;
+            }
+
+            // Reuse the persisted duration so onToolCallEnd /
+            // statelogClient.toolCall always report the real exec time,
+            // not the resume pass's overhead.
+            const timeTaken: number = self.runnerState.toolTimings[callSlug] ?? 0;
+            await b.step(`round.${round}.tool.${callSlug}.end`, async () => {
+              // Same scope-discovery rationale as the .start hook.
+              await invokeCallbacks({
+                ctx,
+                name: "onToolCallEnd",
+                data: {
+                  toolName: handler.name,
+                  result: toolResult,
+                  timeTaken,
+                },
+                stateStack: branchStack,
+              });
+            });
+            // Wrap the toolCall log in its own b.step so it's idempotent
+            // when pr.parallel re-runs a fully-completed branch on resume
+            // (e.g. after a later `nextLlmCall` step bails). Without this
+            // guard, every re-entry would emit a duplicate toolCall event.
+            await b.step(`round.${round}.tool.${callSlug}.log`, async () => {
+              ctx.statelogClient.toolCall({
+                toolName: handler.name,
+                args: namedArgs,
+                output: toolResult,
+                model: JSON.stringify(clientConfig.model),
+                timeTaken,
+                threadId: __threads()?.activeId() ?? null,
+              });
+            });
+          } finally {
+            ctx.statelogClient.endSpan(toolSpanId);
+          }
+        };
+
+        // Run one batch of dispatched calls. An empty batch (an
+        // all-intrinsic round) has nothing to dispatch, so it returns no
+        // interrupts instead of running runBatch over zero children.
+        const runDispatchBatch = async (
+          key: string,
+          items: DispatchItem[],
+          batch: "first" | "handoff",
+        ): Promise<RunBatchResult<void>> => {
+          if (items.length === 0) {
+            return { kind: "values", values: [] };
+          }
+          return pr.parallel(key, items, branchKeyFor, (item, b) =>
+            dispatchToolCall(item.toolCall, b, item.index, batch),
+          );
+        };
 
         // pr.parallel returns a RunBatchResult tagged union; if any tool
         // branch surfaced interrupts, runBatch already stamped the shared
@@ -1862,15 +1819,61 @@ export async function runPrompt(args: {
         // outer caller checkpoints / propagates as usual. (Replaces the
         // former PromptBailout throw with an explicit return so runBatch's
         // no-throw-Interrupt contract is preserved.)
-        if (parallelResult.kind === "interrupts") {
-          shouldPop = false;
-          return parallelResult.interrupts;
+        //
+        // A finished first batch is recorded and never re-run. A resume
+        // that re-ran it would pop every branch on this frame when it
+        // finished (runBatch does that on success), including the branch
+        // of a handoff body paused in the second batch.
+        self.runnerState.finishedFirstBatches ??= [];
+        if (!self.runnerState.finishedFirstBatches.includes(round)) {
+          const firstResult = await runDispatchBatch(
+            `round.${round}.tools`,
+            dispatchItems,
+            "first",
+          );
+          if (firstResult.kind === "interrupts") {
+            shouldPop = false;
+            return firstResult.interrupts;
+          }
+          // All tool calls complete — runBatch already popped branches on the
+          // no-interrupt success path, but call again defensively in case any
+          // branchFn-level cleanup added new branches mid-flight.
+          stack.popBranches();
+          self.runnerState.finishedFirstBatches.push(round);
         }
 
-        // All tool calls complete — runBatch already popped branches on the
-        // no-interrupt success path, but call again defensively in case any
-        // branchFn-level cleanup added new branches mid-flight.
-        stack.popBranches();
+        // A handoff call runs in a second batch of its own, after the
+        // first batch has put every other call's tool result on the
+        // thread. Its body writes to this conversation, and those
+        // messages may only follow the tool results. In the first batch
+        // the handoff only takes its gate verdict (a refused handoff
+        // answers the model there). Between the batches the guard gate
+        // and the approver's feedback run, so a tripped guard stops the
+        // round before the body spends more, and the feedback reaches the
+        // body. See docs/dev/language/handoff-functions.md.
+        const handoffItem = dispatchItems.find(
+          (item) =>
+            handlerFor(item.toolCall)?.markers?.handoff &&
+            self.runnerState.gateVerdicts?.[invocationKeyFor(item)] === "proceed",
+        );
+        if (handoffItem !== undefined) {
+          await runHandoffGate(round, boundaryCtx(), (reason) =>
+            pushToolNotice(
+              handoffNotStartedMessage(handoffItem.toolCall.name, reason),
+              handoffItem.toolCall,
+            ),
+          );
+          const handoffResult = await runDispatchBatch(
+            `round.${round}.handoff`,
+            [handoffItem],
+            "handoff",
+          );
+          if (handoffResult.kind === "interrupts") {
+            shouldPop = false;
+            return handoffResult.interrupts;
+          }
+          stack.popBranches();
+        }
         tools = tools.filter((t) => !removedTools.includes(t.name));
         toolFunctions = toolFunctions.filter((fn) => !removedTools.includes(fn.name));
 

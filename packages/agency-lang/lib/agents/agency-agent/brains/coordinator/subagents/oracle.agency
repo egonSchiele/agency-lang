@@ -41,7 +41,6 @@ export handoff def oracleAgent(
 
   The oracle continues this conversation: it sees everything above, and
   its reading and reasoning stay in your history. Ask the question itself.
-  Call it alone, with no other tool calls in the same response.
 
   @param userMsg - the question
   @param maxSeconds - working-time cap in seconds, when the user gave a

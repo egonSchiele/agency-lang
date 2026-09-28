@@ -1,11 +1,12 @@
 /**
- * Two refusals in runPrompt's tool loop, both decided before a tool runs:
- * a call the model keeps repeating with nothing changing, and a string
- * argument that is really the model's own tool-call markup. See
- * docs/dev/agents/tool-loop-guards.md.
+ * The refusal gate in runPrompt's tool loop: the checks that can refuse
+ * a tool call before it runs, and the text each refusal sends the model.
+ * See docs/dev/agents/tool-loop-guards.md.
  */
 import { createHash } from "crypto";
-import type { FuncParam } from "./agencyFunction.js";
+import type * as smoltalk from "smoltalk";
+import type { AgencyFunction, FuncParam } from "./agencyFunction.js";
+import { tooManyHandoffsMessage } from "./handoff.js";
 
 /** A call is refused once the same tool, with the same arguments, has
  *  returned the same result this many times in a row, with no other call in
@@ -120,4 +121,128 @@ export function repeatedCallMessage(toolName: string, count: number): string {
     `the previous ${count} all returned the same result. It was not run. Say what you ` +
     `expected to change, then either call it with different arguments or continue without it.`
   );
+}
+
+/** The refusal-gate verdict for one tool invocation. Computed exactly
+ *  once, inside its own step, and persisted in runnerState: most gates
+ *  read frame state that mutates as sibling branches complete, so a
+ *  verdict recomputed on resume could differ from the one the call
+ *  originally acted on. */
+export type GateVerdict =
+  | "removed"
+  | "unhandled"
+  | "tooManyRounds"
+  | "tooManyHandoffs"
+  | "markup"
+  | "priorRejected"
+  | "repeated"
+  | "proceed";
+
+/** The state of one llm() call that the gate reads. The arrays and the
+ *  streak are the live records on the runPrompt frame, which change as
+ *  sibling calls finish. */
+export type GateState = {
+  removedTools: string[];
+  rejectedCalls: string[];
+  repeatStreak: RepeatStreak;
+  toolCallRound: number;
+  maxToolCallRounds: number;
+  maxRepeatedToolCalls: number;
+};
+
+/** One call as the gate sees it. */
+export type GateInput = {
+  toolCall: smoltalk.ToolCallJSON;
+  handler: AgencyFunction | null;
+  markupArg: string | null;
+  callKey: string;
+};
+
+export type GateCall = GateInput & {
+  /** The handoff calls of this round that pass every other check, from
+   *  `runnableHandoffs`. */
+  runnableHandoffs: string[];
+};
+
+/** The names of the handoff calls in a round that pass every check
+ *  except the one-handoff-per-round rule. Only these count toward that
+ *  rule: a handoff that is refused for another reason would not run
+ *  anyway, so it must not stop the one that would. Reads mutable state,
+ *  so callers compute it once per round, inside a step. */
+export function runnableHandoffs(state: GateState, inputs: GateInput[]): string[] {
+  return inputs
+    .filter((input) => input.handler?.markers?.handoff && checkCall(state, input) === "proceed")
+    .map((input) => input.toolCall.name);
+}
+
+/** The refusal-gate decision for one call, in refusal-priority order.
+ *  Reads mutable state, so callers must run it exactly once, inside the
+ *  call's `.gate` step, and persist the verdict in runnerState. */
+export function computeGateVerdict(state: GateState, call: GateCall): GateVerdict {
+  const verdict = checkCall(state, call);
+  // A handoff continues this conversation and runs after the other
+  // calls in its round. Two handoff bodies would both write to the
+  // conversation, so a round with two runnable handoffs refuses both.
+  if (verdict === "proceed" && call.handler?.markers?.handoff && call.runnableHandoffs.length > 1) {
+    return "tooManyHandoffs";
+  }
+  return verdict;
+}
+
+/** Every check except the one-handoff-per-round rule. */
+function checkCall(state: GateState, input: GateInput): GateVerdict {
+  const { toolCall, handler, markupArg, callKey } = input;
+  if (state.removedTools.includes(toolCall.name)) {
+    return "removed";
+  }
+  if (handler === null) {
+    return "unhandled";
+  }
+  if (state.toolCallRound >= state.maxToolCallRounds) {
+    return "tooManyRounds";
+  }
+  if (markupArg !== null) {
+    return "markup";
+  }
+  if (state.rejectedCalls.includes(callKey)) {
+    // A call identical to one already rejected in this llm() call: no
+    // invoke, no re-raised interrupt, no counter movement. Checked
+    // before the repeat guard so the model hears "rejected", not
+    // "repeated".
+    return "priorRejected";
+  }
+  if (
+    state.maxRepeatedToolCalls > 0 &&
+    repeatsBefore(state.repeatStreak, callKey) >= state.maxRepeatedToolCalls
+  ) {
+    return "repeated";
+  }
+  return "proceed";
+}
+
+/** The model-facing text for a refusal verdict. */
+export function refusalMessage(
+  state: GateState,
+  verdict: Exclude<GateVerdict, "proceed">,
+  call: GateCall,
+): string {
+  const name = call.toolCall.name;
+  switch (verdict) {
+    case "removed":
+      return `Error: Tool ${name} has been removed from this conversation after repeated failures or rejections, and will not be executed.`;
+    case "unhandled":
+      return `Error: No handler found for tool call ${name}`;
+    case "tooManyHandoffs":
+      return tooManyHandoffsMessage(name, call.runnableHandoffs);
+    case "tooManyRounds":
+      return `Error: Maximum number of tool call rounds (${state.maxToolCallRounds}) exceeded. This tool call will not be executed.`;
+    case "markup":
+      // markupArg is non-null whenever the verdict says markup: both
+      // derive from the same replay-stable inputs.
+      return markupArgumentMessage(name, call.markupArg ?? "");
+    case "priorRejected":
+      return `This exact call to ${name} was already rejected and will not be executed. Do not retry it.`;
+    case "repeated":
+      return repeatedCallMessage(name, repeatsBefore(state.repeatStreak, call.callKey));
+  }
 }

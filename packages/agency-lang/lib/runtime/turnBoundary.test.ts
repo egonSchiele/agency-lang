@@ -3,9 +3,11 @@ import * as smoltalk from "smoltalk";
 import { StateStack } from "./state/stateStack.js";
 import { MessageThread } from "./state/messageThread.js";
 import type { HarvestedReplyAttachment } from "./replyAttachments.js";
+import { PromptBailout } from "./promptRunner.js";
 import {
   drainProducer,
   runGateAndFeedback,
+  runHandoffGate,
   runRoundBoundary,
   runInitialBoundary,
   attachmentsProducer,
@@ -210,5 +212,41 @@ describe("guard pause signal flows through the boundary untouched", () => {
     });
     await runGateAndFeedback("g", "f", bctx);
     expect(returns[0]).toBe(fakeInterrupts);
+  });
+});
+
+describe("runHandoffGate", () => {
+  it("runs the gate and the feedback under the handoff keys", async () => {
+    const { bctx, stepKeys } = makeBctx();
+    const stopped: string[] = [];
+    await runHandoffGate(2, bctx, (reason) => stopped.push(reason));
+    expect(stepKeys).toEqual(["round.2.handoffGuardGate", "round.2.handoffGuardFeedback"]);
+    expect(stopped).toEqual([]);
+  });
+
+  it("reports the reason and rethrows when the gate ends the round", async () => {
+    const { bctx } = makeBctx({
+      guardGate: async () => {
+        throw new Error("cost limit reached");
+      },
+    });
+    const stopped: string[] = [];
+    await expect(runHandoffGate(0, bctx, (reason) => stopped.push(reason))).rejects.toThrow(
+      "cost limit reached",
+    );
+    expect(stopped).toEqual(["cost limit reached"]);
+  });
+
+  it("does not report a pause, which resumes into the handoff", async () => {
+    const { bctx } = makeBctx({
+      guardGate: async () => {
+        throw new PromptBailout([]);
+      },
+    });
+    const stopped: string[] = [];
+    await expect(runHandoffGate(0, bctx, (reason) => stopped.push(reason))).rejects.toBeInstanceOf(
+      PromptBailout,
+    );
+    expect(stopped).toEqual([]);
   });
 });

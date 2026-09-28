@@ -1,12 +1,18 @@
 import { describe, it, expect } from "vitest";
+import { AgencyFunction } from "./agencyFunction.js";
 import {
+  computeGateVerdict,
   DEFAULT_MAX_REPEATED_TOOL_CALLS,
   freshRepeatStreak,
   markupArgument,
   noteRepeat,
+  refusalMessage,
   repeatKey,
   repeatsBefore,
   resetRepeat,
+  runnableHandoffs,
+  type GateCall,
+  type GateState,
 } from "./toolLoopGuards.js";
 
 describe("markupArgument", () => {
@@ -112,5 +118,98 @@ describe("repeated tool calls", () => {
 
   it("DEFAULT_MAX_REPEATED_TOOL_CALLS is the documented default", () => {
     expect(DEFAULT_MAX_REPEATED_TOOL_CALLS).toBe(3);
+  });
+});
+
+describe("computeGateVerdict", () => {
+  const tool = (name: string, handoff: boolean) =>
+    new AgencyFunction({
+      name,
+      module: "test.agency",
+      fn: async () => "ok",
+      params: [],
+      toolDefinition: null,
+      markers: handoff ? { handoff: true } : {},
+    });
+  const state = (): GateState => ({
+    removedTools: [],
+    rejectedCalls: [],
+    repeatStreak: freshRepeatStreak(),
+    toolCallRound: 0,
+    maxToolCallRounds: 10,
+    maxRepeatedToolCalls: DEFAULT_MAX_REPEATED_TOOL_CALLS,
+  });
+  const call = (handler: AgencyFunction, handoffs: string[]): GateCall => ({
+    toolCall: { id: "c1", name: handler.name, arguments: {} },
+    handler,
+    markupArg: null,
+    callKey: repeatKey(handler.name, {}),
+    runnableHandoffs: handoffs,
+  });
+
+  it("lets one handoff through beside ordinary calls", () => {
+    const explorer = tool("explorer", true);
+    expect(computeGateVerdict(state(), call(explorer, ["explorer"]))).toBe("proceed");
+  });
+
+  it("refuses a handoff when the round has two runnable handoffs, and names both", () => {
+    const explorer = tool("explorer", true);
+    const gateCall = call(explorer, ["explorer", "oracle"]);
+    expect(computeGateVerdict(state(), gateCall)).toBe("tooManyHandoffs");
+    expect(refusalMessage(state(), "tooManyHandoffs", gateCall)).toContain(
+      "explorer and oracle were called in the same response",
+    );
+  });
+
+  it("does not refuse an ordinary call in a round with two handoffs", () => {
+    const lookup = tool("lookup", false);
+    expect(computeGateVerdict(state(), call(lookup, ["explorer", "oracle"]))).toBe("proceed");
+  });
+
+  it("gives a removed handoff its own refusal, not the handoff one", () => {
+    const explorer = tool("explorer", true);
+    const removed = { ...state(), removedTools: ["explorer"] };
+    expect(computeGateVerdict(removed, call(explorer, ["explorer", "oracle"]))).toBe("removed");
+  });
+});
+
+describe("runnableHandoffs", () => {
+  const tool = (name: string, handoff: boolean) =>
+    new AgencyFunction({
+      name,
+      module: "test.agency",
+      fn: async () => "ok",
+      params: [],
+      toolDefinition: null,
+      markers: handoff ? { handoff: true } : {},
+    });
+  const input = (handler: AgencyFunction) => ({
+    toolCall: { id: handler.name, name: handler.name, arguments: {} },
+    handler,
+    markupArg: null,
+    callKey: repeatKey(handler.name, {}),
+  });
+  const state = (removedTools: string[]): GateState => ({
+    removedTools,
+    rejectedCalls: [],
+    repeatStreak: freshRepeatStreak(),
+    toolCallRound: 0,
+    maxToolCallRounds: 10,
+    maxRepeatedToolCalls: DEFAULT_MAX_REPEATED_TOOL_CALLS,
+  });
+  const inputs = [
+    input(tool("explorer", true)),
+    input(tool("oracle", true)),
+    input(tool("lookup", false)),
+  ];
+
+  it("lists the handoff calls and leaves out ordinary calls", () => {
+    expect(runnableHandoffs(state([]), inputs)).toEqual(["explorer", "oracle"]);
+  });
+
+  it("leaves out a handoff that another check refuses", () => {
+    // The model called a removed handoff beside a live one. The live one
+    // is the only handoff that could run, so it must not be refused.
+    expect(runnableHandoffs(state(["explorer"]), inputs)).toEqual(["oracle"]);
   });
 });

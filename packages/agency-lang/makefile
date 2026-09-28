@@ -88,8 +88,11 @@ build:
 	cp lib/cli/runShim/*.mjs dist/lib/cli/runShim/
 	cp lib/cli/mlxChatServer.py dist/lib/cli/mlxChatServer.py
 	cp lib/cli/mlxEmbedServer.py dist/lib/cli/mlxEmbedServer.py
+	cp lib/cli/localServerCommon.py dist/lib/cli/localServerCommon.py
 	cp lib/cli/mlxSpeechServer.py dist/lib/cli/mlxSpeechServer.py
 	cp lib/cli/mlxSpeechRules.py dist/lib/cli/mlxSpeechRules.py
+	cp lib/cli/diffusersImageServer.py dist/lib/cli/diffusersImageServer.py
+	cp lib/cli/diffusersImageRules.py dist/lib/cli/diffusersImageRules.py
 	rm -rf dist/lib/stdlib/providers
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
 	cp lib/stdlib/visionOcr.jxa dist/lib/stdlib/visionOcr.jxa

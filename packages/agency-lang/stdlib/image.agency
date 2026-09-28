@@ -1,11 +1,12 @@
-import { _generateImage } from "agency-lang/stdlib-lib/image.js"
+import { _generateImage, _generateImageLocal } from "agency-lang/stdlib-lib/image.js"
 
 /** @module
-  @summary Generate images from a text prompt (or edit input images) using a hosted provider, returning base64 you can persist.
-  Generate images from a text prompt (or edit input images) using a
-hosted provider (OpenAI, Google, or an open-source model via LiteLLM / Together).
-Returns base64 you can persist with `writeBinary()` or send onward with
-`std::thread`'s `image(...)`.
+  @summary Generate images from a text prompt with a hosted provider or a model on this machine, returning base64 you can persist.
+  Generate images from a text prompt. `generateImage` uses a hosted
+provider (OpenAI, Google, or an open-source model via LiteLLM / Together),
+and can also edit input images. `generateImageLocal` uses a model on this
+machine, served by `agency local serve --image`. Both return base64 you can
+persist with `writeBinary()` or send onward with `std::thread`'s `image(...)`.
 
   ```ts
   import { generateImage } from "std::image"
@@ -14,6 +15,10 @@ Returns base64 you can persist with `writeBinary()` or send onward with
     const r = generateImage("a red bicycle in the rain", size: "1024x1024")
     if (isFailure(r)) { print("failed: ${r.error}"); return }
     writeBinary("bike.png", r.value.base64)
+
+    const local = generateImageLocal("a lighthouse in a storm", "z-image-turbo")
+    if (isFailure(local)) { print("failed: ${local.error}"); return }
+    writeBinary("lighthouse.png", local.value.base64)
   }
   ```
 */
@@ -58,5 +63,49 @@ export def generateImage(
     images,
     apiKey,
     baseUrl,
+  )
+}
+
+export type LocalImage = {
+  base64: string;
+  mimeType: string;
+  seed: number
+}
+
+export def generateImageLocal(
+  prompt: string,
+  model: string,
+  size: string = "1024x1024",
+  steps: number | null = null,
+  guidance: number | null = null,
+  seed: number | null = null,
+  negativePrompt: string = "",
+  format: string = "png",
+): Result<LocalImage> {
+  """
+  Generate an image on this machine with a local image model, such as
+  z-image-turbo or chroma1-hd. The model must be running: start it with
+  `agency local serve --image <model>`. Nothing leaves the machine and
+  nothing is written; save the image with writeBinary. Returns a Result
+  whose success value is { base64, mimeType, seed }.
+
+  @param prompt - What to draw
+  @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
+  @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768"
+  @param steps - How many refinement passes to make. More is slower and usually more detailed. Null uses the model's own default (9 for z-image-turbo, 40 for chroma1-hd)
+  @param guidance - How closely to follow the prompt; higher sticks to it more literally. Null uses the model's own default. z-image-turbo takes none
+  @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
+  @param negativePrompt - What the image should not contain. z-image-turbo takes none
+  @param format - "png", "jpeg", or "webp"
+  """
+  return _generateImageLocal(
+    prompt,
+    model,
+    size,
+    steps,
+    guidance,
+    seed,
+    negativePrompt,
+    format,
   )
 }

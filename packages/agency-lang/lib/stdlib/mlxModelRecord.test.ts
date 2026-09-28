@@ -4,7 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import {
   mlxModelDirName,
-  mlxModelDir,
+  servedModelDir,
   readMlxModelRecord,
   writeMlxModelRecord,
   isMlxModelComplete,
@@ -18,11 +18,14 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("mlx model record", () => {
-  it("names the directory org--repo under mlx/", () => {
+  it("names the directory org--repo under the backend's folder", () => {
     expect(mlxModelDirName("mlx-community/Qwen3-Coder-Next-4bit")).toBe(
       "mlx-community--Qwen3-Coder-Next-4bit",
     );
-    expect(mlxModelDir(dir, "org/repo")).toBe(path.join(dir, "mlx", "org--repo"));
+    expect(servedModelDir(dir, "mlx", "org/repo")).toBe(path.join(dir, "mlx", "org--repo"));
+    expect(servedModelDir(dir, "diffusers", "org/repo")).toBe(
+      path.join(dir, "diffusers", "org--repo"),
+    );
   });
 
   it("round-trips a record and reports completeness", () => {

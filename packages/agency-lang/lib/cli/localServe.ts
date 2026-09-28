@@ -4,17 +4,18 @@ import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import prompts from "prompts";
-import { isMlxUri, parseMlxUri, modelDirEntries } from "../stdlib/modelBackend.js";
+import { isServedUri, parseServedUri, modelDirSizeBytes } from "../stdlib/modelBackend.js";
 import {
   _resolveModel,
   _mlxServedName,
   _localModelCategory,
   _listDownloadedModels,
-  _findDownloadedMlxModel,
+  _findDownloadedServedModel,
   defaultCacheDir,
   readClientConfig,
   formatGB,
   type DownloadedModel,
+  type ResolvedModel,
 } from "../stdlib/localModels.js";
 import type { ModelCategory } from "../stdlib/modelCatalog.js";
 import { startFrontDoor, type FrontDoor, type Route } from "./mlxServer.js";
@@ -23,7 +24,7 @@ import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
 export { formatElapsed };
 
-export type ServeKind = "chat" | "embedding" | "speech";
+export type ServeKind = "chat" | "embedding" | "speech" | "image";
 
 /** Inputs an embedding model accepts, in tokens: the Qwen3 Embedding
  *  card's value. */
@@ -188,6 +189,11 @@ export function speechServeArgs(
   ];
 }
 
+/** The argv for one image server process, after the Python path. */
+export function imageServeArgs(script: string, modelDir: string, internalPort: number): string[] {
+  return [script, "--model", modelDir, "--host", "127.0.0.1", "--port", String(internalPort)];
+}
+
 /** The argv for one process, by its kind. */
 function argsFor(
   model: Planned,
@@ -201,6 +207,9 @@ function argsFor(
   if (model.kind === "speech") {
     return speechServeArgs(speechServerScript(), model.dir, internalPort, modelsDir);
   }
+  if (model.kind === "image") {
+    return imageServeArgs(imageServerScript(), model.dir, internalPort);
+  }
   return serveArgs(chatServerScript(), model.dir, internalPort, settings);
 }
 
@@ -211,6 +220,9 @@ function processLabel(kind: ServeKind, name: string): string {
   }
   if (kind === "speech") {
     return `the speech server for ${name}`;
+  }
+  if (kind === "image") {
+    return `the image server for ${name}`;
   }
   return `mlx_lm.server for ${name}`;
 }
@@ -251,18 +263,42 @@ export function speechServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "mlxSpeechServer.py");
 }
 
+/** The diffusers release the image server's rules were written against.
+ *  A test checks it matches DIFFUSERS_VERSION in
+ *  lib/cli/diffusersImageRules.py; the server refuses any other version. */
+export const DIFFUSERS_VERSION = "0.40.0";
+
+/** The releases the image server was tested with alongside diffusers. */
+export const TORCH_VERSION = "2.14.0";
+export const TRANSFORMERS_VERSION = "5.17.0";
+export const ACCELERATE_VERSION = "1.15.0";
+
+/** Everything the image server needs, pinned to the versions it was tested
+ *  with. sentencepiece and protobuf are Chroma's T5 tokenizer. A missing
+ *  image module is fixed by installing all of these at once. */
+const IMAGE_REQUIREMENTS = [
+  `torch==${TORCH_VERSION}`,
+  `diffusers==${DIFFUSERS_VERSION}`,
+  `transformers==${TRANSFORMERS_VERSION}`,
+  `accelerate==${ACCELERATE_VERSION}`,
+  "sentencepiece==0.2.2",
+  "protobuf==7.36.2",
+].join(" ");
+
+/** The image server shipped next to this file, copied into dist like the
+ *  speech one. */
+export function imageServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "diffusersImageServer.py");
+}
+
 /** The Python modules each kind of process imports. */
 const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
   chat: ["mlx_lm", "llguidance"],
   embedding: ["mlx_lm"],
   speech: ["mlx_audio"],
-};
-
-/** What a module that will not import means. */
-const PROBLEM_FOR_MODULE: Record<string, PythonProblem> = {
-  mlx_lm: "no-mlx-lm",
-  llguidance: "no-llguidance",
-  mlx_audio: "no-mlx-audio",
+  // accelerate is optional to diffusers, but without it a model loads
+  // several times slower and with more memory.
+  image: ["torch", "diffusers", "transformers", "accelerate"],
 };
 
 /** The pip requirement that provides each module. */
@@ -270,7 +306,19 @@ const PIP_FOR_MODULE: Record<string, string> = {
   mlx_lm: `mlx-lm==${MLX_LM_VERSION}`,
   llguidance: `llguidance==${LLGUIDANCE_VERSION}`,
   mlx_audio: `mlx-audio==${MLX_AUDIO_VERSION}`,
+  torch: IMAGE_REQUIREMENTS,
+  diffusers: IMAGE_REQUIREMENTS,
+  transformers: IMAGE_REQUIREMENTS,
+  accelerate: IMAGE_REQUIREMENTS,
 };
+
+/** The pip requirements for `modules`, each once. The image modules share
+ *  one requirement line. */
+function requirementsFor(modules: string[]): string[] {
+  return modules
+    .map((m) => PIP_FOR_MODULE[m])
+    .filter((requirement, index, all) => all.indexOf(requirement) === index);
+}
 
 /** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`, then the
  *  default environment under the home directory. */
@@ -310,14 +358,16 @@ function joinNames(names: string[]): string {
  *  path. */
 export function notServedMessage(served: string[], requested: string): string {
   const startWith =
-    path.isAbsolute(requested) || isMlxUri(requested) ? requested : `mlx:${requested}`;
+    path.isAbsolute(requested) || isServedUri(requested) ? requested : `mlx:${requested}`;
   return (
     `This server is serving ${joinNames(served)}. It is not serving ${requested}. ` +
     `Start it with: agency local serve ${startWith}`
   );
 }
 
-export type PythonProblem = "missing" | "no-mlx-lm" | "no-llguidance" | "no-mlx-audio";
+/** Why a Python cannot serve: it is not there, or it cannot import a module
+ *  one of the planned kinds needs. */
+export type PythonProblem = { kind: "missing" } | { kind: "cannot-import"; module: string };
 
 /** What to print when the chosen Python is not there, or cannot import a
  *  module the planned kinds need. The venv commands create the default
@@ -331,11 +381,13 @@ export function pythonMissingMessage(
 ): string {
   const venv = defaultMlxEnv(home);
   const pip = path.join(venv, "bin", "pip");
-  if (problem === "no-mlx-audio" || problem === "no-llguidance") {
-    const module = problem === "no-mlx-audio" ? "mlx_audio" : "llguidance";
-    const requirement = PIP_FOR_MODULE[module];
+  // A Python that has mlx_lm but not another module is an environment the
+  // user made and only needs one more package. Any other problem gets the
+  // commands that create the default environment from nothing.
+  if (problem.kind === "cannot-import" && problem.module !== "mlx_lm") {
+    const requirement = PIP_FOR_MODULE[problem.module];
     return [
-      `${python} cannot import ${module}.`,
+      `${python} cannot import ${problem.module}.`,
       "Agency does not install Python. Install it once:",
       "",
       `  ${pip} install ${requirement}`,
@@ -344,16 +396,16 @@ export function pythonMissingMessage(
     ].join("\n");
   }
   const what =
-    problem === "missing" ? `${python} does not exist.` : `${python} cannot import mlx_lm.`;
+    problem.kind === "missing" ? `${python} does not exist.` : `${python} cannot import mlx_lm.`;
   return [
     what,
     "Agency does not install Python. Create an environment once:",
     "",
     `  python3.12 -m venv ${venv}`,
-    `  ${pip} install ${modules.map((m) => PIP_FOR_MODULE[m]).join(" ")}`,
+    `  ${pip} install ${requirementsFor(modules).join(" ")}`,
     "",
     "Python 3.11 or newer is required. Or point --python at a Python that has",
-    `${modules.map((m) => PIP_FOR_MODULE[m]).join(" and ")} installed.`,
+    `${requirementsFor(modules).join(" and ")} installed.`,
   ].join("\n");
 }
 
@@ -373,9 +425,9 @@ type Probe = { method: "GET" | "POST"; path: string; body?: string };
 
 /** The one-request probe for each kind of process. The chat and embedding
  *  probes name the model the process was started with and ask for as little
- *  work as possible. The speech script speaks once before it opens its port,
- *  so an answer on /health already means it can speak; which family needs
- *  what stays in the Python rules module. */
+ *  work as possible. The speech and image scripts generate once before they
+ *  open their port, so an answer on /health already means they can
+ *  generate; which family needs what stays in the Python rules modules. */
 function readinessRequest(kind: ServeKind, upstreamModel: string): Probe {
   if (kind === "embedding") {
     return {
@@ -384,7 +436,7 @@ function readinessRequest(kind: ServeKind, upstreamModel: string): Probe {
       body: JSON.stringify({ model: upstreamModel, input: "hi" }),
     };
   }
-  if (kind === "speech") {
+  if (kind === "speech" || kind === "image") {
     return { method: "GET", path: "/health" };
   }
   return {
@@ -465,10 +517,10 @@ export function checkPython(
   for (const module of modules) {
     const run = exec(python, ["-c", `import ${module}`]);
     if (run.error?.code === "ENOENT") {
-      return "missing";
+      return { kind: "missing" };
     }
     if (run.status !== 0) {
-      return PROBLEM_FOR_MODULE[module];
+      return { kind: "cannot-import", module };
     }
   }
   return "ok";
@@ -614,6 +666,8 @@ export type ServeFlags = ReplyLimits & {
   embedding?: string[];
   /** Models to serve with the speech server on /v1/audio/speech. */
   speech?: string[];
+  /** Models to serve with the image server on /v1/images/generations. */
+  image?: string[];
 };
 
 function realSpawn(python: string, args: string[]): Child {
@@ -646,6 +700,7 @@ type Planned = { name: string; dir: string; sizeBytes: number; kind: ServeKind }
 const FLAG_FOR_CATEGORY: Partial<Record<ModelCategory, string>> = {
   embedding: "--embedding",
   speech: "--speech",
+  image: "--image",
 };
 
 /** Whether a catalog category has to be served with a flag. */
@@ -661,9 +716,23 @@ function anArticle(word: string): string {
  *  as a chat model, or the reverse, fails only after a long load, so refuse
  *  it up front when the catalog can tell, from the name or from what it
  *  resolves to. */
-function checkKind(value: string, target: string, kind: ServeKind): void {
+function checkKind(value: string, resolved: ResolvedModel, kind: ServeKind): void {
+  // The backend knows an image model even when the catalog does not.
+  if (resolved.backend === "diffusers" && kind !== "image") {
+    throw new Error(
+      `${value} is an image model. Serve it with: agency local serve --image ${value}`,
+    );
+  }
+  const target = resolved.target;
   const category = _localModelCategory(value) ?? _localModelCategory(target);
   if (category === undefined) {
+    // Only the backend can say that an unknown model is not an image model.
+    if (kind === "image" && resolved.backend !== "diffusers") {
+      throw new Error(
+        `${value} is not an image model. --image serves diffusers models, named with a ` +
+          `diffusers: URI or a directory holding model_index.json.`,
+      );
+    }
     return;
   }
   const wanted = FLAG_FOR_CATEGORY[category];
@@ -690,23 +759,23 @@ function checkKind(value: string, target: string, kind: ServeKind): void {
  *  serves it. */
 function planModel(value: string, cacheDir: string, kind: ServeKind): Planned {
   const resolved = _resolveModel(value);
-  checkKind(value, resolved.target, kind);
+  checkKind(value, resolved, kind);
   if (resolved.backend === "llama-cpp") {
     throw new Error(
-      `"${value}" is a GGUF model. agency local serve is for MLX models; ` +
+      `"${value}" is a GGUF model. agency local serve is for MLX and diffusers models; ` +
         `run it with agency run --local ${value} instead.`,
     );
   }
   const name = _mlxServedName(resolved);
-  if (isMlxUri(resolved.target)) {
-    const { repo, revision } = parseMlxUri(resolved.target);
+  if (isServedUri(resolved.target)) {
+    const { backend, repo, revision } = parseServedUri(resolved.target);
     // Whichever layout holds it, at the revision asked for: our own directory
     // with a record, or a Hugging Face cache someone else downloaded into.
-    const found = _findDownloadedMlxModel(repo, cacheDir, revision);
+    const found = _findDownloadedServedModel(backend, repo, cacheDir, revision);
     if (found !== null) {
       return { name, dir: found.path, sizeBytes: found.sizeBytes, kind };
     }
-    const anyRevision = _findDownloadedMlxModel(repo, cacheDir);
+    const anyRevision = _findDownloadedServedModel(backend, repo, cacheDir);
     if (anyRevision === null) {
       throw new Error(
         `${repo} is not downloaded. Run:\n  agency local download ${resolved.target}`,
@@ -719,8 +788,7 @@ function planModel(value: string, cacheDir: string, kind: ServeKind): Planned {
     );
   }
   const dir = path.resolve(resolved.target);
-  const sizeBytes = modelDirEntries(dir).reduce((sum, f) => sum + f.size, 0);
-  return { name, dir, sizeBytes, kind };
+  return { name, dir, sizeBytes: modelDirSizeBytes(dir), kind };
 }
 
 /** Resolves with a description once the child exits. */
@@ -740,6 +808,7 @@ const BANNER_SUFFIX: Record<ServeKind, string> = {
   chat: "",
   embedding: "  (embeddings)",
   speech: "  (speech)",
+  image: "  (images)",
 };
 
 /** What `serve` prints once every process is ready: the models, in plan
@@ -777,6 +846,15 @@ export function servingBanner(port: number, models: ServedModel[]): string[] {
       `    speakLocal("Hello there.", "${speech}")`,
     );
   }
+  const image = first("image");
+  if (image !== undefined) {
+    lines.push(
+      "",
+      "  In Agency code:",
+      `    import { generateImageLocal } from "std::image"`,
+      `    generateImageLocal("a lighthouse in a storm", "${image}")`,
+    );
+  }
   return lines;
 }
 
@@ -791,6 +869,7 @@ export async function runServe(
     ...values.map((v) => planModel(v, deps.cacheDir, "chat")),
     ...(flags.embedding ?? []).map((v) => planModel(v, deps.cacheDir, "embedding")),
     ...(flags.speech ?? []).map((v) => planModel(v, deps.cacheDir, "speech")),
+    ...(flags.image ?? []).map((v) => planModel(v, deps.cacheDir, "image")),
   ];
   if (planned.length === 0) {
     throw new Error("Name at least one model to serve.");
@@ -930,7 +1009,8 @@ export async function localServe(values: string[], flags: ServeFlags): Promise<v
     const wantsPicker =
       values.length === 0 &&
       (flags.embedding ?? []).length === 0 &&
-      (flags.speech ?? []).length === 0;
+      (flags.speech ?? []).length === 0 &&
+      (flags.image ?? []).length === 0;
     const models = wantsPicker ? await pickModelsToServe(realPickDeps(defaultCacheDir())) : values;
     if (wantsPicker && models.length === 0) {
       // Cancelled, or nothing ticked: nothing to serve, and nothing wrong.

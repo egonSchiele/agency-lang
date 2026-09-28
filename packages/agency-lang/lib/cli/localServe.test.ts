@@ -20,6 +20,7 @@ import {
   serveChoices,
   embedServeArgs,
   speechServeArgs,
+  imageServeArgs,
   pickModelsToServe,
   type ServeDeps,
   type Child,
@@ -119,6 +120,20 @@ describe("embedServeArgs", () => {
   });
 });
 
+describe("imageServeArgs", () => {
+  it("builds the image server command line", () => {
+    expect(imageServeArgs("/x/diffusersImageServer.py", "/m/dir", 9003)).toEqual([
+      "/x/diffusersImageServer.py",
+      "--model",
+      "/m/dir",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9003",
+    ]);
+  });
+});
+
 describe("speechServeArgs", () => {
   it("builds the speech server command line", () => {
     expect(speechServeArgs("/x/mlxSpeechServer.py", "/m/dir", 9002, "/home/me/models")).toEqual([
@@ -176,10 +191,12 @@ describe("messages", () => {
   });
 
   it("pythonMissingMessage shows the venv commands for the default environment", () => {
-    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me", "no-mlx-lm", [
-      "mlx_lm",
-      "llguidance",
-    ]);
+    const msg = pythonMissingMessage(
+      "/usr/bin/python3",
+      "/home/me",
+      { kind: "cannot-import", module: "mlx_lm" },
+      ["mlx_lm", "llguidance"],
+    );
     expect(msg).toContain("/usr/bin/python3 cannot import mlx_lm.");
     expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
     expect(msg).toContain(
@@ -189,30 +206,61 @@ describe("messages", () => {
   });
 
   it("pythonMissingMessage names llguidance when only it is missing", () => {
-    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me", "no-llguidance");
+    const msg = pythonMissingMessage("/usr/bin/python3", "/home/me", {
+      kind: "cannot-import",
+      module: "llguidance",
+    });
     expect(msg).toContain("/usr/bin/python3 cannot import llguidance.");
     expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install llguidance==1.8.0");
     expect(msg).not.toContain("venv");
   });
 
   it("pythonMissingMessage says when the Python itself is not there", () => {
-    const msg = pythonMissingMessage(
-      "/home/me/.agency-agent/mlx-env/bin/python",
-      "/home/me",
-      "missing",
-    );
+    const msg = pythonMissingMessage("/home/me/.agency-agent/mlx-env/bin/python", "/home/me", {
+      kind: "missing",
+    });
     expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/python does not exist.");
     expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
   });
 
   it("pythonMissingMessage shows the pip line for a Python without mlx-audio", () => {
-    const msg = pythonMissingMessage("/py/bin/python", "/home/me", "no-mlx-audio");
+    const msg = pythonMissingMessage("/py/bin/python", "/home/me", {
+      kind: "cannot-import",
+      module: "mlx_audio",
+    });
     expect(msg).toContain("/py/bin/python cannot import mlx_audio.");
     expect(msg).toContain("/home/me/.agency-agent/mlx-env/bin/pip install mlx-audio==0.5.4");
   });
 
+  it("pythonMissingMessage names the image module that failed and installs every image package", () => {
+    const msg = pythonMissingMessage("/py/bin/python", "/home/me", {
+      kind: "cannot-import",
+      module: "diffusers",
+    });
+    expect(msg).toContain("/py/bin/python cannot import diffusers.");
+    expect(msg).toContain(
+      "/home/me/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2",
+    );
+    expect(msg).not.toContain("mlx-lm");
+    expect(msg).not.toContain("mlx-audio");
+  });
+
+  it("pythonMissingMessage creates an environment with only the image packages for an image-only serve", () => {
+    const msg = pythonMissingMessage("/py/bin/python", "/home/me", { kind: "missing" }, [
+      "torch",
+      "diffusers",
+      "transformers",
+      "accelerate",
+    ]);
+    expect(msg).toContain("python3.12 -m venv /home/me/.agency-agent/mlx-env");
+    expect(msg).toContain(
+      "/home/me/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2\n",
+    );
+    expect(msg).not.toContain("mlx-lm");
+  });
+
   it("pythonMissingMessage installs what the planned kinds need", () => {
-    const msg = pythonMissingMessage("/py/bin/python", "/home/me", "missing", [
+    const msg = pythonMissingMessage("/py/bin/python", "/home/me", { kind: "missing" }, [
       "mlx_lm",
       "mlx_audio",
     ]);
@@ -321,14 +369,17 @@ describe("checkPython", () => {
     };
     expect(checkPython("/x/python", exec)).toBe("ok");
     expect(seen).toEqual([["/x/python", "-c", "import mlx_lm"]]);
-    expect(checkPython("/x/python", () => ({ status: 1 }))).toBe("no-mlx-lm");
-    expect(checkPython("/x/python", () => ({ status: null, error: { code: "ENOENT" } }))).toBe(
-      "missing",
-    );
+    expect(checkPython("/x/python", () => ({ status: 1 }))).toEqual({
+      kind: "cannot-import",
+      module: "mlx_lm",
+    });
+    expect(checkPython("/x/python", () => ({ status: null, error: { code: "ENOENT" } }))).toEqual({
+      kind: "missing",
+    });
   });
 
   it("reports a Python that does not exist", () => {
-    expect(checkPython("/no/such/python")).toBe("missing");
+    expect(checkPython("/no/such/python")).toEqual({ kind: "missing" });
   });
 
   it("checks each module it is asked for, and names the first that fails", () => {
@@ -337,7 +388,10 @@ describe("checkPython", () => {
       asked.push(args[1]);
       return { status: args[1] === "import mlx_audio" ? 1 : 0 };
     };
-    expect(checkPython("py", exec, ["mlx_lm", "mlx_audio"])).toBe("no-mlx-audio");
+    expect(checkPython("py", exec, ["mlx_lm", "mlx_audio"])).toEqual({
+      kind: "cannot-import",
+      module: "mlx_audio",
+    });
     expect(asked).toEqual(["import mlx_lm", "import mlx_audio"]);
     expect(checkPython("py", exec, ["mlx_lm"])).toBe("ok");
   });
@@ -377,6 +431,17 @@ describe("servingBanner", () => {
     const dirOnly = servingBanner(8080, [{ name: "/m/dir", kind: "chat" }]);
     expect(dirOnly[0]).toBe("Serving 1 model on http://127.0.0.1:8080/v1:");
     expect(dirOnly[3]).toBe("  agency run --local /m/dir your.agency");
+  });
+
+  it("marks image models and shows the generateImageLocal call for the first", () => {
+    expect(servingBanner(8080, [{ name: "org/img", kind: "image" }])).toEqual([
+      "Serving 1 model on http://127.0.0.1:8080/v1:",
+      "  org/img  (images)",
+      "",
+      "  In Agency code:",
+      `    import { generateImageLocal } from "std::image"`,
+      `    generateImageLocal("a lighthouse in a storm", "org/img")`,
+    ]);
   });
 
   it("marks speech models and shows the speakLocal call for the first", () => {
@@ -439,6 +504,27 @@ describe("runServe", () => {
         files: {
           "config.json": { size: 2, complete: true },
           "model.safetensors": { size: 600e6, complete },
+        },
+      }),
+    );
+    return model;
+  }
+
+  /** A downloaded diffusers model under <cacheDir>/diffusers with a
+   *  complete record. */
+  function diffusersModel(repo: string): string {
+    const model = path.join(cacheDir, "diffusers", repo.replace("/", "--"));
+    fs.mkdirSync(path.join(model, "transformer"), { recursive: true });
+    fs.writeFileSync(path.join(model, "model_index.json"), "{}");
+    fs.writeFileSync(path.join(model, "transformer", "model.safetensors"), "xxxxxxxx");
+    fs.writeFileSync(
+      path.join(model, ".agency-model.json"),
+      JSON.stringify({
+        repo,
+        revision: "abc",
+        files: {
+          "model_index.json": { size: 2, complete: true },
+          "transformer/model.safetensors": { size: 600e6, complete: true },
         },
       }),
     );
@@ -669,7 +755,7 @@ describe("runServe", () => {
 
   it("refuses a GGUF model", async () => {
     await expect(runServe(["smollm2-135m"], {}, deps)).rejects.toThrow(
-      '"smollm2-135m" is a GGUF model. agency local serve is for MLX models; run it with agency run --local smollm2-135m instead.',
+      '"smollm2-135m" is a GGUF model. agency local serve is for MLX and diffusers models; run it with agency run --local smollm2-135m instead.',
     );
   });
 
@@ -842,6 +928,55 @@ describe("runServe", () => {
     await handle.close();
   });
 
+  it("serves a diffusers model with the image server, probed on /health, importing only image modules", async () => {
+    const img = diffusersModel("org/img");
+    const probes: string[] = [];
+    const imports: string[] = [];
+    deps.fetch = (async (url: string) => {
+      probes.push(url);
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    deps.exec = (_cmd, args) => {
+      imports.push(args[1]);
+      return { status: 0 };
+    };
+    const handle = await runServe([], { port: 0, image: ["diffusers:org/img"] }, deps);
+    expect(imports).toEqual([
+      "import torch",
+      "import diffusers",
+      "import transformers",
+      "import accelerate",
+    ]);
+    expect(spawned[0][1].endsWith("/lib/cli/diffusersImageServer.py")).toBe(true);
+    expect(spawned[0].slice(2)).toEqual(["--model", img, "--host", "127.0.0.1", "--port", "9000"]);
+    expect(probes).toEqual(["http://127.0.0.1:9000/health"]);
+    expect(log).toContain("Loading org/img (0.60 GB)…");
+    expect(log).toContain("  org/img  (images)");
+    await handle.close();
+  });
+
+  it("refuses a diffusers model without --image, even one the catalog does not know", async () => {
+    diffusersModel("org/img");
+    await expect(runServe(["diffusers:org/img"], { port: 0 }, deps)).rejects.toThrow(
+      "diffusers:org/img is an image model. Serve it with: agency local serve --image diffusers:org/img",
+    );
+    await expect(runServe(["z-image-turbo"], { port: 0 }, deps)).rejects.toThrow(
+      "z-image-turbo is an image model. Serve it with: agency local serve --image z-image-turbo",
+    );
+    expect(spawned).toEqual([]);
+  });
+
+  it("refuses --image for a model that is not a diffusers model", async () => {
+    recordedModel("org/a", true);
+    await expect(runServe([], { port: 0, image: ["mlx:org/a"] }, deps)).rejects.toThrow(
+      "mlx:org/a is not an image model. --image serves diffusers models",
+    );
+    await expect(runServe([], { port: 0, image: ["qwen3-tts-mlx"] }, deps)).rejects.toThrow(
+      "qwen3-tts-mlx is a speech model, not an image model. Serve it with: agency local serve --speech qwen3-tts-mlx",
+    );
+    expect(spawned).toEqual([]);
+  });
+
   it("asks for mlx_lm and llguidance for a chat model, and mlx_audio for speech", async () => {
     recordedModel("org/a", true);
     recordedModel("org/tts", true);
@@ -944,6 +1079,21 @@ describe("serveChoices", () => {
       },
     ];
     expect(serveChoices(withEmb).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
+  });
+
+  it("leaves out a diffusers model, which needs --image", () => {
+    const withImage = [
+      ...downloaded,
+      {
+        name: "org/img",
+        path: "/m/diffusers/org--img",
+        sizeBytes: 3e9,
+        backend: "diffusers" as const,
+        complete: true,
+        layout: "agency" as const,
+      },
+    ];
+    expect(serveChoices(withImage).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
   });
 
   it("leaves out a catalog speech model, which needs --speech", () => {

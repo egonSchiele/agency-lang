@@ -1,0 +1,24 @@
+// Generate one image with a local model and save it in the current directory.
+//
+// Start the model first, in another terminal:
+//   agency local serve --image z-image-turbo
+// Then, from packages/agency-lang:
+//   pnpm run agency ../examples/local-image.agency
+import { generateImageLocal } from "std::image"
+import { now } from "std::date"
+
+node main() {
+  const started = now()
+  const r = generateImageLocal(
+    "a lighthouse on a rocky coast at dusk, waves crashing, warm light in the window",
+    "z-image-turbo",
+    seed: 7,
+  )
+  if (isFailure(r)) {
+    print("failed: ${r.error}")
+    return
+  }
+  const seconds = (now() - started) / 1000
+  writeBinary("lighthouse.png", r.value.base64) with approve
+  print("wrote lighthouse.png (seed ${r.value.seed}, ${r.value.mimeType}) in ${seconds} s")
+}

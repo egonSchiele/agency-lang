@@ -32,3 +32,10 @@ export async function _mlxServerModels(baseUrl: string = ""): Promise<string[] |
     return null;
   }
 }
+
+/** Whether a failed request's message means nothing is listening at the
+ *  server's address: the refused connection the OpenAI SDK and fetch each
+ *  describe in their own words. */
+export function isNoServerError(error: string): boolean {
+  return /connection error|ECONNREFUSED|fetch failed/i.test(error);
+}

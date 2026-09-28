@@ -59,6 +59,9 @@ export type ReplySummary = {
   truncated: boolean;
   /** Set for an audio reply, whose bytes are never logged: how many there were. */
   audioBytes?: number;
+  /** Set for a successful image reply, whose base64 is never logged: how
+   *  many bytes the reply had, and the format the request asked for. */
+  image?: { bytes: number; format: string };
 };
 
 /** One reply as it went out: the status, the body the capture kept, its
@@ -154,13 +157,31 @@ function isAudio(contentType: string | undefined): boolean {
   );
 }
 
+/** Where image servers answer. A reply there holds about a megabyte of
+ *  base64, which does not belong in a terminal. */
+export const IMAGES_PATH = "/v1/images/generations";
+
+/** What the log knows about the request a reply answers. */
+export type RequestFacts = { path: string; outputFormat?: string };
+
 /** One reply, kept whole for the log. A body that is a single JSON object is
  *  indented; a stream of `data:` frames is left exactly as it came, since the
- *  framing is often what you are debugging. Audio is summarized by its size. */
-export function describeReply(reply: Reply): ReplySummary {
+ *  framing is often what you are debugging. Audio is summarized by its size.
+ *  A successful image reply is summarized from the request and the byte
+ *  count alone, never parsed, so a capture cut short makes no difference.
+ *  An image server returns one image per request. */
+export function describeReply(reply: Reply, request?: RequestFacts): ReplySummary {
   const { body, contentType, truncated } = reply;
   if (isAudio(contentType)) {
     return { body: "", streamed: false, truncated: false, audioBytes: reply.totalBytes };
+  }
+  if (request?.path === IMAGES_PATH && reply.status >= 200 && reply.status < 300) {
+    return {
+      body: `<image reply, ${megabytes(reply.totalBytes)}>`,
+      streamed: false,
+      truncated: false,
+      image: { bytes: reply.totalBytes, format: request.outputFormat ?? "png" },
+    };
   }
   const streamed = contentType !== undefined && contentType.includes("text/event-stream");
   if (streamed) {
@@ -213,10 +234,17 @@ function tokenCounts(reply: ReplySummary | null): string | null {
   return `${reply.promptTokens}→${reply.completionTokens} tok`;
 }
 
-/** The counts after a reply: its audio size, or its token counts. */
+function megabytes(bytes: number): string {
+  return `${(bytes / 1e6).toFixed(1)} MB`;
+}
+
+/** The counts after a reply: its audio or image size, or its token counts. */
 function replyCounts(reply: ReplySummary | null): string | null {
   if (reply?.audioBytes !== undefined) {
     return `${reply.audioBytes.toLocaleString("en-US")} bytes of audio`;
+  }
+  if (reply?.image !== undefined) {
+    return `1 image, ${megabytes(reply.image.bytes)} ${oneLine(reply.image.format)}`;
   }
   return tokenCounts(reply);
 }

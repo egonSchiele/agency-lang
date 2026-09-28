@@ -280,6 +280,39 @@ class StallTimer {
   }
 }
 
+/** The largest file `fetchHubFileText` reads into memory. */
+const SMALL_FILE_MAX = 1024 * 1024;
+
+/** One small file of a snapshot, read into memory as text, without writing
+ *  anything to disk. For a file the downloader needs to read before it
+ *  decides what else to fetch. */
+export async function fetchHubFileText(
+  snapshot: HubSnapshot,
+  filePath: string,
+  options: HubOptions = {},
+): Promise<string> {
+  const file = snapshot.files.find((f) => f.path === filePath);
+  if (file === undefined) {
+    throw new Error(`${snapshot.repo} has no ${filePath}.`);
+  }
+  if (file.size > SMALL_FILE_MAX) {
+    throw new Error(`${snapshot.repo}'s ${filePath} is ${file.size} bytes, too large to read.`);
+  }
+  if (file.size === 0) {
+    return "";
+  }
+  const hub = new HubClient(options);
+  const url = await hub.resolveFileUrl(snapshot, filePath);
+  const pieces: Uint8Array[] = [];
+  await hub.fetchRange(
+    url,
+    { path: filePath, index: 0, start: 0, end: file.size },
+    file.size,
+    (p) => pieces.push(p),
+  );
+  return Buffer.concat(pieces).toString("utf8");
+}
+
 /** The snapshot for a repo, for callers that need nothing else from the hub. */
 export async function fetchHubSnapshot(
   repo: string,

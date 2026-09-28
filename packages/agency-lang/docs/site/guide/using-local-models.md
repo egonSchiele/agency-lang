@@ -288,6 +288,40 @@ agency agent --local qwen3.5-27b-mlx --model embedding=mlx/qwen3-embedding-4b-ml
 
 In `agency.json`, the same thing is `embeddings: { model, provider: "mlx" }` under the memory settings.
 
+## Generate images on a Mac
+
+Two open image models run on this machine with no content filter in their weights: `z-image-turbo`, which makes a 1024×1024 image in about 8 seconds on an M5 Ultra, and `chroma1-hd`, which takes about 90 seconds and gives more detailed, cinematic pictures. They run on Hugging Face's diffusers library rather than MLX, so they need torch and diffusers in the same Python:
+
+```bash
+~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
+```
+
+You can serve images without installing any MLX packages; `serve` checks only for what the models you name need.
+
+Download a model and serve it with `--image`:
+
+```bash
+agency local download z-image-turbo
+agency local serve --image z-image-turbo
+```
+
+Then call it from Agency code:
+
+```ts
+import { generateImageLocal } from "std::image"
+
+node main() {
+  const r = generateImageLocal("a lighthouse in a storm", "z-image-turbo", seed: 7)
+  if (isFailure(r)) { print("failed: ${r.error}"); return }
+  writeBinary("lighthouse.png", r.value.base64)
+  print("made with seed ${r.value.seed}")
+}
+```
+
+The same prompt and seed make the same image. Leave `seed` out and the server picks one, and the result says which. `steps` and `guidance` default to each model's own settings. `z-image-turbo` takes no guidance and no negative prompt, and says so if you pass one.
+
+Image models use more memory while they generate than their size on disk: `chroma1-hd` is 27.5 GB on disk and peaks at 36 GB.
+
 ## What is different about a local model
 
 A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.

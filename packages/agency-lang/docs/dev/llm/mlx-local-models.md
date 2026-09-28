@@ -2,7 +2,9 @@
 
 How Agency runs MLX models. The GGUF path, which runs a model inside the
 Agency process through llama.cpp, is in `local-models.md`. This page covers
-the second backend, which runs a model in a server on a Mac.
+the second backend, which runs a model in a server on a Mac. Image models
+are a third backend, `diffusers`, served by the same command; see
+`local-images.md`.
 
 The user-facing shape:
 
@@ -30,17 +32,25 @@ the OpenAI chat format to `http://127.0.0.1:8080/v1` by default, or to
 `MLX_BASE_URL`. The spec for the whole feature is
 `2026-09-07-mlx-local-models-spec.md` in the package root.
 
-## Two backends
+## Three backends
 
-`Backend` in `lib/stdlib/localModels.ts` is `"llama-cpp" | "mlx"`. Every
-model Agency knows about has exactly one. `backendOfTarget(target)` decides:
+`Backend` in `lib/stdlib/modelBackend.ts` is
+`"llama-cpp" | "mlx" | "diffusers"`. Every model Agency knows about has
+exactly one. `backendOfTarget(target)` decides:
 
 | Target | Backend |
 |---|---|
 | `hf:org/repo:Q4_K_M`, `https://…/x.gguf`, `x.gguf` | `llama-cpp` |
 | `mlx:org/repo`, `mlx:org/repo@rev` | `mlx` |
-| A directory with `config.json` and a `.safetensors` file | `mlx` |
+| `diffusers:org/repo`, `diffusers:org/repo@rev` | `diffusers` |
+| A directory with `model_index.json` at the top and a `.safetensors` file one level down (`isDiffusersDir`) | `diffusers` |
+| A directory with `config.json` and a `.safetensors` file (`isModelDir`) | `mlx` |
 | Anything else | throws "is not a model" |
+
+`mlx` and `diffusers` are the two `ServedBackend`s. `agency local serve`
+runs both, the same Hub downloader fetches both into a folder of their own
+name under the models directory, and `parseServedUri` reads both URI
+prefixes with the same repo-id rules.
 
 The directory rule is what makes models downloaded by other tools usable.
 Every model in Hugging Face's standard layout has a `config.json` and its
@@ -270,11 +280,13 @@ a one-token completion naming the model directory, an embedding process an
 embeddings request, and a speech process `GET /health`.
 
 **Python.** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`,
-then `~/.agency-agent/mlx-env/bin/python`. `serve` imports the module each
+then `~/.agency-agent/mlx-env/bin/python`. `serve` imports the modules each
 planned kind needs: `mlx_lm` for a chat or embedding model, `mlx_audio` for
-a speech model. On failure it prints the venv commands for the default
-environment, installing what those kinds need, and exits. Agency does not
-install Python.
+a speech model, and torch, diffusers, transformers, and accelerate for an
+image model. So `mlx-env` holds the image packages too, and someone who only
+serves images installs no MLX in it. On failure it prints the venv commands
+for the default environment, installing what those kinds need, and exits.
+Agency does not install Python.
 
 **Stopping.** Ctrl-C reaches the children before `serve`, since they share
 its process group, so a child's exit can arrive before the signal handler
@@ -331,6 +343,19 @@ The catalog guard and the picker treat the `speech` category the way they
 treat `embedding`. A speech process needs `mlx_audio` rather than `mlx_lm`,
 and it speaks once before opening its port, so readiness only probes
 `GET /health`. See `local-speech.md` for the script and its request rules.
+
+## Images
+
+`--image` starts a `diffusers` model with `lib/cli/diffusersImageServer.py`,
+which answers `POST /v1/images/generations`:
+
+    agency local serve --image z-image-turbo
+
+The backend guards the flag, so an image model the catalog does not know is
+still refused without `--image`. The picker leaves image models out. An
+image process needs torch, diffusers, transformers, and accelerate. It
+generates once before opening its port, so readiness probes `GET /health`.
+See `local-images.md`.
 
 ## `remove` and `-f`
 

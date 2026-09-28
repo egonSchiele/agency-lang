@@ -220,8 +220,10 @@ export interface AgencyConfig {
     modelCatalogUrl: string;
     /** Settings for MLX models, which run in a server. */
     mlx?: Partial<{
-      /** Python with mlx-lm installed, used by `agency local serve`. Overridden
-       *  by `--python` and the `AGENCY_MLX_PYTHON` env var; defaults to
+      /** The Python `agency local serve` runs every model server with: it
+       *  needs mlx-lm for chat and embedding models, mlx-audio for speech,
+       *  and torch and diffusers for images. Overridden by `--python` and
+       *  the `AGENCY_MLX_PYTHON` env var; defaults to
        *  `~/.agency-agent/mlx-env/bin/python`. */
       python: string;
       /** Parallel byte-range requests while downloading an MLX model. Default 8. */
@@ -489,7 +491,7 @@ export const ModelAliasSchema = z.union([
   z.string(),
   z
     .object({
-      backend: z.enum(["llama-cpp", "mlx"]),
+      backend: z.enum(["llama-cpp", "mlx", "diffusers"]),
       uri: z.string(),
       source: z.literal("remote").optional(),
       params: z.string().optional(),

@@ -1,8 +1,17 @@
 import * as path from "node:path";
 import { root, stat, readText, writeText, mkdir } from "./contained.js";
+import type { ServedBackend } from "./modelBackend.js";
 
 /** MLX models live under `<modelsDir>/mlx/<org>--<repo>/`. */
 export const MLX_SUBDIR = "mlx";
+
+/** The folder under the models directory that each served backend
+ *  downloads into. Diffusers models live under
+ *  `<modelsDir>/diffusers/<org>--<repo>/`, with the same record. */
+export const SUBDIR_FOR_BACKEND: Record<ServedBackend, string> = {
+  mlx: MLX_SUBDIR,
+  diffusers: "diffusers",
+};
 
 /** The per-model record: which revision the files came from and how much of
  *  each file is on disk. Written by the downloader, read by `list`, `serve`,
@@ -27,8 +36,8 @@ export function mlxModelDirName(repo: string): string {
   return repo.replace("/", "--");
 }
 
-export function mlxModelDir(cacheDir: string, repo: string): string {
-  return path.join(cacheDir, MLX_SUBDIR, mlxModelDirName(repo));
+export function servedModelDir(cacheDir: string, backend: ServedBackend, repo: string): string {
+  return path.join(cacheDir, SUBDIR_FOR_BACKEND[backend], mlxModelDirName(repo));
 }
 
 function isFileRecord(v: unknown): v is MlxFileRecord {

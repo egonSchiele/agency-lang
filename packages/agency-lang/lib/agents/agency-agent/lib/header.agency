@@ -159,6 +159,8 @@ def extendedInfo(left, brainName: string) {
     }
   }
   left.text(render(argsTable))
+  // Startup turns memory off (see main() in agent.agency).
+  left.text("Memory temporarily disabled.", dim: true)
 
   //  heading(left, "Brain")
   //  left.text(brainName, dim: true)

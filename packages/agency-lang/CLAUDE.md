@@ -191,6 +191,13 @@ Tools and functions are the same thing in the agency. Functions are tools. So th
 
 Please note that you cannot write and run agency files in the `/tmp` directory or any directory outside of the current directory, because certain node modules are needed for the files to run and the `/tmp` directory does not have those node modules.
 
+## Plan and spec docs
+- Put spec docs in docs/superpowers/specs.
+- Put plan docs in docs/superpowers/plans.
+
+## Worktrees
+Always create your worktrees inside packages/agency-lang. Never create them outside that directory.
+
 ## Deeper docs
 
 `docs/dev/` holds a doc per feature, recording the key decisions, the architecture, the relevant files, and the subtleties that are easy to miss. **Read the one covering an area before changing it.** The index below lists every doc with what it is for; skim it at the start of a task and open the ones that match.

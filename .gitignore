@@ -82,7 +82,6 @@ tests/integration/eval-run/.tmp/
 # root — transient output, never a fixture (got committed by accident once;
 # see PR #517 review).
 packages/agency-lang/a.vs.b.verdict.json
-docs/superpowers/**/*
 packages/agency-lang/docs/site/stdlib/.agency-doc*
 packages/agency-lang/docs/site/packages/**/.agency-doc*
 __pycache__/

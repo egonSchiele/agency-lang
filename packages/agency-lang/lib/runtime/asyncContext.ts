@@ -78,6 +78,15 @@ export type AgencyStore = {
    */
   globals: GlobalStore;
   /**
+   * The branch stack of the tool invocation this code runs in, set by the
+   * tool loop for the body's duration. `endTurn()` and `handBack()` write
+   * their marks here, and the loop drains this stack when the tool
+   * returns. Every frame builder copies it from the outer frame, so code
+   * in a `parallel`, `fork`, or `async` branch of the body still marks
+   * the tool and not the branch. Absent outside a tool invocation.
+   */
+  toolInvocationStack?: StateStack;
+  /**
    * Per-call-site source location for the currently-executing step.
    * Seeded by `Runner.runInScope` for every step body. Stdlib helpers
    * that need to attribute a checkpoint to its originating step

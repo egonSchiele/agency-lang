@@ -1,12 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SmolError } from "smoltalk";
 import { _internal } from "./prompt.js";
-import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
-import { RuntimeContext } from "./state/context.js";
-import { meteredDispatch } from "./recordPaidUsage.js";
-import type { GraphState } from "./types.js";
-
-const {
+import {
   DEFAULT_TOOL_RESULT_CHARS,
   stringifyToolResult,
   capToolResultForLlm,
@@ -15,7 +10,11 @@ const {
   failureTier,
   TIER_SUFFIX,
   MAX_TOOL_FAILURES,
-} = _internal;
+} from "./toolInvocation.js";
+import { AgencyCancelledError, makeAbortCause, readCause } from "./errors.js";
+import { RuntimeContext } from "./state/context.js";
+import { meteredDispatch } from "./recordPaidUsage.js";
+import type { GraphState } from "./types.js";
 
 describe("failureTier", () => {
   const f = (over: { destructiveRan?: boolean; neverStarted?: boolean }) => over;

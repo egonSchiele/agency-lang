@@ -19,7 +19,7 @@ import { CostGuard, TimeGuard } from "../runtime/guard.js";
 import type { ModelUsage } from "../runtime/utils.js";
 import type { UsageEntry, UsageKind } from "../runtime/invocationUsage.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
-import type { StateStack } from "../runtime/state/stateStack.js";
+import type { StateStack, TurnScope } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
 
 /**
@@ -269,6 +269,43 @@ export function _attachToReply(attachment: unknown): void {
     return;
   }
   frame.stack.queueReplyAttachment(attachment as ReplyAttachmentPart);
+}
+
+/** Backs `std::thread.endTurn`. Marks the current tool invocation so the
+ *  tool loop ends the caller's llm() call when the tool returns. Same
+ *  contract as _attachToReply: outside a tool invocation there is no
+ *  tool loop to read the mark, so it is dropped with a statelog error,
+ *  never a throw. See docs/dev/language/handoff-functions.md. */
+export function _endTurn(scope: TurnScope): void {
+  const stack = toolInvocationStack("endTurn", "mark dropped");
+  stack?.markTurn(scope);
+}
+
+/** Backs `std::thread.handBack`. Records the message a handoff hands
+ *  control back with. Same contract as _endTurn. */
+export function _handBack(message: string): void {
+  const stack = toolInvocationStack("handBack", "message dropped");
+  stack?.setHandBack(message);
+}
+
+/** The branch stack of the tool invocation this code runs in, read from
+ *  the frame slot the tool loop sets (not the innermost stack, which
+ *  inside a parallel or async branch of the body would be the branch's
+ *  own), or null with a statelog error when there is none. */
+function toolInvocationStack(functionName: string, dropped: string): StateStack | null {
+  const frame = agencyStore.getStore();
+  if (!frame?.stack) {
+    return null;
+  }
+  if (frame.toolInvocationStack === undefined) {
+    frame.ctx?.statelogClient?.error({
+      errorType: "toolError",
+      message: `${functionName} called outside a tool invocation; ${dropped}`,
+      functionName,
+    });
+    return null;
+  }
+  return frame.toolInvocationStack;
 }
 
 /** True while a tool invocation is on the stack. attachToReply is a

@@ -31,7 +31,9 @@ export type HarvestedReplyAttachment = {
   part: ReplyAttachmentPart;
 };
 
-const BUFFER_KEY = "replyAttachments";
+/** The runnerState key the harvested attachments wait under until the
+ *  round boundary delivers them. */
+export const BUFFER_KEY = "replyAttachments";
 const COUNTER_KEY = "replyAttachmentCounter";
 
 /** Decoded size estimate. base64 length * 3/4 for inline data; fs.stat for

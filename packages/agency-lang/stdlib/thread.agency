@@ -33,6 +33,8 @@ import {
   _fileAttachment,
   _audioAttachment,
   _attachToReply,
+  _endTurn,
+  _handBack,
   _insideToolCall,
   _viewFilePrecheck,
   _getCost,
@@ -192,6 +194,34 @@ export def attachToReply(attachment: Attachment) {
   @param attachment - The attachment to show the model
   """
   _attachToReply(attachment)
+}
+
+export def endTurn(scope: "llm" | "turn" = "llm") {
+  """
+  End the current llm() call when this tool returns. The tool's return
+  value becomes the answer and no follow-up LLM call is made. Only
+  meaningful while running as a tool inside an llm() call; ignored
+  elsewhere. The turn still goes on if the tool fails, if it ran beside
+  other tool calls in the same response (a handoff is exempt, since it
+  runs last), if the value is not a string (or does not match the
+  caller's structured output type), or if a reply attachment is waiting.
+
+  @param scope - "llm" ends the nearest enclosing llm() call. "turn" also ends every llm() call above it, up to the user's turn; use it only when the answer covers the whole request.
+  """
+  _endTurn(scope)
+}
+
+export def handBack(message: string) {
+  """
+  For a handoff function: the message that hands control back to the
+  caller when this handoff returns, in place of the default one, which
+  repeats the result and asks the caller to continue. Ignored
+  from an ordinary tool, when the handoff was rejected, when the message
+  is empty, and when endTurn() ends the turn.
+
+  @param message - The user-role message to put on the thread
+  """
+  _handBack(message)
 }
 
 // viewFile sends a file's bytes to a model provider. That is a different

@@ -157,6 +157,71 @@ The model can call a handoff tool in the same response as other tools. The other
 
 Only one handoff tool can run per response. If the model calls two, neither runs, and the model is told to call one of them again. The other tools in that response still run.
 
+### Ending the turn from a tool
+
+After a handoff finishes, the model gets one more call to write its reply. When the handoff already answered the user, that call only restates the answer, and it is often the slowest call of the turn. A tool can skip it by calling `endTurn()` from `std::thread` before it returns. The tool's return value becomes the answer, and the `llm()` call that dispatched the tool returns it with no follow-up call.
+
+The tool is the right place for this decision because it has the context: a handoff body has seen the user's whole request and the results of every other tool the model called. Usually the model inside the handoff makes the call. Here the calendar agent asks its last LLM call whether the answer covers everything, and a `@jsonSchema` description tells the model what that means:
+
+```ts
+import { endTurn } from "std::thread"
+
+@jsonSchema({ description: "true only if your answer covers every part of the user's latest message" })
+type AnsweredEverything = boolean;
+
+type CalendarReply = {
+  answer: string;
+  answeredEverything: AnsweredEverything;
+}
+
+handoff def calendarAgent(userMessage: string): string {
+  const reply: CalendarReply = llm("Answer the user's calendar question.", { tools: [listEvents] })
+  if (reply.answeredEverything) {
+    endTurn()
+  }
+  return reply.answer
+}
+```
+
+An ordinary tool can end the turn too, when its result is the exact text the user should see:
+
+```ts
+def lookupOrder(id: string): string {
+  endTurn()
+  return "Order ${id} shipped yesterday and arrives Thursday."
+}
+```
+
+A mark only counts when the tool was the last to run in its response: a handoff always is, and an ordinary tool counts only when it was the only tool the model called. A tool that ran beside others never saw their results, so its `endTurn()` is ignored.
+
+Some things still make the turn go on, each with a warning in the statelog:
+
+- The tool failed, was rejected, or returned nothing.
+- The value is not a string, or does not match the structured output type the caller asked for.
+- A tool in the same response handed back an image with `attachToReply`, which the model still has to see.
+
+When the turn ends, the thread ends with the answer as an assistant message. If the body's last message was structured output, like the `CalendarReply` JSON above, the answer replaces it.
+
+#### The `scope` argument
+
+When a handoff's body has its own `llm()` call whose tool ends the turn, only that inner call ends by default. The body's code keeps running and returns, and the outer model still gets its follow-up call. `endTurn(scope: "turn")` ends every enclosing `llm()` call up to the user's turn. Code is never skipped at any level; only the model calls that would restate the answer are. Use `"turn"` only when the answer covers the whole request, because the agents above cannot refuse it.
+
+#### Replacing the hand-back message
+
+A handoff hands control back with `[name finished. <result>] Continue with the user's request.` To say something else, call `handBack(message)` before returning:
+
+```ts
+handoff def calendarAgent(userMessage: string): string {
+  if (!calendarConnected()) {
+    handBack("[calendarAgent could not help: no calendar is connected.] Tell the user how to connect one.")
+    return "no calendar"
+  }
+  ...
+}
+```
+
+The message is ignored from an ordinary tool, when the handoff was rejected (the model must see the rejection), when it is empty, and when `endTurn()` ends the turn. Both functions are ignored outside a tool invocation, for example when a handoff is called from code.
+
 ### System Messages in Handoff Tools
 
 Suppose the handoff tool includes a system message. In a non-handoff context, this is fine, but in a handoff context, having this system message in the thread is going to be confusing, especially if the main thread already had a totally different system message. That is why system messages are inserted into the thread for the duration of the tool call, but they are removed from the thread after the tool call returns.

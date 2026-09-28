@@ -4,13 +4,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as smoltalk from "smoltalk";
 import type { DecideResult } from "smoltalk";
-import { runInTestContext } from "../runtime/asyncContext.js";
+import { agencyStore, runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
+import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { AgencyAbort, makeAbortCause } from "../runtime/errors.js";
 import { isFailure } from "../runtime/result.js";
 import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
-import { _lastReply, _runGuarded, _viewFilePrecheck } from "./thread.js";
+import { _endTurn, _handBack, _lastReply, _runGuarded, _viewFilePrecheck } from "./thread.js";
 
 describe("_viewFilePrecheck", () => {
   let tmp: string;
@@ -231,5 +232,58 @@ describe("_lastReply", () => {
   it("returns an empty logprobs array for a reply without them", async () => {
     const reply = await lastReplyOn(threadsWith([smoltalk.assistantMessage("plain")]));
     expect(reply?.logprobs).toEqual([]);
+  });
+});
+
+describe("_endTurn and _handBack", () => {
+  async function inFrame(insideTool: boolean, body: () => void) {
+    const ctx = makeCtx();
+    const execCtx = await ctx.createExecutionContext({ runId: "r1" });
+    const errors: unknown[] = [];
+    execCtx.statelogClient.error = ((event: unknown) => {
+      errors.push(event);
+    }) as typeof execCtx.statelogClient.error;
+    const toolStack = execCtx.stateStack;
+    await runInTestContext(execCtx, toolStack, new ThreadStore(), () => {
+      if (!insideTool) {
+        return body();
+      }
+      // The tool loop records the invocation's stack on the frame; the
+      // code may run on another stack, as a parallel branch of the body does.
+      const branch = new StateStack();
+      const frame = agencyStore.getStore();
+      return agencyStore.run({ ...frame!, stack: branch, toolInvocationStack: toolStack }, body);
+    });
+    return { stack: toolStack, errors };
+  }
+
+  it("_endTurn with no frame is a no-op", () => {
+    expect(() => _endTurn("llm")).not.toThrow();
+  });
+
+  it("_endTurn outside a tool invocation writes a statelog error and marks nothing", async () => {
+    const { stack, errors } = await inFrame(false, () => _endTurn("llm"));
+    expect(errors).toHaveLength(1);
+    expect(JSON.stringify(errors[0])).toContain("endTurn");
+    expect(stack.drainTurnMarks().endTurn).toBe(false);
+  });
+
+  it("_endTurn inside a tool invocation marks the invocation's stack, not the branch's", async () => {
+    const { stack, errors } = await inFrame(true, () => _endTurn("turn"));
+    expect(errors).toHaveLength(0);
+    expect(stack.drainTurnMarks()).toEqual({ endTurn: true, scope: "turn", message: null });
+  });
+
+  it("_handBack outside a tool invocation writes a statelog error and records nothing", async () => {
+    const { stack, errors } = await inFrame(false, () => _handBack("m"));
+    expect(errors).toHaveLength(1);
+    expect(JSON.stringify(errors[0])).toContain("handBack");
+    expect(stack.drainTurnMarks().message).toBeNull();
+  });
+
+  it("_handBack inside a tool invocation records the message, even an empty one", async () => {
+    const { stack } = await inFrame(true, () => _handBack(""));
+    // The tool loop is what ignores an empty message; the helper is a plain writer.
+    expect(stack.drainTurnMarks().message).toBe("");
   });
 });

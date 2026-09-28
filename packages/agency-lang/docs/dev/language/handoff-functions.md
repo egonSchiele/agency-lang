@@ -46,15 +46,15 @@ the body's messages can land on the caller's thread as valid history.
    the call id, and the nesting depth; the depth matters because a
    provider that sends no call ids leaves a handoff nested inside
    itself with the same name and the same empty id.
-4. When the body returns, `finishHandoff` removes every message tagged
+4. When the body returns, `closeHandoff` removes every message tagged
    with this dispatch's scope key and pushes a user-role
    `[name finished. <result>]\nContinue with the user's request.`
    The return value is always included, even when it repeats the body's
    last assistant message. A rejection takes the same route with the
    text an ordinary tool message would have carried.
 
-   A failure, or an aborted result from an outer guard trip, goes
-   through `finishStoppedHandoff` instead, which pushes
+   A failure, or an aborted result from an outer guard trip, gets the
+   stopped text instead, which says
    `[name stopped before finishing: <reason>]` and a line saying the
    work so far is in the messages above and to continue with the user's
    request from it. The reason is the failure's error text, or
@@ -126,6 +126,88 @@ anyway, so it does not stop another handoff from running. The list of
 handoffs that count is computed once per round, in a step, because the
 checks read state that changes as calls finish.
 
+## Ending the turn from a tool
+
+Two `std::thread` functions let a tool steer what the loop does once the
+tool returns. `endTurn()` ends the caller's `llm()` call after this
+round with the tool's return value as the answer, so the model makes no
+follow-up call to restate it. `handBack(message)` replaces a handoff's
+default hand-back text. Both are marks on the current tool invocation,
+written onto its branch `StateStack` the way `attachToReply` queues an
+attachment (`markTurn`, `setHandBack`, `drainTurnMarks`), so they
+serialize and a pause after the call keeps them. The helpers in
+`lib/stdlib/thread.ts` refuse a call outside a tool invocation with a
+statelog error and no effect.
+
+A mark lands on the innermost tool invocation on the stack: a helper the
+body calls from code marks the tool, and a tool of the body's own
+`llm()` marks that inner call. A handoff called from code inside another
+tool's body marks that tool, since there is no loop between them.
+
+### Draining and recording
+
+`runInvokeStep` drains the marks in one place, right after the tool
+returns and before the outcome is classified, and hands them to every
+outcome path as data. A result that carries interrupts keeps its marks on
+the stack for the resumed invoke. A finished call records an entry in
+`runnerState.turnMarks[round][callIndex]` (`recordTurnMark`), but only
+when something was set, and the answer value only with `endTurn`:
+`runnerState` rides in every later checkpoint. The value is the return
+value before the loop's "ran successfully" placeholder, unwrapped from a
+`success(...)`. A tool that failed, was rejected, or was aborted has its
+`endTurn` dropped with a warning; `handBack` from a failing handoff still
+works.
+
+### The hand-back
+
+`closeHandoff` in `lib/runtime/handoff.ts` strips the body's system
+messages, then pushes the hand-back: the custom text when `handBack` set one and the outcome
+allows it, else the default for the outcome. A rejection keeps its text,
+since it tells the model the user said no, and an empty message is
+ignored, since a follow-up request needs a user-role message in front of
+it. A success with `endTurn` pushes nothing yet and returns a
+`DeferredHandBack`, which the invoke step stores in the mark for the
+decision step to push if the turn goes on after all.
+
+### The decision step
+
+After the round's batches, one step `round.N.endTurn` runs
+`runEndTurnStep`: decide from the round's marks, apply, record
+`runnerState.turnEnded[round]`, and drop the marks. Deciding after every
+call has run means a handoff in the round still runs even when a
+first-batch tool marked the turn; deciding earlier would leave its call
+unanswered on the assistant message.
+
+`decideEndTurn`: a mark counts only when its call was the last to run in
+the round, a handoff (alone in the second batch) or an ordinary tool that
+was the round's only dispatched call that ran. An ordinary tool beside
+other calls never saw their results, so its mark is dropped. Then the
+fallbacks: a reply attachment waiting for the round boundary (the model
+must see it), a value that does not match the caller's `responseFormat`
+(checked with `extractStructuredResponse`, like the final assistant
+message), or a non-string value with no `responseFormat`. Every dropped
+or fallen-back mark is a statelog warning (`warnType: "endTurn"`).
+
+`applyEndTurnDecision`: on "end", `endThreadWithAnswer` replaces a
+trailing assistant message that carries no tool calls (the body's JSON,
+or the caller's own text left by `dropHandoffToolCall`) and pushes
+otherwise, so two assistant messages never sit side by side; the
+Anthropic client would merge them into JSON followed by prose. On
+"continue", every deferred hand-back is pushed. The loop then runs
+`guardGate.final` and returns the recorded value, the string or the
+parsed structured value.
+
+### Scope
+
+`endTurn(scope: "turn")` ends every enclosing `llm()` call up to the
+user's turn. When the decision ends a call whose loop runs inside a tool
+body (`isInsideToolCall()`), `applyEndTurnDecision` writes the same mark
+onto the loop's own `stateStack`, which is the enclosing tool's branch
+stack, so the enclosing loop ends too when that tool returns. The
+default `"llm"` ends only the nearest call; the body's code still runs
+and the outer model gets its follow-up. Code is never skipped at any
+level.
+
 ## Threads inside the body
 
 `thread {}` still isolates. `subthread {}` inherits the caller's history
@@ -179,7 +261,15 @@ re-entering the scope on the way in. There is no orphaned tool call for
   list.
 - `lib/runtime/agencyFunction.ts` — the runtime `ToolMarkers.handoff`.
 - `lib/runtime/handoff.ts` — resume and refusal text, `handoffScopeKey`,
-  `dropHandoffToolCall`, `finishHandoff`.
+  `dropHandoffToolCall`, `closeHandoff`, and the end-turn decision:
+  `recordTurnMark`, `decideEndTurn`, `applyEndTurnDecision`,
+  `runEndTurnStep`.
+- `lib/runtime/toolInvocation.ts` — the frame a tool body runs in, failure
+  tiers, and result capping, moved out of `prompt.ts` for its line cap.
+- `lib/runtime/state/stateStack.ts` — `markTurn`, `setHandBack`,
+  `drainTurnMarks`.
+- `lib/stdlib/thread.ts` and `stdlib/thread.agency` — `endTurn` and
+  `handBack`.
 - `lib/runtime/prompt.ts` — the gate verdict, the two dispatch
   batches, the `.handoffDropCall` step, `invokeOnThread` (enters and
   exits the scope), and `pushToolReply`.
@@ -187,6 +277,8 @@ re-entering the scope on the way in. There is no orphaned tool call for
   `enterHandoffScope`, `removeHandoffScoped`.
 - `lib/runtime/state/threadStore.ts` — `viewWithActive`.
 - `tests/agency-js/handoff/` — the end-to-end suite.
+- `tests/agency-js/end-turn/` — the end-to-end suite for `endTurn` and
+  `handBack`.
 - `stdlib/agents/oracle.agency`, `explorer.agency`, and the coordinator
   wrappers under `lib/agents/agency-agent/brains/coordinator/subagents/`
   — the handoff functions that ship.

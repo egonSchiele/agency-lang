@@ -386,6 +386,15 @@ export function claimFrameForScope(frame: State, scopeName: string, moduleId: st
   }
 }
 
+/** How far endTurn() reaches: the nearest enclosing llm() call, or every
+ *  enclosing call up to the user's turn. */
+export type TurnScope = "llm" | "turn";
+
+/** What endTurn() and handBack() recorded on one tool invocation. */
+export type TurnMarks = { endTurn: boolean; scope: TurnScope; message: string | null };
+
+export const EMPTY_TURN_MARKS: TurnMarks = { endTurn: false, scope: "llm", message: null };
+
 export type StateStackJSON = {
   stack: StateJSON[];
   mode: "serialize" | "deserialize";
@@ -441,6 +450,40 @@ export class StateStack {
     const queued = (this.other.pendingReplyAttachments ?? []) as ReplyAttachmentPart[];
     delete this.other.pendingReplyAttachments;
     return queued;
+  }
+
+  /** Mark this tool invocation with endTurn() (backs std::thread.endTurn).
+   *  Same home as reply attachments: branch-local, in `other`, so it
+   *  serializes and a pause after the call keeps it. Idempotent; a
+   *  "turn" scope wins over "llm" when both were set. */
+  markTurn(scope: TurnScope): void {
+    const marks = this.turnMarks();
+    marks.endTurn = true;
+    if (scope === "turn") {
+      marks.scope = "turn";
+    }
+    this.other.turnMarks = marks;
+  }
+
+  /** Record the hand-back message (backs std::thread.handBack). A later
+   *  call replaces an earlier one. */
+  setHandBack(message: string): void {
+    const marks = this.turnMarks();
+    marks.message = message;
+    this.other.turnMarks = marks;
+  }
+
+  /** Return and clear the marks. Called by the tool loop exactly once per
+   *  tool invocation, at completion, like drainPendingReplyAttachments. */
+  drainTurnMarks(): TurnMarks {
+    const marks = this.turnMarks();
+    delete this.other.turnMarks;
+    return marks;
+  }
+
+  private turnMarks(): TurnMarks {
+    const stored = this.other.turnMarks as TurnMarks | undefined;
+    return stored ?? { ...EMPTY_TURN_MARKS };
   }
   nodesTraversed: string[] = [];
 

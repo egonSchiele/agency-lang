@@ -881,3 +881,38 @@ describe("claimFrameForScope moduleId stamping", () => {
     expect(frame.moduleId).toBe("mod.agency");
   });
 });
+
+describe("turn marks (endTurn / handBack)", () => {
+  it("markTurn is idempotent and a drain clears it", () => {
+    const stack = new StateStack();
+    stack.markTurn("llm");
+    stack.markTurn("llm");
+    expect(stack.drainTurnMarks()).toEqual({ endTurn: true, scope: "llm", message: null });
+    expect(stack.drainTurnMarks()).toEqual({ endTurn: false, scope: "llm", message: null });
+  });
+
+  it("a turn scope wins over llm whichever order they were set", () => {
+    const stack = new StateStack();
+    stack.markTurn("turn");
+    stack.markTurn("llm");
+    expect(stack.drainTurnMarks().scope).toBe("turn");
+    stack.markTurn("llm");
+    stack.markTurn("turn");
+    expect(stack.drainTurnMarks().scope).toBe("turn");
+  });
+
+  it("a later handBack replaces an earlier one", () => {
+    const stack = new StateStack();
+    stack.setHandBack("a");
+    stack.setHandBack("b");
+    expect(stack.drainTurnMarks()).toEqual({ endTurn: false, scope: "llm", message: "b" });
+  });
+
+  it("marks survive a serialize and deserialize round trip", () => {
+    const stack = new StateStack();
+    stack.markTurn("turn");
+    stack.setHandBack("m");
+    const restored = StateStack.fromJSON(JSON.parse(JSON.stringify(stack.toJSON())));
+    expect(restored.drainTurnMarks()).toEqual({ endTurn: true, scope: "turn", message: "m" });
+  });
+});

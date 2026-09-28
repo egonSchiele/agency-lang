@@ -14,7 +14,8 @@ export type ModelCategory =
   | "science" // research and science questions
   | "uncensored" // refusals removed
   | "embedding" // returns vectors, not text
-  | "speech"; // returns audio, not text
+  | "speech" // returns audio, not text
+  | "image"; // returns images, not text
 
 export type ModelInfo = {
   /** Which engine runs the model. Required; must agree with `uri`. */
@@ -31,7 +32,8 @@ export type ModelInfo = {
   category: ModelCategory;
   /** One-line "what is it good for" — shown by `agency local alias list`. */
   description: string;
-  /** Native context window in tokens. */
+  /** Native context window in tokens. For an image model, the longest
+   *  prompt its text encoder reads, in tokens; a longer one is cut off. */
   contextWindow: number;
   /** License identifier (SPDX-ish). Curated entries are permissive only
    *  (apache-2.0 / mit); restrictively-licensed models (older Gemma's custom
@@ -614,6 +616,31 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     license: "apache-2.0",
     description:
       "Qwen3-TTS with no preset voices. Describe the voice and the emotion in instructions.",
+  },
+  // sizeBytes for the diffusers entries counts only the files the download
+  // keeps (see diffusersFiles.ts); Chroma's repo also holds a 17.8 GB
+  // single-file copy that is skipped.
+  "z-image-turbo": {
+    backend: "diffusers",
+    uri: "diffusers:Tongyi-MAI/Z-Image-Turbo",
+    params: "6B",
+    sizeBytes: 32848305533,
+    category: "image",
+    contextWindow: 512,
+    license: "apache-2.0",
+    description:
+      "Fast, photorealistic images; renders text well. About 8 s per 1024x1024 image on an M5 Ultra.",
+  },
+  "chroma1-hd": {
+    backend: "diffusers",
+    uri: "diffusers:lodestones/Chroma1-HD",
+    params: "8.9B",
+    sizeBytes: 27493350519,
+    category: "image",
+    contextWindow: 512,
+    license: "apache-2.0",
+    description:
+      "Detailed, cinematic images with no content filter. About 90 s per 1024x1024 image on an M5 Ultra.",
   },
 };
 

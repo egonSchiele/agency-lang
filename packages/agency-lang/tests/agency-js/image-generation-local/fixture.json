@@ -1,0 +1,21 @@
+{
+  "data": {
+    "ok": true,
+    "error": "",
+    "seed": 42,
+    "mimeType": "image/png",
+    "persisted": true
+  },
+  "requests": [
+    {
+      "path": "/v1/images/generations",
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "a lighthouse in a storm",
+      "n": 1,
+      "response_format": "b64_json",
+      "size": "1024x1024",
+      "output_format": "png",
+      "seed": 42
+    }
+  ]
+}

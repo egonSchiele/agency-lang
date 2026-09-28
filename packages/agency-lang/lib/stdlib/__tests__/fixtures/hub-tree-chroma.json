@@ -1,0 +1,94 @@
+[
+ {
+  "path": ".gitattributes",
+  "size": 1802
+ },
+ {
+  "path": "Chroma1-HD.safetensors",
+  "size": 17800038288
+ },
+ {
+  "path": "ComfyUI_Chroma1-HD_T2I-overview.png",
+  "size": 4098529
+ },
+ {
+  "path": "ComfyUI_Chroma1-HD_T2I-sample.png",
+  "size": 1854807
+ },
+ {
+  "path": "ComfyUI_Chroma1-HD_T2I-workflow.json",
+  "size": 23027
+ },
+ {
+  "path": "README.md",
+  "size": 8107
+ },
+ {
+  "path": "images/FictionalChromaBanner_1.png",
+  "size": 1008192
+ },
+ {
+  "path": "model_index.json",
+  "size": 494
+ },
+ {
+  "path": "scheduler/scheduler_config.json",
+  "size": 482
+ },
+ {
+  "path": "text_encoder/config.json",
+  "size": 741
+ },
+ {
+  "path": "text_encoder/model-00001-of-00002.safetensors",
+  "size": 4994582224
+ },
+ {
+  "path": "text_encoder/model-00002-of-00002.safetensors",
+  "size": 4530066360
+ },
+ {
+  "path": "text_encoder/model.safetensors.index.json",
+  "size": 19921
+ },
+ {
+  "path": "tokenizer/added_tokens.json",
+  "size": 2593
+ },
+ {
+  "path": "tokenizer/special_tokens_map.json",
+  "size": 2543
+ },
+ {
+  "path": "tokenizer/spiece.model",
+  "size": 791656
+ },
+ {
+  "path": "tokenizer/tokenizer_config.json",
+  "size": 20847
+ },
+ {
+  "path": "transformer/config.json",
+  "size": 490
+ },
+ {
+  "path": "transformer/diffusion_pytorch_model-00001-of-00002.safetensors",
+  "size": 9946193392
+ },
+ {
+  "path": "transformer/diffusion_pytorch_model-00002-of-00002.safetensors",
+  "size": 7853894360
+ },
+ {
+  "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+  "size": 106695
+ },
+ {
+  "path": "vae/config.json",
+  "size": 819
+ },
+ {
+  "path": "vae/diffusion_pytorch_model.safetensors",
+  "size": 167666902
+ }
+]

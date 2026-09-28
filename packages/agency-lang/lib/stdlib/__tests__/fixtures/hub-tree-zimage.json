@@ -1,0 +1,130 @@
+[
+ {
+  "path": ".gitattributes",
+  "size": 2187
+ },
+ {
+  "path": "README.md",
+  "size": 13684
+ },
+ {
+  "path": "assets/DMDR.webp",
+  "size": 172966
+ },
+ {
+  "path": "assets/Z-Image-Gallery.pdf",
+  "size": 15767436
+ },
+ {
+  "path": "assets/architecture.webp",
+  "size": 422392
+ },
+ {
+  "path": "assets/decoupled-dmd.webp",
+  "size": 152062
+ },
+ {
+  "path": "assets/leaderboard.png",
+  "size": 2034429
+ },
+ {
+  "path": "assets/leaderboard.webp",
+  "size": 63754
+ },
+ {
+  "path": "assets/reasoning.png",
+  "size": 7696993
+ },
+ {
+  "path": "assets/showcase.jpg",
+  "size": 6433750
+ },
+ {
+  "path": "assets/showcase_editing.png",
+  "size": 4746838
+ },
+ {
+  "path": "assets/showcase_realistic.png",
+  "size": 6256136
+ },
+ {
+  "path": "assets/showcase_rendering.png",
+  "size": 7599237
+ },
+ {
+  "path": "model_index.json",
+  "size": 467
+ },
+ {
+  "path": "scheduler/scheduler_config.json",
+  "size": 173
+ },
+ {
+  "path": "text_encoder/config.json",
+  "size": 726
+ },
+ {
+  "path": "text_encoder/generation_config.json",
+  "size": 239
+ },
+ {
+  "path": "text_encoder/model-00001-of-00003.safetensors",
+  "size": 3957900840
+ },
+ {
+  "path": "text_encoder/model-00002-of-00003.safetensors",
+  "size": 3987450520
+ },
+ {
+  "path": "text_encoder/model-00003-of-00003.safetensors",
+  "size": 99630640
+ },
+ {
+  "path": "text_encoder/model.safetensors.index.json",
+  "size": 32819
+ },
+ {
+  "path": "tokenizer/merges.txt",
+  "size": 1671853
+ },
+ {
+  "path": "tokenizer/tokenizer.json",
+  "size": 11422654
+ },
+ {
+  "path": "tokenizer/tokenizer_config.json",
+  "size": 9732
+ },
+ {
+  "path": "tokenizer/vocab.json",
+  "size": 2776833
+ },
+ {
+  "path": "transformer/config.json",
+  "size": 473
+ },
+ {
+  "path": "transformer/diffusion_pytorch_model-00001-of-00003.safetensors",
+  "size": 9973693184
+ },
+ {
+  "path": "transformer/diffusion_pytorch_model-00002-of-00003.safetensors",
+  "size": 9973714824
+ },
+ {
+  "path": "transformer/diffusion_pytorch_model-00003-of-00003.safetensors",
+  "size": 4672282880
+ },
+ {
+  "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+  "size": 48969
+ },
+ {
+  "path": "vae/config.json",
+  "size": 805
+ },
+ {
+  "path": "vae/diffusion_pytorch_model.safetensors",
+  "size": 167666902
+ }
+]

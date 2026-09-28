@@ -1,0 +1,20 @@
+// End-to-end: generateImageLocal against a stand-in for
+// `agency local serve --image` that test.js starts -> persist via
+// writeBinary. No model and no network are used.
+import { generateImageLocal } from "std::image"
+
+node main() {
+  const r = generateImageLocal("a lighthouse in a storm", "z-image-turbo", seed: 42)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error, seed: 0, mimeType: "", persisted: false }
+  }
+
+  writeBinary("local-image.png", r.value.base64, "/tmp") with approve
+  const back = readBinary("local-image.png", "/tmp") with approve
+  let persisted = false
+  if (isSuccess(back)) {
+    persisted = back.value == r.value.base64
+  }
+
+  return { ok: true, error: "", seed: r.value.seed, mimeType: r.value.mimeType, persisted: persisted }
+}

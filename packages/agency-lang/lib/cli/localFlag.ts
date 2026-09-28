@@ -18,6 +18,11 @@ export async function resolveLocalRunFlag(
   draft?: string,
 ): Promise<ResolvedModelFlag> {
   const resolved = _resolveModel(value);
+  if (resolved.backend === "diffusers") {
+    throw new Error(
+      `${value} is an image model. Serve it with agency local serve --image ${value} and call generateImageLocal.`,
+    );
+  }
   if (resolved.backend === "mlx") {
     if (draft !== undefined) {
       // The server owns speculative decoding for an MLX model; a run cannot
@@ -39,8 +44,11 @@ export async function resolveLocalRunFlag(
     return flag;
   }
   const draftResolved = _resolveModel(draft);
-  if (draftResolved.backend === "mlx") {
-    throw new Error(`${draft} is an MLX model; a draft for a GGUF model must be a GGUF model too.`);
+  if (draftResolved.backend !== "llama-cpp") {
+    const kind = draftResolved.backend === "mlx" ? "an MLX" : "a diffusers";
+    throw new Error(
+      `${draft} is ${kind} model; a draft for a GGUF model must be a GGUF model too.`,
+    );
   }
   const draftPath = await _registerLocalModel(draft);
   return { ...flag, draftModel: path.resolve(draftPath) };

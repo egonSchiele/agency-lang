@@ -1,3 +1,10 @@
+## Unreleased
+
+### Local models
+
+- **Local image generation.** `agency local serve --image z-image-turbo` serves an open image model with no content filter on this Mac, and `generateImageLocal` in `std::image` calls it. The catalog has `z-image-turbo` (about 8 seconds per 1024×1024 image on an M5 Ultra) and `chroma1-hd` (about 90 seconds). Image models run on diffusers in the same Python as MLX models and need no MLX packages.
+- **The `diffusers` backend.** Image models are named with a `diffusers:` URI or a directory holding `model_index.json`. `agency local download` keeps only the files the pipeline reads, which skips Chroma's 17.8 GB duplicate. `agency run --local` refuses an image model and says how to serve it.
+
 ## Sep 26 2026 — v0.24.0
 
 ### LLM

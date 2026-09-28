@@ -1947,7 +1947,9 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .action(localDownload);
   localCmd
     .command("serve")
-    .description("Serve MLX models in this terminal: one mlx_lm.server per model, behind one port")
+    .description(
+      "Serve MLX and diffusers models in this terminal: one server process per model, behind one port",
+    )
     .argument("[models...]", "mlx: URIs, aliases, or model directories; none opens a picker")
     .option(
       "--embedding <model>",
@@ -1958,6 +1960,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option(
       "--speech <model>",
       "Also serve this speech model on /v1/audio/speech (repeatable)",
+      collectRepeats,
+      [],
+    )
+    .option(
+      "--image <model>",
+      "Also serve this image model on /v1/images/generations (repeatable)",
       collectRepeats,
       [],
     )
@@ -1996,7 +2004,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
       "Tokens of prompt read per pass (default: 2048, 4096, or 8192 by the machine's memory)",
       parsePositiveInt,
     )
-    .option("--python <path>", "Python with mlx-lm (and mlx-audio, for --speech) installed")
+    .option(
+      "--python <path>",
+      "Python with mlx-lm installed (and mlx-audio for --speech, torch and diffusers for --image)",
+    )
     .option("--log-prompts", "Log each request's full body and reply, not just a summary line")
     .action(
       (
@@ -2015,6 +2026,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
           logPrompts?: boolean;
           embedding: string[];
           speech: string[];
+          image: string[];
         },
       ) =>
         // `--verbose` is the whole CLI's own flag, so serve cannot declare it

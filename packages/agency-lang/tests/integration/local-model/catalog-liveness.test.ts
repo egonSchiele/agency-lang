@@ -5,8 +5,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { CURATED_LOCAL_MODELS } from "../../../lib/stdlib/localModels.js";
-import { HubClient } from "../../../lib/stdlib/hubClient.js";
-import { parseMlxUri } from "../../../lib/stdlib/modelBackend.js";
+import { HubClient, fetchHubFileText } from "../../../lib/stdlib/hubClient.js";
+import { parseMlxUri, parseServedUri } from "../../../lib/stdlib/modelBackend.js";
+import { diffusersFiles, MODEL_INDEX } from "../../../lib/stdlib/diffusersFiles.js";
 import type { ModelInfo } from "../../../lib/stdlib/modelCatalog.js";
 
 // Catalog liveness: assert every curated short name's Hugging Face URI still
@@ -20,7 +21,8 @@ import type { ModelInfo } from "../../../lib/stdlib/modelCatalog.js";
 // `.download()`. mlx entries go through the same Hub metadata calls the
 // downloader makes (`HubClient.fetchSnapshot`): the repo must hold a
 // `config.json` and at least one weights shard, which is what `isModelDir`
-// demands of the download once it lands.
+// demands of the download once it lands. diffusers entries read the repo's
+// model_index.json and size the files the downloader would keep.
 //
 // Gated on AGENCY_LLM_INTEGRATION=1 (network required); runs post-merge via
 // .github/workflows/local-model.yml. Lightweight — manifest fetches only, no
@@ -80,11 +82,23 @@ async function checkMlx(info: ModelInfo): Promise<void> {
   expect(Math.abs(total - info.sizeBytes) / info.sizeBytes).toBeLessThan(SIZE_TOLERANCE);
 }
 
+async function checkDiffusers(info: ModelInfo): Promise<void> {
+  const { repo, revision } = parseServedUri(info.uri);
+  const snapshot = await new HubClient().fetchSnapshot(repo, revision);
+  const modelIndex: unknown = JSON.parse(await fetchHubFileText(snapshot, MODEL_INDEX));
+  const kept = diffusersFiles(repo, snapshot.files, modelIndex);
+  expect(kept.some((f) => f.path.endsWith(".safetensors"))).toBe(true);
+  const total = kept.reduce((sum, f) => sum + f.size, 0);
+  expect(Math.abs(total - info.sizeBytes) / info.sizeBytes).toBeLessThan(SIZE_TOLERANCE);
+}
+
 describe.runIf(enabled)("curated catalog liveness (HF manifest resolves; no weights)", () => {
   for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
     it(`${name} → ${info.uri}`, { timeout: 60_000 }, async () => {
       if (info.backend === "mlx") {
         await checkMlx(info);
+      } else if (info.backend === "diffusers") {
+        await checkDiffusers(info);
       } else {
         await checkLlamaCpp(info);
       }

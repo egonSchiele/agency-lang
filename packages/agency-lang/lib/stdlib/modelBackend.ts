@@ -3,46 +3,69 @@ import * as path from "node:path";
 import { wholePath, stat, root, readText } from "./contained.js";
 
 /** Which engine runs a model. GGUF files run in-process through llama.cpp.
- *  MLX models run in mlx_lm.server, which the user starts. */
-export type Backend = "llama-cpp" | "mlx";
+ *  MLX models run in mlx_lm.server, and diffusers models in Agency's image
+ *  server; `agency local serve` starts both. */
+export type Backend = "llama-cpp" | "mlx" | "diffusers";
+
+/** The backends whose models `agency local serve` runs. Each is named with
+ *  a URI of its own prefix and downloaded into a folder of its own name. */
+export type ServedBackend = "mlx" | "diffusers";
 
 export function isGgufPath(v: string): boolean {
   return v.endsWith(".gguf");
 }
 
-/** `mlx:<org>/<repo>` with an optional `@<revision>`. */
-/** A repo id is two names made of letters, digits, `.`, `_` and `-`.
- *  The Hub allows nothing else, and the id becomes a directory name, so
- *  a backslash or a `..` component must not get through. */
-const MLX_URI = /^mlx:([\w.-]+\/[\w.-]+)(?:@([\w.-]+))?$/;
+/** `mlx:<org>/<repo>` or `diffusers:<org>/<repo>`, with an optional
+ *  `@<revision>`. A repo id is two names made of letters, digits, `.`, `_`
+ *  and `-`. The Hub allows nothing else, and the id becomes a directory
+ *  name, so a backslash or a `..` component must not get through. */
+const SERVED_URI = /^(mlx|diffusers):([\w.-]+\/[\w.-]+)(?:@([\w.-]+))?$/;
 
-export function isMlxUri(v: string): boolean {
-  return mlxUriParts(v) !== null;
+export type ServedUri = { backend: ServedBackend; repo: string; revision: string | undefined };
+
+export function isServedUri(v: string): boolean {
+  return servedUriParts(v) !== null;
 }
 
-/** Split "mlx:org/repo@rev" into its parts. Throws on any other shape. */
-export function parseMlxUri(v: string): { repo: string; revision: string | undefined } {
-  const parts = mlxUriParts(v);
+/** Split "diffusers:org/repo@rev" or "mlx:org/repo@rev" into its parts.
+ *  Throws on any other shape. */
+export function parseServedUri(v: string): ServedUri {
+  const parts = servedUriParts(v);
   if (parts === null) {
     throw new Error(
-      `"${v}" is not an mlx: URI. Expected mlx:<org>/<repo> or mlx:<org>/<repo>@<revision>.`,
+      `"${v}" is not an mlx: or diffusers: URI. Expected mlx:<org>/<repo> or diffusers:<org>/<repo>, optionally followed by @<revision>.`,
     );
   }
   return parts;
 }
 
+export function isMlxUri(v: string): boolean {
+  return servedUriParts(v)?.backend === "mlx";
+}
+
+/** Split "mlx:org/repo@rev" into its parts. Throws on any other shape. */
+export function parseMlxUri(v: string): { repo: string; revision: string | undefined } {
+  const parts = servedUriParts(v);
+  if (parts === null || parts.backend !== "mlx") {
+    throw new Error(
+      `"${v}" is not an mlx: URI. Expected mlx:<org>/<repo> or mlx:<org>/<repo>@<revision>.`,
+    );
+  }
+  return { repo: parts.repo, revision: parts.revision };
+}
+
 /** The match, unless a component is only dots, which a URL or a path
  *  would read as the current or parent directory. */
-function mlxUriParts(v: string): { repo: string; revision: string | undefined } | null {
-  const m = MLX_URI.exec(v);
+function servedUriParts(v: string): ServedUri | null {
+  const m = SERVED_URI.exec(v);
   if (m === null) {
     return null;
   }
-  const components = [...m[1].split("/"), ...(m[2] === undefined ? [] : [m[2]])];
+  const components = [...m[2].split("/"), ...(m[3] === undefined ? [] : [m[3]])];
   if (components.some((c) => /^\.+$/.test(c))) {
     return null;
   }
-  return { repo: m[1], revision: m[2] };
+  return { backend: m[1] as ServedBackend, repo: m[2], revision: m[3] };
 }
 
 export type ModelDirEntry = { name: string; size: number };
@@ -72,9 +95,7 @@ export function modelDirEntries(dir: string): ModelDirEntry[] {
  *  file. This is the layout `mlx_lm.server` loads. A GGUF model is one file
  *  with that information inside it, so it never has a config.json. */
 export function isModelDir(p: string): boolean {
-  const located = wholePath(p);
-  const info = stat(located.root, located.target);
-  if (info === null || !info.isDirectory()) {
+  if (!isDirectory(p)) {
     return false;
   }
   const entries = modelDirEntries(p);
@@ -83,17 +104,92 @@ export function isModelDir(p: string): boolean {
   return hasConfig && hasWeights;
 }
 
+/** A diffusers model directory: `model_index.json` at the top and its
+ *  weights one level down, in a folder per component (`transformer/`,
+ *  `vae/`, and so on). It has no top-level config.json, so it is never also
+ *  an MLX model directory. */
+export function isDiffusersDir(p: string): boolean {
+  if (!isDirectory(p)) {
+    return false;
+  }
+  if (!modelDirEntries(p).some((e) => e.name === "model_index.json")) {
+    return false;
+  }
+  return componentDirs(p).some((dir) =>
+    modelDirEntries(dir).some((e) => e.name.endsWith(".safetensors")),
+  );
+}
+
+/** Which served backend a model directory is for, or null when it is
+ *  neither kind. */
+export function servedDirBackend(p: string): ServedBackend | null {
+  if (isDiffusersDir(p)) {
+    return "diffusers";
+  }
+  if (isModelDir(p)) {
+    return "mlx";
+  }
+  return null;
+}
+
+export function isServedModelDir(p: string): boolean {
+  return servedDirBackend(p) !== null;
+}
+
+/** The bytes a model directory holds: its files, and for a diffusers model
+ *  the files in its component folders too. Follows symlinks the way
+ *  `modelDirEntries` does. */
+export function modelDirSizeBytes(p: string): number {
+  const sum = (dir: string) => modelDirEntries(dir).reduce((total, f) => total + f.size, 0);
+  const top = sum(p);
+  if (!isDiffusersDir(p)) {
+    return top;
+  }
+  return componentDirs(p).reduce((total, dir) => total + sum(dir), top);
+}
+
+function isDirectory(p: string): boolean {
+  const located = wholePath(p);
+  const info = stat(located.root, located.target);
+  return info !== null && info.isDirectory();
+}
+
+/** The subfolders of a model directory, following symlinks, skipping any
+ *  whose name starts with `.`. */
+function componentDirs(p: string): string[] {
+  const out: string[] = [];
+  for (const name of fs.readdirSync(p)) {
+    if (name.startsWith(".")) {
+      continue;
+    }
+    const dir = path.join(p, name);
+    try {
+      if (fs.statSync(dir).isDirectory()) {
+        out.push(dir);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+
 /** Which engine runs a resolved target. Throws for a path that is neither a
  *  GGUF file nor a model directory. */
 export function backendOfTarget(target: string): Backend {
   if (isGgufPath(target) || /^(hf:|https?:)/.test(target)) {
     return "llama-cpp";
   }
-  if (isMlxUri(target) || isModelDir(target)) {
-    return "mlx";
+  const uri = servedUriParts(target);
+  if (uri !== null) {
+    return uri.backend;
+  }
+  const dirBackend = servedDirBackend(target);
+  if (dirBackend !== null) {
+    return dirBackend;
   }
   throw new Error(
-    `"${target}" is not a model: expected a .gguf file or a directory containing config.json.`,
+    `"${target}" is not a model: expected a .gguf file, a directory containing config.json, or a diffusers directory containing model_index.json.`,
   );
 }
 
@@ -163,7 +259,7 @@ export function hubSnapshotDir(p: string): string | null {
     return null;
   }
   const snapshot = (name: string) => path.join(p, "snapshots", name);
-  const models = names.filter((name) => isModelDir(snapshot(name)));
+  const models = names.filter((name) => isServedModelDir(snapshot(name)));
   const ref = readRef(p);
   if (ref !== null) {
     if (models.includes(ref)) {

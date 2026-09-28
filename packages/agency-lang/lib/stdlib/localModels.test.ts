@@ -14,7 +14,7 @@ import {
   _aliasModel,
   _unaliasModel,
   _listDownloadedModels,
-  _findDownloadedMlxModel,
+  _findDownloadedServedModel,
   hubSnapshotDir,
   hubRepoOfDirName,
   type DownloadedModel,
@@ -33,10 +33,13 @@ import {
   backendOfTarget,
   _resolveModel,
   _localModelCategory,
-  _removeMlxModel,
+  _removeServedModel,
   isMlxUri,
   parseMlxUri,
+  isServedUri,
+  parseServedUri,
   isModelDir,
+  isDiffusersDir,
   modelDirEntries,
   _modelFilesOnDisk,
 } from "./localModels.js";
@@ -85,14 +88,13 @@ describe("curated catalog shape", () => {
       "uncensored",
       "embedding",
       "speech",
+      "image",
     ]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
     for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
-      expect(info.uri, `${name}.uri`).toMatch(/^(hf|mlx):/);
-      expect(info.backend, `${name}.backend`).toBe(
-        info.uri.startsWith("mlx:") ? "mlx" : "llama-cpp",
-      );
+      expect(info.uri, `${name}.uri`).toMatch(/^(hf|mlx|diffusers):/);
+      expect(info.backend, `${name}.backend`).toBe(backendOfTarget(info.uri));
       expect(info.params.length, `${name}.params`).toBeGreaterThan(0);
       expect(info.description.length, `${name}.description`).toBeGreaterThan(0);
       expect(info.sizeBytes, `${name}.sizeBytes`).toBeGreaterThan(0);
@@ -1117,7 +1119,7 @@ describe("backend of a target", () => {
 
   it("a path that is neither is an error", () => {
     expect(() => backendOfTarget(path.join(dir, "nothing-here"))).toThrow(
-      /not a model: expected a \.gguf file or a directory containing config\.json/,
+      /not a model: expected a \.gguf file, a directory containing config\.json, or a diffusers directory/,
     );
   });
 });
@@ -1245,9 +1247,9 @@ describe("_resolveModel", () => {
     expect(_resolveModel(model)).toEqual({ backend: "mlx", target: model });
   });
 
-  it("the unknown-name error mentions mlx: URIs", () => {
+  it("the unknown-name error mentions mlx: and diffusers: URIs", () => {
     expect(() => _resolveModel("nope")).toThrow(
-      /or pass a \.gguf path, an "hf:" URI, an "mlx:" URI, or a model directory/,
+      /or pass a \.gguf path, an "hf:" URI, an "mlx:" or "diffusers:" URI, or a model directory/,
     );
   });
 });
@@ -1362,16 +1364,16 @@ describe("_listDownloadedModels with mlx directories", () => {
   });
 });
 
-describe("_removeMlxModel", () => {
+describe("_removeServedModel", () => {
   it("deletes the model directory under mlx/ and refuses anything else", () => {
     const model = path.join(dir, "mlx", "org--repo");
     fs.mkdirSync(model, { recursive: true });
     fs.writeFileSync(path.join(model, "config.json"), "{}");
-    expect(_removeMlxModel("org/repo", dir)).toBe(true);
+    expect(_removeServedModel("mlx", "org/repo", dir)).toBe(true);
     expect(fs.existsSync(model)).toBe(false);
-    expect(_removeMlxModel("org/repo", dir)).toBe(false);
+    expect(_removeServedModel("mlx", "org/repo", dir)).toBe(false);
     // The slash becomes "--", so a repo id cannot name a path outside mlx/.
-    expect(_removeMlxModel("../../etc", dir)).toBe(false);
+    expect(_removeServedModel("mlx", "../../etc", dir)).toBe(false);
   });
 });
 
@@ -1539,14 +1541,14 @@ describe("Hugging Face caches", () => {
     expect(listed[0].sizeBytes).toBeGreaterThan(10);
   });
 
-  it("_findDownloadedMlxModel finds a repo id in a Hugging Face cache", () => {
+  it("_findDownloadedServedModel finds a repo id in a Hugging Face cache", () => {
     const cache = path.join(dir, "models-find");
     const snapshot = hubModel(cache, "org/repo", "abc123");
-    expect(_findDownloadedMlxModel("org/repo", cache)?.path).toBe(snapshot);
-    expect(_findDownloadedMlxModel("org/missing", cache)).toBe(null);
+    expect(_findDownloadedServedModel("mlx", "org/repo", cache)?.path).toBe(snapshot);
+    expect(_findDownloadedServedModel("mlx", "org/missing", cache)).toBe(null);
   });
 
-  it("_findDownloadedMlxModel finds a pinned revision that is not the current one", () => {
+  it("_findDownloadedServedModel finds a pinned revision that is not the current one", () => {
     const cache = path.join(dir, "models-pin");
     hubModel(cache, "org/repo", "aaa111");
     // A second revision in the same cache. refs/main still names the first.
@@ -1554,9 +1556,9 @@ describe("Hugging Face caches", () => {
     fs.mkdirSync(older, { recursive: true });
     fs.writeFileSync(path.join(older, "config.json"), "{}");
     fs.writeFileSync(path.join(older, "model.safetensors"), "xxxxxxxxxx");
-    expect(_findDownloadedMlxModel("org/repo", cache)?.revision).toBe("aaa111");
-    expect(_findDownloadedMlxModel("org/repo", cache, "bbb")?.path).toBe(older);
-    expect(_findDownloadedMlxModel("org/repo", cache, "ccc")).toBe(null);
+    expect(_findDownloadedServedModel("mlx", "org/repo", cache)?.revision).toBe("aaa111");
+    expect(_findDownloadedServedModel("mlx", "org/repo", cache, "bbb")?.path).toBe(older);
+    expect(_findDownloadedServedModel("mlx", "org/repo", cache, "ccc")).toBe(null);
   });
 
   it("refuses a refs/main that is a symlink instead of reading what it points at", () => {
@@ -1589,5 +1591,204 @@ describe("Hugging Face caches", () => {
     } finally {
       delete process.env.AGENCY_MODELS_DIR;
     }
+  });
+});
+
+describe("the diffusers backend", () => {
+  it("downloads only the files the pipeline reads, into diffusers/", async () => {
+    const index = JSON.stringify({
+      _class_name: "ZImagePipeline",
+      transformer: ["diffusers", "ZImageTransformer2DModel"],
+      tokenizer: ["transformers", "Qwen2Tokenizer"],
+    });
+    const weights = Buffer.alloc(3000, 7);
+    const hub = await startFakeHub("org/image", [
+      { path: "model_index.json", bytes: Buffer.from(index) },
+      { path: "single-file-copy.safetensors", bytes: Buffer.alloc(5000, 1) },
+      { path: "assets/banner.png", bytes: Buffer.from("png") },
+      { path: "transformer/config.json", bytes: Buffer.from("{}") },
+      { path: "transformer/model.safetensors", bytes: weights },
+      { path: "transformer/model.bin", bytes: Buffer.alloc(3000, 2) },
+      { path: "tokenizer/vocab.json", bytes: Buffer.from("{}") },
+    ]);
+    try {
+      const out = await _downloadModel("diffusers:org/image", dir, {
+        hubUrl: hub.baseUrl,
+        allowHttp: true,
+      });
+      expect(out).toBe(path.join(dir, "diffusers", "org--image"));
+      const record = readMlxModelRecord(out)!;
+      expect(Object.keys(record.files).sort()).toEqual([
+        "model_index.json",
+        "tokenizer/vocab.json",
+        "transformer/config.json",
+        "transformer/model.safetensors",
+      ]);
+      expect(isMlxModelComplete(record)).toBe(true);
+      expect(
+        fs.readFileSync(path.join(out, "transformer", "model.safetensors")).equals(weights),
+      ).toBe(true);
+      expect(fs.existsSync(path.join(out, "single-file-copy.safetensors"))).toBe(false);
+      expect(_listDownloadedModels(dir).map((m) => [m.name, m.backend, m.complete])).toEqual([
+        ["org/image", "diffusers", true],
+      ]);
+    } finally {
+      await hub.close();
+    }
+  });
+
+  it("refuses a diffusers: repo with no model_index.json, writing nothing", async () => {
+    const hub = await startFakeHub("org/notimage", [
+      { path: "config.json", bytes: Buffer.from("{}") },
+      { path: "model.safetensors", bytes: Buffer.alloc(10) },
+    ]);
+    try {
+      await expect(
+        _downloadModel("diffusers:org/notimage", dir, { hubUrl: hub.baseUrl, allowHttp: true }),
+      ).rejects.toThrow("org/notimage has no model_index.json, so it is not a diffusers model.");
+      expect(fs.existsSync(path.join(dir, "diffusers"))).toBe(false);
+    } finally {
+      await hub.close();
+    }
+  });
+
+  it("an mlx: download of a repo with model_index.json is not filtered", async () => {
+    const hub = await startFakeHub("org/both", [
+      { path: "config.json", bytes: Buffer.from("{}") },
+      { path: "model_index.json", bytes: Buffer.from("{}") },
+      { path: "model.safetensors", bytes: Buffer.alloc(10) },
+      { path: "extra/readme.txt", bytes: Buffer.from("x") },
+    ]);
+    try {
+      const out = await _downloadModel("mlx:org/both", dir, {
+        hubUrl: hub.baseUrl,
+        allowHttp: true,
+      });
+      expect(Object.keys(readMlxModelRecord(out)!.files).sort()).toEqual([
+        "config.json",
+        "extra/readme.txt",
+        "model.safetensors",
+        "model_index.json",
+      ]);
+    } finally {
+      await hub.close();
+    }
+  });
+
+  /** A diffusers model: model_index.json at the top, weights one level
+   *  down. */
+  function diffusersModel(at: string): string {
+    fs.mkdirSync(path.join(at, "transformer"), { recursive: true });
+    fs.mkdirSync(path.join(at, "vae"), { recursive: true });
+    fs.writeFileSync(path.join(at, "model_index.json"), '{"_class_name": "ZImagePipeline"}');
+    fs.writeFileSync(path.join(at, "transformer", "config.json"), "{}");
+    fs.writeFileSync(path.join(at, "transformer", "model.safetensors"), Buffer.alloc(1000));
+    fs.writeFileSync(path.join(at, "vae", "model.safetensors"), Buffer.alloc(500));
+    return at;
+  }
+
+  it("parses diffusers: URIs with the same rules as mlx: URIs", () => {
+    expect(parseServedUri("diffusers:Tongyi-MAI/Z-Image-Turbo")).toEqual({
+      backend: "diffusers",
+      repo: "Tongyi-MAI/Z-Image-Turbo",
+      revision: undefined,
+    });
+    expect(parseServedUri("diffusers:org/repo@abc123")).toEqual({
+      backend: "diffusers",
+      repo: "org/repo",
+      revision: "abc123",
+    });
+    for (const bad of [
+      "diffusers:../x",
+      "diffusers:org",
+      "diffusers:org/..",
+      "diffuser:org/repo",
+    ]) {
+      expect(isServedUri(bad)).toBe(false);
+    }
+    // A diffusers: URI is not an mlx: URI.
+    expect(isMlxUri("diffusers:org/repo")).toBe(false);
+    expect(() => parseMlxUri("diffusers:org/repo")).toThrow(/is not an mlx: URI/);
+    expect(backendOfTarget("diffusers:org/repo")).toBe("diffusers");
+    expect(backendOfTarget("diffusers:org/repo@abc123")).toBe("diffusers");
+  });
+
+  it("a directory with model_index.json and weights one level down is a diffusers model", () => {
+    const model = diffusersModel(path.join(dir, "z"));
+    expect(isDiffusersDir(model)).toBe(true);
+    expect(isModelDir(model)).toBe(false);
+    expect(backendOfTarget(model)).toBe("diffusers");
+    expect(_modelFilesOnDisk({ backend: "diffusers", target: model }, dir)?.sizeBytes).toBe(
+      fs.statSync(path.join(model, "model_index.json")).size + 2 + 1000 + 500,
+    );
+  });
+
+  it("model_index.json without weights is neither backend", () => {
+    const model = path.join(dir, "empty");
+    fs.mkdirSync(path.join(model, "transformer"), { recursive: true });
+    fs.writeFileSync(path.join(model, "model_index.json"), "{}");
+    fs.writeFileSync(path.join(model, "transformer", "model.bin"), "");
+    expect(isDiffusersDir(model)).toBe(false);
+    expect(() => backendOfTarget(model)).toThrow(/is not a model/);
+  });
+
+  it("an MLX model directory is still mlx", () => {
+    const model = path.join(dir, "m");
+    fs.mkdirSync(model);
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "");
+    expect(isDiffusersDir(model)).toBe(false);
+    expect(backendOfTarget(model)).toBe("mlx");
+  });
+
+  it("a Hugging Face snapshot of symlinks in the diffusers shape is a diffusers model", () => {
+    const blobs = path.join(dir, "blobs");
+    const snapshot = path.join(dir, "snapshots", "abc");
+    fs.mkdirSync(blobs);
+    fs.mkdirSync(path.join(snapshot, "transformer"), { recursive: true });
+    fs.writeFileSync(path.join(blobs, "i0"), "{}");
+    fs.writeFileSync(path.join(blobs, "w0"), Buffer.alloc(1000));
+    fs.symlinkSync("../../blobs/i0", path.join(snapshot, "model_index.json"));
+    fs.symlinkSync("../../../blobs/w0", path.join(snapshot, "transformer", "model.safetensors"));
+    expect(isDiffusersDir(snapshot)).toBe(true);
+    expect(backendOfTarget(snapshot)).toBe("diffusers");
+  });
+
+  it("lists a diffusers model from each layout with backend diffusers", () => {
+    const cache = path.join(dir, "models");
+    // A Hugging Face cache.
+    const snapshot = diffusersModel(
+      path.join(cache, "hub", "models--org--hubmodel", "snapshots", "abc123"),
+    );
+    fs.mkdirSync(path.join(cache, "hub", "models--org--hubmodel", "refs"));
+    fs.writeFileSync(path.join(cache, "hub", "models--org--hubmodel", "refs", "main"), "abc123");
+    // Agency's own layout: a folder under diffusers/ with a record.
+    const own = diffusersModel(path.join(cache, "diffusers", "org--own"));
+    fs.writeFileSync(
+      path.join(own, ".agency-model.json"),
+      JSON.stringify({
+        repo: "org/own",
+        revision: "def456",
+        files: { "model_index.json": { size: 2, complete: true } },
+      }),
+    );
+    const listed = _listDownloadedModels(cache).map((m) => [m.name, m.backend, m.layout, m.path]);
+    expect(listed).toEqual([
+      ["org/own", "diffusers", "agency", own],
+      ["org/hubmodel", "diffusers", "hub", snapshot],
+    ]);
+    expect(_findDownloadedServedModel("diffusers", "org/hubmodel", cache)?.path).toBe(snapshot);
+    expect(_findDownloadedServedModel("mlx", "org/hubmodel", cache)).toBe(null);
+    expect(_findDownloadedServedModel("diffusers", "org/hubmodel", cache, "abc")?.path).toBe(
+      snapshot,
+    );
+  });
+
+  it("removes a diffusers model from its own folder only", () => {
+    const cache = path.join(dir, "models");
+    diffusersModel(path.join(cache, "diffusers", "org--repo"));
+    expect(_removeServedModel("mlx", "org/repo", cache)).toBe(false);
+    expect(_removeServedModel("diffusers", "org/repo", cache)).toBe(true);
+    expect(fs.existsSync(path.join(cache, "diffusers", "org--repo"))).toBe(false);
   });
 });

@@ -192,10 +192,12 @@ function recorder(
     reply: null,
   };
   let written = false;
+  let outputFormat: string | undefined;
   return {
     describe: (body) => {
       entry.model = typeof body.model === "string" ? body.model : null;
       entry.request = describeRequest(body);
+      outputFormat = typeof body.output_format === "string" ? body.output_format : undefined;
     },
     finish: (reply) => {
       if (written) {
@@ -204,7 +206,7 @@ function recorder(
       written = true;
       entry.status = reply.status;
       entry.durationMs = now() - started;
-      entry.reply = describeReply(reply);
+      entry.reply = describeReply(reply, { path: entry.path, outputFormat });
       for (const line of serveLogLines(entry, logging)) {
         logging.log(line);
       }
@@ -253,7 +255,7 @@ export function startFrontDoor(
     const model = parsed.model;
     const route = routes.find((r) => r.model === model) ?? defaultRoute(routes, model);
     if (route === undefined) {
-      refuse(404, notServedMessage(served, model));
+      refuse(404, notServedMessage(served, model, req.url ?? ""));
       return;
     }
     forward(

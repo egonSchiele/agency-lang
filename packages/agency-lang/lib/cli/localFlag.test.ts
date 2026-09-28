@@ -109,3 +109,11 @@ describe("resolveLocalRunFlag for mlx", () => {
     }
   });
 });
+
+describe("resolveLocalRunFlag for diffusers", () => {
+  it("refuses an image model and says how to serve it", async () => {
+    await expect(resolveLocalRunFlag("diffusers:Tongyi-MAI/Z-Image-Turbo")).rejects.toThrow(
+      "diffusers:Tongyi-MAI/Z-Image-Turbo is an image model. Serve it with agency local serve --image diffusers:Tongyi-MAI/Z-Image-Turbo and call generateImageLocal.",
+    );
+  });
+});

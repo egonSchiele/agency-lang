@@ -20,14 +20,13 @@ import importlib.metadata
 import io
 import json
 import os
-import select
-import socket
 import sys
 import threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from localServerCommon import client_gone, fail  # noqa: E402
 from mlxSpeechRules import (  # noqa: E402
     FAMILIES,
     FORMATS,
@@ -54,11 +53,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def fail(message):
-    print(message, file=sys.stderr)
-    sys.exit(1)
-
-
 def check_mlx_audio_version():
     # The package defines no __version__; the distribution metadata is the
     # one place the installed version is recorded.
@@ -77,20 +71,6 @@ def check_mlx_audio_version():
 def read_config(model_dir):
     with open(os.path.join(model_dir, "config.json"), encoding="utf-8") as f:
         return json.load(f)
-
-
-def client_gone(sock):
-    """True when the client has closed its side. Checked between sentences,
-    since a generation already running cannot be stopped."""
-    if sock is None:
-        return False
-    try:
-        readable, _, _ = select.select([sock], [], [], 0)
-        if not readable:
-            return False
-        return sock.recv(1, socket.MSG_PEEK) == b""
-    except OSError:
-        return True
 
 
 def to_pcm16(samples):

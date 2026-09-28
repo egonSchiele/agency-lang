@@ -4,12 +4,12 @@ import {
   CURATED_LOCAL_MODELS,
   _resolveModel,
   _resolveModelName,
-  _removeMlxModel,
+  _removeServedModel,
   _modelFilesOnDisk,
   readModelAliases,
   type ResolvedModel,
-  isMlxUri,
-  parseMlxUri,
+  isServedUri,
+  parseServedUri,
   _downloadModel,
   _listDownloadedModels,
   _listModelNames,
@@ -120,7 +120,10 @@ export function downloadChoices(entries: ModelNameEntry[]): { title: string; val
   }));
   return [
     ...rows,
-    { title: "custom (hf: URI, .gguf path, mlx: URI, or model directory)…", value: CUSTOM_CHOICE },
+    {
+      title: "custom (hf: URI, .gguf path, mlx: or diffusers: URI, or model directory)…",
+      value: CUSTOM_CHOICE,
+    },
   ];
 }
 
@@ -151,7 +154,7 @@ export async function runDownload(value?: string): Promise<void> {
       const custom = await prompts({
         type: "text",
         name: "value",
-        message: "hf: URI, .gguf path, mlx: URI, or model directory:",
+        message: "hf: URI, .gguf path, mlx: or diffusers: URI, or model directory:",
       });
       if (custom.value == null || custom.value === "") return;
       picked = custom.value as string;
@@ -337,11 +340,11 @@ export function runRemove(
     console.error("That model is not in the models directory; remove it yourself.");
     process.exit(1);
   }
-  if (resolved.backend === "mlx") {
-    const repo = isMlxUri(resolved.target)
-      ? parseMlxUri(resolved.target).repo
+  if (resolved.backend !== "llama-cpp") {
+    const repo = isServedUri(resolved.target)
+      ? parseServedUri(resolved.target).repo
       : path.basename(files.path).replace("--", "/");
-    const removed = _removeMlxModel(repo);
+    const removed = _removeServedModel(resolved.backend, repo);
     console.log(removed ? `Deleted ${where}` : `Not found: ${name}`);
     return;
   }

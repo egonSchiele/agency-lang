@@ -29,7 +29,7 @@ import { projectProviderTokenUsage } from "../runtime/invocationUsage.js";
 import { SPEAK_FORMATS, SPEECH_FORMAT_TO_MIME, type SpeakFormat } from "../runtime/audioFormats.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
 import { _resolveModel, _mlxServedName } from "./localModels.js";
-import { mlxBaseUrl } from "./mlxServerModels.js";
+import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 import { sentencePieces } from "./speechPieces.js";
 import { throwAbortReason } from "./abortReason.js";
 import { wavFile, concatBytes } from "./wavFile.js";
@@ -641,6 +641,11 @@ export function _validateSpeakLocalArgs(
     throw new Error("speakLocal model cannot be empty");
   }
   const resolved = _resolveModel(model); // throws "Unknown local model" with the known names
+  if (resolved.backend === "diffusers") {
+    throw new Error(
+      `speakLocal: "${model}" is an image model. Local speech models are MLX models served by agency local serve --speech.`,
+    );
+  }
   if (resolved.backend !== "mlx") {
     throw new Error(
       `speakLocal: "${model}" is a GGUF model. Local speech models are MLX models served by agency local serve --speech.`,
@@ -662,12 +667,6 @@ export function _validateSpeakLocalArgs(
     assertFfmpegAvailable();
   }
   return resolvedFormat;
-}
-
-/** True for the failure smoltalk returns when nothing listens at the base
- *  URL. */
-function isNoServer(error: string): boolean {
-  return /connection error|ECONNREFUSED|fetch failed/i.test(error);
 }
 
 /** The PCM of every piece, in order, and the sample rate for the header.
@@ -758,7 +757,7 @@ export async function _speakLocal(
     produce: async (signal) => {
       const spoken = await speakPieces(client, pieces, config, signal);
       if (!spoken.success) {
-        if (isNoServer(spoken.error)) {
+        if (isNoServerError(spoken.error)) {
           return {
             success: false,
             error: `no MLX server answered at ${baseUrl}. Start one with:\n  agency local serve --speech ${model}`,

@@ -728,6 +728,9 @@ describe("_speakLocal", () => {
     expect(() => _validateSpeakLocalArgs("Hi.", "smollm2-135m", "wav", "", 1)).toThrow(
       /is a GGUF model/,
     );
+    expect(() =>
+      _validateSpeakLocalArgs("Hi.", "diffusers:Tongyi-MAI/Z-Image-Turbo", "wav", "", 1),
+    ).toThrow(/is an image model/);
     expect(() => _validateSpeakLocalArgs("Hi.", "", "wav", "", 1)).toThrow(
       "speakLocal model cannot be empty",
     );

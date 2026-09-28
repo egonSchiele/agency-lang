@@ -113,6 +113,35 @@ describe("describeReply", () => {
     );
     expect(cut.audioBytes).toBe(2_000_000);
   });
+  it("summarizes an image reply from the request and byte count, without parsing it", () => {
+    const images = { path: "/v1/images/generations", outputFormat: "webp" };
+    const whole = describeReply(
+      reply({ body: '{"data": [{"b64_json": "iVBORw0"}]}', totalBytes: 1_400_000 }),
+      images,
+    );
+    expect(whole).toEqual({
+      body: "<image reply, 1.4 MB>",
+      streamed: false,
+      truncated: false,
+      image: { bytes: 1_400_000, format: "webp" },
+    });
+    // A capture cut short at 1 MiB, mid-base64, reads the same.
+    const cut = describeReply(
+      reply({ body: '{"data": [{"b64_json": "iVBO', truncated: true, totalBytes: 2_500_000 }),
+      { path: "/v1/images/generations" },
+    );
+    expect(cut.image).toEqual({ bytes: 2_500_000, format: "png" });
+    expect(cut.truncated).toBe(false);
+  });
+
+  it("shows a failed image reply as any other error", () => {
+    const body = JSON.stringify({ error: { message: "steps must be between 1 and 50." } });
+    const summary = describeReply(reply({ status: 400, body, totalBytes: body.length }), {
+      path: "/v1/images/generations",
+    });
+    expect(summary.image).toBe(undefined);
+    expect(summary.body).toContain("steps must be between 1 and 50.");
+  });
 });
 
 describe("createCapture", () => {
@@ -228,6 +257,29 @@ describe("serveLogLines", () => {
     expect(verbose[0]).toBe("POST /v1/audio/speech  org/a  200  15.4s");
     expect(verbose.some((line) => line.includes("←"))).toBe(false);
     expect(verbose).toContain("  318,764 bytes of audio");
+  });
+
+  it("prints one image and its size in place of token counts, and no base64 when verbose", () => {
+    const e = entry({
+      path: "/v1/images/generations",
+      model: "Tongyi-MAI/Z-Image-Turbo",
+      durationMs: 8300,
+      request: '{"prompt": "a lighthouse"}',
+      reply: {
+        body: "<image reply, 1.4 MB>",
+        streamed: false,
+        truncated: false,
+        image: { bytes: 1_400_000, format: "png" },
+      },
+    });
+    expect(serveLogLines(e, { verbose: false, color: plainColor })).toEqual([
+      "POST /v1/images/generations  Tongyi-MAI/Z-Image-Turbo  200  8.3s  1 image, 1.4 MB png",
+    ]);
+    expect(serveLogLines(e, { verbose: true, color: plainColor }).slice(1)).toEqual([
+      '  → {"prompt": "a lighthouse"}',
+      "  ← <image reply, 1.4 MB>",
+      "  1 image, 1.4 MB png",
+    ]);
   });
 
   it("colors the status by its class and leaves the text alone", () => {

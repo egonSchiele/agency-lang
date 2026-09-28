@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import * as http from "node:http";
+import type { AddressInfo } from "node:net";
+import * as smoltalk from "smoltalk";
 import { agencyStore } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
-import { _generateImage } from "./image.js";
+import { _generateImage, _generateImageLocal } from "./image.js";
+import { registerMlxImageProvider } from "./mlxImage.js";
 
 type ImageImpl = (input: any, config: any) => Promise<any>;
 
@@ -180,6 +184,208 @@ describe("_generateImage", () => {
         { kind: "path", path: "./a.png" },
         { kind: "url", url: "https://x/b.png" },
       ]);
+    });
+  });
+});
+
+describe("_generateImageLocal", () => {
+  // The runtime registers the provider when it loads provider modules; the
+  // tests call the stdlib function directly, so they register it here.
+  beforeAll(() => registerMlxImageProvider());
+  // A stand-in for `agency local serve --image`: records each request body
+  // and answers with whatever the test sets.
+  let server: http.Server;
+  let baseUrl = "";
+  let requests: Record<string, unknown>[] = [];
+  let answer: { status: number; body: unknown } = { status: 200, body: {} };
+  const savedBaseUrl = process.env.MLX_BASE_URL;
+
+  beforeAll(async () => {
+    server = http.createServer((req, res) => {
+      let text = "";
+      req.on("data", (chunk) => (text += chunk));
+      req.on("end", () => {
+        requests.push({ path: req.url, ...JSON.parse(text) });
+        res.writeHead(answer.status, { "content-type": "application/json" });
+        res.end(JSON.stringify(answer.body));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
+  });
+
+  afterAll(async () => {
+    process.env.MLX_BASE_URL = savedBaseUrl;
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  /** The default client's image path: smoltalk's image(), which dispatches
+   *  to the mlx provider Agency registers. */
+  const realImage: ImageImpl = (input, config) => smoltalk.image(input, config);
+
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+  function serve(status: number, body: unknown) {
+    process.env.MLX_BASE_URL = baseUrl;
+    requests = [];
+    answer = { status, body };
+  }
+
+  it("sends the served name and only the settings given, and returns the seed", async () => {
+    serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 42 }] });
+    await withClient(realImage, async ({ stack, imageGeneration }) => {
+      const r = await _generateImageLocal(
+        "a lighthouse",
+        "z-image-turbo",
+        "1024x768",
+        null,
+        null,
+        null,
+        "",
+        "png",
+      );
+      expect(r.success).toBe(true);
+      expect(r.success && r.value).toEqual({
+        base64: PNG.toString("base64"),
+        mimeType: "image/png",
+        seed: 42,
+      });
+      expect(requests).toEqual([
+        {
+          path: "/v1/images/generations",
+          model: "Tongyi-MAI/Z-Image-Turbo",
+          prompt: "a lighthouse",
+          n: 1,
+          size: "1024x768",
+          output_format: "png",
+          response_format: "b64_json",
+        },
+      ]);
+      expect(stack.localCost).toBe(0);
+      expect(imageGeneration).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("sends steps, guidance, seed, and a negative prompt when they are set", async () => {
+    serve(200, { output_format: "webp", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "a cat",
+        "chroma1-hd",
+        "512x512",
+        30,
+        4.5,
+        7,
+        "blurry",
+        "webp",
+      );
+      expect(r.success && r.value.mimeType).toBe("image/webp");
+      expect(requests[0]).toMatchObject({
+        model: "lodestones/Chroma1-HD",
+        steps: 30,
+        guidance: 4.5,
+        seed: 7,
+        negative_prompt: "blurry",
+        output_format: "webp",
+      });
+    });
+  });
+
+  it("passes the server's refusal through as the failure", async () => {
+    serve(400, { error: { message: "steps must be between 1 and 50 for Z-Image Turbo." } });
+    await withClient(realImage, async ({ stack }) => {
+      const r = await _generateImageLocal(
+        "a cat",
+        "z-image-turbo",
+        "1024x1024",
+        99,
+        null,
+        null,
+        "",
+        "png",
+      );
+      expect(r.success === false && r.error).toBe(
+        "generateImageLocal failed: steps must be between 1 and 50 for Z-Image Turbo.",
+      );
+      expect(stack.localCost).toBe(0);
+      // A refusal is one request, never retried.
+      expect(requests).toHaveLength(1);
+    });
+  });
+
+  it("says how to start the server when nothing answers", async () => {
+    process.env.MLX_BASE_URL = "http://127.0.0.1:9/v1";
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "a cat",
+        "z-image-turbo",
+        "1024x1024",
+        null,
+        null,
+        null,
+        "",
+        "png",
+      );
+      expect(r.success === false && r.error).toBe(
+        "generateImageLocal failed: no local model server answered at http://127.0.0.1:9/v1. Start one with:\n  agency local serve --image z-image-turbo",
+      );
+    });
+  });
+
+  it("refuses a chat or GGUF model, a bad format, and an empty prompt before any request", async () => {
+    serve(200, {});
+    await withClient(realImage, async () => {
+      const mlx = await _generateImageLocal(
+        "a cat",
+        "qwen3-tts-mlx",
+        "1024x1024",
+        null,
+        null,
+        null,
+        "",
+        "png",
+      );
+      expect(mlx.success === false && mlx.error).toMatch(
+        /is an MLX model\. Local image models are diffusers models/,
+      );
+      const gguf = await _generateImageLocal(
+        "a cat",
+        "smollm2-135m",
+        "1024x1024",
+        null,
+        null,
+        null,
+        "",
+        "png",
+      );
+      expect(gguf.success === false && gguf.error).toMatch(/is a GGUF model/);
+      const gif = await _generateImageLocal(
+        "a cat",
+        "z-image-turbo",
+        "1024x1024",
+        null,
+        null,
+        null,
+        "",
+        "gif",
+      );
+      expect(gif.success === false && gif.error).toBe(
+        'generateImageLocal failed: format "gif" is not supported. Use png, jpeg, or webp.',
+      );
+      const empty = await _generateImageLocal(
+        "  ",
+        "z-image-turbo",
+        "1024x1024",
+        null,
+        null,
+        null,
+        "",
+        "png",
+      );
+      expect(empty.success === false && empty.error).toBe(
+        "generateImageLocal failed: prompt cannot be empty.",
+      );
+      expect(requests).toEqual([]);
     });
   });
 });

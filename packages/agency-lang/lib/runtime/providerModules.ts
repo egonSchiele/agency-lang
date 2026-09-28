@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { registerProvider } from "smoltalk";
+import { registerMlxImageProvider } from "../stdlib/mlxImage.js";
 
 /** Absolute paths of provider modules already loaded + registered in this
  *  process. Registration writes to smoltalk's module-level registry, so a
@@ -89,6 +90,8 @@ export async function loadProviderModuleByPath(raw: string): Promise<void> {
  * module is a setup error, never silently skipped.
  */
 export async function loadProviderModules(ctx: { providerModules?: string[] }): Promise<void> {
+  // Agency's own provider for the local image server, before any user module.
+  registerMlxImageProvider();
   const configured = [...(ctx.providerModules ?? []), ...envProviderModules()];
   for (const raw of configured) {
     await loadProviderModuleByPath(raw);

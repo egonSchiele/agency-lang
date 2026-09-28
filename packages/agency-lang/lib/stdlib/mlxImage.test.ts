@@ -22,21 +22,21 @@ describe("localImageTimeoutMs", () => {
     expect(localImageTimeoutMs(9, "big")).toBe(localImageTimeoutMs(9, "2000x2000"));
   });
 
-  it("gives the slowest allowed request, queued behind another, most of an hour", () => {
-    // Chroma's measured 90 s at 40 steps over one megapixel, doubled for
+  it("gives the slowest allowed request, queued behind another, about two hours", () => {
+    // Qwen-Image's estimated 5 s per step over one megapixel, doubled for
     // attention, at 80 steps over four megapixels, twice over.
     const worst = localImageTimeoutMs(MAX_STEPS, "2048x1952");
-    expect(worst).toBeGreaterThan(45 * 60_000);
-    expect(worst).toBeLessThan(60 * 60_000);
+    expect(worst).toBeGreaterThan(100 * 60_000);
+    expect(worst).toBeLessThan(130 * 60_000);
   });
 
-  it("gives the default request a few minutes past its measured time", () => {
+  it("gives each family's default request room past its expected time", () => {
     // Z-Image at 9 steps runs about 8 s; Chroma at 40 about 90 s.
-    const zImage = localImageTimeoutMs(9, "1024x1024");
-    expect(zImage).toBeGreaterThan(90_000);
-    expect(zImage).toBeLessThan(120_000);
-    const chroma = localImageTimeoutMs(40, "1024x1024");
-    expect(chroma).toBeGreaterThan(400_000);
-    expect(chroma).toBeLessThan(480_000);
+    // Qwen-Image at 50 is estimated at about 250 s.
+    expect(localImageTimeoutMs(9, "1024x1024")).toBeGreaterThan(8_000 * 10);
+    expect(localImageTimeoutMs(40, "1024x1024")).toBeGreaterThan(90_000 * 4);
+    const qwen = localImageTimeoutMs(50, "1024x1024");
+    expect(qwen).toBeGreaterThan(250_000 * 3);
+    expect(qwen).toBeLessThan(30 * 60_000);
   });
 });

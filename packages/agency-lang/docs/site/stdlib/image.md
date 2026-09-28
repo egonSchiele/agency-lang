@@ -121,7 +121,7 @@ generateImageLocal(
 ```
 
 Generate an image on this machine with a local image model, such as
-  z-image-turbo or chroma1-hd. The model must be running: start it with
+  z-image-turbo, chroma1-hd, qwen-image-2512, or flux2-klein-4b. The model must be running: start it with
   `agency local serve --image <model>`. Nothing leaves the machine and
   nothing is written; save the image with writeBinary. Returns a Result
   whose success value is { base64, mimeType, seed }.
@@ -129,10 +129,10 @@ Generate an image on this machine with a local image model, such as
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
   @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768"
-  @param steps - How many refinement passes to make. More is slower and usually more detailed. Null uses the model's own default (9 for z-image-turbo, 40 for chroma1-hd)
-  @param guidance - How closely to follow the prompt; higher sticks to it more literally. Null uses the model's own default. z-image-turbo takes none
+  @param steps - How many refinement passes to make. More is slower and usually more detailed. Null uses the model's own default (9 for z-image-turbo, 40 for chroma1-hd, 50 for qwen-image-2512, 4 for flux2-klein-4b)
+  @param guidance - How closely to follow the prompt; higher sticks to it more literally. Null uses the model's own default. z-image-turbo and flux2-klein-4b take none
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
-  @param negativePrompt - What the image should not contain. z-image-turbo takes none
+  @param negativePrompt - What the image should not contain. z-image-turbo and flux2-klein-4b take none
   @param format - "png", "jpeg", or "webp"
 
 **Parameters:**

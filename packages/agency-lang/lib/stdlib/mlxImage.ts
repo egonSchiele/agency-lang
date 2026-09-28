@@ -14,14 +14,17 @@ import { mlxBaseUrl } from "./mlxServerModels.js";
  *  image again), sends Agency's own settings, reads back the seed the
  *  server used, and costs nothing. */
 
-/** What one step over one megapixel is allowed to take. Chroma, the slowest
- *  family, measured 90 s for 40 steps at 1024x1024, which is 2.25 s per step
- *  per megapixel; attention grows faster than the pixel count, so the
- *  allowance is about double that. */
-const STEP_MEGAPIXEL_MS = 5_000;
+/** What one step over one megapixel is allowed to take. Chroma measured
+ *  90 s for 40 steps at 1024x1024, which is 2.25 s per step per megapixel.
+ *  Qwen-Image has not been timed; its transformer is 2.25 times the size of
+ *  Chroma's and both run guidance as two passes per step, so it is
+ *  estimated at about 5 s. Attention grows faster than the pixel count, so
+ *  the allowance is about double that. Replace the estimate once
+ *  Qwen-Image is timed. */
+const STEP_MEGAPIXEL_MS = 10_000;
 
-/** The most steps any family accepts: Chroma's max_steps in
- *  diffusersImageRules.py, which a test checks. A request that leaves steps
+/** The most steps any family accepts: Chroma's and Qwen-Image's
+ *  max_steps in diffusersImageRules.py, which a test checks. A request that leaves steps
  *  to the model is budgeted as if it asked for this many. */
 export const MAX_STEPS = 80;
 
@@ -45,7 +48,7 @@ function megapixelsOf(size: string | undefined): number {
 
 /** How long one request may take: room for the slowest family at the steps
  *  and size asked for, plus one request queued ahead of it. The server caps
- *  both inputs, so this is bounded; at the caps it is about 53 minutes. It
+ *  both inputs, so this is bounded; at the caps it is about 107 minutes. It
  *  guards against a server that has stopped answering, not a slow one. */
 export function localImageTimeoutMs(steps: unknown, size: string | undefined): number {
   const budgetedSteps =

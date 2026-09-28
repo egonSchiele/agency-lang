@@ -37,15 +37,49 @@
   },
   "notAlone": {
     "result": "notAlone done",
-    "requestCount": 2,
+    "requestCount": 3,
     "allWellFormed": true,
-    "refused": 1,
+    "roles": [
+      "user",
+      "assistant",
+      "tool",
+      "user",
+      "assistant",
+      "user"
+    ],
     "siblingRan": true,
-    "assistantKeptToolCalls": true,
-    "toolStarts": [
+    "bodySawSibling": true,
+    "keptCalls": [
       "lookup"
     ],
-    "markers": 0
+    "resumeCarriesResult": 1,
+    "toolStarts": [
+      "lookup",
+      "subagent"
+    ]
+  },
+  "siblingPause": {
+    "result": "siblingPause done",
+    "requestsAtPause": 1,
+    "toolStartsAtPause": [
+      "pauseMe"
+    ],
+    "requestCount": 3,
+    "allWellFormed": true,
+    "bodySawSibling": true,
+    "roles": [
+      "user",
+      "assistant",
+      "tool",
+      "user",
+      "assistant",
+      "user"
+    ],
+    "resumes": 1,
+    "toolStarts": [
+      "pauseMe",
+      "subagent"
+    ]
   },
   "threadInside": {
     "result": "thread done",
@@ -175,18 +209,27 @@
     "requestCount": 2,
     "allWellFormed": true,
     "refused": 2,
+    "refusalNamesBoth": 2,
     "toolStarts": [],
     "markers": 0
   },
   "handoffWithDraft": {
     "result": "draft done",
-    "requestCount": 2,
+    "requestCount": 3,
     "allWellFormed": true,
-    "refused": 1,
-    "toolStarts": [
-      "saveDraft"
+    "roles": [
+      "user",
+      "assistant",
+      "tool",
+      "user",
+      "assistant",
+      "user"
     ],
-    "markers": 0
+    "resumeCarriesResult": 1,
+    "toolStarts": [
+      "saveDraft",
+      "subagent"
+    ]
   },
   "objectResult": {
     "result": "object done",
@@ -291,5 +334,19 @@
     "loserKeptPersona": 0,
     "loserKeptMarker": 0,
     "loserMarkedCancelled": 0
+  },
+  "feedbackBeforeHandoff": {
+    "result": "feedback done",
+    "requestCount": 3,
+    "allWellFormed": true,
+    "bodySawFeedback": true,
+    "feedbackAfterSibling": true,
+    "feedbackBeforeBrief": true,
+    "feedbackDeliveredOnce": 1,
+    "events": [
+      "lookup",
+      "guard",
+      "subagent"
+    ]
   }
 }

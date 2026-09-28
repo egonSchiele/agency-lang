@@ -12,7 +12,15 @@
       { "name": "subagent", "args": { "question": "q3" } },
       { "name": "lookup", "args": { "key": "k3" } }
   ] },
+  { "return": "notAlone inner" },
   { "return": "notAlone done" },
+
+  { "toolCalls": [
+      { "name": "subagent", "args": { "question": "sp1" } },
+      { "name": "pauseMe", "args": { "id": "p5" } }
+  ] },
+  { "return": "siblingPause inner" },
+  { "return": "siblingPause done" },
 
   { "toolCall": { "name": "threadedAgent", "args": { "question": "q4" } } },
   { "return": "threaded answer" },
@@ -65,6 +73,7 @@
       { "name": "subagent", "args": { "question": "s1" } },
       { "name": "saveDraft", "args": { "value": "draft" } }
   ] },
+  { "return": "draft inner" },
   { "return": "draft done" },
 
   { "toolCall": { "name": "objectAgent", "args": { "question": "o1" } } },

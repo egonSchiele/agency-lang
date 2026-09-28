@@ -2,6 +2,7 @@ import {
   basic,
   persona,
   notAlone,
+  siblingPause,
   threadInside,
   subthreadInside,
   pauseInside,
@@ -20,6 +21,7 @@ import {
   callerSystemVisible,
   twoAsyncHandoffs,
   cancelledHandoff,
+  feedbackBeforeHandoff,
   respondToInterrupts,
   approve,
   reject,
@@ -50,10 +52,12 @@ const roles = (messages) => messages.map((message) => message.role);
 const last = (state) => state.requests[state.requests.length - 1];
 const count = (messages, needle) =>
   messages.filter((message) => text(message).includes(needle)).length;
-const hasToolCalls = (message) =>
-  Array.isArray(message.toolCalls) && message.toolCalls.length > 0;
+const hasToolCalls = (message) => Array.isArray(message.toolCalls) && message.toolCalls.length > 0;
 const toolTexts = (messages) =>
-  messages.filter((message) => message.role === "tool").map(text).sort();
+  messages
+    .filter((message) => message.role === "tool")
+    .map(text)
+    .sort();
 
 // Would a real provider accept this request? The mock client accepts
 // anything, so this is the check that a handoff never leaves a dangling
@@ -124,21 +128,49 @@ const results = {};
   };
 }
 
-// A handoff beside another call is refused as an ordinary tool message;
-// the sibling runs; the assistant message keeps its tool calls.
+// A handoff beside another call runs after it. The model listed the
+// handoff first, and the sibling still ran first: the body's first
+// request already holds the sibling's tool result. The assistant message
+// keeps the sibling's call and loses the handoff's.
 {
   const { state, callbacks } = makeCapture();
   const result = await notAlone({ callbacks });
   const final = last(state);
+  const bodyFirst = state.requests[1];
   results.notAlone = {
     result: result.data,
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
-    refused: count(final, "must be the only tool call in its round"),
+    roles: roles(final),
     siblingRan: toolTexts(final).includes("value-of-k3"),
-    assistantKeptToolCalls: hasToolCalls(final[1]),
+    bodySawSibling: toolTexts(bodyFirst).includes("value-of-k3"),
+    keptCalls: final[1].toolCalls.map((call) => call.name),
+    resumeCarriesResult: count(final, "[subagent finished. notAlone inner]"),
     toolStarts: state.toolStarts,
-    markers: count(final, "[dispatching"),
+  };
+}
+
+// A sibling pauses. The handoff has not started when the run pauses;
+// after the approval the sibling finishes and then the handoff runs.
+{
+  const { state, callbacks } = makeCapture();
+  const paused = await siblingPause({ callbacks });
+  const requestsAtPause = state.requests.length;
+  const toolStartsAtPause = [...state.toolStarts];
+  const resumed = await respondToInterrupts(paused.data, [approve()], {
+    metadata: { callbacks },
+  });
+  const final = last(state);
+  results.siblingPause = {
+    result: resumed.data,
+    requestsAtPause,
+    toolStartsAtPause,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    bodySawSibling: toolTexts(state.requests[1]).includes("ran p5"),
+    roles: roles(final),
+    resumes: count(final, "[subagent finished. siblingPause inner]"),
+    toolStarts: state.toolStarts,
   };
 }
 
@@ -177,8 +209,7 @@ const results = {};
 {
   const { state, callbacks } = makeCapture();
   const paused = await pauseInside({ callbacks });
-  const pausedWithInterrupt =
-    Array.isArray(paused.data) && paused.data[0]?.type === "interrupt";
+  const pausedWithInterrupt = Array.isArray(paused.data) && paused.data[0]?.type === "interrupt";
   const resumed = await respondToInterrupts(paused.data, [approve()], {
     metadata: { callbacks },
   });
@@ -321,14 +352,15 @@ const results = {};
     result: result.data,
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
-    refused: count(final, "must be the only tool call in its round"),
+    refused: count(final, "Only one of them can run per round"),
+    refusalNamesBoth: count(final, "(subagent, personaAgent)"),
     toolStarts: state.toolStarts,
     markers: count(final, "[dispatching"),
   };
 }
 
-// A handoff beside an intrinsic saveDraft call is a mixed round too: the
-// draft is filed and the handoff is refused.
+// A handoff beside an intrinsic saveDraft call: the draft is filed
+// first, then the handoff runs.
 {
   const { state, callbacks } = makeCapture();
   const result = await handoffWithDraft({ callbacks });
@@ -337,9 +369,9 @@ const results = {};
     result: result.data,
     requestCount: state.requests.length,
     allWellFormed: allWellFormed(state),
-    refused: count(final, "must be the only tool call in its round"),
+    roles: roles(final),
+    resumeCarriesResult: count(final, "[subagent finished. draft inner]"),
     toolStarts: state.toolStarts,
-    markers: count(final, "[dispatching"),
   };
 }
 
@@ -461,7 +493,8 @@ const dispatch = (name, args) => ({
 });
 const parkUntilAbort = (config) =>
   new Promise((resolve, reject) => {
-    const abortError = () => Object.assign(new Error("Request was aborted."), { name: "AbortError" });
+    const abortError = () =>
+      Object.assign(new Error("Request was aborted."), { name: "AbortError" });
     const signal = config?.abortSignal;
     if (!signal) {
       reject(new Error("expected an abortSignal on the parked request"));
@@ -553,11 +586,78 @@ const answeringClient = (rules) => ({
   results.cancelledHandoff = {
     loserThreadFound: loser !== undefined,
     parkedRequestSawPersona: state.requests.some(
-      (messages) => count(messages, "parked: p") === 1 && count(messages, "persona: be parked") === 1,
+      (messages) =>
+        count(messages, "parked: p") === 1 && count(messages, "persona: be parked") === 1,
     ),
     loserKeptPersona: loser === undefined ? null : count(loser, "persona: be parked"),
     loserKeptMarker: loser === undefined ? null : count(loser, "[dispatching parkingAgent"),
     loserMarkedCancelled: loser === undefined ? null : count(loser, "[Response cancelled.]"),
+  };
+}
+
+// The first request's charge trips a cost guard. The guard fires after
+// the sibling ran and before the handoff started, and the approval's
+// message lands between the sibling's tool result and the body's first
+// request.
+{
+  const PRICED = {
+    inputCost: 0.000001,
+    outputCost: 0.000001,
+    totalCost: 0.000002,
+    currency: "USD",
+  };
+  __setLLMClient(
+    answeringClient((asked) => {
+      if (asked === "Check the key and ask the subagent.") {
+        return {
+          success: true,
+          value: {
+            output: null,
+            toolCalls: [
+              new ToolCall("call-lookup", "lookup", { key: "k9" }),
+              new ToolCall("call-subagent", "subagent", { question: "f1" }),
+            ],
+            model: "test",
+            usage: USAGE,
+            cost: PRICED,
+          },
+        };
+      }
+      if (asked.startsWith("brief:")) {
+        return answer("feedback inner");
+      }
+      return answer("feedback done");
+    }),
+  );
+  const { state, callbacks } = makeCapture();
+  // The guard and tool starts in the order they happened.
+  const events = [];
+  const result = await feedbackBeforeHandoff({
+    callbacks: {
+      ...callbacks,
+      onToolCallStart: ({ toolName }) => events.push(toolName),
+      onFunctionStart: ({ functionName }) => {
+        if (functionName === "noteGuard") {
+          events.push("guard");
+        }
+      },
+    },
+  });
+  const bodyFirst = state.requests[1];
+  const feedbackAt = bodyFirst.findIndex((message) =>
+    text(message).includes("budget raised: keep it short"),
+  );
+  const siblingAt = bodyFirst.findIndex((message) => text(message) === "value-of-k9");
+  const briefAt = bodyFirst.findIndex((message) => text(message).startsWith("brief: f1"));
+  results.feedbackBeforeHandoff = {
+    result: result.data,
+    requestCount: state.requests.length,
+    allWellFormed: allWellFormed(state),
+    bodySawFeedback: feedbackAt !== -1,
+    feedbackAfterSibling: siblingAt !== -1 && siblingAt < feedbackAt,
+    feedbackBeforeBrief: feedbackAt !== -1 && feedbackAt < briefAt,
+    feedbackDeliveredOnce: count(last(state), "budget raised: keep it short"),
+    events,
   };
 }
 

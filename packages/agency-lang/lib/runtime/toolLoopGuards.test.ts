@@ -1,12 +1,17 @@
 import { describe, it, expect } from "vitest";
+import { AgencyFunction } from "./agencyFunction.js";
 import {
+  computeGateVerdict,
   DEFAULT_MAX_REPEATED_TOOL_CALLS,
   freshRepeatStreak,
   markupArgument,
   noteRepeat,
+  refusalMessage,
   repeatKey,
   repeatsBefore,
   resetRepeat,
+  type GateCall,
+  type GateState,
 } from "./toolLoopGuards.js";
 
 describe("markupArgument", () => {
@@ -112,5 +117,49 @@ describe("repeated tool calls", () => {
 
   it("DEFAULT_MAX_REPEATED_TOOL_CALLS is the documented default", () => {
     expect(DEFAULT_MAX_REPEATED_TOOL_CALLS).toBe(3);
+  });
+});
+
+describe("computeGateVerdict", () => {
+  const tool = (name: string, handoff: boolean) =>
+    new AgencyFunction({
+      name,
+      module: "test.agency",
+      fn: async () => "ok",
+      params: [],
+      toolDefinition: null,
+      markers: handoff ? { handoff: true } : {},
+    });
+  const state = (): GateState => ({
+    removedTools: [],
+    rejectedCalls: [],
+    repeatStreak: freshRepeatStreak(),
+    toolCallRound: 0,
+    maxToolCallRounds: 10,
+    maxRepeatedToolCalls: DEFAULT_MAX_REPEATED_TOOL_CALLS,
+  });
+  const call = (handler: AgencyFunction, handoffNames: string[]): GateCall => ({
+    toolCall: { id: "c1", name: handler.name, arguments: {} },
+    handler,
+    markupArg: null,
+    callKey: repeatKey(handler.name, {}),
+    handoffNames,
+  });
+
+  it("lets one handoff through beside ordinary calls", () => {
+    const explorer = tool("explorer", true);
+    expect(computeGateVerdict(state(), call(explorer, ["explorer"]))).toBe("proceed");
+  });
+
+  it("refuses a handoff when the round called two, and names both", () => {
+    const explorer = tool("explorer", true);
+    const gateCall = call(explorer, ["explorer", "oracle"]);
+    expect(computeGateVerdict(state(), gateCall)).toBe("tooManyHandoffs");
+    expect(refusalMessage(state(), "tooManyHandoffs", gateCall)).toContain("(explorer, oracle)");
+  });
+
+  it("does not refuse an ordinary call in a round with two handoffs", () => {
+    const lookup = tool("lookup", false);
+    expect(computeGateVerdict(state(), call(lookup, ["explorer", "oracle"]))).toBe("proceed");
   });
 });

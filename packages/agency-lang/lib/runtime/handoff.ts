@@ -12,11 +12,12 @@
 import * as smoltalk from "smoltalk";
 import type { MessageThread } from "./state/messageThread.js";
 
-/** The refusal for a handoff call that shares a round with another call. */
-export function handoffNotAloneMessage(toolName: string): string {
+/** The refusal for a handoff call made in the same round as another
+ *  handoff call. `names` lists every handoff tool the round called. */
+export function tooManyHandoffsMessage(toolName: string, names: string[]): string {
   return (
-    `Error: ${toolName} continues this conversation, so it must be the only tool call in its round. ` +
-    `It was not run. Call it again by itself, with no other tool calls in the same response.`
+    `Error: ${toolName} was not run. It continues this conversation, and this response called more than one tool that does (${names.join(", ")}). ` +
+    `Only one of them can run per round. Call one of them again in a new response. Other tools may be called alongside it.`
   );
 }
 
@@ -46,22 +47,46 @@ export function handoffStoppedText(toolName: string, reason: string): string {
 }
 
 /**
- * Drop the tool call from the assistant message that carried the handoff
- * call. Its text stays; a message that was only the call is removed, so
- * the thread reads as the user's request followed by the body's work.
+ * Drop the handoff's tool call from the assistant message that carried
+ * it. `callIndex` is the call's position in that message's tool calls.
+ *
+ * The handoff runs after every other call in its round, so the thread
+ * may end on those calls' tool results, and on the guard feedback
+ * delivered just before the handoff, rather than on the assistant
+ * message itself. That message is the last assistant message on the
+ * thread.
+ *
+ * When other calls remain, only this one is removed, so the tool
+ * results that follow still pair with their calls. When it was the only
+ * call, its text stays and a message that was only the call is removed,
+ * so the thread reads as the user's request followed by the body's work.
  * Nothing is added in its place: a model that sees dispatch narration in
  * its history learns to write it instead of calling the tool.
  */
-export function dropHandoffToolCall(thread: MessageThread): void {
+export function dropHandoffToolCall(
+  thread: MessageThread,
+  call: { index: number; id: string; name: string },
+): void {
   const messages = thread.getMessages();
-  const index = messages.length - 1;
-  const last = messages[index];
-  if (last === undefined || last.role !== "assistant") {
+  const index = messages.findLastIndex((message) => message.role === "assistant");
+  if (index === -1) {
+    throw new Error("handoff: expected an assistant message carrying the tool call, found none");
+  }
+  const carrier = messages[index] as smoltalk.AssistantMessage;
+  const json = carrier.toJSON();
+  const calls = json.toolCalls ?? [];
+  const target = calls[call.index];
+  if (target === undefined || target.name !== call.name || target.id !== call.id) {
     throw new Error(
-      `handoff: expected the thread to end with the assistant message carrying the tool call, found ${last?.role ?? "an empty thread"}`,
+      `handoff: expected tool call ${call.index} of the last assistant message to be ${call.name} (${call.id})`,
     );
   }
-  const text = typeof last.content === "string" ? last.content.trim() : "";
+  const siblings = calls.filter((_, i) => i !== call.index);
+  if (siblings.length > 0) {
+    thread.replaceAt(index, smoltalk.AssistantMessage.fromJSON({ ...json, toolCalls: siblings }));
+    return;
+  }
+  const text = typeof carrier.content === "string" ? carrier.content.trim() : "";
   if (text === "") {
     thread.removeAt(index);
     return;

@@ -21,14 +21,18 @@ the body's messages can land on the caller's thread as valid history.
 ## What happens
 
 1. The model calls a handoff tool. The `.gate` step refuses it with
-   `handoffNotAlone` if any other call shares the round.
-2. The `.handoffDropCall` step edits the last message on the thread,
-   the assistant message carrying the tool call: its text is kept and
-   the tool call is dropped. A message that was only the call is
-   removed, so the thread reads as the user's request followed by the
-   body's work. Nothing is written in its place: a model that sees
-   dispatch narration in its history learns to write it instead of
-   calling the tool.
+   `tooManyHandoffs` if another handoff call shares the round. Other
+   calls may share the round. They run first (see "Other calls in the
+   same round" below).
+2. The `.handoffDropCall` step edits the assistant message carrying the
+   tool call, the last assistant message on the thread. Only the
+   handoff's call is dropped. The other calls stay, so their tool
+   results still pair with them. When the handoff was the only call,
+   the text is kept and a message that was only the call is removed,
+   so the thread reads as the user's request followed by the body's
+   work. Nothing is written in its place: a model that sees dispatch
+   narration in its history learns to write it instead of calling the
+   tool.
 3. `runInvokeStep` runs the body in a frame whose thread store is a
    view of the caller's store with the prompt's own thread active
    (`ThreadStore.viewWithActive`). That is the active thread for an
@@ -69,6 +73,54 @@ re-enters it when a resume re-runs the dispatch.
 The return value still reaches the code that awaited the call, through
 `setResultOnBranch`, unchanged.
 
+## Other calls in the same round
+
+A model often calls a handoff alongside other tools, for example a
+status update beside the explorer:
+
+```
+assistant: "Checking the parser."  [updateStatus, explorer]
+```
+
+Providers require every tool call to be answered by a tool result
+before any other message. The body's messages are other messages, so
+the handoff runs last. The tool loop splits the round into two batches:
+
+1. The first batch runs every call except the handoff, concurrently, as
+   an ordinary round does. The handoff's branch only takes its gate
+   verdict there. A refused handoff answers the model with a tool
+   message like any refused call.
+2. Between the batches the guard gate runs and the approver's feedback
+   is delivered (`round.N.handoffGuardGate`,
+   `round.N.handoffGuardFeedback`). A guard that tripped during the
+   first batch stops the round before the body starts, and feedback
+   given at that approval reaches the body.
+3. The second batch runs the handoff alone. Its drop step removes only
+   its own call, and the thread becomes:
+
+```
+assistant: "Checking the parser."  [updateStatus]
+tool:      updateStatus → "ok"
+...the explorer's work...
+user:      [explorer finished. <result>] Continue with the user's request.
+```
+
+The order the model listed the calls in does not matter, because calls in
+one response are independent.
+
+If a call in the first batch interrupts, the round pauses before the
+handoff starts. On resume the first batch finishes and then the handoff
+runs.
+
+A first batch that finished is recorded in
+`runnerState.finishedFirstBatches` and never re-run. This matters for a
+body that pauses: `runBatch` pops every branch on the frame when a batch
+succeeds, so re-running the first batch on resume would throw away the
+paused body's branch, and the body would start over.
+
+Two handoffs in one round are both refused, and the other calls still
+run. Running one of them would be a guess about which the model wanted.
+
 ## Threads inside the body
 
 `thread {}` still isolates. `subthread {}` inherits the caller's history
@@ -105,8 +157,8 @@ re-entering the scope on the way in. There is no orphaned tool call for
 
 ## Known limits
 
-- One handoff per round. A mixed round refuses the handoff and runs the
-  siblings.
+- One handoff per round. A round with two refuses both and runs the
+  other calls.
 - A served function (`agency serve`, HTTP or MCP) is invoked outside
   the tool loop, so a served handoff function is an ordinary call. Its
   docstring's promise to continue the conversation does not apply
@@ -122,9 +174,9 @@ re-entering the scope on the way in. There is no orphaned tool call for
 - `lib/runtime/agencyFunction.ts` — the runtime `ToolMarkers.handoff`.
 - `lib/runtime/handoff.ts` — resume and refusal text, `handoffScopeKey`,
   `dropHandoffToolCall`, `finishHandoff`.
-- `lib/runtime/prompt.ts` — the gate verdict, the `.handoffDropCall`
-  step, `invokeOnThread` (enters and exits the scope), and
-  `pushToolReply`.
+- `lib/runtime/prompt.ts` — the gate verdict, the two dispatch
+  batches, the `.handoffDropCall` step, `invokeOnThread` (enters and
+  exits the scope), and `pushToolReply`.
 - `lib/runtime/state/messageThread.ts` — `messageScopes`,
   `enterHandoffScope`, `removeHandoffScoped`.
 - `lib/runtime/state/threadStore.ts` — `viewWithActive`.

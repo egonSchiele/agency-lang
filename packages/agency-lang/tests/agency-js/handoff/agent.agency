@@ -103,6 +103,11 @@ node notAlone() {
   return llm("Use both tools at once.", { tools: [subagent, lookup] })
 }
 
+// A sibling pauses; the handoff waits for it.
+node siblingPause() {
+  return llm("Pause and ask the subagent.", { tools: [subagent, pauseMe] })
+}
+
 node threadInside() {
   return llm("Answer with the threaded agent.", { tools: [threadedAgent] })
 }
@@ -144,8 +149,8 @@ node twoHandoffs() {
   return llm("Use both agents at once.", { tools: [subagent, personaAgent] })
 }
 
-// saveDraft is an intrinsic call; it counts toward the round like any
-// other call. It needs a def with a declared return type.
+// saveDraft is an intrinsic call, so it runs before the handoff like
+// any other sibling. It needs a def with a declared return type.
 def withDraft(): string {
   return llm("Use the subagent and save a draft.", { tools: [subagent, saveDraft] })
 }
@@ -214,4 +219,29 @@ node explicitMessages() {
   const first = llm("Answer with the subagent.", options)
   const second = llm("What happened?")
   return "${first} / ${second}"
+}
+
+// Called by the guard handler so the test can see when the guard fired.
+def noteGuard(): string {
+  return "noted"
+}
+
+// The first request's charge trips the guard. It fires between the
+// sibling and the handoff, and the approval's message reaches the body.
+node feedbackBeforeHandoff() {
+  handle {
+    const answer = guard(cost: $0.000001, label: "budget") {
+      return llm("Check the key and ask the subagent.", { tools: [subagent, lookup] })
+    }
+    if (isFailure(answer)) {
+      return "guard failed"
+    }
+    return answer.value
+  } with (i) {
+    if (i.effect == "std::guard") {
+      const _noted = noteGuard()
+      return approve({ maxCost: 0.01, message: "budget raised: keep it short" })
+    }
+    return pass()
+  }
 }

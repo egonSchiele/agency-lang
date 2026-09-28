@@ -135,6 +135,22 @@ handoff def turnEnder(question: string): string {
   return answer
 }
 
+// endTurn() inside a parallel branch of the body still marks the tool.
+def parallelEnder(question: string): string {
+  parallel {
+    endTurn()
+    lookup("p")
+  }
+  return "parallel: ${question}"
+}
+
+// The body's llm() runs as an async call; the inner turnEnder's "turn"
+// scope must still reach this handoff's own stack.
+handoff def asyncTurnHandoff(question: string): string {
+  const inner = async llm("outer brief: ${question}", { tools: [turnEnder] })
+  return "async: ${await inner}"
+}
+
 handoff def outerTurnHandoff(question: string): string {
   const inner = llm("outer brief: ${question}", { tools: [turnEnder] })
   return "outer: ${inner}"
@@ -238,6 +254,14 @@ node resumeNestedEndsTurn() {
 
 node nested() {
   return llm("Answer with outerHandoff.", { tools: [outerHandoff] })
+}
+
+node parallelEndsTurn() {
+  return llm("Answer with parallelEnder.", { tools: [parallelEnder] })
+}
+
+node asyncNestedTurn() {
+  return llm("Answer with asyncTurnHandoff.", { tools: [asyncTurnHandoff] })
 }
 
 node nestedTurn() {

@@ -220,6 +220,18 @@
     "result": "outer: answer to brief: in",
     "lastRequestFirstText": "Answer with outerTurnHandoff."
   },
+  "parallelEndsTurn": {
+    "requestCount": 1,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "parallel: p"
+  },
+  "asyncNestedTurn": {
+    "requestCount": 3,
+    "allWellFormed": true,
+    "warnings": [],
+    "result": "async: answer to brief: in"
+  },
   "calledFromCode": {
     "requestCount": 0,
     "allWellFormed": true,

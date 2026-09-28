@@ -1,14 +1,15 @@
 /**
  * Helpers for one tool invocation inside the tool loop: the frame the
  * body runs in, how a failure is classified for the model, and the
- * constants that decide when a tool is removed. Pulled out of prompt.ts,
- * which is at its line cap; prompt.ts decides when to call them.
+ * constants that decide when a tool is removed. prompt.ts decides when
+ * to call them.
  */
 import type { FuncParam } from "./agencyFunction.js";
 import { agencyStore } from "./asyncContext.js";
 import { isSuccess } from "./result.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { MessageThread } from "./state/messageThread.js";
+import type { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import type { GraphState } from "./types.js";
 
@@ -43,6 +44,23 @@ export const REJECTION_REMOVAL_SUFFIX =
   "This tool has been rejected too many times and can no longer be called.";
 
 export type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutral";
+
+/**
+ * Run the tool body with `branchStack` recorded on the frame as the tool
+ * invocation's stack, so endTurn() and handBack() mark this invocation
+ * from anywhere inside the body, including its parallel, fork, and async
+ * branches, whose frames copy the slot.
+ */
+export function runAsToolInvocation<T>(
+  branchStack: StateStack,
+  invoke: () => Promise<T>,
+): Promise<T> {
+  const parentFrame = agencyStore.getStore();
+  if (!parentFrame) {
+    return invoke();
+  }
+  return agencyStore.run({ ...parentFrame, toolInvocationStack: branchStack }, invoke);
+}
 
 /**
  * Run `invoke` in a copy of the current ALS frame whose `threads` slot is

@@ -133,16 +133,19 @@ tool returns. `endTurn()` ends the caller's `llm()` call after this
 round with the tool's return value as the answer, so the model makes no
 follow-up call to restate it. `handBack(message)` replaces a handoff's
 default hand-back text. Both are marks on the current tool invocation,
-written onto its branch `StateStack` the way `attachToReply` queues an
-attachment (`markTurn`, `setHandBack`, `drainTurnMarks`), so they
-serialize and a pause after the call keeps them. The helpers in
-`lib/stdlib/thread.ts` refuse a call outside a tool invocation with a
-statelog error and no effect.
+written onto its branch `StateStack` (`markTurn`, `setHandBack`,
+`drainTurnMarks`), so they serialize and a pause after the call keeps
+them. The loop records that stack on the async-context frame as
+`toolInvocationStack` for the body's duration (`runAsToolInvocation`),
+and every frame builder copies the slot, so a call inside a `parallel`,
+`fork`, or `async` branch of the body still marks the tool, not the
+branch. The helpers in `lib/stdlib/thread.ts` read the slot and refuse a
+call outside a tool invocation with a statelog error and no effect.
 
-A mark lands on the innermost tool invocation on the stack: a helper the
-body calls from code marks the tool, and a tool of the body's own
-`llm()` marks that inner call. A handoff called from code inside another
-tool's body marks that tool, since there is no loop between them.
+A mark lands on the innermost tool invocation: a helper the body calls
+from code marks the tool, and a tool of the body's own `llm()` marks
+that inner call. A handoff called from code inside another tool's body
+marks that tool, since there is no loop between them.
 
 ### Draining and recording
 
@@ -201,9 +204,9 @@ parsed structured value.
 
 `endTurn(scope: "turn")` ends every enclosing `llm()` call up to the
 user's turn. When the decision ends a call whose loop runs inside a tool
-body (`isInsideToolCall()`), `applyEndTurnDecision` writes the same mark
-onto the loop's own `stateStack`, which is the enclosing tool's branch
-stack, so the enclosing loop ends too when that tool returns. The
+body, `applyEndTurnDecision` writes the same mark onto that tool's
+branch stack (the frame's `toolInvocationStack`), so the enclosing loop
+ends too when that tool returns. The
 default `"llm"` ends only the nearest call; the body's code still runs
 and the outer model gets its follow-up. Code is never skipped at any
 level.
@@ -264,8 +267,9 @@ re-entering the scope on the way in. There is no orphaned tool call for
   `dropHandoffToolCall`, `closeHandoff`, and the end-turn decision:
   `recordTurnMark`, `decideEndTurn`, `applyEndTurnDecision`,
   `runEndTurnStep`.
-- `lib/runtime/toolInvocation.ts` — the frame a tool body runs in, failure
-  tiers, and result capping, moved out of `prompt.ts` for its line cap.
+- `lib/runtime/toolInvocation.ts` — the frame a tool body runs in
+  (`runAsToolInvocation`, `invokeOnThread`), failure tiers, and result
+  capping.
 - `lib/runtime/state/stateStack.ts` — `markTurn`, `setHandBack`,
   `drainTurnMarks`.
 - `lib/stdlib/thread.ts` and `stdlib/thread.agency` — `endTurn` and

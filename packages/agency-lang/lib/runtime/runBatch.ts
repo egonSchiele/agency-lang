@@ -474,6 +474,7 @@ function runInBranchAlsFrame<T>(
       stack: branch.stack,
       threads: branchThreads,
       globals: branchGlobals,
+      toolInvocationStack: parent.toolInvocationStack,
       // The block's collector installs this branch's scope. A nested batch
       // that installs none (a tool-dispatch batch) inherits the outer
       // frame's scope, so its tools keep registering under this arm.

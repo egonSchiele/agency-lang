@@ -525,8 +525,8 @@ handBack(message: string)
 ```
 
 For a handoff function: the message that hands control back to the
-  caller when this handoff returns, in place of the default
-  "[name finished. <result>] Continue with the user's request." Ignored
+  caller when this handoff returns, in place of the default one, which
+  repeats the result and asks the caller to continue. Ignored
   from an ordinary tool, when the handoff was rejected, when the message
   is empty, and when endTurn() ends the turn.
 

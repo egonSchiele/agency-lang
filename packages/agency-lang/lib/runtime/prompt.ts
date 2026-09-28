@@ -82,6 +82,7 @@ import {
   MAX_TOOL_REJECTIONS,
   REJECTION_REMOVAL_SUFFIX,
   REJECTION_SUFFIX,
+  runAsToolInvocation,
   stringifyToolResult,
   TIER_SUFFIX,
   unwrapToolResultForLlm,
@@ -159,8 +160,7 @@ export function redactPromptForLog(p: string | UserContentInput): string | UserC
 
 /** Test-only surface for the pure tool-result-cap helpers. Not part of
  *  the supported runtime API. */
-/** For prompt.test.ts. The tool-invocation helpers it used to hold moved
- *  to toolInvocation.ts, which exports them directly. */
+/** For prompt.test.ts. */
 export const _internal = {
   armCallTimeout,
   runWithRetry,
@@ -1069,11 +1069,13 @@ export async function runPrompt(args: {
       ctx.enterToolCall();
       try {
         const invokeAsTool = () =>
-          handler.invoke({
-            type: "named",
-            positionalArgs: [],
-            namedArgs,
-          });
+          runAsToolInvocation(branchStack, () =>
+            handler.invoke({
+              type: "named",
+              positionalArgs: [],
+              namedArgs,
+            }),
+          );
         // A handoff continues this prompt's conversation: the body's llm()
         // calls append to `messages`, the thread that carries the marker.
         // That is usually the active thread, but an async prompt runs on a
@@ -1801,7 +1803,7 @@ export async function runPrompt(args: {
               .map((item) => item.index),
             responseFormat,
             thread: messages,
-            enclosingStack: ctx.isInsideToolCall() ? stateStack : null,
+            enclosingStack: agencyStore.getStore()?.toolInvocationStack ?? null,
             warn: warnEndTurn,
           });
           self.messagesJSON = snapshotThread();

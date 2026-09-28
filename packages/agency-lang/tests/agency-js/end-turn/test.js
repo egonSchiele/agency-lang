@@ -23,6 +23,8 @@ import {
   resumeNestedEndsTurn,
   nested,
   nestedTurn,
+  parallelEndsTurn,
+  asyncNestedTurn,
   calledFromCode,
   respondToInterrupts,
   approve,
@@ -204,6 +206,8 @@ const DISPATCHES = {
   "Answer with pausingEnder.": () => dispatch("pausingEnder", { question: "q" }),
   "Answer with outerHandoff.": () => dispatch("outerHandoff", { question: "q" }),
   "Answer with outerTurnHandoff.": () => dispatch("outerTurnHandoff", { question: "q" }),
+  "Answer with parallelEnder.": () => dispatch("parallelEnder", { question: "p" }),
+  "Answer with asyncTurnHandoff.": () => dispatch("asyncTurnHandoff", { question: "q" }),
 };
 
 const client = {
@@ -220,7 +224,9 @@ const client = {
         : dispatchOrAnswer(asked, json);
     }
     if (asked.startsWith("outer brief:")) {
-      const inner = first === "Answer with outerTurnHandoff." ? "turnEnder" : "ender";
+      const wantsTurn =
+        first === "Answer with outerTurnHandoff." || first === "Answer with asyncTurnHandoff.";
+      const inner = wantsTurn ? "turnEnder" : "ender";
       return dispatch(inner, { question: "in" });
     }
     const followUp = json[json.length - 1].role === "tool" || !(asked in DISPATCHES);
@@ -415,6 +421,13 @@ await run("nestedTurn", nestedTurn, ({ state, value }) => ({
   result: value.data,
   lastRequestFirstText: text(last(state)[0]),
 }));
+
+// endTurn() inside a parallel branch of the tool body marks the tool.
+await run("parallelEndsTurn", parallelEndsTurn, ({ value }) => ({ result: value.data }));
+
+// The body's llm() is an async call; the inner "turn" scope still climbs
+// to the handoff's own stack, and the caller makes no follow-up.
+await run("asyncNestedTurn", asyncNestedTurn, ({ value }) => ({ result: value.data }));
 
 // endTurn() from code, outside any tool: a statelog error, no effect.
 await run("calledFromCode", calledFromCode, ({ value, mark }) => ({

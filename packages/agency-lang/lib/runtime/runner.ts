@@ -198,6 +198,7 @@ export class Runner {
           // entries that build a Runner outside any ALS frame (older
           // tests, direct invocation paths).
           globals: outer?.globals ?? this.ctx.globals,
+          toolInvocationStack: outer?.toolInvocationStack,
           // A Runner inside a fork arm keeps the arm's decision scope, so a
           // decision call in a nested function still batches with the block.
           decisions: outer?.decisions,

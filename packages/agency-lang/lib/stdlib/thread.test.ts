@@ -4,8 +4,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as smoltalk from "smoltalk";
 import type { DecideResult } from "smoltalk";
-import { runInTestContext } from "../runtime/asyncContext.js";
+import { agencyStore, runInTestContext } from "../runtime/asyncContext.js";
 import { RuntimeContext } from "../runtime/state/context.js";
+import { StateStack } from "../runtime/state/stateStack.js";
 import { ThreadStore } from "../runtime/state/threadStore.js";
 import { AgencyAbort, makeAbortCause } from "../runtime/errors.js";
 import { isFailure } from "../runtime/result.js";
@@ -242,11 +243,18 @@ describe("_endTurn and _handBack", () => {
     execCtx.statelogClient.error = ((event: unknown) => {
       errors.push(event);
     }) as typeof execCtx.statelogClient.error;
-    if (insideTool) {
-      execCtx.enterToolCall();
-    }
-    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), body);
-    return { stack: execCtx.stateStack, errors };
+    const toolStack = execCtx.stateStack;
+    await runInTestContext(execCtx, toolStack, new ThreadStore(), () => {
+      if (!insideTool) {
+        return body();
+      }
+      // The tool loop records the invocation's stack on the frame; the
+      // code may run on another stack, as a parallel branch of the body does.
+      const branch = new StateStack();
+      const frame = agencyStore.getStore();
+      return agencyStore.run({ ...frame!, stack: branch, toolInvocationStack: toolStack }, body);
+    });
+    return { stack: toolStack, errors };
   }
 
   it("_endTurn with no frame is a no-op", () => {
@@ -260,7 +268,7 @@ describe("_endTurn and _handBack", () => {
     expect(stack.drainTurnMarks().endTurn).toBe(false);
   });
 
-  it("_endTurn inside a tool invocation marks the frame's stack with its scope", async () => {
+  it("_endTurn inside a tool invocation marks the invocation's stack, not the branch's", async () => {
     const { stack, errors } = await inFrame(true, () => _endTurn("turn"));
     expect(errors).toHaveLength(0);
     expect(stack.drainTurnMarks()).toEqual({ endTurn: true, scope: "turn", message: null });

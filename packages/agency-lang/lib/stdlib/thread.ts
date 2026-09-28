@@ -288,14 +288,16 @@ export function _handBack(message: string): void {
   stack?.setHandBack(message);
 }
 
-/** The branch stack of the tool invocation this code runs in, or null
- *  with a statelog error when there is none. */
+/** The branch stack of the tool invocation this code runs in, read from
+ *  the frame slot the tool loop sets (not the innermost stack, which
+ *  inside a parallel or async branch of the body would be the branch's
+ *  own), or null with a statelog error when there is none. */
 function toolInvocationStack(functionName: string, dropped: string): StateStack | null {
   const frame = agencyStore.getStore();
   if (!frame?.stack) {
     return null;
   }
-  if (!_insideToolCall()) {
+  if (frame.toolInvocationStack === undefined) {
     frame.ctx?.statelogClient?.error({
       errorType: "toolError",
       message: `${functionName} called outside a tool invocation; ${dropped}`,
@@ -303,7 +305,7 @@ function toolInvocationStack(functionName: string, dropped: string): StateStack 
     });
     return null;
   }
-  return frame.stack;
+  return frame.toolInvocationStack;
 }
 
 /** True while a tool invocation is on the stack. attachToReply is a

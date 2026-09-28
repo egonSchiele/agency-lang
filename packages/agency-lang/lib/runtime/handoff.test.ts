@@ -13,6 +13,7 @@ import {
   handoffStoppedText,
   type EndTurnDecision,
   type TurnMark,
+  type TurnMarks,
   dropHandoffToolCall,
   finishHandoff,
   finishStoppedHandoff,
@@ -249,7 +250,7 @@ describe("message text", () => {
 
 // --- Ending the turn from a tool -------------------------------------------
 
-const noMarks = { endTurn: false, scope: "llm" as const, message: null };
+const noMarks: TurnMarks = { endTurn: false, scope: "llm", message: null };
 const mark = (overrides: Partial<TurnMark>): TurnMark => ({
   toolName: "tool",
   isHandoff: false,
@@ -316,14 +317,20 @@ describe("closeHandoff", () => {
 
   it("keeps the rejection text and warns about a custom message", () => {
     const marks = { ...noMarks, message: "Custom." };
-    const { thread, warnings } = close({ kind: "rejected", body: "Tool call rejected: no." }, marks);
+    const { thread, warnings } = close(
+      { kind: "rejected", body: "Tool call rejected: no." },
+      marks,
+    );
     expect(contents(thread)[1]).toBe(handoffResumeText("explorer", "Tool call rejected: no."));
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain("rejected");
   });
 
   it("ignores an empty message with a warning", () => {
-    const { thread, warnings } = close({ kind: "success", body: "done" }, { ...noMarks, message: "" });
+    const { thread, warnings } = close(
+      { kind: "success", body: "done" },
+      { ...noMarks, message: "" },
+    );
     expect(contents(thread)[1]).toBe(handoffResumeText("explorer", "done"));
     expect(warnings[0]).toContain("empty");
   });
@@ -391,13 +398,19 @@ describe("decideEndTurn", () => {
   });
 
   it("drops two ordinary marks with two warnings", () => {
-    const { decision, warnings } = decide({ 0: mark({ toolName: "a" }), 1: mark({ toolName: "b" }) }, [0, 1]);
+    const { decision, warnings } = decide(
+      { 0: mark({ toolName: "a" }), 1: mark({ toolName: "b" }) },
+      [0, 1],
+    );
     expect(ended(decision)).toBe(false);
     expect(warnings).toHaveLength(2);
   });
 
   it("warns about handBack from an ordinary tool and uses nothing from it", () => {
-    const { decision, warnings } = decide({ 0: mark({ endTurn: false, message: "m", value: undefined }) }, [0]);
+    const { decision, warnings } = decide(
+      { 0: mark({ endTurn: false, message: "m", value: undefined }) },
+      [0],
+    );
     expect(decision).toEqual({ kind: "continue" });
     expect(warnings[0]).toContain("only a handoff hands back");
   });
@@ -427,7 +440,9 @@ describe("decideEndTurn", () => {
 
   it("falls back when the value does not match the response format", () => {
     const responseFormat = z.object({ response: z.object({ text: z.string() }) });
-    const { decision, warnings } = decide({ 0: mark({ value: { wrong: 1 } }) }, [0], { responseFormat });
+    const { decision, warnings } = decide({ 0: mark({ value: { wrong: 1 } }) }, [0], {
+      responseFormat,
+    });
     expect(ended(decision)).toBe(false);
     expect(warnings[0]).toContain("structured output");
   });
@@ -500,7 +515,9 @@ describe("applyEndTurnDecision", () => {
     applyEndTurnDecision({
       thread: custom,
       decision: { kind: "continue" },
-      marks: { 0: mark({ isHandoff: true, deferredHandBack: { ...deferred, message: "Custom." } }) },
+      marks: {
+        0: mark({ isHandoff: true, deferredHandBack: { ...deferred, message: "Custom." } }),
+      },
       enclosingStack: null,
     });
     expect(contents(custom)).toEqual(["Custom."]);
@@ -510,7 +527,12 @@ describe("applyEndTurnDecision", () => {
     const thread = new MessageThread();
     thread.push(smoltalk.userMessage("q"));
     const enclosing = new StateStack();
-    const record = applyEndTurnDecision({ thread, decision: end("llm"), marks: {}, enclosingStack: enclosing });
+    const record = applyEndTurnDecision({
+      thread,
+      decision: end("llm"),
+      marks: {},
+      enclosingStack: enclosing,
+    });
     expect(record).toEqual({ ended: true, returnValue: "done" });
     expect(contents(thread)).toEqual(["q", "done"]);
     expect(enclosing.drainTurnMarks().endTurn).toBe(false);

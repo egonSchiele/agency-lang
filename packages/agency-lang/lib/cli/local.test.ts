@@ -512,7 +512,7 @@ describe("checkedKind", () => {
 
   it("refuses anything else, naming the kinds", () => {
     expect(() => checkedKind("video")).toThrow(
-      '"video" is not a kind of model. The kinds are chat, embedding, speech, image, vision.',
+      '"video" is not a kind of model. The kinds are chat, embedding, speech, image, vision, controlnet.',
     );
   });
 });

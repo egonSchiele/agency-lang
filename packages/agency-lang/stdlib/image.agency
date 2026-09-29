@@ -1,6 +1,7 @@
 import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "agency-lang/stdlib-lib/image.js"
 import { _cropImage, _imageSize, _pasteImages } from "agency-lang/stdlib-lib/imageTools.js"
 import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _localImageInputs } from "agency-lang/stdlib-lib/localImageInputs.js"
 import { dirname, basename } from "std::path"
 
 /** @module
@@ -191,20 +192,14 @@ export def generateImageLocal(
   @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
   @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
   """
-  if ((controlnet == "") != (controlImage == "")) {
-    return failure("generateImageLocal failed: controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.")
+  // Every input path is checked before the first interrupt, so a call that
+  // is going to fail asks for nothing.
+  const inputs = try _localImageInputs(controlnet, controlImage, controlScale, invertControlImage)
+  if (isFailure(inputs)) {
+    return inputs
   }
-  let control = null
-  if (controlImage != "") {
-    const real = try _realTarget(controlImage)
-    if (isFailure(real)) {
-      return real
-    }
-    raise std::readImage("Read this drawing to condition the image on?", {
-      dir: dirname(real.value),
-      filename: basename(real.value),
-    })
-    control = { name: controlnet, image: real.value, scale: controlScale, invert: invertControlImage }
+  for (file in inputs.value.files) {
+    raise std::readImage(file.question, { dir: file.dir, filename: file.filename })
   }
   return _generateImageLocal(
     prompt,
@@ -217,7 +212,7 @@ export def generateImageLocal(
     format,
     lora,
     loraScale,
-    control,
+    inputs.value,
   )
 }
 

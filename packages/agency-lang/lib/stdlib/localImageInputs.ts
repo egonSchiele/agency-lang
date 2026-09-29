@@ -1,4 +1,7 @@
+import * as path from "node:path";
 import { MAX_IMAGE_BYTES } from "./vision.js";
+import { _realTarget, wholePath, stat as statUnder } from "./contained.js";
+import { MIME_TYPES } from "./mediaPathScan.js";
 
 /** The images a `generateImageLocal` request can carry, one row per request
  *  field. `INPUT_IMAGES` in lib/cli/diffusersImageRules.py is the same
@@ -50,4 +53,128 @@ export function localBodyBytes(): number {
     ...Object.values(LOCAL_IMAGE_FIELDS).map((row) => row.maxCount * row.maxBytes),
   );
   return REQUEST_SETTINGS_BYTES + base64Length(most);
+}
+
+/** The image types a local input may be, by extension. */
+export const IMAGE_MIME_TYPES: Record<string, string> = Object.fromEntries(
+  Object.entries(MIME_TYPES).filter(([, mime]) => mime.startsWith("image/")),
+);
+
+export function isRemoteSource(source: string): boolean {
+  return (
+    source.startsWith("data:") || source.startsWith("http://") || source.startsWith("https://")
+  );
+}
+
+/** The real spelling of a local image file, once it is checked by name and
+ *  stat: an image extension, a regular file, at most `maxBytes`. No byte is
+ *  read, so a bad path fails here, before any approval is asked for.
+ *  `caller` names the stdlib function in a refusal. */
+export function checkedImageFile(spelling: string, maxBytes: number, caller: string): string {
+  const real = _realTarget(spelling);
+  const ext = path.extname(real).toLowerCase();
+  if (IMAGE_MIME_TYPES[ext] === undefined) {
+    const accepted = Object.keys(IMAGE_MIME_TYPES).join(", ");
+    throw new Error(`${caller} cannot send ${real}. Accepted: ${accepted}.`);
+  }
+  const located = wholePath(real);
+  const info = statUnder(located.root, located.target);
+  if (info === null) {
+    throw new Error(`no such file: ${real}`);
+  }
+  if (!info.isFile()) {
+    throw new Error(`not a regular file: ${real}`);
+  }
+  if (info.size > maxBytes) {
+    throw new Error(
+      `${real} is ${info.size.toLocaleString("en-US")} bytes; the most ${caller} sends is ${maxBytes.toLocaleString("en-US")}.`,
+    );
+  }
+  return real;
+}
+
+/** One file a `generateImageLocal` call reads, after the std::readImage
+ *  interrupt that shows its folder and name asks `question`. `path` is its
+ *  real spelling, the one the interrupt shows. */
+export type LocalImageFile = {
+  path: string;
+  dir: string;
+  filename: string;
+  question: string;
+};
+
+/** The input images of one `generateImageLocal` call. `field` is the
+ *  request field the files go in, or null for a call with none.
+ *  `settings` holds the other request fields of the field's mode, such as
+ *  `controlnet` and `control_scale`. */
+export type LocalImageInputs = {
+  field: string | null;
+  files: LocalImageFile[];
+  settings: Record<string, unknown>;
+};
+
+const CALLER = "generateImageLocal";
+
+function refusal(message: string): Error {
+  return new Error(`${CALLER} failed: ${message}`);
+}
+
+/** A local path checked for the row's byte cap, with what its interrupt
+ *  shows. A URL or a data URI is refused: the image server never fetches
+ *  anything, so every input is a file on this machine. */
+function localImageFile(spelling: string, row: LocalImageField): LocalImageFile {
+  if (isRemoteSource(spelling)) {
+    throw new Error(`${CALLER} reads files on this machine only.`);
+  }
+  let real: string;
+  try {
+    real = checkedImageFile(spelling, row.maxBytes, CALLER);
+  } catch (err) {
+    throw refusal((err as Error).message);
+  }
+  return {
+    path: real,
+    dir: path.dirname(real),
+    filename: path.basename(real),
+    question: row.question,
+  };
+}
+
+/** Backs the checks `generateImageLocal` makes before it asks anything:
+ *  which input images the call has, whether they go together, and whether
+ *  each path is a local image file under its field's size cap. Returns the
+ *  files to raise std::readImage for. Throws with the message to fail
+ *  with. */
+export function _localImageInputs(
+  controlnet: string,
+  controlImage: string,
+  controlScale: number | null,
+  invertControlImage: boolean,
+): LocalImageInputs {
+  if ((controlnet === "") !== (controlImage === "")) {
+    throw refusal(
+      "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
+    );
+  }
+  const paths: Record<string, string[]> = {
+    control_image: controlImage === "" ? [] : [controlImage],
+  };
+  const given = Object.keys(paths).filter((field) => paths[field].length > 0);
+  if (given.length === 0) {
+    return { field: null, files: [], settings: {} };
+  }
+  const field = given[0];
+  const row = LOCAL_IMAGE_FIELDS[field];
+  const settings: Record<string, unknown> = {
+    controlnet,
+    control_invert: invertControlImage,
+  };
+  if (controlScale !== null) {
+    settings.control_scale = controlScale;
+  }
+  return {
+    field,
+    files: paths[field].map((spelling) => localImageFile(spelling, row)),
+    settings,
+  };
 }

@@ -704,7 +704,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "diffusers:Qwen/Qwen-Image-2512",
     params: "20B",
     sizeBytes: 57704574910,
-    category: "image",
+    kind: "image",
+    tags: [],
     contextWindow: 512,
     license: "apache-2.0",
     description:
@@ -715,7 +716,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "diffusers:black-forest-labs/FLUX.2-klein-4B",
     params: "4B",
     sizeBytes: 15980131745,
-    category: "image",
+    kind: "image",
+    tags: [],
     contextWindow: 512,
     license: "apache-2.0",
     description:

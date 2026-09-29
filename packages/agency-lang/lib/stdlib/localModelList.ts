@@ -7,7 +7,6 @@ import {
   defaultAliasTarget,
   formatGB,
   formatCtx,
-  kindOfCategory,
   type DownloadedModel,
   type ModelNameEntry,
 } from "./localModels.js";
@@ -41,10 +40,10 @@ export function formatLocalList(args: {
 }): string {
   const byName = Object.fromEntries(args.files.map((f) => [f.name, f]));
   const byPath = Object.fromEntries(args.files.map((f) => [f.path, f]));
-  // A catalog row's kind is its category's; a file's is what its record
-  // or its contents say. Rows come out in kind order, chat first, so the
+  // A catalog row's kind is its entry's; a file's is what its record or
+  // its contents say. Rows come out in kind order, chat first, so the
   // models that answer one question sit together.
-  const kindOfEntry = (e: ModelNameEntry): ModelKind | undefined => kindOfCategory(e.category);
+  const kindOfEntry = (e: ModelNameEntry): ModelKind | undefined => e.kind;
   const kindOrder = (kind: ModelKind | undefined): number =>
     kind === undefined ? MODEL_KINDS.length : MODEL_KINDS.indexOf(kind);
   // The file on disk that backs a catalog row, if any. A GGUF row goes
@@ -89,7 +88,7 @@ export function formatLocalList(args: {
             : "",
       ctx: e.contextWindow !== undefined ? formatCtx(e.contextWindow) : "",
       license: e.license ?? "",
-      category: e.category ?? "",
+      tags: (e.tags ?? []).join(", "),
       description: e.description ?? "",
     };
   });
@@ -145,7 +144,7 @@ export function formatLocalList(args: {
     ),
     colWidth(
       headers[7],
-      rows.map((r) => r.category),
+      rows.map((r) => r.tags),
     ),
     colWidth(
       headers[8],
@@ -166,7 +165,7 @@ export function formatLocalList(args: {
     // below (which push their own leading "") aren't double-spaced.
     if (args.long === true && i > 0) lines.push("");
     lines.push(
-      render([r.mark, r.name, r.kind, r.backend, r.params, r.size, r.ctx, r.category, r.license]),
+      render([r.mark, r.name, r.kind, r.backend, r.params, r.size, r.ctx, r.tags, r.license]),
     );
     if (args.long === true && r.description !== "") {
       lines.push(ttyColor.dim(`${descIndent}${r.description}`));
@@ -190,7 +189,7 @@ export function formatLocalList(args: {
 }
 
 /** Render the usable-model list as an aligned table: a header row plus one
- *  fact row per curated model (params, category, size, context window,
+ *  fact row per curated model (params, tags, size, context window,
  *  license), the description on a dimmed line below, a blank line between
  *  models. User aliases (which carry no metadata) follow in an ALIASES
  *  section as `name → target`. Returns the block as a string with no trailing
@@ -200,7 +199,7 @@ export function formatModelCatalog(target: ConfigTarget = defaultAliasTarget()):
   const hasMetadata = (m: ModelNameEntry): boolean =>
     m.params !== undefined ||
     m.sizeBytes !== undefined ||
-    m.category !== undefined ||
+    m.kind !== undefined ||
     m.contextWindow !== undefined ||
     m.license !== undefined ||
     m.description !== undefined;
@@ -212,7 +211,7 @@ export function formatModelCatalog(target: ConfigTarget = defaultAliasTarget()):
     const rows = curated.map((m) => ({
       name: m.name,
       params: m.params ?? "",
-      category: m.category ?? "",
+      tags: (m.tags ?? []).join(", "),
       size: m.sizeBytes ? formatGB(m.sizeBytes) : "?",
       ctx: m.contextWindow ? formatCtx(m.contextWindow) : "",
       license: m.license ?? "",
@@ -229,9 +228,9 @@ export function formatModelCatalog(target: ConfigTarget = defaultAliasTarget()):
         "PARAMS",
         rows.map((r) => r.params),
       ),
-      category: colWidth(
-        "CATEGORY",
-        rows.map((r) => r.category),
+      tags: colWidth(
+        "TAGS",
+        rows.map((r) => r.tags),
       ),
       size: colWidth(
         "SIZE",
@@ -245,22 +244,22 @@ export function formatModelCatalog(target: ConfigTarget = defaultAliasTarget()):
     const row = (
       name: string,
       params: string,
-      category: string,
+      tags: string,
       size: string,
       ctx: string,
       license: string,
     ): string =>
-      `${name.padEnd(w.name)}  ${params.padEnd(w.params)}  ${category.padEnd(
-        w.category,
+      `${name.padEnd(w.name)}  ${params.padEnd(w.params)}  ${tags.padEnd(
+        w.tags,
       )}  ${size.padStart(w.size)}  ${ctx.padStart(w.ctx)}  ${license}`;
 
     // LICENSE is the last column, so it needs no trailing pad.
-    lines.push(ttyColor.bold(row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE")));
+    lines.push(ttyColor.bold(row("NAME", "PARAMS", "TAGS", "SIZE", "CTX", "LICENSE")));
     rows.forEach((r, i) => {
       // Blank line *between* models, not after the last one, so the joined
       // string has no trailing newline (console.log adds exactly one).
       if (i > 0) lines.push("");
-      lines.push(row(r.name, r.params, r.category, r.size, r.ctx, r.license));
+      lines.push(row(r.name, r.params, r.tags, r.size, r.ctx, r.license));
       if (r.description) lines.push(ttyColor.dim(`    ${r.description}`));
     });
   }

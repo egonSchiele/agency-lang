@@ -87,9 +87,11 @@ Every local model has a kind: what it takes and returns. `ModelKind` in
 `lib/stdlib/modelKind.ts` is `chat`, `embedding`, `speech`, or `image`.
 The kind decides which server script `serve` starts, which route serves
 it, and which stdlib function calls it. What a model is good for
-(coding, reasoning) is a catalog category, not a kind; `kindOfCategory`
-in `localModels.ts` maps the categories that name a return type to
-themselves and everything else to `chat`.
+(coding, reasoning) is a tag on its catalog entry, not a kind. An entry
+has both, `kind` and `tags`. A remote catalog or an alias written before
+the split has one `category` field instead; `kindOfCategory` and
+`tagsOfCategory` in `localModels.ts` read it as both, so nothing needs
+regenerating.
 
 A kind comes from three places, tried in this order by `_modelKind(value,
 dir)` in `localModels.ts`, the one function every reader calls:

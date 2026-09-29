@@ -176,7 +176,7 @@ A gated repo needs `HF_TOKEN` set to a token that has accepted its terms. The to
 | `agency local remove <name> [-f]` | Remove the alias for a model and keep its files, printing where they are. With `-f`, delete the files too: the `.gguf` file, or the whole MLX or diffusers model directory. Files outside the models directory are never deleted. |
 | `agency local resolve <value>` | Show the backend and what a name/alias maps to, without downloading. |
 | `agency local refresh [url]` | Fetch the remote model catalog and update the `source:"remote"` aliases in `agency.json`. Adds/updates models from the catalog, removes ones it dropped, and skips any name you've aliased yourself (printing what it would have set). |
-| `agency local alias list` | List usable short names. Curated entries show params, category, size, context window, and license (with the description on the next line); your aliases show their target. |
+| `agency local alias list` | List usable short names. Curated entries show params, tags, size, context window, and license (with the description on the next line); your aliases show their target. |
 | `agency local alias add <name> <target>` | Add a short-name alias. The target is an `hf:` URI, a `.gguf` path, an `mlx:` or `diffusers:` URI, or a model directory. Prints the `agency.json` path that was edited. |
 | `agency local alias remove <name>` | Remove a short-name alias. Prints the `agency.json` path that was inspected (the file is left untouched if the alias wasn't present). |
 

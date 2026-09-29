@@ -37,7 +37,8 @@ export type DownloadedModel = {
   path: string;
   sizeBytes: number;
   backend: string;
-  complete: boolean
+  complete: boolean;
+  kind?: string
 }
 ```
 
@@ -53,14 +54,15 @@ export type ModelName = {
   source: string;
   params?: string;
   sizeBytes?: number;
-  category?: string;
+  kind?: string;
+  tags?: string[];
   description?: string;
   contextWindow?: number;
   license?: string
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L49))
 
 ### SkippedAlias
 
@@ -77,7 +79,7 @@ export type SkippedAlias = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L193))
 
 ### RefreshResult
 
@@ -97,7 +99,7 @@ export type RefreshResult = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L200))
 
 ## Functions
 
@@ -111,7 +113,7 @@ True if smoltalk-llama-cpp is installed.
 
 **Returns:** `bool`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L63))
 
 ### resolveModelName
 
@@ -133,7 +135,7 @@ Map a curated short name or alias to its target: an hf: URI or .gguf path
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L68))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L70))
 
 ### downloadModel
 
@@ -157,7 +159,7 @@ Download a model and return its local .gguf path, or the model directory
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L79))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L81))
 
 ### listDownloadedModels
 
@@ -177,7 +179,7 @@ List downloaded models: .gguf files and MLX model directories.
 
 **Returns:** `DownloadedModel[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L93))
 
 ### listModelNames
 
@@ -189,7 +191,7 @@ List usable short names: curated built-ins and your aliases.
 
 **Returns:** `ModelName[]`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L100))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L102))
 
 ### aliasModel
 
@@ -212,7 +214,7 @@ Add a short-name alias for a model URI
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L107))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L109))
 
 ### unaliasModel
 
@@ -233,7 +235,7 @@ Remove a short-name alias.
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L118))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L120))
 
 ### removeModel
 
@@ -257,7 +259,7 @@ Delete a downloaded GGUF file from the models directory. This is what
 
 **Returns:** `bool`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L128))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L130))
 
 ### localModelBackend
 
@@ -278,7 +280,7 @@ Which engine runs a model: "llama-cpp" for GGUF files, "mlx" for MLX
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L142))
 
 ### mlxServedName
 
@@ -300,7 +302,7 @@ The model name to send to the MLX server for this model: the repo id for
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L150))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L152))
 
 ### registerLocalProvider
 
@@ -310,7 +312,7 @@ registerLocalProvider()
 
 Register the llama-cpp provider so local models can be used for LLM calls.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L161))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L163))
 
 ### registerLocalModel
 
@@ -335,7 +337,7 @@ Register the provider and ensure the model is downloaded. Returns the local
 
 **Returns:** `string`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L168))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L170))
 
 ### printLocalCatalog
 
@@ -346,7 +348,7 @@ printLocalCatalog()
 Print the usable-model catalog (curated names + your aliases) as an
     aligned table, the same listing as `agency local alias list`.
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L181))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L183))
 
 ### mlxServerModels
 
@@ -369,7 +371,7 @@ The models the MLX server is serving, or null if no server is running.
 
 **Returns:** `string[] | null`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L209))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L211))
 
 ### mlxServerRunning
 
@@ -390,7 +392,7 @@ Whether an MLX server answers at the base URL. The same probe as
 
 **Returns:** `boolean`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L223))
 
 ### refreshCatalog
 
@@ -418,4 +420,4 @@ Same operation as the `agency local refresh` CLI command.
 
 **Returns:** [RefreshResult](#refreshresult)
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L232))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/agency/local.agency#L234))

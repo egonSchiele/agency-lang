@@ -42,7 +42,8 @@ export type DownloadedModel = {
   path: string;
   sizeBytes: number;
   backend: string;
-  complete: boolean
+  complete: boolean;
+  kind?: string
 }
 
 export type ModelName = {
@@ -52,7 +53,8 @@ export type ModelName = {
   source: string;
   params?: string;
   sizeBytes?: number;
-  category?: string;
+  kind?: string;
+  tags?: string[];
   description?: string;
   contextWindow?: number;
   license?: string

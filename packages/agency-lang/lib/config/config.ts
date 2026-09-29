@@ -216,6 +216,11 @@ export interface AgencyConfig {
      *  `AGENCY_MODELS_DIR` env var; defaults to `~/.agency-agent/models`. Read
      *  at runtime by `std::agency/local` and the `agency local` CLI. */
     modelsDir: string;
+    /** The folder LoRA adapters are in, as `.safetensors` files. A local
+     *  image server loads one the first time a request names it by its
+     *  file name without the extension (`lora: "sketch"`). Relative to the
+     *  folder the config file is in. Unset means no request may name an adapter. */
+    adaptersDir: string;
     /** Where `agency local refresh` fetches the model catalog. Overridden by
      *  the `AGENCY_MODEL_CATALOG_URL` env var. Read at runtime. */
     modelCatalogUrl: string;
@@ -615,6 +620,7 @@ export const AgencyConfigSchema = z
         providerModules: z.array(z.string()),
         modelAliases: z.record(z.string(), ModelAliasSchema),
         modelsDir: z.string(),
+        adaptersDir: z.string(),
         modelCatalogUrl: z.string(),
         mlx: z
           .object({

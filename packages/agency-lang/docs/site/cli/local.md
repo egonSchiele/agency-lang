@@ -147,6 +147,19 @@ An image model is named by a catalog name, a `diffusers:` URI such as `diffusers
 
 Agency code calls it with `generateImageLocal` from `std::image`. On an M5 Ultra, `z-image-turbo` makes a 1024×1024 image in about 8 seconds and `chroma1-hd` in about 90. The catalog also has `qwen-image-2512`, for legible text inside an image, and `flux2-klein-4b`, a small model for Macs with less memory; neither has been timed yet.
 
+An SDXL model, such as the illustration finetune NoobAI-XL, is named by its repo, and takes LoRA adapters you trained or downloaded. Put the `.safetensors` files in a folder and name the folder in `agency.json`:
+
+```bash
+agency local download diffusers:Laxhar/noobai-XL-1.1
+agency local serve diffusers:Laxhar/noobai-XL-1.1
+```
+
+```json
+{ "client": { "adaptersDir": "./adapters" } }
+```
+
+A request then asks for an adapter by its file name without the extension: `generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch")` loads `./adapters/sketch.safetensors` the first time and keeps it. Only a request that names an adapter gets one. A file dropped into the folder is usable with no restart, and a file trained again is read again the next time a request names it. A relative `adaptersDir` is taken from the folder `agency.json` is in.
+
 It prints a line for every request that reaches it:
 
 ```

@@ -286,6 +286,11 @@ describe("imageServeArgs", () => {
       "9003",
     ]);
   });
+
+  it("passes the adapters folder when one is configured", () => {
+    const args = imageServeArgs("/x/s.py", "/m/dir", 9003, "/home/me/adapters");
+    expect(args.slice(7)).toEqual(["--adapters-dir", "/home/me/adapters"]);
+  });
 });
 
 describe("speechServeArgs", () => {
@@ -746,6 +751,7 @@ describe("runServe", () => {
       home: "/home/me",
       env: {},
       configuredPython: undefined,
+      adaptersDir: null,
       useColor: false,
     };
   });
@@ -1159,6 +1165,25 @@ describe("runServe", () => {
     expect(probes).toEqual(["http://127.0.0.1:9000/health"]);
     expect(log).toContain("Loading org/img (0.60 GB)…");
     expect(log).toContain("  org/img  (images)");
+    await handle.close();
+  });
+
+  it("hands the adapters folder to an image server, and to no other kind", async () => {
+    const img = diffusersModel("org/img");
+    recordedModel("org/a", true);
+    deps.adaptersDir = "/home/me/adapters";
+    const handle = await runServe(["diffusers:org/img", "mlx:org/a"], { port: 0 }, deps);
+    expect(spawned[0].slice(2)).toEqual([
+      "--model",
+      img,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9000",
+      "--adapters-dir",
+      "/home/me/adapters",
+    ]);
+    expect(spawned[1]).not.toContain("--adapters-dir");
     await handle.close();
   });
 

@@ -1,12 +1,14 @@
 """An OpenAI-style /v1/images/generations server for one diffusers model.
 
-Started by `agency local serve --image <model>`. Loads the model once on
-the Mac GPU, then answers:
+Started by `agency local serve <model>`. Loads the model once on the Mac
+GPU, loads LoRA adapters from `--adapters-dir` as requests name them, and
+answers:
 
   POST /v1/images/generations  {"prompt", "size"?, "steps"?, "guidance"?, "seed"?,
-                                "negative_prompt"?, "output_format"?, "response_format"?, "n"?}
+                                "negative_prompt"?, "output_format"?, "response_format"?, "n"?,
+                                "lora"?, "lora_scale"?}
   GET  /v1/models
-  GET  /health
+  GET  /health                 {"status": "ok", "adapters": [names]}
 
 A success is {"created", "output_format", "data": [{"b64_json", "seed"}]}.
 A failure is {"error": {"message": "..."}}.
@@ -32,8 +34,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from localServerCommon import client_gone, fail  # noqa: E402
 from diffusersImageRules import (  # noqa: E402
     DIFFUSERS_VERSION,
+    LoadedAdapters,
     RequestError,
+    adapter_names,
+    check_adapters_dir,
     check_request,
+    existing_adapter,
     family_of,
     pipeline_args,
     warm_up_request,
@@ -53,6 +59,11 @@ def parse_args():
     parser.add_argument("--model", required=True, help="model directory")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument(
+        "--adapters-dir",
+        default=None,
+        help="the folder LoRA adapters (.safetensors) are loaded from, by name, as requests ask",
+    )
     return parser.parse_args()
 
 
@@ -83,13 +94,22 @@ class Generator:
     """The loaded pipeline, its family, and a lock, because the GPU runs one
     generation at a time."""
 
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, adapters_dir):
         # The file names the classes from_pretrained will import, so it is
         # checked before anything from diffusers is imported.
         try:
             self.rules = family_of(read_model_index(model_dir))
         except ValueError as err:
             fail(str(err))
+        # A wrong folder fails before the model loads, so it costs seconds.
+        # A family that takes no adapters is not refused the folder: a
+        # request naming one is refused instead, since the folder is one
+        # config key for every image model the user serves.
+        try:
+            self.adapters_dir = check_adapters_dir(adapters_dir)
+        except ValueError as err:
+            fail(str(err))
+        self.adapters = LoadedAdapters()
         # Never fetch anything while serving. Set before diffusers and
         # huggingface_hub are imported, since they read it at import time.
         os.environ["HF_HUB_OFFLINE"] = "1"
@@ -115,6 +135,58 @@ class Generator:
         self.pipe.set_progress_bar_config(disable=True)
         self.torch = torch
         self.lock = threading.Lock()
+
+    def load_adapter(self, name):
+        """The name the pipeline holds the adapter `name` under, loading
+        it from the folder first when it is not loaded or its file has
+        changed since, as it does when the adapter is trained again. The
+        file is .safetensors and use_safetensors is passed, so loading it
+        reads tensors and never runs code. A missing file is a 400 naming
+        what the folder holds. Called under the lock, since the adapter
+        state is the pipeline's."""
+        path, stamp = existing_adapter(self.adapters_dir, name)
+        loaded_as = self.adapters.find(name, stamp)
+        if loaded_as is not None:
+            return loaded_as
+        for old in self.adapters.make_room(name):
+            self.pipe.delete_adapters(old)
+        loaded_as = self.adapters.next_name()
+        try:
+            self.pipe.load_lora_weights(
+                path, adapter_name=loaded_as, use_safetensors=True, local_files_only=True
+            )
+        except Exception:
+            # SDXL loads an adapter into the UNet, then into each text
+            # encoder, and diffusers does not undo the earlier parts when a
+            # later one fails. Whatever did load is removed here.
+            self.unload_partial(loaded_as)
+            raise
+        self.adapters.add(name, loaded_as, stamp)
+        return loaded_as
+
+    def unload_partial(self, loaded_as):
+        """Removes what a failed load left behind. If this fails too, the
+        pieces stay, and apply_lora still turns them off for a request that
+        names no adapter, since it asks the pipeline what it holds."""
+        try:
+            self.pipe.delete_adapters(loaded_as)
+        except Exception as err:  # noqa: BLE001
+            print(f"Could not remove a partly loaded adapter: {err}", file=sys.stderr)
+
+    def apply_lora(self, request):
+        """Switch the loaded adapters to what this request asked for: one
+        adapter at its scale, or none. Called under the lock."""
+        if not self.rules["takes_lora"]:
+            return
+        if request["lora"] is None:
+            # Ask the pipeline, not our own list: a failed load can leave an
+            # adapter in it that the list never recorded.
+            if any(self.pipe.get_list_adapters().values()):
+                self.pipe.disable_lora()
+            return
+        loaded_as = self.load_adapter(request["lora"])
+        self.pipe.enable_lora()
+        self.pipe.set_adapters([loaded_as], adapter_weights=[request["lora_scale"]])
 
     def generate(self, request, sock):
         """The image for a checked request, or None when the client hung up.
@@ -142,6 +214,7 @@ class Generator:
             # nothing started at all.
             if client_gone(sock):
                 return None
+            self.apply_lora(request)
             try:
                 return self.pipe(**kwargs).images[0]
             except ClientGone as gone:
@@ -155,7 +228,7 @@ class Generator:
         """One small generation before the port opens. A model that loads
         but cannot generate fails here, and `agency local serve` reports the
         exit instead of the user's first call finding it."""
-        self.generate(check_request(self.rules, warm_up_request()), None)
+        self.generate(check_request(self.rules, warm_up_request(), self.adapters_dir), None)
 
 
 def encode(image, fmt):
@@ -185,7 +258,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.send_json(200, {"status": "ok"})
+            folder = self.generator.adapters_dir
+            adapters = [] if folder is None else adapter_names(folder)
+            self.send_json(200, {"status": "ok", "adapters": adapters})
         elif self.path == "/v1/models":
             self.send_json(
                 200, {"object": "list", "data": [{"id": self.served_name, "object": "model"}]}
@@ -219,7 +294,9 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         try:
-            request = check_request(self.generator.rules, self.read_body())
+            request = check_request(
+                self.generator.rules, self.read_body(), self.generator.adapters_dir
+            )
             image = self.generator.generate(request, self.connection)
             if image is None:
                 # The client hung up; there is nobody to answer.
@@ -252,7 +329,7 @@ def main():
     # Load and generate once before binding the port. `agency local serve`
     # treats a refused connection as "still loading" and any answer as
     # "ready", so the port must stay closed until the model can answer.
-    Handler.generator = Generator(args.model)
+    Handler.generator = Generator(args.model, args.adapters_dir)
     Handler.generator.warm_up()
     Handler.served_name = args.model
     server = ThreadingHTTPServer((args.host, args.port), Handler)

@@ -331,6 +331,27 @@ The same prompt and seed make the same image. Leave `seed` out and the server pi
 
 Image models use more memory while they generate than their size on disk: `chroma1-hd` is 27.5 GB on disk and peaks at 36 GB.
 
+### Your own style with a LoRA adapter
+
+A LoRA adapter is a small file that teaches an image model a style or a character from a few dozen example pictures. SDXL models take them, and the illustration finetunes NoobAI-XL and Illustrious are the ones most adapters are trained for. Serve one by its repo, and name the folder your adapters are in:
+
+```bash
+agency local download diffusers:Laxhar/noobai-XL-1.1
+agency local serve diffusers:Laxhar/noobai-XL-1.1
+```
+
+```json
+{ "client": { "adaptersDir": "./adapters" } }
+```
+
+Then name the adapter in the call, by its file name without `.safetensors`. A request that leaves `lora` out gets the plain model:
+
+```ts
+const r = generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch", loraScale: 0.9)
+```
+
+`loraScale` is how strongly the adapter is applied: 1 is as trained, less is subtler, and up to 2 is allowed. The server loads an adapter the first time it is asked for, so a file you drop into the folder after training works at once, and when you train it again under the same name, the next request uses the new weights. Adapters are `.safetensors` files only, and a request can only pick a file from the folder you configured, never name a path itself.
+
 ## What is different about a local model
 
 A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.

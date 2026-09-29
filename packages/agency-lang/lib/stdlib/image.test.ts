@@ -243,6 +243,8 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "png",
+        "",
+        null,
       );
       expect(r.success).toBe(true);
       expect(r.success && r.value).toEqual({
@@ -278,6 +280,8 @@ describe("_generateImageLocal", () => {
         7,
         "blurry",
         "webp",
+        "",
+        null,
       );
       expect(r.success && r.value.mimeType).toBe("image/webp");
       expect(requests[0]).toMatchObject({
@@ -303,6 +307,8 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "png",
+        "",
+        null,
       );
       expect(r.success === false && r.error).toBe(
         "generateImageLocal failed: steps must be between 1 and 50 for Z-Image Turbo.",
@@ -325,6 +331,8 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "png",
+        "",
+        null,
       );
       expect(r.success === false && r.error).toBe(
         "generateImageLocal failed: no local model server answered at http://127.0.0.1:9/v1. Start one with:\n  agency local serve --image z-image-turbo",
@@ -344,6 +352,8 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "png",
+        "",
+        null,
       );
       expect(mlx.success === false && mlx.error).toMatch(
         /is an MLX model\. Local image models are diffusers models/,
@@ -357,6 +367,8 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "png",
+        "",
+        null,
       );
       expect(gguf.success === false && gguf.error).toMatch(/is a GGUF model/);
       const gif = await _generateImageLocal(
@@ -368,6 +380,8 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "gif",
+        "",
+        null,
       );
       expect(gif.success === false && gif.error).toBe(
         'generateImageLocal failed: format "gif" is not supported. Use png, jpeg, or webp.',
@@ -381,11 +395,55 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "png",
+        "",
+        null,
       );
       expect(empty.success === false && empty.error).toBe(
         "generateImageLocal failed: prompt cannot be empty.",
       );
       expect(requests).toEqual([]);
+    });
+  });
+
+  it("sends the adapter name and scale when a LoRA is asked for", async () => {
+    serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "a cat",
+        "diffusers:Laxhar/noobai-XL-1.1",
+        "1024x1024",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "sketch",
+        0.8,
+      );
+      expect(r.success).toBe(true);
+      expect(requests[0]).toMatchObject({
+        model: "Laxhar/noobai-XL-1.1",
+        lora: "sketch",
+        lora_scale: 0.8,
+      });
+      // The fields are sent only when asked for: an empty name and a null
+      // scale are the server's defaults, not settings.
+      expect(Object.keys(requests[0])).not.toContain("negative_prompt");
+      serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+      await _generateImageLocal(
+        "a cat",
+        "diffusers:Laxhar/noobai-XL-1.1",
+        "1024x1024",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+      );
+      expect(Object.keys(requests[0])).not.toContain("lora");
+      expect(Object.keys(requests[0])).not.toContain("lora_scale");
     });
   });
 });

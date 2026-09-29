@@ -28,7 +28,8 @@ function rules(code: string): string {
   return run.stdout.toString().trim();
 }
 
-// The model_index.json files of the catalog models, as downloaded.
+// The model_index.json files of the catalog models and of NoobAI-XL
+// 1.1, an SDXL finetune, as downloaded.
 const ZIMAGE_INDEX = {
   _class_name: "ZImagePipeline",
   _diffusers_version: "0.36.0.dev0",
@@ -48,6 +49,21 @@ const CHROMA_INDEX = {
   text_encoder: ["transformers", "T5EncoderModel"],
   tokenizer: ["transformers", "T5Tokenizer"],
   transformer: ["diffusers", "ChromaTransformer2DModel"],
+  vae: ["diffusers", "AutoencoderKL"],
+};
+
+const SDXL_INDEX = {
+  _class_name: "StableDiffusionXLPipeline",
+  _diffusers_version: "0.31.0",
+  feature_extractor: [null, null],
+  force_zeros_for_empty_prompt: true,
+  image_encoder: [null, null],
+  scheduler: ["diffusers", "EulerDiscreteScheduler"],
+  text_encoder: ["transformers", "CLIPTextModel"],
+  text_encoder_2: ["transformers", "CLIPTextModelWithProjection"],
+  tokenizer: ["transformers", "CLIPTokenizer"],
+  tokenizer_2: ["transformers", "CLIPTokenizer"],
+  unet: ["diffusers", "UNet2DConditionModel"],
   vae: ["diffusers", "AutoencoderKL"],
 };
 
@@ -72,7 +88,12 @@ const KLEIN_INDEX = {
   vae: ["diffusers", "AutoencoderKLFlux2"],
 };
 
-type Family = "ZImagePipeline" | "ChromaPipeline" | "QwenImagePipeline" | "Flux2KleinPipeline";
+type Family =
+  | "ZImagePipeline"
+  | "ChromaPipeline"
+  | "QwenImagePipeline"
+  | "Flux2KleinPipeline"
+  | "StableDiffusionXLPipeline";
 
 /** The family label for a model_index.json, or the refusal message. */
 function familyOf(index: Record<string, unknown>): string {
@@ -87,15 +108,27 @@ except ValueError as e:
 
 /** Runs check_request for a family and prints the result, or the error.
  *  The body is parsed from JSON in Python, since JSON's true and null are
- *  not Python's. */
-function check(family: Family, body: unknown): string {
+ *  not Python's. `adaptersDir` is the configured adapters folder, if any. */
+function check(family: Family, body: unknown, adaptersDir: string | null = null): string {
   return rules(`
 import json
 body = json.loads(${JSON.stringify(JSON.stringify(body))})
+adapters_dir = json.loads(${JSON.stringify(JSON.stringify(adaptersDir))})
 try:
-    print(json.dumps(check_request(FAMILIES["${family}"], body), sort_keys=True))
+    print(json.dumps(check_request(FAMILIES["${family}"], body, adapters_dir), sort_keys=True))
 except RequestError as e:
     print("ERROR", e.status, e)
+`);
+}
+
+/** adapter_path for one request name: the path, or the refusal. */
+function adapterPath(name: unknown): string {
+  return rules(`
+import json
+try:
+    print(adapter_path("/a", json.loads(${JSON.stringify(JSON.stringify(name))})))
+except RequestError as e:
+    print("REFUSED", e)
 `);
 }
 
@@ -121,11 +154,12 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
     expect(text).not.toMatch(/^\s*(import|from)\s+(torch|diffusers|transformers)/m);
   });
 
-  it("accepts the catalog models' model_index.json", () => {
+  it("accepts the catalog models' model_index.json, and an SDXL finetune's", () => {
     expect(familyOf(ZIMAGE_INDEX)).toBe("Z-Image Turbo");
     expect(familyOf(CHROMA_INDEX)).toBe("Chroma");
     expect(familyOf(QWEN_IMAGE_INDEX)).toBe("Qwen-Image");
     expect(familyOf(KLEIN_INDEX)).toBe("FLUX.2 [klein]");
+    expect(familyOf(SDXL_INDEX)).toBe("SDXL");
   });
 
   it("refuses a FLUX.2 [klein] model that is not step-distilled", () => {
@@ -148,7 +182,21 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
 
   it("refuses a pipeline class it does not serve", () => {
     expect(familyOf({ ...ZIMAGE_INDEX, _class_name: "StableDiffusionPipeline" })).toBe(
-      'REFUSED diffusersImageServer.py serves ChromaPipeline, Flux2KleinPipeline, QwenImagePipeline, and ZImagePipeline models. This model_index.json names "StableDiffusionPipeline".',
+      'REFUSED diffusersImageServer.py serves ChromaPipeline, Flux2KleinPipeline, QwenImagePipeline, StableDiffusionXLPipeline, and ZImagePipeline models. This model_index.json names "StableDiffusionPipeline".',
+    );
+  });
+
+  it("refuses a setting whose value differs from the table, or that is missing", () => {
+    expect(familyOf({ ...SDXL_INDEX, force_zeros_for_empty_prompt: false })).toBe(
+      'REFUSED SDXL\'s "force_zeros_for_empty_prompt" must be True. This model_index.json says False.',
+    );
+    const { force_zeros_for_empty_prompt: _setting, ...noSetting } = SDXL_INDEX;
+    expect(familyOf(noSetting)).toBe(
+      'REFUSED SDXL\'s "force_zeros_for_empty_prompt" must be True. This model_index.json does not set it.',
+    );
+    // A setting is not a component: Z-Image's table has none, so one is refused as a component.
+    expect(familyOf({ ...ZIMAGE_INDEX, force_zeros_for_empty_prompt: true })).toBe(
+      'REFUSED Z-Image Turbo has no component "force_zeros_for_empty_prompt", and this model_index.json names one.',
     );
   });
 
@@ -182,9 +230,13 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
       seed: 7,
       negative_prompt: "",
       output_format: "png",
+      lora: null,
+      lora_scale: 1.0,
     });
     const chroma = JSON.parse(check("ChromaPipeline", { prompt: "a cat", seed: 7 }));
     expect([chroma.steps, chroma.guidance]).toEqual([40, 3.0]);
+    const sdxl = JSON.parse(check("StableDiffusionXLPipeline", { prompt: "a cat", seed: 7 }));
+    expect([sdxl.steps, sdxl.guidance]).toEqual([28, 5.5]);
   });
 
   it("picks a seed when the request names none", () => {
@@ -280,9 +332,185 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
     );
   });
 
+  it("applies an adapter from the folder only to the request that names it", () => {
+    const named = JSON.parse(
+      check(
+        "StableDiffusionXLPipeline",
+        { prompt: "a cat", lora: "sketch", lora_scale: 0.8 },
+        "/a",
+      ),
+    );
+    expect([named.lora, named.lora_scale]).toEqual(["sketch", 0.8]);
+    const unscaled = JSON.parse(
+      check("StableDiffusionXLPipeline", { prompt: "a cat", lora: "inky" }, "/a"),
+    );
+    expect([unscaled.lora, unscaled.lora_scale]).toEqual(["inky", 1.0]);
+    const none = JSON.parse(check("StableDiffusionXLPipeline", { prompt: "a cat" }, "/a"));
+    expect([none.lora, none.lora_scale]).toEqual([null, 1.0]);
+  });
+
+  it("refuses an adapter with no folder configured, and one for a family that takes none", () => {
+    expect(check("StableDiffusionXLPipeline", { prompt: "a cat", lora: "sketch" })).toBe(
+      "ERROR 400 This server has no adapters folder. Set client.adaptersDir in agency.json to the folder your .safetensors adapters are in, and start the server again.",
+    );
+    expect(check("ChromaPipeline", { prompt: "a cat", lora: "sketch" }, "/a")).toBe(
+      "ERROR 400 Chroma does not take LoRA adapters. Leave lora empty.",
+    );
+  });
+
+  it("refuses a scale without an adapter, or out of range", () => {
+    expect(check("StableDiffusionXLPipeline", { prompt: "a cat", lora_scale: 1 })).toBe(
+      "ERROR 400 lora_scale needs lora: it says how strongly to apply the adapter.",
+    );
+    const message =
+      "ERROR 400 lora_scale must be a number from 0 to 2.0. 1 applies the adapter as trained.";
+    const loaded = "/a";
+    expect(
+      check(
+        "StableDiffusionXLPipeline",
+        { prompt: "a cat", lora: "sketch", lora_scale: 3 },
+        loaded,
+      ),
+    ).toBe(message);
+    expect(
+      check(
+        "StableDiffusionXLPipeline",
+        { prompt: "a cat", lora: "sketch", lora_scale: "1" },
+        loaded,
+      ),
+    ).toBe(message);
+    expect(
+      check(
+        "StableDiffusionXLPipeline",
+        { prompt: "a cat", lora: "sketch", lora_scale: true },
+        loaded,
+      ),
+    ).toBe(message);
+  });
+
+  it("joins an adapter name to the folder, and refuses a name that is not one file name", () => {
+    expect(adapterPath("sketch")).toBe("/a/sketch.safetensors");
+    expect(adapterPath("my-style_2")).toBe("/a/my-style_2.safetensors");
+    expect(adapterPath("style.v2")).toBe("/a/style.v2.safetensors");
+    const refused =
+      'REFUSED lora must be an adapter\'s name: its file name in the adapters folder without .safetensors, such as "sketch" for sketch.safetensors. Got ';
+    expect(adapterPath("../x")).toBe(`${refused}'../x'.`);
+    expect(adapterPath("a/b")).toBe(`${refused}'a/b'.`);
+    expect(adapterPath("sketch.safetensors")).toBe(`${refused}'sketch.safetensors'.`);
+    expect(adapterPath("")).toBe(`${refused}''.`);
+    expect(adapterPath(".")).toBe(`${refused}'.'.`);
+    expect(adapterPath(7)).toBe(`${refused}7.`);
+  });
+
+  it("lists the adapters in a folder by name, and none for a folder that is not there", () => {
+    const out = rules(`
+import os, tempfile
+d = tempfile.mkdtemp()
+for name in ["b.safetensors", "a.safetensors", "notes.txt"]:
+    open(os.path.join(d, name), "w").close()
+print(adapter_names(d))
+print(adapter_names(os.path.join(d, "missing")))
+`);
+    expect(out.split("\n")).toEqual(["['a', 'b']", "[]"]);
+  });
+
+  it("lists only the adapters a request could load", () => {
+    // A symlink, a folder, and a file whose name a request cannot spell
+    // are all left out, so /health never lists an adapter that then fails.
+    const out = rules(`
+import os, shutil, tempfile
+d = tempfile.mkdtemp()
+open(os.path.join(d, "style.v2.safetensors"), "w").close()
+open(os.path.join(d, "x.safetensors.safetensors"), "w").close()
+os.mkdir(os.path.join(d, "folder.safetensors"))
+os.symlink(os.path.join(d, "style.v2.safetensors"), os.path.join(d, "link.safetensors"))
+print(adapter_names(d))
+shutil.rmtree(d)
+`);
+    expect(out).toBe("['style.v2']");
+  });
+
+  it("finds an adapter's file and its stamp, and refuses a symlink or a missing file", () => {
+    const out = rules(`
+import os, shutil, tempfile
+d = tempfile.mkdtemp()
+target = os.path.join(d, "sketch.safetensors")
+with open(target, "w") as f:
+    f.write("one")
+path, stamp = existing_adapter(d, "sketch")
+print(path == target, stamp[1])
+with open(target, "w") as f:
+    f.write("retrained")
+print(existing_adapter(d, "sketch")[1] != stamp)
+os.symlink(target, os.path.join(d, "link.safetensors"))
+for name in ["link", "missing"]:
+    try:
+        existing_adapter(d, name)
+    except RequestError as e:
+        print(str(e).replace(d, "DIR"))
+shutil.rmtree(d)
+`);
+    expect(out.split("\n")).toEqual([
+      "True 3",
+      "True",
+      'There is no adapter "link" in DIR. It has sketch.',
+      'There is no adapter "missing" in DIR. It has sketch.',
+    ]);
+  });
+
+  it("refuses an adapters folder that is a symlink or not a folder", () => {
+    const out = rules(`
+import os, shutil, tempfile
+d = tempfile.mkdtemp()
+folder = os.path.join(d, "adapters")
+os.mkdir(folder)
+os.symlink(folder, os.path.join(d, "link"))
+print(check_adapters_dir(folder) == folder, check_adapters_dir(None))
+for name in ["link", "missing"]:
+    try:
+        check_adapters_dir(os.path.join(d, name))
+    except ValueError as e:
+        print(str(e).replace(d, "DIR"))
+shutil.rmtree(d)
+`);
+    expect(out.split("\n")).toEqual([
+      "True None",
+      "--adapters-dir DIR/link is a symlink. Name the folder itself.",
+      "--adapters-dir DIR/missing is not a folder.",
+    ]);
+  });
+
+  it("loads each adapter under a fresh name without dots, and keeps at most two", () => {
+    const out = rules(`
+a = LoadedAdapters(limit=2)
+def use(name, stamp):
+    found = a.find(name, stamp)
+    if found is not None:
+        return f"{name}: kept {found}"
+    dropped = a.make_room(name)
+    loaded_as = a.next_name()
+    a.add(name, loaded_as, stamp)
+    return f"{name}: load {loaded_as}, unload {dropped}"
+print(use("style.v2", [1, 10]))
+print(use("sketch", [1, 20]))
+print(use("style.v2", [1, 10]))
+print(use("inky", [1, 30]))
+print(use("style.v2", [2, 11]))
+`);
+    expect(out.split("\n")).toEqual([
+      "style.v2: load adapter_0, unload []",
+      "sketch: load adapter_1, unload []",
+      "style.v2: kept adapter_0",
+      // sketch was used longest ago, so it makes room for inky.
+      "inky: load adapter_2, unload ['adapter_1']",
+      // A retrained file has a new stamp: the old load goes, the new one gets a new name.
+      "style.v2: load adapter_3, unload ['adapter_0']",
+    ]);
+  });
+
   it("refuses a field it does not know, naming the ones it takes", () => {
     expect(check("ZImagePipeline", { prompt: "a cat", style: "vivid" })).toBe(
-      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, and n.",
+      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, and lora_scale.",
     );
   });
 
@@ -307,7 +535,7 @@ for family in FAMILIES.values():
     r = check_request(family, body)
     print(r["width"], r["height"], r["steps"])
 `);
-    expect(out.split("\n")).toEqual(["512 512 2", "512 512 2", "512 512 2", "512 512 2"]);
+    expect(out.split("\n")).toEqual(Array(5).fill("512 512 2"));
   });
 
   it("passes guidance to the argument each family's pipeline reads", () => {

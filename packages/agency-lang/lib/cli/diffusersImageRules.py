@@ -6,6 +6,7 @@ CI runs these through python3; it has no torch.
 Nothing here may import torch or diffusers. A test checks the imports.
 """
 
+import os
 import random
 
 # The one diffusers release these rules and the server were written
@@ -51,7 +52,26 @@ FIELDS = [
     "output_format",
     "response_format",
     "n",
+    "lora",
+    "lora_scale",
 ]
+
+# A request names a LoRA adapter by its file's name in the adapters folder
+# (`client.adaptersDir`), without the extension: "sketch" for
+# sketch.safetensors. One path segment, so a name can never leave the
+# folder. Only this format: a .bin or .pt adapter loads through pickle,
+# which runs code.
+ADAPTER_EXTENSION = ".safetensors"
+
+# How strongly an adapter is applied. 1.0 is as trained; the model cards
+# for style adapters suggest 0.5 to 1.2, and above 2 the image falls apart.
+MAX_LORA_SCALE = 2.0
+DEFAULT_LORA_SCALE = 1.0
+
+# How many adapters stay loaded at once. Two lets a user compare two
+# adapters without reloading either; more would hold GPU memory for
+# adapters no request is using.
+MAX_LOADED_ADAPTERS = 2
 
 # What each family takes, keyed by `_class_name` in model_index.json.
 #
@@ -68,6 +88,10 @@ FIELDS = [
 #                    the negative prompt sent when a request has none.
 #                    Qwen-Image runs guidance only when it gets one, even
 #                    a blank one.
+#   takes_lora       True: the server may load LoRA adapters for it, and a
+#                    request may name one. Every family's pipeline can load
+#                    LoRA; only SDXL, the family people train adapters for,
+#                    has been tried with them.
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
@@ -84,6 +108,7 @@ FAMILIES = {
         "takes_guidance": False,
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
+        "takes_lora": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -102,6 +127,7 @@ FAMILIES = {
         "takes_guidance": True,
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
+        "takes_lora": False,
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -124,6 +150,7 @@ FAMILIES = {
         # and true_cfg_scale sets the strength of classifier-free guidance.
         "guidance_arg": "true_cfg_scale",
         "default_negative_prompt": " ",
+        "takes_lora": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
@@ -144,6 +171,7 @@ FAMILIES = {
         "takes_guidance": False,
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
+        "takes_lora": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3ForCausalLM"],
@@ -154,6 +182,34 @@ FAMILIES = {
         # Only the step-distilled checkpoint is served. The base model
         # needs guidance and about 50 steps, which this row does not allow.
         "settings": {"is_distilled": True},
+    },
+    # SDXL and its finetunes: Illustrious, NoobAI, and base SDXL share one
+    # model_index.json shape. The steps and guidance are NoobAI-XL's card;
+    # base SDXL's card says 50 steps at 5.0, well inside the caps.
+    "StableDiffusionXLPipeline": {
+        "label": "SDXL",
+        "pipeline": "StableDiffusionXLPipeline",
+        "default_steps": 28,
+        "max_steps": 80,
+        "default_guidance": 5.5,
+        "takes_guidance": True,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
+        "takes_lora": True,
+        "components": {
+            "feature_extractor": [None, None],
+            "image_encoder": [None, None],
+            "scheduler": ["diffusers", "EulerDiscreteScheduler"],
+            "text_encoder": ["transformers", "CLIPTextModel"],
+            "text_encoder_2": ["transformers", "CLIPTextModelWithProjection"],
+            "tokenizer": ["transformers", "CLIPTokenizer"],
+            "tokenizer_2": ["transformers", "CLIPTokenizer"],
+            "unet": ["diffusers", "UNet2DConditionModel"],
+            "vae": ["diffusers", "AutoencoderKL"],
+        },
+        # Every SDXL checkpoint sets this; it makes an empty negative prompt
+        # encode as zeros, as the model was trained.
+        "settings": {"force_zeros_for_empty_prompt": True},
     },
 }
 
@@ -323,6 +379,169 @@ def _format_of(body):
     return fmt
 
 
+def adapter_path(adapters_dir, name):
+    """The file the adapter `name` is, inside the folder. Raises RequestError
+    for a name that is not one plain file name: empty, a dot name, one with
+    a path separator, or one that already carries the extension.
+    existing_adapter checks the file itself."""
+    bad = (
+        not isinstance(name, str)
+        or name in ("", ".", "..")
+        or "/" in name
+        or "\\" in name
+        or name.endswith(ADAPTER_EXTENSION)
+    )
+    if bad:
+        raise RequestError(
+            f"lora must be an adapter's name: its file name in the adapters folder without "
+            f'{ADAPTER_EXTENSION}, such as "sketch" for sketch{ADAPTER_EXTENSION}. Got {name!r}.'
+        )
+    return os.path.join(adapters_dir, name + ADAPTER_EXTENSION)
+
+
+def _adapter_name_of(entry):
+    """The name a request uses for a file in the folder, or None for a file
+    no request can name: another format, or a name adapter_path refuses,
+    such as "x.safetensors" for x.safetensors.safetensors."""
+    if not entry.endswith(ADAPTER_EXTENSION):
+        return None
+    name = entry[: -len(ADAPTER_EXTENSION)]
+    try:
+        adapter_path("", name)
+    except RequestError:
+        return None
+    return name
+
+
+def adapter_names(adapters_dir):
+    """The adapters in the folder, by name, for a message or /health. Reads
+    the folder fresh, so an adapter dropped in after start-up is listed.
+    Lists only what existing_adapter would load: a symlink, a folder, or a
+    file whose name a request cannot spell is left out."""
+    try:
+        entries = os.listdir(adapters_dir)
+    except OSError:
+        return []
+    names = []
+    for entry in entries:
+        name = _adapter_name_of(entry)
+        path = os.path.join(adapters_dir, entry)
+        if name is not None and not os.path.islink(path) and os.path.isfile(path):
+            names.append(name)
+    return sorted(names)
+
+
+def check_adapters_dir(adapters_dir):
+    """The folder, once it is known to be a directory and not a symlink, or
+    None when none is configured. Raises ValueError with the message to
+    fail with."""
+    if adapters_dir is None:
+        return None
+    if os.path.islink(adapters_dir):
+        raise ValueError(f"--adapters-dir {adapters_dir} is a symlink. Name the folder itself.")
+    if not os.path.isdir(adapters_dir):
+        raise ValueError(f"--adapters-dir {adapters_dir} is not a folder.")
+    return adapters_dir
+
+
+def existing_adapter(adapters_dir, name):
+    """(path, stamp) for the adapter `name`: its file, and the file's
+    modification time and size, which change when the adapter is trained
+    again. Raises RequestError for a name adapter_path refuses, and for a
+    file that is missing, is not a plain file, or is a symlink, naming what
+    the folder holds."""
+    path = adapter_path(adapters_dir, name)
+    try:
+        info = os.lstat(path)
+    except OSError:
+        info = None
+    if info is None or os.path.islink(path) or not os.path.isfile(path):
+        have = adapter_names(adapters_dir)
+        listing = join_names(have) if have else "no adapters"
+        raise RequestError(f'There is no adapter "{name}" in {adapters_dir}. It has {listing}.')
+    return path, [info.st_mtime_ns, info.st_size]
+
+
+class LoadedAdapters:
+    """Which adapters the pipeline holds, and the name each is loaded under.
+
+    The pipeline does not get the file name as the adapter's name: torch
+    refuses a dot in a module name, and "style.v2" is a common file name.
+    Each load gets a fresh name instead, adapter_0, adapter_1, and so on,
+    so a name left behind by a failed load is never reused.
+
+    At most `limit` adapters stay loaded. An SDXL adapter can be close to a
+    gigabyte, and a model calling generateImageLocal may try every adapter
+    in the folder, so the one used longest ago is unloaded to make room.
+
+    This class only keeps the books. The server does the loading and
+    unloading it says to do."""
+
+    def __init__(self, limit=MAX_LOADED_ADAPTERS):
+        self.limit = limit
+        # Oldest use first: [{"name", "loaded_as", "stamp"}].
+        self.entries = []
+        self.count = 0
+
+    def find(self, name, stamp):
+        """The name `name` is loaded under, or None when it is not loaded or
+        its file has changed since. Marks it as just used."""
+        for entry in self.entries:
+            if entry["name"] == name and entry["stamp"] == stamp:
+                self.entries.remove(entry)
+                self.entries.append(entry)
+                return entry["loaded_as"]
+        return None
+
+    def make_room(self, name):
+        """The loaded names to unload before `name` is loaded: its own
+        earlier load, whose file has changed, and the adapters used longest
+        ago, until one more fits. Forgets them."""
+        drop = [entry for entry in self.entries if entry["name"] == name]
+        kept = [entry for entry in self.entries if entry["name"] != name]
+        while len(kept) >= self.limit:
+            drop.append(kept.pop(0))
+        self.entries = kept
+        return [entry["loaded_as"] for entry in drop]
+
+    def next_name(self):
+        """A name no load has used yet."""
+        loaded_as = f"adapter_{self.count}"
+        self.count += 1
+        return loaded_as
+
+    def add(self, name, loaded_as, stamp):
+        """Records a load that finished."""
+        self.entries.append({"name": name, "loaded_as": loaded_as, "stamp": stamp})
+
+
+def _lora_of(rules, body, adapters_dir):
+    """(name or None, scale) for a request. A request that names no adapter
+    gets none, whatever the folder holds: an adapter changes every image,
+    so it is applied only when asked for."""
+    name = body.get("lora")
+    scale = body.get("lora_scale")
+    if name is None:
+        if scale is not None:
+            raise RequestError("lora_scale needs lora: it says how strongly to apply the adapter.")
+        return None, DEFAULT_LORA_SCALE
+    if not rules["takes_lora"]:
+        raise RequestError(f"{rules['label']} does not take LoRA adapters. Leave lora empty.")
+    if adapters_dir is None:
+        raise RequestError(
+            "This server has no adapters folder. Set client.adaptersDir in agency.json to the "
+            "folder your .safetensors adapters are in, and start the server again."
+        )
+    adapter_path(adapters_dir, name)
+    if scale is None:
+        return name, DEFAULT_LORA_SCALE
+    if not _is_number(scale) or scale < 0 or scale > MAX_LORA_SCALE:
+        raise RequestError(
+            f"lora_scale must be a number from 0 to {MAX_LORA_SCALE}. 1 applies the adapter as trained."
+        )
+    return name, float(scale)
+
+
 def _check_openai_fields(body):
     """The OpenAI fields this server takes only one value of."""
     response_format = body.get("response_format")
@@ -348,15 +567,17 @@ def _check_unknown_fields(body):
         )
 
 
-def check_request(rules, body):
+def check_request(rules, body, adapters_dir=None):
     """The checked request, with the family's defaults filled in and a
-    random seed when none was given. Raises RequestError with a message
-    that says what the model takes instead."""
+    random seed when none was given. `adapters_dir` is the folder LoRA
+    adapters come from, or None when none is configured. Raises
+    RequestError with a message that says what the model takes instead."""
     if not isinstance(body, dict):
         raise RequestError("The request body must be a JSON object.")
     _check_unknown_fields(body)
     _check_openai_fields(body)
     width, height = parse_size(body.get("size") or DEFAULT_SIZE)
+    lora, lora_scale = _lora_of(rules, body, adapters_dir)
     return {
         "prompt": _prompt_of(body),
         "width": width,
@@ -366,6 +587,8 @@ def check_request(rules, body):
         "seed": _seed_of(body),
         "negative_prompt": _negative_prompt_of(rules, body),
         "output_format": _format_of(body),
+        "lora": lora,
+        "lora_scale": lora_scale,
     }
 
 

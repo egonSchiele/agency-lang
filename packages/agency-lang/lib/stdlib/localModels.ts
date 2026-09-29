@@ -96,6 +96,21 @@ export {
 import { isModelKind, kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
 export { MODEL_KINDS, isModelKind, type ModelKind } from "./modelKind.js";
 
+/** The folder LoRA adapters come from, `client.adaptersDir`, or null when
+ *  it is not set. A relative path is taken from the folder the config file
+ *  is in, not the working directory: `"./adapters"` in `myproject/agency.json`
+ *  is `myproject/adapters` even when `agency local serve` runs in
+ *  `myproject/src`. */
+export function configuredAdaptersDir(startDir: string = process.cwd()): string | null {
+  const target = defaultAliasTarget(startDir);
+  const configured = readAliasConfig(target).client?.adaptersDir;
+  if (typeof configured !== "string" || configured.length === 0) {
+    return null;
+  }
+  const configDir = target.kind === "file" ? path.dirname(target.path) : target.dir;
+  return path.resolve(configDir, configured);
+}
+
 /** Where downloaded models live, in precedence order:
  *   1. `AGENCY_MODELS_DIR` env var (per-machine override).
  *   2. `client.modelsDir` in the nearest `agency.json` (read at runtime, like

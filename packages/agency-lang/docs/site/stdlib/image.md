@@ -117,6 +117,8 @@ generateImageLocal(
   seed: number | null = null,
   negativePrompt: string = "",
   format: string = "png",
+  lora: string = "",
+  loraScale: number | null = null,
 ): Result<LocalImage>
 ```
 
@@ -126,6 +128,12 @@ Generate an image on this machine with a local image model. The model
   nothing is written; save the image with writeBinary. Returns a Result
   whose success value is { base64, mimeType, seed }.
 
+  A LoRA adapter is a small file that teaches an SDXL model a style or a
+  character. Put the file in your adapters folder (`client.adaptersDir`
+  in agency.json) and pass its file name without .safetensors:
+  `lora: "sketch"` for sketch.safetensors. Only the request that names it
+  gets it.
+
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
   @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768"
@@ -134,6 +142,8 @@ Generate an image on this machine with a local image model. The model
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
   @param negativePrompt - What the image should not contain. Leave it empty unless asked; some models refuse one
   @param format - "png", "jpeg", or "webp"
+  @param lora - The file name, without .safetensors, of an adapter in the adapters folder (client.adaptersDir). Empty applies none
+  @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
 
 **Parameters:**
 
@@ -147,6 +157,8 @@ Generate an image on this machine with a local image model. The model
 | seed | `number \| null` | null |
 | negativePrompt | `string` | "" |
 | format | `string` | "png" |
+| lora | `string` | "" |
+| loraScale | `number \| null` | null |
 
 **Returns:** `Result<LocalImage>`
 

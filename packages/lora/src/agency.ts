@@ -7,7 +7,7 @@ import {
   _findDownloadedServedModel,
   _localModelKindOf,
 } from "agency-lang/stdlib-lib/localModels.js";
-import { isServedUri, parseServedUri } from "agency-lang/stdlib-lib/modelBackend.js";
+import { isServedUri, parseServedUri, readModelJson } from "agency-lang/stdlib-lib/modelBackend.js";
 import { estimateMinutes } from "./estimate.js";
 import { runTraining, type Trained } from "./train.js";
 import { readSafetensorsHeader } from "./safetensors.js";
@@ -42,6 +42,9 @@ export type TrainPlan = {
  *  path. Throws when it is not an image model or not downloaded. The
  *  trainer then checks its model_index.json against the image server's
  *  family table before loading it. */
+/** The one pipeline the trainer trains. */
+const SDXL_PIPELINE = "StableDiffusionXLPipeline";
+
 function baseModelDir(base: string): string {
   const kind = _localModelKindOf(base);
   if (kind !== null && kind !== "image") {
@@ -63,6 +66,15 @@ function baseModelDir(base: string): string {
   }
   if (kind === null) {
     throw new Error(`lora: ${base} is not an image model: ${dir} has no model_index.json for one.`);
+  }
+  // Any diffusers folder counts as an image model, but the trainer only
+  // trains SDXL. Saying so here refuses the rest before anyone is asked to
+  // approve a run; the trainer checks the family table again after.
+  const pipeline = readModelJson(dir, "model_index.json")?._class_name;
+  if (pipeline !== SDXL_PIPELINE) {
+    throw new Error(
+      `lora: ${base} is a ${String(pipeline)} model. lora trains SDXL models only (${SDXL_PIPELINE}).`,
+    );
   }
   return dir;
 }

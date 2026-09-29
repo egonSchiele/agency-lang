@@ -101,9 +101,11 @@ describe("planning and running a training run", () => {
     expect(runs()).toEqual([]);
   });
 
-  it("refuses a base model that is not an image model", () => {
+  it("refuses a base image model that is not SDXL", () => {
     diffusersDir("not-a-model", { ...SDXL_INDEX, _class_name: "SomeOtherPipeline" });
-    expect(() => plan("sketch.safetensors", "./not-a-model")).toThrow("is not an image model");
+    expect(() => plan("sketch.safetensors", "./not-a-model")).toThrow(
+      "is a SomeOtherPipeline model. lora trains SDXL models only",
+    );
   });
 
   it("refuses an adapter that exists, and a linked partial file or samples folder", () => {

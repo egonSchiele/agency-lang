@@ -67,7 +67,7 @@ What each command does with one:
 | Command | A `diffusers` model |
 |---|---|
 | `agency local download` | Downloads only the files the pipeline reads (see "Downloading") |
-| `agency local serve` | Serves it with `--image`, and refuses it without the flag even when the catalog does not know it |
+| `agency local serve` | Serves it as an image model, with or without `--image`: any diffusers directory is one. The server refuses a pipeline family it does not serve |
 | `agency local remove -f` | Deletes it from `<modelsDir>/diffusers/` |
 | `agency run --local`, `agency agent --local` | Refuses: it is an image model |
 | `speakLocal` | Refuses |

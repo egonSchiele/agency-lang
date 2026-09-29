@@ -207,7 +207,7 @@ Browse what is available with `agency local list`. MLX entries show `mlx` in the
 agency local serve
 ```
 
-With no model named, this shows you the MLX models you have downloaded, and you pick the ones to serve. Name them yourself to skip the picker:
+With no model named, this shows you the MLX and diffusers models you have downloaded, each with its kind (chat, embedding, speech, or image), and you pick the ones to serve. Name them yourself to skip the picker:
 
 ```bash
 agency local serve mlx:mlx-community/Qwen3.8-27B-4bit

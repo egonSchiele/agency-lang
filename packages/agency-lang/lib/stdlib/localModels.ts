@@ -1324,19 +1324,22 @@ function companionsFor(
   return catalogEntry(value, modelTarget)?.companions ?? [];
 }
 
-/** Download a model and return where it is: the `.gguf` path, or the MLX
- *  model directory. `hubOptions` lets the CLI watch progress and lets tests
- *  point at a fake hub. */
 /** The download options, plus the kind to record when the user says what
  *  the model is. Without it, the catalog or the files decide. */
 export type ModelDownloadOptions = DownloadOptions & { kind?: ModelKind };
 
+/** Download a model and return where it is: the `.gguf` path, or the MLX
+ *  model directory. `hubOptions` lets the CLI watch progress and lets tests
+ *  point at a fake hub. */
 export async function _downloadModel(
   value: string,
   cacheDir: string = "",
   hubOptions: ModelDownloadOptions = {},
 ): Promise<string> {
   const model = _resolveModel(value);
+  if (hubOptions.kind !== undefined) {
+    refuseUnrecordableKind(value, model);
+  }
   if (model.backend !== "llama-cpp") {
     if (isServedModelDir(model.target)) {
       return path.resolve(model.target);
@@ -1373,6 +1376,23 @@ export async function _downloadModel(
   // written into the manifest.
   recordDownload(dir, target, path.basename(resolved));
   return resolved;
+}
+
+/** `--kind` is written into the record an mlx: or diffusers: download
+ *  keeps. A GGUF file and a directory have no such record, so the kind
+ *  would be dropped without a word. Refuse instead, naming what works. */
+function refuseUnrecordableKind(value: string, model: ResolvedModel): void {
+  if (model.backend === "llama-cpp") {
+    throw new Error(
+      `${value} is a GGUF model, which is always a chat model. Download it without --kind.`,
+    );
+  }
+  if (isServedModelDir(model.target)) {
+    throw new Error(
+      `${value} is a directory, and --kind is only recorded for a download. ` +
+        `Name its kind when serving it instead, for example: agency local serve --embedding ${value}`,
+    );
+  }
 }
 
 /** Writes the kind into a finished download's record. A null kind leaves

@@ -992,23 +992,43 @@ describe("runServe", () => {
     await handle.close();
   });
 
-  it("refuses a directory whose files say nothing about what the model is", async () => {
+  /** A model directory whose files match no kind rule. */
+  function mysteryModel(): string {
     const model = path.join(cacheDir, "mystery");
     fs.mkdirSync(model, { recursive: true });
     fs.writeFileSync(path.join(model, "config.json"), "{}");
     fs.writeFileSync(path.join(model, "model.safetensors"), "xxxxxxxx");
-    await expect(runServe([model], { port: 0 }, deps)).rejects.toThrow(
-      `${model} is a model directory of a shape agency does not know. Say what it is when ` +
-        `downloading: agency local download --kind <chat|embedding|speech|image> ${model}`,
+    return model;
+  }
+
+  it("refuses a directory whose files say nothing, naming the flags that say it", async () => {
+    const model = mysteryModel();
+    const refusal = runServe([model], { port: 0 }, deps);
+    await expect(refusal).rejects.toThrow(
+      `agency cannot tell from its files what kind of model ${model} is.`,
     );
+    await expect(refusal).rejects.toThrow(`agency local serve --embedding ${model}`);
+    await expect(refusal).rejects.not.toThrow("download --kind");
     expect(spawned).toEqual([]);
   });
 
-  it("refuses --image for a model that is not an image model", async () => {
-    recordedModel("org/a", true);
-    await expect(runServe([], { port: 0, image: ["mlx:org/a"] }, deps)).rejects.toThrow(
-      "mlx:org/a is a chat model, not an image model. Serve it with: agency local serve mlx:org/a",
-    );
+  it("takes the kind from a flag when the files say nothing", async () => {
+    const model = mysteryModel();
+    const handle = await runServe([], { port: 0, embedding: [model] }, deps);
+    expect(spawned[0][1].endsWith("/lib/cli/mlxEmbedServer.py")).toBe(true);
+    await handle.close();
+  });
+
+  it("takes the kind from a flag over the files, which can be wrong", async () => {
+    // An embedding model whose config names a ForCausalLM class, which the
+    // file rules read as chat.
+    recordedModel("org/emb-causal", true);
+    const handle = await runServe([], { port: 0, embedding: ["mlx:org/emb-causal"] }, deps);
+    expect(spawned[0][1].endsWith("/lib/cli/mlxEmbedServer.py")).toBe(true);
+    await handle.close();
+  });
+
+  it("refuses a flag the catalog disagrees with", async () => {
     await expect(runServe([], { port: 0, image: ["qwen3-tts-mlx"] }, deps)).rejects.toThrow(
       "qwen3-tts-mlx is a speech model, not an image model. Serve it with: agency local serve --speech qwen3-tts-mlx",
     );
@@ -1074,6 +1094,7 @@ describe("serveChoices", () => {
       backend: "mlx" as const,
       complete: true,
       layout: "agency" as const,
+      kind: "chat" as const,
     },
     {
       name: "org/a",
@@ -1082,6 +1103,7 @@ describe("serveChoices", () => {
       backend: "mlx" as const,
       complete: true,
       layout: "hub" as const,
+      kind: "chat" as const,
     },
     {
       name: "org/half",
@@ -1090,13 +1112,22 @@ describe("serveChoices", () => {
       backend: "mlx" as const,
       complete: false,
       layout: "agency" as const,
+      kind: "chat" as const,
+    },
+    {
+      name: "org/unknown",
+      path: "/m/mlx/org--unknown",
+      sizeBytes: 1e9,
+      backend: "mlx" as const,
+      complete: true,
+      layout: "agency" as const,
     },
   ];
 
   it("offers the complete served models by repo id, whichever layout holds them", () => {
     expect(serveChoices(downloaded)).toEqual([
-      { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
-      { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
+      { title: "org/a  (12.40 GB, chat)", value: "mlx:org/a" },
+      { title: "org/b  (4.20 GB, chat)", value: "mlx:org/b" },
     ]);
   });
 
@@ -1125,8 +1156,8 @@ describe("serveChoices", () => {
     ];
     expect(serveChoices(withEmb)).toEqual([
       { title: `${emb}  (2.28 GB, embedding)`, value: `mlx:${emb}` },
-      { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
-      { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
+      { title: "org/a  (12.40 GB, chat)", value: "mlx:org/a" },
+      { title: "org/b  (4.20 GB, chat)", value: "mlx:org/b" },
       { title: "org/img  (3.00 GB, image)", value: "diffusers:org/img" },
     ]);
   });
@@ -1140,6 +1171,7 @@ describe("serveChoices", () => {
         backend: "mlx" as const,
         complete: true,
         layout: "agency" as const,
+        kind: "chat" as const,
       },
       {
         name: "org/a",
@@ -1148,15 +1180,18 @@ describe("serveChoices", () => {
         backend: "mlx" as const,
         complete: true,
         layout: "hub" as const,
+        kind: "chat" as const,
       },
     ];
     expect(serveChoices(both).map((c) => c.value)).toEqual(["mlx:org/a"]);
   });
 
-  it("leaves out GGUF models and half-downloaded ones", () => {
+  it("leaves out GGUF models, half-downloaded ones, and ones of no known kind", () => {
     const titles = serveChoices(downloaded).map((c) => c.title);
     expect(titles.some((t) => t.includes("smollm2"))).toBe(false);
     expect(titles.some((t) => t.includes("half"))).toBe(false);
+    // serve would refuse it unflagged, and the picker cannot pass a flag.
+    expect(titles.some((t) => t.includes("unknown"))).toBe(false);
   });
 });
 
@@ -1168,6 +1203,7 @@ describe("pickModelsToServe", () => {
     backend: "mlx" as const,
     complete,
     layout: "agency" as const,
+    kind: "chat" as const,
   });
 
   function deps(over: Partial<PickDeps> = {}): PickDeps {

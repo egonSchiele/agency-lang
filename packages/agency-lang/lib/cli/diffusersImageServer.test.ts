@@ -150,7 +150,7 @@ import json
 rules = FAMILIES["${family}"]
 body = json.loads(${JSON.stringify(JSON.stringify(body))})
 request = check_request(rules, body)
-width, height = output_size(request["size"], None)
+width, height = output_size(request["size"], None, None)
 print(json.dumps(pipeline_args(rules, request, width, height), sort_keys=True))
 `),
   );
@@ -543,11 +543,77 @@ print(fit_box("none", 400, 300, 1024, 1024))
 
   it("makes the size the request gave, else the first picture's, else the default", () => {
     const out = rules(`
-print(output_size((512, 768), (4000, 3000)))
-print(output_size(None, (4000, 3000)))
-print(output_size(None, None))
+print(output_size((512, 768), "images", (4000, 3000)))
+print(output_size(None, "images", (4000, 3000)))
+print(output_size(None, None, None))
 `);
     expect(out.split("\n")).toEqual(["(512, 768)", "(1168, 880)", "(1024, 1024)"]);
+  });
+
+  it("takes no size from a control image: an empty size is the default", () => {
+    expect(rules(`print(output_size(None, "control_image", (4000, 3000)))`)).toBe("(1024, 1024)");
+  });
+
+  it("leaves the size of a request with a reference and no size to the picture", () => {
+    const reference = Buffer.from("png").toString("base64");
+    const out = rules(`
+rules = FAMILIES["Flux2KleinPipeline"]
+print(check_request(rules, {"prompt": "add a hat", "size": "", "images": ["${reference}"]})["size"])
+`);
+    expect(out).toBe("None");
+  });
+
+  it("refuses references for a family other than FLUX.2 [klein], naming klein", () => {
+    const reference = Buffer.from("png").toString("base64");
+    const out = rules(`
+try:
+    check_request(FAMILIES["ZImagePipeline"], {"prompt": "add a hat", "images": ["${reference}"]})
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe(
+      "Z-Image Turbo does not take reference images. Only FLUX.2 [klein] takes them.",
+    );
+  });
+
+  it("refuses more references than the images row allows", () => {
+    const reference = Buffer.from("png").toString("base64");
+    const out = rules(`
+try:
+    check_request(FAMILIES["Flux2KleinPipeline"], {"prompt": "add a hat", "images": ["${reference}"] * 5})
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe("images takes at most 4 images. This request has 5.");
+  });
+
+  it("refuses references together with a control image", () => {
+    const image = Buffer.from("png").toString("base64");
+    const out = rules(`
+body = {"prompt": "a cat", "controlnet": "scribble", "control_image": "${image}", "images": ["${image}"]}
+try:
+    check_request(FAMILIES["StableDiffusionXLPipeline"], body, None, "/c")
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe("a request takes one of control_image or images.");
+  });
+
+  it("refuses a reference with a side under 64 pixels or a shape past 8 to 1", () => {
+    const out = rules(`
+for width, height in [(63, 500), (64, 512), (100, 801), (1024, 1024)]:
+    print(reference_problem(width, height))
+print(image_problem("images", 63, 500) == reference_problem(63, 500))
+print(image_problem("control_image", 63, 500))
+`);
+    expect(out.split("\n")).toEqual([
+      "the picture is 63x500. A reference must be at least 64 pixels on each side.",
+      "None",
+      "the picture is 100x801. A reference can be at most 8 times as long as it is wide.",
+      "None",
+      "True",
+      "None",
+    ]);
   });
 
   it("takes a size from a picture at one megapixel or less, and refuses a picture too small", () => {
@@ -799,7 +865,7 @@ print(use("style.v2", [2, 11]))
 
   it("refuses a field it does not know, naming the ones it takes", () => {
     expect(check("ZImagePipeline", { prompt: "a cat", style: "vivid" })).toBe(
-      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, and control_invert.",
+      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, control_invert, and images.",
     );
   });
 

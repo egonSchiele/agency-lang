@@ -62,6 +62,7 @@ FIELDS = [
     "control_image",
     "control_scale",
     "control_invert",
+    "images",
 ]
 
 # A request names a LoRA adapter by its file's name in the adapters folder
@@ -84,6 +85,18 @@ CONTROLNET_FILES = ("config.json", "diffusion_pytorch_model.safetensors")
 MAX_CONTROL_SCALE = 2.0
 DEFAULT_CONTROL_SCALE = 1.0
 
+# A reference image. The model shrinks every reference to about one
+# megapixel, so a larger file buys nothing. `MAX_INPUT_IMAGE_BYTES` and
+# `MAX_REFERENCE_IMAGES` in lib/stdlib/localImageInputs.ts are the same.
+MAX_INPUT_IMAGE_BYTES = 20_000_000
+MAX_REFERENCE_IMAGES = 4
+
+# The smallest side and the most extreme shape FLUX.2 [klein] takes in a
+# reference. The pipeline checks both itself, but from inside the call,
+# where a failure is a server error; the server checks them on decode.
+MIN_REFERENCE_SIDE = 64
+MAX_REFERENCE_ASPECT = 8
+
 # The images a request can carry, one row per request field. The field a
 # request carries decides its mode; a request with no image is in "plain"
 # mode. `LOCAL_IMAGE_FIELDS` in lib/stdlib/localImageInputs.ts is the same
@@ -94,6 +107,8 @@ DEFAULT_CONTROL_SCALE = 1.0
 #   max_count  how many images the field takes. One is a base64 string,
 #              more is a list of them.
 #   max_bytes  the largest image, in bytes
+#   sets_size  True: with no size in the request, the output takes its
+#              shape from the field's first image. False: the default size.
 #   fit        how the server fits a decoded image to the output size:
 #              "letterbox" scales it to fit inside and centers it on black,
 #              "none" leaves it as it is
@@ -104,15 +119,30 @@ DEFAULT_CONTROL_SCALE = 1.0
 #   prepare    optional: the name of a step the server runs on a decoded
 #              image before fitting it. "invert" inverts a control image
 #              when the request asks.
+#   check      optional: the name of a check in CHECKS the server runs on a
+#              decoded image's size. It returns a refusal or None.
 INPUT_IMAGES = {
     "control_image": {
         "mode": "control",
         "max_count": 1,
         "max_bytes": MAX_IMAGE_BYTES,
+        # A control image is a drawing to follow, not a picture to keep.
+        "sets_size": False,
         "fit": "letterbox",
         "on_white": False,
         "refusal": "{label} does not take a ControlNet. Leave controlnet empty.",
         "prepare": "invert",
+    },
+    "images": {
+        "mode": "reference",
+        "max_count": MAX_REFERENCE_IMAGES,
+        "max_bytes": MAX_INPUT_IMAGE_BYTES,
+        "sets_size": True,
+        # The model only looks at a reference, so it can stay any shape.
+        "fit": "none",
+        "on_white": True,
+        "refusal": "{label} does not take reference images. Only {families} takes them.",
+        "check": "reference_problem",
     },
 }
 
@@ -120,6 +150,7 @@ INPUT_IMAGES = {
 # of a mode the request is not in is refused.
 MODE_FIELDS = {
     "control": ["controlnet", "control_image", "control_scale", "control_invert"],
+    "reference": ["images"],
 }
 
 # Room in a request body for everything but its images: the prompt and the
@@ -234,7 +265,8 @@ FAMILIES = {
     },
     "Flux2KleinPipeline": {
         "label": "FLUX.2 [klein]",
-        "pipelines": {"plain": "Flux2KleinPipeline"},
+        # One class does both: it edits when it is given images.
+        "pipelines": {"plain": "Flux2KleinPipeline", "reference": "Flux2KleinPipeline"},
         "default_steps": 4,
         "max_steps": 50,
         # The pipeline ignores guidance on a step-distilled model and warns
@@ -852,15 +884,43 @@ def derived_size(width, height):
     return out_width, out_height
 
 
-def output_size(size, first_image_size):
+def output_size(size, field, first_image_size):
     """(width, height) of the image to make: the size the request gave, or
-    else the size taken from its first input picture, or else the default
-    size. `first_image_size` is (width, height) of that picture, or None."""
+    else the size taken from its first input picture when the image field
+    `field` says it sets the size, or else the default size.
+    `first_image_size` is (width, height) of that picture, or None."""
     if size is not None:
         return size
-    if first_image_size is not None:
+    if first_image_size is not None and INPUT_IMAGES[field]["sets_size"]:
         return derived_size(*first_image_size)
     return parse_size(DEFAULT_SIZE)
+
+
+def reference_problem(width, height):
+    """Why FLUX.2 [klein] cannot take a reference of width x height, or
+    None when it can."""
+    if min(width, height) < MIN_REFERENCE_SIDE:
+        return (
+            f"the picture is {width}x{height}. A reference must be at least "
+            f"{MIN_REFERENCE_SIDE} pixels on each side."
+        )
+    if max(width, height) > MAX_REFERENCE_ASPECT * min(width, height):
+        return (
+            f"the picture is {width}x{height}. A reference can be at most "
+            f"{MAX_REFERENCE_ASPECT} times as long as it is wide."
+        )
+    return None
+
+
+# The checks a row of INPUT_IMAGES names in `check`.
+CHECKS = {"reference_problem": reference_problem}
+
+
+def image_problem(field, width, height):
+    """Why the server cannot take a decoded image of width x height in the
+    image field `field`, from the check its row names, or None."""
+    check = INPUT_IMAGES[field].get("check")
+    return None if check is None else CHECKS[check](width, height)
 
 
 def check_request(rules, body, adapters_dir=None, controlnets_dir=None):

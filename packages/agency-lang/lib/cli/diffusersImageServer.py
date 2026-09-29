@@ -7,7 +7,7 @@ GPU, loads LoRA adapters from `--adapters-dir` and ControlNets from
   POST /v1/images/generations  {"prompt", "size"?, "steps"?, "guidance"?, "seed"?,
                                 "negative_prompt"?, "output_format"?, "response_format"?, "n"?,
                                 "lora"?, "lora_scale"?, "controlnet"?, "control_image"?, "control_scale"?,
-                                "control_invert"?}
+                                "control_invert"?, "images"?}
   GET  /v1/models
   GET  /health                 {"status": "ok", "adapters": [names], "controlnets": [names]}
 
@@ -48,6 +48,7 @@ from diffusersImageRules import (  # noqa: E402
     existing_adapter,
     family_of,
     fit_box,
+    image_problem,
     join_names,
     output_size,
     pipeline_args,
@@ -78,7 +79,8 @@ def decode_image(data, field):
     EXIF orientation is applied, so a portrait photo from a phone stays
     upright. When the field's row says on_white, a transparent image is
     pasted onto white first; converting it directly would turn its
-    background black."""
+    background black. Then the check the field's row names, if any, runs
+    on the upright image's size."""
     from PIL import Image, ImageOps
 
     try:
@@ -98,6 +100,9 @@ def decode_image(data, field):
         image = image.convert("RGBA")
         white = Image.new("RGBA", image.size, (255, 255, 255, 255))
         image = Image.alpha_composite(white, image)
+    problem = image_problem(field, image.width, image.height)
+    if problem is not None:
+        raise RequestError(f"{field}: {problem}")
     return image.convert("RGB")
 
 
@@ -345,7 +350,7 @@ class Generator:
         field = request["image_field"]
         images = [prepared(decode_image(data, field), field, request) for data in request["input_images"]]
         first_size = images[0].size if images else None
-        width, height = output_size(request["size"], first_size)
+        width, height = output_size(request["size"], field, first_size)
         fitted_images = [fitted(image, field, width, height) for image in images]
         kwargs = {
             **pipeline_args(self.rules, request, width, height),

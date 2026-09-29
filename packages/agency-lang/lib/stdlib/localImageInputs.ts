@@ -37,6 +37,12 @@ export const LOCAL_IMAGE_FIELDS: Record<string, LocalImageField> = {
     maxBytes: MAX_CONTROL_IMAGE_BYTES,
     question: "Read this drawing to condition the image on?",
   },
+  images: {
+    mode: "reference",
+    maxCount: MAX_REFERENCE_IMAGES,
+    maxBytes: MAX_INPUT_IMAGE_BYTES,
+    question: "Read this picture to edit it?",
+  },
 };
 
 /** How many characters base64 turns `bytes` bytes into. */

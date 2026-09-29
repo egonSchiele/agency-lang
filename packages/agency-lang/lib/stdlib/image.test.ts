@@ -10,6 +10,10 @@ import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "./image.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import { registerMlxImageProvider } from "./mlxImage.js";
+import type { LocalImageInputs } from "./localImageInputs.js";
+
+/** The input images of a call with none. */
+const NO_INPUTS: LocalImageInputs = { field: null, files: [], settings: {} };
 
 type ImageImpl = (input: any, config: any) => Promise<any>;
 
@@ -320,7 +324,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(r.success).toBe(true);
       expect(r.success && r.value).toEqual({
@@ -358,7 +362,7 @@ describe("_generateImageLocal", () => {
         "webp",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(r.success && r.value.mimeType).toBe("image/webp");
       expect(requests[0]).toMatchObject({
@@ -386,7 +390,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(r.success === false && r.error).toBe(
         "generateImageLocal failed: steps must be between 1 and 50 for Z-Image Turbo.",
@@ -411,7 +415,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(r.success === false && r.error).toBe(
         "generateImageLocal failed: no local model server answered at http://127.0.0.1:9/v1. Start one with:\n  agency local serve --image z-image-turbo",
@@ -433,7 +437,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(mlx.success === false && mlx.error).toMatch(
         /is an MLX model\. Local image models are diffusers models/,
@@ -449,7 +453,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(gguf.success === false && gguf.error).toMatch(/is a GGUF model/);
       const gif = await _generateImageLocal(
@@ -463,7 +467,7 @@ describe("_generateImageLocal", () => {
         "gif",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(gif.success === false && gif.error).toBe(
         'generateImageLocal failed: format "gif" is not supported. Use png, jpeg, or webp.',
@@ -479,7 +483,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(empty.success === false && empty.error).toBe(
         "generateImageLocal failed: prompt cannot be empty.",
@@ -510,7 +514,13 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        { name: "scribble", image, scale: 0.8, invert: true },
+        {
+          field: "control_image",
+          files: [
+            { path: image, dir: path.dirname(image), filename: path.basename(image), question: "" },
+          ],
+          settings: { controlnet: "scribble", control_scale: 0.8, control_invert: true },
+        },
       );
     await withClient(realImage, async () => {
       const r = await generate(pose);
@@ -539,6 +549,44 @@ describe("_generateImageLocal", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  it("sends references as a list of their bytes in base64, never their paths", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "reference-")));
+    const cat = path.join(dir, "cat.png");
+    const hat = path.join(dir, "hat.png");
+    const HAT = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d]);
+    fs.writeFileSync(cat, PNG);
+    fs.writeFileSync(hat, HAT);
+    serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+    const file = (image: string) => ({
+      path: image,
+      dir,
+      filename: path.basename(image),
+      question: "",
+    });
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "add a hat to the cat",
+        "flux2-klein-4b",
+        "",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+        { field: "images", files: [file(cat), file(hat)], settings: {} },
+      );
+      expect(r.success).toBe(true);
+      expect(requests[0].images).toEqual([PNG.toString("base64"), HAT.toString("base64")]);
+      expect(requests[0].size).toBe("");
+      // The count is for the timeout and is not a request field.
+      expect(Object.keys(requests[0])).not.toContain("references");
+      expect(JSON.stringify(requests[0])).not.toContain(dir);
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it("sends the adapter name and scale when a LoRA is asked for", async () => {
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     await withClient(realImage, async () => {
@@ -553,7 +601,7 @@ describe("_generateImageLocal", () => {
         "png",
         "sketch",
         0.8,
-        null,
+        NO_INPUTS,
       );
       expect(r.success).toBe(true);
       expect(requests[0]).toMatchObject({
@@ -576,7 +624,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        null,
+        NO_INPUTS,
       );
       expect(Object.keys(requests[0])).not.toContain("lora");
       expect(Object.keys(requests[0])).not.toContain("lora_scale");

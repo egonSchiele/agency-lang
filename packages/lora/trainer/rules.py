@@ -138,7 +138,7 @@ def check_base_model(model_dir, family_of):
         rules = family_of(model_index)
     except ValueError as err:
         raise ArgumentError(str(err)) from err
-    if rules["pipeline"] != "StableDiffusionXLPipeline":
+    if rules["pipelines"]["plain"] != "StableDiffusionXLPipeline":
         raise ArgumentError(f"The trainer trains SDXL models. {model_dir} is {rules['label']}.")
     return rules
 

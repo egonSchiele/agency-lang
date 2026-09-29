@@ -34,9 +34,18 @@ const MAX_MEGAPIXELS = 4;
  *  already running before its own time starts. */
 const QUEUE_ALLOWANCE = 2;
 
-/** The megapixels of a "WxH" size, or the largest allowed when the size is
- *  missing or not in that shape. The server refuses a bad size anyway. */
+/** The megapixels of the size the server makes when a request leaves
+ *  `size` empty and has no picture to take it from: 1024x1024. A size taken
+ *  from a picture is never more. */
+const DEFAULT_MEGAPIXELS = (1024 * 1024) / 1_000_000;
+
+/** The megapixels of a "WxH" size: the default size's for an empty one,
+ *  and the largest allowed when the size is missing or not in that shape.
+ *  The server refuses a bad size anyway. */
 function megapixelsOf(size: string | undefined): number {
+  if (size === "") {
+    return DEFAULT_MEGAPIXELS;
+  }
   const match = /^(\d+)x(\d+)$/.exec(size ?? "");
   if (match === null) {
     return MAX_MEGAPIXELS;
@@ -45,18 +54,29 @@ function megapixelsOf(size: string | undefined): number {
 }
 
 /** How long one request may take: room for the slowest family at the steps
- *  and size asked for, plus one request queued ahead of it. The server caps
- *  both inputs, so this is bounded; at the caps it is about 107 minutes. It
- *  guards against a server that has stopped answering, not a slow one. */
-export function localImageTimeoutMs(steps: unknown, size: string | undefined): number {
+ *  and size asked for, plus one request queued ahead of it. Each reference
+ *  picture adds about as much work to every step as one more megapixel of
+ *  output, so it adds one megapixel to the budget. The server caps every
+ *  input, so this is bounded; at the caps with no reference it is about
+ *  107 minutes. It guards against a server that has stopped answering, not
+ *  a slow one. */
+export function localImageTimeoutMs(
+  steps: unknown,
+  size: string | undefined,
+  references: unknown = 0,
+): number {
   const budgetedSteps =
     typeof steps === "number" && steps > 0 ? Math.min(steps, MAX_STEPS) : MAX_STEPS;
-  return Math.ceil(QUEUE_ALLOWANCE * budgetedSteps * megapixelsOf(size) * STEP_MEGAPIXEL_MS);
+  const pictures = typeof references === "number" && references > 0 ? references : 0;
+  return Math.ceil(
+    QUEUE_ALLOWANCE * budgetedSteps * (megapixelsOf(size) + pictures) * STEP_MEGAPIXEL_MS,
+  );
 }
 
 /** The settings `config.metadata` may carry, sent as request fields of the
  *  same names. Anything else in metadata is not sent: the server refuses
- *  fields it does not know. */
+ *  fields it does not know. `metadata.references`, the number of reference
+ *  pictures, is read for the timeout only. */
 const SETTINGS = [
   "steps",
   "guidance",
@@ -68,6 +88,7 @@ const SETTINGS = [
   "control_image",
   "control_scale",
   "control_invert",
+  "images",
 ];
 
 /** An image from the local server, with the seed that made it. */
@@ -118,7 +139,9 @@ async function mlxImage(input: ImageInput, config: ImageConfig) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(localImageTimeoutMs(body.steps, config.size)),
+      signal: AbortSignal.timeout(
+        localImageTimeoutMs(body.steps, config.size, config.metadata?.references),
+      ),
     });
   } catch (err) {
     const cause = (err as { cause?: { code?: string } }).cause?.code;

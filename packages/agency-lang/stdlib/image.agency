@@ -1,6 +1,7 @@
 import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "agency-lang/stdlib-lib/image.js"
 import { _cropImage, _imageSize, _pasteImages } from "agency-lang/stdlib-lib/imageTools.js"
 import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { _localImageInputs } from "agency-lang/stdlib-lib/localImageInputs.js"
 import { dirname, basename } from "std::path"
 
 /** @module
@@ -139,7 +140,7 @@ export type LocalImage = {
 export def generateImageLocal(
   prompt: string,
   model: string,
-  size: string = "1024x1024",
+  size: string = "",
   steps: number | null = null,
   guidance: number | null = null,
   seed: number | null = null,
@@ -151,6 +152,7 @@ export def generateImageLocal(
   controlImage: string = "",
   controlScale: number | null = null,
   invertControlImage: boolean = false,
+  images: string[] = [],
 ): Result<LocalImage> raises <std::readImage> {
   """
   Generate an image on this machine with a local image model. The model
@@ -176,9 +178,15 @@ export def generateImageLocal(
   The scribble ControlNet reads white lines on black. For a drawing made
   with dark lines on white paper, pass `invertControlImage: true`.
 
+  FLUX.2 [klein] edits pictures. Pass up to 4 paths in `images` and say in
+  the prompt what to change: `generateImageLocal("add a hat to the
+  character", "flux2-klein-4b", images: ["cat.png"])`. Each picture is read
+  from this machine, under std::readImage, and never uploaded. With `size`
+  left empty, the result keeps the first picture's shape.
+
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
-  @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768"
+  @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768". Empty is 1024x1024. Leave it empty when editing a picture, and the result keeps the picture's shape
   @param steps - How many refinement passes to make. More is slower and usually more detailed. Null uses the model's own default
   @param guidance - How closely to follow the prompt; higher sticks to it more literally. Leave it null unless asked: null uses the model's own default, and some models refuse any guidance
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
@@ -190,21 +198,16 @@ export def generateImageLocal(
   @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
   @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
   @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
+  @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] takes them, and at most 4
   """
-  if ((controlnet == "") != (controlImage == "")) {
-    return failure("generateImageLocal failed: controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.")
+  // Every input path is checked before the first interrupt, so a call that
+  // is going to fail asks for nothing.
+  const inputs = try _localImageInputs(controlnet, controlImage, controlScale, invertControlImage, images)
+  if (isFailure(inputs)) {
+    return inputs
   }
-  let control = null
-  if (controlImage != "") {
-    const real = try _realTarget(controlImage)
-    if (isFailure(real)) {
-      return real
-    }
-    raise std::readImage("Read this drawing to condition the image on?", {
-      dir: dirname(real.value),
-      filename: basename(real.value),
-    })
-    control = { name: controlnet, image: real.value, scale: controlScale, invert: invertControlImage }
+  for (file in inputs.value.files) {
+    raise std::readImage(file.question, { dir: file.dir, filename: file.filename })
   }
   return _generateImageLocal(
     prompt,
@@ -217,7 +220,7 @@ export def generateImageLocal(
     format,
     lora,
     loraScale,
-    control,
+    inputs.value,
   )
 }
 

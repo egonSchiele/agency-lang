@@ -13,8 +13,14 @@ import { LOCAL_IMAGE_FORMATS, type LocalGeneratedImage } from "./mlxImage.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
 import { approvedFileBytes } from "./approvedPath.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
-import { _realTarget, wholePath, stat as statUnder } from "./contained.js";
-import { MIME_TYPES } from "./mediaPathScan.js";
+import {
+  IMAGE_MIME_TYPES,
+  LOCAL_IMAGE_FIELDS,
+  checkedImageFile,
+  isRemoteSource,
+  referenceCount,
+  type LocalImageInputs,
+} from "./localImageInputs.js";
 import { DEFAULT_IMAGE_MODEL } from "../constants.js";
 
 /** Drop keys whose value is "" or undefined; keep numbers/objects. */
@@ -31,17 +37,6 @@ function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
  *  std::uploadImage interrupt shows, and read only after approval. */
 export type ImageSource = { source: string; local: boolean };
 
-/** The image types a local input may be, by extension. */
-const IMAGE_MIME_TYPES: Record<string, string> = Object.fromEntries(
-  Object.entries(MIME_TYPES).filter(([, mime]) => mime.startsWith("image/")),
-);
-
-function isRemoteSource(source: string): boolean {
-  return (
-    source.startsWith("data:") || source.startsWith("http://") || source.startsWith("https://")
-  );
-}
-
 /** Backs the checks `generateImage` makes before it asks anything. A
  *  local path is resolved to its real spelling and checked by name and
  *  stat: an image extension, a regular file, under the size cap. No byte
@@ -51,26 +46,7 @@ export function _imageSources(images: string[]): ImageSource[] {
     if (isRemoteSource(image)) {
       return { source: image, local: false };
     }
-    const real = _realTarget(image);
-    const ext = path.extname(real).toLowerCase();
-    if (IMAGE_MIME_TYPES[ext] === undefined) {
-      const accepted = Object.keys(IMAGE_MIME_TYPES).join(", ");
-      throw new Error(`generateImage cannot send ${real}. Accepted: ${accepted}.`);
-    }
-    const located = wholePath(real);
-    const info = statUnder(located.root, located.target);
-    if (info === null) {
-      throw new Error(`no such file: ${real}`);
-    }
-    if (!info.isFile()) {
-      throw new Error(`not a regular file: ${real}`);
-    }
-    if (info.size > MAX_IMAGE_BYTES) {
-      throw new Error(
-        `${real} is ${info.size.toLocaleString("en-US")} bytes; the most generateImage sends is ${MAX_IMAGE_BYTES.toLocaleString("en-US")}.`,
-      );
-    }
-    return { source: real, local: true };
+    return { source: checkedImageFile(image, MAX_IMAGE_BYTES, "generateImage"), local: true };
   });
 }
 
@@ -255,34 +231,24 @@ function checkLocalImageArgs(
   return { servedName: _mlxServedName(resolved) };
 }
 
-/** A ControlNet for one `generateImageLocal` call. `image` is the real
- *  spelling of the drawing the Agency side raised std::readImage for. */
-export type LocalControl = {
-  name: string;
-  image: string;
-  scale: number | null;
-  invert: boolean;
-};
-
-/** The request fields for a ControlNet, with the drawing's bytes as
- *  base64. The file is read here, after the approval, so the server never
- *  opens a path a request wrote. `approvedFileBytes` refuses a symlink
- *  that appeared while the prompt was pending, and a file over the size
- *  the server takes. */
-function controlFields(control: LocalControl | null): Record<string, unknown> {
-  if (control === null) {
+/** The request field that carries a call's input images, with each file's
+ *  bytes as base64: one string when the field takes one image, a list
+ *  otherwise. The files are read here, after the Agency side raised
+ *  std::readImage for each, so the server never opens a path a request
+ *  wrote. `approvedFileBytes` refuses a symlink that appeared while the
+ *  prompt was pending, and a file over the field's size cap. */
+function imageFields(inputs: LocalImageInputs): Record<string, unknown> {
+  if (inputs.field === null) {
     return {};
   }
-  const bytes = approvedFileBytes(control.image, MAX_IMAGE_BYTES);
-  const fields: Record<string, unknown> = {
-    controlnet: control.name,
-    control_image: bytes.toString("base64"),
-    control_invert: control.invert,
-  };
-  if (control.scale !== null) {
-    fields.control_scale = control.scale;
+  const row = LOCAL_IMAGE_FIELDS[inputs.field];
+  if (row === undefined) {
+    throw new Error(`${inputs.field} is not an image field of the image server.`);
   }
-  return fields;
+  const encoded = inputs.files.map((file) =>
+    approvedFileBytes(file.path, row.maxBytes).toString("base64"),
+  );
+  return { [inputs.field]: row.maxCount === 1 ? encoded[0] : encoded };
 }
 
 /** The settings a call gives, as the request fields the server takes. A
@@ -320,16 +286,16 @@ export async function _generateImageLocal(
   format: string,
   lora: string,
   loraScale: number | null,
-  control: LocalControl | null,
+  inputs: LocalImageInputs,
 ): Promise<ResultValue> {
   const fail = (message: string) => failure(`generateImageLocal failed: ${message}`);
   const checked = checkLocalImageArgs(prompt, model, format);
   if ("error" in checked) {
     return fail(checked.error);
   }
-  let controlled: Record<string, unknown>;
+  let images: Record<string, unknown>;
   try {
-    controlled = controlFields(control);
+    images = imageFields(inputs);
   } catch (err) {
     return fail((err as Error).message);
   }
@@ -341,7 +307,9 @@ export async function _generateImageLocal(
     n: 1,
     metadata: {
       ...localImageSettings(steps, guidance, seed, negativePrompt, lora, loraScale),
-      ...controlled,
+      ...inputs.settings,
+      ...images,
+      references: referenceCount(inputs),
     },
   };
   const out = await generateOne(prompt, prompt, config, checked.servedName);

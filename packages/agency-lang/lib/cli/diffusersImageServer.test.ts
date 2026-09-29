@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { DIFFUSERS_VERSION, imageServerScript } from "./localServe.js";
 import { MAX_STEPS } from "../stdlib/mlxImage.js";
+import { LOCAL_IMAGE_FIELDS, localBodyBytes } from "../stdlib/localImageInputs.js";
 
 const rulesModule = path.join(path.dirname(imageServerScript()), "diffusersImageRules.py");
 
@@ -110,7 +111,7 @@ except ValueError as e:
 /** Runs check_request for a family and prints the result, or the error.
  *  The body is parsed from JSON in Python, since JSON's true and null are
  *  not Python's. `adaptersDir` is the configured adapters folder, if any.
- *  A control image's bytes print as their length. */
+ *  An input image's bytes print as their length. */
 function check(
   family: Family,
   body: unknown,
@@ -148,7 +149,9 @@ function pipelineArgs(family: Family, body: unknown): Record<string, unknown> {
 import json
 rules = FAMILIES["${family}"]
 body = json.loads(${JSON.stringify(JSON.stringify(body))})
-print(json.dumps(pipeline_args(rules, check_request(rules, body)), sort_keys=True))
+request = check_request(rules, body)
+width, height = output_size(request["size"], None, None)
+print(json.dumps(pipeline_args(rules, request, width, height), sort_keys=True))
 `),
   );
 }
@@ -232,8 +235,10 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
     const out = JSON.parse(check("ZImagePipeline", { prompt: "a cat", seed: 7 }));
     expect(out).toEqual({
       prompt: "a cat",
-      width: 1024,
-      height: 1024,
+      size: null,
+      mode: "plain",
+      image_field: null,
+      input_images: [],
       steps: 9,
       guidance: 0.0,
       seed: 7,
@@ -242,7 +247,6 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
       lora: null,
       lora_scale: 1.0,
       controlnet: null,
-      control_image: null,
       control_scale: 1.0,
       control_invert: false,
     });
@@ -273,7 +277,7 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
         model: "/some/dir",
       }),
     );
-    expect(out).toMatchObject({
+    expect({ ...out, width: out.size[0], height: out.size[1] }).toMatchObject({
       negative_prompt: "blurry",
       guidance: 4.5,
       steps: 30,
@@ -434,7 +438,7 @@ print(adapter_names(os.path.join(d, "missing")))
     const out = JSON.parse(
       check(family, { ...body, control_scale: 0.8, control_invert: true }, null, "/c"),
     );
-    expect([out.controlnet, out.control_image, out.control_scale, out.control_invert]).toEqual([
+    expect([out.controlnet, out.input_images[0], out.control_scale, out.control_invert]).toEqual([
       "scribble",
       "3 bytes",
       0.8,
@@ -445,11 +449,14 @@ print(adapter_names(os.path.join(d, "missing")))
     expect(check(family, { prompt: "a cat", controlnet: "scribble" }, null, "/c")).toBe(
       "ERROR 400 controlnet and control_image go together: the ControlNet's name, and the image it conditions the generation on.",
     );
-    for (const lone of [{ control_scale: 1 }, { control_invert: true }]) {
-      expect(check(family, { prompt: "a cat", ...lone }, null, "/c")).toBe(
-        "ERROR 400 control_scale and control_invert need controlnet: they say how to apply it.",
-      );
-    }
+    expect(check(family, { prompt: "a cat", control_scale: 1 }, null, "/c")).toBe(
+      "ERROR 400 control_scale goes with control_image, and this request has none.",
+    );
+    expect(
+      check(family, { prompt: "a cat", control_scale: 1, control_invert: true }, null, "/c"),
+    ).toBe(
+      "ERROR 400 control_scale and control_invert go with control_image, and this request has none.",
+    );
     expect(check(family, body)).toBe(
       "ERROR 400 This server has no ControlNets folder. Set client.controlnetsDir in agency.json to the folder your ControlNets are in, and start the server again.",
     );
@@ -475,13 +482,192 @@ print(adapter_names(os.path.join(d, "missing")))
     }
   });
 
-  it("gives every family row the same keys, and a ControlNet pipeline to each that takes one", () => {
+  it("gives every family row the same keys, and a plain pipeline and only known modes", () => {
     const out = rules(`
-keys = [sorted(k for k in row if k != "controlnet_pipeline") for row in FAMILIES.values()]
+keys = [sorted(row) for row in FAMILIES.values()]
 print(all(k == keys[0] for k in keys))
-print(all(("controlnet_pipeline" in row) == row["takes_controlnet"] for row in FAMILIES.values()))
+modes = ["plain"] + [row["mode"] for row in INPUT_IMAGES.values()]
+print(all(mode in modes for row in FAMILIES.values() for mode in row["pipelines"]))
+print(all("plain" in row["pipelines"] for row in FAMILIES.values()))
 `);
-    expect(out.split("\n")).toEqual(["True", "True"]);
+    expect(out.split("\n")).toEqual(["True", "True", "True"]);
+  });
+
+  it("decides a request's mode from its image field, and refuses what does not fit the mode", () => {
+    const out = rules(`
+pose = "cG5n"
+def mode(family, body):
+    try:
+        return mode_of(FAMILIES[family], body)
+    except RequestError as e:
+        return f"ERROR {e}"
+print(mode("StableDiffusionXLPipeline", {"prompt": "a cat"}))
+print(mode("StableDiffusionXLPipeline", {"prompt": "a cat", "controlnet": "scribble", "control_image": pose}))
+print(mode("StableDiffusionXLPipeline", {"prompt": "a cat", "control_scale": 1}))
+print(mode("ZImagePipeline", {"prompt": "a cat", "controlnet": "scribble", "control_image": pose}))
+`);
+    expect(out.split("\n")).toEqual([
+      "plain",
+      "control",
+      "ERROR control_scale goes with control_image, and this request has none.",
+      "ERROR Z-Image Turbo does not take a ControlNet. Leave controlnet empty.",
+    ]);
+  });
+
+  it("holds an image field to its count and names the entry a refusal is about", () => {
+    // No field takes a list yet, so this test adds one for the length of
+    // the run.
+    const out = rules(`
+INPUT_IMAGES["pictures"] = {**INPUT_IMAGES["control_image"], "max_count": 2}
+good = "cG5n"
+for value in [[good, good], [good, good, good], [good, "not base64!"], good]:
+    try:
+        print(len(input_bytes({"pictures": value}, "pictures")))
+    except RequestError as e:
+        print(e)
+print(input_bytes({}, None))
+`);
+    expect(out.split("\n")).toEqual([
+      "2",
+      "pictures takes at most 2 images. This request has 3.",
+      "pictures[1]: image is not valid base64.",
+      "pictures must be a list of images, each its bytes as base64.",
+      "[]",
+    ]);
+  });
+
+  it("fits an image the way its row says", () => {
+    const out = rules(`
+print(fit_box("letterbox", 400, 300, 1024, 1024))
+print(fit_box("shrink", 400, 300, 1024, 1024))
+print(fit_box("shrink", 4000, 3000, 512, 512))
+print(fit_has_canvas("letterbox"), fit_has_canvas("shrink"))
+`);
+    expect(out.split("\n")).toEqual([
+      "(1024, 768, 0, 128)",
+      "(400, 300, 0, 0)",
+      "(1182, 886, 0, 0)",
+      "True False",
+    ]);
+  });
+
+  it("makes the size the request gave, else the first picture's, else the default", () => {
+    const out = rules(`
+print(output_size((512, 768), "images", (4000, 3000)))
+print(output_size(None, "images", (4000, 3000)))
+print(output_size(None, None, None))
+`);
+    expect(out.split("\n")).toEqual(["(512, 768)", "(1168, 880)", "(1024, 1024)"]);
+  });
+
+  it("takes no size from a control image: an empty size is the default", () => {
+    expect(rules(`print(output_size(None, "control_image", (4000, 3000)))`)).toBe("(1024, 1024)");
+  });
+
+  it("leaves the size of a request with a reference and no size to the picture", () => {
+    const reference = Buffer.from("png").toString("base64");
+    const out = rules(`
+rules = FAMILIES["Flux2KleinPipeline"]
+print(check_request(rules, {"prompt": "add a hat", "size": "", "images": ["${reference}"]})["size"])
+`);
+    expect(out).toBe("None");
+  });
+
+  it("refuses references for a family other than FLUX.2 [klein], naming klein", () => {
+    const reference = Buffer.from("png").toString("base64");
+    const out = rules(`
+try:
+    check_request(FAMILIES["ZImagePipeline"], {"prompt": "add a hat", "images": ["${reference}"]})
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe(
+      "Z-Image Turbo does not take reference images. Only FLUX.2 [klein] takes them.",
+    );
+  });
+
+  it("refuses more references than the images row allows", () => {
+    const reference = Buffer.from("png").toString("base64");
+    const out = rules(`
+try:
+    check_request(FAMILIES["Flux2KleinPipeline"], {"prompt": "add a hat", "images": ["${reference}"] * 5})
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe("images takes at most 4 images. This request has 5.");
+  });
+
+  it("refuses references together with a control image", () => {
+    const image = Buffer.from("png").toString("base64");
+    const out = rules(`
+body = {"prompt": "a cat", "controlnet": "scribble", "control_image": "${image}", "images": ["${image}"]}
+try:
+    check_request(FAMILIES["StableDiffusionXLPipeline"], body, None, "/c")
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe("a request takes one of control_image or images.");
+  });
+
+  it("refuses a reference with a side under 64 pixels or a shape past 8 to 1", () => {
+    const out = rules(`
+for width, height in [(63, 500), (64, 512), (100, 801), (1024, 1024)]:
+    print(reference_problem(width, height))
+print(image_problem("images", 63, 500) == reference_problem(63, 500))
+print(image_problem("control_image", 63, 500))
+`);
+    expect(out.split("\n")).toEqual([
+      "the picture is 63x500. A reference must be at least 64 pixels on each side.",
+      "None",
+      "the picture is 100x801. A reference can be at most 8 times as long as it is wide.",
+      "None",
+      "True",
+      "None",
+    ]);
+  });
+
+  it("takes a size from a picture at one megapixel or less, and refuses a picture too small", () => {
+    const out = rules(`
+for width, height in [(1024, 1024), (4000, 3000), (300, 300), (2896, 362), (200, 1000)]:
+    try:
+        print(derived_size(width, height))
+    except RequestError as e:
+        print(e)
+`);
+    expect(out.split("\n")).toEqual([
+      "(1024, 1024)",
+      "(1168, 880)",
+      "(288, 288)",
+      "(2048, 256)",
+      "the picture is 200x1000, which is too small or too narrow to take a size from. Pass size.",
+    ]);
+  });
+
+  it("passes the control scale to a ControlNet pipeline only", () => {
+    const pose = Buffer.from("png").toString("base64");
+    const out = rules(`
+rules = FAMILIES["StableDiffusionXLPipeline"]
+body = {"prompt": "a cat", "controlnet": "scribble", "control_image": "${pose}", "control_scale": 0.8}
+print(pipeline_args(rules, check_request(rules, body, None, "/c"), 1024, 768)["controlnet_conditioning_scale"])
+print("controlnet_conditioning_scale" in pipeline_args(rules, check_request(rules, {"prompt": "a cat"}), 1024, 768))
+`);
+    expect(out.split("\n")).toEqual(["0.8", "False"]);
+  });
+
+  it("has the same image fields, counts, byte caps, and body limit as the stdlib", () => {
+    const python = JSON.parse(
+      rules(
+        `import json; print(json.dumps({"fields": {f: [r["max_count"], r["max_bytes"]] for f, r in INPUT_IMAGES.items()}, "body": MAX_BODY_BYTES}))`,
+      ),
+    );
+    const typescript = Object.fromEntries(
+      Object.entries(LOCAL_IMAGE_FIELDS).map(([field, row]) => [
+        field,
+        [row.maxCount, row.maxBytes],
+      ]),
+    );
+    expect(python.fields).toEqual(typescript);
+    expect(python.body).toBe(localBodyBytes());
   });
 
   it("takes the control image only as base64 bytes, never as a path, up to a size", () => {
@@ -688,7 +874,7 @@ print(use("style.v2", [2, 11]))
 
   it("refuses a field it does not know, naming the ones it takes", () => {
     expect(check("ZImagePipeline", { prompt: "a cat", style: "vivid" })).toBe(
-      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, and control_invert.",
+      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, control_invert, and images.",
     );
   });
 
@@ -711,7 +897,7 @@ import json
 body = warm_up_request()
 for family in FAMILIES.values():
     r = check_request(family, body)
-    print(r["width"], r["height"], r["steps"])
+    print(*r["size"], r["steps"])
 `);
     expect(out.split("\n")).toEqual(Array(5).fill("512 512 2"));
   });
@@ -787,5 +973,127 @@ describe.skipIf(!hasPython3)("diffusersImageServer.py", () => {
     );
     expect(run.stderr.toString()).toBe("");
     expect(run.status).toBe(0);
+  });
+});
+
+// The server's image functions need Pillow and no torch, so they run
+// wherever a Python has Pillow: AGENCY_IMAGE_PYTHON when it is set, as in
+// the live test, or python3.
+const pillowPython = process.env.AGENCY_IMAGE_PYTHON || "python3";
+const hasPillow = spawnSync(pillowPython, ["-c", "import PIL"], { stdio: "ignore" }).status === 0;
+
+/** Runs `code` with the server module's image functions and a few helpers
+ *  that make test images, and returns stdout. */
+function images(code: string): string {
+  const helpers = `
+import io, sys
+sys.path.insert(0, sys.argv[1])
+from PIL import Image
+from diffusersImageServer import decode_image, prepared, fitted
+from diffusersImageRules import RequestError
+
+def saved(image, format="PNG", **options):
+    out = io.BytesIO()
+    image.save(out, format, **options)
+    return out.getvalue()
+
+def decoded(data, field):
+    try:
+        return decode_image(data, field)
+    except RequestError as e:
+        return f"ERROR {e.status} {e}"
+`;
+  const run = spawnSync(pillowPython, ["-c", `${helpers}\n${code}`, path.dirname(rulesModule)], {
+    stdio: "pipe",
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
+  });
+  expect(run.status).toBe(0);
+  return run.stdout.toString().trim();
+}
+
+describe.skipIf(!hasPillow)("diffusersImageServer.py's input images", () => {
+  it("turns a photo upright by its EXIF orientation", () => {
+    const out = images(`
+photo = Image.new("RGB", (400, 300), (255, 0, 0))
+exif = photo.getexif()
+exif[0x0112] = 6
+upright = decoded(saved(photo, "JPEG", exif=exif), "images")
+print(upright.size, upright.mode)
+`);
+    expect(out).toBe("(300, 400) RGB");
+  });
+
+  it("puts a transparent reference on white, and leaves a control image as drawn", () => {
+    const out = images(`
+clear = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+palette = Image.new("P", (100, 100), 0)
+palette.putpalette([10, 20, 30] + [0] * 765)
+keyed = Image.new("RGB", (100, 100), (1, 2, 3))
+print(decoded(saved(clear), "images").getpixel((5, 5)))
+print(decoded(saved(palette, transparency=0), "images").getpixel((5, 5)))
+print(decoded(saved(keyed, transparency=(1, 2, 3)), "images").getpixel((5, 5)))
+print(decoded(saved(palette), "images").getpixel((5, 5)))
+print(decoded(saved(clear), "control_image").getpixel((5, 5)))
+`);
+    expect(out.split("\n")).toEqual([
+      "(255, 255, 255)",
+      "(255, 255, 255)",
+      "(255, 255, 255)",
+      "(10, 20, 30)",
+      "(0, 0, 0)",
+    ]);
+  });
+
+  it("refuses bytes that are not an image, a format it does not read, and a file cut short", () => {
+    const out = images(`
+whole = saved(Image.new("RGB", (500, 500), (9, 9, 9)))
+print(decoded(b"hello", "images"))
+print(decoded(saved(Image.new("RGB", (80, 80)), "BMP"), "control_image"))
+print(decoded(whole[:200], "images"))
+`);
+    const unreadable = (field: string) =>
+      `ERROR 400 ${field} is not an image this server reads. It reads png, jpeg, webp, or gif, and the file must be whole.`;
+    expect(out.split("\n")).toEqual([
+      unreadable("images"),
+      unreadable("control_image"),
+      unreadable("images"),
+    ]);
+  });
+
+  it("refuses an image over the pixel cap, and a reference klein cannot take", () => {
+    const out = images(`
+print(decoded(saved(Image.new("L", (7000, 6000))), "images"))
+print(decoded(saved(Image.new("RGB", (63, 500))), "images"))
+print(decoded(saved(Image.new("RGB", (63, 500))), "control_image").size)
+`);
+    expect(out.split("\n")).toEqual([
+      "ERROR 400 images is 7000x6000; this server takes images up to 40,000,000 pixels.",
+      "ERROR 400 images: the picture is 63x500. A reference must be at least 64 pixels on each side.",
+      "(63, 500)",
+    ]);
+  });
+
+  it("letterboxes a control image on black, and inverts it when asked", () => {
+    const out = images(`
+drawing = decoded(saved(Image.new("RGB", (400, 300), (255, 255, 255))), "control_image")
+for invert in [False, True]:
+    ready = prepared(drawing, "control_image", {"control_invert": invert})
+    canvas = fitted(ready, "control_image", 1024, 1024)
+    print(canvas.size, canvas.getpixel((5, 5)), canvas.getpixel((512, 512)))
+`);
+    expect(out.split("\n")).toEqual([
+      "(1024, 1024) (0, 0, 0) (255, 255, 255)",
+      "(1024, 1024) (0, 0, 0) (0, 0, 0)",
+    ]);
+  });
+
+  it("shrinks a large reference to a megapixel and leaves a small one alone", () => {
+    const out = images(`
+large = decoded(saved(Image.new("RGB", (4000, 3000))), "images")
+small = decoded(saved(Image.new("RGB", (400, 300))), "images")
+print(fitted(large, "images", 512, 512).size)
+print(fitted(small, "images", 512, 512).size)
+`);
+    expect(out.split("\n")).toEqual(["(1182, 886)", "(400, 300)"]);
   });
 });

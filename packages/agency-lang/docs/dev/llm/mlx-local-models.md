@@ -242,6 +242,29 @@ This server is serving X and Y. It is not serving Z. Start it with: agency local
 through, so streaming works. A client that disconnects mid-reply destroys
 the upstream request, so the server stops generating.
 
+**The body limit.** The door reads each body with `parseJsonBody` from
+`lib/serve/util.ts`. For most routes the limit is its default, 10 MiB
+(`MAX_BODY_BYTES` in `lib/serve/constants.ts`). A request for
+`/v1/images/generations` gets a larger limit, `localBodyBytes()` from
+`lib/stdlib/localImageInputs.ts`: 64 KB for the settings plus the base64
+of 4 reference images of 20 MB each, about 107 MB. That is the image
+server's own body limit, and a test keeps the two equal. The door knows
+the path before it reads the body, so it picks the limit per request.
+See `local-images.md` for where the image limits come from.
+
+Only the image route gets the larger limit. A chat request to the door
+keeps 10 MiB. `agency serve` also reads bodies with `parseJsonBody` and
+keeps 10 MiB, since its routes take a served agent's JSON arguments and
+have no use for a 100 MB body.
+
+A body over the limit gets a 413 with a JSON error. The door used to
+close the socket at once, and a client that was still sending saw a
+dropped connection. Now it passes `parseJsonBody` a `drainBytes`, so it
+answers 413, reads the rest of the body, and throws it away. Nothing of
+a refused body is kept in memory. The reading is bounded: once the
+client has sent `localBodyBytes()` past the limit, the door closes the
+socket.
+
 **The request log.** The door takes a `DoorLogging` — where to print, whether
 to include prompts, and a color function — and writes one entry per request as
 it ends:
@@ -253,7 +276,11 @@ POST /v1/chat/completions  mlx-community/Qwen3.5-4B-MLX-4bit  200  2.6s  16→12
 `lib/cli/serveLog.ts` holds the formatting, so it is all pure functions over a
 `LogEntry`. Verbose adds the whole request body (`→`) and the whole reply
 (`←`) under that line — indented JSON, or a stream left frame for frame,
-since the framing is often what you are debugging. The vendored commander
+since the framing is often what you are debugging. `describeRequest`
+replaces each image field named in `LOCAL_IMAGE_FIELDS` with a note of
+the image count and decoded size, such as `<1 image, 5.0 MB>` or
+`<3 images, 4.2 MB>`. Without the note, one control image would print as
+megabytes of base64. The vendored commander
 refuses a subcommand option that shadows the CLI's own `--verbose`, so serve
 declares `--log-prompts` and the action reads the global flag as well; both
 spellings mean the same thing, and `--verbose` is the one to reach for. Color

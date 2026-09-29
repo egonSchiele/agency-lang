@@ -1,0 +1,23 @@
+// generateImageLocal editing pictures with FLUX.2 [klein], against a
+// stand-in for `agency local serve --image` that test.js starts. No model
+// and no network are used. The nodes have no handlers, so each
+// std::readImage reaches test.js, which approves or rejects it.
+import { generateImageLocal } from "std::image"
+
+const model = "diffusers:black-forest-labs/FLUX.2-klein-4B"
+
+node edit(images: string[]) {
+  const r = generateImageLocal("add a hat to the cat", model, seed: 7, images: images)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}
+
+node plain() {
+  const r = generateImageLocal("a cat", model, seed: 7)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}

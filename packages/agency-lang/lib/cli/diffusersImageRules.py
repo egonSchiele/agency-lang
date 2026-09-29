@@ -11,7 +11,7 @@ import random
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import ImageDataError, image_bytes_of  # noqa: E402
+from localServerCommon import MAX_IMAGE_BYTES, ImageDataError, base64_length, image_bytes_of  # noqa: E402
 
 # The one diffusers release these rules and the server were written
 # against. The server refuses any other version, because it reaches into
@@ -62,6 +62,7 @@ FIELDS = [
     "control_image",
     "control_scale",
     "control_invert",
+    "images",
 ]
 
 # A request names a LoRA adapter by its file's name in the adapters folder
@@ -84,6 +85,96 @@ CONTROLNET_FILES = ("config.json", "diffusion_pytorch_model.safetensors")
 MAX_CONTROL_SCALE = 2.0
 DEFAULT_CONTROL_SCALE = 1.0
 
+# A reference image. The model shrinks every reference to about one
+# megapixel, so a larger file buys nothing. `MAX_INPUT_IMAGE_BYTES` and
+# `MAX_REFERENCE_IMAGES` in lib/stdlib/localImageInputs.ts are the same.
+MAX_INPUT_IMAGE_BYTES = 20_000_000
+MAX_REFERENCE_IMAGES = 4
+
+# The smallest side and the most extreme shape FLUX.2 [klein] takes in a
+# reference. The pipeline checks both itself, but from inside the call,
+# where a failure is a server error; the server checks them on decode.
+MIN_REFERENCE_SIDE = 64
+MAX_REFERENCE_ASPECT = 8
+
+# The images a request can carry, one row per request field. The field a
+# request carries decides its mode; a request with no image is in "plain"
+# mode. `LOCAL_IMAGE_FIELDS` in lib/stdlib/localImageInputs.ts is the same
+# table for the stdlib, and a test compares the two.
+#
+#   mode       the mode the field puts a request in. A family takes a mode
+#              when its row in FAMILIES has a pipeline for it.
+#   max_count  how many images the field takes. One is a base64 string,
+#              more is a list of them.
+#   max_bytes  the largest image, in bytes
+#   sets_size  True: with no size in the request, the output takes its
+#              shape from the field's first image. False: the default size.
+#   fit        how the server fits a decoded image to the output size:
+#              "letterbox" scales it to fit inside and centers it on black,
+#              "shrink" scales a picture over REFERENCE_PIXELS down to that
+#              many and leaves a smaller one as it is
+#   on_white   True: a transparent image is pasted onto white before it is
+#              made RGB. False: its pixels are kept as drawn.
+#   refusal    the message for a family with no pipeline for the mode, with
+#              {label} for the family and {families} for those that have one
+#   prepare    optional: the name of a step the server runs on a decoded
+#              image before fitting it. "invert" inverts a control image
+#              when the request asks.
+#   check      optional: the name of a check in CHECKS the server runs on a
+#              decoded image's size. It returns a refusal or None.
+INPUT_IMAGES = {
+    "control_image": {
+        "mode": "control",
+        "max_count": 1,
+        "max_bytes": MAX_IMAGE_BYTES,
+        # A control image is a drawing to follow, not a picture to keep.
+        "sets_size": False,
+        "fit": "letterbox",
+        "on_white": False,
+        "refusal": "{label} does not take a ControlNet. Leave controlnet empty.",
+        "prepare": "invert",
+    },
+    "images": {
+        "mode": "reference",
+        "max_count": MAX_REFERENCE_IMAGES,
+        "max_bytes": MAX_INPUT_IMAGE_BYTES,
+        "sets_size": True,
+        # The model only looks at a reference, so it can stay any shape.
+        "fit": "shrink",
+        "on_white": True,
+        "refusal": "{label} does not take reference images. Only {families} takes them.",
+        "check": "reference_problem",
+    },
+}
+
+# Every field of each mode but plain, its image field among them. A field
+# of a mode the request is not in is refused.
+MODE_FIELDS = {
+    "control": ["controlnet", "control_image", "control_scale", "control_invert"],
+    "reference": ["images"],
+}
+
+# Room in a request body for everything but its images: the prompt and the
+# settings.
+REQUEST_SETTINGS_BYTES = 64 * 1024
+
+# The largest request body: the settings, plus the base64 of the most image
+# bytes one field may carry. A request carries one image field, never two.
+# `localBodyBytes()` in lib/stdlib/localImageInputs.ts is the same number,
+# and the front door holds image requests to it.
+MAX_BODY_BYTES = REQUEST_SETTINGS_BYTES + max(
+    base64_length(row["max_count"] * row["max_bytes"]) for row in INPUT_IMAGES.values()
+)
+
+# The pixel budget of a size taken from a picture: the default size's.
+DERIVED_PIXELS = 1024 * 1024
+
+# The most pixels of a reference the model reads. FLUX.2 [klein] shrinks a
+# larger one to this many inside the pipeline, under the generation lock.
+# The server shrinks it first, so it holds no full-size picture while it
+# waits for the lock.
+REFERENCE_PIXELS = 1024 * 1024
+
 # How many adapters stay loaded at once. Two lets a user compare two
 # adapters without reloading either; more would hold GPU memory for
 # adapters no request is using.
@@ -92,8 +183,11 @@ MAX_LOADED_ADAPTERS = 2
 # What each family takes, keyed by `_class_name` in model_index.json.
 #
 #   label            how the family is named in a message
-#   pipeline         the diffusers class the server loads. The server takes
-#                    the class from here, never from the file.
+#   pipelines        the diffusers class for each mode the family takes.
+#                    "plain" is the class the server loads; the class of
+#                    another mode is built from the loaded one's parts. A
+#                    mode with no class here is refused. The server takes
+#                    each class from here, never from the file.
 #   default_steps    the model card's step count
 #   max_steps        the most steps one request may ask for
 #   default_guidance the model card's guidance
@@ -108,10 +202,6 @@ MAX_LOADED_ADAPTERS = 2
 #                    request may name one. Every family's pipeline can load
 #                    LoRA; only SDXL, the family people train adapters for,
 #                    has been tried with them.
-#   takes_controlnet True: a request may name a ControlNet and an image to
-#                    condition on, and controlnet_pipeline is the diffusers
-#                    class that runs the pair. Only SDXL: every catalog
-#                    ControlNet is an SDXL one.
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
@@ -121,7 +211,7 @@ MAX_LOADED_ADAPTERS = 2
 FAMILIES = {
     "ZImagePipeline": {
         "label": "Z-Image Turbo",
-        "pipeline": "ZImagePipeline",
+        "pipelines": {"plain": "ZImagePipeline"},
         "default_steps": 9,
         "max_steps": 50,
         "default_guidance": 0.0,
@@ -129,7 +219,6 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
-        "takes_controlnet": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -141,7 +230,7 @@ FAMILIES = {
     },
     "ChromaPipeline": {
         "label": "Chroma",
-        "pipeline": "ChromaPipeline",
+        "pipelines": {"plain": "ChromaPipeline"},
         "default_steps": 40,
         "max_steps": 80,
         "default_guidance": 3.0,
@@ -149,7 +238,6 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
-        "takes_controlnet": False,
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -163,7 +251,7 @@ FAMILIES = {
     },
     "QwenImagePipeline": {
         "label": "Qwen-Image",
-        "pipeline": "QwenImagePipeline",
+        "pipelines": {"plain": "QwenImagePipeline"},
         "default_steps": 50,
         "max_steps": 80,
         "default_guidance": 4.0,
@@ -173,7 +261,6 @@ FAMILIES = {
         "guidance_arg": "true_cfg_scale",
         "default_negative_prompt": " ",
         "takes_lora": False,
-        "takes_controlnet": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
@@ -185,7 +272,8 @@ FAMILIES = {
     },
     "Flux2KleinPipeline": {
         "label": "FLUX.2 [klein]",
-        "pipeline": "Flux2KleinPipeline",
+        # One class does both: it edits when it is given images.
+        "pipelines": {"plain": "Flux2KleinPipeline", "reference": "Flux2KleinPipeline"},
         "default_steps": 4,
         "max_steps": 50,
         # The pipeline ignores guidance on a step-distilled model and warns
@@ -195,7 +283,6 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
-        "takes_controlnet": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3ForCausalLM"],
@@ -212,7 +299,11 @@ FAMILIES = {
     # base SDXL's card says 50 steps at 5.0, well inside the caps.
     "StableDiffusionXLPipeline": {
         "label": "SDXL",
-        "pipeline": "StableDiffusionXLPipeline",
+        # Only SDXL takes a ControlNet: every catalog ControlNet is an SDXL one.
+        "pipelines": {
+            "plain": "StableDiffusionXLPipeline",
+            "control": "StableDiffusionXLControlNetPipeline",
+        },
         "default_steps": 28,
         "max_steps": 80,
         "default_guidance": 5.5,
@@ -220,8 +311,6 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": True,
-        "takes_controlnet": True,
-        "controlnet_pipeline": "StableDiffusionXLControlNetPipeline",
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -646,43 +735,89 @@ def _check_unknown_fields(body):
         )
 
 
-def _control_image_of(value):
-    """The bytes of the control image, from the request's base64. The
-    stdlib reads the file after the user approves it, so the server never
-    opens a path a request wrote."""
-    try:
-        return image_bytes_of(value)
-    except ImageDataError as err:
-        raise RequestError(f"control_image: {err}")
+def mode_of(rules, body):
+    """The request's mode: the mode of the image field it carries, or
+    "plain" when it carries none. Refuses image fields of two modes, a
+    field of a mode the request is not in, and a mode the family has no
+    pipeline for."""
+    present = [field for field in INPUT_IMAGES if body.get(field) is not None]
+    if len(present) > 1:
+        raise RequestError(f"a request takes one of {join_names(list(INPUT_IMAGES), 'or')}.")
+    field = present[0] if present else None
+    mode = "plain" if field is None else INPUT_IMAGES[field]["mode"]
+    for other, fields in MODE_FIELDS.items():
+        stray = [name for name in fields if other != mode and body.get(name) is not None]
+        if stray:
+            verb = "goes" if len(stray) == 1 else "go"
+            raise RequestError(
+                f"{join_names(stray)} {verb} with {image_field_of(other)}, and this request has none."
+            )
+    if mode not in rules["pipelines"]:
+        families = [row["label"] for row in FAMILIES.values() if mode in row["pipelines"]]
+        raise RequestError(
+            INPUT_IMAGES[field]["refusal"].format(label=rules["label"], families=join_names(families))
+        )
+    return mode
 
 
-def _controlnet_of(rules, body, controlnets_dir):
-    """The ControlNet part of a checked request: the name or None, the
-    image's bytes or None, the scale, and whether to invert the image. A
-    ControlNet and its image go together; one without the other is
-    refused, and so are a scale or an invert without them."""
+def image_field_of(mode):
+    """The image field of a mode, or None for plain."""
+    for field, row in INPUT_IMAGES.items():
+        if row["mode"] == mode:
+            return field
+    return None
+
+
+def input_bytes(body, field):
+    """The bytes of each image in the field `field`, from the request's
+    base64: a list, empty when `field` is None. Holds the field to its
+    row's count and byte caps, and names the entry a refusal is about.
+    The stdlib reads each file after the user approves it, so the server
+    never opens a path a request wrote."""
+    if field is None:
+        return []
+    row = INPUT_IMAGES[field]
+    value = body[field]
+    if row["max_count"] == 1:
+        entries = [(field, value)]
+    else:
+        if not isinstance(value, list) or value == []:
+            raise RequestError(f"{field} must be a list of images, each its bytes as base64.")
+        if len(value) > row["max_count"]:
+            raise RequestError(f"{field} takes at most {row['max_count']} images. This request has {len(value)}.")
+        entries = [(f"{field}[{index}]", entry) for index, entry in enumerate(value)]
+    images = []
+    for name, entry in entries:
+        try:
+            images.append(image_bytes_of(entry, row["max_bytes"]))
+        except ImageDataError as err:
+            raise RequestError(f"{name}: {err}")
+    return images
+
+
+def _check_control_pairing(body):
+    """A ControlNet and its image go together; one without the other is
+    refused. Checked before mode_of, so a request that is only missing its
+    image hears that. A scale or an invert with neither is mode_of's to
+    refuse, as a field of a mode the request is not in."""
     name = body.get("controlnet")
     image = body.get("control_image")
-    scale = body.get("control_scale")
-    invert = body.get("control_invert")
-    if name is None and image is None:
-        if scale is not None or invert is not None:
-            raise RequestError(
-                "control_scale and control_invert need controlnet: they say how to apply it."
-            )
-        return {
-            "controlnet": None,
-            "control_image": None,
-            "control_scale": DEFAULT_CONTROL_SCALE,
-            "control_invert": False,
-        }
-    if name is None or image is None:
+    if (name is None) != (image is None):
         raise RequestError(
             "controlnet and control_image go together: the ControlNet's name, and the image "
             "it conditions the generation on."
         )
-    if not rules["takes_controlnet"]:
-        raise RequestError(f"{rules['label']} does not take a ControlNet. Leave controlnet empty.")
+
+
+def _controlnet_of(body, controlnets_dir):
+    """The ControlNet part of a checked request: the name or None, the
+    scale, and whether to invert the image. Runs after mode_of, which has
+    refused a family that takes no ControlNet."""
+    name = body.get("controlnet")
+    scale = body.get("control_scale")
+    invert = body.get("control_invert")
+    if name is None:
+        return {"controlnet": None, "control_scale": DEFAULT_CONTROL_SCALE, "control_invert": False}
     if controlnets_dir is None:
         raise RequestError(
             "This server has no ControlNets folder. Set client.controlnetsDir in agency.json to the "
@@ -697,7 +832,6 @@ def _controlnet_of(rules, body, controlnets_dir):
         raise RequestError("control_invert must be true or false.")
     return {
         "controlnet": name,
-        "control_image": _control_image_of(image),
         "control_scale": DEFAULT_CONTROL_SCALE if scale is None else float(scale),
         "control_invert": invert is True,
     }
@@ -714,23 +848,131 @@ def letterbox(source_width, source_height, width, height):
     return fit_width, fit_height, (width - fit_width) // 2, (height - fit_height) // 2
 
 
+def shrink(source_width, source_height, width, height):
+    """The size a reference of the source size is scaled to: its shape at
+    REFERENCE_PIXELS or fewer, as (scaled width, scaled height, 0, 0). A
+    smaller picture keeps its size. The output size plays no part: the
+    model only looks at a reference."""
+    if source_width * source_height <= REFERENCE_PIXELS:
+        return source_width, source_height, 0, 0
+    scale = (REFERENCE_PIXELS / (source_width * source_height)) ** 0.5
+    return max(1, int(source_width * scale)), max(1, int(source_height * scale)), 0, 0
+
+
+# How each fit in INPUT_IMAGES scales an image of the source size.
+#
+#   box     the function that gives (scaled width, scaled height, left, top)
+#   canvas  True: the scaled image is pasted at left, top on a black canvas
+#           of the output size. False: the scaled image is used as it is.
+FITS = {
+    "letterbox": {"box": letterbox, "canvas": True},
+    "shrink": {"box": shrink, "canvas": False},
+}
+
+
+def fit_box(fit, source_width, source_height, width, height):
+    """(scaled width, scaled height, left, top) for an image of the source
+    size fitted to width x height the way `fit` says."""
+    return FITS[fit]["box"](source_width, source_height, width, height)
+
+
+def fit_has_canvas(fit):
+    """Whether an image fitted the way `fit` says goes on a canvas of the
+    output size."""
+    return FITS[fit]["canvas"]
+
+
+def derived_size(width, height):
+    """The output size for a request that gave none, from the size of its
+    first input picture: its shape at DERIVED_PIXELS or fewer, each side at
+    most MAX_SIDE and a multiple of SIZE_MULTIPLE. A picture is never
+    scaled up. Raises RequestError when a side ends up under MIN_SIDE."""
+    scaled_width, scaled_height = float(width), float(height)
+    if width * height > DERIVED_PIXELS:
+        scale = (DERIVED_PIXELS / (width * height)) ** 0.5
+        scaled_width, scaled_height = width * scale, height * scale
+    longest = max(scaled_width, scaled_height)
+    if longest > MAX_SIDE:
+        scaled_width = scaled_width * MAX_SIDE / longest
+        scaled_height = scaled_height * MAX_SIDE / longest
+    out_width = int(scaled_width // SIZE_MULTIPLE) * SIZE_MULTIPLE
+    out_height = int(scaled_height // SIZE_MULTIPLE) * SIZE_MULTIPLE
+    if min(out_width, out_height) < MIN_SIDE:
+        raise RequestError(
+            f"the picture is {width}x{height}, which is too small or too narrow to take a size "
+            "from. Pass size."
+        )
+    return out_width, out_height
+
+
+def output_size(size, field, first_image_size):
+    """(width, height) of the image to make: the size the request gave, or
+    else the size taken from its first input picture when the image field
+    `field` says it sets the size, or else the default size.
+    `first_image_size` is (width, height) of that picture, or None."""
+    if size is not None:
+        return size
+    if first_image_size is not None and INPUT_IMAGES[field]["sets_size"]:
+        return derived_size(*first_image_size)
+    return parse_size(DEFAULT_SIZE)
+
+
+def reference_problem(width, height):
+    """Why FLUX.2 [klein] cannot take a reference of width x height, or
+    None when it can."""
+    if min(width, height) < MIN_REFERENCE_SIDE:
+        return (
+            f"the picture is {width}x{height}. A reference must be at least "
+            f"{MIN_REFERENCE_SIDE} pixels on each side."
+        )
+    if max(width, height) > MAX_REFERENCE_ASPECT * min(width, height):
+        return (
+            f"the picture is {width}x{height}. A reference can be at most "
+            f"{MAX_REFERENCE_ASPECT} times as long as it is wide."
+        )
+    return None
+
+
+# The checks a row of INPUT_IMAGES names in `check`.
+CHECKS = {"reference_problem": reference_problem}
+
+
+def image_problem(field, width, height):
+    """Why the server cannot take a decoded image of width x height in the
+    image field `field`, from the check its row names, or None."""
+    check = INPUT_IMAGES[field].get("check")
+    return None if check is None else CHECKS[check](width, height)
+
+
 def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     """The checked request, with the family's defaults filled in and a
     random seed when none was given. `adapters_dir` and `controlnets_dir`
     are the folders LoRA adapters and ControlNets come from, or None when
     not configured. Raises RequestError with a message that says what the
-    model takes instead."""
+    model takes instead.
+
+    `size` is the (width, height) the request gave, or None: with none,
+    the size depends on the first input image, which only the server can
+    open, so output_size decides it there. `image_field` is the image field
+    the request carries, or None in plain mode, and `input_images` holds the
+    bytes of each image in it."""
     if not isinstance(body, dict):
         raise RequestError("The request body must be a JSON object.")
     _check_unknown_fields(body)
     _check_openai_fields(body)
-    width, height = parse_size(body.get("size") or DEFAULT_SIZE)
+    size = parse_size(body["size"]) if body.get("size") else None
     lora, lora_scale = _lora_of(rules, body, adapters_dir)
-    control = _controlnet_of(rules, body, controlnets_dir)
+    _check_control_pairing(body)
+    mode = mode_of(rules, body)
+    control = _controlnet_of(body, controlnets_dir)
+    image_field = image_field_of(mode)
+    input_images = input_bytes(body, image_field)
     return {
         "prompt": _prompt_of(body),
-        "width": width,
-        "height": height,
+        "size": size,
+        "mode": mode,
+        "image_field": image_field,
+        "input_images": input_images,
         "steps": _steps_of(rules, body),
         "guidance": _guidance_of(rules, body),
         "seed": _seed_of(body),
@@ -742,20 +984,22 @@ def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     }
 
 
-def pipeline_args(rules, request):
+def pipeline_args(rules, request, width, height):
     """The keyword arguments a checked request becomes when it is passed to
-    the family's pipeline, less the seed's generator and the step callback,
-    which need torch."""
+    the family's pipeline at width x height, less the input images, the
+    seed's generator, and the step callback, which need Pillow or torch."""
     args = {
         "prompt": request["prompt"],
-        "height": request["height"],
-        "width": request["width"],
+        "height": height,
+        "width": width,
         "num_inference_steps": request["steps"],
         rules["guidance_arg"]: request["guidance"],
     }
     negative = request["negative_prompt"] or rules["default_negative_prompt"]
     if negative != "":
         args["negative_prompt"] = negative
+    if request["mode"] == "control":
+        args["controlnet_conditioning_scale"] = request["control_scale"]
     return args
 
 

@@ -1,4 +1,5 @@
 import { type ColorFunction } from "../utils/termcolors.js";
+import { LOCAL_IMAGE_FIELDS } from "../stdlib/localImageInputs.js";
 
 /** What `agency local serve` prints about one request that reached its front
  *  door. The front door times the request and collects the reply; everything
@@ -92,12 +93,37 @@ export type LogEntry = {
 export type LogOptions = { verbose: boolean; color: ColorFunction };
 
 /** The request body for the log: the JSON that was forwarded, indented so a
- *  long messages array is readable. */
+ *  long messages array is readable. An input image is shown as a note of
+ *  its count and size, never as its base64. */
 export function describeRequest(body: Record<string, unknown>): string | null {
   if (Object.keys(body).length === 0) {
     return null;
   }
-  return JSON.stringify(body, null, 2);
+  const shown = { ...body };
+  for (const field of Object.keys(LOCAL_IMAGE_FIELDS)) {
+    if (field in shown) {
+      shown[field] = imageNote(shown[field]);
+    }
+  }
+  return JSON.stringify(shown, null, 2);
+}
+
+/** What the log shows in place of an image field's base64: how many images
+ *  and their decoded size, such as `<3 images, 4.2 MB>`. */
+function imageNote(value: unknown): string {
+  const images = Array.isArray(value) ? value : [value];
+  const bytes = images.reduce<number>((sum, image) => sum + decodedBytes(image), 0);
+  const count = images.length === 1 ? "1 image" : `${images.length} images`;
+  return `<${count}, ${megabytes(bytes)}>`;
+}
+
+/** The size of the bytes a base64 string holds, from its length alone. */
+function decodedBytes(image: unknown): number {
+  if (typeof image !== "string") {
+    return 0;
+  }
+  const padding = image.length - image.replace(/=+$/, "").length;
+  return Math.max(0, Math.floor((image.length * 3) / 4) - padding);
 }
 
 type Usage = { prompt_tokens?: unknown; completion_tokens?: unknown };

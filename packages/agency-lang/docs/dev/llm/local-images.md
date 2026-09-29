@@ -11,9 +11,10 @@ preserve when changing them.
 |---|---|
 | `stdlib/image.agency` | Public functions and approval interrupts |
 | `lib/stdlib/image.ts` | Input validation, approved file reads, dispatch, and usage accounting |
+| `lib/stdlib/localImageInputs.ts` | The stdlib's copy of the input image table, the checks made before approval, and the body limit |
 | `lib/stdlib/mlxImage.ts` | The local image provider and request timeouts |
 | `lib/cli/diffusersImageServer.py` | Model loading and image generation |
-| `lib/cli/diffusersImageRules.py` | Supported families, request validation, and adapter bookkeeping |
+| `lib/cli/diffusersImageRules.py` | Supported families, the input image table, request validation, size arithmetic, and adapter bookkeeping |
 | `lib/cli/localServerCommon.py` | Shared HTTP helpers and image byte validation |
 | `lib/stdlib/modelBackend.ts` | Recognition of diffusers model directories |
 | `lib/stdlib/diffusersFiles.ts` | Selection of files to download |
@@ -73,10 +74,10 @@ inference requirements. SDXL requires `force_zeros_for_empty_prompt: true`.
 Qwen-Image uses `true_cfg_scale` for guidance and needs a negative prompt
 to enable it. Its default negative prompt is a single space.
 
-Only SDXL enables `takes_lora` and `takes_controlnet`. Its
-`controlnet_pipeline` is `StableDiffusionXLControlNetPipeline`.
-When adding a family, define its components, settings, defaults, and
-supported options in the table. Verify them against a model's
+Only SDXL enables `takes_lora`. Each row's `pipelines` key names the
+diffusers class for each mode the family takes, as described in
+[Modes](#modes). When adding a family, define its components, settings,
+defaults, pipelines, and supported options in the table. Verify them against a model's
 `model_index.json` and test generation on a Mac before adding a catalog entry.
 
 All components must be available in the model directory. Models that
@@ -88,6 +89,200 @@ A request generates one image. Width and height must each be a multiple
 of 16 between 256 and 2048, with at most 4 million pixels in total.
 For example, `2048x1920` is allowed and `2048x2048` is not. The size and
 step limits bound how long a request can hold the generation lock.
+[Output size](#output-size) covers a request that gives no size.
+
+## Modes
+
+A request is in one of three modes. The image field it carries decides
+which:
+
+| Mode | Image field | Other fields of the mode | Families |
+|---|---|---|---|
+| plain | none | none | all five |
+| control | `control_image` | `controlnet`, `control_scale`, `control_invert` | SDXL |
+| reference | `images` | none | FLUX.2 [klein] |
+
+In reference mode, klein draws a new image from pure noise and reads
+each reference as extra tokens on every step. It copies from the
+reference instead of repainting it, so an edit keeps the character.
+There is no `strength`.
+
+`mode_of` in the rules module decides the mode and makes three
+refusals:
+
+1. Image fields of two modes: "a request takes one of control_image or
+   images."
+2. A field of a mode the request is not in, such as `control_scale`
+   without `control_image`. The message names the image field the
+   setting goes with. `MODE_FIELDS` lists each mode's fields.
+3. A mode the family has no pipeline for. The message comes from the
+   image field's `refusal` and names the families that take the mode.
+
+A LoRA works in every mode. It is loaded into the shared weights, so
+every pipeline of the family sees it.
+
+### The input image table
+
+`INPUT_IMAGES` in the rules module has one row per image field. The code
+that checks a request, decodes an image, fits it, and picks a pipeline
+reads the row. It has no branch per mode. `pipeline_args` is the one
+exception: it adds `controlnet_conditioning_scale` in control mode.
+
+| Key | Meaning | `control_image` | `images` |
+|---|---|---|---|
+| `mode` | The mode the field puts a request in | `control` | `reference` |
+| `max_count` | How many images the field takes. One is a base64 string, more is a list | 1 | 4 |
+| `max_bytes` | The largest image, in bytes | 50 MB | 20 MB |
+| `fit` | How a decoded image is fitted to the output size | `letterbox` | `shrink` |
+| `on_white` | Paste a transparent image onto white before converting it to RGB | false | true |
+| `sets_size` | With no size in the request, take the output's shape from the first image | false | true |
+| `prepare` | Optional. A step in the server's `PREPARES` run on the decoded image before fitting | `invert` | none |
+| `check` | Optional. A check in the rules module's `CHECKS` run on the decoded image's size | none | `reference_problem` |
+| `refusal` | The message for a family with no pipeline for the mode, with `{label}` and `{families}` | "does not take a ControlNet" | "does not take reference images" |
+
+A control image has `on_white` false because its background must stay
+as drawn. A reference has it true because character art is often a PNG
+with a transparent background, and converting it directly turns that
+background black. `reference_problem` refuses a reference with a side
+under 64 pixels or a shape more extreme than 8 to 1. klein makes both
+checks itself, but from inside the pipeline call, where a failure is a
+server error.
+
+`LOCAL_IMAGE_FIELDS` in `lib/stdlib/localImageInputs.ts` is the same
+table for the stdlib, with the parameter name and the approval question
+for each field. A test in `diffusersImageServer.test.ts` checks that
+both tables have the same fields, counts, and byte caps.
+
+### The pipelines table
+
+The `pipelines` key of each family row names a diffusers class per mode.
+A family takes a mode when it has a class for it:
+
+| Family | `plain` | `control` | `reference` |
+|---|---|---|---|
+| Z-Image Turbo | `ZImagePipeline` | | |
+| Chroma | `ChromaPipeline` | | |
+| Qwen-Image | `QwenImagePipeline` | | |
+| FLUX.2 [klein] | `Flux2KleinPipeline` | | `Flux2KleinPipeline` |
+| SDXL | `StableDiffusionXLPipeline` | `StableDiffusionXLControlNetPipeline` | |
+
+The server loads the `plain` class. `pipeline_for` returns the loaded
+pipeline when a mode's class is the plain class, as klein's reference
+class is. Otherwise it builds the mode's class once from the loaded
+pipeline's components and keeps it. The two pipelines share weights, so
+the second one costs no extra memory or load time. A mode that needs a
+model on top of those components names its request fields in the
+server's `MODE_MODELS`. Control mode names `controlnet`, which
+`load_controlnet` loads.
+
+### Adding a mode
+
+1. Add a row to `INPUT_IMAGES` and to `LOCAL_IMAGE_FIELDS`, with the
+   same field name, mode, count, and byte cap.
+2. Add the image field and the mode's other fields to `MODE_FIELDS`, to
+   `FIELDS`, and to `SETTINGS` in `mlxImage.ts`.
+3. Add the mode's class to the `pipelines` key of each family that takes
+   it. Check in the diffusers source that the class can be built from
+   the plain pipeline's components.
+4. Add a fit to `FITS`, a step to `PREPARES`, or a check to `CHECKS` if
+   the existing ones do not fit the mode.
+5. Add the parameter to `generateImageLocal` and `_localImageInputs`.
+   The body limits on both sides follow from the tables.
+6. Add rules tests for the refusals, and an agency-js test for the
+   approval, like `image-generation-local-edit`.
+
+## Decoding an input image
+
+`decode_image` in the server decodes every input image. It reads the
+image's row and does these steps in order:
+
+1. Open the bytes with Pillow, allowing only PNG, JPEG, WebP, and GIF.
+2. Refuse an image over 40 megapixels before decoding its pixels.
+3. Decode the pixels with `image.load()`. `Image.open` reads the header
+   only, so a file that is cut short or damaged fails here. The server
+   answers 400 and prints Pillow's error to stderr.
+4. Apply the EXIF orientation with `ImageOps.exif_transpose`. A phone
+   stores a portrait photo as landscape pixels plus a rotation tag.
+   Without this step, an edit of a portrait photo comes back sideways.
+5. When the row's `on_white` is true, paste a transparent image onto
+   white. An image is transparent when it has an alpha band, or when it
+   marks one color as transparent, as a palette or RGB PNG can.
+6. Run the row's `check` on the upright image's size.
+7. Convert to RGB.
+
+After decoding, `prepared` runs the row's `prepare` step, and `fitted`
+fits the image to the output size. All of this happens before the
+generation lock is taken, so a bad image never waits for the GPU or
+loads a ControlNet.
+
+## Output size
+
+`check_request` returns `size` as the request gave it, or `None`. The
+server decodes the input images and then calls `output_size`:
+
+| Request's size | Row's `sets_size` | Result |
+|---|---|---|
+| given | any | the request's size |
+| none | true | `derived_size` of the first image |
+| none | false, or no image | 1024x1024 |
+
+A control request with no size still makes a 1024x1024 image. Its
+drawing is letterboxed into that size.
+
+`derived_size` turns a picture's size into an output size:
+
+1. If the picture has more than 1,048,576 pixels, scale it down to that
+   many, keeping its shape. A picture is never scaled up.
+2. If a side is still over 2048, scale down again until it is 2048.
+3. Round each side down to a multiple of 16.
+4. If a side is now under 256, refuse and ask for a size.
+
+| Picture | Output size |
+|---|---|
+| 1024x1024 | 1024x1024 |
+| 4000x3000 | 1168x880 |
+| 300x300 | 288x288 |
+| 2896x362 | 2048x256 |
+| 200x1000 | refused |
+
+One megapixel is the pixel budget of the default size, so an edit of a
+large photo takes about as long as a plain generation.
+
+The size is computed once and passed to `fit_box` and `pipeline_args`.
+The checked request is never changed after `check_request` returns it.
+`fit_box` scales an image the way the row's `fit` says. The `FITS` table
+in the rules module has one row per fit:
+
+| Fit | What it does | Goes on a canvas of the output size |
+|---|---|---|
+| `letterbox` | Scales the image to fit inside the output and centers it | Yes, on black |
+| `shrink` | Scales an image over one megapixel down to one megapixel | No |
+
+klein shrinks a reference to one megapixel itself, but inside the
+pipeline call, under the generation lock. The server shrinks it first.
+Four references of 40 megapixels are about 480 MB as RGB, and with
+`shrink` the server holds them only while it decodes.
+
+## Size limits on the inputs
+
+Three limits apply, from the outside in:
+
+| Limit | Value | Where |
+|---|---|---|
+| One reference | 20 MB | `_localImageInputs` before approval, `approvedFileBytes` after it, `image_bytes_of` on the server |
+| One control image | 50 MB | the same three places |
+| One request body | 64 KB plus the base64 of 80 MB, 106,732,204 bytes | the local front door and the image server |
+
+A request carries one image field. The largest field is 4 references of
+20 MB each, so the body limit is computed from that. `MAX_BODY_BYTES` in
+the rules module and `localBodyBytes()` in `localImageInputs.ts` each
+compute it from their own table, and the same test checks that they
+are equal.
+The front door holds requests for `/v1/images/generations` to it, as
+`mlx-local-models.md` describes.
+
+A reference over 20 MB buys nothing, because klein shrinks every
+reference to one megapixel.
 
 ## Security constraints
 
@@ -102,33 +297,50 @@ Preserve these constraints when changing loading or request handling:
 5. Loads do not pass `trust_remote_code` or `custom_pipeline`.
 6. The family table controls pipeline imports and permitted components.
 7. Requests use strictly parsed JSON. The body limit allows 64 KB of
-   request fields plus the base64 representation of a 50 MB control image.
+   request fields plus the base64 of the most image bytes one image
+   field may carry, from `INPUT_IMAGES`. Today that is 4 references of
+   20 MB each.
 8. Requests select adapters and ControlNets by a single name within
    configured folders. They cannot supply arbitrary paths for the server
    to open.
-9. Control images reach the server as bytes after stdlib approval.
-   `approvedFileBytes` rejects symlinks and files over 50 MB.
-   `image_bytes_of` checks the size again on the server. Pillow accepts
-   only PNG, JPEG, WebP, and GIF, and images over 40 megapixels are rejected
-   before decoding.
+9. Every input image, in any image field, reaches the server as bytes
+   after stdlib approval. `approvedFileBytes` rejects symlinks and files
+   over the field's `max_bytes`. `image_bytes_of` checks the size again
+   on the server against the same row. Pillow accepts only PNG, JPEG,
+   WebP, and GIF, and images over 40 megapixels are rejected before
+   decoding.
 
 The stdlib enforces approval. A process that can reach the local HTTP
 endpoint can submit image bytes directly, but the server cannot be asked
-to read a control image from a path.
+to read an input image from a path.
 
 ## Approval for input images
 
 ### Local generation
 
-`generateImageLocal` returns an image in memory. Without a control image,
+`generateImageLocal` returns an image in memory. Without an input image,
 it raises no interrupt. Saving the result with `writeBinary` raises that
 function's own effect.
 
-A ControlNet call must provide both `controlnet` and `controlImage`.
-The Agency function checks that pair and resolves the image path before
-raising `std::readImage`. After approval, `image.ts` reads the file through
-`approvedFileBytes` and sends its base64 bytes as `control_image`.
-Rejection prevents the request.
+A call with input images keeps this order:
+
+1. `_localImageInputs` makes every check that can fail. It refuses a
+   `controlnet` without a `controlImage` and the reverse, input images of
+   two modes, more images than the field's `maxCount`, a URL or data URI,
+   and any path that is not a regular image file under the field's
+   `maxBytes`. It reads no bytes. A call that is going to fail asks for
+   nothing.
+2. The Agency function raises one `std::readImage` per file, with the
+   file's `dir` and `filename` and the field's question. The control
+   image asks "Read this drawing to condition the image on?" and each
+   reference asks "Read this picture to edit it?". Every file is
+   approved before any is read.
+3. `image.ts` reads each file through `approvedFileBytes` and sends the
+   base64 bytes in the field's request field.
+
+A rejection of any one file returns before the request is sent. A
+reference stays on this machine, so it raises `std::readImage` and not
+`std::uploadImage`.
 
 ### Hosted generation
 
@@ -216,8 +428,9 @@ The pipelines share the UNet and encoders, so a LoRA applied to the UNet
 also affects ControlNet generation. `ControlNetModel.from_pretrained`
 loads that fixed class without allowing `config.json` to choose an import.
 
-`letterbox` scales the control image to fit the requested output size
-while preserving its aspect ratio. The server centers it on black.
+`letterbox` scales the control image to fit the output size while
+preserving its aspect ratio. With no size in the request, the output is
+1024x1024, because the control row's `sets_size` is false. The server centers it on black.
 The caller can invert the image with `invertControlImage`, sent as
 `control_invert`, before fitting. The server does not infer inversion
 from the filename or image brightness. It does not extract edges, depth,
@@ -242,7 +455,15 @@ statelog event, and guard enforcement.
 pixel count, with allowances for attention cost and a queued request.
 When steps are omitted, it budgets for 80, the largest family limit.
 Keep that allowance in sync when changing the table. The timeout reaches
-about 107 minutes at the size and step caps.
+about 107 minutes at the size and step caps. An empty size is budgeted as
+1024x1024, since a size taken from a picture is never larger.
+
+Each reference adds about 4,000 tokens to every step, as much work as one
+more megapixel of output. So the timeout adds one megapixel per
+reference. The stdlib passes the count as `metadata.references`, from
+`referenceCount`, which counts the images of a field whose
+`readEachStep` is true. The provider does not look inside the request's
+image fields.
 
 ## Startup and cancellation
 
@@ -280,7 +501,8 @@ The downloader reads `model_index.json` into memory with
 The shared HTTP server streams image replies without parsing their base64.
 It logs the request path, format, response size, and duration. Verbose
 logging replaces a successful response body with an image-size summary.
-Error responses remain visible as JSON.
+Error responses remain visible as JSON. In a logged request, each image
+field is replaced with a note such as `<3 images, 4.2 MB>`.
 
 ## Tests
 
@@ -288,7 +510,21 @@ The rules tests cover request validation and folder checks without
 loading torch. `tests/agency-js/image-upload-approval` covers hosted
 upload approval, multiple inputs, rejection, and the bytes sent.
 `tests/agency-js/image-generation-local-controlnet` covers control-image
-approval and transmission.
+approval and transmission. `tests/agency-js/image-generation-local-edit`
+covers one `std::readImage` per reference, a rejection that sends no
+request, and a bad path that asks nothing. Both agency-js tests start
+their stand-in server in `server.js`, which `test.js` imports before the
+program, so the environment is set before the program loads.
+
+`decode_image`, `prepared`, and `fitted` need Pillow and no torch. Their
+tests are the last block of `diffusersImageServer.test.ts`. The block
+runs with `AGENCY_IMAGE_PYTHON` when it is set and with `python3`
+otherwise, and it is skipped when that Python has no Pillow:
+
+```bash
+AGENCY_IMAGE_PYTHON=<a Python with Pillow> \
+pnpm vitest run lib/cli/diffusersImageServer.test.ts
+```
 
 The live server test requires a downloaded model and a Mac GPU:
 
@@ -298,4 +534,6 @@ AGENCY_IMAGE_PYTHON=<a Python with the image packages> \
 pnpm vitest run lib/cli/diffusersImageServer.live.test.ts
 ```
 
-It generates a small image and checks cancellation.
+It generates a small image and checks cancellation. Set
+`AGENCY_KLEIN_MODEL_DIR` to a FLUX.2 [klein] directory to also run an
+edit with one reference.

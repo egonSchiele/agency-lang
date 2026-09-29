@@ -54,6 +54,23 @@ describe("describeRequest", () => {
   it("is null for an empty body", () => {
     expect(describeRequest({})).toBe(null);
   });
+
+  it("shows a control image as a note of its count and size, never its base64", () => {
+    const image = Buffer.alloc(5_000_000).toString("base64");
+    const logged = describeRequest({ model: "org/a", prompt: "a cat", control_image: image });
+    expect(JSON.parse(logged!)).toEqual({
+      model: "org/a",
+      prompt: "a cat",
+      control_image: "<1 image, 5.0 MB>",
+    });
+    expect(logged).not.toContain(image.slice(0, 100));
+  });
+
+  it("counts a list of images together", () => {
+    const image = Buffer.alloc(1_400_000).toString("base64");
+    const logged = describeRequest({ model: "org/a", control_image: [image, image, image] });
+    expect(JSON.parse(logged!).control_image).toBe("<3 images, 4.2 MB>");
+  });
 });
 
 describe("describeReply", () => {

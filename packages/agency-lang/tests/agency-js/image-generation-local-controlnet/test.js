@@ -1,38 +1,8 @@
-import * as http from "node:http";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-// A stand-in for `agency local serve --image`: one 1x1 PNG, with the seed
-// the request asked for. It records every request, so the result shows
-// what generateImageLocal sent, and that a rejected read sent nothing.
-const PNG =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
-const requests = [];
-const server = http.createServer((req, res) => {
-  let text = "";
-  req.on("data", (chunk) => (text += chunk));
-  req.on("end", () => {
-    const body = JSON.parse(text);
-    requests.push(body);
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ output_format: "png", data: [{ b64_json: PNG, seed: body.seed }] }));
-  });
-});
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-process.env.MLX_BASE_URL = `http://127.0.0.1:${server.address().port}/v1`;
-// The deterministic LLM client answers image() itself. This test is about
-// the real path through the mlx provider to the server, so the mocks are
-// switched off before the program is imported and installs its client.
-delete process.env.AGENCY_LLM_MOCKS;
-
-// The drawing, in a folder spelled without links so the interrupt's
-// payload can be compared with it.
-const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "controlnet-")));
-const drawing = path.join(dir, "pose.png");
-fs.writeFileSync(drawing, Buffer.from(PNG, "base64"));
-
-const {
+import { PNG, requests, server } from "./server.js";
+import {
   withControl,
   withoutControl,
   imageWithoutControlnet,
@@ -40,7 +10,13 @@ const {
   approve,
   reject,
   respondToInterrupts,
-} = await import("./agent.js");
+} from "./agent.js";
+
+// The drawing, in a folder spelled without links so the interrupt's
+// payload can be compared with it.
+const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "controlnet-")));
+const drawing = path.join(dir, "pose.png");
+fs.writeFileSync(drawing, Buffer.from(PNG, "base64"));
 
 /** What one interrupt asked, with the folder checked against the real one. */
 function asked(result) {

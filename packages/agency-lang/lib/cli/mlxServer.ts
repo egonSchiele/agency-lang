@@ -1,10 +1,12 @@
 import * as http from "node:http";
 import { parseJsonBody } from "../serve/util.js";
 import { notServedMessage } from "./localServe.js";
+import { localBodyBytes } from "../stdlib/localImageInputs.js";
 import {
   createCapture,
   describeReply,
   describeRequest,
+  IMAGES_PATH,
   serveLogLines,
   type LogEntry,
   type LogOptions,
@@ -155,11 +157,26 @@ function forward(
 type ReadResult =
   { body: Record<string, unknown> } | { refusal: { status: number; message: string } };
 
+/** The largest body the door reads for a request to `url`. An image
+ *  request may carry input images, up to what the image server takes.
+ *  Every other route keeps parseJsonBody's default. */
+function bodyLimit(url: string | undefined): number | undefined {
+  return url === IMAGES_PATH ? localBodyBytes() : undefined;
+}
+
 /** The request body, or how to refuse it. Refusing is left to the caller so
- *  that every reply the door sends, including this one, reaches the log. */
-async function readRequest(req: http.IncomingMessage): Promise<ReadResult> {
+ *  that every reply the door sends, including this one, reaches the log.
+ *
+ *  A body over the limit is read to its end and thrown away, so the client
+ *  reads the 413 instead of seeing a dropped connection. That reading
+ *  stops, and the socket closes, once the client has sent as much past the
+ *  limit as the largest body the door takes. */
+async function readRequest(
+  req: http.IncomingMessage,
+  maxBytes: number | undefined,
+): Promise<ReadResult> {
   try {
-    const parsed = await parseJsonBody(req);
+    const parsed = await parseJsonBody(req, maxBytes, localBodyBytes());
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return { refusal: { status: 400, message: "Request body is not a JSON object." } };
     }
@@ -238,7 +255,7 @@ export function startFrontDoor(
       record.finish(ownReply(200, JSON.stringify(body)));
       return;
     }
-    const read = await readRequest(req);
+    const read = await readRequest(req, bodyLimit(req.url));
     if ("refusal" in read) {
       refuse(read.refusal.status, read.refusal.message);
       return;

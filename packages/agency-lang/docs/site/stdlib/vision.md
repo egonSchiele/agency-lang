@@ -14,12 +14,17 @@ it with `agency local serve <model>`. The image never leaves the machine.
   import { cropImage } from "std::image"
 
   node main() {
-    const found = detectObjects("page.png", ["person", "desk", "chair"], "florence-2") with approve
-    for (hit in found) {
-      cropImage("page.png", hit.box, "crops/${hit.label}_${hit.id}.png", pad: 0.05) with approve
-    }
-    const tags = tagImage("crops/person_0.png", "wd14-tagger") with approve
-    print(map(tags, \\t -> t.tag).join(", "))
+    handle {
+      const found = detectObjects("page.png", ["person", "desk", "chair"], "florence-2") catch []
+      for (hit in found) {
+        cropImage("page.png", hit.box, "crops/${hit.label}_${hit.id}.png", pad: 0.05)
+      }
+      const tags = tagImage("crops/person_0.png", "wd14-tagger") catch []
+      const names = map(tags) as t {
+        return t.tag
+      }
+      print(names.join(", "))
+    } with approve
   }
   ```
 
@@ -48,7 +53,7 @@ export type BoundingBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L44))
 
 ### Detection
 
@@ -66,7 +71,7 @@ export type Detection = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L48))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L53))
 
 ### Tag
 
@@ -80,7 +85,7 @@ export type Tag = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L61))
 
 ## Effects
 
@@ -96,7 +101,7 @@ effect std::vision {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L39))
 
 ## Functions
 
@@ -117,9 +122,9 @@ Find the named things in an image with a local detector and return
   on this machine; nothing is uploaded.
 
   @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required
+  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required. Florence-2 looks for each label in its own pass, so each label adds to the time
   @param model - A local vision model that detects, such as "florence-2"
-  @param threshold - Drop detections scoring below this, 0 to 1
+  @param threshold - Drop detections scoring below this, 0 to 1. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
 
 **Parameters:**
 
@@ -134,7 +139,7 @@ Find the named things in an image with a local detector and return
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L66))
 
 ### tagImage
 
@@ -171,7 +176,7 @@ Describe an image as booru tags with a local tagger: "1girl, glasses,
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L91))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L96))
 
 ### captionImage
 
@@ -202,4 +207,4 @@ Write a sentence about an image with a local model. Runs on this
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L122))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L127))

@@ -43,7 +43,7 @@ export type ImageBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L43))
 
 ### ImageSize
 
@@ -57,7 +57,7 @@ export type ImageSize = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L51))
 
 ### GeneratedImage
 
@@ -68,7 +68,7 @@ export type GeneratedImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L56))
 
 ### ImageQuality
 
@@ -76,7 +76,7 @@ export type GeneratedImage = {
 export type ImageQuality = "low" | "medium" | "high" | "auto"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L61))
 
 ### LocalImage
 
@@ -88,14 +88,14 @@ export type LocalImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L99))
 
 ## Effects
 
 ### std::cropImage
 
 ```ts
-@alwaysUnder(outDir)
+@alwaysUnder(dir, outDir)
 effect std::cropImage {
   dir: string;
   filename: string;
@@ -104,12 +104,11 @@ effect std::cropImage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L34))
 
 ### std::pasteImages
 
 ```ts
-@alwaysUnder(outDir)
 effect std::pasteImages {
   files: string[];
   outDir: string;
@@ -117,7 +116,7 @@ effect std::pasteImages {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L39))
 
 ## Functions
 
@@ -164,7 +163,7 @@ Generate an image from a text prompt using a hosted provider, optionally
 
 **Returns:** `Result<GeneratedImage>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L63))
 
 ### generateImageLocal
 
@@ -223,7 +222,7 @@ Generate an image on this machine with a local image model, such as
 
 **Returns:** `Result<LocalImage>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L105))
 
 ### cropImage
 
@@ -262,7 +261,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L155))
 
 ### imageSize
 
@@ -284,7 +283,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L191))
 
 ### pasteImages
 
@@ -317,4 +316,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L206))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L208))

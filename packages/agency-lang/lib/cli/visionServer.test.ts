@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
-import { safeDeleteDirectoryWithin } from "../utils.js";
 import { visionServerScript, ONNXRUNTIME_VERSION, TRANSFORMERS_VERSION } from "./localServe.js";
 import { VISION_ARCHITECTURES, VISION_ONNX_FILES } from "../stdlib/modelKind.js";
+import { MAX_IMAGE_BYTES } from "../stdlib/vision.js";
 
 const cliDir = path.dirname(visionServerScript());
 const rulesModule = path.join(cliDir, "visionRules.py");
@@ -43,37 +42,28 @@ except ValueError as e:
 }
 
 /** Runs check_request for a family and route and prints the result, or
- *  the error. */
+ *  the error. The checked image is bytes, printed back as base64. */
 function check(
   family: "wd14" | "Florence2ForConditionalGeneration",
   route: string,
   body: unknown,
 ): string {
   return rules(`
-import json
+import base64, json
 body = json.loads(${JSON.stringify(JSON.stringify(body))})
 try:
-    print(json.dumps(check_request(FAMILIES["${family}"], "${route}", body), sort_keys=True))
+    checked = check_request(FAMILIES["${family}"], "${route}", body)
+    checked["image"] = base64.b64encode(checked["image"]).decode("ascii")
+    print(json.dumps(checked, sort_keys=True))
 except RequestError as e:
     print("ERROR", e.status, e)
 `);
 }
 
 describe.skipIf(!hasPython3)("visionRules.py", () => {
-  let dir: string;
-  let image: string;
-
-  beforeAll(() => {
-    // realpath, because the server refuses a path through a symlink and
-    // macOS's temp directory is one. The stdlib sends real paths.
-    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "vision-")));
-    image = path.join(dir, "page.png");
-    fs.writeFileSync(image, "not really a png");
-  });
-
-  afterAll(() => {
-    safeDeleteDirectoryWithin(os.tmpdir(), dir);
-  });
+  // A request carries the image's bytes as base64. Pillow decides later
+  // whether they are an image, so any bytes pass the rules.
+  const image = Buffer.from("not really a png").toString("base64");
 
   it("ships next to localServe", () => {
     expect(fs.existsSync(rulesModule)).toBe(true);
@@ -141,34 +131,30 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
     );
   });
 
-  it("refuses an image that is not an absolute path to a regular image file", () => {
-    expect(check("wd14", "tags", { image: "page.png" })).toBe(
-      "ERROR 400 image must be an absolute path. Got 'page.png'.",
+  it("refuses an image that is not base64, or is a path", () => {
+    expect(check("wd14", "tags", {})).toBe("ERROR 400 image must be the image's bytes as base64.");
+    expect(check("wd14", "tags", { image: "/Users/me/Pictures/passport.jpg" })).toBe(
+      "ERROR 400 image is not valid base64.",
     );
-    expect(check("wd14", "tags", { image: path.join(dir, "missing.png") })).toBe(
-      `ERROR 400 ${path.join(dir, "missing.png")} is not a file.`,
-    );
-    expect(check("wd14", "tags", { image: dir })).toBe(`ERROR 400 ${dir} is not a file.`);
-    fs.writeFileSync(path.join(dir, "notes.txt"), "x");
-    expect(check("wd14", "tags", { image: path.join(dir, "notes.txt") })).toBe(
-      `ERROR 400 ${path.join(dir, "notes.txt")} is not an image this server reads. It reads .png, .jpg, .jpeg, .webp, .gif.`,
-    );
-    expect(check("wd14", "tags", {})).toBe(
-      "ERROR 400 image must be the absolute path of an image file.",
+    expect(check("wd14", "tags", { image: 42 })).toBe(
+      "ERROR 400 image must be the image's bytes as base64.",
     );
   });
 
-  it("refuses an image reached through a symlink, at the file or above it", () => {
-    fs.symlinkSync(image, path.join(dir, "link.png"));
-    expect(check("wd14", "tags", { image: path.join(dir, "link.png") })).toBe(
-      `ERROR 400 ${path.join(dir, "link.png")} goes through a symlink at ${path.join(dir, "link.png")}, which this server does not follow.`,
-    );
-    fs.mkdirSync(path.join(dir, "real"));
-    fs.writeFileSync(path.join(dir, "real", "a.png"), "x");
-    fs.symlinkSync(path.join(dir, "real"), path.join(dir, "linked"));
-    expect(check("wd14", "tags", { image: path.join(dir, "linked", "a.png") })).toBe(
-      `ERROR 400 ${path.join(dir, "linked", "a.png")} goes through a symlink at ${path.join(dir, "linked")}, which this server does not follow.`,
-    );
+  it("refuses an image over the size limit without decoding it", () => {
+    const out = rules(`
+from localServerCommon import MAX_IMAGE_BYTES, base64_length, image_bytes_of, ImageDataError
+try:
+    image_bytes_of("A" * (base64_length(MAX_IMAGE_BYTES) + 4))
+except ImageDataError as e:
+    print(e)
+`);
+    expect(out).toBe("image is over 50,000,000 bytes; this server reads images up to that size.");
+  });
+
+  it("takes a body big enough for the largest image, and the same limit as the stdlib", () => {
+    expect(rules("print(MAX_IMAGE_BYTES)")).toBe(String(MAX_IMAGE_BYTES));
+    expect(Number(rules("print(MAX_BODY_BYTES - base64_length(MAX_IMAGE_BYTES))"))).toBe(64 * 1024);
   });
 
   it("refuses the labels a detector cannot use", () => {
@@ -229,10 +215,12 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
 
   it("builds a warm-up request on the family's first route that passes its own checks", () => {
     const out = rules(`
-import json
+import base64, json
 for family in FAMILIES.values():
     route, body = warm_up_request(family, ${JSON.stringify(image)})
-    print(route, json.dumps(check_request(family, route, body), sort_keys=True))
+    checked = check_request(family, route, body)
+    checked["image"] = base64.b64encode(checked["image"]).decode("ascii")
+    print(route, json.dumps(checked, sort_keys=True))
 `);
     expect(out.split("\n")).toEqual([
       `tags {"image": "${image}", "limit": 30, "threshold": 0.35}`,
@@ -242,6 +230,30 @@ for family in FAMILIES.values():
 });
 
 describe.skipIf(!hasPython3)("visionServer.py and imageTools.py", () => {
+  it("runs Florence-2 detection once per label and labels each box with the label asked for", () => {
+    // The runner is built without loading a model; only its _run is faked.
+    const out = rules(`
+import json
+import visionServer
+runner = visionServer.Florence2Runner.__new__(visionServer.Florence2Runner)
+runner.rules = FAMILIES["Florence2ForConditionalGeneration"]
+asked = []
+def fake_run(image, task, text=""):
+    asked.append(task + text)
+    return {"bboxes": [[0, 0, 50, 50]], "bboxes_labels": ["whatever the model wrote"]}
+runner._run = fake_run
+class FakeImage:
+    size = (100, 100)
+print(json.dumps(asked + [d["label"] for d in runner.detections_of(FakeImage(), {"labels": ["person", "desk"]})["detections"]]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      "<OPEN_VOCABULARY_DETECTION>person",
+      "<OPEN_VOCABULARY_DETECTION>desk",
+      "person",
+      "desk",
+    ]);
+  });
+
   it("ship next to localServe and are valid Python 3", () => {
     for (const script of ["visionServer.py", "imageTools.py"]) {
       const file = path.join(cliDir, script);

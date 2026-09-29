@@ -1,0 +1,65 @@
+// cropImage, pasteImages, and imageSize in std::image each raise an effect
+// naming the real files they read and write. These nodes check the payload
+// with a handler that rejects, so no Python runs.
+import { cropImage, pasteImages, imageSize } from "std::image"
+import { basename } from "std::path"
+
+def probe(): string {
+  const w = write("image-effects-probe.png", "not a png", "/tmp") with approve
+  return "/tmp/image-effects-probe.png"
+}
+
+node cropPayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    cropImage(path, { x: 0, y: 0, width: 0.5, height: 0.5 }, "/tmp/image-effects-crop.png")
+  } with (data) {
+    seen = "${data.effect}|${data.data.filename}|${data.data.outFilename}|${data.data.dir == data.data.outDir}"
+    return reject()
+  }
+  return seen
+}
+
+node pastePayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    pasteImages([path, path], "/tmp/image-effects-sheet.png")
+  } with (data) {
+    seen = "${data.effect}|${data.data.files.length}|${basename(data.data.files[0])}|${data.data.outFilename}"
+    return reject()
+  }
+  return seen
+}
+
+// A path that cannot be resolved fails before the interrupt, so nobody is
+// asked to approve it.
+node pasteBadPathAsksNobody(): string {
+  let asked = false
+  let result = ""
+  handle {
+    const r = pasteImages([""], "/tmp/image-effects-bad.png")
+    if (isFailure(r)) {
+      result = "failed"
+    } else {
+      result = "succeeded"
+    }
+  } with (data) {
+    asked = true
+    return reject()
+  }
+  return "${result}|asked=${asked}"
+}
+
+node sizePayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    imageSize(path)
+  } with (data) {
+    seen = "${data.effect}|${data.data.filename}"
+    return reject()
+  }
+  return seen
+}

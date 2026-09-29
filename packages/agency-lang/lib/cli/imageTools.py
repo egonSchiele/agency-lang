@@ -12,20 +12,27 @@ files are created with mode "x": an existing file is never overwritten.
   imageTools.py paste <out> <columns> <in>...
 
 Box numbers are normalized 0..1 with the origin at the top left, the
-shape std::ocr and std::vision return.
+shape std::ocr and std::vision return. The arithmetic is in
+imageToolsRules.py, which CI tests without Pillow.
 """
 
 import json
 import os
 import sys
+import warnings
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 
 from PIL import Image  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from imageToolsRules import MAX_IMAGE_PIXELS, crop_box, paste_layout  # noqa: E402
+
 # Pillow refuses images with more pixels than this, which guards against
-# a decompression bomb.
-Image.MAX_IMAGE_PIXELS = 100_000_000
+# a decompression bomb. Pillow only warns between the limit and twice it,
+# so the warning is an error here too.
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+warnings.simplefilter("error", Image.DecompressionBombWarning)
 
 # The background a square pad or a paste canvas gets.
 WHITE = (255, 255, 255)
@@ -53,16 +60,7 @@ def crop(source, out, x, y, w, h, pad, square):
     image, cut out and written. `square` pads the cut to a square with
     the edge color, so a wide crop keeps its whole width."""
     image = open_rgb(source)
-    width, height = image.size
-    box_w, box_h = float(w) * width, float(h) * height
-    grow_x, grow_y = box_w * float(pad), box_h * float(pad)
-    left = max(0.0, float(x) * width - grow_x)
-    top = max(0.0, float(y) * height - grow_y)
-    right = min(float(width), float(x) * width + box_w + grow_x)
-    bottom = min(float(height), float(y) * height + box_h + grow_y)
-    if right <= left or bottom <= top:
-        raise ValueError(f"the box covers nothing of a {width}x{height} image")
-    cut = image.crop((round(left), round(top), round(right), round(bottom)))
+    cut = image.crop(crop_box(x, y, w, h, pad, image.width, image.height))
     if square == "true":
         side = max(cut.width, cut.height)
         canvas = Image.new("RGB", (side, side), cut.getpixel((0, 0)))
@@ -71,30 +69,27 @@ def crop(source, out, x, y, w, h, pad, square):
     return save_new(cut, out)
 
 
-def size(source):
+def dimensions(source):
+    """(width, height) from the image's header, without decoding pixels."""
     with open(source, "rb") as f:
-        image = Image.open(f)
-        return {"width": image.width, "height": image.height}
+        return Image.open(f).size
+
+
+def size(source):
+    width, height = dimensions(source)
+    return {"width": width, "height": height}
 
 
 def paste(out, columns, *sources):
     """The inputs on a white canvas in rows of `columns`, each at its own
     size in a cell the size of the largest. Two inputs is a before and
-    after; a folder in rows of eight is a contact sheet."""
-    columns = int(columns)
-    if columns < 1:
-        raise ValueError("columns must be at least 1")
-    images = [open_rgb(path) for path in sources]
-    if not images:
-        raise ValueError("paste needs at least one image")
-    cell_w = max(image.width for image in images)
-    cell_h = max(image.height for image in images)
-    rows = (len(images) + columns - 1) // columns
-    canvas = Image.new("RGB", (cell_w * columns, cell_h * rows), WHITE)
-    for index, image in enumerate(images):
-        cell_x = (index % columns) * cell_w
-        cell_y = (index // columns) * cell_h
-        canvas.paste(image, (cell_x + (cell_w - image.width) // 2, cell_y + (cell_h - image.height) // 2))
+    after; a folder in rows of eight is a contact sheet. The sizes are
+    read first, so a canvas too large is refused before any pixels are
+    decoded, and the inputs are decoded one at a time."""
+    layout = paste_layout([dimensions(path) for path in sources], columns)
+    canvas = Image.new("RGB", layout["canvas"], WHITE)
+    for path, corner in zip(sources, layout["corners"]):
+        canvas.paste(open_rgb(path), corner)
     return save_new(canvas, out)
 
 
@@ -107,7 +102,7 @@ def main(argv):
         return 2
     try:
         result = COMMANDS[argv[1]](*argv[2:])
-    except (OSError, ValueError, TypeError) as err:
+    except (OSError, ValueError, TypeError, Image.DecompressionBombError, Image.DecompressionBombWarning) as err:
         print(str(err), file=sys.stderr)
         return 1
     print(json.dumps(result))

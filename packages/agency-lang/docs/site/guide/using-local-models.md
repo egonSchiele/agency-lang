@@ -357,23 +357,26 @@ Then ask. Each function does one thing and returns a `Result`, so a loop over a 
 ```ts
 import { detectObjects, tagImage } from "std::vision"
 import { cropImage } from "std::image"
-import { glob, write } from "std::shell"
+import { glob } from "std::shell"
 
 node main() {
-  const pages = glob("*.png", "./comics") with approve
+  const pages = glob("comics/*.png") catch []
   for (page in pages) {
     const found = detectObjects(page, ["person", "desk", "chair"], "florence-2") catch []
     for (hit in found) {
-      const out = "./dataset/${hit.label}_${hit.id}.png"
+      const out = "dataset/${hit.label}_${hit.id}.png"
       cropImage(page, hit.box, out, pad: 0.05)
       const tags = tagImage(out, "wd14-tagger") catch []
-      write("${out}.txt", map(tags, \t -> t.tag).join(", "))
+      const names = map(tags) as t {
+        return t.tag
+      }
+      write("${out}.txt", names.join(", "))
     }
   }
 }
 ```
 
-Run it with `--approve std::vision --approve std::cropImage --approve std::write` and it labels a few hundred crops unattended. Every call raises an effect naming the file it reads or writes, so a policy can allow tagging under `./dataset` and nothing else. Partial application narrows a tool before an agent gets it: `detectObjects.partial(labels: ["person"], model: "florence-2")` is a person-finder, and `cropImage` only ever writes a file that does not exist yet.
+Run it with `--approve std::glob --approve std::vision --approve std::cropImage --approve std::write` and it labels a few hundred crops unattended. Every call raises an effect naming the file it reads or writes, so a policy can allow tagging under `./dataset` and nothing else. Partial application narrows a tool before an agent gets it: `detectObjects.partial(labels: ["person"], model: "florence-2")` is a person-finder, and `cropImage` only ever writes a file that does not exist yet.
 
 ## What is different about a local model
 

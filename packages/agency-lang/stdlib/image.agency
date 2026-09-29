@@ -27,13 +27,15 @@ persist with `writeBinary()` or send onward with `std::thread`'s `image(...)`.
 */
 
 // Cutting a box out of one image and writing it as another. Both paths are
-// real spellings, since one approval is for "read this, write that".
-@alwaysUnder(outDir)
+// real spellings, since one approval is for "read this, write that". An
+// "always" answer pins both folders, as std::copy does, so a rule saved
+// for one crop cannot read an image from anywhere else.
+@alwaysUnder(dir, outDir)
 effect std::cropImage { dir: string, filename: string, outDir: string, outFilename: string }
 
 // Laying several images out on one canvas. Every input is listed the way
-// applyPatch lists the files a patch touches.
-@alwaysUnder(outDir)
+// applyPatch lists the files a patch touches. No "always" tag, as with
+// applyPatch: a list of inputs cannot be pinned to one folder.
 effect std::pasteImages { files: string[], outDir: string, outFilename: string }
 
 /** A region of an image, normalized to 0..1 with the origin at the top
@@ -218,8 +220,15 @@ export def pasteImages(
   @param outPath - Where to write the canvas. The extension picks the format
   @param columns - How many images per row
   """
-  const reals = map(paths) as p {
-    return _realTarget(p)
+  // Every path is checked before the interrupt, so a bad one fails here
+  // instead of being approved and failing afterwards.
+  const reals: string[] = []
+  for (p in paths) {
+    const real = try _realTarget(p)
+    if (isFailure(real)) {
+      return real
+    }
+    reals.push(real.value)
   }
   const out = try _realTarget(outPath)
   if (isFailure(out)) {

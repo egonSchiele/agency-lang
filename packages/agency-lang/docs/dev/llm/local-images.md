@@ -33,11 +33,14 @@ A failure is `{"error": {"message": "..."}}`.
 |---|---|---|---|---|---|
 | `z-image-turbo` | `Tongyi-MAI/Z-Image-Turbo` | 32.8 GB | 9 | 8.2 s | 29 GB |
 | `chroma1-hd` | `lodestones/Chroma1-HD` | 27.5 GB | 40 | 90.5 s | 36 GB |
+| `qwen-image-2512` | `Qwen/Qwen-Image-2512` | 57.7 GB | 50 | not measured | not measured |
+| `flux2-klein-4b` | `black-forest-labs/FLUX.2-klein-4B` | 16.0 GB | 4 | not measured | not measured |
 
-Both are apache-2.0 and have no content filter in their weights. The times
-come from a timing run with diffusers 0.40.0 and torch 2.14.0 in bfloat16,
-three images each. Loading took under 3 seconds from a warm file cache, and
-the warm-up generation 4 to 6 seconds.
+All four are apache-2.0. Z-Image Turbo and Chroma have no content filter in
+their weights; FLUX.2 [klein] is safety fine-tuned. The times come from a
+timing run with diffusers 0.40.0 and torch 2.14.0 in bfloat16, three images
+each. Loading took under 3 seconds from a warm file cache, and the warm-up
+generation 4 to 6 seconds.
 
 The memory warning `serve` prints adds up download sizes. An image model
 uses more than that while it generates: Chroma peaks at 36 GB against
@@ -131,22 +134,44 @@ The family table, `FAMILIES`, is keyed by `_class_name` in
 |---|---|---|---|---|
 | `ZImagePipeline` | 9 | 50 | 0.0 | refused |
 | `ChromaPipeline` | 40 | 80 | 3.0 | accepted |
+| `QwenImagePipeline` | 50 | 80 | 4.0 | accepted |
+| `Flux2KleinPipeline` | 4 | 50 | 1.0 | refused |
 | `StableDiffusionXLPipeline` | 28 | 80 | 5.5 | accepted |
 
-SDXL is the one family with `takes_lora`, and the one whose
-`model_index.json` carries a setting that is not a component,
-`force_zeros_for_empty_prompt`. A family row lists such settings under
-`settings`, each with the one value allowed, and `family_of` refuses a
-file that sets a different value or leaves it out, since the pipeline would
-then fall back to its own default.
+SDXL is the one family with `takes_lora`. Every family's pipeline class
+can load a LoRA adapter, but SDXL is the family people train adapters
+for, and the only one the adapter code has been tried with; a request
+naming an adapter for another family is refused.
 
 Each row also lists every component its `model_index.json` must name, as
 `[library, class]`. A file that names another class, an extra component, or
-too few is refused at start-up.
+too few is refused at start-up. A few files carry settings as well as
+components, which `from_pretrained` passes to the pipeline: klein's says
+`"is_distilled": true`, and every SDXL file says
+`"force_zeros_for_empty_prompt": true`, which makes an empty negative
+prompt encode as zeros, as the model was trained. A row's `settings` lists each one with the one
+value allowed, and a file that leaves one out is refused too. This keeps out
+the klein base model, which needs guidance and about 50 steps.
+
+`pipeline_args` turns a checked request into the pipeline's arguments, and
+two rows need it to do more than copy fields across:
+
+- Qwen-Image is not guidance-distilled. It ignores `guidance_scale` and
+  reads its guidance from `true_cfg_scale`, which the row's `guidance_arg`
+  names.
+- Qwen-Image runs guidance only when it gets a negative prompt, even a
+  blank one, so its `default_negative_prompt` is `" "`, as its model card
+  suggests. The others send none.
 
 To add a family, add a row: the pipeline class, the model card's steps and
 guidance, and the components copied from a real `model_index.json`. Then
 time it on a Mac and add it to the catalog.
+
+Two kinds of model cannot be served this way. One whose repo leaves out a
+component, such as HiDream-I1, which loads its Llama 3.1 text encoder from
+another repo: the server loads one directory. And one that ships only fp16
+variant weights in diffusers format, as most SDXL fine-tunes do: the
+downloader keeps only plain `.safetensors` files.
 
 The size rules: two multiples of 16 joined by `x`, each side from 256 to
 2048, and at most 4 million pixels, so `2048x1920` passes and `2048x2048`
@@ -206,11 +231,11 @@ every kind of model sits behind it. The provider sends no key, never retries
 seed back onto the image, and reports a cost of zero.
 
 Its timeout scales with the request (`localImageTimeoutMs`): the slowest
-family's measured rate per step per megapixel, doubled for attention's
-growth, times the steps and size asked for, times two for a request that
+family's rate per step per megapixel, doubled for attention's growth, times the steps and size asked for, times two for a request that
 may be queued ahead. A request that leaves steps to the model is budgeted
 at the most any family allows, 80, which a test checks against the rules
-module. At the caps the timeout is about 53 minutes. It is there to catch a
+module. Qwen-Image's rate is estimated from its size until it is timed.
+At the caps the timeout is about 107 minutes. It is there to catch a
 server that has stopped answering, not to bound a slow one; the caps on
 steps and size do that.
 

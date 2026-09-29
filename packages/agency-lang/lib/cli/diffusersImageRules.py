@@ -83,8 +83,15 @@ MAX_LOADED_ADAPTERS = 2
 #   default_guidance the model card's guidance
 #   takes_guidance   False: the family runs without guidance, and a request
 #                    that sets guidance or a negative prompt is refused
+#   guidance_arg     the pipeline argument the guidance goes to
+#   default_negative_prompt
+#                    the negative prompt sent when a request has none.
+#                    Qwen-Image runs guidance only when it gets one, even
+#                    a blank one.
 #   takes_lora       True: the server may load LoRA adapters for it, and a
-#                    request may name one
+#                    request may name one. Every family's pipeline can load
+#                    LoRA; only SDXL, the family people train adapters for,
+#                    has been tried with them.
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
@@ -99,6 +106,8 @@ FAMILIES = {
         "max_steps": 50,
         "default_guidance": 0.0,
         "takes_guidance": False,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
         "takes_lora": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
@@ -116,6 +125,8 @@ FAMILIES = {
         "max_steps": 80,
         "default_guidance": 3.0,
         "takes_guidance": True,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
         "takes_lora": False,
         "components": {
             "feature_extractor": [None, None],
@@ -128,6 +139,50 @@ FAMILIES = {
         },
         "settings": {},
     },
+    "QwenImagePipeline": {
+        "label": "Qwen-Image",
+        "pipeline": "QwenImagePipeline",
+        "default_steps": 50,
+        "max_steps": 80,
+        "default_guidance": 4.0,
+        "takes_guidance": True,
+        # Qwen-Image is not guidance-distilled: guidance_scale is ignored,
+        # and true_cfg_scale sets the strength of classifier-free guidance.
+        "guidance_arg": "true_cfg_scale",
+        "default_negative_prompt": " ",
+        "takes_lora": False,
+        "components": {
+            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+            "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
+            "tokenizer": ["transformers", "Qwen2Tokenizer"],
+            "transformer": ["diffusers", "QwenImageTransformer2DModel"],
+            "vae": ["diffusers", "AutoencoderKLQwenImage"],
+        },
+        "settings": {},
+    },
+    "Flux2KleinPipeline": {
+        "label": "FLUX.2 [klein]",
+        "pipeline": "Flux2KleinPipeline",
+        "default_steps": 4,
+        "max_steps": 50,
+        # The pipeline ignores guidance on a step-distilled model and warns
+        # above 1.0, so 1.0 is what the model card passes.
+        "default_guidance": 1.0,
+        "takes_guidance": False,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
+        "takes_lora": False,
+        "components": {
+            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+            "text_encoder": ["transformers", "Qwen3ForCausalLM"],
+            "tokenizer": ["transformers", "Qwen2TokenizerFast"],
+            "transformer": ["diffusers", "Flux2Transformer2DModel"],
+            "vae": ["diffusers", "AutoencoderKLFlux2"],
+        },
+        # Only the step-distilled checkpoint is served. The base model
+        # needs guidance and about 50 steps, which this row does not allow.
+        "settings": {"is_distilled": True},
+    },
     # SDXL and its finetunes: Illustrious, NoobAI, and base SDXL share one
     # model_index.json shape. The steps and guidance are NoobAI-XL's card;
     # base SDXL's card says 50 steps at 5.0, well inside the caps.
@@ -138,6 +193,8 @@ FAMILIES = {
         "max_steps": 80,
         "default_guidance": 5.5,
         "takes_guidance": True,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
         "takes_lora": True,
         "components": {
             "feature_extractor": [None, None],
@@ -533,6 +590,23 @@ def check_request(rules, body, adapters_dir=None):
         "lora": lora,
         "lora_scale": lora_scale,
     }
+
+
+def pipeline_args(rules, request):
+    """The keyword arguments a checked request becomes when it is passed to
+    the family's pipeline, less the seed's generator and the step callback,
+    which need torch."""
+    args = {
+        "prompt": request["prompt"],
+        "height": request["height"],
+        "width": request["width"],
+        "num_inference_steps": request["steps"],
+        rules["guidance_arg"]: request["guidance"],
+    }
+    negative = request["negative_prompt"] or rules["default_negative_prompt"]
+    if negative != "":
+        args["negative_prompt"] = negative
+    return args
 
 
 def warm_up_request():

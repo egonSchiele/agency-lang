@@ -28,7 +28,7 @@ function rules(code: string): string {
   return run.stdout.toString().trim();
 }
 
-// The model_index.json files of the two catalog models and of NoobAI-XL
+// The model_index.json files of the catalog models and of NoobAI-XL
 // 1.1, an SDXL finetune, as downloaded.
 const ZIMAGE_INDEX = {
   _class_name: "ZImagePipeline",
@@ -67,6 +67,34 @@ const SDXL_INDEX = {
   vae: ["diffusers", "AutoencoderKL"],
 };
 
+const QWEN_IMAGE_INDEX = {
+  _class_name: "QwenImagePipeline",
+  _diffusers_version: "0.36.0.dev0",
+  scheduler: ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+  text_encoder: ["transformers", "Qwen2_5_VLForConditionalGeneration"],
+  tokenizer: ["transformers", "Qwen2Tokenizer"],
+  transformer: ["diffusers", "QwenImageTransformer2DModel"],
+  vae: ["diffusers", "AutoencoderKLQwenImage"],
+};
+
+const KLEIN_INDEX = {
+  _class_name: "Flux2KleinPipeline",
+  _diffusers_version: "0.37.0.dev0",
+  is_distilled: true,
+  scheduler: ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+  text_encoder: ["transformers", "Qwen3ForCausalLM"],
+  tokenizer: ["transformers", "Qwen2TokenizerFast"],
+  transformer: ["diffusers", "Flux2Transformer2DModel"],
+  vae: ["diffusers", "AutoencoderKLFlux2"],
+};
+
+type Family =
+  | "ZImagePipeline"
+  | "ChromaPipeline"
+  | "QwenImagePipeline"
+  | "Flux2KleinPipeline"
+  | "StableDiffusionXLPipeline";
+
 /** The family label for a model_index.json, or the refusal message. */
 function familyOf(index: Record<string, unknown>): string {
   return rules(`
@@ -81,11 +109,7 @@ except ValueError as e:
 /** Runs check_request for a family and prints the result, or the error.
  *  The body is parsed from JSON in Python, since JSON's true and null are
  *  not Python's. `adaptersDir` is the configured adapters folder, if any. */
-function check(
-  family: "ZImagePipeline" | "ChromaPipeline" | "StableDiffusionXLPipeline",
-  body: unknown,
-  adaptersDir: string | null = null,
-): string {
+function check(family: Family, body: unknown, adaptersDir: string | null = null): string {
   return rules(`
 import json
 body = json.loads(${JSON.stringify(JSON.stringify(body))})
@@ -108,6 +132,18 @@ except RequestError as e:
 `);
 }
 
+/** The pipeline arguments a request becomes for a family, or the error. */
+function pipelineArgs(family: Family, body: unknown): Record<string, unknown> {
+  return JSON.parse(
+    rules(`
+import json
+rules = FAMILIES["${family}"]
+body = json.loads(${JSON.stringify(JSON.stringify(body))})
+print(json.dumps(pipeline_args(rules, check_request(rules, body)), sort_keys=True))
+`),
+  );
+}
+
 describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
   it("ships next to localServe", () => {
     expect(fs.existsSync(rulesModule)).toBe(true);
@@ -118,15 +154,35 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
     expect(text).not.toMatch(/^\s*(import|from)\s+(torch|diffusers|transformers)/m);
   });
 
-  it("accepts the two catalog models' model_index.json, and an SDXL finetune's", () => {
+  it("accepts the catalog models' model_index.json, and an SDXL finetune's", () => {
     expect(familyOf(ZIMAGE_INDEX)).toBe("Z-Image Turbo");
     expect(familyOf(CHROMA_INDEX)).toBe("Chroma");
+    expect(familyOf(QWEN_IMAGE_INDEX)).toBe("Qwen-Image");
+    expect(familyOf(KLEIN_INDEX)).toBe("FLUX.2 [klein]");
     expect(familyOf(SDXL_INDEX)).toBe("SDXL");
+  });
+
+  it("refuses a FLUX.2 [klein] model that is not step-distilled", () => {
+    // The base model needs guidance and about 50 steps; the klein row
+    // allows neither.
+    expect(familyOf({ ...KLEIN_INDEX, is_distilled: false })).toBe(
+      'REFUSED FLUX.2 [klein]\'s "is_distilled" must be True. This model_index.json says False.',
+    );
+    const { is_distilled: _distilled, ...unset } = KLEIN_INDEX;
+    expect(familyOf(unset)).toBe(
+      'REFUSED FLUX.2 [klein]\'s "is_distilled" must be True. This model_index.json does not set it.',
+    );
+  });
+
+  it("refuses a setting the family does not list", () => {
+    expect(familyOf({ ...QWEN_IMAGE_INDEX, is_distilled: true })).toBe(
+      'REFUSED Qwen-Image has no component "is_distilled", and this model_index.json names one.',
+    );
   });
 
   it("refuses a pipeline class it does not serve", () => {
     expect(familyOf({ ...ZIMAGE_INDEX, _class_name: "StableDiffusionPipeline" })).toBe(
-      'REFUSED diffusersImageServer.py serves ChromaPipeline, StableDiffusionXLPipeline, and ZImagePipeline models. This model_index.json names "StableDiffusionPipeline".',
+      'REFUSED diffusersImageServer.py serves ChromaPipeline, Flux2KleinPipeline, QwenImagePipeline, StableDiffusionXLPipeline, and ZImagePipeline models. This model_index.json names "StableDiffusionPipeline".',
     );
   });
 
@@ -479,7 +535,50 @@ for family in FAMILIES.values():
     r = check_request(family, body)
     print(r["width"], r["height"], r["steps"])
 `);
-    expect(out.split("\n")).toEqual(["512 512 2", "512 512 2", "512 512 2"]);
+    expect(out.split("\n")).toEqual(Array(5).fill("512 512 2"));
+  });
+
+  it("passes guidance to the argument each family's pipeline reads", () => {
+    expect(pipelineArgs("ChromaPipeline", { prompt: "a cat", seed: 1 })).toEqual({
+      prompt: "a cat",
+      height: 1024,
+      width: 1024,
+      num_inference_steps: 40,
+      guidance_scale: 3.0,
+    });
+    // Qwen-Image ignores guidance_scale; true_cfg_scale is its guidance.
+    expect(pipelineArgs("QwenImagePipeline", { prompt: "a cat", guidance: 5 })).toMatchObject({
+      num_inference_steps: 50,
+      true_cfg_scale: 5,
+    });
+    expect(pipelineArgs("QwenImagePipeline", { prompt: "a cat" })).not.toHaveProperty(
+      "guidance_scale",
+    );
+  });
+
+  it("sends Qwen-Image a blank negative prompt when the request has none", () => {
+    // Without a negative prompt the pipeline skips guidance altogether.
+    expect(pipelineArgs("QwenImagePipeline", { prompt: "a cat" }).negative_prompt).toBe(" ");
+    expect(
+      pipelineArgs("QwenImagePipeline", { prompt: "a cat", negative_prompt: "blurry" })
+        .negative_prompt,
+    ).toBe("blurry");
+    expect(pipelineArgs("ChromaPipeline", { prompt: "a cat" })).not.toHaveProperty(
+      "negative_prompt",
+    );
+  });
+
+  it("runs FLUX.2 [klein] at the model card's 4 steps with no guidance", () => {
+    expect(pipelineArgs("Flux2KleinPipeline", { prompt: "a cat" })).toEqual({
+      prompt: "a cat",
+      height: 1024,
+      width: 1024,
+      num_inference_steps: 4,
+      guidance_scale: 1.0,
+    });
+    expect(check("Flux2KleinPipeline", { prompt: "a cat", guidance: 4 })).toBe(
+      "ERROR 400 FLUX.2 [klein] runs without guidance. Leave guidance empty.",
+    );
   });
 
   it("pins the same diffusers version as localServe.ts", () => {

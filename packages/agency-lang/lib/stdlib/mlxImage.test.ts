@@ -39,4 +39,16 @@ describe("localImageTimeoutMs", () => {
     expect(qwen).toBeGreaterThan(250_000 * 3);
     expect(qwen).toBeLessThan(30 * 60_000);
   });
+
+  it("adds one megapixel of budget per reference picture", () => {
+    const plain = localImageTimeoutMs(4, "1024x1024");
+    const four = localImageTimeoutMs(4, "1024x1024", 4);
+    // 1000x1000 is exactly one megapixel.
+    expect(four - plain).toBe(4 * localImageTimeoutMs(4, "1000x1000"));
+    expect(localImageTimeoutMs(4, "1024x1024", undefined)).toBe(plain);
+  });
+
+  it("budgets an empty size as 1024x1024", () => {
+    expect(localImageTimeoutMs(4, "")).toBe(localImageTimeoutMs(4, "1024x1024"));
+  });
 });

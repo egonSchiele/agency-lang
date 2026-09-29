@@ -12,12 +12,18 @@ import { MIME_TYPES } from "./mediaPathScan.js";
  *  maxCount  how many images the field takes. One is sent as a base64
  *            string, more as a list of them
  *  maxBytes  the largest file each image may be
- *  question  what the std::readImage interrupt asks before the file is read */
+ *  parameter the `generateImageLocal` parameter the paths come in
+ *  question  what the std::readImage interrupt asks before the file is read
+ *  readEachStep  true: the model reads each image at every step, as much
+ *            work as one more megapixel of output, and the provider's
+ *            timeout budgets for it */
 export type LocalImageField = {
   mode: "control" | "reference" | "img2img";
   maxCount: number;
   maxBytes: number;
+  parameter: string;
   question: string;
+  readEachStep: boolean;
 };
 
 /** A control image is read up to the size every local server takes. */
@@ -35,13 +41,17 @@ export const LOCAL_IMAGE_FIELDS: Record<string, LocalImageField> = {
     mode: "control",
     maxCount: 1,
     maxBytes: MAX_CONTROL_IMAGE_BYTES,
+    parameter: "controlImage",
     question: "Read this drawing to condition the image on?",
+    readEachStep: false,
   },
   images: {
     mode: "reference",
     maxCount: MAX_REFERENCE_IMAGES,
     maxBytes: MAX_INPUT_IMAGE_BYTES,
+    parameter: "images",
     question: "Read this picture to edit it?",
+    readEachStep: true,
   },
 };
 
@@ -146,16 +156,27 @@ function localImageFile(spelling: string, row: LocalImageField): LocalImageFile 
   };
 }
 
+/** How many images of `inputs` the model reads at every step, which the
+ *  provider's timeout budgets for. 0 for a call with none. */
+export function referenceCount(inputs: LocalImageInputs): number {
+  if (inputs.field === null || !LOCAL_IMAGE_FIELDS[inputs.field].readEachStep) {
+    return 0;
+  }
+  return inputs.files.length;
+}
+
 /** Backs the checks `generateImageLocal` makes before it asks anything:
- *  which input images the call has, whether they go together, and whether
- *  each path is a local image file under its field's size cap. Returns the
- *  files to raise std::readImage for. Throws with the message to fail
- *  with. */
+ *  which input images the call has, whether they go together, whether
+ *  there are too many, and whether each path is a local image file under
+ *  its field's size cap. Returns the files to raise std::readImage for.
+ *  Throws with the message to fail with. The messages match the image
+ *  server's, with the parameters' names for the request fields'. */
 export function _localImageInputs(
   controlnet: string,
   controlImage: string,
   controlScale: number | null,
   invertControlImage: boolean,
+  images: string[],
 ): LocalImageInputs {
   if ((controlnet === "") !== (controlImage === "")) {
     throw refusal(
@@ -164,23 +185,35 @@ export function _localImageInputs(
   }
   const paths: Record<string, string[]> = {
     control_image: controlImage === "" ? [] : [controlImage],
+    images,
+  };
+  // The other request fields of each image field's mode.
+  const settingsOf: Record<string, Record<string, unknown>> = {
+    control_image: {
+      controlnet,
+      control_invert: invertControlImage,
+      ...(controlScale === null ? {} : { control_scale: controlScale }),
+    },
+    images: {},
   };
   const given = Object.keys(paths).filter((field) => paths[field].length > 0);
   if (given.length === 0) {
     return { field: null, files: [], settings: {} };
   }
+  if (given.length > 1) {
+    const names = Object.keys(paths).map((field) => LOCAL_IMAGE_FIELDS[field].parameter);
+    throw refusal(`a call takes one of ${names.join(" or ")}.`);
+  }
   const field = given[0];
   const row = LOCAL_IMAGE_FIELDS[field];
-  const settings: Record<string, unknown> = {
-    controlnet,
-    control_invert: invertControlImage,
-  };
-  if (controlScale !== null) {
-    settings.control_scale = controlScale;
+  if (paths[field].length > row.maxCount) {
+    throw refusal(
+      `${row.parameter} takes at most ${row.maxCount} images. This call has ${paths[field].length}.`,
+    );
   }
   return {
     field,
     files: paths[field].map((spelling) => localImageFile(spelling, row)),
-    settings,
+    settings: settingsOf[field],
   };
 }

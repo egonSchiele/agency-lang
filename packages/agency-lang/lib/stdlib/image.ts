@@ -18,6 +18,7 @@ import {
   LOCAL_IMAGE_FIELDS,
   checkedImageFile,
   isRemoteSource,
+  referenceCount,
   type LocalImageInputs,
 } from "./localImageInputs.js";
 import { DEFAULT_IMAGE_MODEL } from "../constants.js";
@@ -308,6 +309,7 @@ export async function _generateImageLocal(
       ...localImageSettings(steps, guidance, seed, negativePrompt, lora, loraScale),
       ...inputs.settings,
       ...images,
+      references: referenceCount(inputs),
     },
   };
   const out = await generateOne(prompt, prompt, config, checked.servedName);

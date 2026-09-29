@@ -549,6 +549,44 @@ describe("_generateImageLocal", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  it("sends references as a list of their bytes in base64, never their paths", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "reference-")));
+    const cat = path.join(dir, "cat.png");
+    const hat = path.join(dir, "hat.png");
+    const HAT = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d]);
+    fs.writeFileSync(cat, PNG);
+    fs.writeFileSync(hat, HAT);
+    serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+    const file = (image: string) => ({
+      path: image,
+      dir,
+      filename: path.basename(image),
+      question: "",
+    });
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "add a hat to the cat",
+        "flux2-klein-4b",
+        "",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+        { field: "images", files: [file(cat), file(hat)], settings: {} },
+      );
+      expect(r.success).toBe(true);
+      expect(requests[0].images).toEqual([PNG.toString("base64"), HAT.toString("base64")]);
+      expect(requests[0].size).toBe("");
+      // The count is for the timeout and is not a request field.
+      expect(Object.keys(requests[0])).not.toContain("references");
+      expect(JSON.stringify(requests[0])).not.toContain(dir);
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it("sends the adapter name and scale when a LoRA is asked for", async () => {
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     await withClient(realImage, async () => {

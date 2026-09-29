@@ -194,7 +194,7 @@ Generate an image from a text prompt using a hosted provider, optionally
 generateImageLocal(
   prompt: string,
   model: string,
-  size: string = "1024x1024",
+  size: string = "",
   steps: number | null = null,
   guidance: number | null = null,
   seed: number | null = null,
@@ -206,6 +206,7 @@ generateImageLocal(
   controlImage: string = "",
   controlScale: number | null = null,
   invertControlImage: boolean = false,
+  images: string[] = [],
 ): Result<LocalImage> raises <std::readImage>
 ```
 
@@ -232,9 +233,15 @@ Generate an image on this machine with a local image model. The model
   The scribble ControlNet reads white lines on black. For a drawing made
   with dark lines on white paper, pass `invertControlImage: true`.
 
+  FLUX.2 [klein] edits pictures. Pass up to 4 paths in `images` and say in
+  the prompt what to change: `generateImageLocal("add a hat to the
+  character", "flux2-klein-4b", images: ["cat.png"])`. Each picture is read
+  from this machine, under std::readImage, and never uploaded. With `size`
+  left empty, the result keeps the first picture's shape.
+
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
-  @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768"
+  @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768". Empty is 1024x1024. Leave it empty when editing or redrawing a picture, and the result keeps the picture's shape
   @param steps - How many refinement passes to make. More is slower and usually more detailed. Null uses the model's own default
   @param guidance - How closely to follow the prompt; higher sticks to it more literally. Leave it null unless asked: null uses the model's own default, and some models refuse any guidance
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
@@ -246,6 +253,7 @@ Generate an image on this machine with a local image model. The model
   @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
   @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
   @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
+  @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] takes them, and at most 4
 
 **Parameters:**
 
@@ -253,7 +261,7 @@ Generate an image on this machine with a local image model. The model
 |---|---|---|
 | prompt | `string` |  |
 | model | `string` |  |
-| size | `string` | "1024x1024" |
+| size | `string` | "" |
 | steps | `number \| null` | null |
 | guidance | `number \| null` | null |
 | seed | `number \| null` | null |
@@ -265,6 +273,7 @@ Generate an image on this machine with a local image model. The model
 | controlImage | `string` | "" |
 | controlScale | `number \| null` | null |
 | invertControlImage | `boolean` | false |
+| images | `string[]` | [] |
 
 **Returns:** `Result<LocalImage>`
 
@@ -309,7 +318,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L219))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L227))
 
 ### imageSize
 
@@ -331,7 +340,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L263))
 
 ### pasteImages
 
@@ -364,4 +373,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L272))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L280))

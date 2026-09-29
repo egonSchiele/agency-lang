@@ -11,9 +11,9 @@ import {
   _registerLocalModel,
   _resolveModel,
   _mlxServedName,
-  _printLocalCatalog,
   _refreshCatalog,
  } from "agency-lang/stdlib-lib/localModels.js"
+import { _printLocalCatalog } from "agency-lang/stdlib-lib/localModelList.js"
 import { _mlxServerModels } from "agency-lang/stdlib-lib/mlxServerModels.js"
 
 /** @module

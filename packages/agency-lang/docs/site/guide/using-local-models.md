@@ -279,10 +279,10 @@ The `mlx:` prefix is the spelling that always works. You need it for a model you
 
 ### Differences from GGUF models
 
-The table at the end of [What is different about a local model](#llamacpp-and-the-mlx-server-side-by-side) sets the two backends side by side. One difference is not in it: the agent's memory feature needs an embedding model, and a chat server does not serve one unless you ask. Add `--embedding` when you start it, and name that model for the agent:
+The table at the end of [What is different about a local model](#llamacpp-and-the-mlx-server-side-by-side) sets the two backends side by side. One difference is not in it: the agent's memory feature needs an embedding model, and a chat server does not serve one unless you name one. Name it when you start the server, and name it for the agent too. `serve` knows an embedding model when it sees one, so no flag is needed:
 
 ```bash
-agency local serve qwen3.5-27b-mlx --embedding qwen3-embedding-4b-mlx
+agency local serve qwen3.5-27b-mlx qwen3-embedding-4b-mlx
 agency agent --local qwen3.5-27b-mlx --model embedding=mlx/qwen3-embedding-4b-mlx
 ```
 
@@ -298,11 +298,11 @@ Two open image models run on this machine with no content filter in their weight
 
 You can serve images without installing any MLX packages; `serve` checks only for what the models you name need.
 
-Download a model and serve it with `--image`:
+Download a model and serve it. `serve` reads what kind of model it is from the download, so it starts the image server without being told:
 
 ```bash
 agency local download z-image-turbo
-agency local serve --image z-image-turbo
+agency local serve z-image-turbo
 ```
 
 Then call it from Agency code:

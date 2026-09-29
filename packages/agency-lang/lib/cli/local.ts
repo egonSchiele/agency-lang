@@ -19,14 +19,16 @@ import {
   _removeModel,
   hasLocalModelSupport,
   formatGB,
-  formatModelCatalog,
-  formatLocalList,
   _refreshCatalog,
   defaultAliasTarget,
   type ModelNameEntry,
   type RefreshResult,
   type UnaliasResult,
+  MODEL_KINDS,
+  isModelKind,
+  type ModelKind,
 } from "../stdlib/localModels.js";
+import { formatModelCatalog, formatLocalList } from "../stdlib/localModelList.js";
 import { configFiles, writeTarget, type ConfigTarget } from "../config/target.js";
 import { readDownloadManifest } from "../stdlib/localModelManifest.js";
 import type { DownloadEvent } from "../stdlib/hubDownload.js";
@@ -92,7 +94,7 @@ function reportAliasRemoval(name: string, target: ConfigTarget, result: UnaliasR
 /** Deliberately ungated: browsing the catalog needs no provider package
  *  (only download/remove do), and the pre-install experience — see what is
  *  available, then get told what to install — is the point. */
-export function runList(long: boolean = false): void {
+export function runList(long: boolean = false, kind?: string): void {
   const dir = _modelsCacheDir();
   console.log(
     formatLocalList({
@@ -101,8 +103,21 @@ export function runList(long: boolean = false): void {
       manifest: readDownloadManifest(dir),
       files: _listDownloadedModels(),
       long,
+      kind: checkedKind(kind),
     }),
   );
+}
+
+/** A `--kind` value, or undefined for none. Anything else is refused
+ *  naming the kinds. */
+export function checkedKind(kind: string | undefined): ModelKind | undefined {
+  if (kind === undefined) {
+    return undefined;
+  }
+  if (!isModelKind(kind)) {
+    throw new Error(`"${kind}" is not a kind of model. The kinds are ${MODEL_KINDS.join(", ")}.`);
+  }
+  return kind;
 }
 
 export const CUSTOM_CHOICE = "__custom__";
@@ -127,7 +142,8 @@ export function downloadChoices(entries: ModelNameEntry[]): { title: string; val
   ];
 }
 
-export async function runDownload(value?: string): Promise<void> {
+export async function runDownload(value?: string, kind?: string): Promise<void> {
+  const givenKind = checkedKind(kind);
   let picked = value;
   if (picked === undefined) {
     // Prompting needs BOTH ends of the terminal: a TTY stdout to draw on and
@@ -170,6 +186,7 @@ export async function runDownload(value?: string): Promise<void> {
   const source = resolved.target;
   const modelPath = await _downloadModel(picked, "", {
     onEvent: printDownloadEvent(process.stdout.isTTY === true),
+    kind: givenKind,
   });
   if (source !== modelPath) {
     console.log(`source: ${source}`);

@@ -314,12 +314,14 @@ connection as "still loading" and any reply as "ready". The script uses
 mlx-lm alone; `mlx-embeddings`, the library other MLX servers use, is GPL
 v3, which Agency cannot ship.
 
-`--embedding` is the one way to say a model is an embedding model. The
-catalog category is a guard: a catalog embedding model without the flag,
-or a chat model with it, is refused before anything loads, and the picker
-leaves embedding models out. The front door needs no change, since it
-forwards by the `model` field at whatever path the request used.
-Readiness probes an embedding process with an embeddings request.
+An embedding model is one whose kind is `embedding` (`local-models.md`,
+"Kinds"): the catalog says so for its entries, and an encoder's
+`config.json` says so for the rest. `serve` starts the embedding server
+for it with no flag; `--embedding` asserts the kind, and a chat model
+named with it is refused before anything loads. The front door needs no
+change, since it forwards by the `model` field at whatever path the
+request used. Readiness probes an embedding process with an embeddings
+request.
 
 Memory never derives an embedding model for a local provider. It needs
 `memory.embeddings` in `agency.json` with the served name and
@@ -339,8 +341,10 @@ answers `POST /v1/audio/speech`:
 
     agency local serve --speech qwen3-tts-mlx
 
-The catalog guard and the picker treat the `speech` category the way they
-treat `embedding`. A speech process needs `mlx_audio` rather than `mlx_lm`,
+A Qwen3-TTS config says `speech`; an Orpheus config says `llama`, so only
+the catalog knows it is speech, which is why the catalog is consulted
+first. `--speech` asserts the kind the way `--embedding` does. A speech
+process needs `mlx_audio` rather than `mlx_lm`,
 and it speaks once before opening its port, so readiness only probes
 `GET /health`. See `local-speech.md` for the script and its request rules.
 

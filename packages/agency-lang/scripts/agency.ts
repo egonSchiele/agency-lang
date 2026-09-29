@@ -1939,12 +1939,19 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .command("list")
     .description("List local models: the full catalog, with downloaded models marked")
     .option("-l, --long", "Show each model's description on its own line")
-    .action((opts: { long?: boolean }) => localList(opts.long === true));
+    .option("--kind <kind>", "Only models of one kind: chat, embedding, speech, or image")
+    .action((opts: { long?: boolean; kind?: string }) => localList(opts.long === true, opts.kind));
   localCmd
     .command("download")
     .description("Download a model (curated name, alias, or hf: URI); no argument opens a picker")
     .argument("[value]")
-    .action(localDownload);
+    .option(
+      "--kind <kind>",
+      "What the model is (chat, embedding, speech, or image), when its files do not say",
+    )
+    .action((value: string | undefined, opts: { kind?: string }) =>
+      localDownload(value, opts.kind),
+    );
   localCmd
     .command("serve")
     .description(

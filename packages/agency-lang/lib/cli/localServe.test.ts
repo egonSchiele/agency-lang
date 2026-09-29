@@ -507,12 +507,23 @@ describe("runServe", () => {
   let killed: number;
   let log: string[];
   let deps: ServeDeps;
+  const CHAT_CONFIG = JSON.stringify({ architectures: ["Qwen3ForCausalLM"] });
+  const IMAGE_INDEX = JSON.stringify({ _class_name: "ZImagePipeline" });
+
+  /** The config.json that says what a fixture model is, so `serve` reads
+   *  its kind from the files the way a real download's would be read. */
+  const CONFIG_FOR_KIND: Record<string, string> = {
+    chat: CHAT_CONFIG,
+    embedding: JSON.stringify({ architectures: ["Qwen3Model"] }),
+    speech: JSON.stringify({ model_type: "qwen3_tts", tts_model_type: "custom_voice" }),
+  };
 
   /** A downloaded model under <cacheDir>/mlx with a complete record. */
-  function recordedModel(repo: string, complete: boolean): string {
+  function recordedModel(repo: string, complete: boolean, kind: string = "chat"): string {
     const model = path.join(cacheDir, "mlx", repo.replace("/", "--"));
+    const config = CONFIG_FOR_KIND[kind];
     fs.mkdirSync(model, { recursive: true });
-    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "config.json"), config);
     fs.writeFileSync(path.join(model, "model.safetensors"), "xxxxxxxx");
     fs.writeFileSync(
       path.join(model, ".agency-model.json"),
@@ -520,7 +531,7 @@ describe("runServe", () => {
         repo,
         revision: "abc",
         files: {
-          "config.json": { size: 2, complete: true },
+          "config.json": { size: config.length, complete: true },
           "model.safetensors": { size: 600e6, complete },
         },
       }),
@@ -533,7 +544,7 @@ describe("runServe", () => {
   function diffusersModel(repo: string): string {
     const model = path.join(cacheDir, "diffusers", repo.replace("/", "--"));
     fs.mkdirSync(path.join(model, "transformer"), { recursive: true });
-    fs.writeFileSync(path.join(model, "model_index.json"), "{}");
+    fs.writeFileSync(path.join(model, "model_index.json"), IMAGE_INDEX);
     fs.writeFileSync(path.join(model, "transformer", "model.safetensors"), "xxxxxxxx");
     fs.writeFileSync(
       path.join(model, ".agency-model.json"),
@@ -541,7 +552,7 @@ describe("runServe", () => {
         repo,
         revision: "abc",
         files: {
-          "model_index.json": { size: 2, complete: true },
+          "model_index.json": { size: IMAGE_INDEX.length, complete: true },
           "transformer/model.safetensors": { size: 600e6, complete: true },
         },
       }),
@@ -667,7 +678,7 @@ describe("runServe", () => {
 
   it("serves an embedding model with the embedding server, probed on /v1/embeddings", async () => {
     const a = recordedModel("org/a", true);
-    const emb = recordedModel("org/emb", true);
+    const emb = recordedModel("org/emb", true, "embedding");
     const probes: string[] = [];
     deps.fetch = (async (url: string) => {
       probes.push(url);
@@ -700,13 +711,12 @@ describe("runServe", () => {
     await handle.close();
   });
 
-  it("refuses a catalog embedding model passed as a chat model, before spawning", async () => {
-    await expect(runServe(["qwen3-embedding-4b-mlx"], { port: 0 }, deps)).rejects.toThrow(
-      "agency local serve --embedding qwen3-embedding-4b-mlx",
-    );
+  it("refuses a catalog chat model passed with --embedding, before looking for its files", async () => {
     await expect(
       runServe([], { port: 0, embedding: ["qwen3-coder-next-mlx"] }, deps),
-    ).rejects.toThrow("is a coding model, not an embedding model");
+    ).rejects.toThrow(
+      "qwen3-coder-next-mlx is a chat model, not an embedding model. Serve it with: agency local serve qwen3-coder-next-mlx",
+    );
     expect(spawned).toEqual([]);
   });
 
@@ -717,7 +727,7 @@ describe("runServe", () => {
   it("serves a model directory under the name run --local sends", async () => {
     const model = path.join(dir, "snapshot");
     fs.mkdirSync(model);
-    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "config.json"), CHAT_CONFIG);
     fs.writeFileSync(path.join(model, "model.safetensors"), "");
     const handle = await runServe(
       [model],
@@ -736,7 +746,7 @@ describe("runServe", () => {
     const folder = path.join(cacheDir, `models--${repo.replace("/", "--")}`);
     const snapshot = path.join(folder, "snapshots", sha);
     fs.mkdirSync(snapshot, { recursive: true });
-    fs.writeFileSync(path.join(snapshot, "config.json"), "{}");
+    fs.writeFileSync(path.join(snapshot, "config.json"), CHAT_CONFIG);
     fs.writeFileSync(path.join(snapshot, "model.safetensors"), "xxxxxxxx");
     fs.mkdirSync(path.join(folder, "refs"), { recursive: true });
     fs.writeFileSync(path.join(folder, "refs", "main"), sha);
@@ -757,7 +767,7 @@ describe("runServe", () => {
     hubModel("org/hub", "abc123");
     const older = path.join(cacheDir, "models--org--hub", "snapshots", "def456");
     fs.mkdirSync(older, { recursive: true });
-    fs.writeFileSync(path.join(older, "config.json"), "{}");
+    fs.writeFileSync(path.join(older, "config.json"), CHAT_CONFIG);
     fs.writeFileSync(path.join(older, "model.safetensors"), "xxxxxxxx");
     const handle = await runServe(["mlx:org/hub@def456"], { port: 0 }, deps);
     expect(spawned[0]).toContain(older);
@@ -915,7 +925,7 @@ describe("runServe", () => {
   });
 
   it("serves a speech model with the speech server, probed on /health", async () => {
-    const tts = recordedModel("org/tts", true);
+    const tts = recordedModel("org/tts", true, "speech");
     const probes: string[] = [];
     const imports: string[] = [];
     deps.fetch = (async (url: string) => {
@@ -973,21 +983,31 @@ describe("runServe", () => {
     await handle.close();
   });
 
-  it("refuses a diffusers model without --image, even one the catalog does not know", async () => {
-    diffusersModel("org/img");
-    await expect(runServe(["diffusers:org/img"], { port: 0 }, deps)).rejects.toThrow(
-      "diffusers:org/img is an image model. Serve it with: agency local serve --image diffusers:org/img",
-    );
-    await expect(runServe(["z-image-turbo"], { port: 0 }, deps)).rejects.toThrow(
-      "z-image-turbo is an image model. Serve it with: agency local serve --image z-image-turbo",
+  it("serves a diffusers model named without a flag, reading its kind from its files", async () => {
+    const img = diffusersModel("org/img");
+    const handle = await runServe(["diffusers:org/img"], { port: 0 }, deps);
+    expect(spawned[0][1].endsWith("/lib/cli/diffusersImageServer.py")).toBe(true);
+    expect(spawned[0].slice(2)).toEqual(["--model", img, "--host", "127.0.0.1", "--port", "9000"]);
+    expect(log).toContain("  org/img  (images)");
+    await handle.close();
+  });
+
+  it("refuses a directory whose files say nothing about what the model is", async () => {
+    const model = path.join(cacheDir, "mystery");
+    fs.mkdirSync(model, { recursive: true });
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "xxxxxxxx");
+    await expect(runServe([model], { port: 0 }, deps)).rejects.toThrow(
+      `${model} is a model directory of a shape agency does not know. Say what it is when ` +
+        `downloading: agency local download --kind <chat|embedding|speech|image> ${model}`,
     );
     expect(spawned).toEqual([]);
   });
 
-  it("refuses --image for a model that is not a diffusers model", async () => {
+  it("refuses --image for a model that is not an image model", async () => {
     recordedModel("org/a", true);
     await expect(runServe([], { port: 0, image: ["mlx:org/a"] }, deps)).rejects.toThrow(
-      "mlx:org/a is not an image model. --image serves diffusers models",
+      "mlx:org/a is a chat model, not an image model. Serve it with: agency local serve mlx:org/a",
     );
     await expect(runServe([], { port: 0, image: ["qwen3-tts-mlx"] }, deps)).rejects.toThrow(
       "qwen3-tts-mlx is a speech model, not an image model. Serve it with: agency local serve --speech qwen3-tts-mlx",
@@ -997,7 +1017,7 @@ describe("runServe", () => {
 
   it("asks for mlx_lm and llguidance for a chat model, and mlx_audio for speech", async () => {
     recordedModel("org/a", true);
-    recordedModel("org/tts", true);
+    recordedModel("org/tts", true, "speech");
     const imports: string[] = [];
     deps.exec = (_cmd, args) => {
       imports.push(args[1]);
@@ -1008,12 +1028,9 @@ describe("runServe", () => {
     await handle.close();
   });
 
-  it("refuses a catalog speech model passed without --speech, and a chat model passed with it", async () => {
-    await expect(runServe(["qwen3-tts-mlx"], { port: 0 }, deps)).rejects.toThrow(
-      "qwen3-tts-mlx is a speech model. Serve it with: agency local serve --speech qwen3-tts-mlx",
-    );
+  it("refuses a chat model passed with --speech, and a speech model passed with --embedding", async () => {
     await expect(runServe([], { port: 0, speech: ["qwen3-coder-next-mlx"] }, deps)).rejects.toThrow(
-      "qwen3-coder-next-mlx is a coding model, not a speech model. Pass it without --speech.",
+      "qwen3-coder-next-mlx is a chat model, not a speech model. Serve it with: agency local serve qwen3-coder-next-mlx",
     );
     await expect(runServe([], { port: 0, embedding: ["qwen3-tts-mlx"] }, deps)).rejects.toThrow(
       "qwen3-tts-mlx is a speech model, not an embedding model. Serve it with: agency local serve --speech qwen3-tts-mlx",
@@ -1022,7 +1039,7 @@ describe("runServe", () => {
   });
 
   it("names the speech server when it exits before it is ready", async () => {
-    recordedModel("org/tts", true);
+    recordedModel("org/tts", true, "speech");
     const failing: ServeDeps = {
       ...deps,
       spawn: () => {
@@ -1076,14 +1093,14 @@ describe("serveChoices", () => {
     },
   ];
 
-  it("offers the complete MLX models by repo id, whichever layout holds them", () => {
+  it("offers the complete served models by repo id, whichever layout holds them", () => {
     expect(serveChoices(downloaded)).toEqual([
       { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
       { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
     ]);
   });
 
-  it("leaves out a catalog embedding model, which needs --embedding", () => {
+  it("names each model's kind, and offers every kind", () => {
     const emb = CURATED_LOCAL_MODELS["qwen3-embedding-4b-mlx"].uri.slice("mlx:".length);
     const withEmb = [
       ...downloaded,
@@ -1094,14 +1111,8 @@ describe("serveChoices", () => {
         backend: "mlx" as const,
         complete: true,
         layout: "agency" as const,
+        kind: "embedding" as const,
       },
-    ];
-    expect(serveChoices(withEmb).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
-  });
-
-  it("leaves out a diffusers model, which needs --image", () => {
-    const withImage = [
-      ...downloaded,
       {
         name: "org/img",
         path: "/m/diffusers/org--img",
@@ -1109,25 +1120,15 @@ describe("serveChoices", () => {
         backend: "diffusers" as const,
         complete: true,
         layout: "agency" as const,
+        kind: "image" as const,
       },
     ];
-    expect(serveChoices(withImage).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
-  });
-
-  it("leaves out a catalog speech model, which needs --speech", () => {
-    const tts = CURATED_LOCAL_MODELS["qwen3-tts-mlx"].uri.slice("mlx:".length);
-    const withTts = [
-      ...downloaded,
-      {
-        name: tts,
-        path: `/m/mlx/${tts.replace("/", "--")}`,
-        sizeBytes: 3.08e9,
-        backend: "mlx" as const,
-        complete: true,
-        layout: "agency" as const,
-      },
-    ];
-    expect(serveChoices(withTts).map((c) => c.value)).toEqual(["mlx:org/a", "mlx:org/b"]);
+    expect(serveChoices(withEmb)).toEqual([
+      { title: `${emb}  (2.28 GB, embedding)`, value: `mlx:${emb}` },
+      { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
+      { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
+      { title: "org/img  (3.00 GB, image)", value: "diffusers:org/img" },
+    ]);
   });
 
   it("offers one row for a repo that both layouts hold", () => {
@@ -1200,10 +1201,10 @@ describe("pickModelsToServe", () => {
     expect(await pickModelsToServe(deps({ ask: async () => [] }))).toEqual([]);
   });
 
-  it("says what to run when no MLX model is downloaded", async () => {
+  it("says what to run when no model is downloaded", async () => {
     await expect(
       pickModelsToServe(deps({ downloaded: () => [mlx("org/half", false)] })),
-    ).rejects.toThrow("No MLX models are downloaded");
+    ).rejects.toThrow("No models are downloaded");
   });
 
   it("off a terminal, names the models it could have served and fails", async () => {

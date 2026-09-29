@@ -76,12 +76,15 @@ import {
   servedModelDir,
   mlxModelDirName,
   readMlxModelRecord,
+  writeMlxModelRecord,
   isMlxModelComplete,
 } from "./mlxModelRecord.js";
 import { ttyColor } from "../utils/termcolors.js";
 
 import { CURATED_LOCAL_MODELS, type ModelCategory, type ModelInfo } from "./modelCatalog.js";
 export { CURATED_LOCAL_MODELS, type ModelCategory, type ModelInfo } from "./modelCatalog.js";
+import { kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
+export { MODEL_KINDS, isModelKind, type ModelKind } from "./modelKind.js";
 
 /** Where downloaded models live, in precedence order:
  *   1. `AGENCY_MODELS_DIR` env var (per-machine override).
@@ -449,6 +452,8 @@ export type DownloadedModel = {
    *  which we read but never write. `directory` is any other model
    *  directory, such as the target of an alias. */
   layout: "gguf" | "agency" | "hub" | "directory";
+  /** What the model is, when the record, the catalog, or the files say. */
+  kind?: ModelKind;
 };
 
 export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] {
@@ -460,6 +465,7 @@ export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] 
     backend: "llama-cpp",
     complete: true,
     layout: "gguf",
+    kind: "chat",
   }));
   return [
     ...gguf,
@@ -492,7 +498,7 @@ function hubEntriesIn(dir: string): DownloadedModel[] {
     if (modelDir === null || backend === null) {
       continue;
     }
-    out.push({
+    const model: DownloadedModel = {
       name: repo,
       path: modelDir,
       sizeBytes: modelDirSizeBytes(modelDir),
@@ -500,7 +506,12 @@ function hubEntriesIn(dir: string): DownloadedModel[] {
       complete: true,
       revision: hubSnapshotRevision(modelDir),
       layout: "hub",
-    });
+    };
+    const kind = _modelKind(`${backend}:${repo}`, modelDir);
+    if (kind !== null) {
+      model.kind = kind;
+    }
+    out.push(model);
   }
   return out;
 }
@@ -607,7 +618,7 @@ function servedEntries(dir: string, backend: ServedBackend): DownloadedModel[] {
     const sizeBytes = complete
       ? Object.values(record.files).reduce((sum, f) => sum + f.size, 0)
       : treeSizeBytes(root(modelDir), ".");
-    out.push({
+    const model: DownloadedModel = {
       name: record.repo,
       path: modelDir,
       sizeBytes,
@@ -615,7 +626,12 @@ function servedEntries(dir: string, backend: ServedBackend): DownloadedModel[] {
       complete,
       revision: record.revision,
       layout: "agency",
-    });
+    };
+    const kind = _modelKind(`${backend}:${record.repo}`, modelDir);
+    if (kind !== null) {
+      model.kind = kind;
+    }
+    out.push(model);
   }
   return out;
 }
@@ -1282,22 +1298,28 @@ function companionsFor(
 /** Download a model and return where it is: the `.gguf` path, or the MLX
  *  model directory. `hubOptions` lets the CLI watch progress and lets tests
  *  point at a fake hub. */
+/** The download options, plus the kind to record when the user says what
+ *  the model is. Without it, the catalog or the files decide. */
+export type ModelDownloadOptions = DownloadOptions & { kind?: ModelKind };
+
 export async function _downloadModel(
   value: string,
   cacheDir: string = "",
-  hubOptions: DownloadOptions = {},
+  hubOptions: ModelDownloadOptions = {},
 ): Promise<string> {
   const model = _resolveModel(value);
   if (model.backend !== "llama-cpp") {
     if (isServedModelDir(model.target)) {
       return path.resolve(model.target);
     }
+    const { kind: givenKind, ...rest } = hubOptions;
     const opts: DownloadOptions = {
       concurrency: configuredDownloadConcurrency(),
-      ...hubOptions,
+      ...rest,
       token: hubOptions.token ?? process.env.HF_TOKEN,
     };
     const dir = await downloadServedRepo(model.target, cacheDir, opts);
+    recordKind(dir, givenKind ?? _modelKind(value, dir));
     // A model that loads other repos by name at runtime needs them on disk
     // too, or it cannot start offline. Only a catalog entry lists them.
     for (const companion of companionsFor(value, model.target)) {
@@ -1322,6 +1344,56 @@ export async function _downloadModel(
   // written into the manifest.
   recordDownload(dir, target, path.basename(resolved));
   return resolved;
+}
+
+/** Writes the kind into a finished download's record. A null kind leaves
+ *  the record as it is: an unknown layout can still be served by someone
+ *  who says what it is. */
+function recordKind(dir: string, kind: ModelKind | null): void {
+  const record = readMlxModelRecord(dir);
+  if (record === null || kind === null || record.kind === kind) {
+    return;
+  }
+  writeMlxModelRecord(dir, { ...record, kind });
+}
+
+/** The kind a catalog category implies. The categories that say what a
+ *  model returns map to themselves; the rest describe a chat model. */
+export function kindOfCategory(category: ModelCategory | undefined): ModelKind | undefined {
+  if (category === undefined) {
+    return undefined;
+  }
+  if (category === "embedding" || category === "speech" || category === "image") {
+    return category;
+  }
+  return "chat";
+}
+
+/** What kind of model `value` is, given the directory it resolved to. The
+ *  catalog's word comes first, because it knows the models whose files are
+ *  ambiguous (an Orpheus speech model has a Llama config). Then the record
+ *  the download wrote. Then the files. Null when none of the three knows,
+ *  which also covers a directory that is not there. */
+export function _modelKind(value: string, dir: string): ModelKind | null {
+  const fromCatalog = _catalogKind(value);
+  if (fromCatalog !== undefined) {
+    return fromCatalog;
+  }
+  const record = readMlxModelRecord(dir);
+  if (record?.kind !== undefined) {
+    return record.kind;
+  }
+  try {
+    return kindOfModelDir(dir);
+  } catch {
+    return null;
+  }
+}
+
+/** The kind the catalog or an alias entry gives `value`, before any file is
+ *  looked at. Undefined when no entry names it. */
+export function _catalogKind(value: string): ModelKind | undefined {
+  return kindOfCategory(_localModelCategory(value));
 }
 
 /** What a local model is for, when its catalog or alias entry says. The
@@ -1397,234 +1469,4 @@ export function formatCtx(tokens: number): string {
   if (tokens >= 1_000_000) return `${Math.round(tokens / 1_000_000)}M`;
   if (tokens >= 1024) return `${Math.round(tokens / 1024)}K`;
   return `${tokens}`;
-}
-
-/** Width of a column: the longer of its header and its widest value. */
-function colWidth(header: string, values: string[]): number {
-  return Math.max(header.length, ...values.map((v) => v.length));
-}
-
-/** The `agency local list` view: every usable model (curated + aliases) with
- *  a downloaded marker, then cache-dir files no catalog entry claims. A row
- *  is "downloaded" when the manifest maps its target URI to a file that still
- *  exists in the cache dir; its SIZE column then shows the on-disk size
- *  rather than the catalog estimate. Compact and operational by default;
- *  `long` (the `-l` flag) adds each model's description on its own dimmed
- *  line, with a blank line between models so the descriptions stay readable.
- *  Returns the block with no trailing newline (the caller's `console.log`
- *  adds exactly one). */
-export function formatLocalList(args: {
-  dir: string;
-  entries: ModelNameEntry[];
-  manifest: Record<string, string>;
-  files: DownloadedModel[];
-  long?: boolean;
-}): string {
-  const byName = Object.fromEntries(args.files.map((f) => [f.name, f]));
-  const byPath = Object.fromEntries(args.files.map((f) => [f.path, f]));
-  // The file on disk that backs a catalog row, if any. A GGUF row goes
-  // through the manifest. An MLX row matches by repo id, or by directory
-  // for an alias that points straight at one.
-  const fileFor = (e: ModelNameEntry): DownloadedModel | undefined => {
-    if (e.backend === "llama-cpp") {
-      const manifestFile = args.manifest[e.target];
-      return manifestFile === undefined ? undefined : byName[manifestFile];
-    }
-    if (!isServedUri(e.target)) {
-      const file = byPath[e.target];
-      return file !== undefined && file.complete ? file : undefined;
-    }
-    // A pinned revision must match what was downloaded. The pin may be a
-    // short prefix of the full commit hash. A repo can sit in more than one
-    // layout, so every copy of it is a candidate, not just the last one.
-    const { backend, repo, revision } = parseServedUri(e.target);
-    const copies = args.files.filter((f) => f.backend === backend && f.name === repo && f.complete);
-    if (revision === undefined) {
-      return copies[0];
-    }
-    return copies.find((f) => (f.revision ?? "").startsWith(revision));
-  };
-  const rows = args.entries.map((e) => {
-    const file = fileFor(e);
-    return {
-      mark: file !== undefined ? "✓" : "",
-      name: e.name,
-      backend: e.backend,
-      params: e.params ?? "",
-      size:
-        file !== undefined
-          ? formatGB(file.sizeBytes)
-          : e.sizeBytes !== undefined
-            ? formatGB(e.sizeBytes)
-            : "",
-      ctx: e.contextWindow !== undefined ? formatCtx(e.contextWindow) : "",
-      license: e.license ?? "",
-      category: e.category ?? "",
-      description: e.description ?? "",
-    };
-  });
-  // Only files claimed by a CATALOG row are excluded from OTHER FILES. The
-  // manifest also records raw-URI downloads, which have no row here — their
-  // files must stay visible.
-  const claimedPaths: string[] = args.entries
-    .map(fileFor)
-    .filter((f): f is DownloadedModel => f !== undefined)
-    .map((f) => f.path);
-  const others = args.files.filter((f) => !claimedPaths.includes(f.path));
-  const headers = ["", "NAME", "BACKEND", "PARAMS", "SIZE", "CONTEXT", "CATEGORY", "LICENSE"];
-  const cols = [
-    colWidth(
-      headers[0],
-      rows.map((r) => r.mark),
-    ),
-    colWidth(
-      headers[1],
-      rows.map((r) => r.name),
-    ),
-    colWidth(
-      headers[2],
-      rows.map((r) => r.backend),
-    ),
-    colWidth(
-      headers[3],
-      rows.map((r) => r.params),
-    ),
-    colWidth(
-      headers[4],
-      rows.map((r) => r.size),
-    ),
-    colWidth(
-      headers[5],
-      rows.map((r) => r.ctx),
-    ),
-    colWidth(
-      headers[6],
-      rows.map((r) => r.category),
-    ),
-    colWidth(
-      headers[7],
-      rows.map((r) => r.license),
-    ),
-  ];
-  const render = (cells: string[]) =>
-    cells
-      .map((c, i) => c.padEnd(cols[i]))
-      .join("  ")
-      .trimEnd();
-  // Indent descriptions two past where NAME starts (mark column + its
-  // separator), so they read as nested under the model they describe.
-  const descIndent = " ".repeat(cols[0] + 2 + 2);
-  const lines = [`Models directory: ${args.dir}`, "", render(headers)];
-  rows.forEach((r, i) => {
-    // Blank line *between* models, not after the last one, so the sections
-    // below (which push their own leading "") aren't double-spaced.
-    if (args.long === true && i > 0) lines.push("");
-    lines.push(render([r.mark, r.name, r.backend, r.params, r.size, r.ctx, r.category, r.license]));
-    if (args.long === true && r.description !== "") {
-      lines.push(ttyColor.dim(`${descIndent}${r.description}`));
-    }
-  });
-  if (others.length > 0) {
-    lines.push("", "OTHER FILES");
-    for (const f of others) {
-      const tag = f.backend === "mlx" ? (f.complete ? "  (mlx)" : "  (mlx, incomplete)") : "";
-      lines.push(`  ${f.name}${tag}  ${formatGB(f.sizeBytes)}`);
-    }
-  }
-  const total = args.files.reduce((sum, f) => sum + f.sizeBytes, 0);
-  lines.push("", `Total downloaded: ${formatGB(total)}`);
-  return lines.join("\n");
-}
-
-/** Render the usable-model list as an aligned table: a header row plus one
- *  fact row per curated model (params, category, size, context window,
- *  license), the description on a dimmed line below, a blank line between
- *  models. User aliases (which carry no metadata) follow in an ALIASES
- *  section as `name → target`. Returns the block as a string with no trailing
- *  newline (the caller's `console.log` adds exactly one). */
-export function formatModelCatalog(target: ConfigTarget = defaultAliasTarget()): string {
-  const entries = _listModelNames(target);
-  const hasMetadata = (m: ModelNameEntry): boolean =>
-    m.params !== undefined ||
-    m.sizeBytes !== undefined ||
-    m.category !== undefined ||
-    m.contextWindow !== undefined ||
-    m.license !== undefined ||
-    m.description !== undefined;
-  const curated = entries.filter(hasMetadata); // table rows: built-ins + rich aliases
-  const aliases = entries.filter((m) => !hasMetadata(m)); // plain name→uri only
-  const lines: string[] = [];
-
-  if (curated.length > 0) {
-    const rows = curated.map((m) => ({
-      name: m.name,
-      params: m.params ?? "",
-      category: m.category ?? "",
-      size: m.sizeBytes ? formatGB(m.sizeBytes) : "?",
-      ctx: m.contextWindow ? formatCtx(m.contextWindow) : "",
-      license: m.license ?? "",
-      description: m.description ?? "",
-    }));
-    // Computed widths so columns fit the actual data (names range from ~10
-    // to ~28 chars). SIZE and CTX are numeric, so they right-align.
-    const w = {
-      name: colWidth(
-        "NAME",
-        rows.map((r) => r.name),
-      ),
-      params: colWidth(
-        "PARAMS",
-        rows.map((r) => r.params),
-      ),
-      category: colWidth(
-        "CATEGORY",
-        rows.map((r) => r.category),
-      ),
-      size: colWidth(
-        "SIZE",
-        rows.map((r) => r.size),
-      ),
-      ctx: colWidth(
-        "CTX",
-        rows.map((r) => r.ctx),
-      ),
-    };
-    const row = (
-      name: string,
-      params: string,
-      category: string,
-      size: string,
-      ctx: string,
-      license: string,
-    ): string =>
-      `${name.padEnd(w.name)}  ${params.padEnd(w.params)}  ${category.padEnd(
-        w.category,
-      )}  ${size.padStart(w.size)}  ${ctx.padStart(w.ctx)}  ${license}`;
-
-    // LICENSE is the last column, so it needs no trailing pad.
-    lines.push(ttyColor.bold(row("NAME", "PARAMS", "CATEGORY", "SIZE", "CTX", "LICENSE")));
-    rows.forEach((r, i) => {
-      // Blank line *between* models, not after the last one, so the joined
-      // string has no trailing newline (console.log adds exactly one).
-      if (i > 0) lines.push("");
-      lines.push(row(r.name, r.params, r.category, r.size, r.ctx, r.license));
-      if (r.description) lines.push(ttyColor.dim(`    ${r.description}`));
-    });
-  }
-
-  if (aliases.length > 0) {
-    if (lines.length > 0) lines.push(""); // separate the table from ALIASES
-    lines.push(ttyColor.bold("ALIASES"));
-    for (const a of aliases) {
-      lines.push(`${a.name} → ${a.target}`);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-/** Print the model catalog to stdout. The agent's bare `--local-model`
- *  path calls this through `std::agency/local`. */
-export function _printLocalCatalog(): void {
-  console.log(formatModelCatalog());
 }

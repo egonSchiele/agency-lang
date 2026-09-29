@@ -307,3 +307,26 @@ export function isHubSnapshotPath(p: string): boolean {
 export function hubSnapshotRevision(snapshotDir: string): string {
   return path.basename(snapshotDir);
 }
+
+/** The parsed contents of one JSON file in a model directory, or null when
+ *  it is missing or not JSON. Follows a symlink the way `modelDirEntries`
+ *  does, for the same reason: a Hub cache snapshot links every file into
+ *  `blobs/`. The server that loads the model reads the same file. Only
+ *  `config.json` and `model_index.json` are read this way, and only to
+ *  decide what the directory holds. */
+export function readModelJson(dir: string, name: string): Record<string, unknown> | null {
+  let text: string;
+  try {
+    text = fs.readFileSync(path.join(dir, name), "utf8");
+  } catch {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed !== null && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}

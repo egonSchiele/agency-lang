@@ -21,8 +21,6 @@ import {
   _removeModel,
   _localModelsSupported,
   resolveAliasConfigPath,
-  formatModelCatalog,
-  formatLocalList,
   type ModelNameEntry,
   resolveCatalogUrl,
   parseCatalog,
@@ -43,6 +41,7 @@ import {
   modelDirEntries,
   _modelFilesOnDisk,
 } from "./localModels.js";
+import { formatModelCatalog, formatLocalList } from "./localModelList.js";
 
 let dir: string;
 let aliasFile: string;

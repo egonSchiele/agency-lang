@@ -1,31 +1,47 @@
 import * as path from "node:path";
 import { getRuntimeContext } from "agency-lang/runtime";
-import { _realTarget, fixedPath, stat } from "agency-lang/stdlib-lib/contained.js";
-import { configuredPython } from "agency-lang/stdlib-lib/localPython.js";
+import { _realTarget, fixedPath, resolveUnder, stat } from "agency-lang/stdlib-lib/contained.js";
+import { configuredPython, serverRulesDir } from "agency-lang/stdlib-lib/localPython.js";
 import {
   _resolveModel,
   _findDownloadedServedModel,
   _localModelKindOf,
 } from "agency-lang/stdlib-lib/localModels.js";
 import { isServedUri, parseServedUri } from "agency-lang/stdlib-lib/modelBackend.js";
-import { estimateTraining, runTraining, type TrainArgs, type Trained } from "./train.js";
+import { estimateMinutes } from "./estimate.js";
+import { runTraining, type Trained } from "./train.js";
 import { readSafetensorsHeader } from "./safetensors.js";
 
-/** The functions index.agency calls. Each check throws before any
- *  interrupt is raised; after approval the same real spellings are used. */
+/** The functions index.agency calls. Nothing here runs a process or reads
+ *  the images folder before `lora::train` is approved. The plan holds one
+ *  copy of every value, and `_train` builds the trainer's arguments from
+ *  the same copy it checks, so the values that run are the values that
+ *  were checked. */
 
 /** Everything `trainLora` knows before it raises its effect: the real
- *  paths, the base model's directory, and the trainer's estimate. */
+ *  spellings of the two paths, the settings, and the estimate. The Python
+ *  and the base model's directory are not in it; `_train` works them out
+ *  again, so a checkpoint cannot choose them. */
 export type TrainPlan = {
-  args: TrainArgs;
   imagesDir: string;
   outPath: string;
-  images: number;
+  base: string;
+  trigger: string;
+  steps: number;
+  rank: number;
+  learningRate: number;
+  resolution: number;
+  flip: boolean;
+  seed: number;
+  samplePrompts: string[];
+  sampleEvery: number;
   estimatedMinutes: number;
 };
 
 /** The directory of a downloaded image model, by catalog name, URI, or
- *  path. Throws when it is not an image model or not downloaded. */
+ *  path. Throws when it is not an image model or not downloaded. The
+ *  trainer then checks its model_index.json against the image server's
+ *  family table before loading it. */
 function baseModelDir(base: string): string {
   const kind = _localModelKindOf(base);
   if (kind !== null && kind !== "image") {
@@ -34,6 +50,7 @@ function baseModelDir(base: string): string {
     );
   }
   const resolved = _resolveModel(base);
+  let dir = path.resolve(resolved.target);
   if (isServedUri(resolved.target)) {
     const { backend, repo, revision } = parseServedUri(resolved.target);
     const found = _findDownloadedServedModel(backend, repo, "", revision);
@@ -42,12 +59,48 @@ function baseModelDir(base: string): string {
         `lora: ${base} is not downloaded. Run:\n  agency local download ${resolved.target}`,
       );
     }
-    return found.path;
+    dir = found.path;
   }
-  return path.resolve(resolved.target);
+  if (kind === null) {
+    throw new Error(`lora: ${base} is not an image model: ${dir} has no model_index.json for one.`);
+  }
+  return dir;
 }
 
-export async function _planTraining(
+/** Throws when `spelling` is a symlink. It is checked below its real
+ *  parent, so a link anywhere in the parent's spelling is refused too. */
+function refuseLink(spelling: string): void {
+  const located = fixedPath(spelling);
+  resolveUnder(located.root, located.target);
+}
+
+/** The folder the trainer writes sample grids into, beside the adapter.
+ *  The same name as `samples_dir` in trainer/rules.py. */
+function samplesDir(outPath: string): string {
+  return path.join(path.dirname(outPath), `${path.basename(outPath, ".safetensors")}-samples`);
+}
+
+/** The paths the run writes or reads, checked with nothing followed: the
+ *  images folder must be a directory, the adapter must not exist yet, and
+ *  neither `<out>.partial` nor the samples folder may be a link. */
+function checkPaths(imagesDir: string, outPath: string): void {
+  const images = fixedPath(imagesDir);
+  if (stat(images.root, images.target)?.isDirectory() !== true) {
+    throw new Error(`lora: ${imagesDir} is not a directory.`);
+  }
+  if (!outPath.endsWith(".safetensors")) {
+    throw new Error(`lora: ${outPath} must end in .safetensors.`);
+  }
+  const out = fixedPath(outPath);
+  refuseLink(outPath);
+  if (stat(out.root, out.target) !== null) {
+    throw new Error(`lora: ${outPath} already exists. Remove it first, or write elsewhere.`);
+  }
+  refuseLink(`${outPath}.partial`);
+  refuseLink(samplesDir(outPath));
+}
+
+export function _planTraining(
   imagesDir: string,
   trigger: string,
   base: string,
@@ -60,18 +113,16 @@ export async function _planTraining(
   seed: number,
   samplePrompts: string[],
   sampleEvery: number,
-  pythonPath: string,
-): Promise<TrainPlan> {
+): TrainPlan {
   const realImages = _realTarget(imagesDir);
   const realOut = _realTarget(outPath);
-  const modelDir = baseModelDir(base);
-  const args: TrainArgs = {
-    python: pythonPath === "" ? configuredPython() : pythonPath,
-    modelDir,
-    baseName: base,
+  checkPaths(realImages, realOut);
+  baseModelDir(base);
+  return {
     imagesDir: realImages,
-    trigger,
     outPath: realOut,
+    base,
+    trigger,
     steps,
     rank,
     learningRate,
@@ -80,30 +131,45 @@ export async function _planTraining(
     seed,
     samplePrompts,
     sampleEvery,
-  };
-  const estimate = await estimateTraining(args);
-  return {
-    args,
-    imagesDir: realImages,
-    outPath: realOut,
-    images: estimate.images,
-    estimatedMinutes: estimate.estimatedMinutes,
+    estimatedMinutes: estimateMinutes(steps, resolution, samplePrompts, sampleEvery),
   };
 }
 
-export async function _train(
+/** Runs an approved plan. The paths are checked again, for a link that
+ *  appeared while the prompt was pending, and the trainer's arguments are
+ *  built from the same fields that were checked. */
+export async function trainPlan(
   plan: TrainPlan,
-): Promise<Trained & { images: number; steps: number }> {
+  signal: AbortSignal | undefined,
+): Promise<Trained & { steps: number }> {
+  checkPaths(plan.imagesDir, plan.outPath);
+  const trained = await runTraining(
+    {
+      python: configuredPython(),
+      modelDir: baseModelDir(plan.base),
+      rulesDir: serverRulesDir(),
+      baseName: plan.base,
+      imagesDir: plan.imagesDir,
+      trigger: plan.trigger,
+      outPath: plan.outPath,
+      steps: plan.steps,
+      rank: plan.rank,
+      learningRate: plan.learningRate,
+      resolution: plan.resolution,
+      flip: plan.flip,
+      seed: plan.seed,
+      samplePrompts: plan.samplePrompts,
+      sampleEvery: plan.sampleEvery,
+    },
+    () => undefined,
+    signal,
+  );
+  return { ...trained, steps: plan.steps };
+}
+
+export async function _train(plan: TrainPlan): Promise<Trained & { steps: number }> {
   const { ctx, stack } = getRuntimeContext();
-  // The spellings the approver saw, checked again for a link that appeared
-  // while the prompt was pending.
-  const images = fixedPath(plan.imagesDir);
-  if (stat(images.root, images.target)?.isDirectory() !== true) {
-    throw new Error(`lora: ${plan.imagesDir} is not a directory.`);
-  }
-  fixedPath(plan.outPath);
-  const trained = await runTraining(plan.args, () => undefined, ctx.getAbortSignal(stack));
-  return { ...trained, images: plan.images, steps: plan.args.steps };
+  return trainPlan(plan, ctx.getAbortSignal(stack));
 }
 
 export type LoraInfo = {

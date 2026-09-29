@@ -4,8 +4,15 @@ Everything runs locally. HF_HUB_OFFLINE is forced on before torch is
 imported, so nothing here can open a network connection: the model
 directory must already be on disk.
 
-  python train_lora_sdxl.py --model <diffusers dir> --images <dir> --trigger "pen and ink" \\
-      --out ./adapters/sketch.safetensors --steps 1000 [--flip] [--sample-prompts ...]
+  python train_lora_sdxl.py --model=<diffusers dir> --images=<dir> --trigger="pen and ink" \\
+      --out=./adapters/sketch.safetensors --rules-dir=<dir> --steps=1000 [--flip] \\
+      [--sample-prompts-json='["pen and ink, a cat"]']
+
+Every value is passed in the `--name=value` form, and the sample prompts
+as one JSON array, so no value can be read as a flag: a prompt of
+"--out /elsewhere" stays a prompt. `--rules-dir` is the folder holding
+the image server's diffusersImageRules.py, whose family table decides
+which base models may be loaded.
 
 The images directory holds png/jpg files. A file may have a sidecar
 caption, `foo.txt` next to `foo.png`, with comma-separated booru-style
@@ -14,7 +21,7 @@ tags. The trigger word is prepended to every caption.
 Progress goes to stdout as one JSON object a line, so the caller that
 started this process can read it without parsing prose:
 
-  {"event": "estimate", "images": 56, "steps": 1000, "estimatedMinutes": 14.2}
+  {"event": "start", "images": 56}
   {"event": "cached", "images": 112}
   {"event": "step", "step": 20, "loss": 0.041, "secondsPerStep": 0.8}
   {"event": "sample", "path": ".../samples/step_0250.png"}
@@ -37,7 +44,17 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from rules import SETTINGS, ArgumentError, check_args, estimate_minutes, read_captions  # noqa: E402
+from rules import (  # noqa: E402
+    SETTINGS,
+    ArgumentError,
+    check_args,
+    check_base_model,
+    open_no_follow,
+    partial_path,
+    read_captions,
+    refuse_link,
+    samples_dir,
+)
 
 
 def emit(event, **fields):
@@ -49,12 +66,13 @@ def fail(message):
     sys.exit(1)
 
 
-def parse_args():
+def parse_args(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--model", required=True, help="diffusers model directory")
     p.add_argument("--images", required=True, help="directory of training images")
     p.add_argument("--trigger", required=True, help="trigger word prepended to captions")
     p.add_argument("--out", required=True, help="the .safetensors file to write")
+    p.add_argument("--rules-dir", required=True, help="the folder holding diffusersImageRules.py")
     p.add_argument("--base-name", default="", help="how to name the base model in the adapter's metadata")
     p.add_argument("--steps", type=int, default=1000)
     p.add_argument("--lr", type=float, default=1e-4)
@@ -62,17 +80,27 @@ def parse_args():
     p.add_argument("--resolution", type=int, default=1024)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--sample-every", type=int, default=250)
-    p.add_argument("--sample-prompts", nargs="*", default=[])
+    p.add_argument("--sample-prompts-json", default="[]", help="the sample prompts, as one JSON array")
     p.add_argument("--flip", action="store_true", help="also train on mirrored copies")
-    p.add_argument("--estimate-only", action="store_true", help="check the arguments and print the estimate")
-    return p.parse_args()
+    args = p.parse_args(argv)
+    try:
+        args.sample_prompts = json.loads(args.sample_prompts_json)
+    except ValueError:
+        p.error("--sample-prompts-json must be a JSON array of strings")
+    return args
 
 
-def estimate(args):
-    """Checks everything that can be checked without loading a model, and
-    prints the estimate. This is what runs before the effect is raised."""
+def preflight(args):
+    """Checks everything that can be checked without loading a model:
+    the numbers, the paths, the base model against the image server's
+    family table, the captions, and that torch and diffusers import.
+    Returns the images with their captions."""
     try:
         check_args(args)
+        sys.path.insert(0, os.path.abspath(args.rules_dir))
+        from diffusersImageRules import family_of
+
+        check_base_model(args.model, family_of)
         items = read_captions(args.images, args.trigger)
     except ArgumentError as err:
         fail(str(err))
@@ -81,12 +109,8 @@ def estimate(args):
             __import__(module)
         except ImportError:
             fail(f"{sys.executable} cannot import {module}. Install the image server's packages first.")
-    if not os.path.isfile(os.path.join(args.model, "model_index.json")):
-        fail(f"{args.model} is not a diffusers model directory (no model_index.json).")
-    minutes = estimate_minutes(
-        len(items), args.steps, args.resolution, args.flip, args.sample_prompts, args.sample_every
-    )
-    emit("estimate", images=len(items), steps=args.steps, estimatedMinutes=minutes)
+    emit("start", images=len(items))
+    return items
 
 
 # ---------------------------------------------------------------- the model
@@ -202,7 +226,7 @@ def render_samples(torch, Image, ImageDraw, Layer, pipe, prompts, seed, out_path
 # ---------------------------------------------------------------- train
 
 
-def train(args):
+def train(args, items):
     import numpy as np
     import torch
     import torch.nn as nn
@@ -211,14 +235,13 @@ def train(args):
     from safetensors.torch import save_file
     from diffusers import DDPMScheduler, EulerDiscreteScheduler, StableDiffusionXLPipeline
 
-    items = read_captions(args.images, args.trigger)
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    out_dir = os.path.dirname(os.path.abspath(args.out))
-    samples_dir = os.path.join(out_dir, os.path.splitext(os.path.basename(args.out))[0] + "-samples")
+    samples = samples_dir(args.out)
     if args.sample_every > 0 and args.sample_prompts:
-        os.makedirs(samples_dir, exist_ok=True)
+        refuse_link(samples)
+        os.makedirs(samples, exist_ok=True)
 
     pipe = StableDiffusionXLPipeline.from_pretrained(
         args.model, torch_dtype=torch.bfloat16, use_safetensors=True, local_files_only=True
@@ -237,7 +260,8 @@ def train(args):
     cache = []
     with torch.no_grad():
         for path, caption in items:
-            img = fit_square(Image, Image.open(path).convert("RGB"), args.resolution)
+            with open_no_follow(path) as f:
+                img = fit_square(Image, Image.open(f).convert("RGB"), args.resolution)
             variants = [img, img.transpose(Image.FLIP_LEFT_RIGHT)] if args.flip else [img]
             embeds, _, pooled, _ = pipe.encode_prompt(
                 prompt=caption, device=device, num_images_per_prompt=1, do_classifier_free_guidance=False
@@ -258,9 +282,10 @@ def train(args):
     res = args.resolution
     time_ids = torch.tensor([[res, res, 0, 0, res, res]], device=device, dtype=torch.bfloat16)
     T = noise_scheduler.config.num_train_timesteps
-    partial = args.out + ".partial"
+    partial = partial_path(args.out)
 
     def save(step):
+        refuse_link(partial)
         save_file(
             lora_state_dict(layers),
             partial,
@@ -274,7 +299,9 @@ def train(args):
 
     def maybe_sample(step, label):
         if args.sample_every > 0 and args.sample_prompts:
-            out_path = os.path.join(samples_dir, f"step_{step:04d}.png")
+            refuse_link(samples)
+            out_path = os.path.join(samples, f"step_{step:04d}.png")
+            refuse_link(out_path)
             render_samples(torch, Image, ImageDraw, Layer, pipe, args.sample_prompts, args.seed, out_path, label)
 
     maybe_sample(0, "step 0")
@@ -306,16 +333,18 @@ def train(args):
             maybe_sample(step, f"step {step}")
     maybe_sample(args.steps, f"step {args.steps}")
     save(args.steps)
+    refuse_link(args.out)
     os.replace(partial, args.out)
     emit("done", path=os.path.abspath(args.out), minutes=round((time.time() - t0) / 60, 1))
 
 
 def main():
     args = parse_args()
-    estimate(args)
-    if args.estimate_only:
-        return
-    train(args)
+    items = preflight(args)
+    try:
+        train(args, items)
+    except ArgumentError as err:
+        fail(str(err))
 
 
 if __name__ == "__main__":

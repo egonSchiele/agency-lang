@@ -40,9 +40,9 @@ node main() {
 ```
 
 `trainLora` raises `lora::train` before it starts, with the folder, the
-base model, the output path, the image count, the steps, and the
-estimated minutes, so you approve the whole run with the numbers in front
-of you. Write the adapter into your `client.adaptersDir` and a running
+base model, the output path, the steps, and the estimated minutes, so
+you approve the whole run with the numbers in front of you. Nothing runs,
+and nothing in the folder is read, until you answer. Write the adapter into your `client.adaptersDir` and a running
 image server loads it by name the first time a request asks:
 
 ```ts
@@ -73,7 +73,7 @@ in one dictionary at the top of `trainer/rules.py`, with a comment each.
 |---|---|---|
 | `trigger` | required | The word the adapter answers to. A real phrase learns faster and keeps the base model's idea of it; a nonsense word owns the token. |
 | `steps` | 1000 | The main dial. Too few, the style is faint; too many, every output is a training image. Judge by the grids. |
-| `rank` | 16 | How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. The file doubles each step. |
+| `rank` | 16 | How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. Doubling the rank doubles the file. |
 | `learningRate` | 1e-4 | Halve it if the grids get worse after getting better. |
 | `resolution` | 1024 | 768 trains twice as fast for a first look. |
 | `flip` | false | Doubles a small set with mirror images. Off for an asymmetric character. |

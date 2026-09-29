@@ -1,6 +1,8 @@
 """A stand-in for the trainer: prints the JSON lines a real run prints and
 writes an empty adapter, or fails, as the environment says. Tests point
-`pythonPath` at a shell script that runs this."""
+the Python at a shell script that runs this. When FAKE_TRAINER_LOG is
+set, every run appends its arguments to that file, so a test can tell
+whether anything ran."""
 
 import json
 import os
@@ -8,8 +10,12 @@ import sys
 import time
 
 args = sys.argv[1:]
-out = args[args.index("--out") + 1]
+out = next(arg.split("=", 1)[1] for arg in args if arg.startswith("--out="))
 mode = os.environ.get("FAKE_TRAINER", "ok")
+log = os.environ.get("FAKE_TRAINER_LOG")
+if log:
+    with open(log, "a") as f:
+        f.write(json.dumps(args) + "\n")
 
 
 def emit(**fields):
@@ -19,9 +25,7 @@ def emit(**fields):
 if mode == "refuse":
     print("steps must be from 1 to 20000. Got 0.", file=sys.stderr)
     sys.exit(1)
-emit(event="estimate", images=4, steps=20, estimatedMinutes=0.3)
-if "--estimate-only" in args:
-    sys.exit(0)
+emit(event="start", images=4)
 emit(event="cached", images=8)
 with open(out + ".partial", "wb") as f:
     f.write(b"partial")
@@ -36,3 +40,5 @@ open(sample, "wb").write(b"png")
 emit(event="sample", path=sample)
 os.replace(out + ".partial", out)
 emit(event="done", path=out, minutes=0.2)
+if mode == "hang-after-done":
+    time.sleep(60)

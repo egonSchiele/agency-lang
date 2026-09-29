@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { readSafetensorsHeader, MAX_HEADER_BYTES } from "./safetensors.js";
+import { readSafetensorsHeader, headerLength, MAX_HEADER_BYTES } from "./safetensors.js";
 import { _loraInfo } from "./agency.js";
 
 /** A safetensors file: the 8-byte header length, the JSON header, then
@@ -71,6 +71,18 @@ describe("readSafetensorsHeader", () => {
     length.writeBigUInt64LE(BigInt(MAX_HEADER_BYTES + 1));
     fs.writeFileSync(huge, Buffer.concat([length, Buffer.alloc(16)]));
     await expect(readSafetensorsHeader(huge)).rejects.toThrow("far smaller");
+  });
+
+  it("refuses a bogus length as soon as the length field is read", async () => {
+    // The check sits in headerLength, which readHead calls on the first 8
+    // bytes, so a length of 2^40 stops the read there instead of reading
+    // the whole file looking for a header that long.
+    const length = Buffer.alloc(8);
+    length.writeBigUInt64LE(2n ** 40n);
+    expect(() => headerLength(length, "big.safetensors")).toThrow("far smaller");
+    const big = path.join(dir, "big.safetensors");
+    fs.writeFileSync(big, Buffer.concat([length, Buffer.alloc(4 * 1024 * 1024)]));
+    await expect(readSafetensorsHeader(big)).rejects.toThrow("far smaller");
   });
 
   it("refuses a symlink", async () => {

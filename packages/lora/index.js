@@ -99,7 +99,7 @@ const __globalCtx = new RuntimeContext({
   dirname: __dirname,
   logLevel: "info",
   traceConfig: {
-    program: "index.agency"
+    program: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency"
   }
 });
 const graph = __globalCtx.graph;
@@ -161,7 +161,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "a520fcfd8b3fb5a934df3adf56ed3d9332207294fa61928eece5ca4ae880ce8a", import.meta.url);
+__registerModuleFingerprint("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", "b0ab7bd5f91e53fb7f811cf33ad36dbb1415864fb00d9e049394778f07732035", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -195,7 +195,7 @@ __registerTool(getAgentCwd);
 __registerTool(applyAgentCwd);
 __registerTool(dirname);
 __registerTool(basename);
-__registerAlwaysScope("lora::train", [{ "field": "outDir", "matchSubpaths": true }]);
+__registerAlwaysScope("lora::train", [{ "field": "outDir", "matchSubpaths": true }, { "field": "imagesDir", "matchSubpaths": true }]);
 __registerAlwaysScope("lora::info", [{ "field": "dir", "matchSubpaths": true }]);
 let __staticInitPromise = null;
 let STYLE_TAGS = __UNINIT_STATIC;
@@ -214,23 +214,23 @@ function __getStaticVars() {
   };
 }
 __globalCtx.getStaticVars = __getStaticVars;
-__registerStaticInit("index.agency", __initializeStatic);
+__registerStaticInit("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", __initializeStatic);
 async function __initializeGlobals(__ctx) {
-  if (__ctx.globals.isInitialized("index.agency")) {
+  if (__ctx.globals.isInitialized("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency")) {
     return;
   }
-  __ctx.globals.markInitialized("index.agency");
+  __ctx.globals.markInitialized("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency");
   await __initializeStatic(__ctx);
   await __ctx.writeStaticStateToTrace(__globalCtx.getStaticVars());
 }
-__registerGlobalsInit("index.agency", __initializeGlobals);
+__registerGlobalsInit("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", __initializeGlobals);
 async function __registerTopLevelCallbacks(__ctx) {
 }
-__registerCallbacksInit("index.agency", __registerTopLevelCallbacks);
+__registerCallbacksInit("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 const TrainedLora = z.object({ "path": z.string(), "steps": z.number(), "images": z.number(), "minutes": z.number(), "samples": z.array(z.string()) });
 const LoraInfo = z.object({ "base": z.string(), "trigger": z.string(), "rank": z.number(), "steps": z.number(), "sizeBytes": z.number() });
-async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNSET, rank = __UNSET, learningRate = __UNSET, resolution = __UNSET, flip = __UNSET, seed = __UNSET, samplePrompts = __UNSET, sampleEvery = __UNSET, pythonPath = __UNSET) {
+async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNSET, rank = __UNSET, learningRate = __UNSET, resolution = __UNSET, flip = __UNSET, seed = __UNSET, samplePrompts = __UNSET, sampleEvery = __UNSET) {
   const __setupData = setupFunction();
   const __stack = __setupData.stack;
   const __step = __setupData.step;
@@ -238,8 +238,8 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "trainLora", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
+  claimFrameForScope(__stack, "trainLora", "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency");
+  if (!__globals().isInitialized("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
@@ -255,9 +255,8 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
   __stack.args["seed"] = seed === __UNSET ? 1 : seed;
   __stack.args["samplePrompts"] = samplePrompts === __UNSET ? [] : samplePrompts;
   __stack.args["sampleEvery"] = sampleEvery === __UNSET ? 250 : sampleEvery;
-  __stack.args["pythonPath"] = pythonPath === __UNSET ? `` : pythonPath;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "trainLora", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", scopeName: "trainLora", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -310,10 +309,6 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
       sampleEvery = __overrides["sampleEvery"];
       __stack.args["sampleEvery"] = sampleEvery;
     }
-    if ("pythonPath" in __overrides) {
-      pythonPath = __overrides["pythonPath"];
-      __stack.args["pythonPath"] = pythonPath;
-    }
   }
   try {
     await agencyStore.run({
@@ -339,17 +334,16 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
               flip,
               seed,
               samplePrompts,
-              sampleEvery,
-              pythonPath
+              sampleEvery
             },
-            moduleId: "index.agency"
+            moduleId: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency"
           }
         });
       });
       await runner.step(1, async (runner2) => {
         __stack.locals.plan = await __tryCall(async () => await __call(_planTraining, {
           type: "positional",
-          args: [__stack.args.imagesDir, __stack.args.trigger, __stack.args.base, __stack.args.outPath, __stack.args.steps, __stack.args.rank, __stack.args.learningRate, __stack.args.resolution, __stack.args.flip, __stack.args.seed, __stack.args.samplePrompts, __stack.args.sampleEvery, __stack.args.pythonPath]
+          args: [__stack.args.imagesDir, __stack.args.trigger, __stack.args.base, __stack.args.outPath, __stack.args.steps, __stack.args.rank, __stack.args.learningRate, __stack.args.resolution, __stack.args.flip, __stack.args.seed, __stack.args.samplePrompts, __stack.args.sampleEvery]
         }), {
           checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
           functionName: "trainLora",
@@ -428,22 +422,21 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
             return;
           }
         } else {
-          const __handlerResult = await interruptWithHandlers("lora::train", `Train a LoRA adapter on ${__stack.locals.plan.value.images} images for ${__stack.args.steps} steps, about ${__stack.locals.plan.value.estimatedMinutes} minutes on the GPU, writing ${__stack.locals.plan.value.outPath}?`, {
+          const __handlerResult = await interruptWithHandlers("lora::train", `Train a LoRA adapter on the images in ${__stack.locals.plan.value.imagesDir} for ${__stack.locals.plan.value.steps} steps, about ${__stack.locals.plan.value.estimatedMinutes} minutes on the GPU plus a few seconds an image, writing ${__stack.locals.plan.value.outPath}?`, {
             "imagesDir": __stack.locals.plan.value.imagesDir,
-            "base": __stack.args.base,
+            "base": __stack.locals.plan.value.base,
             "outDir": __stack.locals.__hoist_1,
             "outFilename": __stack.locals.__hoist_2,
-            "images": __stack.locals.plan.value.images,
-            "steps": __stack.args.steps,
+            "steps": __stack.locals.plan.value.steps,
             "estimatedMinutes": __stack.locals.plan.value.estimatedMinutes
-          }, "./index.agency", __ctx, __stateStack());
+          }, "./../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", __ctx, __stateStack());
           if (isRejected(__handlerResult)) {
             runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_6 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "trainLora", stepPath: "6" });
+            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", scopeName: "trainLora", stepPath: "6" });
             __handlerResult[0].checkpointId = __checkpointId;
             __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
@@ -510,7 +503,7 @@ async function __trainLora_impl(imagesDir, trigger, base, outPath, steps = __UNS
 }
 const trainLora = __AgencyFunction.create({
   name: "trainLora",
-  module: "index.agency",
+  module: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency",
   fn: __trainLora_impl,
   params: [{
     name: "imagesDir",
@@ -596,13 +589,6 @@ const trainLora = __AgencyFunction.create({
     variadic: false,
     isFunctionTyped: false,
     acceptsResult: false
-  }, {
-    name: "pythonPath",
-    hasDefault: true,
-    defaultValue: void 0,
-    variadic: false,
-    isFunctionTyped: false,
-    acceptsResult: false
   }],
   toolDefinition: {
     name: "trainLora",
@@ -611,23 +597,22 @@ const trainLora = __AgencyFunction.create({
   tags). The trigger word is put in front of every caption. Takes minutes
   on a Mac GPU and writes the adapter as a .safetensors file, plus a
   before-and-after sample grid at every sampleEvery steps beside it.
-  Everything runs on this machine. Returns the adapter's path and the
-  sample grids.
+  Everything runs on this machine, with the Python agency local serve
+  uses. Returns the adapter's path and the sample grids.
 
   @param imagesDir - The folder of training images, PNG or JPEG, with optional .txt captions beside them
   @param trigger - The word the adapter answers to. A real phrase learns faster and keeps the base model's idea of it; a nonsense word owns the token
   @param base - The SDXL model to train on: a catalog name, a diffusers: URI, or a model directory, already downloaded
   @param outPath - The .safetensors file to write. It must not exist yet
   @param steps - How long to train. Too few and the style is faint; too many and every output is a training image. Judge by the sample grids
-  @param rank - How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. The file doubles with each
+  @param rank - How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. Doubling the rank doubles the file
   @param learningRate - Halve it if the grids get worse after getting better
   @param resolution - The training size. 768 trains twice as fast for a first look; 1024 for the real run
   @param flip - Also train on mirrored copies, which doubles a small set. Off for an asymmetric character
   @param seed - Fixes the randomness, so a run is repeatable
   @param samplePrompts - Prompts to render before and after at each checkpoint, to judge the run. Use the trigger word in them
-  @param sampleEvery - Steps between sample grids. 0 for none
-  @param pythonPath - The Python to run the trainer with. Empty uses the one agency local serve uses`,
-    schema: z.object({ "imagesDir": z.string(), "trigger": z.string(), "base": z.string(), "outPath": z.string(), "steps": z.number().nullable().describe("Default: 1000"), "rank": z.number().nullable().describe("Default: 16"), "learningRate": z.number().nullable().describe("Default: 0.0001"), "resolution": z.number().nullable().describe("Default: 1024"), "flip": z.boolean().nullable().describe("Default: false"), "seed": z.number().nullable().describe("Default: 1"), "samplePrompts": z.array(z.string()).nullable().describe("Default: []"), "sampleEvery": z.number().nullable().describe("Default: 250"), "pythonPath": z.string().nullable().describe("Default: ") })
+  @param sampleEvery - Steps between sample grids. 0 for none`,
+    schema: z.object({ "imagesDir": z.string(), "trigger": z.string(), "base": z.string(), "outPath": z.string(), "steps": z.number().nullable().describe("Default: 1000"), "rank": z.number().nullable().describe("Default: 16"), "learningRate": z.number().nullable().describe("Default: 0.0001"), "resolution": z.number().nullable().describe("Default: 1024"), "flip": z.boolean().nullable().describe("Default: false"), "seed": z.number().nullable().describe("Default: 1"), "samplePrompts": z.array(z.string()).nullable().describe("Default: []"), "sampleEvery": z.number().nullable().describe("Default: 250") })
   },
   exported: true
 }, __toolRegistry);
@@ -639,14 +624,14 @@ async function __loraInfo_impl(path2) {
   const __ctx = getRuntimeContext().ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "loraInfo", "index.agency");
-  if (!__globals().isInitialized("index.agency")) {
+  claimFrameForScope(__stack, "loraInfo", "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency");
+  if (!__globals().isInitialized("../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency")) {
     await __initializeGlobals(__ctx);
   }
   let __funcStartTime = performance.now();
   __stack.args["path"] = path2;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "index.agency", scopeName: "loraInfo", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", scopeName: "loraInfo", threads: __setupData.threads });
   let __resultCheckpointId = -1;
   if (__ctx._pendingArgOverrides?.moduleId === __stack.moduleId && __ctx._pendingArgOverrides?.scopeName === __stack.scopeName) {
     const __overrides = __ctx._pendingArgOverrides.values;
@@ -671,7 +656,7 @@ async function __loraInfo_impl(path2) {
             args: {
               path: path2
             },
-            moduleId: "index.agency"
+            moduleId: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency"
           }
         });
       });
@@ -760,14 +745,14 @@ async function __loraInfo_impl(path2) {
           const __handlerResult = await interruptWithHandlers("lora::info", `Read this adapter's header?`, {
             "dir": __stack.locals.__hoist_1,
             "filename": __stack.locals.__hoist_2
-          }, "./index.agency", __ctx, __stateStack());
+          }, "./../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", __ctx, __stateStack());
           if (isRejected(__handlerResult)) {
             runner2.halt(runtimeFailure(__handlerResult.value ?? "interrupt rejected", { rejected: true, checkpoint: getRuntimeContext().ctx.checkpoints.get(__resultCheckpointId) }));
             return;
           }
           if (!isApproved(__handlerResult)) {
             __self.__interruptId_6 = __handlerResult[0].interruptId;
-            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "index.agency", scopeName: "loraInfo", stepPath: "6" });
+            const __checkpointId = getRuntimeContext().ctx.checkpoints.create(__stateStack(), __ctx, { moduleId: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency", scopeName: "loraInfo", stepPath: "6" });
             __handlerResult[0].checkpointId = __checkpointId;
             __handlerResult[0].checkpoint = getRuntimeContext().ctx.checkpoints.get(__checkpointId);
             runner2.halt(__handlerResult);
@@ -834,7 +819,7 @@ async function __loraInfo_impl(path2) {
 }
 const loraInfo = __AgencyFunction.create({
   name: "loraInfo",
-  module: "index.agency",
+  module: "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency",
   fn: __loraInfo_impl,
   params: [{
     name: "path",
@@ -859,7 +844,7 @@ const loraInfo = __AgencyFunction.create({
   }
 }, __toolRegistry);
 var stdin_default = graph;
-const __sourceMap = { "index.agency:trainLora": { "1": { "line": 128, "col": 2 }, "2": { "line": 129, "col": 6 }, "3": { "line": 129, "col": 2 }, "4": { "line": 135, "col": 12 }, "5": { "line": 136, "col": 17 }, "6": { "line": 132, "col": 2 }, "7": { "line": 141, "col": 2 }, "3.0": { "line": 130, "col": 4 } }, "index.agency:loraInfo": { "1": { "line": 152, "col": 2 }, "2": { "line": 153, "col": 6 }, "3": { "line": 153, "col": 2 }, "4": { "line": 157, "col": 9 }, "5": { "line": 158, "col": 14 }, "6": { "line": 156, "col": 2 }, "7": { "line": 160, "col": 2 }, "3.0": { "line": 154, "col": 4 } } };
+const __sourceMap = { "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency:trainLora": { "1": { "line": 126, "col": 2 }, "2": { "line": 127, "col": 6 }, "3": { "line": 127, "col": 2 }, "4": { "line": 133, "col": 12 }, "5": { "line": 134, "col": 17 }, "6": { "line": 130, "col": 2 }, "7": { "line": 138, "col": 2 }, "3.0": { "line": 128, "col": 4 } }, "../../../../../../../Users/adit/agency-lang/packages/agency-lang/.worktrees/lora/packages/lora/index.agency:loraInfo": { "1": { "line": 149, "col": 2 }, "2": { "line": 150, "col": 6 }, "3": { "line": 150, "col": 2 }, "4": { "line": 154, "col": 9 }, "5": { "line": 155, "col": 14 }, "6": { "line": 153, "col": 2 }, "7": { "line": 157, "col": 2 }, "3.0": { "line": 151, "col": 4 } } };
 export {
   LoraInfo,
   STYLE_TAGS,

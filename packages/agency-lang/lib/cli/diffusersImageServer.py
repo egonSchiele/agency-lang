@@ -47,6 +47,7 @@ from diffusersImageRules import (  # noqa: E402
     family_of,
     join_names,
     letterbox,
+    pipeline_args,
     warm_up_request,
 )
 
@@ -286,16 +287,10 @@ class Generator:
             return callback_kwargs
 
         kwargs = {
-            "prompt": request["prompt"],
-            "height": request["height"],
-            "width": request["width"],
-            "num_inference_steps": total,
-            "guidance_scale": request["guidance"],
+            **pipeline_args(self.rules, request),
             "generator": torch.Generator("cpu").manual_seed(request["seed"]),
             "callback_on_step_end": on_step_end,
         }
-        if request["negative_prompt"] != "":
-            kwargs["negative_prompt"] = request["negative_prompt"]
         # Decoded before the lock, so a bad image never waits for the GPU
         # or loads a ControlNet.
         if request["controlnet"] is not None:

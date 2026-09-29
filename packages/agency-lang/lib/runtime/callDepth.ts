@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
 import { agencyStore } from "./asyncContext.js";
 import { CallDepthExceededError } from "./errors.js";
 

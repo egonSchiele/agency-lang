@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "cropPayload",
+      "input": "",
+      "expectedOutput": "\"std::cropImage|image-effects-probe.png|image-effects-crop.png|true\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "pastePayload",
+      "input": "",
+      "expectedOutput": "\"std::pasteImages|2|image-effects-probe.png|image-effects-sheet.png\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "pasteBadPathAsksNobody",
+      "input": "",
+      "expectedOutput": "\"failed|asked=false\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "sizePayload",
+      "input": "",
+      "expectedOutput": "\"std::readImage|image-effects-probe.png\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

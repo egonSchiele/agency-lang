@@ -20,6 +20,9 @@ export function trainerScript(): string {
 export type TrainArgs = {
   python: string;
   modelDir: string;
+  /** The folder holding the image server's `diffusersImageRules.py`, whose
+   *  family table the trainer checks the base model against. */
+  rulesDir: string;
   /** The base model as the caller named it, written into the adapter's
    *  metadata so loraInfo says "noobai-xl", not a cache directory's hash. */
   baseName: string;
@@ -37,52 +40,42 @@ export type TrainArgs = {
 };
 
 export type TrainEvent =
-  | { event: "estimate"; images: number; steps: number; estimatedMinutes: number }
+  | { event: "start"; images: number }
   | { event: "cached"; images: number }
   | { event: "step"; step: number; loss: number; secondsPerStep: number }
   | { event: "sample"; path: string }
   | { event: "done"; path: string; minutes: number };
 
-export type Estimate = { images: number; steps: number; estimatedMinutes: number };
-
-export type Trained = { path: string; minutes: number; samples: string[] };
+export type Trained = { path: string; minutes: number; samples: string[]; images: number };
 
 /** A training run that did not finish: the trainer refused its arguments,
  *  the Python was missing, or the run died. The message is the trainer's
  *  own last words. */
 export class TrainError extends Error {}
 
-function argv(args: TrainArgs): string[] {
+/** The trainer's command line, after the Python. Every value goes in the
+ *  `--name=value` form and the prompts go as one JSON array, so argparse
+ *  never reads a caller's string as a flag: a prompt of "--out /elsewhere"
+ *  stays a prompt. */
+export function trainerArgv(args: TrainArgs): string[] {
   const out = [
     trainerScript(),
-    "--model",
-    args.modelDir,
-    "--images",
-    args.imagesDir,
-    "--trigger",
-    args.trigger,
-    "--out",
-    args.outPath,
-    "--base-name",
-    args.baseName,
-    "--steps",
-    String(args.steps),
-    "--rank",
-    String(args.rank),
-    "--lr",
-    String(args.learningRate),
-    "--resolution",
-    String(args.resolution),
-    "--seed",
-    String(args.seed),
-    "--sample-every",
-    String(args.sampleEvery),
+    `--model=${args.modelDir}`,
+    `--images=${args.imagesDir}`,
+    `--trigger=${args.trigger}`,
+    `--out=${args.outPath}`,
+    `--rules-dir=${args.rulesDir}`,
+    `--base-name=${args.baseName}`,
+    `--steps=${args.steps}`,
+    `--rank=${args.rank}`,
+    `--lr=${args.learningRate}`,
+    `--resolution=${args.resolution}`,
+    `--seed=${args.seed}`,
+    `--sample-every=${args.sampleEvery}`,
+    `--sample-prompts-json=${JSON.stringify(args.samplePrompts)}`,
   ];
   if (args.flip) {
     out.push("--flip");
-  }
-  if (args.samplePrompts.length > 0) {
-    out.push("--sample-prompts", ...args.samplePrompts);
   }
   return out;
 }
@@ -97,21 +90,24 @@ function parseEvent(line: string): TrainEvent | null {
   }
 }
 
-/** Runs the trainer with the given extra flags, sending each event to
- *  `onEvent`, and resolves with every event once it exits. Rejects with
- *  the trainer's stderr on a non-zero exit, or with the abort reason. */
+/** Runs the trainer, sending each event to `onEvent`, and resolves once
+ *  it exits. Rejects with the trainer's stderr on a
+ *  non-zero exit, or when the signal aborts. A signal that is already
+ *  aborted starts nothing: an abort listener never fires for it. */
 function runTrainer(
   args: TrainArgs,
-  extra: string[],
   onEvent: (event: TrainEvent) => void,
   signal: AbortSignal | undefined,
-): Promise<TrainEvent[]> {
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(args.python, [...argv(args), ...extra], {
+    if (signal?.aborted) {
+      reject(new TrainError("training was cancelled"));
+      return;
+    }
+    const child = spawn(args.python, trainerArgv(args), {
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, HF_HUB_OFFLINE: "1", HF_HUB_DISABLE_TELEMETRY: "1" },
     });
-    const events: TrainEvent[] = [];
     let pending = "";
     let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => {
@@ -121,7 +117,6 @@ function runTrainer(
       for (const line of lines) {
         const event = parseEvent(line);
         if (event !== null) {
-          events.push(event);
           onEvent(event);
         }
       }
@@ -148,55 +143,68 @@ function runTrainer(
         reject(new TrainError(detail === "" ? `the trainer exited with ${code}` : detail));
         return;
       }
-      resolve(events);
+      resolve();
     });
   });
 }
 
-/** Checks the arguments and reads the captions without loading a model,
- *  and returns the estimate. What runs before the effect is raised. */
-export async function estimateTraining(args: TrainArgs): Promise<Estimate> {
-  const events = await runTrainer(args, ["--estimate-only"], () => undefined, undefined);
-  const estimate = events.find((event) => event.event === "estimate");
-  if (estimate === undefined || estimate.event !== "estimate") {
-    throw new TrainError("the trainer printed no estimate");
-  }
-  return {
-    images: estimate.images,
-    steps: estimate.steps,
-    estimatedMinutes: estimate.estimatedMinutes,
-  };
-}
-
-/** Removes the partial file a killed run leaves, if there is one. */
-function removePartial(outPath: string): void {
-  const partial = `${outPath}.partial`;
-  const located = fixedPath(partial);
-  if (stat(located.root, located.target) !== null) {
-    remove(located.root, located.target);
+/** Removes what a run that did not succeed left behind: the partial
+ *  file, and the adapter itself when the trainer finished writing it but
+ *  the run was cancelled on the way out. The trainer refuses an `outPath`
+ *  that already exists, so an adapter there after a `done` event is this
+ *  run's own. */
+function removeLeftovers(outPath: string, wroteAdapter: boolean): void {
+  const targets = wroteAdapter ? [`${outPath}.partial`, outPath] : [`${outPath}.partial`];
+  for (const target of targets) {
+    const located = fixedPath(target);
+    if (stat(located.root, located.target) !== null) {
+      remove(located.root, located.target);
+    }
   }
 }
 
-/** Trains, streaming progress to `onEvent`, and returns the adapter's path
- *  and the sample grids. A cancelled or failed run leaves no `.partial`. */
+/** Trains, streaming progress to `onEvent`, and returns the adapter's path,
+ *  the sample grids, and how many images it trained on. A cancelled or
+ *  failed run leaves neither a `.partial` file nor an adapter. */
 export async function runTraining(
   args: TrainArgs,
   onEvent: (event: TrainEvent) => void,
   signal: AbortSignal | undefined,
 ): Promise<Trained> {
-  let events: TrainEvent[];
+  const events: TrainEvent[] = [];
   try {
-    events = await runTrainer(args, [], onEvent, signal);
+    await runTrainer(
+      args,
+      (event) => {
+        events.push(event);
+        onEvent(event);
+      },
+      signal,
+    );
   } catch (err) {
-    removePartial(args.outPath);
+    removeLeftovers(
+      args.outPath,
+      events.some((event) => event.event === "done"),
+    );
     throw err;
   }
   const done = events.find((event) => event.event === "done");
-  if (done === undefined || done.event !== "done") {
-    removePartial(args.outPath);
+  const start = events.find((event) => event.event === "start");
+  if (
+    done === undefined ||
+    done.event !== "done" ||
+    start === undefined ||
+    start.event !== "start"
+  ) {
+    removeLeftovers(args.outPath, false);
     throw new TrainError("the trainer exited without writing the adapter");
   }
   const samples = events.flatMap((event) => (event.event === "sample" ? [event.path] : []));
   const located = fixedPath(done.path);
-  return { path: resolveUnder(located.root, located.target), minutes: done.minutes, samples };
+  return {
+    path: resolveUnder(located.root, located.target),
+    minutes: done.minutes,
+    samples,
+    images: start.images,
+  };
 }

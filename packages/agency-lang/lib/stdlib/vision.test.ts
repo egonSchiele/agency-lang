@@ -16,6 +16,8 @@ describe("std::vision helpers", () => {
   const savedBaseUrl = process.env.MLX_BASE_URL;
   let dir: string;
   let image: string;
+  // The server gets the file's bytes, never its path.
+  const imageBase64 = Buffer.from("png bytes").toString("base64");
 
   beforeAll(async () => {
     dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "vision-")));
@@ -62,7 +64,7 @@ describe("std::vision helpers", () => {
       {
         path: "/v1/vision/detections",
         model: "florence-community/Florence-2-large",
-        image,
+        image: imageBase64,
         labels: ["person", "desk"],
         threshold: 0.3,
       },
@@ -76,7 +78,7 @@ describe("std::vision helpers", () => {
     expect(requests[0]).toEqual({
       path: "/v1/vision/tags",
       model: "SmilingWolf/wd-eva02-large-tagger-v3",
-      image,
+      image: imageBase64,
       threshold: 0.35,
       limit: 30,
     });

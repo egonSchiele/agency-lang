@@ -30,10 +30,11 @@
     "build": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
     "agency": "agency",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:agency": "vitest run tests/agencyPrograms.test.ts"
   },
   "peerDependencies": {
-    "agency-lang": ">=0.25.0"
+    "agency-lang": ">=0.26.0"
   },
   "devDependencies": {
     "agency-lang": "workspace:*",

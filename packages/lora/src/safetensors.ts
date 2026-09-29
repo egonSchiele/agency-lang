@@ -15,19 +15,30 @@ export type SafetensorsHeader = {
   sizeBytes: number;
 };
 
-/** The first bytes of a file the caller already validated (`spelling` is
- *  the real path an effect named), read through a descriptor that refuses
- *  a link, stopping once `wanted(bytes)` says enough has arrived. */
-function readHead(spelling: string, wanted: (bytes: Buffer) => number | null): Promise<Buffer> {
+/** The length field and header of a file the caller already validated
+ *  (`spelling` is the real path an effect named), read through a
+ *  descriptor that refuses a link. It stops as soon as the length field
+ *  is in when the length is too large, and as soon as the header is in
+ *  otherwise, so a bogus length never reads the rest of the file. */
+function readHead(spelling: string): Promise<Buffer> {
   const located = fixedPath(spelling);
   const stream = readStream(located.root, located.target);
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
+    let need: number | null = null;
     stream.on("data", (chunk: Buffer) => {
       chunks.push(chunk);
       total += chunk.length;
-      const need = wanted(Buffer.concat(chunks));
+      if (need === null && total >= LENGTH_BYTES) {
+        try {
+          need = headerLength(Buffer.concat(chunks).subarray(0, LENGTH_BYTES), spelling);
+        } catch (err) {
+          stream.destroy();
+          reject(err);
+          return;
+        }
+      }
       if (need !== null && total >= need) {
         stream.destroy();
         resolve(Buffer.concat(chunks).subarray(0, need));
@@ -39,12 +50,14 @@ function readHead(spelling: string, wanted: (bytes: Buffer) => number | null): P
 }
 
 /** How many bytes the header needs: the length field, then the JSON it
- *  announces. Null until the length field is in. */
-function headerLength(bytes: Buffer): number | null {
-  if (bytes.length < LENGTH_BYTES) {
-    return null;
+ *  announces. Throws when the announced length is more than an adapter's
+ *  header could be. */
+export function headerLength(lengthField: Buffer, spelling: string): number {
+  const length = Number(lengthField.readBigUInt64LE(0));
+  if (length > MAX_HEADER_BYTES) {
+    throw new Error(`${spelling} has a ${length}-byte header; an adapter's is far smaller.`);
   }
-  return LENGTH_BYTES + Number(bytes.readBigUInt64LE(0));
+  return LENGTH_BYTES + length;
 }
 
 export async function readSafetensorsHeader(spelling: string): Promise<SafetensorsHeader> {
@@ -53,15 +66,11 @@ export async function readSafetensorsHeader(spelling: string): Promise<Safetenso
   if (info === null || !info.isFile()) {
     throw new Error(`${spelling} is not a file.`);
   }
-  const head = await readHead(spelling, headerLength);
+  const head = await readHead(spelling);
   if (head.length < LENGTH_BYTES) {
     throw new Error(`${spelling} is too short to be a safetensors file.`);
   }
-  const length = Number(head.readBigUInt64LE(0));
-  if (length > MAX_HEADER_BYTES) {
-    throw new Error(`${spelling} has a ${length}-byte header; an adapter's is far smaller.`);
-  }
-  const text = head.subarray(LENGTH_BYTES, LENGTH_BYTES + length).toString("utf8");
+  const text = head.subarray(LENGTH_BYTES, headerLength(head, spelling)).toString("utf8");
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(text) as Record<string, unknown>;

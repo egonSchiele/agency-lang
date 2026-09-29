@@ -24,9 +24,8 @@ node main() {
 ```
 
 `trainLora` raises `lora::train` before it starts, with the folder, the
-base model, the output path, the image count, the steps, and the
-estimated minutes, so the approver sees the whole run before anything
-runs. Put the output in your `client.adaptersDir` and a running image
+base model, the output path, the steps, and the estimated minutes, so the
+approver sees the whole run before anything runs or reads the folder. Put the output in your `client.adaptersDir` and a running image
 server picks it up by name the first time a request asks for it.
 */
 
@@ -34,16 +33,17 @@ import { _planTraining, _train, _loraInfo } from "./dist/src/agency.js"
 import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
 import { dirname, basename } from "std::path"
 
-// One effect for the whole run: it writes the adapter, its sample grids,
-// and nothing else, all under the output path's folder, and uses the GPU
-// for minutes.
-@alwaysUnder(outDir)
+// One effect for the whole run: it reads the images folder, writes the
+// adapter, its sample grids, and nothing else, all under the output
+// path's folder, and uses the GPU for minutes. An "always" answer covers
+// one images folder and one output folder together, the way a copy's
+// covers its source and destination.
+@alwaysUnder(outDir, imagesDir)
 effect lora::train {
   imagesDir: string,
   base: string,
   outDir: string,
   outFilename: string,
-  images: number,
   steps: number,
   estimatedMinutes: number,
 }
@@ -101,7 +101,6 @@ export def trainLora(
   seed: number = 1,
   samplePrompts: string[] = [],
   sampleEvery: number = 250,
-  pythonPath: string = "",
 ): Result<TrainedLora> raises <lora::train> {
   """
   Train a LoRA adapter for an SDXL image model from a folder of images,
@@ -109,34 +108,32 @@ export def trainLora(
   tags). The trigger word is put in front of every caption. Takes minutes
   on a Mac GPU and writes the adapter as a .safetensors file, plus a
   before-and-after sample grid at every sampleEvery steps beside it.
-  Everything runs on this machine. Returns the adapter's path and the
-  sample grids.
+  Everything runs on this machine, with the Python agency local serve
+  uses. Returns the adapter's path and the sample grids.
 
   @param imagesDir - The folder of training images, PNG or JPEG, with optional .txt captions beside them
   @param trigger - The word the adapter answers to. A real phrase learns faster and keeps the base model's idea of it; a nonsense word owns the token
   @param base - The SDXL model to train on: a catalog name, a diffusers: URI, or a model directory, already downloaded
   @param outPath - The .safetensors file to write. It must not exist yet
   @param steps - How long to train. Too few and the style is faint; too many and every output is a training image. Judge by the sample grids
-  @param rank - How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. The file doubles with each
+  @param rank - How much the adapter can hold: 8 for a style, 16 for a character, 32 for a character with a wardrobe. Doubling the rank doubles the file
   @param learningRate - Halve it if the grids get worse after getting better
   @param resolution - The training size. 768 trains twice as fast for a first look; 1024 for the real run
   @param flip - Also train on mirrored copies, which doubles a small set. Off for an asymmetric character
   @param seed - Fixes the randomness, so a run is repeatable
   @param samplePrompts - Prompts to render before and after at each checkpoint, to judge the run. Use the trigger word in them
   @param sampleEvery - Steps between sample grids. 0 for none
-  @param pythonPath - The Python to run the trainer with. Empty uses the one agency local serve uses
   """
-  const plan = try _planTraining(imagesDir, trigger, base, outPath, steps, rank, learningRate, resolution, flip, seed, samplePrompts, sampleEvery, pythonPath)
+  const plan = try _planTraining(imagesDir, trigger, base, outPath, steps, rank, learningRate, resolution, flip, seed, samplePrompts, sampleEvery)
   if (isFailure(plan)) {
     return plan
   }
-  return interrupt lora::train("Train a LoRA adapter on ${plan.value.images} images for ${steps} steps, about ${plan.value.estimatedMinutes} minutes on the GPU, writing ${plan.value.outPath}?", {
+  return interrupt lora::train("Train a LoRA adapter on the images in ${plan.value.imagesDir} for ${plan.value.steps} steps, about ${plan.value.estimatedMinutes} minutes on the GPU plus a few seconds an image, writing ${plan.value.outPath}?", {
     imagesDir: plan.value.imagesDir,
-    base: base,
+    base: plan.value.base,
     outDir: dirname(plan.value.outPath),
     outFilename: basename(plan.value.outPath),
-    images: plan.value.images,
-    steps: steps,
+    steps: plan.value.steps,
     estimatedMinutes: plan.value.estimatedMinutes,
   })
   return try _train(plan.value)

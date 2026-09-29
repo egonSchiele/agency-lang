@@ -35,16 +35,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from localServerCommon import MAX_IMAGE_BYTES, base64_length, client_gone, fail  # noqa: E402
 from diffusersImageRules import (  # noqa: E402
     DIFFUSERS_VERSION,
+    LoadedAdapters,
     RequestError,
+    adapter_names,
     check_folder,
     check_request,
-    join_names,
-    family_of,
-    adapter_names,
-    adapter_path,
     controlnet_names,
     controlnet_path,
     controlnet_problem,
+    existing_adapter,
+    family_of,
+    join_names,
     letterbox,
     warm_up_request,
 )
@@ -120,8 +121,8 @@ class Generator:
             self.rules = family_of(read_model_index(model_dir))
         except ValueError as err:
             fail(str(err))
-        # Checked before the model loads, so a wrong path costs seconds. A
-        # family that takes no adapters or ControlNets is not refused the
+        # A wrong folder fails before the model loads, so it costs seconds.
+        # A family that takes no adapters or ControlNets is not refused the
         # folders: a request naming one is refused instead, since each
         # folder is one config key for every image model the user serves.
         try:
@@ -129,9 +130,7 @@ class Generator:
             self.controlnets_dir = check_folder(controlnets_dir, "--controlnets-dir")
         except ValueError as err:
             fail(str(err))
-        # The adapters loaded so far, by name. An adapter is loaded the
-        # first time a request names it and kept.
-        self.loaded = []
+        self.adapters = LoadedAdapters()
         # The ControlNet pipelines built so far, by name. Each shares the
         # base pipeline's components, so a LoRA applied to the UNet applies
         # to both.
@@ -163,33 +162,56 @@ class Generator:
         self.lock = threading.Lock()
 
     def load_adapter(self, name):
-        """Loads the adapter `name` from the folder the first time it is
-        asked for. The file is .safetensors, so loading it reads tensors and
-        never runs code. A missing file is a 400 naming what the folder
-        holds. Called under the lock, since the adapter state is the
-        pipeline's."""
-        if name in self.loaded:
-            return
-        path = adapter_path(self.adapters_dir, name)
-        if os.path.islink(path) or not os.path.isfile(path):
-            have = adapter_names(self.adapters_dir)
-            listing = join_names(have) if have else "no adapters"
-            raise RequestError(
-                f'There is no adapter "{name}" in {self.adapters_dir}. It has {listing}.'
+        """The name the pipeline holds the adapter `name` under, loading
+        it from the folder first when it is not loaded or its file has
+        changed since, as it does when the adapter is trained again. The
+        file is .safetensors and use_safetensors is passed, so loading it
+        reads tensors and never runs code. A missing file is a 400 naming
+        what the folder holds. Called under the lock, since the adapter
+        state is the pipeline's."""
+        path, stamp = existing_adapter(self.adapters_dir, name)
+        loaded_as = self.adapters.find(name, stamp)
+        if loaded_as is not None:
+            return loaded_as
+        for old in self.adapters.make_room(name):
+            self.pipe.delete_adapters(old)
+        loaded_as = self.adapters.next_name()
+        try:
+            self.pipe.load_lora_weights(
+                path, adapter_name=loaded_as, use_safetensors=True, local_files_only=True
             )
-        self.pipe.load_lora_weights(path, adapter_name=name)
-        self.loaded.append(name)
+        except Exception:
+            # SDXL loads an adapter into the UNet, then into each text
+            # encoder, and diffusers does not undo the earlier parts when a
+            # later one fails. Whatever did load is removed here.
+            self.unload_partial(loaded_as)
+            raise
+        self.adapters.add(name, loaded_as, stamp)
+        return loaded_as
+
+    def unload_partial(self, loaded_as):
+        """Removes what a failed load left behind. If this fails too, the
+        pieces stay, and apply_lora still turns them off for a request that
+        names no adapter, since it asks the pipeline what it holds."""
+        try:
+            self.pipe.delete_adapters(loaded_as)
+        except Exception as err:  # noqa: BLE001
+            print(f"Could not remove a partly loaded adapter: {err}", file=sys.stderr)
 
     def apply_lora(self, request):
         """Switch the loaded adapters to what this request asked for: one
         adapter at its scale, or none. Called under the lock."""
+        if not self.rules["takes_lora"]:
+            return
         if request["lora"] is None:
-            if self.loaded:
+            # Ask the pipeline, not our own list: a failed load can leave an
+            # adapter in it that the list never recorded.
+            if any(self.pipe.get_list_adapters().values()):
                 self.pipe.disable_lora()
             return
-        self.load_adapter(request["lora"])
+        loaded_as = self.load_adapter(request["lora"])
         self.pipe.enable_lora()
-        self.pipe.set_adapters([request["lora"]], adapter_weights=[request["lora_scale"]])
+        self.pipe.set_adapters([loaded_as], adapter_weights=[request["lora_scale"]])
 
     def control_pipeline(self, name):
         """The ControlNet pipeline for `name`, built the first time it is

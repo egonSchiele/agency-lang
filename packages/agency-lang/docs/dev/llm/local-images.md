@@ -80,7 +80,7 @@ What each command does with one:
 | Command | A `diffusers` model |
 |---|---|
 | `agency local download` | Downloads only the files the pipeline reads (see "Downloading") |
-| `agency local serve` | Serves it with `--image`, and refuses it without the flag even when the catalog does not know it |
+| `agency local serve` | Serves it as an image model, with or without `--image`: any diffusers directory is one. The server refuses a pipeline family it does not serve |
 | `agency local remove -f` | Deletes it from `<modelsDir>/diffusers/` |
 | `agency run --local`, `agency agent --local` | Refuses: it is an image model |
 | `speakLocal` | Refuses |
@@ -257,6 +257,10 @@ folder and a name. The folder is `client.adaptersDir` in `agency.json`:
 
     { "client": { "adaptersDir": "./adapters" } }
 
+A relative path is taken from the folder that config file is in, not the
+working directory, so `agency local serve` finds the same folder from any
+subfolder of the project (`configuredAdaptersDir` in `localModels.ts`).
+
 Every `.safetensors` file in it is an adapter, named by its file name
 without the extension. A request names one with the `lora` field, and
 says how strongly with `lora_scale`, from 0 to 2 with 1 as trained:
@@ -265,11 +269,19 @@ says how strongly with `lora_scale`, from 0 to 2 with 1 as trained:
 
 `serve` passes the folder to every image process as `--adapters-dir`. The
 process loads `sketch.safetensors` the first time a request names
-`sketch`, under the generation lock, and keeps it loaded. Dropping a new
-file into the folder makes it usable with no restart, which is the
+`sketch`, under the generation lock, and keeps it loaded until it needs
+the room. Dropping a new file into the folder makes it usable with no
+restart, and so does training `sketch.safetensors` again: the process
+keeps each file's modification time and size, and when either has changed
+it unloads the old weights and reads the file again. That is the
 train-try-adjust loop a person training adapters is in.
 
-Three decisions:
+The file checks and the bookkeeping live in `diffusersImageRules.py`, so
+CI tests them with python3: `check_folder`, which the ControlNets folder
+shares, `existing_adapter`, `adapter_names`, and `LoadedAdapters`. The
+server only calls diffusers.
+
+Six decisions:
 
 1. **A request names a file only by its stem.** `adapter_path` in the
    rules module joins the name to the folder and refuses a name that is
@@ -282,18 +294,40 @@ Three decisions:
 2. **Only `.safetensors`.** A `.bin` or `.pt` adapter loads through
    `pickle`, which runs code. The extension is fixed by `adapter_path`, so
    no request can ask for another format, and a symlink at the file is
-   refused when it is loaded. `load_lora_weights` reads tensors from the
-   file and nothing else.
+   refused when it is loaded. `load_lora_weights` gets
+   `use_safetensors=True`, which turns off diffusers' fallback to a pickle
+   loader, so it reads tensors from the file and nothing else.
 3. **Only the request that asks gets it.** An adapter changes every image,
    so `apply_lora` sets the pipeline to the request's adapter at its scale,
    or to none, under the generation lock, before every generation. The
-   warm-up request names none.
+   warm-up request names none. For a request that names none, it asks the
+   pipeline which adapters it holds (`get_list_adapters`) instead of
+   trusting its own list, because of decision 6.
+4. **The pipeline never sees the file name.** PEFT uses the adapter name
+   as a key in a torch `ModuleDict`, and torch refuses a dot in one, so
+   `style.v2.safetensors` would fail with "module name can't contain".
+   Each load gets a fresh name instead, `adapter_0`, `adapter_1`, and so
+   on, and `LoadedAdapters` maps file names to them. A fresh name for every
+   load, even a reload of the same file, means a name a failed load left
+   behind is never asked for again.
+5. **At most two adapters stay loaded.** An SDXL adapter runs from tens of
+   megabytes to nearly a gigabyte, and a model calling the tool may try
+   every file in the folder. Before a load, the adapter used longest ago is
+   unloaded with `delete_adapters` until one more fits. Two lets a person
+   compare two adapters without reloading either.
+6. **A failed load is undone.** SDXL's `load_lora_weights` loads the UNet
+   part, then each text encoder, and diffusers 0.40 does not undo the UNet
+   part when a text encoder fails. Left alone, the UNet would keep an
+   active adapter that a later plain request would draw with. The server
+   calls `delete_adapters` on the new name before it raises the error,
+   and records the load only once it has finished.
 
 A request naming an adapter when no folder is configured, or a family
 that takes none, is refused with the config key or the family named. A
 name the folder does not hold is a 400 listing what it does hold, read
 fresh each time. `GET /health` lists the folder's adapter names the same
-way.
+way. Both leave out what a request could not load: a symlink, a folder,
+and a file whose name `adapter_path` refuses.
 
 ## ControlNets
 

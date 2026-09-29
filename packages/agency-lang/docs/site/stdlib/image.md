@@ -43,7 +43,7 @@ export type ImageBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L41))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L43))
 
 ### ImageSize
 
@@ -57,7 +57,7 @@ export type ImageSize = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L49))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L51))
 
 ### GeneratedImage
 
@@ -68,7 +68,7 @@ export type GeneratedImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L54))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L56))
 
 ### ImageQuality
 
@@ -76,7 +76,7 @@ export type GeneratedImage = {
 export type ImageQuality = "low" | "medium" | "high" | "auto"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L59))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L61))
 
 ### LocalImage
 
@@ -88,14 +88,14 @@ export type LocalImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L97))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L99))
 
 ## Effects
 
 ### std::cropImage
 
 ```ts
-@alwaysUnder(outDir)
+@alwaysUnder(dir, outDir)
 effect std::cropImage {
   dir: string;
   filename: string;
@@ -104,12 +104,11 @@ effect std::cropImage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L32))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L34))
 
 ### std::pasteImages
 
 ```ts
-@alwaysUnder(outDir)
 effect std::pasteImages {
   files: string[];
   outDir: string;
@@ -117,7 +116,7 @@ effect std::pasteImages {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L37))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L39))
 
 ## Functions
 
@@ -164,7 +163,7 @@ Generate an image from a text prompt using a hosted provider, optionally
 
 **Returns:** `Result<GeneratedImage>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L63))
 
 ### generateImageLocal
 
@@ -195,8 +194,10 @@ Generate an image on this machine with a local image model, such as
   whose success value is { base64, mimeType, seed }.
 
   A LoRA adapter is a small file that teaches an SDXL model a style or a
-  character. Put it in the folder client.adaptersDir names and ask for it
-  here with `lora: "sketch"`. Only the request that names it gets it.
+  character. Put the file in your adapters folder (`client.adaptersDir`
+  in agency.json) and pass its file name without .safetensors:
+  `lora: "sketch"` for sketch.safetensors. Only the request that names it
+  gets it.
 
   A ControlNet constrains the image to a drawing you give it: a stick
   figure becomes the pose. Download one into client.controlnetsDir and
@@ -217,7 +218,7 @@ Generate an image on this machine with a local image model, such as
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
   @param negativePrompt - What the image should not contain. z-image-turbo takes none
   @param format - "png", "jpeg", or "webp"
-  @param lora - The name of a LoRA adapter in client.adaptersDir, its file name without .safetensors. Empty applies none
+  @param lora - The file name, without .safetensors, of an adapter in the adapters folder (client.adaptersDir). Empty applies none
   @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
   @param controlnet - The name of a ControlNet in client.controlnetsDir, its folder name. Empty applies none. Goes with controlImage
   @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
@@ -247,7 +248,7 @@ Generate an image on this machine with a local image model, such as
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L103))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L105))
 
 ### cropImage
 
@@ -286,7 +287,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L187))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L191))
 
 ### imageSize
 
@@ -308,7 +309,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L223))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L227))
 
 ### pasteImages
 
@@ -341,4 +342,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L240))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L244))

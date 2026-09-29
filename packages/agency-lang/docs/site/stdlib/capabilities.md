@@ -42,7 +42,7 @@ Read-only filesystem access: reading files and listing/searching paths.
 
 ```ts
 /** Read-only filesystem access: reading files and listing/searching paths. */
-export effectSet FileRead = <std::read, std::readBinary, std::ls, std::glob, std::grep>
+export effectSet FileRead = <std::read, std::readBinary, std::ls, std::glob, std::grep, std::vision>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L33))
@@ -53,7 +53,7 @@ Filesystem mutation: creating, editing, moving, copying, and deleting.
 
 ```ts
 /** Filesystem mutation: creating, editing, moving, copying, and deleting. */
-export effectSet FileWrite = <std::write, std::writeBinary, std::edit, std::applyPatch, std::mkdir, std::move, std::copy, std::remove>
+export effectSet FileWrite = <std::write, std::writeBinary, std::edit, std::applyPatch, std::mkdir, std::move, std::copy, std::remove, std::cropImage, std::pasteImages>
 ```
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/capabilities.agency#L36))

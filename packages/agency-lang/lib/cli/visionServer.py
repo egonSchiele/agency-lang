@@ -2,8 +2,8 @@
 on this machine.
 
 Started by `agency local serve <model>` for a model whose kind is vision.
-Loads the model once, then answers, each with {"model", "image": <absolute
-path>, ...}:
+Loads the model once, then answers, each with {"model", "image": <base64
+of the image's bytes>, ...}:
 
   POST /v1/vision/detections  {"labels": [...], "threshold"?}  -> {"detections": [{"label", "score", "box"}]}
   POST /v1/vision/tags        {"threshold"?, "limit"?}          -> {"tags": [{"tag", "score"}]}
@@ -13,9 +13,10 @@ path>, ...}:
 A failure is {"error": {"message": "..."}}. A route the model does not
 answer is a 404 naming the ones it does.
 
-The image is named by path, never sent: the stdlib raised an effect for
-that path, and the server reads it once through a descriptor after the
-checks in localServerCommon.check_image_path. The server never lists a
+The image comes as bytes, never as a path. The stdlib raised an effect
+for the file, read it after the user approved, and sent what it read.
+The server opens no file a request names, so a process that reaches the
+port can describe only images it already has. It never lists a
 directory and never writes.
 
 The rules (families, routes, the fields a request may carry) are in
@@ -24,19 +25,21 @@ test it. This file is the part that needs the libraries.
 """
 
 import argparse
+import base64
 import csv
 import importlib.metadata
 import io
 import json
 import os
 import sys
-import tempfile
 import threading
+import warnings
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import client_gone, fail, read_image_bytes  # noqa: E402
+from localServerCommon import client_gone, fail  # noqa: E402
 from visionRules import (  # noqa: E402
+    MAX_BODY_BYTES,
     ONNXRUNTIME_VERSION,
     TRANSFORMERS_VERSION,
     RequestError,
@@ -49,7 +52,13 @@ from visionRules import (  # noqa: E402
     warm_up_request,
 )
 
-MAX_BODY_BYTES = 64 * 1024
+# The formats Pillow may decode a request's bytes as. Anything else is
+# refused before a decoder for it runs.
+IMAGE_FORMATS = ["PNG", "JPEG", "WEBP", "GIF"]
+
+# An image with more pixels than this is refused, which guards against a
+# small file that decodes to a huge one.
+MAX_IMAGE_PIXELS = 100_000_000
 
 # WD14 tag categories in selected_tags.csv: general tags describe the
 # picture; the rest are ratings and character names.
@@ -88,11 +97,22 @@ def read_config(model_dir):
         return None
 
 
-def open_image(path):
-    """A Pillow image for a checked path, in RGB."""
-    from PIL import Image
+def open_image(data):
+    """A Pillow image, in RGB, for the bytes a request sent. Raises
+    RequestError for bytes that are not an image in IMAGE_FORMATS or that
+    decode to more than MAX_IMAGE_PIXELS."""
+    from PIL import Image, UnidentifiedImageError
 
-    return Image.open(io.BytesIO(read_image_bytes(path))).convert("RGB")
+    Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+    try:
+        with warnings.catch_warnings():
+            # Pillow only warns between the limit and twice it; refuse there too.
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            return Image.open(io.BytesIO(data), formats=IMAGE_FORMATS).convert("RGB")
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        raise RequestError(f"The image has more than {MAX_IMAGE_PIXELS:,} pixels; this server refuses it.")
+    except UnidentifiedImageError:
+        raise RequestError(f"The image is not one this server reads. It reads {join_names(IMAGE_FORMATS, 'or')}.")
 
 
 class Wd14Runner:
@@ -174,17 +194,17 @@ class Florence2Runner:
         return parsed[task]
 
     def detections_of(self, image, request):
-        # Florence-2 takes the labels as text and returns boxes with the
-        # label each matched. It gives no score, so every box scores 1.
-        wanted = request["labels"]
-        answer = self._run(image, self.rules["task_detections"], ", ".join(wanted))
+        # The detection task takes one phrase: "Locate {phrase} in the
+        # image." Given "person, desk, chair" it looks for that whole
+        # phrase. So each label is its own pass, and each box is labeled
+        # with the label that was asked for, not the text the model wrote
+        # back. Florence-2 gives no score, so every box scores 1.
         width, height = image.size
-        boxes = answer.get("bboxes", [])
-        labels = answer.get("bboxes_labels", [])
-        found = [
-            {"label": label, "score": 1.0, "box": normalized_box(box, width, height)}
-            for box, label in zip(boxes, labels)
-        ]
+        found = []
+        for label in request["labels"]:
+            answer = self._run(image, self.rules["task_detections"], label)
+            for box in answer.get("bboxes", []):
+                found.append({"label": label, "score": 1.0, "box": normalized_box(box, width, height)})
         return {"detections": found}
 
     def tags_of(self, image, request):
@@ -233,19 +253,16 @@ class Server:
 
     def warm_up(self):
         """One request on the family's first route, against a small image
-        the server draws into a temp file it removes. A model that loads
-        but cannot run fails here, before the port opens."""
+        the server draws in memory. A model that loads but cannot run
+        fails here, before the port opens."""
         from PIL import Image, ImageDraw
 
-        with tempfile.TemporaryDirectory() as folder:
-            # The real path: the temp directory sits under a symlink on macOS,
-            # and the server refuses a path through one.
-            image_path = os.path.join(os.path.realpath(folder), "warmup.png")
-            image = Image.new("RGB", (64, 64), (255, 255, 255))
-            ImageDraw.Draw(image).rectangle((16, 16, 48, 48), fill=(0, 0, 0))
-            image.save(image_path)
-            route, body = warm_up_request(self.rules, image_path)
-            self.answer(route, check_request(self.rules, route, body), None)
+        image = Image.new("RGB", (64, 64), (255, 255, 255))
+        ImageDraw.Draw(image).rectangle((16, 16, 48, 48), fill=(0, 0, 0))
+        png = io.BytesIO()
+        image.save(png, format="PNG")
+        route, body = warm_up_request(self.rules, base64.b64encode(png.getvalue()).decode("ascii"))
+        self.answer(route, check_request(self.rules, route, body), None)
 
 
 class Handler(BaseHTTPRequestHandler):

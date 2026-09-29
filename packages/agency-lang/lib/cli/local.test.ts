@@ -17,6 +17,7 @@ import {
   printDownloadEvent,
   downloadChoices,
   CUSTOM_CHOICE,
+  checkedKind,
 } from "./local.js";
 import { fileTarget } from "../config/target.js";
 
@@ -499,5 +500,18 @@ describe("printDownloadEvent", () => {
       "  0.00 GB / 0.00 GB  100%\n",
       "  a failed verification\n",
     ]);
+  });
+});
+
+describe("checkedKind", () => {
+  it("passes a kind through, and none as none", () => {
+    expect(checkedKind("image")).toBe("image");
+    expect(checkedKind(undefined)).toBeUndefined();
+  });
+
+  it("refuses anything else, naming the kinds", () => {
+    expect(() => checkedKind("video")).toThrow(
+      '"video" is not a kind of model. The kinds are chat, embedding, speech, image, vision.',
+    );
   });
 });

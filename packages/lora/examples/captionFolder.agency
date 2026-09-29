@@ -15,16 +15,22 @@ node main() {
     print("could not list ./drawings: ${images.error}")
     return
   }
+  // glob returns names relative to the folder, so each is joined back
+  // onto it before tagImage reads it.
   for (image in images.value) {
-    const tags = tagImage(image, "wd14-tagger") catch []
-    const kept = filter(tags) as tag {
-      return !STYLE_TAGS.includes(tag.tag)
+    const tagged = tagImage("./drawings/${image}", "wd14-tagger")
+    if (isFailure(tagged)) {
+      print("could not tag ${image}: ${tagged.error}")
+    } else {
+      const kept = filter(tagged.value) as tag {
+        return !STYLE_TAGS.includes(tag.tag)
+      }
+      const names = map(kept) as tag {
+        return tag.tag
+      }
+      const sidecar = image.replace(".png", ".txt")
+      write(sidecar, names.join(", "), "./drawings")
+      print("${sidecar}: ${names.join(", ")}")
     }
-    const names = map(kept) as tag {
-      return tag.tag
-    }
-    const sidecar = image.replace(".png", ".txt")
-    write(sidecar, names.join(", "), "./drawings")
-    print("${sidecar}: ${names.join(", ")}")
   }
 }

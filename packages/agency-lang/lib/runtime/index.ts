@@ -152,6 +152,7 @@ export {
 } from "./node.js";
 export type { RunUsage, ServedInvocationOutcome, UsageEntry } from "./invocationUsage.js";
 export { reportBudgetExceededAndExit, formatBudgetExceeded } from "./budgetExit.js";
+export { flushPendingStatelogPosts } from "../statelogClient.js";
 export { Runner } from "./runner.js";
 
 export { rewindFrom, applyOverrides } from "./rewind.js";

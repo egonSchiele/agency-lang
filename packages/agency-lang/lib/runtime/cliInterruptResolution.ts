@@ -11,6 +11,7 @@
 import { resolveInterrupts, buildDecider } from "./interruptResolution.js";
 import type { ResumeFn } from "./interruptResolution.js";
 import { hasInterrupts, reportUnhandledInterrupts } from "./interrupts.js";
+import { flushPendingStatelogPosts } from "../statelogClient.js";
 import type { RunNodeCoreResult } from "./types.js";
 import { isIpcMode } from "./subprocessRunInfo.js";
 import { hasRunPolicyMechanism } from "./runPolicyHandler.js";
@@ -39,6 +40,8 @@ export async function resolveCliInterrupts(
     return result;
   }
   if (isIpcMode() || !hasRunPolicyMechanism()) {
+    // reportUnhandledInterrupts exits the process; send pending logs first.
+    await flushPendingStatelogPosts();
     reportUnhandledInterrupts(result);
     return result;
   }

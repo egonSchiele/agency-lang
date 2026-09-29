@@ -25,6 +25,7 @@ import {
   serializeInterruptsForIpc,
 } from "./ipc.js";
 import { hasInterrupts } from "./interrupts.js";
+import { flushPendingStatelogPosts } from "../statelogClient.js";
 import { setRuntimeConfigOverrides } from "./configOverrides.js";
 import { setSubprocessRunInfo } from "./subprocessRunInfo.js";
 
@@ -42,6 +43,15 @@ process.on("disconnect", () => {
   process.stderr.write("[bootstrap] parent disconnected — exiting\n");
   process.exit(1);
 });
+
+/**
+ * Exit once any remote log POSTs still in flight have been sent. Called after
+ * the result is on its way to the parent, so the parent never waits on logs.
+ */
+async function exitAfterLogs(code: number): Promise<never> {
+  await flushPendingStatelogPosts();
+  process.exit(code);
+}
 
 /**
  * Send an IPC message and wait for the channel to flush before resolving.
@@ -212,7 +222,7 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
       // applies to BOTH modes — a resumed child that pauses again
       // re-enters the same cycle (multi-cycle).
       await sendResultOrLimitError(serializeInterruptsForIpc(result.data));
-      process.exit(0);
+      await exitAfterLogs(0);
     }
 
     await sendResultOrLimitError({
@@ -223,13 +233,13 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
         messages: result.messages?.toJSON?.() ?? result.messages,
       },
     });
-    process.exit(0);
+    await exitAfterLogs(0);
   } catch (err: any) {
     await sendOrDie({
       type: "error",
       error: err instanceof Error ? err.message : String(err),
     });
-    process.exit(1);
+    await exitAfterLogs(1);
   }
 };
 process.on("message", bootstrapHandler);

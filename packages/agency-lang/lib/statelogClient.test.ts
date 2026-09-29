@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { StatelogClient, StatelogConfig, getStatelogClient } from "./statelogClient.js";
+import {
+  StatelogClient,
+  StatelogConfig,
+  flushPendingStatelogPosts,
+  getStatelogClient,
+} from "./statelogClient.js";
 
 /** Make a unique temp file path for a logFile-based test. The file is NOT
  *  created — the client should create the parent dir and append on first
@@ -238,6 +243,105 @@ describe("StatelogClient", () => {
   });
 
   describe("apiKey requirement", () => {
+    it("remote host with no projectId sends nothing", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("hi", {});
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("an apiKey with no host sends nothing", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      const client = new StatelogClient({
+        host: "",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("hi", {});
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("stops sending after the server refuses the key", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("", { status: 403 }));
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "key-for-another-project",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("first", {});
+      await client.flush();
+      await client.debug("second", {});
+      await client.debug("third", {});
+      await client.flush();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('refused the API key for project "p"');
+    });
+
+    it("keeps sending after a server error that is not a refusal", async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("", { status: 500 }));
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("first", {});
+      await client.flush();
+      await client.debug("second", {});
+      await client.flush();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("flushPendingStatelogPosts waits for posts from every client", async () => {
+      const resolvers: ((r: Response) => void)[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation(
+        () => new Promise<Response>((resolve) => resolvers.push(resolve)),
+      );
+      const config = {
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+        requestTimeoutMs: 60_000,
+      };
+      await new StatelogClient(config).debug("a", {});
+      await new StatelogClient(config).debug("b", {});
+
+      let flushed = false;
+      const flushing = flushPendingStatelogPosts().then(() => {
+        flushed = true;
+      });
+      resolvers[0](new Response("", { status: 200 }));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(flushed).toBe(false);
+      resolvers[1](new Response("", { status: 200 }));
+      await flushing;
+      expect(flushed).toBe(true);
+    });
+
     it("remote host with no apiKey disables the client", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch");
       const client = new StatelogClient({
@@ -285,11 +389,17 @@ describe("StatelogClient", () => {
     });
 
     it("agentEnd does not await the remote fetch (fire-and-forget)", async () => {
-      // fetch never resolves; if agentEnd awaited it, this test would
-      // hang. With noWait the call returns immediately.
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockImplementation(() => new Promise<Response>(() => {}));
+      // fetch settles only when the request times out; if agentEnd awaited
+      // it, this call would take 500ms. The timeout keeps the post from
+      // sitting in the process-wide pending list for the rest of the file.
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            (init as RequestInit | undefined)?.signal?.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            );
+          }),
+      );
       const client = new StatelogClient({
         host: "https://example.invalid",
         apiKey: "secret",
@@ -297,7 +407,7 @@ describe("StatelogClient", () => {
         traceId: "t",
         debugMode: false,
         observability: true,
-        requestTimeoutMs: 60_000,
+        requestTimeoutMs: 500,
       });
       const start = Date.now();
       await client.agentEnd({ entryNode: "main", timeTaken: 1 });

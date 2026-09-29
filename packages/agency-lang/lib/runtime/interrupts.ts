@@ -802,12 +802,12 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
   }
   const failed = outcome.status === "threw";
   const served = await finishServedInvocation(execCtx, outcome, async () => {
+    // Remote statelog POSTs are not awaited here; see finalizeExecCtx.
     try {
       // A run that returned has already closed or paused its trace.
       if (failed) {
         await execCtx.closeTraceWriter();
       }
-      await execCtx.statelogClient.flush();
     } finally {
       execCtx.cleanup();
     }

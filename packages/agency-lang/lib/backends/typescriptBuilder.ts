@@ -396,18 +396,13 @@ export class TypeScriptBuilder {
       // smoltalk-internal one. "info" matches the existing
       // no-debug-by-default behavior — users opt in via agency.json.
       logLevel: "info",
-      log: {
-        host: "https://statelog.adit.io",
-      },
+      // No log host or client.statelog here: remote logging happens only
+      // when a config names a host and a project id.
       // No defaultModel here: the smoltalk-fields builder applies the
       // built-in model and provider together only when neither is
       // configured, which a merged default would hide.
       client: {
         logLevel: "warn",
-        statelog: {
-          host: "https://statelog.adit.io",
-          projectId: "smoltalk",
-        },
       },
       typechecker: {
         enabled: true,
@@ -4192,13 +4187,19 @@ export class TypeScriptBuilder {
       baseUrl: ts.obj(baseUrlFields),
       model: ts.str(cfg.client?.defaultModel || DEFAULT_MODEL),
       logLevel: ts.str(cfg.client?.logLevel || "warn"),
-      statelog: ts.obj({
-        host: ts.str(cfg.client?.statelog?.host || ""),
-        projectId: ts.str(cfg.client?.statelog?.projectId || ""),
+    };
+    // smoltalk sends LLM-call logs whenever it gets a statelog config with an
+    // apiKey, so the config is left out unless a host and a project id are
+    // both configured.
+    const smoltalkStatelog = cfg.client?.statelog;
+    if (smoltalkStatelog?.host && smoltalkStatelog?.projectId) {
+      smoltalkFields.statelog = ts.obj({
+        host: ts.str(smoltalkStatelog.host),
+        projectId: ts.str(smoltalkStatelog.projectId),
         apiKey: ts.binOp(ts.env("STATELOG_SMOLTALK_API_KEY"), "||", ts.str("")),
         traceId: $(ts.id("nanoid")).call().done(),
-      }),
-    };
+      });
+    }
     // The provider: the configured one; else, when the model is the built-in
     // default too, its built-in provider; else unset, so smoltalk's normal
     // model→provider registry lookup applies to the model the user named.
@@ -4562,6 +4563,10 @@ export class TypeScriptBuilder {
                 ),
               ]),
               ts.statements([
+                // Both paths below end the process at once (an explicit
+                // exit, or an uncaught throw), which would kill any log
+                // POSTs still in flight. Send them first.
+                ts.await(ts.call(ts.id("flushPendingStatelogPosts"), [])),
                 // A root budget trip (--max-cost/--max-time) exits 3 with a
                 // user-facing overrun message and never returns; every other
                 // error falls through to the crash path below. User guard()

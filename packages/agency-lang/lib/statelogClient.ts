@@ -208,17 +208,19 @@ export class StatelogClient {
     }
 
     // Decide whether the remote sink is usable. The remote sink (any
-    // host that isn't "stdout") requires an apiKey. If the host is set
-    // but the key is missing, we keep the client enabled (so local
+    // host that isn't "stdout") needs a host, a project id, and an apiKey,
+    // all three. There is no default host or project: an apiKey exported
+    // for some other project must never turn on remote logging by itself.
+    // When any of the three is missing we keep the client enabled (so local
     // sinks still work) but skip the http POST inside `post()`.
     const hostLower = this.host.toLowerCase();
     const isRemoteHost = !!this.host && hostLower !== "stdout";
     if (isRemoteHost) {
-      if (this.apiKey) {
+      if (this.apiKey && this.projectId) {
         this.remoteEnabled = true;
       } else if (this.debugMode) {
         console.warn(
-          "StatelogClient: remote host configured without apiKey — remote sink disabled. Local sinks (stdout/logFile) will still receive events.",
+          "StatelogClient: remote host configured without a projectId or apiKey — remote sink disabled. Local sinks (stdout/logFile) will still receive events.",
         );
       }
     }
@@ -1634,27 +1636,50 @@ export class StatelogClient {
         },
         body: postBody,
         signal: AbortSignal.timeout(this.requestTimeoutMs),
-      }).catch((err) => {
-        if (this.debugMode) console.error("Failed to send statelog:", err);
-      });
+      })
+        .then((response) => this.checkResponse(response))
+        .catch((err) => {
+          if (this.debugMode) console.error("Failed to send statelog:", err);
+        });
 
       // Detach the network round-trip from the caller's await chain so
-      // execution never blocks on telemetry delivery. Awaiting each POST
-      // used to add ~1.8s to agent startup — one blocked round-trip per
-      // init-time interrupt. Track the request so `flush()` can drain it
+      // execution never blocks on telemetry delivery. Nothing waits on these
+      // requests during a run, not even a node returning. They are tracked
+      // so `flush()` and `flushPendingStatelogPosts()` can drain them just
       // before the process exits; the `.catch` above guarantees no
-      // UnhandledPromiseRejection if it later fails or aborts. (`noWait`
-      // is now the default for every event; the option is kept for
-      // source compatibility.)
+      // UnhandledPromiseRejection if one later fails or aborts.
       const tracked: Promise<unknown> = request.finally(() => {
         this.inFlight.delete(tracked);
+        removePendingPost(tracked);
       });
       this.inFlight.add(tracked);
+      pendingPosts.push(tracked);
     } catch (err) {
       if (this.debugMode)
         console.error("Error sending log in statelog client:", err, {
           host: this.host,
         });
+    }
+  }
+
+  /**
+   * A 401 or 403 means the server refused this key for this project. Every
+   * later post would be refused the same way, so turn the remote sink off
+   * for the rest of the run and say so once. Other failures (a 500, a
+   * timeout) may be passing, so they only print in debug mode.
+   */
+  private checkResponse(response: Response): void {
+    if (response.status === 401 || response.status === 403) {
+      if (this.remoteEnabled) {
+        this.remoteEnabled = false;
+        console.warn(
+          `Statelog: ${this.host} refused the API key for project "${this.projectId}" (HTTP ${response.status}). Remote logging is off for the rest of this run.`,
+        );
+      }
+      return;
+    }
+    if (!response.ok && this.debugMode) {
+      console.error(`Failed to send statelog: HTTP ${response.status}`);
     }
   }
 
@@ -1668,6 +1693,30 @@ export class StatelogClient {
     if (this.inFlight.size === 0) return;
     await Promise.allSettled([...this.inFlight]);
   }
+}
+
+// Every remote POST still in flight, across all clients in this process. A
+// run never waits on these; the process waits on them once, just before it
+// exits (see `flushPendingStatelogPosts`).
+const pendingPosts: Promise<unknown>[] = [];
+
+function removePendingPost(post: Promise<unknown>): void {
+  const index = pendingPosts.indexOf(post);
+  if (index !== -1) {
+    pendingPosts.splice(index, 1);
+  }
+}
+
+/**
+ * Wait for every remote log POST still in flight, from every client. Call
+ * this before an explicit `process.exit()`, which would otherwise kill those
+ * requests before they are sent. A process that ends on its own does not need
+ * it: Node keeps running until open requests finish. Each request has its own
+ * timeout (`requestTimeoutMs`), so this wait is bounded.
+ */
+export async function flushPendingStatelogPosts(): Promise<void> {
+  if (pendingPosts.length === 0) return;
+  await Promise.allSettled([...pendingPosts]);
 }
 
 export function getStatelogClient(config: {

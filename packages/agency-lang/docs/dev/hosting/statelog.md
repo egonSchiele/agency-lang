@@ -36,11 +36,17 @@ the top-level `observability` master switch:
   events, no network, no file writes, and the span helpers short-circuit.
   Everything below only happens when this is `true`.
 - **`host`** — remote Statelog server URL, or the literal `"stdout"` to print
-  JSON events to the console. If unset (and no `logFile`), `post()` returns early.
-- **`projectId`** — groups events by project in the dashboard.
+  JSON events to the console. There is no default: if unset (and no
+  `logFile`), `post()` returns early.
+- **`projectId`** — the project the events belong to. There is no default,
+  and the remote sink needs one.
 - **`apiKey`** — bearer token for the remote sink. Also read from the
-  `STATELOG_API_KEY` env var by `getStatelogClient`. A configured remote host
-  with no key keeps local sinks working but skips the HTTP POST.
+  `STATELOG_API_KEY` env var by `getStatelogClient`.
+
+The remote sink turns on only when `host`, `projectId`, and `apiKey` are all
+set. Missing any one keeps local sinks working but skips the HTTP POST. This
+is deliberate: a `STATELOG_API_KEY` exported for some other project must not
+turn on remote logging by itself.
 - **`logFile`** — append every event as one JSON line to this path (local dev
   and tests). Compatible with `host`/`stdout` — all configured sinks receive
   every event.
@@ -79,9 +85,23 @@ Every event is serialized by `post()` into this envelope:
 - **Remote** — `POST {host}/api/logs` with `Authorization: Bearer <apiKey>`,
   bounded by `AbortSignal.timeout(requestTimeoutMs)`. Requires an apiKey.
 
-Remote sends are **fire-and-forget**: the fetch is not awaited (telemetry never
-blocks execution), but it is tracked in an `inFlight` set. Call `flush()` at
-end-of-run to drain in-flight POSTs before the process exits.
+Remote sends are **fire-and-forget**: the fetch is not awaited, and nothing
+during a run waits for it. A node returning does not wait either; that wait
+used to add 600 ms or more to every node run. Each request is tracked twice:
+in the client's `inFlight` set (drained by `flush()`) and in a process-wide
+list (drained by `flushPendingStatelogPosts()`).
+
+A process that ends on its own needs no flush, because Node keeps running
+until open requests finish. An explicit `process.exit()` kills them, so every
+place that exits on purpose awaits `flushPendingStatelogPosts()` first: the
+generated entry's crash and budget path, `resolveCliInterrupts` before it
+reports unhandled interrupts, and the subprocess bootstrap after it has sent
+its result to the parent. The per-request timeout bounds that wait.
+
+The client reads only the status of each reply. A 401 or 403 means the server
+refused this key for this project, so the client turns the remote sink off
+for the rest of the run and prints one warning. Any other failure prints only
+in debug mode.
 
 ## Redaction
 
@@ -245,6 +265,7 @@ given.
 
 - **Opt-in / graceful no-op** — disabled unless `observability` is true; with no
   host and no logFile, `post()` returns immediately.
-- **Non-blocking** — remote posts are detached; `flush()` drains them at exit.
+- **Non-blocking** — remote posts are detached; the process drains them once,
+  just before an explicit exit.
 - **Format versioning** — bump `STATELOG_FORMAT_VERSION` when the wire format
   changes in a way a viewer must notice; viewers should reject a higher version.

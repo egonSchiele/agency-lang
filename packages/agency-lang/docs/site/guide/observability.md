@@ -25,9 +25,52 @@ Sinks:
 
 - `host: "stdout"` — prints logs to `console.log`.
 - `logFile: "<path>"` — appends logs to the given file. The parent directory is created automatically.
-- Pick one or both.
+- `host: "<url>"` — sends logs to a Statelog server. See [Sending logs to a Statelog server](#sending-logs-to-a-statelog-server).
+- Pick any combination.
 
 Agency will now emit logs for different events such as entering a node, making an LLM call, making a tool call, throwing an interrupt, etc.
+
+## Sending logs to a Statelog server
+
+Agency never sends logs anywhere unless you ask it to. To send them to a Statelog server, set all three of these:
+
+- `log.host`: the server's URL.
+- `log.projectId`: the project the logs belong to.
+- An API key for that project, in the `STATELOG_API_KEY` environment variable (or `log.apiKey`).
+
+```json
+{
+  "observability": true,
+  "log": {
+    "host": "https://statelog.example.com",
+    "projectId": "my-project",
+    "logFile": "logs.jsonl"
+  }
+}
+```
+
+If any of the three is missing, Agency sends nothing and still writes to your other sinks. If the server refuses the key for that project, Agency prints one warning and stops sending for the rest of the run.
+
+Every event is sent, including prompts, model replies, and tool arguments and results. Values you marked for redaction are blanked first.
+
+Logs are sent in the background. A node never waits for them before returning. A run from the command line waits for the last few to finish before it exits, at most 1.5 seconds per request (set `log.requestTimeoutMs` to change that).
+
+### LLM-call logs
+
+Agency's LLM library can also send its own log of every model request. This is separate from the logs above and has its own settings:
+
+```json
+{
+  "client": {
+    "statelog": {
+      "host": "https://statelog.example.com",
+      "projectId": "my-llm-calls"
+    }
+  }
+}
+```
+
+It needs the host, the project id, and an API key in `STATELOG_SMOLTALK_API_KEY`. Without all three, it sends nothing.
 
 ## Inspecting logs
 

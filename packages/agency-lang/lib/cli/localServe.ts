@@ -19,6 +19,7 @@ import {
   _listDownloadedModels,
   _findDownloadedServedModel,
   defaultCacheDir,
+  configuredAdaptersDir,
   readClientConfig,
   formatGB,
   type DownloadedModel,
@@ -263,9 +264,20 @@ export function speechServeArgs(
   ];
 }
 
-/** The argv for one image server process, after the Python path. */
-export function imageServeArgs(script: string, modelDir: string, internalPort: number): string[] {
-  return [script, "--model", modelDir, "--host", "127.0.0.1", "--port", String(internalPort)];
+/** The argv for one image server process, after the Python path. The
+ *  adapters folder goes along when one is configured, so a request can
+ *  name a LoRA adapter in it. */
+export function imageServeArgs(
+  script: string,
+  modelDir: string,
+  internalPort: number,
+  adaptersDir: string | null = null,
+): string[] {
+  const args = [script, "--model", modelDir, "--host", "127.0.0.1", "--port", String(internalPort)];
+  if (adaptersDir !== null) {
+    args.push("--adapters-dir", adaptersDir);
+  }
+  return args;
 }
 
 /** The argv for one process, by its kind. */
@@ -274,6 +286,7 @@ function argsFor(
   internalPort: number,
   settings: ChatServerSettings,
   modelsDir: string,
+  adaptersDir: string | null,
 ): string[] {
   if (model.kind === "embedding") {
     return embedServeArgs(embedServerScript(), model.dir, internalPort, EMBED_MAX_LENGTH);
@@ -282,7 +295,7 @@ function argsFor(
     return speechServeArgs(speechServerScript(), model.dir, internalPort, modelsDir);
   }
   if (model.kind === "image") {
-    return imageServeArgs(imageServerScript(), model.dir, internalPort);
+    return imageServeArgs(imageServerScript(), model.dir, internalPort, adaptersDir);
   }
   return serveArgs(chatServerScript(), model.dir, internalPort, settings);
 }
@@ -721,6 +734,8 @@ export type ServeDeps = {
   home: string;
   env: Record<string, string | undefined>;
   configuredPython: string | undefined;
+  /** `client.adaptersDir`, absolute, or null when unset. */
+  adaptersDir: string | null;
   /** Whether the request log is colored. Off when stdout is not a terminal. */
   useColor: boolean;
 };
@@ -784,6 +799,7 @@ function realDeps(): ServeDeps {
     home: os.homedir(),
     env: process.env,
     configuredPython: readClientConfig().mlx?.python,
+    adaptersDir: configuredAdaptersDir(),
     useColor: autoUseColor(),
   };
 }
@@ -1076,7 +1092,7 @@ export async function runServe(
         `Drafting for ${model.name} with ${model.draft.name} (${formatGB(model.draft.sizeBytes)})`,
       );
     }
-    const args = argsFor(model, internalPort, settings, deps.cacheDir);
+    const args = argsFor(model, internalPort, settings, deps.cacheDir, deps.adaptersDir);
     const child = deps.spawn(python, args);
     children.push(child);
     exits.push(exitOf(child, model.name, model.kind));

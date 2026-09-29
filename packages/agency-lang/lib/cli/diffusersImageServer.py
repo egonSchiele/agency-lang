@@ -1,12 +1,14 @@
 """An OpenAI-style /v1/images/generations server for one diffusers model.
 
-Started by `agency local serve --image <model>`. Loads the model once on
-the Mac GPU, then answers:
+Started by `agency local serve <model>`. Loads the model once on the Mac
+GPU, loads LoRA adapters from `--adapters-dir` as requests name them, and
+answers:
 
   POST /v1/images/generations  {"prompt", "size"?, "steps"?, "guidance"?, "seed"?,
-                                "negative_prompt"?, "output_format"?, "response_format"?, "n"?}
+                                "negative_prompt"?, "output_format"?, "response_format"?, "n"?,
+                                "lora"?, "lora_scale"?}
   GET  /v1/models
-  GET  /health
+  GET  /health                 {"status": "ok", "adapters": [names]}
 
 A success is {"created", "output_format", "data": [{"b64_json", "seed"}]}.
 A failure is {"error": {"message": "..."}}.
@@ -34,7 +36,10 @@ from diffusersImageRules import (  # noqa: E402
     DIFFUSERS_VERSION,
     RequestError,
     check_request,
+    join_names,
     family_of,
+    adapter_names,
+    adapter_path,
     warm_up_request,
 )
 
@@ -52,7 +57,27 @@ def parse_args():
     parser.add_argument("--model", required=True, help="model directory")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument(
+        "--adapters-dir",
+        default=None,
+        help="the folder LoRA adapters (.safetensors) are loaded from, by name, as requests ask",
+    )
     return parser.parse_args()
+
+
+def check_adapters_dir(adapters_dir):
+    """The folder, once it is known to be a directory and not a symlink, or
+    None. Fails before the model loads, so a wrong path costs seconds. A
+    family that takes no adapters is not refused the folder: a request
+    naming one is refused instead, since the folder is one config key for
+    every image model the user serves."""
+    if adapters_dir is None:
+        return None
+    if os.path.islink(adapters_dir):
+        fail(f"--adapters-dir {adapters_dir} is a symlink. Name the folder itself.")
+    if not os.path.isdir(adapters_dir):
+        fail(f"--adapters-dir {adapters_dir} is not a folder.")
+    return adapters_dir
 
 
 def check_diffusers_version():
@@ -82,13 +107,17 @@ class Generator:
     """The loaded pipeline, its family, and a lock, because the GPU runs one
     generation at a time."""
 
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, adapters_dir):
         # The file names the classes from_pretrained will import, so it is
         # checked before anything from diffusers is imported.
         try:
             self.rules = family_of(read_model_index(model_dir))
         except ValueError as err:
             fail(str(err))
+        self.adapters_dir = check_adapters_dir(adapters_dir)
+        # The adapters loaded so far, by name. An adapter is loaded the
+        # first time a request names it and kept.
+        self.loaded = []
         # Never fetch anything while serving. Set before diffusers and
         # huggingface_hub are imported, since they read it at import time.
         os.environ["HF_HUB_OFFLINE"] = "1"
@@ -114,6 +143,35 @@ class Generator:
         self.pipe.set_progress_bar_config(disable=True)
         self.torch = torch
         self.lock = threading.Lock()
+
+    def load_adapter(self, name):
+        """Loads the adapter `name` from the folder the first time it is
+        asked for. The file is .safetensors, so loading it reads tensors and
+        never runs code. A missing file is a 400 naming what the folder
+        holds. Called under the lock, since the adapter state is the
+        pipeline's."""
+        if name in self.loaded:
+            return
+        path = adapter_path(self.adapters_dir, name)
+        if os.path.islink(path) or not os.path.isfile(path):
+            have = adapter_names(self.adapters_dir)
+            listing = join_names(have) if have else "no adapters"
+            raise RequestError(
+                f'There is no adapter "{name}" in {self.adapters_dir}. It has {listing}.'
+            )
+        self.pipe.load_lora_weights(path, adapter_name=name)
+        self.loaded.append(name)
+
+    def apply_lora(self, request):
+        """Switch the loaded adapters to what this request asked for: one
+        adapter at its scale, or none. Called under the lock."""
+        if request["lora"] is None:
+            if self.loaded:
+                self.pipe.disable_lora()
+            return
+        self.load_adapter(request["lora"])
+        self.pipe.enable_lora()
+        self.pipe.set_adapters([request["lora"]], adapter_weights=[request["lora_scale"]])
 
     def generate(self, request, sock):
         """The image for a checked request, or None when the client hung up.
@@ -147,6 +205,7 @@ class Generator:
             # nothing started at all.
             if client_gone(sock):
                 return None
+            self.apply_lora(request)
             try:
                 return self.pipe(**kwargs).images[0]
             except ClientGone as gone:
@@ -160,7 +219,7 @@ class Generator:
         """One small generation before the port opens. A model that loads
         but cannot generate fails here, and `agency local serve` reports the
         exit instead of the user's first call finding it."""
-        self.generate(check_request(self.rules, warm_up_request()), None)
+        self.generate(check_request(self.rules, warm_up_request(), self.adapters_dir), None)
 
 
 def encode(image, fmt):
@@ -190,7 +249,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self.send_json(200, {"status": "ok"})
+            folder = self.generator.adapters_dir
+            adapters = [] if folder is None else adapter_names(folder)
+            self.send_json(200, {"status": "ok", "adapters": adapters})
         elif self.path == "/v1/models":
             self.send_json(
                 200, {"object": "list", "data": [{"id": self.served_name, "object": "model"}]}
@@ -224,7 +285,9 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         try:
-            request = check_request(self.generator.rules, self.read_body())
+            request = check_request(
+                self.generator.rules, self.read_body(), self.generator.adapters_dir
+            )
             image = self.generator.generate(request, self.connection)
             if image is None:
                 # The client hung up; there is nobody to answer.
@@ -257,7 +320,7 @@ def main():
     # Load and generate once before binding the port. `agency local serve`
     # treats a refused connection as "still loading" and any answer as
     # "ready", so the port must stay closed until the model can answer.
-    Handler.generator = Generator(args.model)
+    Handler.generator = Generator(args.model, args.adapters_dir)
     Handler.generator.warm_up()
     Handler.served_name = args.model
     server = ThreadingHTTPServer((args.host, args.port), Handler)

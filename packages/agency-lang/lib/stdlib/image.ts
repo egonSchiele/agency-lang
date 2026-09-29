@@ -178,12 +178,16 @@ function localImageSettings(
   guidance: number | null,
   seed: number | null,
   negativePrompt: string,
+  lora: string,
+  loraScale: number | null,
 ): Record<string, unknown> {
   const given: [string, unknown][] = [
     ["steps", steps],
     ["guidance", guidance],
     ["seed", seed],
     ["negative_prompt", negativePrompt === "" ? null : negativePrompt],
+    ["lora", lora === "" ? null : lora],
+    ["lora_scale", loraScale],
   ];
   return Object.fromEntries(given.filter(([, value]) => value !== null));
 }
@@ -199,6 +203,8 @@ export async function _generateImageLocal(
   seed: number | null,
   negativePrompt: string,
   format: string,
+  lora: string,
+  loraScale: number | null,
 ): Promise<ResultValue> {
   const fail = (message: string) => failure(`generateImageLocal failed: ${message}`);
   const checked = checkLocalImageArgs(prompt, model, format);
@@ -211,7 +217,7 @@ export async function _generateImageLocal(
     size,
     outputFormat: format as ImageConfig["outputFormat"],
     n: 1,
-    metadata: localImageSettings(steps, guidance, seed, negativePrompt),
+    metadata: localImageSettings(steps, guidance, seed, negativePrompt, lora, loraScale),
   };
   const out = await generateOne(prompt, prompt, config, checked.servedName);
   if ("error" in out) {

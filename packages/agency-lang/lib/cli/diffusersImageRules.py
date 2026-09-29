@@ -6,6 +6,7 @@ CI runs these through python3; it has no torch.
 Nothing here may import torch or diffusers. A test checks the imports.
 """
 
+import os
 import random
 
 # The one diffusers release these rules and the server were written
@@ -51,7 +52,21 @@ FIELDS = [
     "output_format",
     "response_format",
     "n",
+    "lora",
+    "lora_scale",
 ]
+
+# A request names a LoRA adapter by its file's name in the adapters folder
+# (`client.adaptersDir`), without the extension: "sketch" for
+# sketch.safetensors. One path segment, so a name can never leave the
+# folder. Only this format: a .bin or .pt adapter loads through pickle,
+# which runs code.
+ADAPTER_EXTENSION = ".safetensors"
+
+# How strongly an adapter is applied. 1.0 is as trained; the model cards
+# for style adapters suggest 0.5 to 1.2, and above 2 the image falls apart.
+MAX_LORA_SCALE = 2.0
+DEFAULT_LORA_SCALE = 1.0
 
 # What each family takes, keyed by `_class_name` in model_index.json.
 #
@@ -63,9 +78,14 @@ FIELDS = [
 #   default_guidance the model card's guidance
 #   takes_guidance   False: the family runs without guidance, and a request
 #                    that sets guidance or a negative prompt is refused
+#   takes_lora       True: the server may load LoRA adapters for it, and a
+#                    request may name one
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
+#   settings         the other values model_index.json may carry, which
+#                    from_pretrained passes to the pipeline, each with the
+#                    one value allowed
 FAMILIES = {
     "ZImagePipeline": {
         "label": "Z-Image Turbo",
@@ -74,6 +94,7 @@ FAMILIES = {
         "max_steps": 50,
         "default_guidance": 0.0,
         "takes_guidance": False,
+        "takes_lora": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -81,6 +102,7 @@ FAMILIES = {
             "transformer": ["diffusers", "ZImageTransformer2DModel"],
             "vae": ["diffusers", "AutoencoderKL"],
         },
+        "settings": {},
     },
     "ChromaPipeline": {
         "label": "Chroma",
@@ -89,6 +111,7 @@ FAMILIES = {
         "max_steps": 80,
         "default_guidance": 3.0,
         "takes_guidance": True,
+        "takes_lora": False,
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -98,6 +121,33 @@ FAMILIES = {
             "transformer": ["diffusers", "ChromaTransformer2DModel"],
             "vae": ["diffusers", "AutoencoderKL"],
         },
+        "settings": {},
+    },
+    # SDXL and its finetunes: Illustrious, NoobAI, and base SDXL share one
+    # model_index.json shape. The steps and guidance are NoobAI-XL's card;
+    # base SDXL's card says 50 steps at 5.0, well inside the caps.
+    "StableDiffusionXLPipeline": {
+        "label": "SDXL",
+        "pipeline": "StableDiffusionXLPipeline",
+        "default_steps": 28,
+        "max_steps": 80,
+        "default_guidance": 5.5,
+        "takes_guidance": True,
+        "takes_lora": True,
+        "components": {
+            "feature_extractor": [None, None],
+            "image_encoder": [None, None],
+            "scheduler": ["diffusers", "EulerDiscreteScheduler"],
+            "text_encoder": ["transformers", "CLIPTextModel"],
+            "text_encoder_2": ["transformers", "CLIPTextModelWithProjection"],
+            "tokenizer": ["transformers", "CLIPTokenizer"],
+            "tokenizer_2": ["transformers", "CLIPTokenizer"],
+            "unet": ["diffusers", "UNet2DConditionModel"],
+            "vae": ["diffusers", "AutoencoderKL"],
+        },
+        # Every SDXL checkpoint sets this; it makes an empty negative prompt
+        # encode as zeros, as the model was trained.
+        "settings": {"force_zeros_for_empty_prompt": True},
     },
 }
 
@@ -134,6 +184,15 @@ def family_of(model_index):
             f'This model_index.json names "{class_name}".'
         )
     named = {key: value for key, value in model_index.items() if not key.startswith("_")}
+    for key, value in rules["settings"].items():
+        # A missing setting is refused too: the pipeline would fall back to
+        # its own default, which may not be the value allowed.
+        if key not in named or named[key] != value:
+            found = f"says {named[key]}" if key in named else "does not set it"
+            raise ValueError(
+                f'{rules["label"]}\'s "{key}" must be {value}. This model_index.json {found}.'
+            )
+    named = {key: value for key, value in named.items() if key not in rules["settings"]}
     for component, value in named.items():
         expected = rules["components"].get(component)
         if expected is None:
@@ -258,6 +317,65 @@ def _format_of(body):
     return fmt
 
 
+def adapter_path(adapters_dir, name):
+    """The file the adapter `name` is, inside the folder. Raises RequestError
+    for a name that is not one plain file name: empty, a dot name, one with
+    a path separator, or one that already carries the extension. Whether
+    the file exists is found out when it is loaded."""
+    bad = (
+        not isinstance(name, str)
+        or name in ("", ".", "..")
+        or "/" in name
+        or "\\" in name
+        or name.endswith(ADAPTER_EXTENSION)
+    )
+    if bad:
+        raise RequestError(
+            f"lora must be an adapter's name: its file name in the adapters folder without "
+            f'{ADAPTER_EXTENSION}, such as "sketch" for sketch{ADAPTER_EXTENSION}. Got {name!r}.'
+        )
+    return os.path.join(adapters_dir, name + ADAPTER_EXTENSION)
+
+
+def adapter_names(adapters_dir):
+    """The adapters in the folder, by name, for a message or /health. Reads
+    the folder fresh, so an adapter dropped in after start-up is listed."""
+    try:
+        entries = os.listdir(adapters_dir)
+    except OSError:
+        return []
+    return sorted(
+        entry[: -len(ADAPTER_EXTENSION)] for entry in entries if entry.endswith(ADAPTER_EXTENSION)
+    )
+
+
+def _lora_of(rules, body, adapters_dir):
+    """(name or None, scale) for a request. A request that names no adapter
+    gets none, whatever the folder holds: an adapter changes every image,
+    so it is applied only when asked for."""
+    name = body.get("lora")
+    scale = body.get("lora_scale")
+    if name is None:
+        if scale is not None:
+            raise RequestError("lora_scale needs lora: it says how strongly to apply the adapter.")
+        return None, DEFAULT_LORA_SCALE
+    if not rules["takes_lora"]:
+        raise RequestError(f"{rules['label']} does not take LoRA adapters. Leave lora empty.")
+    if adapters_dir is None:
+        raise RequestError(
+            "This server has no adapters folder. Set client.adaptersDir in agency.json to the "
+            "folder your .safetensors adapters are in, and start the server again."
+        )
+    adapter_path(adapters_dir, name)
+    if scale is None:
+        return name, DEFAULT_LORA_SCALE
+    if not _is_number(scale) or scale < 0 or scale > MAX_LORA_SCALE:
+        raise RequestError(
+            f"lora_scale must be a number from 0 to {MAX_LORA_SCALE}. 1 applies the adapter as trained."
+        )
+    return name, float(scale)
+
+
 def _check_openai_fields(body):
     """The OpenAI fields this server takes only one value of."""
     response_format = body.get("response_format")
@@ -283,15 +401,17 @@ def _check_unknown_fields(body):
         )
 
 
-def check_request(rules, body):
+def check_request(rules, body, adapters_dir=None):
     """The checked request, with the family's defaults filled in and a
-    random seed when none was given. Raises RequestError with a message
-    that says what the model takes instead."""
+    random seed when none was given. `adapters_dir` is the folder LoRA
+    adapters come from, or None when none is configured. Raises
+    RequestError with a message that says what the model takes instead."""
     if not isinstance(body, dict):
         raise RequestError("The request body must be a JSON object.")
     _check_unknown_fields(body)
     _check_openai_fields(body)
     width, height = parse_size(body.get("size") or DEFAULT_SIZE)
+    lora, lora_scale = _lora_of(rules, body, adapters_dir)
     return {
         "prompt": _prompt_of(body),
         "width": width,
@@ -301,6 +421,8 @@ def check_request(rules, body):
         "seed": _seed_of(body),
         "negative_prompt": _negative_prompt_of(rules, body),
         "output_format": _format_of(body),
+        "lora": lora,
+        "lora_scale": lora_scale,
     }
 
 

@@ -43,6 +43,19 @@ The memory warning `serve` prints adds up download sizes. An image model
 uses more than that while it generates: Chroma peaks at 36 GB against
 27.5 GB on disk. The warning is left as it is.
 
+A third family, SDXL, is served but not in the catalog. Its finetunes for
+illustration (NoobAI-XL, Illustrious) are the models people train LoRA
+adapters for, and every one of them declares a restrictive license, so
+none qualifies for the catalog's permissive-only rule. Name one by its
+repo or directory:
+
+    agency local download diffusers:Laxhar/noobai-XL-1.1
+    agency local serve diffusers:Laxhar/noobai-XL-1.1
+
+NoobAI-XL 1.1 downloads 6.9 GB (the repo's 7.1 GB single-file copy is
+skipped) and makes a 1024×1024 image at 28 steps in about 6.5 s on an M5
+Ultra, or 7.5 s with a LoRA adapter applied.
+
 ## The `diffusers` backend
 
 An image model has its own backend, `diffusers`, next to `llama-cpp` and
@@ -118,6 +131,14 @@ The family table, `FAMILIES`, is keyed by `_class_name` in
 |---|---|---|---|---|
 | `ZImagePipeline` | 9 | 50 | 0.0 | refused |
 | `ChromaPipeline` | 40 | 80 | 3.0 | accepted |
+| `StableDiffusionXLPipeline` | 28 | 80 | 5.5 | accepted |
+
+SDXL is the one family with `takes_lora`, and the one whose
+`model_index.json` carries a setting that is not a component,
+`force_zeros_for_empty_prompt`. A family row lists such settings under
+`settings`, each with the one value allowed, and `family_of` refuses a
+file that sets a different value or leaves it out, since the pipeline would
+then fall back to its own default.
 
 Each row also lists every component its `model_index.json` must name, as
 `[library, class]`. A file that names another class, an extra component, or
@@ -204,6 +225,54 @@ the `imageGeneration` statelog event, and the guards.
 It raises no interrupt. A local generation spends no money, sends nothing
 off the machine, and writes nothing. Saving the image goes through
 `writeBinary`, which raises its own effect.
+
+## LoRA adapters
+
+A LoRA adapter is a small file, tens of megabytes, that changes an SDXL
+model's attention weights to draw a style or a character it was not
+trained on. Training one is not the core package's job (see
+`docs/superpowers/specs/2026-09-28-lora-package.md`). Using one is a
+folder and a name. The folder is `client.adaptersDir` in `agency.json`:
+
+    { "client": { "adaptersDir": "./adapters" } }
+
+Every `.safetensors` file in it is an adapter, named by its file name
+without the extension. A request names one with the `lora` field, and
+says how strongly with `lora_scale`, from 0 to 2 with 1 as trained:
+
+    generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch")
+
+`serve` passes the folder to every image process as `--adapters-dir`. The
+process loads `sketch.safetensors` the first time a request names
+`sketch`, under the generation lock, and keeps it loaded. Dropping a new
+file into the folder makes it usable with no restart, which is the
+train-try-adjust loop a person training adapters is in.
+
+Three decisions:
+
+1. **A request names a file only by its stem.** `adapter_path` in the
+   rules module joins the name to the folder and refuses a name that is
+   not one plain file name: empty, `.` or `..`, anything with a path
+   separator, or one that already ends in `.safetensors`. So a program, or
+   a model calling `generateImageLocal` as a tool, can pick from the
+   folder the user configured and nothing else, and the server never
+   opens a path a request wrote. The folder itself is refused at start-up
+   when it is a symlink or not a directory.
+2. **Only `.safetensors`.** A `.bin` or `.pt` adapter loads through
+   `pickle`, which runs code. The extension is fixed by `adapter_path`, so
+   no request can ask for another format, and a symlink at the file is
+   refused when it is loaded. `load_lora_weights` reads tensors from the
+   file and nothing else.
+3. **Only the request that asks gets it.** An adapter changes every image,
+   so `apply_lora` sets the pipeline to the request's adapter at its scale,
+   or to none, under the generation lock, before every generation. The
+   warm-up request names none.
+
+A request naming an adapter when no folder is configured, or a family
+that takes none, is refused with the config key or the family named. A
+name the folder does not hold is a 400 listing what it does hold, read
+fresh each time. `GET /health` lists the folder's adapter names the same
+way.
 
 ## Downloading
 

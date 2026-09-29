@@ -16,7 +16,7 @@ export function isModelKind(value: unknown): value is ModelKind {
 /** The pipeline classes the image server's family table serves, copied
  *  from `FAMILIES` in `lib/cli/diffusersImageRules.py` so a directory can
  *  be recognised without running Python. A test checks the two agree. */
-export const IMAGE_PIPELINES = ["ZImagePipeline", "ChromaPipeline"];
+export const IMAGE_PIPELINES = ["ZImagePipeline", "ChromaPipeline", "StableDiffusionXLPipeline"];
 
 /** The `model_type` values the speech server's family table serves. Orpheus
  *  models say `llama`, the same as a Llama chat model, so they are not

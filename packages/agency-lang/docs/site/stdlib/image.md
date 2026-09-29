@@ -180,7 +180,10 @@ generateImageLocal(
   format: string = "png",
   lora: string = "",
   loraScale: number | null = null,
-): Result<LocalImage>
+  controlnet: string = "",
+  controlImage: string = "",
+  controlScale: number | null = null,
+): Result<LocalImage> raises <std::readImage>
 ```
 
 Generate an image on this machine with a local image model, such as
@@ -191,9 +194,14 @@ Generate an image on this machine with a local image model, such as
   whose success value is { base64, mimeType, seed }.
 
   A LoRA adapter is a small file that teaches an SDXL model a style or a
-  character. Load one when serving, `--lora sketch=./sketch.safetensors`,
-  and name it here with `lora: "sketch"`. Only the request that names it
-  gets it.
+  character. Put it in the folder client.adaptersDir names and ask for it
+  here with `lora: "sketch"`. Only the request that names it gets it.
+
+  A ControlNet constrains the image to a drawing you give it: a stick
+  figure becomes the pose. Download one into client.controlnetsDir and
+  name it with `controlnet: "controlnet-scribble-sdxl"` and the drawing
+  with `controlImage`. The drawing is read from this machine, under
+  std::readImage, and never uploaded.
 
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
@@ -203,8 +211,11 @@ Generate an image on this machine with a local image model, such as
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
   @param negativePrompt - What the image should not contain. z-image-turbo takes none
   @param format - "png", "jpeg", or "webp"
-  @param lora - The name of a LoRA adapter the server loaded with --lora. Empty applies none
+  @param lora - The name of a LoRA adapter in client.adaptersDir, its file name without .safetensors. Empty applies none
   @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
+  @param controlnet - The name of a ControlNet in client.controlnetsDir, its folder name. Empty applies none. Goes with controlImage
+  @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
+  @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
 
 **Parameters:**
 
@@ -220,8 +231,13 @@ Generate an image on this machine with a local image model, such as
 | format | `string` | "png" |
 | lora | `string` | "" |
 | loraScale | `number \| null` | null |
+| controlnet | `string` | "" |
+| controlImage | `string` | "" |
+| controlScale | `number \| null` | null |
 
 **Returns:** `Result<LocalImage>`
+
+**Throws:** `std::readImage`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L103))
 
@@ -262,7 +278,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L153))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L179))
 
 ### imageSize
 
@@ -284,7 +300,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L189))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L215))
 
 ### pasteImages
 
@@ -317,4 +333,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L206))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L232))

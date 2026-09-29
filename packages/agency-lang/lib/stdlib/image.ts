@@ -9,6 +9,7 @@ import { _resolveModel, _mlxServedName, type ResolvedModel } from "./localModels
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 import { LOCAL_IMAGE_FORMATS, type LocalGeneratedImage } from "./mlxImage.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
+import { _approvedFilePath } from "./approvedPath.js";
 
 /** Drop keys whose value is "" or undefined; keep numbers/objects. */
 function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -180,6 +181,9 @@ function localImageSettings(
   negativePrompt: string,
   lora: string,
   loraScale: number | null,
+  controlnet: string,
+  controlImage: string,
+  controlScale: number | null,
 ): Record<string, unknown> {
   const given: [string, unknown][] = [
     ["steps", steps],
@@ -188,6 +192,9 @@ function localImageSettings(
     ["negative_prompt", negativePrompt === "" ? null : negativePrompt],
     ["lora", lora === "" ? null : lora],
     ["lora_scale", loraScale],
+    ["controlnet", controlnet === "" ? null : controlnet],
+    ["control_image", controlImage === "" ? null : controlImage],
+    ["control_scale", controlScale],
   ];
   return Object.fromEntries(given.filter(([, value]) => value !== null));
 }
@@ -205,11 +212,30 @@ export async function _generateImageLocal(
   format: string,
   lora: string,
   loraScale: number | null,
+  controlnet: string,
+  controlImage: string,
+  controlScale: number | null,
 ): Promise<ResultValue> {
   const fail = (message: string) => failure(`generateImageLocal failed: ${message}`);
   const checked = checkLocalImageArgs(prompt, model, format);
   if ("error" in checked) {
     return fail(checked.error);
+  }
+  if ((controlnet === "") !== (controlImage === "")) {
+    return fail(
+      "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
+    );
+  }
+  // `controlImage` is the real spelling the Agency side raised std::readImage
+  // for; re-validated here for a link that appeared while the prompt was
+  // pending, and sent as the absolute path the server reads once.
+  let controlPath = "";
+  if (controlImage !== "") {
+    try {
+      controlPath = _approvedFilePath(controlImage);
+    } catch (err) {
+      return fail((err as Error).message);
+    }
   }
   const config: Partial<ImageConfig> = {
     model: checked.servedName,
@@ -217,7 +243,17 @@ export async function _generateImageLocal(
     size,
     outputFormat: format as ImageConfig["outputFormat"],
     n: 1,
-    metadata: localImageSettings(steps, guidance, seed, negativePrompt, lora, loraScale),
+    metadata: localImageSettings(
+      steps,
+      guidance,
+      seed,
+      negativePrompt,
+      lora,
+      loraScale,
+      controlnet,
+      controlPath,
+      controlScale,
+    ),
   };
   const out = await generateOne(prompt, prompt, config, checked.servedName);
   if ("error" in out) {

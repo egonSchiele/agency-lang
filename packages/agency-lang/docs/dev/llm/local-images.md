@@ -274,6 +274,45 @@ name the folder does not hold is a 400 listing what it does hold, read
 fresh each time. `GET /health` lists the folder's adapter names the same
 way.
 
+## ControlNets
+
+A ControlNet constrains a generation to a drawing: a stick figure becomes
+the pose, a line drawing the composition. It is an inference-time input,
+loaded like a LoRA adapter, so it lives here beside adapter loading and
+not in the training package. The folder is `client.controlnetsDir`; each
+entry is a diffusers ControlNet directory (`config.json` and its
+`.safetensors`), named by its folder name. `agency local download
+controlnet-scribble-sdxl` puts a catalog ControlNet there, keeping the
+config and the one weights file, and refuses when the folder is not
+configured, since there is nowhere else a ControlNet is useful.
+
+A request names one with `controlnet` and the drawing with
+`control_image`, an absolute path the server reads once after the checks
+in `localServerCommon.check_image_path`, the same read the vision server
+makes; `control_scale` is how strongly, 0 to 2 with 1 as the model card
+says. The stdlib raises `std::readImage` for that drawing before the
+request, so a call with a control image is the one local generation that
+raises anything. One without the other is refused; the pair is refused
+for Z-Image and Chroma; the name goes through `folder_entry`, the same
+one-segment rule adapters use.
+
+    generateImageLocal("pen and ink, zxq_girl, surprised", "diffusers:Laxhar/noobai-XL-1.1",
+      lora: "zxq", controlnet: "controlnet-scribble-sdxl", controlImage: "./poses/jump.png")
+
+On first use the server loads the ControlNet and builds
+`StableDiffusionXLControlNetPipeline` from the base pipeline's
+components plus it, so the UNet and encoders are shared and a LoRA
+applied to the UNet applies to both. The control image is resized to
+the request's size; a scribble whose mean brightness is above half is
+inverted, since the scribble ControlNet was trained on white lines over
+black. Nothing else is preprocessed: edges, depth, and pose extraction
+are the vision server's job. `serve` refuses to plan a ControlNet, by
+catalog kind or by its `config.json`, and says where it is loaded from.
+
+Measured on an M5 Ultra against NoobAI-XL 1.1 with a LoRA applied: 8.4 s
+for a 1024×1024 image without a ControlNet, 11.4 s for the first request
+with the scribble ControlNet, which included loading it.
+
 ## Downloading
 
 A diffusers repo often holds more than the pipeline reads. Chroma1-HD has

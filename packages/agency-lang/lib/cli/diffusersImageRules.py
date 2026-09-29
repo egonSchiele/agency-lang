@@ -8,6 +8,10 @@ Nothing here may import torch or diffusers. A test checks the imports.
 
 import os
 import random
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from localServerCommon import ImagePathError, check_image_path  # noqa: E402
 
 # The one diffusers release these rules and the server were written
 # against. The server refuses any other version, because it reaches into
@@ -54,6 +58,9 @@ FIELDS = [
     "n",
     "lora",
     "lora_scale",
+    "controlnet",
+    "control_image",
+    "control_scale",
 ]
 
 # A request names a LoRA adapter by its file's name in the adapters folder
@@ -68,6 +75,13 @@ ADAPTER_EXTENSION = ".safetensors"
 MAX_LORA_SCALE = 2.0
 DEFAULT_LORA_SCALE = 1.0
 
+# A request names a ControlNet by its folder's name in the ControlNets
+# folder (`client.controlnetsDir`): a diffusers ControlNet directory with
+# config.json and its .safetensors weights. How strongly it constrains
+# the image is control_scale, 1.0 as the model card says.
+MAX_CONTROL_SCALE = 2.0
+DEFAULT_CONTROL_SCALE = 1.0
+
 # What each family takes, keyed by `_class_name` in model_index.json.
 #
 #   label            how the family is named in a message
@@ -80,6 +94,9 @@ DEFAULT_LORA_SCALE = 1.0
 #                    that sets guidance or a negative prompt is refused
 #   takes_lora       True: the server may load LoRA adapters for it, and a
 #                    request may name one
+#   takes_controlnet True: a request may name a ControlNet and an image to
+#                    condition on, and controlnet_pipeline is the diffusers
+#                    class that runs the pair
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
@@ -95,6 +112,7 @@ FAMILIES = {
         "default_guidance": 0.0,
         "takes_guidance": False,
         "takes_lora": False,
+        "takes_controlnet": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -112,6 +130,7 @@ FAMILIES = {
         "default_guidance": 3.0,
         "takes_guidance": True,
         "takes_lora": False,
+        "takes_controlnet": False,
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -134,6 +153,8 @@ FAMILIES = {
         "default_guidance": 5.5,
         "takes_guidance": True,
         "takes_lora": True,
+        "takes_controlnet": True,
+        "controlnet_pipeline": "StableDiffusionXLControlNetPipeline",
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -317,24 +338,56 @@ def _format_of(body):
     return fmt
 
 
-def adapter_path(adapters_dir, name):
-    """The file the adapter `name` is, inside the folder. Raises RequestError
-    for a name that is not one plain file name: empty, a dot name, one with
-    a path separator, or one that already carries the extension. Whether
-    the file exists is found out when it is loaded."""
+def folder_entry(folder, name, field, what, extension):
+    """The path of the entry `name` inside a configured folder. Raises
+    RequestError for a name that is not one plain name: empty, a dot name,
+    one with a path separator, or one that already carries the extension.
+    Whether the entry exists is found out when it is loaded. The one rule
+    for adapters and ControlNets, so a request can never leave its folder."""
     bad = (
         not isinstance(name, str)
         or name in ("", ".", "..")
         or "/" in name
         or "\\" in name
-        or name.endswith(ADAPTER_EXTENSION)
+        or (extension != "" and name.endswith(extension))
     )
     if bad:
         raise RequestError(
-            f"lora must be an adapter's name: its file name in the adapters folder without "
-            f'{ADAPTER_EXTENSION}, such as "sketch" for sketch{ADAPTER_EXTENSION}. Got {name!r}.'
+            f'{field} must be {what}, such as "sketch" for sketch{extension or "/"}. Got {name!r}.'
         )
-    return os.path.join(adapters_dir, name + ADAPTER_EXTENSION)
+    return os.path.join(folder, name + extension)
+
+
+def adapter_path(adapters_dir, name):
+    """The file the adapter `name` is, inside the adapters folder."""
+    return folder_entry(
+        adapters_dir,
+        name,
+        "lora",
+        f"an adapter's name: its file name in the adapters folder without {ADAPTER_EXTENSION}",
+        ADAPTER_EXTENSION,
+    )
+
+
+def controlnet_path(controlnets_dir, name):
+    """The directory the ControlNet `name` is, inside the ControlNets folder."""
+    return folder_entry(
+        controlnets_dir, name, "controlnet", "a ControlNet's name: its folder in the ControlNets folder", ""
+    )
+
+
+def controlnet_names(controlnets_dir):
+    """The ControlNets in the folder, by name: the subfolders holding a
+    config.json. Read fresh each time."""
+    try:
+        entries = os.listdir(controlnets_dir)
+    except OSError:
+        return []
+    return sorted(
+        entry
+        for entry in entries
+        if os.path.isfile(os.path.join(controlnets_dir, entry, "config.json"))
+    )
 
 
 def adapter_names(adapters_dir):
@@ -401,17 +454,55 @@ def _check_unknown_fields(body):
         )
 
 
-def check_request(rules, body, adapters_dir=None):
+def _controlnet_of(rules, body, controlnets_dir):
+    """(name or None, image path or None, scale) for a request. A ControlNet
+    and its image go together; one without the other is refused."""
+    name = body.get("controlnet")
+    image = body.get("control_image")
+    scale = body.get("control_scale")
+    if name is None and image is None:
+        if scale is not None:
+            raise RequestError("control_scale needs controlnet: it says how strongly to apply it.")
+        return None, None, DEFAULT_CONTROL_SCALE
+    if name is None or image is None:
+        raise RequestError(
+            "controlnet and control_image go together: the ControlNet's name, and the image "
+            "it conditions the generation on."
+        )
+    if not rules["takes_controlnet"]:
+        raise RequestError(f"{rules['label']} does not take a ControlNet. Leave controlnet empty.")
+    if controlnets_dir is None:
+        raise RequestError(
+            "This server has no ControlNets folder. Set client.controlnetsDir in agency.json to the "
+            "folder your ControlNets are in, and start the server again."
+        )
+    controlnet_path(controlnets_dir, name)
+    try:
+        image_path = check_image_path(image)
+    except ImagePathError as err:
+        raise RequestError(f"control_image: {err}")
+    if scale is None:
+        return name, image_path, DEFAULT_CONTROL_SCALE
+    if not _is_number(scale) or scale < 0 or scale > MAX_CONTROL_SCALE:
+        raise RequestError(
+            f"control_scale must be a number from 0 to {MAX_CONTROL_SCALE}. 1 applies it as the model card says."
+        )
+    return name, image_path, float(scale)
+
+
+def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     """The checked request, with the family's defaults filled in and a
-    random seed when none was given. `adapters_dir` is the folder LoRA
-    adapters come from, or None when none is configured. Raises
-    RequestError with a message that says what the model takes instead."""
+    random seed when none was given. `adapters_dir` and `controlnets_dir`
+    are the folders LoRA adapters and ControlNets come from, or None when
+    not configured. Raises RequestError with a message that says what the
+    model takes instead."""
     if not isinstance(body, dict):
         raise RequestError("The request body must be a JSON object.")
     _check_unknown_fields(body)
     _check_openai_fields(body)
     width, height = parse_size(body.get("size") or DEFAULT_SIZE)
     lora, lora_scale = _lora_of(rules, body, adapters_dir)
+    controlnet, control_image, control_scale = _controlnet_of(rules, body, controlnets_dir)
     return {
         "prompt": _prompt_of(body),
         "width": width,
@@ -423,6 +514,9 @@ def check_request(rules, body, adapters_dir=None):
         "output_format": _format_of(body),
         "lora": lora,
         "lora_scale": lora_scale,
+        "controlnet": controlnet,
+        "control_image": control_image,
+        "control_scale": control_scale,
     }
 
 

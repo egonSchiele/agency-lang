@@ -24,7 +24,7 @@ agency local download                     # pick a model from the catalog intera
 agency local download qwen3.5-2b          # curated name, alias, hf: URI, or .gguf path
 agency local list                         # the catalog, with each model's kind and backend, downloaded models marked
 agency local list -l                      # ...and each model's description
-agency local list --kind image            # one kind: chat, embedding, speech, image, or vision
+agency local list --kind image            # one kind: chat, embedding, speech, image, vision, or controlnet
 agency local remove my7b                  # remove the alias, keep the files
 agency local remove my7b -f               # remove the alias and delete the files
 agency local resolve my7b                 # show the backend and what a name/alias maps to
@@ -159,6 +159,8 @@ agency local serve diffusers:Laxhar/noobai-XL-1.1
 ```
 
 A request then asks for an adapter by its file name without the extension: `generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch")` loads `./adapters/sketch.safetensors` the first time and keeps it. Only a request that names an adapter gets one, and a file dropped into the folder is usable with no restart.
+
+A ControlNet is downloaded into `client.controlnetsDir` rather than the models directory, since an image server loads it from there when a call names it: `agency local download controlnet-scribble-sdxl`, then `generateImageLocal(..., controlnet: "controlnet-scribble-sdxl", controlImage: "./pose.png")`. It is never served on its own.
 
 Vision models find things in images rather than making them. Two are in the catalog: `wd14-tagger` describes a picture as booru tags, and `florence-2` finds the objects you name, tags, and captions. They are served the same way and called from `std::vision`:
 

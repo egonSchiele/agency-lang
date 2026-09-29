@@ -24,6 +24,7 @@ import {
   _findDownloadedServedModel,
   defaultCacheDir,
   configuredAdaptersDir,
+  configuredControlnetsDir,
   readClientConfig,
   formatGB,
   type DownloadedModel,
@@ -276,10 +277,14 @@ export function imageServeArgs(
   modelDir: string,
   internalPort: number,
   adaptersDir: string | null = null,
+  controlnetsDir: string | null = null,
 ): string[] {
   const args = [script, "--model", modelDir, "--host", "127.0.0.1", "--port", String(internalPort)];
   if (adaptersDir !== null) {
     args.push("--adapters-dir", adaptersDir);
+  }
+  if (controlnetsDir !== null) {
+    args.push("--controlnets-dir", controlnetsDir);
   }
   return args;
 }
@@ -291,6 +296,7 @@ function argsFor(
   settings: ChatServerSettings,
   modelsDir: string,
   adaptersDir: string | null,
+  controlnetsDir: string | null,
 ): string[] {
   if (model.kind === "embedding") {
     return embedServeArgs(embedServerScript(), model.dir, internalPort, EMBED_MAX_LENGTH);
@@ -299,7 +305,13 @@ function argsFor(
     return speechServeArgs(speechServerScript(), model.dir, internalPort, modelsDir);
   }
   if (model.kind === "image") {
-    return imageServeArgs(imageServerScript(), model.dir, internalPort, adaptersDir);
+    return imageServeArgs(
+      imageServerScript(),
+      model.dir,
+      internalPort,
+      adaptersDir,
+      controlnetsDir,
+    );
   }
   if (model.kind === "vision") {
     return visionServeArgs(visionServerScript(), model.dir, internalPort);
@@ -315,7 +327,7 @@ function processLabel(kind: ServeKind, name: string): string {
   if (kind === "speech") {
     return `the speech server for ${name}`;
   }
-  if (kind === "image") {
+  if (kind === "image" || kind === "controlnet") {
     return `the image server for ${name}`;
   }
   if (kind === "vision") {
@@ -410,6 +422,7 @@ const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
   // several times slower and with more memory.
   image: ["torch", "diffusers", "transformers", "accelerate"],
   vision: [],
+  controlnet: [],
 };
 
 /** The modules one planned model's process imports. A vision model that
@@ -559,7 +572,7 @@ function readinessRequest(kind: ServeKind, upstreamModel: string): Probe {
       body: JSON.stringify({ model: upstreamModel, input: "hi" }),
     };
   }
-  if (kind === "speech" || kind === "image" || kind === "vision") {
+  if (kind === "speech" || kind === "image" || kind === "vision" || kind === "controlnet") {
     return { method: "GET", path: "/health" };
   }
   return {
@@ -759,6 +772,8 @@ export type ServeDeps = {
   configuredPython: string | undefined;
   /** `client.adaptersDir`, absolute, or null when unset. */
   adaptersDir: string | null;
+  /** `client.controlnetsDir`, absolute, or null when unset. */
+  controlnetsDir: string | null;
   /** Whether the request log is colored. Off when stdout is not a terminal. */
   useColor: boolean;
 };
@@ -823,6 +838,7 @@ function realDeps(): ServeDeps {
     env: process.env,
     configuredPython: readClientConfig().mlx?.python,
     adaptersDir: configuredAdaptersDir(),
+    controlnetsDir: configuredControlnetsDir(),
     useColor: autoUseColor(),
   };
 }
@@ -844,6 +860,7 @@ const FLAG_FOR_KIND: Record<ServeKind, string> = {
   speech: "--speech",
   image: "--image",
   vision: "",
+  controlnet: "",
 };
 
 function anArticle(word: string): string {
@@ -908,8 +925,20 @@ function planModel(value: string, cacheDir: string): Planned {
     );
   }
   const name = _mlxServedName(resolved);
+  if (_catalogKind(value) === "controlnet") {
+    throw new Error(
+      `${value} is a ControlNet, which is not served: an SDXL image server loads it from ` +
+        `client.controlnetsDir when a request names it. Serve the image model instead.`,
+    );
+  }
   const { dir, sizeBytes } = servedModelLocation(resolved, cacheDir);
   const kind = _modelKind(value, dir);
+  if (kind === "controlnet") {
+    throw new Error(
+      `${value} is a ControlNet directory, which is not served: an SDXL image server loads it ` +
+        `from client.controlnetsDir when a request names it. Serve the image model instead.`,
+    );
+  }
   if (kind === null) {
     throw new Error(
       `${value} is a model directory of a shape agency does not know. Say what it is when ` +
@@ -977,6 +1006,7 @@ const BANNER_SUFFIX: Record<ServeKind, string> = {
   speech: "  (speech)",
   image: "  (images)",
   vision: "  (vision)",
+  controlnet: "  (controlnet)",
 };
 
 /** What `serve` prints once every process is ready: the models, in plan
@@ -1126,7 +1156,14 @@ export async function runServe(
         `Drafting for ${model.name} with ${model.draft.name} (${formatGB(model.draft.sizeBytes)})`,
       );
     }
-    const args = argsFor(model, internalPort, settings, deps.cacheDir, deps.adaptersDir);
+    const args = argsFor(
+      model,
+      internalPort,
+      settings,
+      deps.cacheDir,
+      deps.adaptersDir,
+      deps.controlnetsDir,
+    );
     const child = deps.spawn(python, args);
     children.push(child);
     exits.push(exitOf(child, model.name, model.kind));

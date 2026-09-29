@@ -111,7 +111,10 @@ export def generateImageLocal(
   format: string = "png",
   lora: string = "",
   loraScale: number | null = null,
-): Result<LocalImage> {
+  controlnet: string = "",
+  controlImage: string = "",
+  controlScale: number | null = null,
+): Result<LocalImage> raises <std::readImage> {
   """
   Generate an image on this machine with a local image model, such as
   z-image-turbo, chroma1-hd, or an SDXL finetune named by its diffusers:
@@ -121,9 +124,14 @@ export def generateImageLocal(
   whose success value is { base64, mimeType, seed }.
 
   A LoRA adapter is a small file that teaches an SDXL model a style or a
-  character. Load one when serving, `--lora sketch=./sketch.safetensors`,
-  and name it here with `lora: "sketch"`. Only the request that names it
-  gets it.
+  character. Put it in the folder client.adaptersDir names and ask for it
+  here with `lora: "sketch"`. Only the request that names it gets it.
+
+  A ControlNet constrains the image to a drawing you give it: a stick
+  figure becomes the pose. Download one into client.controlnetsDir and
+  name it with `controlnet: "controlnet-scribble-sdxl"` and the drawing
+  with `controlImage`. The drawing is read from this machine, under
+  std::readImage, and never uploaded.
 
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
@@ -133,9 +141,24 @@ export def generateImageLocal(
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
   @param negativePrompt - What the image should not contain. z-image-turbo takes none
   @param format - "png", "jpeg", or "webp"
-  @param lora - The name of a LoRA adapter the server loaded with --lora. Empty applies none
+  @param lora - The name of a LoRA adapter in client.adaptersDir, its file name without .safetensors. Empty applies none
   @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
+  @param controlnet - The name of a ControlNet in client.controlnetsDir, its folder name. Empty applies none. Goes with controlImage
+  @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
+  @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
   """
+  let control = ""
+  if (controlImage != "") {
+    const real = try _realTarget(controlImage)
+    if (isFailure(real)) {
+      return real
+    }
+    control = real.value
+    raise std::readImage("Read this drawing to condition the image on?", {
+      dir: dirname(real.value),
+      filename: basename(real.value),
+    })
+  }
   return _generateImageLocal(
     prompt,
     model,
@@ -147,6 +170,9 @@ export def generateImageLocal(
     format,
     lora,
     loraScale,
+    controlnet,
+    control,
+    controlScale,
   )
 }
 

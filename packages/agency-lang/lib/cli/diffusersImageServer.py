@@ -6,9 +6,9 @@ answers:
 
   POST /v1/images/generations  {"prompt", "size"?, "steps"?, "guidance"?, "seed"?,
                                 "negative_prompt"?, "output_format"?, "response_format"?, "n"?,
-                                "lora"?, "lora_scale"?}
+                                "lora"?, "lora_scale"?, "controlnet"?, "control_image"?, "control_scale"?}
   GET  /v1/models
-  GET  /health                 {"status": "ok", "adapters": [names]}
+  GET  /health                 {"status": "ok", "adapters": [names], "controlnets": [names]}
 
 A success is {"created", "output_format", "data": [{"b64_json", "seed"}]}.
 A failure is {"error": {"message": "..."}}.
@@ -40,8 +40,11 @@ from diffusersImageRules import (  # noqa: E402
     family_of,
     adapter_names,
     adapter_path,
+    controlnet_names,
+    controlnet_path,
     warm_up_request,
 )
+from localServerCommon import read_image_bytes  # noqa: E402
 
 GENERATIONS_PATH = "/v1/images/generations"
 
@@ -50,6 +53,10 @@ GENERATIONS_PATH = "/v1/images/generations"
 MAX_BODY_BYTES = 64 * 1024
 
 PIL_FORMATS = {"png": "PNG", "jpeg": "JPEG", "webp": "WEBP"}
+
+# A scribble whose mean brightness is above this is black lines on white
+# paper, which the scribble ControlNet was trained on the inverse of.
+SCRIBBLE_INVERT_ABOVE = 127
 
 
 def parse_args():
@@ -62,7 +69,24 @@ def parse_args():
         default=None,
         help="the folder LoRA adapters (.safetensors) are loaded from, by name, as requests ask",
     )
+    parser.add_argument(
+        "--controlnets-dir",
+        default=None,
+        help="the folder ControlNets (a diffusers directory each) are loaded from, by name, as requests ask",
+    )
     return parser.parse_args()
+
+
+def check_folder(folder, flag):
+    """A configured folder, once it is known to be a directory and not a
+    symlink, or None. Fails before the model loads."""
+    if folder is None:
+        return None
+    if os.path.islink(folder):
+        fail(f"{flag} {folder} is a symlink. Name the folder itself.")
+    if not os.path.isdir(folder):
+        fail(f"{flag} {folder} is not a folder.")
+    return folder
 
 
 def check_adapters_dir(adapters_dir):
@@ -107,7 +131,7 @@ class Generator:
     """The loaded pipeline, its family, and a lock, because the GPU runs one
     generation at a time."""
 
-    def __init__(self, model_dir, adapters_dir):
+    def __init__(self, model_dir, adapters_dir, controlnets_dir):
         # The file names the classes from_pretrained will import, so it is
         # checked before anything from diffusers is imported.
         try:
@@ -115,9 +139,14 @@ class Generator:
         except ValueError as err:
             fail(str(err))
         self.adapters_dir = check_adapters_dir(adapters_dir)
+        self.controlnets_dir = check_folder(controlnets_dir, "--controlnets-dir")
         # The adapters loaded so far, by name. An adapter is loaded the
         # first time a request names it and kept.
         self.loaded = []
+        # The ControlNet pipelines built so far, by name. Each shares the
+        # base pipeline's components, so a LoRA applied to the UNet applies
+        # to both.
+        self.control_pipes = {}
         # Never fetch anything while serving. Set before diffusers and
         # huggingface_hub are imported, since they read it at import time.
         os.environ["HF_HUB_OFFLINE"] = "1"
@@ -173,6 +202,47 @@ class Generator:
         self.pipe.enable_lora()
         self.pipe.set_adapters([request["lora"]], adapter_weights=[request["lora_scale"]])
 
+    def control_pipeline(self, name):
+        """The ControlNet pipeline for `name`, built the first time it is
+        asked for from the base pipeline's components plus the ControlNet
+        loaded from its folder. A missing folder is a 400 naming what the
+        ControlNets folder holds. Called under the lock."""
+        if name in self.control_pipes:
+            return self.control_pipes[name]
+        import diffusers
+
+        folder = controlnet_path(self.controlnets_dir, name)
+        if os.path.islink(folder) or not os.path.isfile(os.path.join(folder, "config.json")):
+            have = controlnet_names(self.controlnets_dir)
+            listing = join_names(have) if have else "no ControlNets"
+            raise RequestError(
+                f'There is no ControlNet "{name}" in {self.controlnets_dir}. It has {listing}.'
+            )
+        controlnet = diffusers.ControlNetModel.from_pretrained(
+            folder, dtype=self.torch.bfloat16, use_safetensors=True, local_files_only=True
+        ).to("mps")
+        pipeline_class = getattr(diffusers, self.rules["controlnet_pipeline"])
+        pipe = pipeline_class(**self.pipe.components, controlnet=controlnet)
+        pipe.set_progress_bar_config(disable=True)
+        self.control_pipes[name] = pipe
+        return pipe
+
+    def control_image(self, request):
+        """The conditioning image, resized to the request's size. A scribble
+        drawn black on white is inverted, since a scribble ControlNet was
+        trained on white lines over black."""
+        import io
+        from PIL import Image, ImageOps
+
+        image = Image.open(io.BytesIO(read_image_bytes(request["control_image"]))).convert("RGB")
+        image = image.resize((request["width"], request["height"]), Image.LANCZOS)
+        if "scribble" in request["controlnet"]:
+            grey = ImageOps.grayscale(image)
+            mean = sum(grey.getdata()) / (grey.width * grey.height)
+            if mean > SCRIBBLE_INVERT_ABOVE:
+                image = ImageOps.invert(image)
+        return image
+
     def generate(self, request, sock):
         """The image for a checked request, or None when the client hung up.
         `sock` is None for the warm-up, which nobody can hang up on."""
@@ -206,8 +276,13 @@ class Generator:
             if client_gone(sock):
                 return None
             self.apply_lora(request)
+            pipe = self.pipe
+            if request["controlnet"] is not None:
+                pipe = self.control_pipeline(request["controlnet"])
+                kwargs["image"] = self.control_image(request)
+                kwargs["controlnet_conditioning_scale"] = request["control_scale"]
             try:
-                return self.pipe(**kwargs).images[0]
+                return pipe(**kwargs).images[0]
             except ClientGone as gone:
                 print(
                     f"Stopped after {gone.args[0]} of {total} steps: the client hung up.",
@@ -219,7 +294,10 @@ class Generator:
         """One small generation before the port opens. A model that loads
         but cannot generate fails here, and `agency local serve` reports the
         exit instead of the user's first call finding it."""
-        self.generate(check_request(self.rules, warm_up_request(), self.adapters_dir), None)
+        self.generate(
+            check_request(self.rules, warm_up_request(), self.adapters_dir, self.controlnets_dir),
+            None,
+        )
 
 
 def encode(image, fmt):
@@ -249,9 +327,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            folder = self.generator.adapters_dir
-            adapters = [] if folder is None else adapter_names(folder)
-            self.send_json(200, {"status": "ok", "adapters": adapters})
+            adapters_dir = self.generator.adapters_dir
+            controlnets_dir = self.generator.controlnets_dir
+            self.send_json(
+                200,
+                {
+                    "status": "ok",
+                    "adapters": [] if adapters_dir is None else adapter_names(adapters_dir),
+                    "controlnets": [] if controlnets_dir is None else controlnet_names(controlnets_dir),
+                },
+            )
         elif self.path == "/v1/models":
             self.send_json(
                 200, {"object": "list", "data": [{"id": self.served_name, "object": "model"}]}
@@ -286,7 +371,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             request = check_request(
-                self.generator.rules, self.read_body(), self.generator.adapters_dir
+                self.generator.rules,
+                self.read_body(),
+                self.generator.adapters_dir,
+                self.generator.controlnets_dir,
             )
             image = self.generator.generate(request, self.connection)
             if image is None:
@@ -320,7 +408,7 @@ def main():
     # Load and generate once before binding the port. `agency local serve`
     # treats a refused connection as "still loading" and any answer as
     # "ready", so the port must stay closed until the model can answer.
-    Handler.generator = Generator(args.model, args.adapters_dir)
+    Handler.generator = Generator(args.model, args.adapters_dir, args.controlnets_dir)
     Handler.generator.warm_up()
     Handler.served_name = args.model
     server = ThreadingHTTPServer((args.host, args.port), Handler)

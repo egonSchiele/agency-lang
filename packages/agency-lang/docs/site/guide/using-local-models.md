@@ -343,6 +343,25 @@ const r = generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/nooba
 
 `loraScale` is how strongly the adapter is applied: 1 is as trained, less is subtler, and up to 2 is allowed. The server loads an adapter the first time it is asked for, so a file you drop into the folder after training works at once. Adapters are `.safetensors` files only, and a request can only pick a file from the folder you configured, never name a path itself.
 
+### Pose a character with a ControlNet
+
+A ControlNet holds the image to a drawing you give it, so a stick figure becomes the pose. Name a folder for them, download one, and pass a drawing with the call:
+
+```json
+{ "client": { "controlnetsDir": "./controlnets" } }
+```
+
+```bash
+agency local download controlnet-scribble-sdxl
+```
+
+```ts
+const r = generateImageLocal("pen and ink, zxq_girl, surprised", "diffusers:Laxhar/noobai-XL-1.1",
+  lora: "zxq", controlnet: "controlnet-scribble-sdxl", controlImage: "./poses/jump.png")
+```
+
+The drawing is read on this machine under `std::readImage`, the one thing a local generation asks approval for. `controlScale` is how strongly the drawing constrains the image, 1 by default. `controlnet-openpose-sdxl` takes a rendered pose skeleton instead of a scribble.
+
 ## Look at images on a Mac
 
 Two vision models turn a picture into words and boxes, on this machine, with nothing uploaded. `wd14-tagger` describes an image as booru tags, the vocabulary illustration models such as NoobAI-XL take in a prompt. `florence-2` finds the objects you name and returns a box for each, tags what it sees, and writes a caption. Download and serve them like any other model:

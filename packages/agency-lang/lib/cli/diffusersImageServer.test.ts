@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { DIFFUSERS_VERSION, imageServerScript } from "./localServe.js";
@@ -85,13 +86,15 @@ function check(
   family: "ZImagePipeline" | "ChromaPipeline" | "StableDiffusionXLPipeline",
   body: unknown,
   adaptersDir: string | null = null,
+  controlnetsDir: string | null = null,
 ): string {
   return rules(`
 import json
 body = json.loads(${JSON.stringify(JSON.stringify(body))})
 adapters_dir = json.loads(${JSON.stringify(JSON.stringify(adaptersDir))})
+controlnets_dir = json.loads(${JSON.stringify(JSON.stringify(controlnetsDir))})
 try:
-    print(json.dumps(check_request(FAMILIES["${family}"], body, adapters_dir), sort_keys=True))
+    print(json.dumps(check_request(FAMILIES["${family}"], body, adapters_dir, controlnets_dir), sort_keys=True))
 except RequestError as e:
     print("ERROR", e.status, e)
 `);
@@ -176,6 +179,9 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
       output_format: "png",
       lora: null,
       lora_scale: 1.0,
+      controlnet: null,
+      control_image: null,
+      control_scale: 1.0,
     });
     const chroma = JSON.parse(check("ChromaPipeline", { prompt: "a cat", seed: 7 }));
     expect([chroma.steps, chroma.guidance]).toEqual([40, 3.0]);
@@ -264,9 +270,83 @@ print(adapter_names(os.path.join(d, "missing")))
     expect(out.split("\n")).toEqual(["['a', 'b']", "[]"]);
   });
 
+  it("takes a ControlNet with its image and scale, only for SDXL, only from a folder", () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "control-")));
+    const pose = path.join(dir, "pose.png");
+    fs.writeFileSync(pose, "png");
+    const family = "StableDiffusionXLPipeline";
+    const out = JSON.parse(
+      check(
+        family,
+        { prompt: "a cat", controlnet: "scribble", control_image: pose, control_scale: 0.8 },
+        null,
+        "/c",
+      ),
+    );
+    expect([out.controlnet, out.control_image, out.control_scale]).toEqual(["scribble", pose, 0.8]);
+    const unscaled = JSON.parse(
+      check(family, { prompt: "a cat", controlnet: "scribble", control_image: pose }, null, "/c"),
+    );
+    expect(unscaled.control_scale).toBe(1.0);
+    expect(check(family, { prompt: "a cat", controlnet: "scribble" }, null, "/c")).toBe(
+      "ERROR 400 controlnet and control_image go together: the ControlNet's name, and the image it conditions the generation on.",
+    );
+    expect(check(family, { prompt: "a cat", control_scale: 1 }, null, "/c")).toBe(
+      "ERROR 400 control_scale needs controlnet: it says how strongly to apply it.",
+    );
+    expect(check(family, { prompt: "a cat", controlnet: "scribble", control_image: pose })).toBe(
+      "ERROR 400 This server has no ControlNets folder. Set client.controlnetsDir in agency.json to the folder your ControlNets are in, and start the server again.",
+    );
+    expect(
+      check(family, { prompt: "a cat", controlnet: "../x", control_image: pose }, null, "/c"),
+    ).toBe(
+      "ERROR 400 controlnet must be a ControlNet's name: its folder in the ControlNets folder, such as \"sketch\" for sketch/. Got '../x'.",
+    );
+    expect(
+      check(
+        family,
+        { prompt: "a cat", controlnet: "scribble", control_image: "pose.png" },
+        null,
+        "/c",
+      ),
+    ).toBe("ERROR 400 control_image: image must be an absolute path. Got 'pose.png'.");
+    expect(
+      check(
+        family,
+        { prompt: "a cat", controlnet: "scribble", control_image: pose, control_scale: 5 },
+        null,
+        "/c",
+      ),
+    ).toBe(
+      "ERROR 400 control_scale must be a number from 0 to 2.0. 1 applies it as the model card says.",
+    );
+    expect(
+      check(
+        "ChromaPipeline",
+        { prompt: "a cat", controlnet: "s", control_image: pose },
+        null,
+        "/c",
+      ),
+    ).toBe("ERROR 400 Chroma does not take a ControlNet. Leave controlnet empty.");
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("lists the ControlNets in a folder: the subfolders with a config.json", () => {
+    const out = rules(`
+import os, tempfile
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "scribble")); open(os.path.join(d, "scribble", "config.json"), "w").close()
+os.makedirs(os.path.join(d, "junk"))
+open(os.path.join(d, "note.txt"), "w").close()
+print(controlnet_names(d))
+print(controlnet_names(os.path.join(d, "missing")))
+`);
+    expect(out.split("\n")).toEqual(["['scribble']", "[]"]);
+  });
+
   it("refuses a field it does not know, naming the ones it takes", () => {
     expect(check("ZImagePipeline", { prompt: "a cat", style: "vivid" })).toBe(
-      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, and lora_scale.",
+      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, and control_scale.",
     );
   });
 

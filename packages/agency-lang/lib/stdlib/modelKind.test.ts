@@ -75,6 +75,14 @@ describe("kindOfModelDir", () => {
     expect(kindOfModelDir(florence)).toBe("vision");
   });
 
+  it("says controlnet for a diffusers ControlNet directory", () => {
+    const controlnet = modelDir("cn", {
+      "config.json": { _class_name: "ControlNetModel" },
+      "diffusion_pytorch_model.safetensors": "x",
+    });
+    expect(kindOfModelDir(controlnet)).toBe("controlnet");
+  });
+
   it("says speech for a Qwen3-TTS config", () => {
     const tts = modelDir("tts", {
       "config.json": { model_type: "qwen3_tts", tts_model_type: "custom_voice" },
@@ -107,7 +115,7 @@ describe("isModelKind", () => {
     for (const kind of MODEL_KINDS) {
       expect(isModelKind(kind)).toBe(true);
     }
-    expect(isModelKind("controlnet")).toBe(false);
+    expect(isModelKind("lora")).toBe(false);
     expect(isModelKind(3)).toBe(false);
   });
 });

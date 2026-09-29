@@ -727,6 +727,34 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Finds the objects you name, tags what it sees, and writes captions. One model for boxes and words.",
   },
+  // ── ControlNets ────────────────────────────────────────────────────────
+  // Not served: `agency local download` puts one in client.controlnetsDir,
+  // and an SDXL image server loads it when a request names it with a
+  // control image. Sizes are the config and the one weights file kept.
+  "controlnet-scribble-sdxl": {
+    backend: "mlx",
+    uri: "mlx:xinsir/controlnet-scribble-sdxl-1.0",
+    params: "1.3B",
+    sizeBytes: 2502140339,
+    kind: "controlnet",
+    tags: [],
+    contextWindow: 77,
+    license: "apache-2.0",
+    description:
+      "Constrains an SDXL image to a rough line drawing: a stick figure becomes the pose. Give it a scribble as controlImage.",
+  },
+  "controlnet-openpose-sdxl": {
+    backend: "mlx",
+    uri: "mlx:xinsir/controlnet-openpose-sdxl-1.0",
+    params: "1.3B",
+    sizeBytes: 2502140339,
+    kind: "controlnet",
+    tags: [],
+    contextWindow: 77,
+    license: "apache-2.0",
+    description:
+      "Constrains an SDXL image to a rendered pose skeleton. Give it an OpenPose drawing as controlImage.",
+  },
 };
 
 /** The sampling a model card asks for, by the name a local call carries:

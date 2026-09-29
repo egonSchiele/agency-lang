@@ -193,6 +193,11 @@ describe("imageServeArgs", () => {
     const args = imageServeArgs("/x/s.py", "/m/dir", 9003, "/home/me/adapters");
     expect(args.slice(7)).toEqual(["--adapters-dir", "/home/me/adapters"]);
   });
+
+  it("passes the ControlNets folder when one is configured", () => {
+    const args = imageServeArgs("/x/s.py", "/m/dir", 9003, null, "/home/me/controlnets");
+    expect(args.slice(7)).toEqual(["--controlnets-dir", "/home/me/controlnets"]);
+  });
 });
 
 describe("speechServeArgs", () => {
@@ -659,6 +664,7 @@ describe("runServe", () => {
       env: {},
       configuredPython: undefined,
       adaptersDir: null,
+      controlnetsDir: null,
       useColor: false,
     };
   });
@@ -1136,6 +1142,23 @@ describe("runServe", () => {
     ]);
     expect(spawned[1]).not.toContain("--adapters-dir");
     await handle.close();
+  });
+
+  it("refuses to serve a ControlNet, naming where it is loaded from", async () => {
+    await expect(runServe(["controlnet-scribble-sdxl"], { port: 0 }, deps)).rejects.toThrow(
+      "controlnet-scribble-sdxl is a ControlNet, which is not served: an SDXL image server loads it from client.controlnetsDir when a request names it. Serve the image model instead.",
+    );
+    const dir = path.join(cacheDir, "cn");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "config.json"),
+      JSON.stringify({ _class_name: "ControlNetModel" }),
+    );
+    fs.writeFileSync(path.join(dir, "diffusion_pytorch_model.safetensors"), "x");
+    await expect(runServe([dir], { port: 0 }, deps)).rejects.toThrow(
+      `${dir} is a ControlNet directory, which is not served`,
+    );
+    expect(spawned).toEqual([]);
   });
 
   it("serves a diffusers model named without a flag, reading its kind from its files", async () => {

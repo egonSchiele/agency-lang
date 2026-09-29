@@ -80,7 +80,7 @@ describe("name resolution", () => {
 
 describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, a kind, and tags", () => {
-    const validKinds = new Set(["chat", "embedding", "speech", "image", "vision"]);
+    const validKinds = new Set(["chat", "embedding", "speech", "image", "vision", "controlnet"]);
     const validTags = new Set(["coding", "reasoning", "writing", "science", "uncensored"]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);

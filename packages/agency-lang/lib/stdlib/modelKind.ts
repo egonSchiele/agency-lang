@@ -4,10 +4,22 @@ import { modelDirEntries, readModelJson } from "./modelBackend.js";
  *  script runs it, which route serves it, and which stdlib function calls
  *  it. What a model is good for (coding, reasoning, illustration) is not a
  *  kind; that is a tag on its catalog entry. */
-export type ModelKind = "chat" | "embedding" | "speech" | "image" | "vision";
+export type ModelKind = "chat" | "embedding" | "speech" | "image" | "vision" | "controlnet";
 
 /** In the order `list` shows them. */
-export const MODEL_KINDS: ModelKind[] = ["chat", "embedding", "speech", "image", "vision"];
+export const MODEL_KINDS: ModelKind[] = [
+  "chat",
+  "embedding",
+  "speech",
+  "image",
+  "vision",
+  "controlnet",
+];
+
+/** The class a diffusers ControlNet directory names in its config.json. A
+ *  ControlNet is not served: an image server loads it from
+ *  `client.controlnetsDir` when a request names it. */
+export const CONTROLNET_CLASS = "ControlNetModel";
 
 export function isModelKind(value: unknown): value is ModelKind {
   return typeof value === "string" && MODEL_KINDS.includes(value as ModelKind);
@@ -56,6 +68,10 @@ const KIND_RULES: KindRule[] = [
   {
     kind: "image",
     matches: (facts) => IMAGE_PIPELINES.includes(String(facts.modelIndex?._class_name)),
+  },
+  {
+    kind: "controlnet",
+    matches: (facts) => facts.config?._class_name === CONTROLNET_CLASS,
   },
   {
     // Before the chat rule: Florence-2's class ends in ForConditionalGeneration too.

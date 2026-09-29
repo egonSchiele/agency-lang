@@ -1,3 +1,6 @@
+import * as path from "node:path";
+import * as os from "node:os";
+import * as fs from "node:fs";
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
@@ -245,6 +248,9 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
+        "",
+        "",
+        null,
       );
       expect(r.success).toBe(true);
       expect(r.success && r.value).toEqual({
@@ -282,6 +288,9 @@ describe("_generateImageLocal", () => {
         "webp",
         "",
         null,
+        "",
+        "",
+        null,
       );
       expect(r.success && r.value.mimeType).toBe("image/webp");
       expect(requests[0]).toMatchObject({
@@ -309,6 +318,9 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
+        "",
+        "",
+        null,
       );
       expect(r.success === false && r.error).toBe(
         "generateImageLocal failed: steps must be between 1 and 50 for Z-Image Turbo.",
@@ -333,6 +345,9 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
+        "",
+        "",
+        null,
       );
       expect(r.success === false && r.error).toBe(
         "generateImageLocal failed: no local model server answered at http://127.0.0.1:9/v1. Start one with:\n  agency local serve --image z-image-turbo",
@@ -354,6 +369,9 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
+        "",
+        "",
+        null,
       );
       expect(mlx.success === false && mlx.error).toMatch(
         /is an MLX model\. Local image models are diffusers models/,
@@ -369,6 +387,9 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
+        "",
+        "",
+        null,
       );
       expect(gguf.success === false && gguf.error).toMatch(/is a GGUF model/);
       const gif = await _generateImageLocal(
@@ -380,6 +401,9 @@ describe("_generateImageLocal", () => {
         null,
         "",
         "gif",
+        "",
+        null,
+        "",
         "",
         null,
       );
@@ -397,12 +421,81 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
+        "",
+        "",
+        null,
       );
       expect(empty.success === false && empty.error).toBe(
         "generateImageLocal failed: prompt cannot be empty.",
       );
       expect(requests).toEqual([]);
     });
+  });
+
+  it("sends the ControlNet, its image as a real path, and its scale, and refuses one without the other", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "control-")));
+    const pose = path.join(dir, "pose.png");
+    fs.writeFileSync(pose, "png");
+    serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "a cat",
+        "diffusers:Laxhar/noobai-XL-1.1",
+        "1024x1024",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+        "scribble",
+        pose,
+        0.8,
+      );
+      expect(r.success).toBe(true);
+      expect(requests[0]).toMatchObject({
+        controlnet: "scribble",
+        control_image: pose,
+        control_scale: 0.8,
+      });
+      const half = await _generateImageLocal(
+        "a cat",
+        "diffusers:Laxhar/noobai-XL-1.1",
+        "1024x1024",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+        "scribble",
+        "",
+        null,
+      );
+      expect(half.success === false && half.error).toBe(
+        "generateImageLocal failed: controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
+      );
+      const missing = await _generateImageLocal(
+        "a cat",
+        "diffusers:Laxhar/noobai-XL-1.1",
+        "1024x1024",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+        "scribble",
+        path.join(dir, "nope.png"),
+        null,
+      );
+      expect(missing.success === false && missing.error).toMatch(/no such file/);
+      expect(requests).toHaveLength(1);
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it("sends the adapter name and scale when a LoRA is asked for", async () => {
@@ -419,6 +512,9 @@ describe("_generateImageLocal", () => {
         "png",
         "sketch",
         0.8,
+        "",
+        "",
+        null,
       );
       expect(r.success).toBe(true);
       expect(requests[0]).toMatchObject({
@@ -439,6 +535,9 @@ describe("_generateImageLocal", () => {
         7,
         "",
         "png",
+        "",
+        null,
+        "",
         "",
         null,
       );

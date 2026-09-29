@@ -721,7 +721,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 512,
     license: "apache-2.0",
     description:
-      "Small and fast, for Macs with less memory: 4 steps per image. Safety fine-tuned. Time per image not measured yet.",
+      "Small and fast, for Macs with less memory: 4 steps per image. Also edits a picture from an instruction, with generateImageLocal's images. Safety fine-tuned. Time per image not measured yet.",
   },
   // ── Vision ──────────────────────────────────────────────────────────────
   // Served by lib/cli/visionServer.py. The mlx: URI names the repo the

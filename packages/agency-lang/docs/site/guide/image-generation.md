@@ -205,7 +205,7 @@ The catalog includes:
 | `z-image-turbo` | Fast, photorealistic images | 32.8 GB |
 | `chroma1-hd` | Detailed, cinematic images | 27.5 GB |
 | `qwen-image-2512` | Images containing text, such as signs and posters | 57.7 GB |
-| `flux2-klein-4b` | Generation in four steps, with a smaller download | 16.0 GB |
+| `flux2-klein-4b` | Generation in four steps, with a smaller download. Also edits pictures. | 16.0 GB |
 
 For a sense of speed, a 1024×1024 image took about 8 seconds with
 Z-Image Turbo and 90 seconds with Chroma on an M5 Ultra. Peak memory use
@@ -273,8 +273,10 @@ agency run --approve std::writeBinary lighthouse.agency
 `generateImageLocal` returns a `Result` containing `base64`, `mimeType`,
 and `seed` on success. This generation call needs no approval. Saving
 the image requires `std::writeBinary` approval, which the command grants.
-A call that reads a ControlNet drawing also requires `std::readImage`
-approval, as described [below](#pose-an-image-with-a-controlnet).
+A call that reads a ControlNet drawing or a picture to edit also requires
+`std::readImage` approval, as described in
+[Pose an image with a ControlNet](#pose-an-image-with-a-controlnet) and
+[Edit an image on your Mac](#edit-an-image-on-your-mac).
 
 If the model is not running, the failure message includes the
 `agency local serve` command you need.
@@ -300,7 +302,7 @@ settings the same.
 |---|---|---|
 | `prompt` | Required | Describe the image to generate. |
 | `model` | Required | Choose a catalog name, a `diffusers:` URI, or a model directory. |
-| `size` | `"1024x1024"` | Set the width and height in pixels. |
+| `size` | Empty | Set the width and height in pixels. Empty makes a 1024x1024 image, or keeps the shape of a picture you are editing. |
 | `steps` | Model default | Set the number of refinement passes. More steps take longer. |
 | `guidance` | Model default | Adjust how closely the image follows the prompt. |
 | `seed` | Random | Control the randomness used for generation. The result includes the seed used. |
@@ -324,8 +326,8 @@ Start with the model's defaults for steps and guidance:
 Z-Image Turbo and FLUX.2 klein reject requests that specify guidance or a
 nonempty negative prompt. Leave those arguments out when using either model.
 
-The following sections cover the additional parameters for LoRA adapters
-and ControlNets.
+The following sections cover the additional parameters for LoRA adapters,
+ControlNets, and editing pictures.
 
 ## Style images with a LoRA adapter
 
@@ -627,6 +629,135 @@ space with black, so a 4:3 drawing in a square image has bands above and below.
 
 You can combine a ControlNet with a LoRA adapter by passing both
 `controlnet` and `lora` in the same call.
+
+## Edit an image on your Mac
+
+FLUX.2 [klein] can edit a picture from an instruction. You give it a
+picture and say what to change, such as "add a red top hat to the fox".
+It draws a new image that follows the instruction and copies the rest
+from your picture. Your picture stays on your Mac.
+
+Download and serve the model:
+
+```bash
+agency local download flux2-klein-4b
+agency local serve flux2-klein-4b
+```
+
+Save this program as `edit-fox.agency`:
+
+```ts
+import { generateImageLocal } from "std::image"
+
+node main() {
+  const result = generateImageLocal(
+    "add a red top hat to the fox",
+    "flux2-klein-4b",
+    images: ["fox.png"],
+    seed: 7,
+  )
+  if (isFailure(result)) {
+    print("editing failed: ${result.error}")
+    return
+  }
+  writeBinary("fox-hat.png", result.value.base64)
+  print("made with seed ${result.value.seed}")
+}
+```
+
+Run it in a second terminal:
+
+```bash
+agency run --approve std::readImage --approve std::writeBinary edit-fox.agency
+```
+
+Reading `fox.png` requires `std::readImage` approval, and saving the
+result requires `std::writeBinary` approval. The command grants both.
+Use `--interactive` instead to review each file. If you reject the read,
+the function returns a failure and sends nothing to the image server.
+
+### Choose the size
+
+Leave `size` empty and the result keeps the shape of the first picture,
+at one megapixel or less. A 4000x3000 photo from a phone becomes a
+1168x880 image. A small picture is never scaled up, so a 300x300 picture
+becomes a 288x288 image. Pass `size` to choose the width and height
+yourself. The call fails without one when the picture is too small or
+too narrow to take a shape from, such as a 200x1000 picture.
+
+A picture must be at least 64 pixels on each side, and at most 8 times
+as long as it is wide.
+
+### Edit with more than one picture
+
+You can pass up to 4 pictures. The prompt can refer to each one:
+
+```ts
+const result = generateImageLocal(
+  "put the fox from the first picture in the forest from the second",
+  "flux2-klein-4b",
+  images: ["fox.png", "forest.png"],
+  size: "1344x768",
+)
+```
+
+Each picture raises its own `std::readImage` interrupt. Every picture is
+approved before any of them is read. Each extra picture makes the edit
+slower and uses more memory.
+
+Only FLUX.2 [klein] takes `images`. Another model refuses the request
+with a message naming the models that take them. You cannot combine
+`images` with a ControlNet in one call.
+
+### Let an agent edit pictures
+
+This agent gives a model a tool that edits a picture and saves the
+result:
+
+```ts
+import { generateImageLocal } from "std::image"
+
+def editPicture(instruction: string, picture: string, outPath: string): string {
+  """
+  Edit a picture on this machine and save the result. Returns the path
+  written.
+
+  @param instruction - What to change, such as "add a red top hat"
+  @param picture - The path of the picture to edit
+  @param outPath - Where to save the edited picture, ending in .png
+  """
+  const edited = generateImageLocal(instruction, "flux2-klein-4b", images: [picture])
+  if (isFailure(edited)) {
+    return "The edit failed: ${edited.error}"
+  }
+  const written = writeBinary(outPath, edited.value.base64)
+  if (isFailure(written)) {
+    return "The edit could not be saved: ${written.error}"
+  }
+  return outPath
+}
+
+node main() {
+  const request = "Give the fox a red top hat and save it as fox-hat.png."
+  const picture = "fox.png"
+  const reply = llm(
+    "${request}\n\nThe picture is at ${picture}.",
+    tools: [editPicture],
+  )
+  print(reply)
+}
+```
+
+The model reads the request and the picture's path, then calls
+`editPicture`. Run it with `--interactive` to see which file the tool
+reads and which file it writes before either happens. With a local chat
+model, such as `agency run --local qwen3.5-2b --interactive edit-agent.agency`,
+nothing leaves your Mac.
+
+The tool saves the image and returns its path. If the model called
+`generateImageLocal` directly, the tool result would be megabytes of
+base64 text that the model cannot view as a picture, and nothing would
+save the image.
 
 ## Limitations
 

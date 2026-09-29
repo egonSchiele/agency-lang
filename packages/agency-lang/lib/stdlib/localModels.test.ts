@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { createHash } from "node:crypto";
 import { startFakeHub } from "./__tests__/fakeHub.js";
-import { readMlxModelRecord, isMlxModelComplete } from "./mlxModelRecord.js";
+import { readMlxModelRecord, writeMlxModelRecord, isMlxModelComplete } from "./mlxModelRecord.js";
 import {
   CURATED_LOCAL_MODELS,
   _resolveModelName,
@@ -40,6 +40,7 @@ import {
   isDiffusersDir,
   modelDirEntries,
   _modelFilesOnDisk,
+  _modelKind,
 } from "./localModels.js";
 import { formatModelCatalog, formatLocalList } from "./localModelList.js";
 
@@ -1457,6 +1458,93 @@ describe("companion downloads", () => {
     } finally {
       await hub.close();
     }
+  });
+});
+
+describe("model kinds", () => {
+  const CAUSAL = JSON.stringify({ architectures: ["Qwen3ForCausalLM"] });
+  const ENCODER = JSON.stringify({ architectures: ["Qwen3Model"] });
+
+  /** A model directory under the models directory, with a config.json and,
+   *  when `kind` is given, a record that says it. */
+  function modelWithRecord(name: string, config: string, kind?: "chat" | "speech" | "embedding") {
+    const model = path.join(dir, "mlx", name);
+    fs.mkdirSync(model, { recursive: true });
+    fs.writeFileSync(path.join(model, "config.json"), config);
+    writeMlxModelRecord(model, {
+      repo: name,
+      revision: "abc",
+      files: {},
+      ...(kind === undefined ? {} : { kind }),
+    });
+    return model;
+  }
+
+  it("_modelKind takes the catalog over the record, and the record over the files", () => {
+    // Orpheus has a Llama config, so its files say chat. The catalog knows
+    // it is a speech model, and wins even over a record that says chat.
+    const orpheus = modelWithRecord("orpheus", '{"model_type":"llama"}', "chat");
+    expect(_modelKind("mlx:mlx-community/orpheus-3b-0.1-ft-4bit", orpheus)).toBe("speech");
+    expect(_modelKind("orpheus-3b-mlx", orpheus)).toBe("speech");
+    // No catalog entry: the record beats the files.
+    const recorded = modelWithRecord("recorded", CAUSAL, "embedding");
+    expect(_modelKind("mlx:org/recorded", recorded)).toBe("embedding");
+    // No record kind: the files decide.
+    const unrecorded = modelWithRecord("unrecorded", ENCODER);
+    expect(_modelKind("mlx:org/unrecorded", unrecorded)).toBe("embedding");
+    // Nothing knows, including for a directory that is not there.
+    expect(_modelKind("mlx:org/unknown", modelWithRecord("unknown", "{}"))).toBeNull();
+    expect(_modelKind("mlx:org/missing", path.join(dir, "missing"))).toBeNull();
+  });
+
+  it("readMlxModelRecord keeps a kind it knows and drops one it does not", () => {
+    const model = path.join(dir, "rec");
+    fs.mkdirSync(model);
+    const write = (kind: string) =>
+      fs.writeFileSync(
+        path.join(model, ".agency-model.json"),
+        JSON.stringify({ repo: "org/rec", revision: "abc", files: {}, kind }),
+      );
+    write("speech");
+    expect(readMlxModelRecord(model)?.kind).toBe("speech");
+    write("vision");
+    const record = readMlxModelRecord(model);
+    expect(record?.repo).toBe("org/rec");
+    expect(record?.kind).toBeUndefined();
+  });
+
+  const FILES = (config: string) => [
+    { path: "config.json", bytes: Buffer.from(config) },
+    { path: "model.safetensors", bytes: Buffer.alloc(1500, 7) },
+  ];
+
+  it("a download records the kind its files say, or the kind it was given", async () => {
+    const hub = await startFakeHub(["org/enc", "org/odd"], FILES(ENCODER));
+    try {
+      const opts = { hubUrl: hub.baseUrl, allowHttp: true };
+      const enc = await _downloadModel("mlx:org/enc", dir, opts);
+      expect(readMlxModelRecord(enc)?.kind).toBe("embedding");
+      // --kind overrides what the files say.
+      const odd = await _downloadModel("mlx:org/odd", dir, { ...opts, kind: "speech" });
+      expect(readMlxModelRecord(odd)?.kind).toBe("speech");
+      expect(_modelKind("mlx:org/odd", odd)).toBe("speech");
+    } finally {
+      await hub.close();
+    }
+  });
+
+  it("download refuses --kind for a directory or a GGUF model, which keep no record", async () => {
+    const model = path.join(dir, "m");
+    fs.mkdirSync(model);
+    fs.writeFileSync(path.join(model, "config.json"), "{}");
+    fs.writeFileSync(path.join(model, "model.safetensors"), "");
+    await expect(_downloadModel(model, dir, { kind: "embedding" })).rejects.toThrow(
+      `${model} is a directory, and --kind is only recorded for a download. ` +
+        `Name its kind when serving it instead, for example: agency local serve --embedding ${model}`,
+    );
+    await expect(_downloadModel("hf:o/tiny:Q4", dir, { kind: "chat" })).rejects.toThrow(
+      "hf:o/tiny:Q4 is a GGUF model, which is always a chat model. Download it without --kind.",
+    );
   });
 });
 

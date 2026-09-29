@@ -186,8 +186,9 @@ agency local serve [model]... [--port 8080] [--max-tokens 16384] [--python <path
 ```
 
 **With no model named**, `localServe` asks. `serveChoices` in
-`lib/cli/localServe.ts` keeps the `mlx` entries of `_listDownloadedModels`
-that are complete, and offers them as `mlx:<repo>` in a multiselect, the way
+`lib/cli/localServe.ts` keeps the `mlx` and `diffusers` entries of
+`_listDownloadedModels` that are complete and have a known kind, and
+offers them as `<backend>:<repo>` in a multiselect, the way
 `agency local download` offers the catalog. What "complete" means depends on
 the layout: an `agency` model has a record saying every file arrived, while a
 `hub` model is complete because the snapshot it points at is a model
@@ -317,8 +318,10 @@ v3, which Agency cannot ship.
 An embedding model is one whose kind is `embedding` (`local-models.md`,
 "Kinds"): the catalog says so for its entries, and an encoder's
 `config.json` says so for the rest. `serve` starts the embedding server
-for it with no flag; `--embedding` asserts the kind, and a chat model
-named with it is refused before anything loads. The front door needs no
+for it with no flag. `--embedding` gives the kind yourself, for an
+embedding model whose `config.json` names a `ForCausalLM` class and so
+reads as chat. A catalog chat model named with it is refused before
+anything loads. The front door needs no
 change, since it forwards by the `model` field at whatever path the
 request used. Readiness probes an embedding process with an embeddings
 request.
@@ -343,7 +346,7 @@ answers `POST /v1/audio/speech`:
 
 A Qwen3-TTS config says `speech`; an Orpheus config says `llama`, so only
 the catalog knows it is speech, which is why the catalog is consulted
-first. `--speech` asserts the kind the way `--embedding` does. A speech
+first. `--speech` gives the kind the way `--embedding` does. A speech
 process needs `mlx_audio` rather than `mlx_lm`,
 and it speaks once before opening its port, so readiness only probes
 `GET /health`. See `local-speech.md` for the script and its request rules.
@@ -355,9 +358,9 @@ which answers `POST /v1/images/generations`:
 
     agency local serve --image z-image-turbo
 
-The backend guards the flag, so an image model the catalog does not know is
-still refused without `--image`. The picker leaves image models out. An
-image process needs torch, diffusers, transformers, and accelerate. It
+The flag is optional: any diffusers directory is an image model, so
+`serve` starts the image server for one named without it, and the picker
+offers downloaded image models. An image process needs torch, diffusers, transformers, and accelerate. It
 generates once before opening its port, so readiness probes `GET /health`.
 See `local-images.md`.
 

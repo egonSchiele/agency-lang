@@ -41,10 +41,6 @@ export function formatLocalList(args: {
 }): string {
   const byName = Object.fromEntries(args.files.map((f) => [f.name, f]));
   const byPath = Object.fromEntries(args.files.map((f) => [f.path, f]));
-  // A catalog row's kind is its category's; a file's is what its record
-  // or its contents say. Rows come out in kind order, chat first, so the
-  // models that answer one question sit together.
-  const kindOfEntry = (e: ModelNameEntry): ModelKind | undefined => kindOfCategory(e.category);
   const kindOrder = (kind: ModelKind | undefined): number =>
     kind === undefined ? MODEL_KINDS.length : MODEL_KINDS.indexOf(kind);
   // The file on disk that backs a catalog row, if any. A GGUF row goes
@@ -69,6 +65,12 @@ export function formatLocalList(args: {
     }
     return copies.find((f) => (f.revision ?? "").startsWith(revision));
   };
+  // A catalog row's kind is its category's. A plain alias has no category,
+  // so its kind is what its downloaded files say, when they are here. Rows
+  // come out in kind order, chat first, so the models that answer one
+  // question sit together.
+  const kindOfEntry = (e: ModelNameEntry): ModelKind | undefined =>
+    kindOfCategory(e.category) ?? fileFor(e)?.kind;
   const wanted = args.entries.filter(
     (e) => args.kind === undefined || kindOfEntry(e) === args.kind,
   );

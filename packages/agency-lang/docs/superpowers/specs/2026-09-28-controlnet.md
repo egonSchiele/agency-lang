@@ -11,10 +11,13 @@ LoRA loading, and not in the training package.
    `client.adaptersDir`. Each entry is a directory holding a diffusers
    ControlNet (`config.json` plus `diffusion_pytorch_model.safetensors`),
    named by the directory name.
-2. Two request fields on `/v1/images/generations`: `controlnet`, a name
-   in that folder, and `controlImage`, the path of an image to condition
-   on; and `controlScale`, 0 to 2, how strongly.
-3. The same three named arguments on `generateImageLocal`.
+2. Request fields on `/v1/images/generations`: `controlnet`, a name in
+   that folder; `control_image`, the bytes of an image to condition on,
+   base64-encoded; `control_scale`, 0 to 2, how strongly; and
+   `control_invert`, whether to swap black and white first.
+3. The matching named arguments on `generateImageLocal`: `controlnet`,
+   `controlImage` (a path, read by the stdlib), `controlScale`, and
+   `invertControlImage`.
 4. A family flag, `takes_controlnet`, on SDXL only, and a second
    pipeline class for the family: `StableDiffusionXLControlNetPipeline`
    when a request names a ControlNet, the plain pipeline otherwise. Both
@@ -31,20 +34,21 @@ LoRA loading, and not in the training package.
       controlScale: 0.8,
     )
 
-`controlImage` is a path, read by the server the way the vision server
-reads an image: absolute, a regular file, no symlink, once through a
-descriptor. It is the one file a generation request may name, and it
-becomes a second field in the interrupt `generateImageLocal` does not
-raise today. That is the change with the most weight: today a local
-generation raises nothing because it reads nothing. With a control
-image it reads one file the caller named, so the call raises
-`std::readImage` for that file, with the real spelling in the payload,
-before the request is sent. A call with no `controlImage` raises
-nothing, as now.
+`controlImage` is a path, and the stdlib reads it, never the server.
+That is the change with the most weight: today a local generation
+raises nothing because it reads nothing. With a control image it reads
+one file the caller named, so the call raises `std::readImage` for that
+file, with the real spelling in the payload, before the request is
+sent. After approval the TypeScript side reads the file through the
+contained-files module, refusing a symlink and a file over 50 MB, and
+sends its bytes as base64. The server decodes them and never opens a
+path a request wrote. A call with no `controlImage` raises nothing, as
+now.
 
 `controlnet` and `controlImage` go together: one without the other is
-refused with a message saying so. `controlScale` without `controlnet` is
-refused like `lora_scale` without `lora`.
+refused with a message saying so, before the approval is asked for.
+`controlScale` or `invertControlImage` without `controlnet` is refused
+by the server like `lora_scale` without `lora`.
 
 ## The models
 
@@ -67,16 +71,24 @@ estimator is the vision spec's "later".
 ## Preprocessing
 
 A ControlNet wants its conditioning image in a particular form: scribble
-wants black lines on white at the generation's size, openpose wants the
-skeleton rendering. The server resizes the control image to the request's
-size and inverts a white-on-black scribble to black-on-white, and does
-nothing else. Edge detection, depth, and pose extraction are what the
+wants white lines on black at the generation's size, openpose wants the
+skeleton rendering. The server does two things and nothing else:
+
+1. It inverts the image when the request sets `control_invert`, for a
+   drawing made with dark lines on white. Nothing is inferred from the
+   ControlNet's name or the image's brightness.
+2. It scales the image to fit the request's size with its aspect ratio
+   kept, centered on black. It never stretches it.
+ Edge detection, depth, and pose extraction are what the
 vision server is for, and are not folded in here.
 
 ## Tests
 
-The rules module: the field pairing, the scale range, the family flag,
-the path rules on `controlImage`. The provider: the three fields sent
-only when set. `generateImageLocal`: the effect raised only with a
-control image, with the real spelling. Live: one scribble generation
+The rules module: the field pairing, the scale range, the invert flag,
+the family flag, the base64 and size rules on `control_image`, the
+letterbox geometry, and the ControlNet folder checks, symlinks included.
+The provider: the fields sent only when set, and the file's bytes sent
+in place of its path. `generateImageLocal`, in an agency-js test: the
+effect raised only with a control image, with the real spelling, and
+no request sent when it is rejected. Live: one scribble generation
 against NoobAI-XL in the opt-in image test.

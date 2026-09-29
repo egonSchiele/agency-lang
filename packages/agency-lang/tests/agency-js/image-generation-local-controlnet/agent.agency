@@ -1,0 +1,39 @@
+// generateImageLocal with a ControlNet, against a stand-in for
+// `agency local serve --image` that test.js starts. No model and no
+// network are used. The nodes have no handlers, so std::readImage reaches
+// test.js, which approves or rejects it.
+import { generateImageLocal } from "std::image"
+
+const model = "diffusers:Laxhar/noobai-XL-1.1"
+
+node withControl(image: string) {
+  const r = generateImageLocal(
+    "a cat jumping",
+    model,
+    seed: 7,
+    controlnet: "scribble",
+    controlImage: image,
+    controlScale: 0.8,
+    invertControlImage: true,
+  )
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}
+
+node withoutControl() {
+  const r = generateImageLocal("a cat", model, seed: 7)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}
+
+node imageWithoutControlnet(image: string) {
+  const r = generateImageLocal("a cat", model, seed: 7, controlImage: image)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}

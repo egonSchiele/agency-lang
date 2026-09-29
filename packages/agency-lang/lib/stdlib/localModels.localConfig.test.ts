@@ -6,6 +6,7 @@ import {
   _aliasModel,
   _refreshCatalog,
   configuredAdaptersDir,
+  configuredControlnetsDir,
   defaultAliasTarget,
   readClientConfig,
   readModelAliases,
@@ -92,6 +93,23 @@ describe("configuredAdaptersDir", () => {
     expect(configuredAdaptersDir()).toBe("/models/adapters");
     write(inProject("agency.json"), { client: {} });
     expect(configuredAdaptersDir()).toBeNull();
+  });
+});
+
+describe("configuredControlnetsDir", () => {
+  it("takes a relative folder from the config file's folder, not the working directory", () => {
+    write(inProject("agency.json"), { client: { controlnetsDir: "./controlnets" } });
+    const src = inProject("src");
+    fs.mkdirSync(src);
+    process.chdir(src);
+    expect(configuredControlnetsDir()).toBe(inProject("controlnets"));
+  });
+
+  it("keeps an absolute folder, and is null when unset", () => {
+    write(inProject("agency.json"), { client: { controlnetsDir: "/models/controlnets" } });
+    expect(configuredControlnetsDir()).toBe("/models/controlnets");
+    write(inProject("agency.json"), { client: {} });
+    expect(configuredControlnetsDir()).toBeNull();
   });
 });
 

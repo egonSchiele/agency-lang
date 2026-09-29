@@ -113,7 +113,11 @@ export def generateImageLocal(
   format: string = "png",
   lora: string = "",
   loraScale: number | null = null,
-): Result<LocalImage> {
+  controlnet: string = "",
+  controlImage: string = "",
+  controlScale: number | null = null,
+  invertControlImage: boolean = false,
+): Result<LocalImage> raises <std::readImage> {
   """
   Generate an image on this machine with a local image model. The model
   must be running: start it with `agency local serve --image <model>`.
@@ -127,6 +131,17 @@ export def generateImageLocal(
   `lora: "sketch"` for sketch.safetensors. Only the request that names it
   gets it.
 
+  A ControlNet constrains the image to a drawing you give it: a stick
+  figure becomes the pose. Download one into client.controlnetsDir and
+  name it with `controlnet: "controlnet-scribble-sdxl"` and the drawing
+  with `controlImage`. The drawing is read from this machine, under
+  std::readImage, and never uploaded. It is scaled to fit `size` with its
+  shape kept, and centered on black: a 4:3 drawing in a square image
+  gets black bands above and below, and is never stretched.
+
+  The scribble ControlNet reads white lines on black. For a drawing made
+  with dark lines on white paper, pass `invertControlImage: true`.
+
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
   @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768"
@@ -137,7 +152,26 @@ export def generateImageLocal(
   @param format - "png", "jpeg", or "webp"
   @param lora - The file name, without .safetensors, of an adapter in the adapters folder (client.adaptersDir). Empty applies none
   @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
+  @param controlnet - The name of a ControlNet in client.controlnetsDir, its folder name. Empty applies none. Goes with controlImage
+  @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
+  @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
+  @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
   """
+  if ((controlnet == "") != (controlImage == "")) {
+    return failure("generateImageLocal failed: controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.")
+  }
+  let control = null
+  if (controlImage != "") {
+    const real = try _realTarget(controlImage)
+    if (isFailure(real)) {
+      return real
+    }
+    raise std::readImage("Read this drawing to condition the image on?", {
+      dir: dirname(real.value),
+      filename: basename(real.value),
+    })
+    control = { name: controlnet, image: real.value, scale: controlScale, invert: invertControlImage }
+  }
   return _generateImageLocal(
     prompt,
     model,
@@ -149,6 +183,7 @@ export def generateImageLocal(
     format,
     lora,
     loraScale,
+    control,
   )
 }
 

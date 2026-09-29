@@ -179,7 +179,11 @@ generateImageLocal(
   format: string = "png",
   lora: string = "",
   loraScale: number | null = null,
-): Result<LocalImage>
+  controlnet: string = "",
+  controlImage: string = "",
+  controlScale: number | null = null,
+  invertControlImage: boolean = false,
+): Result<LocalImage> raises <std::readImage>
 ```
 
 Generate an image on this machine with a local image model. The model
@@ -194,6 +198,17 @@ Generate an image on this machine with a local image model. The model
   `lora: "sketch"` for sketch.safetensors. Only the request that names it
   gets it.
 
+  A ControlNet constrains the image to a drawing you give it: a stick
+  figure becomes the pose. Download one into client.controlnetsDir and
+  name it with `controlnet: "controlnet-scribble-sdxl"` and the drawing
+  with `controlImage`. The drawing is read from this machine, under
+  std::readImage, and never uploaded. It is scaled to fit `size` with its
+  shape kept, and centered on black: a 4:3 drawing in a square image
+  gets black bands above and below, and is never stretched.
+
+  The scribble ControlNet reads white lines on black. For a drawing made
+  with dark lines on white paper, pass `invertControlImage: true`.
+
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
   @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768"
@@ -204,6 +219,10 @@ Generate an image on this machine with a local image model. The model
   @param format - "png", "jpeg", or "webp"
   @param lora - The file name, without .safetensors, of an adapter in the adapters folder (client.adaptersDir). Empty applies none
   @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
+  @param controlnet - The name of a ControlNet in client.controlnetsDir, its folder name. Empty applies none. Goes with controlImage
+  @param controlImage - The drawing the ControlNet conditions on: a scribble for a scribble ControlNet, a pose skeleton for openpose. Goes with controlnet
+  @param controlScale - How strongly the ControlNet constrains the image, from 0 to 2. Null is 1
+  @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
 
 **Parameters:**
 
@@ -219,8 +238,14 @@ Generate an image on this machine with a local image model. The model
 | format | `string` | "png" |
 | lora | `string` | "" |
 | loraScale | `number \| null` | null |
+| controlnet | `string` | "" |
+| controlImage | `string` | "" |
+| controlScale | `number \| null` | null |
+| invertControlImage | `boolean` | false |
 
 **Returns:** `Result<LocalImage>`
+
+**Throws:** `std::readImage`
 
 ([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L105))
 
@@ -261,7 +286,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L190))
 
 ### imageSize
 
@@ -283,7 +308,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L226))
 
 ### pasteImages
 
@@ -316,4 +341,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L243))

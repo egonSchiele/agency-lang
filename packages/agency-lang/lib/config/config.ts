@@ -221,6 +221,12 @@ export interface AgencyConfig {
      *  file name without the extension (`lora: "sketch"`). Relative to the
      *  folder the config file is in. Unset means no request may name an adapter. */
     adaptersDir: string;
+    /** The folder ControlNets are in, one diffusers directory each
+     *  (`config.json` and its `.safetensors`). A local image server loads
+     *  one the first time a request names it by folder name
+     *  (`controlnet: "scribble"`) with a `controlImage` to condition on.
+     *  `agency local download` puts a catalog ControlNet here. */
+    controlnetsDir: string;
     /** Where `agency local refresh` fetches the model catalog. Overridden by
      *  the `AGENCY_MODEL_CATALOG_URL` env var. Read at runtime. */
     modelCatalogUrl: string;
@@ -621,6 +627,7 @@ export const AgencyConfigSchema = z
         modelAliases: z.record(z.string(), ModelAliasSchema),
         modelsDir: z.string(),
         adaptersDir: z.string(),
+        controlnetsDir: z.string(),
         modelCatalogUrl: z.string(),
         mlx: z
           .object({

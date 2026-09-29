@@ -37,7 +37,7 @@ import {
   DEFAULT_CONCURRENCY,
   type DownloadOptions,
 } from "./hubDownload.js";
-import { fetchHubFileText, type HubSnapshot } from "./hubClient.js";
+import { fetchHubFileText, type HubFile, type HubSnapshot } from "./hubClient.js";
 import { diffusersFiles, hasModelIndex, MODEL_INDEX } from "./diffusersFiles.js";
 import { visionFiles } from "./visionFiles.js";
 export { fileSha256, verifyModelFile } from "./modelVerify.js";
@@ -97,19 +97,29 @@ export {
 import { isModelKind, kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
 export { MODEL_KINDS, isModelKind, type ModelKind } from "./modelKind.js";
 
-/** The folder LoRA adapters come from, `client.adaptersDir`, or null when
- *  it is not set. A relative path is taken from the folder the config file
- *  is in, not the working directory: `"./adapters"` in `myproject/agency.json`
- *  is `myproject/adapters` even when `agency local serve` runs in
+/** A folder the config names under `client`, or null when it is not set.
+ *  A relative path is taken from the folder the config file is in, not the
+ *  working directory: `"./adapters"` in `myproject/agency.json` is
+ *  `myproject/adapters` even when `agency local serve` runs in
  *  `myproject/src`. */
-export function configuredAdaptersDir(startDir: string = process.cwd()): string | null {
+function configuredFolder(key: "adaptersDir" | "controlnetsDir", startDir: string): string | null {
   const target = defaultAliasTarget(startDir);
-  const configured = readAliasConfig(target).client?.adaptersDir;
+  const configured = readAliasConfig(target).client?.[key];
   if (typeof configured !== "string" || configured.length === 0) {
     return null;
   }
   const configDir = target.kind === "file" ? path.dirname(target.path) : target.dir;
   return path.resolve(configDir, configured);
+}
+
+/** The folder LoRA adapters come from, `client.adaptersDir`. */
+export function configuredAdaptersDir(startDir: string = process.cwd()): string | null {
+  return configuredFolder("adaptersDir", startDir);
+}
+
+/** The folder ControlNets come from, `client.controlnetsDir`. */
+export function configuredControlnetsDir(startDir: string = process.cwd()): string | null {
+  return configuredFolder("controlnetsDir", startDir);
 }
 
 /** Where downloaded models live, in precedence order:
@@ -509,7 +519,42 @@ export function _listDownloadedModels(cacheDir: string = ""): DownloadedModel[] 
     ...servedEntries(dir, "mlx"),
     ...servedEntries(dir, "diffusers"),
     ...hubEntries(dir),
+    ...controlnetEntries(),
   ];
+}
+
+/** The ControlNets in `client.controlnetsDir`: every subfolder with a
+ *  record. They are listed with the models because they are downloaded
+ *  like them, though they are loaded by an image server rather than
+ *  served. */
+function controlnetEntries(): DownloadedModel[] {
+  const folder = configuredControlnetsDir();
+  if (folder === null) {
+    return [];
+  }
+  const parent = root(folder);
+  if (stat(parent, ".") === null) {
+    return [];
+  }
+  const out: DownloadedModel[] = [];
+  for (const entry of list(parent, ".")) {
+    const modelDir = path.join(folder, entry.name);
+    const record = entry.type === "dir" ? readMlxModelRecord(modelDir) : null;
+    if (record === null) {
+      continue;
+    }
+    out.push({
+      name: record.repo,
+      path: modelDir,
+      sizeBytes: Object.values(record.files).reduce((sum, f) => sum + f.size, 0),
+      backend: "diffusers",
+      complete: isMlxModelComplete(record),
+      revision: record.revision,
+      layout: "directory",
+      kind: "controlnet",
+    });
+  }
+  return out;
 }
 
 /** The Hugging Face cache directories under `dir`, and under `dir/hub` —
@@ -1291,6 +1336,39 @@ async function downloadServedRepo(
   return await downloadHubSnapshot(snapshot, dir, opts);
 }
 
+/** The files a ControlNet directory needs: its config and its
+ *  `.safetensors` weights. A repo also ships sample images and, for
+ *  some, a second copy of the weights under another name. */
+export function controlnetFiles(files: HubFile[]): HubFile[] {
+  return files.filter(
+    (f) => f.path === "config.json" || f.path === "diffusion_pytorch_model.safetensors",
+  );
+}
+
+/** Downloads a ControlNet into `client.controlnetsDir/<name>`, where an
+ *  image server finds it by that name. Refuses when no folder is
+ *  configured, since there is nowhere else a ControlNet is useful. */
+async function downloadControlnet(
+  value: string,
+  target: string,
+  opts: DownloadOptions,
+): Promise<string> {
+  const folder = configuredControlnetsDir();
+  if (folder === null) {
+    throw new Error(
+      `${value} is a ControlNet, which an image server loads from client.controlnetsDir. ` +
+        `Set that folder in agency.json, then download again.`,
+    );
+  }
+  const { repo, revision } = parseServedUri(target);
+  const snapshot = await fetchHubSnapshot(repo, revision, opts);
+  const name = isServedUri(value) ? repo.split("/")[1] : value;
+  const dir = path.join(folder, name);
+  await downloadHubSnapshot({ ...snapshot, files: controlnetFiles(snapshot.files) }, dir, opts);
+  recordKind(dir, "controlnet");
+  return dir;
+}
+
 /** A diffusers snapshot cut down to the files the pipeline reads. Reads
  *  model_index.json from the hub first, since it names the component
  *  folders; nothing is written until the whole list is known. */
@@ -1377,6 +1455,9 @@ export async function _downloadModel(
       token: hubOptions.token ?? process.env.HF_TOKEN,
     };
     const kind = givenKind ?? _catalogKind(value);
+    if (kind === "controlnet") {
+      return await downloadControlnet(value, model.target, opts);
+    }
     const dir = await downloadServedRepo(model.target, cacheDir, opts, kind);
     recordKind(dir, kind ?? _modelKind(value, dir));
     // A model that loads other repos by name at runtime needs them on disk

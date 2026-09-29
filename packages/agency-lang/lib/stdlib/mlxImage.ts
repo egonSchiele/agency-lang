@@ -57,7 +57,18 @@ export function localImageTimeoutMs(steps: unknown, size: string | undefined): n
 /** The settings `config.metadata` may carry, sent as request fields of the
  *  same names. Anything else in metadata is not sent: the server refuses
  *  fields it does not know. */
-const SETTINGS = ["steps", "guidance", "seed", "negative_prompt", "lora", "lora_scale"];
+const SETTINGS = [
+  "steps",
+  "guidance",
+  "seed",
+  "negative_prompt",
+  "lora",
+  "lora_scale",
+  "controlnet",
+  "control_image",
+  "control_scale",
+  "control_invert",
+];
 
 /** An image from the local server, with the seed that made it. */
 export type LocalGeneratedImage = ImageGenResult["images"][number] & { seed?: number };

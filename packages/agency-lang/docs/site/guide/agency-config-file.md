@@ -85,6 +85,7 @@ This is where you set your default model, provider, and API keys.
 | `providerModules` | Paths to custom smoltalk provider modules (e.g. a local model via `smoltalk-llama-cpp`). |
 | `modelAliases` / `modelsDir` | Short-name aliases and the cache directory for local models. |
 | `adaptersDir` | The folder LoRA adapters (`.safetensors` files) are in. A local image server loads one the first time a call names it: `generateImageLocal(..., lora: "sketch")` loads `sketch.safetensors` from this folder. A relative path is taken from the folder `agency.json` is in. |
+| `controlnetsDir` | The folder ControlNets are in, one directory each. `agency local download controlnet-scribble-sdxl` puts one here, and `generateImageLocal(..., controlnet: "controlnet-scribble-sdxl", controlImage: "./pose.png")` loads it. A relative path is taken from the folder `agency.json` is in. |
 | `llamaCpp.draftModel` | A smaller GGUF model of the same family that drafts tokens for the main one, which is speculative decoding. `agency run --local <model> --draft <model>` sets it for a run. |
 | `llamaCpp.chatWrapper` | The chat wrapper node-llama-cpp formats the model's prompts with, by its name (`qwen`, `gemma4`, `harmony`, `chatML`), for a model whose template it does not recognise. |
 

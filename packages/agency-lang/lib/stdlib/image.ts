@@ -9,6 +9,8 @@ import { _resolveModel, _mlxServedName, type ResolvedModel } from "./localModels
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 import { LOCAL_IMAGE_FORMATS, type LocalGeneratedImage } from "./mlxImage.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
+import { approvedFileBytes } from "./approvedPath.js";
+import { MAX_IMAGE_BYTES } from "./vision.js";
 
 /** Drop keys whose value is "" or undefined; keep numbers/objects. */
 function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -170,6 +172,36 @@ function checkLocalImageArgs(
   return { servedName: _mlxServedName(resolved) };
 }
 
+/** A ControlNet for one `generateImageLocal` call. `image` is the real
+ *  spelling of the drawing the Agency side raised std::readImage for. */
+export type LocalControl = {
+  name: string;
+  image: string;
+  scale: number | null;
+  invert: boolean;
+};
+
+/** The request fields for a ControlNet, with the drawing's bytes as
+ *  base64. The file is read here, after the approval, so the server never
+ *  opens a path a request wrote. `approvedFileBytes` refuses a symlink
+ *  that appeared while the prompt was pending, and a file over the size
+ *  the server takes. */
+function controlFields(control: LocalControl | null): Record<string, unknown> {
+  if (control === null) {
+    return {};
+  }
+  const bytes = approvedFileBytes(control.image, MAX_IMAGE_BYTES);
+  const fields: Record<string, unknown> = {
+    controlnet: control.name,
+    control_image: bytes.toString("base64"),
+    control_invert: control.invert,
+  };
+  if (control.scale !== null) {
+    fields.control_scale = control.scale;
+  }
+  return fields;
+}
+
 /** The settings a call gives, as the request fields the server takes. A
  *  null setting, or an empty negative prompt, is left out so the server
  *  uses the model card's value. */
@@ -205,11 +237,18 @@ export async function _generateImageLocal(
   format: string,
   lora: string,
   loraScale: number | null,
+  control: LocalControl | null,
 ): Promise<ResultValue> {
   const fail = (message: string) => failure(`generateImageLocal failed: ${message}`);
   const checked = checkLocalImageArgs(prompt, model, format);
   if ("error" in checked) {
     return fail(checked.error);
+  }
+  let controlled: Record<string, unknown>;
+  try {
+    controlled = controlFields(control);
+  } catch (err) {
+    return fail((err as Error).message);
   }
   const config: Partial<ImageConfig> = {
     model: checked.servedName,
@@ -217,7 +256,10 @@ export async function _generateImageLocal(
     size,
     outputFormat: format as ImageConfig["outputFormat"],
     n: 1,
-    metadata: localImageSettings(steps, guidance, seed, negativePrompt, lora, loraScale),
+    metadata: {
+      ...localImageSettings(steps, guidance, seed, negativePrompt, lora, loraScale),
+      ...controlled,
+    },
   };
   const out = await generateOne(prompt, prompt, config, checked.servedName);
   if ("error" in out) {

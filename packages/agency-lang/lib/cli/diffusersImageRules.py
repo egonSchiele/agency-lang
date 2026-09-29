@@ -8,6 +8,10 @@ Nothing here may import torch or diffusers. A test checks the imports.
 
 import os
 import random
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from localServerCommon import ImageDataError, image_bytes_of  # noqa: E402
 
 # The one diffusers release these rules and the server were written
 # against. The server refuses any other version, because it reaches into
@@ -54,6 +58,10 @@ FIELDS = [
     "n",
     "lora",
     "lora_scale",
+    "controlnet",
+    "control_image",
+    "control_scale",
+    "control_invert",
 ]
 
 # A request names a LoRA adapter by its file's name in the adapters folder
@@ -67,6 +75,14 @@ ADAPTER_EXTENSION = ".safetensors"
 # for style adapters suggest 0.5 to 1.2, and above 2 the image falls apart.
 MAX_LORA_SCALE = 2.0
 DEFAULT_LORA_SCALE = 1.0
+
+# A request names a ControlNet by its folder's name in the ControlNets
+# folder (`client.controlnetsDir`): a diffusers ControlNet directory with
+# these two files and nothing that is a symlink. How strongly it
+# constrains the image is control_scale, 1.0 as the model card says.
+CONTROLNET_FILES = ("config.json", "diffusion_pytorch_model.safetensors")
+MAX_CONTROL_SCALE = 2.0
+DEFAULT_CONTROL_SCALE = 1.0
 
 # How many adapters stay loaded at once. Two lets a user compare two
 # adapters without reloading either; more would hold GPU memory for
@@ -92,6 +108,10 @@ MAX_LOADED_ADAPTERS = 2
 #                    request may name one. Every family's pipeline can load
 #                    LoRA; only SDXL, the family people train adapters for,
 #                    has been tried with them.
+#   takes_controlnet True: a request may name a ControlNet and an image to
+#                    condition on, and controlnet_pipeline is the diffusers
+#                    class that runs the pair. Only SDXL: every catalog
+#                    ControlNet is an SDXL one.
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
@@ -109,6 +129,7 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
+        "takes_controlnet": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -128,6 +149,7 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
+        "takes_controlnet": False,
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -151,6 +173,7 @@ FAMILIES = {
         "guidance_arg": "true_cfg_scale",
         "default_negative_prompt": " ",
         "takes_lora": False,
+        "takes_controlnet": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
@@ -172,6 +195,7 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
+        "takes_controlnet": False,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3ForCausalLM"],
@@ -196,6 +220,8 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": True,
+        "takes_controlnet": True,
+        "controlnet_pipeline": "StableDiffusionXLControlNetPipeline",
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -379,24 +405,90 @@ def _format_of(body):
     return fmt
 
 
-def adapter_path(adapters_dir, name):
-    """The file the adapter `name` is, inside the folder. Raises RequestError
-    for a name that is not one plain file name: empty, a dot name, one with
-    a path separator, or one that already carries the extension.
-    existing_adapter checks the file itself."""
+def folder_entry(folder, name, field, what, extension):
+    """The path of the entry `name` inside a configured folder. Raises
+    RequestError for a name that is not one plain name: empty, a dot name,
+    one with a path separator, or one that already carries the extension.
+    Whether the entry exists is checked when it is loaded. The one rule
+    for adapters and ControlNets, so a request can never leave its folder."""
     bad = (
         not isinstance(name, str)
         or name in ("", ".", "..")
         or "/" in name
         or "\\" in name
-        or name.endswith(ADAPTER_EXTENSION)
+        or (extension != "" and name.endswith(extension))
     )
     if bad:
         raise RequestError(
-            f"lora must be an adapter's name: its file name in the adapters folder without "
-            f'{ADAPTER_EXTENSION}, such as "sketch" for sketch{ADAPTER_EXTENSION}. Got {name!r}.'
+            f'{field} must be {what}, such as "sketch" for sketch{extension or "/"}. Got {name!r}.'
         )
-    return os.path.join(adapters_dir, name + ADAPTER_EXTENSION)
+    return os.path.join(folder, name + extension)
+
+
+def adapter_path(adapters_dir, name):
+    """The file the adapter `name` is, inside the adapters folder.
+    existing_adapter checks the file itself."""
+    return folder_entry(
+        adapters_dir,
+        name,
+        "lora",
+        f"an adapter's name: its file name in the adapters folder without {ADAPTER_EXTENSION}",
+        ADAPTER_EXTENSION,
+    )
+
+
+def controlnet_path(controlnets_dir, name):
+    """The directory the ControlNet `name` is, inside the ControlNets folder."""
+    return folder_entry(
+        controlnets_dir, name, "controlnet", "a ControlNet's name: its folder in the ControlNets folder", ""
+    )
+
+
+def check_folder(folder, flag):
+    """A configured folder, the adapters or the ControlNets folder, once it
+    is known to be a directory and not a symlink, or None when none is
+    configured. Raises ValueError with the message to fail with, naming
+    the command-line flag."""
+    if folder is None:
+        return None
+    if os.path.islink(folder):
+        raise ValueError(f"{flag} {folder} is a symlink. Name the folder itself.")
+    if not os.path.isdir(folder):
+        raise ValueError(f"{flag} {folder} is not a folder.")
+    return folder
+
+
+def controlnet_problem(folder):
+    """Why the ControlNet directory `folder` cannot be loaded, or None when
+    it can. It must be a real directory holding CONTROLNET_FILES as regular
+    files, with no symlink anywhere inside it, since from_pretrained
+    follows links."""
+    if os.path.islink(folder):
+        return f"{folder} is a symlink, which this server does not follow."
+    if not os.path.isdir(folder):
+        return f"{folder} is not a folder."
+    for parent, dirs, files in os.walk(folder):
+        for entry in dirs + files:
+            path = os.path.join(parent, entry)
+            if os.path.islink(path):
+                return f"{path} is a symlink, which this server does not follow."
+    missing = [name for name in CONTROLNET_FILES if not os.path.isfile(os.path.join(folder, name))]
+    if missing:
+        return f"{folder} has no {join_names(missing)}."
+    return None
+
+
+def controlnet_names(controlnets_dir):
+    """The ControlNets in the folder, by name: the entries controlnet_problem
+    accepts, so the list holds exactly what a request can load. Read fresh
+    each time."""
+    try:
+        entries = os.listdir(controlnets_dir)
+    except OSError:
+        return []
+    return sorted(
+        entry for entry in entries if controlnet_problem(os.path.join(controlnets_dir, entry)) is None
+    )
 
 
 def _adapter_name_of(entry):
@@ -429,19 +521,6 @@ def adapter_names(adapters_dir):
         if name is not None and not os.path.islink(path) and os.path.isfile(path):
             names.append(name)
     return sorted(names)
-
-
-def check_adapters_dir(adapters_dir):
-    """The folder, once it is known to be a directory and not a symlink, or
-    None when none is configured. Raises ValueError with the message to
-    fail with."""
-    if adapters_dir is None:
-        return None
-    if os.path.islink(adapters_dir):
-        raise ValueError(f"--adapters-dir {adapters_dir} is a symlink. Name the folder itself.")
-    if not os.path.isdir(adapters_dir):
-        raise ValueError(f"--adapters-dir {adapters_dir} is not a folder.")
-    return adapters_dir
 
 
 def existing_adapter(adapters_dir, name):
@@ -567,17 +646,87 @@ def _check_unknown_fields(body):
         )
 
 
-def check_request(rules, body, adapters_dir=None):
+def _control_image_of(value):
+    """The bytes of the control image, from the request's base64. The
+    stdlib reads the file after the user approves it, so the server never
+    opens a path a request wrote."""
+    try:
+        return image_bytes_of(value)
+    except ImageDataError as err:
+        raise RequestError(f"control_image: {err}")
+
+
+def _controlnet_of(rules, body, controlnets_dir):
+    """The ControlNet part of a checked request: the name or None, the
+    image's bytes or None, the scale, and whether to invert the image. A
+    ControlNet and its image go together; one without the other is
+    refused, and so are a scale or an invert without them."""
+    name = body.get("controlnet")
+    image = body.get("control_image")
+    scale = body.get("control_scale")
+    invert = body.get("control_invert")
+    if name is None and image is None:
+        if scale is not None or invert is not None:
+            raise RequestError(
+                "control_scale and control_invert need controlnet: they say how to apply it."
+            )
+        return {
+            "controlnet": None,
+            "control_image": None,
+            "control_scale": DEFAULT_CONTROL_SCALE,
+            "control_invert": False,
+        }
+    if name is None or image is None:
+        raise RequestError(
+            "controlnet and control_image go together: the ControlNet's name, and the image "
+            "it conditions the generation on."
+        )
+    if not rules["takes_controlnet"]:
+        raise RequestError(f"{rules['label']} does not take a ControlNet. Leave controlnet empty.")
+    if controlnets_dir is None:
+        raise RequestError(
+            "This server has no ControlNets folder. Set client.controlnetsDir in agency.json to the "
+            "folder your ControlNets are in, and start the server again."
+        )
+    controlnet_path(controlnets_dir, name)
+    if scale is not None and (not _is_number(scale) or scale < 0 or scale > MAX_CONTROL_SCALE):
+        raise RequestError(
+            f"control_scale must be a number from 0 to {MAX_CONTROL_SCALE}. 1 applies it as the model card says."
+        )
+    if invert is not None and not isinstance(invert, bool):
+        raise RequestError("control_invert must be true or false.")
+    return {
+        "controlnet": name,
+        "control_image": _control_image_of(image),
+        "control_scale": DEFAULT_CONTROL_SCALE if scale is None else float(scale),
+        "control_invert": invert is True,
+    }
+
+
+def letterbox(source_width, source_height, width, height):
+    """Where a control image of the source size goes inside a width x height
+    canvas, keeping its aspect ratio: (scaled width, scaled height, left,
+    top). The image is scaled to fit and centered, and the rest of the
+    canvas is black, which a ControlNet reads as "no lines here"."""
+    scale = min(width / source_width, height / source_height)
+    fit_width = min(width, max(1, round(source_width * scale)))
+    fit_height = min(height, max(1, round(source_height * scale)))
+    return fit_width, fit_height, (width - fit_width) // 2, (height - fit_height) // 2
+
+
+def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     """The checked request, with the family's defaults filled in and a
-    random seed when none was given. `adapters_dir` is the folder LoRA
-    adapters come from, or None when none is configured. Raises
-    RequestError with a message that says what the model takes instead."""
+    random seed when none was given. `adapters_dir` and `controlnets_dir`
+    are the folders LoRA adapters and ControlNets come from, or None when
+    not configured. Raises RequestError with a message that says what the
+    model takes instead."""
     if not isinstance(body, dict):
         raise RequestError("The request body must be a JSON object.")
     _check_unknown_fields(body)
     _check_openai_fields(body)
     width, height = parse_size(body.get("size") or DEFAULT_SIZE)
     lora, lora_scale = _lora_of(rules, body, adapters_dir)
+    control = _controlnet_of(rules, body, controlnets_dir)
     return {
         "prompt": _prompt_of(body),
         "width": width,
@@ -589,6 +738,7 @@ def check_request(rules, body, adapters_dir=None):
         "output_format": _format_of(body),
         "lora": lora,
         "lora_scale": lora_scale,
+        **control,
     }
 
 

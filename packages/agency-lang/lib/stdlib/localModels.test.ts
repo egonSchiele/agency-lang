@@ -42,6 +42,7 @@ import {
   isDiffusersDir,
   modelDirEntries,
   _modelFilesOnDisk,
+  controlnetFiles,
   _modelKind,
 } from "./localModels.js";
 import { formatModelCatalog, formatLocalList } from "./localModelList.js";
@@ -81,7 +82,7 @@ describe("name resolution", () => {
 
 describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, a kind, and tags", () => {
-    const validKinds = new Set(["chat", "embedding", "speech", "image", "vision"]);
+    const validKinds = new Set(["chat", "embedding", "speech", "image", "vision", "controlnet"]);
     const validTags = new Set(["coding", "reasoning", "writing", "science", "uncensored"]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
@@ -1544,6 +1545,95 @@ describe("_downloadModel for mlx", () => {
     fs.writeFileSync(path.join(model, "config.json"), "{}");
     fs.writeFileSync(path.join(model, "model.safetensors"), "");
     await expect(_downloadModel(model, dir)).resolves.toBe(model);
+  });
+});
+
+describe("ControlNets", () => {
+  const REPO = "xinsir/controlnet-scribble-sdxl-1.0";
+  const WEIGHTS = Buffer.alloc(1500, 3);
+  const REPO_FILES = [
+    { path: "config.json", bytes: Buffer.from("{}") },
+    { path: "diffusion_pytorch_model.safetensors", bytes: WEIGHTS },
+    { path: "diffusion_pytorch_model_V2.safetensors", bytes: WEIGHTS },
+    { path: "masonry.webp", bytes: Buffer.from("img") },
+  ];
+
+  /** Runs `body` from `dir`, where agency.json names the ControlNets
+   *  folder when `controlnetsDir` is given. */
+  async function inProject(controlnetsDir: string | null, body: () => Promise<void>) {
+    const cwd = process.cwd();
+    const client = controlnetsDir === null ? {} : { controlnetsDir };
+    fs.writeFileSync(aliasFile, JSON.stringify({ client }));
+    process.chdir(dir);
+    try {
+      await body();
+    } finally {
+      process.chdir(cwd);
+    }
+  }
+
+  it("keeps only the config and the one weights file a ControlNet loads", () => {
+    const files = REPO_FILES.map((f) => ({ path: f.path, size: f.bytes.length }));
+    expect(controlnetFiles(files).map((f) => f.path)).toEqual([
+      "config.json",
+      "diffusion_pytorch_model.safetensors",
+    ]);
+  });
+
+  it("downloads a catalog ControlNet into client.controlnetsDir by its name, and lists it", async () => {
+    const hub = await startFakeHub(REPO, REPO_FILES);
+    const folder = path.join(dir, "controlnets");
+    try {
+      await inProject(folder, async () => {
+        const out = await _downloadModel("controlnet-scribble-sdxl", path.join(dir, "models"), {
+          hubUrl: hub.baseUrl,
+          allowHttp: true,
+        });
+        expect(out).toBe(path.join(folder, "controlnet-scribble-sdxl"));
+        expect(fs.readdirSync(out).sort()).toEqual([
+          ".agency-model.json",
+          "config.json",
+          "diffusion_pytorch_model.safetensors",
+        ]);
+        expect(readMlxModelRecord(out)?.kind).toBe("controlnet");
+        const listed = _listDownloadedModels(path.join(dir, "models"));
+        expect(listed).toEqual([
+          {
+            name: REPO,
+            path: out,
+            sizeBytes: 2 + WEIGHTS.length,
+            backend: "diffusers",
+            complete: true,
+            revision: hub.sha,
+            layout: "directory",
+            kind: "controlnet",
+          },
+        ]);
+      });
+    } finally {
+      await hub.close();
+    }
+  });
+
+  it("refuses to download a ControlNet when no ControlNets folder is configured", async () => {
+    await inProject(null, async () => {
+      await expect(_downloadModel("controlnet-scribble-sdxl", dir)).rejects.toThrow(
+        "controlnet-scribble-sdxl is a ControlNet, which an image server loads from client.controlnetsDir. Set that folder in agency.json, then download again.",
+      );
+    });
+  });
+
+  it("lists nothing from the ControlNets folder when it is unset, missing, or holds no record", async () => {
+    await inProject(null, async () => {
+      expect(_listDownloadedModels(path.join(dir, "models"))).toEqual([]);
+    });
+    const folder = path.join(dir, "controlnets");
+    await inProject(folder, async () => {
+      expect(_listDownloadedModels(path.join(dir, "models"))).toEqual([]);
+      fs.mkdirSync(path.join(folder, "handmade"), { recursive: true });
+      fs.writeFileSync(path.join(folder, "handmade", "config.json"), "{}");
+      expect(_listDownloadedModels(path.join(dir, "models"))).toEqual([]);
+    });
   });
 });
 

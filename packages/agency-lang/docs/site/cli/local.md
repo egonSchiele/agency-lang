@@ -145,7 +145,7 @@ An image model is named by a catalog name, a `diffusers:` URI such as `diffusers
 ~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
 ```
 
-Agency code calls it with `generateImageLocal` from `std::image`. On an M5 Ultra, `z-image-turbo` makes a 1024×1024 image in about 8 seconds and `chroma1-hd` in about 90.
+Agency code calls it with `generateImageLocal` from `std::image`. On an M5 Ultra, `z-image-turbo` makes a 1024×1024 image in about 8 seconds and `chroma1-hd` in about 90. The catalog also has `qwen-image-2512`, for legible text inside an image, and `flux2-klein-4b`, a small model for Macs with less memory; neither has been timed yet.
 
 It prints a line for every request that reaches it:
 

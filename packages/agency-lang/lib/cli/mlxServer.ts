@@ -1,10 +1,12 @@
 import * as http from "node:http";
 import { parseJsonBody } from "../serve/util.js";
 import { notServedMessage } from "./localServe.js";
+import { localBodyBytes } from "../stdlib/localImageInputs.js";
 import {
   createCapture,
   describeReply,
   describeRequest,
+  IMAGES_PATH,
   serveLogLines,
   type LogEntry,
   type LogOptions,
@@ -155,11 +157,24 @@ function forward(
 type ReadResult =
   { body: Record<string, unknown> } | { refusal: { status: number; message: string } };
 
+/** The largest body the door reads for a request to `url`. An image
+ *  request may carry input images, up to what the image server takes.
+ *  Every other route keeps parseJsonBody's default. */
+function bodyLimit(url: string | undefined): number | undefined {
+  return url === IMAGES_PATH ? localBodyBytes() : undefined;
+}
+
 /** The request body, or how to refuse it. Refusing is left to the caller so
  *  that every reply the door sends, including this one, reaches the log. */
-async function readRequest(req: http.IncomingMessage): Promise<ReadResult> {
+async function readRequest(
+  req: http.IncomingMessage,
+  maxBytes: number | undefined,
+): Promise<ReadResult> {
   try {
-    const parsed = await parseJsonBody(req);
+    // No `destroy`: parseJsonBody would close the socket on a body over the
+    // limit, and the client would see a broken pipe instead of the 413. The
+    // rest of the body is read and dropped, never kept.
+    const parsed = await parseJsonBody({ on: req.on.bind(req) }, maxBytes);
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return { refusal: { status: 400, message: "Request body is not a JSON object." } };
     }
@@ -238,7 +253,7 @@ export function startFrontDoor(
       record.finish(ownReply(200, JSON.stringify(body)));
       return;
     }
-    const read = await readRequest(req);
+    const read = await readRequest(req, bodyLimit(req.url));
     if ("refusal" in read) {
       refuse(read.refusal.status, read.refusal.message);
       return;

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import { defaultRoute, startFrontDoor, type FrontDoor } from "./mlxServer.js";
 import { plainColor } from "../utils/termcolors.js";
+import { localBodyBytes } from "../stdlib/localImageInputs.js";
 
 type Hit = {
   url: string;
@@ -295,6 +296,44 @@ describe("front door", () => {
     expect(res.status).toBe(502);
     expect((await res.json()).error.message).toMatch(/^the speech server for org\/d: /);
     await other.close();
+  });
+
+  describe("body limits", () => {
+    /** A request to `route` whose body is about `bytes` long: a model and
+     *  one long field. */
+    function bigPost(route: string, bytes: number) {
+      return fetch(`http://127.0.0.1:${door.port}${route}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "org/a", prompt: "a cat", control_image: "A".repeat(bytes) }),
+      });
+    }
+
+    it("forwards a 20 MB image request whole", async () => {
+      const res = await bigPost("/v1/images/generations", 20_000_000);
+      expect(res.status).toBe(200);
+      const hit = a.hits[a.hits.length - 1];
+      expect(hit.url).toBe("/v1/images/generations");
+      expect(hit.body).toEqual({
+        model: "/models/mlx/org--a",
+        prompt: "a cat",
+        control_image: "A".repeat(20_000_000),
+      });
+    });
+
+    it("refuses a 20 MB request to any other route with a 413", async () => {
+      const before = a.hits.length;
+      const res = await bigPost("/v1/chat/completions", 20_000_000);
+      expect(res.status).toBe(413);
+      expect(a.hits.length).toBe(before);
+    });
+
+    it("refuses an image request over the image server's limit with a 413", async () => {
+      const before = a.hits.length;
+      const res = await bigPost("/v1/images/generations", localBodyBytes());
+      expect(res.status).toBe(413);
+      expect(a.hits.length).toBe(before);
+    });
   });
 });
 

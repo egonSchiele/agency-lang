@@ -11,16 +11,21 @@ export function toArgs(body: unknown): Record<string, unknown> {
 
 import { MAX_BODY_BYTES } from "./constants.js";
 
-export function parseJsonBody(req: {
-  on: (event: string, cb: (...args: any[]) => void) => void;
-  destroy?: () => void;
-}): Promise<unknown> {
+/** The request's JSON body. Rejects a body over `maxBytes`, which is
+ *  10 MB unless the caller serves a route that takes more. */
+export function parseJsonBody(
+  req: {
+    on: (event: string, cb: (...args: any[]) => void) => void;
+    destroy?: () => void;
+  },
+  maxBytes: number = MAX_BODY_BYTES,
+): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let bytes = 0;
     req.on("data", (chunk: Buffer) => {
       bytes += chunk.length;
-      if (bytes > MAX_BODY_BYTES) {
+      if (bytes > maxBytes) {
         req.destroy?.();
         reject(new Error("Request body too large"));
         return;

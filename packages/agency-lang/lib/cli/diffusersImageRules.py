@@ -63,9 +63,17 @@ FIELDS = [
 #   default_guidance the model card's guidance
 #   takes_guidance   False: the family runs without guidance, and a request
 #                    that sets guidance or a negative prompt is refused
+#   guidance_arg     the pipeline argument the guidance goes to
+#   default_negative_prompt
+#                    the negative prompt sent when a request has none.
+#                    Qwen-Image runs guidance only when it gets one, even
+#                    a blank one.
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
+#   settings         the other values model_index.json may carry, which
+#                    from_pretrained passes to the pipeline, each with the
+#                    one value allowed
 FAMILIES = {
     "ZImagePipeline": {
         "label": "Z-Image Turbo",
@@ -74,6 +82,8 @@ FAMILIES = {
         "max_steps": 50,
         "default_guidance": 0.0,
         "takes_guidance": False,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -81,6 +91,7 @@ FAMILIES = {
             "transformer": ["diffusers", "ZImageTransformer2DModel"],
             "vae": ["diffusers", "AutoencoderKL"],
         },
+        "settings": {},
     },
     "ChromaPipeline": {
         "label": "Chroma",
@@ -89,6 +100,8 @@ FAMILIES = {
         "max_steps": 80,
         "default_guidance": 3.0,
         "takes_guidance": True,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -98,6 +111,49 @@ FAMILIES = {
             "transformer": ["diffusers", "ChromaTransformer2DModel"],
             "vae": ["diffusers", "AutoencoderKL"],
         },
+        "settings": {},
+    },
+    "QwenImagePipeline": {
+        "label": "Qwen-Image",
+        "pipeline": "QwenImagePipeline",
+        "default_steps": 50,
+        "max_steps": 80,
+        "default_guidance": 4.0,
+        "takes_guidance": True,
+        # Qwen-Image is not guidance-distilled: guidance_scale is ignored,
+        # and true_cfg_scale sets the strength of classifier-free guidance.
+        "guidance_arg": "true_cfg_scale",
+        "default_negative_prompt": " ",
+        "components": {
+            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+            "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
+            "tokenizer": ["transformers", "Qwen2Tokenizer"],
+            "transformer": ["diffusers", "QwenImageTransformer2DModel"],
+            "vae": ["diffusers", "AutoencoderKLQwenImage"],
+        },
+        "settings": {},
+    },
+    "Flux2KleinPipeline": {
+        "label": "FLUX.2 [klein]",
+        "pipeline": "Flux2KleinPipeline",
+        "default_steps": 4,
+        "max_steps": 50,
+        # The pipeline ignores guidance on a step-distilled model and warns
+        # above 1.0, so 1.0 is what the model card passes.
+        "default_guidance": 1.0,
+        "takes_guidance": False,
+        "guidance_arg": "guidance_scale",
+        "default_negative_prompt": "",
+        "components": {
+            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
+            "text_encoder": ["transformers", "Qwen3ForCausalLM"],
+            "tokenizer": ["transformers", "Qwen2TokenizerFast"],
+            "transformer": ["diffusers", "Flux2Transformer2DModel"],
+            "vae": ["diffusers", "AutoencoderKLFlux2"],
+        },
+        # Only the step-distilled checkpoint is served. The base model
+        # needs guidance and about 50 steps, which this row does not allow.
+        "settings": {"is_distilled": True},
     },
 }
 
@@ -134,6 +190,15 @@ def family_of(model_index):
             f'This model_index.json names "{class_name}".'
         )
     named = {key: value for key, value in model_index.items() if not key.startswith("_")}
+    for key, value in rules["settings"].items():
+        # A missing setting is refused too: the pipeline would fall back to
+        # its own default, which may not be the value allowed.
+        if key not in named or named[key] != value:
+            found = f"says {named[key]}" if key in named else "does not set it"
+            raise ValueError(
+                f'{rules["label"]}\'s "{key}" must be {value}. This model_index.json {found}.'
+            )
+    named = {key: value for key, value in named.items() if key not in rules["settings"]}
     for component, value in named.items():
         expected = rules["components"].get(component)
         if expected is None:
@@ -302,6 +367,23 @@ def check_request(rules, body):
         "negative_prompt": _negative_prompt_of(rules, body),
         "output_format": _format_of(body),
     }
+
+
+def pipeline_args(rules, request):
+    """The keyword arguments a checked request becomes when it is passed to
+    the family's pipeline, less the seed's generator and the step callback,
+    which need torch."""
+    args = {
+        "prompt": request["prompt"],
+        "height": request["height"],
+        "width": request["width"],
+        "num_inference_steps": request["steps"],
+        rules["guidance_arg"]: request["guidance"],
+    }
+    negative = request["negative_prompt"] or rules["default_negative_prompt"]
+    if negative != "":
+        args["negative_prompt"] = negative
+    return args
 
 
 def warm_up_request():

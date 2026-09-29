@@ -290,7 +290,16 @@ In `agency.json`, the same thing is `embeddings: { model, provider: "mlx" }` und
 
 ## Generate images on a Mac
 
-Two open image models run on this machine with no content filter in their weights: `z-image-turbo`, which makes a 1024×1024 image in about 8 seconds on an M5 Ultra, and `chroma1-hd`, which takes about 90 seconds and gives more detailed, cinematic pictures. They run on Hugging Face's diffusers library rather than MLX, so they need torch and diffusers in the same Python:
+Four open image models run on this machine:
+
+| Model | Good for | 1024×1024 on an M5 Ultra | Download |
+|---|---|---|---|
+| `z-image-turbo` | Fast, photorealistic images | about 8 s | 32.8 GB |
+| `chroma1-hd` | Detailed, cinematic pictures | about 90 s | 27.5 GB |
+| `qwen-image-2512` | Legible text inside the image: signs, posters, diagrams | not measured yet | 57.7 GB |
+| `flux2-klein-4b` | Macs with less memory; 4 steps per image | not measured yet | 16.0 GB |
+
+`z-image-turbo` and `chroma1-hd` have no content filter in their weights; `flux2-klein-4b` is safety fine-tuned. They run on Hugging Face's diffusers library rather than MLX, so they need torch and diffusers in the same Python:
 
 ```bash
 ~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
@@ -318,7 +327,7 @@ node main() {
 }
 ```
 
-The same prompt and seed make the same image. Leave `seed` out and the server picks one, and the result says which. `steps` and `guidance` default to each model's own settings. `z-image-turbo` takes no guidance and no negative prompt, and says so if you pass one.
+The same prompt and seed make the same image. Leave `seed` out and the server picks one, and the result says which. `steps` and `guidance` default to each model's own settings. `z-image-turbo` and `flux2-klein-4b` take no guidance and no negative prompt, and say so if you pass one.
 
 Image models use more memory while they generate than their size on disk: `chroma1-hd` is 27.5 GB on disk and peaks at 36 GB.
 

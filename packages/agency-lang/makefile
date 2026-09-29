@@ -93,6 +93,9 @@ build:
 	cp lib/cli/mlxSpeechRules.py dist/lib/cli/mlxSpeechRules.py
 	cp lib/cli/diffusersImageServer.py dist/lib/cli/diffusersImageServer.py
 	cp lib/cli/diffusersImageRules.py dist/lib/cli/diffusersImageRules.py
+	cp lib/cli/visionServer.py dist/lib/cli/visionServer.py
+	cp lib/cli/visionRules.py dist/lib/cli/visionRules.py
+	cp lib/cli/imageTools.py dist/lib/cli/imageTools.py
 	rm -rf dist/lib/stdlib/providers
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
 	cp lib/stdlib/visionOcr.jxa dist/lib/stdlib/visionOcr.jxa

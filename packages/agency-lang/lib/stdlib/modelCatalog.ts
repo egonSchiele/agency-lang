@@ -699,6 +699,34 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Detailed, cinematic images with no content filter. About 90 s per 1024x1024 image on an M5 Ultra.",
   },
+  // ── Vision ──────────────────────────────────────────────────────────────
+  // Served by lib/cli/visionServer.py. The mlx: URI names the repo the
+  // way every served repo is named; the kind picks the server. Sizes are
+  // what the download keeps (see visionFiles.ts), not the whole repo.
+  "wd14-tagger": {
+    backend: "mlx",
+    uri: "mlx:SmilingWolf/wd-eva02-large-tagger-v3",
+    params: "300M",
+    sizeBytes: 1260744467,
+    kind: "vision",
+    tags: [],
+    contextWindow: 448,
+    license: "apache-2.0",
+    description:
+      "Booru tags for an image, in the vocabulary illustration models take. ONNX on the CPU; about half a second an image.",
+  },
+  "florence-2": {
+    backend: "mlx",
+    uri: "mlx:florence-community/Florence-2-large",
+    params: "770M",
+    sizeBytes: 1558931269,
+    kind: "vision",
+    tags: [],
+    contextWindow: 1024,
+    license: "mit",
+    description:
+      "Finds the objects you name, tags what it sees, and writes captions. One model for boxes and words.",
+  },
 };
 
 /** The sampling a model card asks for, by the name a local call carries:

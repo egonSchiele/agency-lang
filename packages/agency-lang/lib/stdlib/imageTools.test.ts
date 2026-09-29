@@ -1,0 +1,105 @@
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { spawnSync } from "node:child_process";
+import { safeDeleteDirectoryWithin } from "../utils.js";
+import { _cropImage, _imageSize, _pasteImages, imageToolsScript } from "./imageTools.js";
+import { configuredPython } from "./localPython.js";
+
+// These tests run the real script, which needs a Python with Pillow: the
+// one `agency local serve` uses. Without it the block skips, as the image
+// server's live test does.
+const python = configuredPython();
+const hasPillow = spawnSync(python, ["-c", "import PIL"], { stdio: "ignore" }).status === 0;
+
+/** A PNG of one color, made by the same Pillow the tools use. */
+function writePng(file: string, width: number, height: number, color: string): void {
+  const run = spawnSync(python, [
+    "-c",
+    `from PIL import Image; import sys; Image.new("RGB", (${width}, ${height}), ${color}).save(sys.argv[1])`,
+    file,
+  ]);
+  expect(run.status).toBe(0);
+}
+
+describe.skipIf(!hasPillow)("imageTools", () => {
+  let dir: string;
+  let page: string;
+
+  beforeAll(() => {
+    dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "imagetools-")));
+    page = path.join(dir, "page.png");
+    writePng(page, 200, 100, "(200, 50, 50)");
+  });
+
+  afterAll(() => {
+    safeDeleteDirectoryWithin(os.tmpdir(), dir);
+  });
+
+  it("ships next to the server scripts", () => {
+    expect(fs.existsSync(imageToolsScript())).toBe(true);
+  });
+
+  it("reads an image's size", async () => {
+    const r = await _imageSize(page);
+    expect(r.success && r.value).toEqual({ width: 200, height: 100 });
+  });
+
+  it("cuts a box out, grown by the pad, and pads it square when asked", async () => {
+    const box = { x: 0.25, y: 0.5, width: 0.5, height: 0.5 };
+    const plain = await _cropImage(page, box, path.join(dir, "plain.png"), 0, false);
+    expect(plain.success && plain.value).toBe(path.join(dir, "plain.png"));
+    expect((await _imageSize(path.join(dir, "plain.png"))).value).toEqual({
+      width: 100,
+      height: 50,
+    });
+    // Pad of 0.1: 10 px each side of a 100 wide box, 5 px each side of a
+    // 50 tall one, and the bottom is clamped to the image's edge.
+    await _cropImage(page, box, path.join(dir, "padded.png"), 0.1, false);
+    expect((await _imageSize(path.join(dir, "padded.png"))).value).toEqual({
+      width: 120,
+      height: 55,
+    });
+    await _cropImage(page, box, path.join(dir, "square.png"), 0, true);
+    expect((await _imageSize(path.join(dir, "square.png"))).value).toEqual({
+      width: 100,
+      height: 100,
+    });
+  });
+
+  it("refuses to overwrite an output that exists, and a box that covers nothing", async () => {
+    const box = { x: 0, y: 0, width: 0.5, height: 0.5 };
+    const again = await _cropImage(page, box, path.join(dir, "plain.png"), 0, false);
+    expect(again.success === false && again.error).toBe(
+      `cropImage failed: ${path.join(dir, "plain.png")} already exists. Remove it first, or write elsewhere.`,
+    );
+    const empty = await _cropImage(
+      page,
+      { x: 1, y: 1, width: 0.1, height: 0.1 },
+      path.join(dir, "empty.png"),
+      0,
+      false,
+    );
+    expect(empty.success === false && empty.error).toBe(
+      "cropImage failed: the box covers nothing of a 200x100 image",
+    );
+    expect(fs.existsSync(path.join(dir, "empty.png"))).toBe(false);
+  });
+
+  it("refuses a source reached through a symlink", async () => {
+    fs.symlinkSync(page, path.join(dir, "link.png"));
+    const r = await _imageSize(path.join(dir, "link.png"));
+    expect(r.success).toBe(false);
+  });
+
+  it("pastes images in rows of the given width, each centered in the largest cell", async () => {
+    const small = path.join(dir, "small.png");
+    writePng(small, 50, 40, "(50, 50, 200)");
+    const out = path.join(dir, "sheet.png");
+    const r = await _pasteImages([page, small, small], out, 2);
+    expect(r.success && r.value).toBe(out);
+    // Cells are 200 by 100; three images in rows of two is two rows.
+    expect((await _imageSize(out)).value).toEqual({ width: 400, height: 200 });
+  });
+});

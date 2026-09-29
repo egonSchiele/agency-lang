@@ -4,10 +4,10 @@ import { modelDirEntries, readModelJson } from "./modelBackend.js";
  *  script runs it, which route serves it, and which stdlib function calls
  *  it. What a model is good for (coding, reasoning, illustration) is not a
  *  kind; that is a tag on its catalog entry. */
-export type ModelKind = "chat" | "embedding" | "speech" | "image";
+export type ModelKind = "chat" | "embedding" | "speech" | "image" | "vision";
 
 /** In the order `list` shows them. */
-export const MODEL_KINDS: ModelKind[] = ["chat", "embedding", "speech", "image"];
+export const MODEL_KINDS: ModelKind[] = ["chat", "embedding", "speech", "image", "vision"];
 
 export function isModelKind(value: unknown): value is ModelKind {
   return typeof value === "string" && MODEL_KINDS.includes(value as ModelKind);
@@ -17,6 +17,15 @@ export function isModelKind(value: unknown): value is ModelKind {
  *  from `FAMILIES` in `lib/cli/diffusersImageRules.py` so a directory can
  *  be recognised without running Python. A test checks the two agree. */
 export const IMAGE_PIPELINES = ["ZImagePipeline", "ChromaPipeline", "StableDiffusionXLPipeline"];
+
+/** The `architectures` the vision server's family table serves through
+ *  transformers, copied from `FAMILIES` in `lib/cli/visionRules.py`; a
+ *  test checks the two agree. The ONNX tagger family has no config and is
+ *  known by its files instead. */
+export const VISION_ARCHITECTURES = ["Florence2ForConditionalGeneration"];
+
+/** The two files that mark the WD14 tagger family. */
+export const VISION_ONNX_FILES = ["model.onnx", "selected_tags.csv"];
 
 /** The `model_type` values the speech server's family table serves. Orpheus
  *  models say `llama`, the same as a Llama chat model, so they are not
@@ -47,6 +56,13 @@ const KIND_RULES: KindRule[] = [
   {
     kind: "image",
     matches: (facts) => IMAGE_PIPELINES.includes(String(facts.modelIndex?._class_name)),
+  },
+  {
+    // Before the chat rule: Florence-2's class ends in ForConditionalGeneration too.
+    kind: "vision",
+    matches: (facts) =>
+      VISION_ARCHITECTURES.includes(architecture(facts.config)) ||
+      VISION_ONNX_FILES.every((name) => facts.names.includes(name)),
   },
   {
     kind: "speech",

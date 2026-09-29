@@ -1,0 +1,146 @@
+/** @module
+  @summary Find objects, tags, or a caption in an image with a vision model on this machine.
+  Ask a local vision model about an image: which objects are where, which
+booru tags describe it, or a caption. The model must be running: start
+it with `agency local serve <model>`. The image never leaves the machine.
+
+  ```ts
+  import { detectObjects, tagImage } from "std::vision"
+  import { cropImage } from "std::image"
+
+  node main() {
+    const found = detectObjects("page.png", ["person", "desk", "chair"], "florence-2") with approve
+    for (hit in found) {
+      cropImage("page.png", hit.box, "crops/${hit.label}_${hit.id}.png", pad: 0.05) with approve
+    }
+    const tags = tagImage("crops/person_0.png", "wd14-tagger") with approve
+    print(map(tags, \\t -> t.tag).join(", "))
+  }
+  ```
+
+Each function is one job with a `Result`, so a labeling loop is a few
+lines of your own code over them, and partial application narrows each:
+`detectObjects.partial(labels: ["person"], model: "florence-2")` is a
+person-finder.
+*/
+import { _detectObjects, _tagImage, _captionImage } from "agency-lang/stdlib-lib/vision.js"
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { dirname, basename } from "std::path"
+
+// One effect for the three functions, because all three do the same thing
+// to the file: read it once and hand it to a local model. The task and
+// the model are in the payload for a policy that wants them.
+@alwaysUnder(dir)
+effect std::vision { dir: string, filename: string, task: string, model: string }
+
+/** Normalized to 0..1 with the origin at the top left of the image, so
+`y` grows downward. The same shape std::ocr returns, so a box from
+either can go to cropImage. */
+export type BoundingBox = {
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+}
+
+/** One thing a detector found. `id` is its index in the reply, so crops
+can be named after it. The box is normalized 0..1 from the top left. */
+export type Detection = {
+  id: number,
+  label: string,
+  score: number,
+  box: BoundingBox,
+}
+
+/** One tag a tagger gave, with how sure it was, 0..1. */
+export type Tag = {
+  tag: string,
+  score: number,
+}
+
+export idempotent def detectObjects(
+  path: string,
+  labels: string[],
+  model: string,
+  threshold: number = 0.3,
+): Result<Detection[]> raises <std::vision> {
+  """
+  Find the named things in an image with a local detector and return
+  each one's label, score, and bounding box. The box is normalized to
+  0..1 with the origin at the top left, the shape cropImage takes. Runs
+  on this machine; nothing is uploaded.
+
+  @param path - Path to a PNG, JPEG, WebP, or GIF image
+  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required
+  @param model - A local vision model that detects, such as "florence-2"
+  @param threshold - Drop detections scoring below this, 0 to 1
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::vision("Look for ${labels.join(", ")} in this image with a local model?", {
+    dir: dirname(real.value),
+    filename: basename(real.value),
+    task: "detections",
+    model: model,
+  })
+  return try _detectObjects(real.value, labels, model, threshold)
+}
+
+export idempotent def tagImage(
+  path: string,
+  model: string,
+  threshold: number = 0.35,
+  limit: number = 30,
+): Result<Tag[]> raises <std::vision> {
+  """
+  Describe an image as booru tags with a local tagger: "1girl, glasses,
+  reading, book". Each tag comes with its score, best first. This is the
+  vocabulary illustration models such as NoobAI-XL take in a prompt, so
+  the tags can go straight into a caption file. Runs on this machine;
+  nothing is uploaded.
+
+  @param path - Path to a PNG, JPEG, WebP, or GIF image
+  @param model - A local vision model that tags, such as "wd14-tagger" or "florence-2"
+  @param threshold - Drop tags scoring below this, 0 to 1
+  @param limit - At most this many tags, 1 to 500
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::vision("Tag this image with a local model?", {
+    dir: dirname(real.value),
+    filename: basename(real.value),
+    task: "tags",
+    model: model,
+  })
+  return try _tagImage(real.value, model, threshold, limit)
+}
+
+export idempotent def captionImage(
+  path: string,
+  model: string,
+  detail: string = "short",
+): Result<string> raises <std::vision> {
+  """
+  Write a sentence about an image with a local model. Runs on this
+  machine; nothing is uploaded.
+
+  @param path - Path to a PNG, JPEG, WebP, or GIF image
+  @param model - A local vision model that captions, such as "florence-2"
+  @param detail - "short" for one sentence, "long" for a paragraph
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::vision("Caption this image with a local model?", {
+    dir: dirname(real.value),
+    filename: basename(real.value),
+    task: "captions",
+    model: model,
+  })
+  return try _captionImage(real.value, model, detail)
+}

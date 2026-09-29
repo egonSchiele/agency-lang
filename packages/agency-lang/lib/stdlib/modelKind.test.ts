@@ -66,6 +66,15 @@ describe("kindOfModelDir", () => {
     expect(kindOfModelDir(embedding)).toBe("embedding");
   });
 
+  it("says vision for a tagger's two files, and for Florence-2 before the chat rule sees it", () => {
+    const tagger = modelDir("wd14", { "model.onnx": "onnx", "selected_tags.csv": "tag_id,name" });
+    expect(kindOfModelDir(tagger)).toBe("vision");
+    const florence = modelDir("florence", {
+      "config.json": { architectures: ["Florence2ForConditionalGeneration"] },
+    });
+    expect(kindOfModelDir(florence)).toBe("vision");
+  });
+
   it("says speech for a Qwen3-TTS config", () => {
     const tts = modelDir("tts", {
       "config.json": { model_type: "qwen3_tts", tts_model_type: "custom_voice" },
@@ -98,7 +107,7 @@ describe("isModelKind", () => {
     for (const kind of MODEL_KINDS) {
       expect(isModelKind(kind)).toBe(true);
     }
-    expect(isModelKind("vision")).toBe(false);
+    expect(isModelKind("controlnet")).toBe(false);
     expect(isModelKind(3)).toBe(false);
   });
 });

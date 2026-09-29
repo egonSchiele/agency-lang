@@ -102,17 +102,7 @@ export function formatLocalList(args: {
   const others = args.files.filter(
     (f) => !claimedPaths.includes(f.path) && (args.kind === undefined || f.kind === args.kind),
   );
-  const headers = [
-    "",
-    "NAME",
-    "KIND",
-    "BACKEND",
-    "PARAMS",
-    "SIZE",
-    "CONTEXT",
-    "CATEGORY",
-    "LICENSE",
-  ];
+  const headers = ["", "NAME", "KIND", "BACKEND", "PARAMS", "SIZE", "CONTEXT", "TAGS", "LICENSE"];
   const cols = [
     colWidth(
       headers[0],

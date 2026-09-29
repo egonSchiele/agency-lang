@@ -1,0 +1,54 @@
+// std::vision raises one effect for the image it will read, with the real
+// directory, the file name, the task, and the model. These nodes check the
+// payload with a handler that rejects, so no model runs.
+import { detectObjects, tagImage, captionImage } from "std::vision"
+
+def probe(): string {
+  const w = write("vision-probe.png", "not a png", "/tmp") with approve
+  return "/tmp/vision-probe.png"
+}
+
+node detectPayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    detectObjects(path, ["person", "desk"], "florence-2")
+  } with (data) {
+    seen = "${data.effect}|${data.data.filename}|${data.data.task}|${data.data.model}"
+    return reject()
+  }
+  return seen
+}
+
+node tagPayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    tagImage(path, "wd14-tagger")
+  } with (data) {
+    seen = "${data.data.task}|${data.data.model}"
+    return reject()
+  }
+  return seen
+}
+
+node captionPayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    captionImage(path, "florence-2", detail: "long")
+  } with (data) {
+    seen = "${data.data.task}"
+    return reject()
+  }
+  return seen
+}
+
+node rejectedIsFailure(): string {
+  const path = probe()
+  const r = tagImage(path, "wd14-tagger") with reject
+  if (isFailure(r)) {
+    return "rejected"
+  }
+  return "approved"
+}

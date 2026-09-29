@@ -261,6 +261,10 @@ describe("messages", () => {
     expect(notServedMessage(["a/chat"], "/m/zimage", "/v1/images/generations")).toBe(
       "This server is serving a/chat. It is not serving /m/zimage. Start it with: agency local serve --image /m/zimage",
     );
+    // A vision model takes no flag.
+    expect(notServedMessage(["a/chat"], "SmilingWolf/wd", "/v1/vision/tags")).toBe(
+      "This server is serving a/chat. It is not serving SmilingWolf/wd. Start it with: agency local serve mlx:SmilingWolf/wd",
+    );
     expect(notServedMessage(["a/chat"], "mlx/tts", "/v1/audio/speech")).toBe(
       "This server is serving a/chat. It is not serving mlx/tts. Start it with: agency local serve --speech mlx:mlx/tts",
     );
@@ -577,6 +581,7 @@ describe("runServe", () => {
     chat: CHAT_CONFIG,
     embedding: JSON.stringify({ architectures: ["Qwen3Model"] }),
     speech: JSON.stringify({ model_type: "qwen3_tts", tts_model_type: "custom_voice" }),
+    vision: JSON.stringify({ architectures: ["Florence2ForConditionalGeneration"] }),
   };
 
   /** A downloaded model under <cacheDir>/mlx with a complete record. */
@@ -1064,6 +1069,53 @@ describe("runServe", () => {
     expect(probes).toEqual(["http://127.0.0.1:9000/health"]);
     expect(log).toContain("Loading org/img (0.60 GB)…");
     expect(log).toContain("  org/img  (images)");
+    await handle.close();
+  });
+
+  it("serves a tagger with the vision server, importing onnxruntime alone, and Florence-2 with torch", async () => {
+    const tagger = path.join(cacheDir, "mlx", "org--tagger");
+    fs.mkdirSync(tagger, { recursive: true });
+    fs.writeFileSync(path.join(tagger, "model.onnx"), "onnx");
+    fs.writeFileSync(path.join(tagger, "selected_tags.csv"), "tag_id,name");
+    fs.writeFileSync(path.join(tagger, "config.json"), "{}");
+    fs.writeFileSync(path.join(tagger, "model.safetensors"), "x");
+    fs.writeFileSync(
+      path.join(tagger, ".agency-model.json"),
+      JSON.stringify({ repo: "org/tagger", revision: "abc", files: {} }),
+    );
+    const florence = recordedModel("org/florence", true, "vision");
+    const probes: string[] = [];
+    const imports: string[] = [];
+    deps.fetch = (async (url: string) => {
+      probes.push(url);
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    deps.exec = (_cmd, args) => {
+      imports.push(args[1]);
+      return { status: 0 };
+    };
+    const handle = await runServe(["mlx:org/tagger", "mlx:org/florence"], { port: 0 }, deps);
+    expect(imports).toEqual(["import onnxruntime", "import torch", "import transformers"]);
+    expect(spawned[0][1].endsWith("/lib/cli/visionServer.py")).toBe(true);
+    expect(spawned[0].slice(2)).toEqual([
+      "--model",
+      tagger,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9000",
+    ]);
+    expect(spawned[1].slice(2)).toEqual([
+      "--model",
+      florence,
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "9001",
+    ]);
+    expect(probes).toEqual(["http://127.0.0.1:9000/health", "http://127.0.0.1:9001/health"]);
+    expect(log).toContain("  org/tagger  (vision)");
+    expect(log).toContain(`    tagImage("drawing.png", "org/tagger")`);
     await handle.close();
   });
 

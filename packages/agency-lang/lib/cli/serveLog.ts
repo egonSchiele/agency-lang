@@ -62,6 +62,8 @@ export type ReplySummary = {
   /** Set for a successful image reply, whose base64 is never logged: how
    *  many bytes the reply had, and the format the request asked for. */
   image?: { bytes: number; format: string };
+  /** Set for a successful vision reply: what it was, counted. */
+  vision?: string;
 };
 
 /** One reply as it went out: the status, the body the capture kept, its
@@ -161,6 +163,10 @@ function isAudio(contentType: string | undefined): boolean {
  *  base64, which does not belong in a terminal. */
 export const IMAGES_PATH = "/v1/images/generations";
 
+/** Where vision servers answer. A reply there is a list of boxes or tags,
+ *  or one caption, and is logged by its count. */
+export const VISION_PATHS = ["/v1/vision/detections", "/v1/vision/tags", "/v1/vision/captions"];
+
 /** What the log knows about the request a reply answers. */
 export type RequestFacts = { path: string; outputFormat?: string };
 
@@ -188,12 +194,37 @@ export function describeReply(reply: Reply, request?: RequestFacts): ReplySummar
     return { body, streamed, truncated, ...streamedUsage(body) };
   }
   const parsed = parseObject(body);
+  if (
+    request !== undefined &&
+    VISION_PATHS.includes(request.path) &&
+    reply.status >= 200 &&
+    reply.status < 300 &&
+    parsed !== null
+  ) {
+    return {
+      body: JSON.stringify(parsed, null, 2),
+      streamed: false,
+      truncated,
+      vision: describeVision(parsed),
+    };
+  }
   return {
     body: parsed === null ? body : JSON.stringify(parsed, null, 2),
     streamed,
     truncated,
     ...(parsed === null ? {} : usageOf(parsed)),
   };
+}
+
+/** A vision reply in a few words: `3 detections`, `24 tags`, `1 caption`. */
+function describeVision(parsed: Record<string, unknown>): string {
+  for (const field of ["detections", "tags"]) {
+    const items = parsed[field];
+    if (Array.isArray(items)) {
+      return `${items.length} ${field.slice(0, -1)}${items.length === 1 ? "" : "s"}`;
+    }
+  }
+  return typeof parsed.caption === "string" ? "1 caption" : "vision reply";
 }
 
 /** Milliseconds as something quick to read: under a second in whole

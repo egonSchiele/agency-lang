@@ -110,7 +110,7 @@ export function formatLocalList(args: {
     "PARAMS",
     "SIZE",
     "CONTEXT",
-    "CATEGORY",
+    "TAGS",
     "LICENSE",
   ];
   const cols = [

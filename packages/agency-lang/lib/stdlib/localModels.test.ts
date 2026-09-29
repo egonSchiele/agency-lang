@@ -30,7 +30,9 @@ import {
   pinnedSha256,
   backendOfTarget,
   _resolveModel,
-  _localModelCategory,
+  _catalogKind,
+  kindOfCategory,
+  tagsOfCategory,
   _removeServedModel,
   isMlxUri,
   parseMlxUri,
@@ -78,18 +80,9 @@ describe("name resolution", () => {
 });
 
 describe("curated catalog shape", () => {
-  it("every entry has a non-empty uri, params, description, and a known category", () => {
-    const validCategories = new Set([
-      "general",
-      "coding",
-      "reasoning",
-      "writing",
-      "science",
-      "uncensored",
-      "embedding",
-      "speech",
-      "image",
-    ]);
+  it("every entry has a non-empty uri, params, description, a kind, and tags", () => {
+    const validKinds = new Set(["chat", "embedding", "speech", "image"]);
+    const validTags = new Set(["coding", "reasoning", "writing", "science", "uncensored"]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
     for (const [name, info] of Object.entries(CURATED_LOCAL_MODELS)) {
@@ -99,17 +92,25 @@ describe("curated catalog shape", () => {
       expect(info.description.length, `${name}.description`).toBeGreaterThan(0);
       expect(info.sizeBytes, `${name}.sizeBytes`).toBeGreaterThan(0);
       expect(info.contextWindow, `${name}.contextWindow`).toBeGreaterThan(0);
-      expect(validCategories.has(info.category), `${name}.category=${info.category}`).toBe(true);
+      expect(validKinds.has(info.kind), `${name}.kind=${info.kind}`).toBe(true);
+      for (const tag of info.tags) {
+        expect(validTags.has(tag), `${name}.tags has ${tag}`).toBe(true);
+      }
+      // Only a chat model is good for something in particular.
+      if (info.kind !== "chat") {
+        expect(info.tags, `${name}.tags`).toEqual([]);
+      }
       expect(permissiveLicenses.has(info.license), `${name}.license=${info.license}`).toBe(true);
     }
   });
   it("smollm2-135m is present (integration suite depends on it)", () => {
     expect(CURATED_LOCAL_MODELS["smollm2-135m"]).toBeDefined();
-    expect(CURATED_LOCAL_MODELS["smollm2-135m"].category).toBe("general");
+    expect(CURATED_LOCAL_MODELS["smollm2-135m"].kind).toBe("chat");
+    expect(CURATED_LOCAL_MODELS["smollm2-135m"].tags).toEqual([]);
   });
   it("the Qwen3-TTS entries are speech models, resolving to their mlx: URIs", () => {
-    expect(_localModelCategory("qwen3-tts-mlx")).toBe("speech");
-    expect(_localModelCategory("qwen3-tts-design-mlx")).toBe("speech");
+    expect(_catalogKind("qwen3-tts-mlx")).toBe("speech");
+    expect(_catalogKind("qwen3-tts-design-mlx")).toBe("speech");
     expect(_resolveModel("qwen3-tts-mlx").target).toBe(
       "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
     );
@@ -118,7 +119,7 @@ describe("curated catalog shape", () => {
     );
   });
   it("orpheus-3b-mlx is a speech model with the SNAC decoder as its companion", () => {
-    expect(_localModelCategory("orpheus-3b-mlx")).toBe("speech");
+    expect(_catalogKind("orpheus-3b-mlx")).toBe("speech");
     expect(CURATED_LOCAL_MODELS["orpheus-3b-mlx"].companions).toEqual([
       "mlx:mlx-community/snac_24khz",
     ]);
@@ -539,6 +540,20 @@ describe("formatLocalList", () => {
     expect(out).toContain("raw.gguf");
   });
 
+  it("prints every tag of a model in the TAGS column", () => {
+    const tagged: ModelNameEntry[] = [
+      { ...entries[1], kind: "chat", tags: ["coding", "reasoning"] },
+    ];
+    const out = formatLocalList({ dir: "/d", entries: tagged, manifest: {}, files: [] });
+    const lines = out.split("\n");
+    const header = lines.find((l) => l.includes("NAME"));
+    const row = lines.find((l) => l.includes("mid"));
+    expect(header).toContain("TAGS");
+    expect(row).toContain("coding, reasoning");
+    // The tags sit under their header.
+    expect(row!.indexOf("coding")).toBe(header!.indexOf("TAGS"));
+  });
+
   it("omits descriptions by default", () => {
     const out = formatLocalList({ dir: "/d", entries, manifest: {}, files: [] });
     expect(out).not.toContain("A middling model.");
@@ -676,6 +691,57 @@ describe("formatModelCatalog with rich aliases", () => {
   });
 });
 
+describe("kind and tags on an alias", () => {
+  it("prints every tag of an alias in the TAGS column", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            thinker: {
+              backend: "mlx",
+              uri: "mlx:org/thinker",
+              kind: "chat",
+              tags: ["coding", "reasoning"],
+            },
+          },
+        },
+      }),
+    );
+    const lines = formatModelCatalog(fileTarget(aliasFile)).split("\n");
+    const header = lines.find((l) => l.includes("NAME"));
+    const row = lines.find((l) => l.includes("thinker"));
+    expect(row).toContain("coding, reasoning");
+    expect(row!.indexOf("coding")).toBe(header!.indexOf("TAGS"));
+  });
+
+  it("tags that are not a list are an error naming the field, not a crash", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: { modelAliases: { coder: { backend: "mlx", uri: "mlx:org/x", tags: "coding" } } },
+      }),
+    );
+    expect(() => formatModelCatalog(fileTarget(aliasFile))).toThrow(
+      new RegExp(`Invalid config in ${aliasFile}[\\s\\S]*client\\.modelAliases\\.coder\\.tags`),
+    );
+  });
+
+  it("a kind that is not a kind of model is an error naming the field", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: { e: { backend: "mlx", uri: "mlx:org/e", kind: "embeddings" } },
+        },
+      }),
+    );
+    expect(() => _listModelNames(fileTarget(aliasFile))).toThrow(
+      new RegExp(`Invalid config in ${aliasFile}[\\s\\S]*client\\.modelAliases\\.e\\.kind`),
+    );
+  });
+});
+
 describe("resolveCatalogUrl", () => {
   afterEach(() => {
     delete process.env.AGENCY_MODEL_CATALOG_URL;
@@ -739,6 +805,38 @@ describe("parseCatalog", () => {
     const out = parseCatalog(withCompanions);
     expect(out["m2"].companions).toEqual(["mlx:org/decoder"]);
     expect(out["m3"].companions).toBeUndefined();
+  });
+  it("reads an entry that says only category as a kind and tags", () => {
+    const old = JSON.stringify({
+      version: 1,
+      models: {
+        coder: { backend: "llama-cpp", uri: "hf:org/c:Q4_K_M", category: "coding" },
+        general: { backend: "llama-cpp", uri: "hf:org/g:Q4_K_M", category: "general" },
+        embedder: { backend: "llama-cpp", uri: "hf:org/e:Q4_K_M", category: "embedding" },
+      },
+    });
+    const out = parseCatalog(old);
+    expect(out["coder"]).toMatchObject({ kind: "chat", tags: ["coding"] });
+    expect(out["general"]).toMatchObject({ kind: "chat", tags: [] });
+    expect(out["embedder"]).toMatchObject({ kind: "embedding", tags: [] });
+    for (const model of Object.values(out)) {
+      expect(model).not.toHaveProperty("category");
+    }
+  });
+  it("prefers kind and tags over category when an entry has both", () => {
+    const both = JSON.stringify({
+      version: 1,
+      models: {
+        m: {
+          backend: "llama-cpp",
+          uri: "hf:org/m:Q4_K_M",
+          category: "coding",
+          kind: "chat",
+          tags: ["reasoning"],
+        },
+      },
+    });
+    expect(parseCatalog(both)["m"]).toMatchObject({ kind: "chat", tags: ["reasoning"] });
   });
   it("throws on invalid JSON", () => {
     expect(() => parseCatalog("{not json")).toThrow(/valid JSON/);
@@ -1196,32 +1294,59 @@ describe("backend field", () => {
   });
 });
 
-describe("_localModelCategory", () => {
-  it("reads the curated entry's category, by name or by URI", () => {
-    expect(_localModelCategory("qwen3-embedding-4b-mlx")).toBe("embedding");
-    expect(_localModelCategory("qwen3-coder-next-mlx")).toBe("coding");
-    expect(_localModelCategory(CURATED_LOCAL_MODELS["qwen3-embedding-4b-mlx"].uri)).toBe(
-      "embedding",
-    );
+describe("_catalogKind", () => {
+  it("reads the curated entry's kind, by name or by URI", () => {
+    expect(_catalogKind("qwen3-embedding-4b-mlx")).toBe("embedding");
+    expect(_catalogKind("qwen3-coder-next-mlx")).toBe("chat");
+    expect(CURATED_LOCAL_MODELS["qwen3-coder-next-mlx"].tags).toEqual(["coding"]);
+    expect(_catalogKind(CURATED_LOCAL_MODELS["qwen3-embedding-4b-mlx"].uri)).toBe("embedding");
   });
 
-  it("reads an object alias's category and is undefined for the rest", () => {
+  it("reads an alias written before the split, whose category stands for both", () => {
+    expect(kindOfCategory("coding")).toBe("chat");
+    expect(tagsOfCategory("coding")).toEqual(["coding"]);
+    expect(kindOfCategory("general")).toBe("chat");
+    expect(tagsOfCategory("general")).toEqual([]);
+    expect(kindOfCategory("image")).toBe("image");
+    expect(tagsOfCategory("image")).toEqual([]);
+    expect(kindOfCategory(undefined)).toBeUndefined();
+    expect(tagsOfCategory(undefined)).toBeUndefined();
     const file = path.join(dir, "agency.json");
     fs.writeFileSync(
       file,
       JSON.stringify({
         client: {
           modelAliases: {
-            emb: { backend: "mlx", uri: "mlx:org/emb", category: "embedding" },
+            old: { backend: "mlx", uri: "mlx:org/old", category: "coding" },
+            fresh: { backend: "mlx", uri: "mlx:org/fresh", kind: "chat", tags: ["writing"] },
+          },
+        },
+      }),
+    );
+    expect(_catalogKind("old", fileTarget(file))).toBe("chat");
+    expect(_catalogKind("fresh", fileTarget(file))).toBe("chat");
+    const names = _listModelNames(fileTarget(file));
+    expect(names.find((n) => n.name === "old")?.tags).toEqual(["coding"]);
+    expect(names.find((n) => n.name === "fresh")?.tags).toEqual(["writing"]);
+  });
+
+  it("reads an object alias's kind and is undefined for the rest", () => {
+    const file = path.join(dir, "agency.json");
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            emb: { backend: "mlx", uri: "mlx:org/emb", kind: "embedding" },
             plain: "mlx:org/plain",
           },
         },
       }),
     );
-    expect(_localModelCategory("emb", fileTarget(file))).toBe("embedding");
-    expect(_localModelCategory("mlx:org/emb", fileTarget(file))).toBe("embedding");
-    expect(_localModelCategory("plain", fileTarget(file))).toBeUndefined();
-    expect(_localModelCategory("mlx:org/anything", fileTarget(file))).toBeUndefined();
+    expect(_catalogKind("emb", fileTarget(file))).toBe("embedding");
+    expect(_catalogKind("mlx:org/emb", fileTarget(file))).toBe("embedding");
+    expect(_catalogKind("plain", fileTarget(file))).toBeUndefined();
+    expect(_catalogKind("mlx:org/anything", fileTarget(file))).toBeUndefined();
   });
 });
 

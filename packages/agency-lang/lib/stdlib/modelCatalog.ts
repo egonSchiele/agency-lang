@@ -1,11 +1,13 @@
 import type { Backend } from "./modelBackend.js";
+import type { ModelKind } from "./modelKind.js";
 
 /** The built-in model catalog: every entry `agency local list` shows
  *  without a download, with its backend, size, and license. */
 
-/** What a model is FOR — a single axis, orthogonal to size (size is conveyed
- *  by `params` / `sizeBytes`). Lets the CLI group + filter without parsing the
- *  description. */
+/** The one field a catalog entry used to carry for both what a model
+ *  returns and what it is good for. Split into `kind` and `tags`. Still
+ *  read, from a remote catalog or an alias written before the split, and
+ *  mapped by `kindOfCategory` and `tagsOfCategory` in `localModels.ts`. */
 export type ModelCategory =
   | "general" // general-purpose chat / instruct
   | "coding" // SWE-tuned specialists
@@ -16,6 +18,10 @@ export type ModelCategory =
   | "embedding" // returns vectors, not text
   | "speech" // returns audio, not text
   | "image"; // returns images, not text
+
+/** What a chat model is good for. Free-form words for the list and the
+ *  picker, never for routing; the kind does that. */
+export type ModelTag = string;
 
 export type ModelInfo = {
   /** Which engine runs the model. Required; must agree with `uri`. */
@@ -28,8 +34,11 @@ export type ModelInfo = {
   /** Approximate download size in bytes: the Q4_K_M file, or the whole
    *  MLX repo at whatever quantization the entry names. */
   sizeBytes: number;
-  /** What the model is for (orthogonal to size). */
-  category: ModelCategory;
+  /** What the model takes and returns. Decides which server runs it. */
+  kind: ModelKind;
+  /** What it is good for: "coding", "reasoning", "uncensored". Empty for a
+   *  general chat model and for every model that is not a chat model. */
+  tags: ModelTag[];
   /** One-line "what is it good for" — shown by `agency local alias list`. */
   description: string;
   /** Native context window in tokens. For an image model, the longest
@@ -78,7 +87,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/SmolLM2-135M-Instruct-GGUF:Q4_K_M",
     params: "135M",
     sizeBytes: 105000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 8192,
     license: "apache-2.0",
     description:
@@ -90,7 +100,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Qwen3.5-0.8B-GGUF:Q4_K_M",
     params: "0.8B",
     sizeBytes: 500000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Tiny model from Alibaba's current generation. Good edge-device default.",
@@ -102,7 +113,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Qwen3.5-2B-GGUF:Q4_K_M",
     params: "2B",
     sizeBytes: 1280000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Most popular modern small general model. Runs on CPU comfortably.",
@@ -114,7 +126,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Qwen3.5-4B-GGUF:Q4_K_M",
     params: "4B",
     sizeBytes: 2400000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Strong multilingual small general workhorse from Alibaba.",
@@ -126,7 +139,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/gemma-4-E2B-it-GGUF:Q4_K_M",
     params: "2B (E2B)",
     sizeBytes: 3110000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Smallest Gemma 4 for phones and thin laptops.",
@@ -138,7 +152,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/gemma-4-E4B-it-GGUF:Q4_K_M",
     params: "4B (E4B)",
     sizeBytes: 4980000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description:
@@ -151,7 +166,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/granite-4.1-8b-GGUF:Q4_K_M",
     params: "8B",
     sizeBytes: 5350000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "IBM's enterprise-tuned 8B. Built for retrieval, tool use, and long documents.",
@@ -162,7 +178,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Qwen3.5-9B-GGUF:Q4_K_M",
     params: "9B",
     sizeBytes: 5500000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Modern medium general model with strong tool use.",
@@ -174,7 +191,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/gemma-4-12b-it-GGUF:Q4_K_M",
     params: "12B",
     sizeBytes: 7120000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Google's mid-size Gemma 4 dense model. Strong multilingual multimodal use.",
@@ -186,7 +204,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/gpt-oss-20b-GGUF:Q4_K_M",
     params: "20B",
     sizeBytes: 12000000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "OpenAI's open-weights release. Balanced general model for ~16 GB machines.",
@@ -198,7 +217,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Mistral-Small-3.1-24B-Instruct-2503-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14000000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Mistral's general 24B base model (also Devstral's foundation). Broad utility.",
@@ -210,7 +230,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14333000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description:
@@ -223,7 +244,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Qwen3.5-27B-GGUF:Q4_K_M",
     params: "27B",
     sizeBytes: 16000000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Modern dense general 27B. The practical ceiling for most workstations.",
@@ -235,7 +257,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/gemma-4-26B-A4B-it-GGUF:Q4_K_M",
     params: "26B (A4B)",
     sizeBytes: 16900000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Google's Gemma 4 MoE (3.8B active). Fast yet capable multimodal model.",
@@ -247,7 +270,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/gemma-4-31B-it-GGUF:Q4_K_M",
     params: "31B",
     sizeBytes: 18300000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Largest dense Gemma 4. Top Gemma quality for high-RAM workstations.",
@@ -259,7 +283,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Qwen3.5-35B-A3B-GGUF:Q4_K_M",
     params: "35B (A3B)",
     sizeBytes: 22016000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Qwen's general MoE (3B active). 27B-class quality at 9B speed, needs ~32 GB RAM.",
@@ -271,7 +296,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF:Q4_K_M",
     params: "8B",
     sizeBytes: 4920000000,
-    category: "reasoning",
+    kind: "chat",
+    tags: ["reasoning"],
     contextWindow: 131072,
     license: "mit",
     description: "Chain-of-thought distill into Llama-8B. Best small reasoning model.",
@@ -283,7 +309,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF:Q4_K_M",
     params: "8B",
     sizeBytes: 5030000000,
-    category: "reasoning",
+    kind: "chat",
+    tags: ["reasoning"],
     contextWindow: 131072,
     license: "mit",
     description: "DeepSeek's newer R1 distill onto Qwen3-8B. Supersedes the Llama-8B distill.",
@@ -295,7 +322,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Phi-4-reasoning-GGUF:Q4_K_M",
     params: "14B",
     sizeBytes: 9050000000,
-    category: "reasoning",
+    kind: "chat",
+    tags: ["reasoning"],
     contextWindow: 32768,
     license: "mit",
     description:
@@ -308,7 +336,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Magistral-Small-2509-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14333000000,
-    category: "reasoning",
+    kind: "chat",
+    tags: ["reasoning"],
     contextWindow: 131072,
     license: "apache-2.0",
     description:
@@ -321,7 +350,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:mistralai/Devstral-Small-2507_gguf:Q4_K_M",
     params: "24B",
     sizeBytes: 14300000000,
-    category: "coding",
+    kind: "chat",
+    tags: ["coding"],
     contextWindow: 131072,
     license: "apache-2.0",
     description: "Mistral's official coding-agent GGUF.",
@@ -333,7 +363,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M",
     params: "24B",
     sizeBytes: 14334000000,
-    category: "coding",
+    kind: "chat",
+    tags: ["coding"],
     contextWindow: 393216,
     license: "apache-2.0",
     description: "Mistral's current coding agent. Supersedes 2507 and reads 384K tokens at once.",
@@ -345,7 +376,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M",
     params: "30B (A3B)",
     sizeBytes: 19000000000,
-    category: "coding",
+    kind: "chat",
+    tags: ["coding"],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Qwen's MoE coder (3.3B active). Strong agentic coding model.",
@@ -357,7 +389,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "hf:nomic-ai/nomic-embed-text-v1.5-GGUF:Q4_K_M",
     params: "137M",
     sizeBytes: 89000000,
-    category: "embedding",
+    kind: "embedding",
+    tags: [],
     contextWindow: 8192,
     license: "apache-2.0",
     description: "Returns 768-dim embeddings. Pair with a chat model for RAG.",
@@ -369,7 +402,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3-Coder-Next-4bit",
     params: "80B (A3B)",
     sizeBytes: 44900000000,
-    category: "coding",
+    kind: "chat",
+    tags: ["coding"],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Qwen's agentic coder with 3B active. Fast enough to be a daily driver on 64 GB.",
@@ -380,7 +414,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit",
     params: "30B (A3B)",
     sizeBytes: 17200000000,
-    category: "coding",
+    kind: "chat",
+    tags: ["coding"],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3-coder-30b-a3b. Small, fast agentic coder.",
@@ -391,7 +426,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3-235B-A22B-Instruct-2507-4bit",
     params: "235B (A22B)",
     sizeBytes: 132300000000,
-    category: "writing",
+    kind: "chat",
+    tags: ["writing"],
     contextWindow: 262144,
     license: "apache-2.0",
     description:
@@ -403,7 +439,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/gemma-4-31b-it-4bit",
     params: "31B",
     sizeBytes: 18400000000,
-    category: "writing",
+    kind: "chat",
+    tags: ["writing"],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Google's dense 31B. The best prose writer at its size.",
@@ -414,7 +451,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.8-27B-4bit",
     params: "27B",
     sizeBytes: 16100000000,
-    category: "science",
+    kind: "chat",
+    tags: ["science"],
     contextWindow: 262144,
     license: "apache-2.0",
     description:
@@ -426,7 +464,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/gpt-oss-120b-MXFP4-Q8",
     params: "120B (A5B)",
     sizeBytes: 63400000000,
-    category: "science",
+    kind: "chat",
+    tags: ["science"],
     contextWindow: 131072,
     license: "apache-2.0",
     description:
@@ -438,7 +477,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.6-40B-Claude-4.6-Opus-Deckard-Heretic-Uncensored-Thinking-8bit",
     params: "40B",
     sizeBytes: 41500000000,
-    category: "uncensored",
+    kind: "chat",
+    tags: ["uncensored"],
     contextWindow: 262144,
     license: "apache-2.0",
     description:
@@ -450,7 +490,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.8-27B-Uncensored-OptiQ-4bit",
     params: "27B",
     sizeBytes: 19800000000,
-    category: "uncensored",
+    kind: "chat",
+    tags: ["uncensored"],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Qwen3.8-27B with refusals removed. Text-only.",
@@ -461,7 +502,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/gemma-4-31B-it-uncensored-heretic-4bit",
     params: "31B",
     sizeBytes: 17300000000,
-    category: "uncensored",
+    kind: "chat",
+    tags: ["uncensored"],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "Gemma 4 31B with refusals removed by Heretic. Text-only.",
@@ -472,7 +514,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3-0.6B-4bit",
     params: "0.6B",
     sizeBytes: 335000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 32768,
     license: "apache-2.0",
     description:
@@ -484,7 +527,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.5-0.8B-4bit",
     params: "0.8B",
     sizeBytes: 625000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-0.8b. The smallest Qwen3.5 that runs on the server.",
@@ -495,7 +539,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.5-2B-4bit",
     params: "2B",
     sizeBytes: 1720000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description:
@@ -507,7 +552,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.5-4B-MLX-4bit",
     params: "4B",
     sizeBytes: 3060000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-4b. Small general model for a laptop.",
@@ -518,7 +564,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.5-9B-4bit",
     params: "9B",
     sizeBytes: 5950000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-9b. The general model for a 16 to 24 GB Mac.",
@@ -529,7 +576,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/gpt-oss-20b-MXFP4-Q8",
     params: "20B (A3.6B)",
     sizeBytes: 12100000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     description:
@@ -541,7 +589,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/gemma-4-26b-a4b-it-4bit",
     params: "26B (A4B)",
     sizeBytes: 15300000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description:
@@ -553,7 +602,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.5-27B-4bit",
     params: "27B",
     sizeBytes: 16100000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description: "The MLX build of qwen3.5-27b. Dense general model for a 32 GB or larger Mac.",
@@ -564,7 +614,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3.5-35B-A3B-4bit",
     params: "35B (A3B)",
     sizeBytes: 20400000000,
-    category: "general",
+    kind: "chat",
+    tags: [],
     contextWindow: 262144,
     license: "apache-2.0",
     description:
@@ -576,7 +627,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3-Embedding-4B-4bit-DWQ",
     params: "4B",
     sizeBytes: 2280000000,
-    category: "embedding",
+    kind: "embedding",
+    tags: [],
     contextWindow: 40960,
     license: "apache-2.0",
     description:
@@ -588,7 +640,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/orpheus-3b-0.1-ft-4bit",
     params: "3B",
     sizeBytes: 1885400000,
-    category: "speech",
+    kind: "speech",
+    tags: [],
     contextWindow: 131072,
     license: "apache-2.0",
     companions: ["mlx:mlx-community/snac_24khz"],
@@ -600,7 +653,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
     params: "1.7B",
     sizeBytes: 3080000000,
-    category: "speech",
+    kind: "speech",
+    tags: [],
     contextWindow: 32768,
     license: "apache-2.0",
     description:
@@ -611,7 +665,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
     params: "1.7B",
     sizeBytes: 3080000000,
-    category: "speech",
+    kind: "speech",
+    tags: [],
     contextWindow: 32768,
     license: "apache-2.0",
     description:
@@ -625,7 +680,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "diffusers:Tongyi-MAI/Z-Image-Turbo",
     params: "6B",
     sizeBytes: 32848305533,
-    category: "image",
+    kind: "image",
+    tags: [],
     contextWindow: 512,
     license: "apache-2.0",
     description:
@@ -636,7 +692,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "diffusers:lodestones/Chroma1-HD",
     params: "8.9B",
     sizeBytes: 27493350519,
-    category: "image",
+    kind: "image",
+    tags: [],
     contextWindow: 512,
     license: "apache-2.0",
     description:
@@ -647,7 +704,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "diffusers:Qwen/Qwen-Image-2512",
     params: "20B",
     sizeBytes: 57704574910,
-    category: "image",
+    kind: "image",
+    tags: [],
     contextWindow: 512,
     license: "apache-2.0",
     description:
@@ -658,7 +716,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     uri: "diffusers:black-forest-labs/FLUX.2-klein-4B",
     params: "4B",
     sizeBytes: 15980131745,
-    category: "image",
+    kind: "image",
+    tags: [],
     contextWindow: 512,
     license: "apache-2.0",
     description:

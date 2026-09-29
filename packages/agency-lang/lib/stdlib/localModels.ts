@@ -81,9 +81,19 @@ import {
 } from "./mlxModelRecord.js";
 import { ttyColor } from "../utils/termcolors.js";
 
-import { CURATED_LOCAL_MODELS, type ModelCategory, type ModelInfo } from "./modelCatalog.js";
-export { CURATED_LOCAL_MODELS, type ModelCategory, type ModelInfo } from "./modelCatalog.js";
-import { kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
+import {
+  CURATED_LOCAL_MODELS,
+  type ModelCategory,
+  type ModelInfo,
+  type ModelTag,
+} from "./modelCatalog.js";
+export {
+  CURATED_LOCAL_MODELS,
+  type ModelCategory,
+  type ModelInfo,
+  type ModelTag,
+} from "./modelCatalog.js";
+import { isModelKind, kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
 export { MODEL_KINDS, isModelKind, type ModelKind } from "./modelKind.js";
 
 /** Where downloaded models live, in precedence order:
@@ -211,6 +221,9 @@ export type AliasObject = {
   source?: "remote";
   params?: string;
   sizeBytes?: number;
+  kind?: ModelKind;
+  tags?: ModelTag[];
+  /** An alias written before kinds and tags. Read as both. */
   category?: ModelCategory;
   contextWindow?: number;
   license?: string;
@@ -269,7 +282,8 @@ export type ModelNameEntry = {
   source: "curated" | "alias";
   params?: string;
   sizeBytes?: number;
-  category?: ModelCategory;
+  kind?: ModelKind;
+  tags?: ModelTag[];
   description?: string;
   contextWindow?: number;
   license?: string;
@@ -353,20 +367,27 @@ export function _mlxServedName(resolved: ResolvedModel): string {
 
 type EntryMeta = Pick<
   ModelNameEntry,
-  "params" | "sizeBytes" | "category" | "description" | "contextWindow" | "license" | "sha256"
+  "params" | "sizeBytes" | "kind" | "tags" | "description" | "contextWindow" | "license" | "sha256"
 >;
+
+/** A source of entry metadata: a catalog entry, an alias, or a remote
+ *  catalog model, any of which may still say `category`. */
+type MetaSource = Partial<EntryMeta> & { category?: ModelCategory };
 
 /** Project the optional display-metadata fields off any source shape
  *  (`ModelInfo`, or an alias which may be a bare URI string). A string alias
  *  carries no metadata, so it yields `{}` — which is why the call sites can
  *  pass an `AliasValue` directly without a `typeof` guard. Returns only
  *  defined fields so the spread doesn't introduce stray `undefined` keys. */
-function metaFrom(src: string | Partial<EntryMeta>): EntryMeta {
+function metaFrom(src: string | MetaSource): EntryMeta {
   if (typeof src === "string") return {};
   const out: EntryMeta = {};
   if (src.params !== undefined) out.params = src.params;
   if (src.sizeBytes !== undefined) out.sizeBytes = src.sizeBytes;
-  if (src.category !== undefined) out.category = src.category;
+  const kind = isModelKind(src.kind) ? src.kind : kindOfCategory(src.category);
+  if (kind !== undefined) out.kind = kind;
+  const tags = src.tags ?? tagsOfCategory(src.category);
+  if (tags !== undefined) out.tags = tags;
   if (src.description !== undefined) out.description = src.description;
   if (src.contextWindow !== undefined) out.contextWindow = src.contextWindow;
   if (src.license !== undefined) out.license = src.license;
@@ -750,7 +771,8 @@ export type CatalogModel = {
   uri: string;
   params?: string;
   sizeBytes?: number;
-  category?: ModelCategory;
+  kind?: ModelKind;
+  tags?: ModelTag[];
   contextWindow?: number;
   license?: string;
   description?: string;
@@ -805,6 +827,12 @@ const CatalogModelSchema = z
     uri: z.string().refine(isCatalogUri, "uri must be an hf:/mlx:/https: URI or a .gguf path"),
     params: z.string().optional().catch(undefined),
     sizeBytes: z.number().optional().catch(undefined),
+    kind: z
+      .enum(MODEL_KINDS as [ModelKind, ...ModelKind[]])
+      .optional()
+      .catch(undefined),
+    tags: z.array(z.string()).optional().catch(undefined),
+    // What a catalog said before kinds and tags. Read as both.
     category: z.enum(CATALOG_CATEGORIES).optional().catch(undefined),
     contextWindow: z.number().optional().catch(undefined),
     license: z.string().optional().catch(undefined),
@@ -886,7 +914,8 @@ export function parseCatalog(text: string): Record<string, CatalogModel> {
         ...compact({
           params: d.params,
           sizeBytes: d.sizeBytes,
-          category: d.category,
+          kind: d.kind ?? kindOfCategory(d.category),
+          tags: d.tags ?? tagsOfCategory(d.category),
           contextWindow: d.contextWindow,
           license: d.license,
           description: d.description,
@@ -1377,8 +1406,9 @@ function recordKind(dir: string, kind: ModelKind | null): void {
   writeMlxModelRecord(dir, { ...record, kind });
 }
 
-/** The kind a catalog category implies. The categories that say what a
- *  model returns map to themselves; the rest describe a chat model. */
+/** The kind a category from before the split implies. The categories that
+ *  say what a model returns map to themselves; the rest describe a chat
+ *  model. */
 export function kindOfCategory(category: ModelCategory | undefined): ModelKind | undefined {
   if (category === undefined) {
     return undefined;
@@ -1387,6 +1417,18 @@ export function kindOfCategory(category: ModelCategory | undefined): ModelKind |
     return category;
   }
   return "chat";
+}
+
+/** The tags a category from before the split implies: the category itself
+ *  when it says what a chat model is good for, none otherwise. */
+export function tagsOfCategory(category: ModelCategory | undefined): ModelTag[] | undefined {
+  if (category === undefined) {
+    return undefined;
+  }
+  if (kindOfCategory(category) !== "chat" || category === "general") {
+    return [];
+  }
+  return [category];
 }
 
 /** What kind of model `value` is, given the directory it resolved to. The
@@ -1411,33 +1453,27 @@ export function _modelKind(value: string, dir: string): ModelKind | null {
 }
 
 /** The kind the catalog or an alias entry gives `value`, before any file is
- *  looked at. Undefined when no entry names it. */
-export function _catalogKind(value: string): ModelKind | undefined {
-  return kindOfCategory(_localModelCategory(value));
-}
-
-/** What a local model is for, when its catalog or alias entry says. The
- *  value may be the entry's name or the URI it points at; a plain string
- *  alias, a directory, or a URI no entry names has no category. */
-export function _localModelCategory(
+ *  looked at. The value may be the entry's name or the URI it points at; a
+ *  plain string alias, a directory, or a URI no entry names has none. */
+export function _catalogKind(
   value: string,
   target: ConfigTarget = defaultAliasTarget(),
-): ModelCategory | undefined {
+): ModelKind | undefined {
   const aliases = readModelAliases(target);
   const alias = aliases[value];
   if (alias !== undefined) {
-    return typeof alias === "string" ? undefined : alias.category;
+    return typeof alias === "string" ? undefined : metaFrom(alias).kind;
   }
   const curated = CURATED_LOCAL_MODELS[value];
   if (curated !== undefined) {
-    return curated.category;
+    return curated.kind;
   }
   for (const entry of Object.values(aliases)) {
     if (typeof entry !== "string" && entry.uri === value) {
-      return entry.category;
+      return metaFrom(entry).kind;
     }
   }
-  return catalogEntry(value, value)?.category;
+  return catalogEntry(value, value)?.kind;
 }
 
 /** Convenience: register the provider + ensure the model is downloaded. */

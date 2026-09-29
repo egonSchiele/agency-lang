@@ -418,5 +418,10 @@ The built-in catalog lives in `lib/stdlib/modelCatalog.ts` (moved out of
 `data/model-catalog.json`. MLX entries use an `mlx:` URI, carry no
 `sha256` because the downloader verifies each file from the Hub's own
 hashes, and end in `-mlx` when a GGUF entry of the same model exists.
-Sizes are the whole repo, read from the Hub API. Three categories were
-added with them: `writing`, `science`, and `uncensored`.
+Sizes are the whole repo, read from the Hub API. Each entry has a `kind`
+(what it returns; `local-models.md`, "Kinds") and `tags` (what a chat
+model is good for: `coding`, `reasoning`, `writing`, `science`,
+`uncensored`; empty for a general model). Both replaced the one
+`category` field, which a remote catalog or an alias from before the
+split may still carry; `kindOfCategory` and `tagsOfCategory` read it as
+both.

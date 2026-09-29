@@ -87,9 +87,11 @@ Every local model has a kind: what it takes and returns. `ModelKind` in
 `lib/stdlib/modelKind.ts` is `chat`, `embedding`, `speech`, or `image`.
 The kind decides which server script `serve` starts, which route serves
 it, and which stdlib function calls it. What a model is good for
-(coding, reasoning) is a catalog category, not a kind; `kindOfCategory`
-in `localModels.ts` maps the categories that name a return type to
-themselves and everything else to `chat`.
+(coding, reasoning) is a tag on its catalog entry, not a kind. An entry
+has both, `kind` and `tags`. A remote catalog or an alias written before
+the split has one `category` field instead; `kindOfCategory` and
+`tagsOfCategory` in `localModels.ts` read it as both, so nothing needs
+regenerating.
 
 A kind comes from three places, tried in this order by `_modelKind(value,
 dir)` in `localModels.ts`, the one function every reader calls:
@@ -140,7 +142,7 @@ The picker offers every complete downloaded model whose kind is known,
 with the kind in the title. A model of no known kind is left out, since
 the picker cannot pass the flag it would need. `list` prints a `KIND`
 column, orders rows by kind, and takes `--kind` to show one. A plain
-alias has no category, so its kind comes from its downloaded files.
+alias with no `kind` field takes its kind from its downloaded files.
 
 ## The `agency local` CLI surface
 

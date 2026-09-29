@@ -176,7 +176,7 @@ A gated repo needs `HF_TOKEN` set to a token that has accepted its terms. The to
 | `agency local remove <name> [-f]` | Remove the alias for a model and keep its files, printing where they are. With `-f`, delete the files too: the `.gguf` file, or the whole MLX or diffusers model directory. Files outside the models directory are never deleted. |
 | `agency local resolve <value>` | Show the backend and what a name/alias maps to, without downloading. |
 | `agency local refresh [url]` | Fetch the remote model catalog and update the `source:"remote"` aliases in `agency.json`. Adds/updates models from the catalog, removes ones it dropped, and skips any name you've aliased yourself (printing what it would have set). |
-| `agency local alias list` | List usable short names. Curated entries show params, category, size, context window, and license (with the description on the next line); your aliases show their target. |
+| `agency local alias list` | List usable short names. Curated entries show params, tags, size, context window, and license (with the description on the next line); your aliases show their target. |
 | `agency local alias add <name> <target>` | Add a short-name alias. The target is an `hf:` URI, a `.gguf` path, an `mlx:` or `diffusers:` URI, or a model directory. Prints the `agency.json` path that was edited. |
 | `agency local alias remove <name>` | Remove a short-name alias. Prints the `agency.json` path that was inspected (the file is left untouched if the alias wasn't present). |
 
@@ -220,7 +220,10 @@ read at runtime, so edits take effect on the next call:
       "my7b": "hf:Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
       "coder": "mlx:mlx-community/Qwen3-Coder-Next-4bit",
       // The object form needs a "backend" that matches the uri.
-      "big": { "backend": "mlx", "uri": "mlx:mlx-community/DeepSeek-V4-Flash-4bit", "params": "300B" }
+      "big": { "backend": "mlx", "uri": "mlx:mlx-community/DeepSeek-V4-Flash-4bit", "params": "300B" },
+      // "kind" says what the model takes and returns, and "tags" says what it is good for.
+      "embedder": { "backend": "mlx", "uri": "mlx:mlx-community/Qwen3-Embedding-4B-4bit-DWQ", "kind": "embedding" },
+      "thinker": { "backend": "mlx", "uri": "mlx:org/some-model", "kind": "chat", "tags": ["reasoning", "coding"] }
     },
     "modelsDir": "/data/agency-models",
     // Override the URL `agency local refresh` fetches the model catalog from.
@@ -229,6 +232,15 @@ read at runtime, so edits take effect on the next call:
   }
 }
 ```
+
+An object alias can also say what kind of model it is. `kind` is one of
+`chat`, `embedding`, `speech`, or `image`, and `agency local serve` uses it to
+pick the server, so an alias for an embedding model should say
+`"kind": "embedding"`. `tags` is a list of words for what the model is good
+at, such as `["reasoning", "coding"]`, and shows in the TAGS column of
+`agency local list`. Both are optional. A kind that is not one of the four, or
+tags that are not a list of strings, is an error when the config is read. A
+catalog you host through `modelCatalogUrl` uses the same two fields.
 
 ### See also
 

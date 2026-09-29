@@ -9,18 +9,25 @@ describe("formatLocalList kinds", () => {
       backend: "diffusers",
       target: "diffusers:org/painter",
       source: "curated",
-      category: "image",
+      kind: "image",
     },
     {
       name: "embedder",
       backend: "mlx",
       target: "mlx:org/embedder",
       source: "curated",
-      category: "embedding",
+      kind: "embedding",
     },
-    // A plain alias: no category, so only its files can say what it is.
+    // A plain alias: no kind, so only its files can say what it is.
     { name: "my-alias", backend: "mlx", target: "mlx:org/aliased", source: "alias" },
-    { name: "coder", backend: "mlx", target: "mlx:org/coder", source: "curated", category: "code" },
+    {
+      name: "coder",
+      backend: "mlx",
+      target: "mlx:org/coder",
+      source: "curated",
+      kind: "chat",
+      tags: ["coding"],
+    },
     // A plain alias whose files are not downloaded: nothing says its kind.
     { name: "not-here", backend: "mlx", target: "mlx:org/missing", source: "alias" },
   ];
@@ -51,7 +58,7 @@ describe("formatLocalList kinds", () => {
     return table.map((line) => line.trim().replace(/^✓\s+/, "").split(/\s+/)[0]);
   }
 
-  it("shows a KIND column, from the category or else from the files", () => {
+  it("shows a KIND column, from the entry or else from the files", () => {
     const out = formatLocalList({ dir: "/d", entries, manifest: {}, files });
     const lines = out.split("\n");
     expect(lines[2]).toMatch(/NAME\s+KIND\s+BACKEND/);

@@ -93,7 +93,7 @@ export {
   type ModelInfo,
   type ModelTag,
 } from "./modelCatalog.js";
-import { kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
+import { isModelKind, kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
 export { MODEL_KINDS, isModelKind, type ModelKind } from "./modelKind.js";
 
 /** Where downloaded models live, in precedence order:
@@ -384,7 +384,7 @@ function metaFrom(src: string | MetaSource): EntryMeta {
   const out: EntryMeta = {};
   if (src.params !== undefined) out.params = src.params;
   if (src.sizeBytes !== undefined) out.sizeBytes = src.sizeBytes;
-  const kind = src.kind ?? kindOfCategory(src.category);
+  const kind = isModelKind(src.kind) ? src.kind : kindOfCategory(src.category);
   if (kind !== undefined) out.kind = kind;
   const tags = src.tags ?? tagsOfCategory(src.category);
   if (tags !== undefined) out.tags = tags;

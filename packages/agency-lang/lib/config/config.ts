@@ -3,6 +3,7 @@ import type { LogLevel } from "../logger.js";
 import { z } from "zod";
 import { McpServersSchema, type McpServers } from "./mcpServers.js";
 import { mapConfigValues } from "./paths.js";
+import { MODEL_KINDS, type ModelKind } from "../stdlib/modelKind.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -496,11 +497,15 @@ export const ModelAliasSchema = z.union([
       source: z.literal("remote").optional(),
       params: z.string().optional(),
       sizeBytes: z.number().optional(),
+      kind: z.enum(MODEL_KINDS as [ModelKind, ...ModelKind[]]).optional(),
+      tags: z.array(z.string()).optional(),
+      // What refresh wrote before kinds and tags. Still read, as both.
       category: z.string().optional(),
       contextWindow: z.number().optional(),
       license: z.string().optional(),
       description: z.string().optional(),
       sha256: z.string().optional(),
+      companions: z.array(z.string()).optional(),
     })
     .loose(),
 ]);
@@ -721,10 +726,27 @@ export function validateConfig(raw: unknown, source: string): ConfigResult {
   if (result.success) {
     return { config: result.data as AgencyConfig };
   }
-  const issues = result.error.issues
-    .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
-    .join("\n");
+  const issues = result.error.issues.flatMap((issue) => issueLines(issue, [])).join("\n");
   return { config: {}, error: `Invalid config in ${source}:\n${issues}` };
+}
+
+/** One line per problem, each naming the field it is about. A value that
+ *  fails a union, such as a model alias that may be a string or an object,
+ *  is reported through the one branch its type matched. So a bad `tags` on
+ *  an object alias reads `client.modelAliases.coder.tags: Invalid input:
+ *  expected array`, not just `client.modelAliases.coder: Invalid input`. */
+function issueLines(issue: z.core.$ZodIssue, parent: PropertyKey[]): string[] {
+  const at = [...parent, ...issue.path];
+  if (issue.code === "invalid_union") {
+    const typeMatched = issue.errors.filter(
+      (branch) =>
+        !branch.every((inner) => inner.code === "invalid_type" && inner.path.length === 0),
+    );
+    if (typeMatched.length === 1) {
+      return typeMatched[0].flatMap((inner) => issueLines(inner, at));
+    }
+  }
+  return [`  - ${at.map(String).join(".")}: ${issue.message}`];
 }
 
 /** Load exactly one config file. A missing file is an empty config. For a

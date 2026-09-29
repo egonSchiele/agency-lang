@@ -539,6 +539,20 @@ describe("formatLocalList", () => {
     expect(out).toContain("raw.gguf");
   });
 
+  it("prints every tag of a model in the TAGS column", () => {
+    const tagged: ModelNameEntry[] = [
+      { ...entries[1], kind: "chat", tags: ["coding", "reasoning"] },
+    ];
+    const out = formatLocalList({ dir: "/d", entries: tagged, manifest: {}, files: [] });
+    const lines = out.split("\n");
+    const header = lines.find((l) => l.includes("NAME"));
+    const row = lines.find((l) => l.includes("mid"));
+    expect(header).toContain("TAGS");
+    expect(row).toContain("coding, reasoning");
+    // The tags sit under their header.
+    expect(row!.indexOf("coding")).toBe(header!.indexOf("TAGS"));
+  });
+
   it("omits descriptions by default", () => {
     const out = formatLocalList({ dir: "/d", entries, manifest: {}, files: [] });
     expect(out).not.toContain("A middling model.");
@@ -676,6 +690,57 @@ describe("formatModelCatalog with rich aliases", () => {
   });
 });
 
+describe("kind and tags on an alias", () => {
+  it("prints every tag of an alias in the TAGS column", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: {
+            thinker: {
+              backend: "mlx",
+              uri: "mlx:org/thinker",
+              kind: "chat",
+              tags: ["coding", "reasoning"],
+            },
+          },
+        },
+      }),
+    );
+    const lines = formatModelCatalog(fileTarget(aliasFile)).split("\n");
+    const header = lines.find((l) => l.includes("NAME"));
+    const row = lines.find((l) => l.includes("thinker"));
+    expect(row).toContain("coding, reasoning");
+    expect(row!.indexOf("coding")).toBe(header!.indexOf("TAGS"));
+  });
+
+  it("tags that are not a list are an error naming the field, not a crash", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: { modelAliases: { coder: { backend: "mlx", uri: "mlx:org/x", tags: "coding" } } },
+      }),
+    );
+    expect(() => formatModelCatalog(fileTarget(aliasFile))).toThrow(
+      new RegExp(`Invalid config in ${aliasFile}[\\s\\S]*client\\.modelAliases\\.coder\\.tags`),
+    );
+  });
+
+  it("a kind that is not a kind of model is an error naming the field", () => {
+    fs.writeFileSync(
+      aliasFile,
+      JSON.stringify({
+        client: {
+          modelAliases: { e: { backend: "mlx", uri: "mlx:org/e", kind: "embeddings" } },
+        },
+      }),
+    );
+    expect(() => _listModelNames(fileTarget(aliasFile))).toThrow(
+      new RegExp(`Invalid config in ${aliasFile}[\\s\\S]*client\\.modelAliases\\.e\\.kind`),
+    );
+  });
+});
+
 describe("resolveCatalogUrl", () => {
   afterEach(() => {
     delete process.env.AGENCY_MODEL_CATALOG_URL;
@@ -739,6 +804,38 @@ describe("parseCatalog", () => {
     const out = parseCatalog(withCompanions);
     expect(out["m2"].companions).toEqual(["mlx:org/decoder"]);
     expect(out["m3"].companions).toBeUndefined();
+  });
+  it("reads an entry that says only category as a kind and tags", () => {
+    const old = JSON.stringify({
+      version: 1,
+      models: {
+        coder: { backend: "llama-cpp", uri: "hf:org/c:Q4_K_M", category: "coding" },
+        general: { backend: "llama-cpp", uri: "hf:org/g:Q4_K_M", category: "general" },
+        embedder: { backend: "llama-cpp", uri: "hf:org/e:Q4_K_M", category: "embedding" },
+      },
+    });
+    const out = parseCatalog(old);
+    expect(out["coder"]).toMatchObject({ kind: "chat", tags: ["coding"] });
+    expect(out["general"]).toMatchObject({ kind: "chat", tags: [] });
+    expect(out["embedder"]).toMatchObject({ kind: "embedding", tags: [] });
+    for (const model of Object.values(out)) {
+      expect(model).not.toHaveProperty("category");
+    }
+  });
+  it("prefers kind and tags over category when an entry has both", () => {
+    const both = JSON.stringify({
+      version: 1,
+      models: {
+        m: {
+          backend: "llama-cpp",
+          uri: "hf:org/m:Q4_K_M",
+          category: "coding",
+          kind: "chat",
+          tags: ["reasoning"],
+        },
+      },
+    });
+    expect(parseCatalog(both)["m"]).toMatchObject({ kind: "chat", tags: ["reasoning"] });
   });
   it("throws on invalid JSON", () => {
     expect(() => parseCatalog("{not json")).toThrow(/valid JSON/);

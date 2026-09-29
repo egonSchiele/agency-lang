@@ -220,7 +220,10 @@ read at runtime, so edits take effect on the next call:
       "my7b": "hf:Qwen/Qwen2.5-7B-Instruct-GGUF:Q4_K_M",
       "coder": "mlx:mlx-community/Qwen3-Coder-Next-4bit",
       // The object form needs a "backend" that matches the uri.
-      "big": { "backend": "mlx", "uri": "mlx:mlx-community/DeepSeek-V4-Flash-4bit", "params": "300B" }
+      "big": { "backend": "mlx", "uri": "mlx:mlx-community/DeepSeek-V4-Flash-4bit", "params": "300B" },
+      // "kind" says what the model takes and returns, and "tags" says what it is good for.
+      "embedder": { "backend": "mlx", "uri": "mlx:mlx-community/Qwen3-Embedding-4B-4bit-DWQ", "kind": "embedding" },
+      "thinker": { "backend": "mlx", "uri": "mlx:org/some-model", "kind": "chat", "tags": ["reasoning", "coding"] }
     },
     "modelsDir": "/data/agency-models",
     // Override the URL `agency local refresh` fetches the model catalog from.
@@ -229,6 +232,15 @@ read at runtime, so edits take effect on the next call:
   }
 }
 ```
+
+An object alias can also say what kind of model it is. `kind` is one of
+`chat`, `embedding`, `speech`, or `image`, and `agency local serve` uses it to
+pick the server, so an alias for an embedding model should say
+`"kind": "embedding"`. `tags` is a list of words for what the model is good
+at, such as `["reasoning", "coding"]`, and shows in the TAGS column of
+`agency local list`. Both are optional. A kind that is not one of the four, or
+tags that are not a list of strings, is an error when the config is read. A
+catalog you host through `modelCatalogUrl` uses the same two fields.
 
 ### See also
 

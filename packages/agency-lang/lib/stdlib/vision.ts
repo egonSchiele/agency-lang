@@ -9,6 +9,10 @@ import { _approvedFilePath } from "./approvedPath.js";
  *  model is a vision model, and posts to the server `agency local serve`
  *  runs. */
 
+/** The largest image sent. `MAX_IMAGE_BYTES` in
+ *  lib/cli/localServerCommon.py is the same, and a test compares them. */
+export const MAX_IMAGE_BYTES = 50_000_000;
+
 /** The route each task answers on, under the server's `/v1`. */
 const ROUTE_FOR_TASK = {
   detections: "/vision/detections",

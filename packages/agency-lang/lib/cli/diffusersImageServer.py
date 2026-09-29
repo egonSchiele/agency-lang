@@ -1,12 +1,13 @@
 """An OpenAI-style /v1/images/generations server for one diffusers model.
 
 Started by `agency local serve <model>`. Loads the model once on the Mac
-GPU, loads LoRA adapters from `--adapters-dir` as requests name them, and
-answers:
+GPU, loads LoRA adapters from `--adapters-dir` and ControlNets from
+`--controlnets-dir` as requests name them, and answers:
 
   POST /v1/images/generations  {"prompt", "size"?, "steps"?, "guidance"?, "seed"?,
                                 "negative_prompt"?, "output_format"?, "response_format"?, "n"?,
-                                "lora"?, "lora_scale"?, "controlnet"?, "control_image"?, "control_scale"?}
+                                "lora"?, "lora_scale"?, "controlnet"?, "control_image"?, "control_scale"?,
+                                "control_invert"?}
   GET  /v1/models
   GET  /health                 {"status": "ok", "adapters": [names], "controlnets": [names]}
 
@@ -31,10 +32,11 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import client_gone, fail  # noqa: E402
+from localServerCommon import MAX_IMAGE_BYTES, base64_length, client_gone, fail  # noqa: E402
 from diffusersImageRules import (  # noqa: E402
     DIFFUSERS_VERSION,
     RequestError,
+    check_folder,
     check_request,
     join_names,
     family_of,
@@ -42,21 +44,28 @@ from diffusersImageRules import (  # noqa: E402
     adapter_path,
     controlnet_names,
     controlnet_path,
+    controlnet_problem,
+    letterbox,
     warm_up_request,
 )
-from localServerCommon import read_image_bytes  # noqa: E402
 
 GENERATIONS_PATH = "/v1/images/generations"
 
-# A request body is a prompt and a few settings. Anything bigger is not a
-# request this server makes sense of.
-MAX_BODY_BYTES = 64 * 1024
+# A request body is a prompt and a few settings, plus a control image as
+# base64 when it names a ControlNet. Anything bigger is not a request this
+# server makes sense of.
+MAX_BODY_BYTES = 64 * 1024 + base64_length(MAX_IMAGE_BYTES)
+
+# The image formats a control image may be. Pillow is told to try these and
+# nothing else.
+CONTROL_IMAGE_FORMATS = ["PNG", "JPEG", "WEBP", "GIF"]
+
+# The most pixels a control image may have before it is decoded. A 50 MB
+# file can hold a far larger image, and decoding one would take the
+# memory the model needs. It is scaled down to the request's size anyway.
+MAX_CONTROL_IMAGE_PIXELS = 40_000_000
 
 PIL_FORMATS = {"png": "PNG", "jpeg": "JPEG", "webp": "WEBP"}
-
-# A scribble whose mean brightness is above this is black lines on white
-# paper, which the scribble ControlNet was trained on the inverse of.
-SCRIBBLE_INVERT_ABOVE = 127
 
 
 def parse_args():
@@ -75,33 +84,6 @@ def parse_args():
         help="the folder ControlNets (a diffusers directory each) are loaded from, by name, as requests ask",
     )
     return parser.parse_args()
-
-
-def check_folder(folder, flag):
-    """A configured folder, once it is known to be a directory and not a
-    symlink, or None. Fails before the model loads."""
-    if folder is None:
-        return None
-    if os.path.islink(folder):
-        fail(f"{flag} {folder} is a symlink. Name the folder itself.")
-    if not os.path.isdir(folder):
-        fail(f"{flag} {folder} is not a folder.")
-    return folder
-
-
-def check_adapters_dir(adapters_dir):
-    """The folder, once it is known to be a directory and not a symlink, or
-    None. Fails before the model loads, so a wrong path costs seconds. A
-    family that takes no adapters is not refused the folder: a request
-    naming one is refused instead, since the folder is one config key for
-    every image model the user serves."""
-    if adapters_dir is None:
-        return None
-    if os.path.islink(adapters_dir):
-        fail(f"--adapters-dir {adapters_dir} is a symlink. Name the folder itself.")
-    if not os.path.isdir(adapters_dir):
-        fail(f"--adapters-dir {adapters_dir} is not a folder.")
-    return adapters_dir
 
 
 def check_diffusers_version():
@@ -138,8 +120,15 @@ class Generator:
             self.rules = family_of(read_model_index(model_dir))
         except ValueError as err:
             fail(str(err))
-        self.adapters_dir = check_adapters_dir(adapters_dir)
-        self.controlnets_dir = check_folder(controlnets_dir, "--controlnets-dir")
+        # Checked before the model loads, so a wrong path costs seconds. A
+        # family that takes no adapters or ControlNets is not refused the
+        # folders: a request naming one is refused instead, since each
+        # folder is one config key for every image model the user serves.
+        try:
+            self.adapters_dir = check_folder(adapters_dir, "--adapters-dir")
+            self.controlnets_dir = check_folder(controlnets_dir, "--controlnets-dir")
+        except ValueError as err:
+            fail(str(err))
         # The adapters loaded so far, by name. An adapter is loaded the
         # first time a request names it and kept.
         self.loaded = []
@@ -206,18 +195,22 @@ class Generator:
         """The ControlNet pipeline for `name`, built the first time it is
         asked for from the base pipeline's components plus the ControlNet
         loaded from its folder. A missing folder is a 400 naming what the
-        ControlNets folder holds. Called under the lock."""
+        ControlNets folder holds, and a folder with a symlink or a missing
+        file in it is a 400 saying which. Called under the lock."""
         if name in self.control_pipes:
             return self.control_pipes[name]
         import diffusers
 
         folder = controlnet_path(self.controlnets_dir, name)
-        if os.path.islink(folder) or not os.path.isfile(os.path.join(folder, "config.json")):
+        if not os.path.lexists(folder):
             have = controlnet_names(self.controlnets_dir)
             listing = join_names(have) if have else "no ControlNets"
             raise RequestError(
                 f'There is no ControlNet "{name}" in {self.controlnets_dir}. It has {listing}.'
             )
+        problem = controlnet_problem(folder)
+        if problem is not None:
+            raise RequestError(f'The ControlNet "{name}" cannot be loaded: {problem}')
         controlnet = diffusers.ControlNetModel.from_pretrained(
             folder, dtype=self.torch.bfloat16, use_safetensors=True, local_files_only=True
         ).to("mps")
@@ -228,20 +221,31 @@ class Generator:
         return pipe
 
     def control_image(self, request):
-        """The conditioning image, resized to the request's size. A scribble
-        drawn black on white is inverted, since a scribble ControlNet was
-        trained on white lines over black."""
-        import io
+        """The conditioning image at the request's size. It is decoded from
+        the bytes the request carried, inverted when the request asked, and
+        scaled to fit with its aspect ratio kept, centered on black."""
         from PIL import Image, ImageOps
 
-        image = Image.open(io.BytesIO(read_image_bytes(request["control_image"]))).convert("RGB")
-        image = image.resize((request["width"], request["height"]), Image.LANCZOS)
-        if "scribble" in request["controlnet"]:
-            grey = ImageOps.grayscale(image)
-            mean = sum(grey.getdata()) / (grey.width * grey.height)
-            if mean > SCRIBBLE_INVERT_ABOVE:
-                image = ImageOps.invert(image)
-        return image
+        try:
+            image = Image.open(io.BytesIO(request["control_image"]), formats=CONTROL_IMAGE_FORMATS)
+        except (OSError, ValueError, Image.DecompressionBombError):
+            raise RequestError(
+                f"control_image is not an image this server reads. It reads "
+                f"{join_names([f.lower() for f in CONTROL_IMAGE_FORMATS], 'or')}."
+            )
+        if image.width * image.height > MAX_CONTROL_IMAGE_PIXELS:
+            raise RequestError(
+                f"control_image is {image.width}x{image.height}; this server takes images up to "
+                f"{MAX_CONTROL_IMAGE_PIXELS:,} pixels."
+            )
+        image = image.convert("RGB")
+        if request["control_invert"]:
+            image = ImageOps.invert(image)
+        width, height = request["width"], request["height"]
+        fit_width, fit_height, left, top = letterbox(image.width, image.height, width, height)
+        canvas = Image.new("RGB", (width, height), (0, 0, 0))
+        canvas.paste(image.resize((fit_width, fit_height), Image.LANCZOS), (left, top))
+        return canvas
 
     def generate(self, request, sock):
         """The image for a checked request, or None when the client hung up.
@@ -270,6 +274,11 @@ class Generator:
         }
         if request["negative_prompt"] != "":
             kwargs["negative_prompt"] = request["negative_prompt"]
+        # Decoded before the lock, so a bad image never waits for the GPU
+        # or loads a ControlNet.
+        if request["controlnet"] is not None:
+            kwargs["image"] = self.control_image(request)
+            kwargs["controlnet_conditioning_scale"] = request["control_scale"]
         with self.lock:
             # A client that hung up while it waited for the lock gets
             # nothing started at all.
@@ -279,8 +288,6 @@ class Generator:
             pipe = self.pipe
             if request["controlnet"] is not None:
                 pipe = self.control_pipeline(request["controlnet"])
-                kwargs["image"] = self.control_image(request)
-                kwargs["controlnet_conditioning_scale"] = request["control_scale"]
             try:
                 return pipe(**kwargs).images[0]
             except ClientGone as gone:

@@ -11,7 +11,7 @@ import random
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import ImagePathError, check_image_path  # noqa: E402
+from localServerCommon import ImageDataError, image_bytes_of  # noqa: E402
 
 # The one diffusers release these rules and the server were written
 # against. The server refuses any other version, because it reaches into
@@ -61,6 +61,7 @@ FIELDS = [
     "controlnet",
     "control_image",
     "control_scale",
+    "control_invert",
 ]
 
 # A request names a LoRA adapter by its file's name in the adapters folder
@@ -77,8 +78,9 @@ DEFAULT_LORA_SCALE = 1.0
 
 # A request names a ControlNet by its folder's name in the ControlNets
 # folder (`client.controlnetsDir`): a diffusers ControlNet directory with
-# config.json and its .safetensors weights. How strongly it constrains
-# the image is control_scale, 1.0 as the model card says.
+# these two files and nothing that is a symlink. How strongly it
+# constrains the image is control_scale, 1.0 as the model card says.
+CONTROLNET_FILES = ("config.json", "diffusion_pytorch_model.safetensors")
 MAX_CONTROL_SCALE = 2.0
 DEFAULT_CONTROL_SCALE = 1.0
 
@@ -376,17 +378,50 @@ def controlnet_path(controlnets_dir, name):
     )
 
 
+def check_folder(folder, flag):
+    """A configured folder, the adapters or the ControlNets folder, once it
+    is known to be a directory and not a symlink, or None when none is
+    configured. Raises ValueError with the message to fail with, naming
+    the command-line flag."""
+    if folder is None:
+        return None
+    if os.path.islink(folder):
+        raise ValueError(f"{flag} {folder} is a symlink. Name the folder itself.")
+    if not os.path.isdir(folder):
+        raise ValueError(f"{flag} {folder} is not a folder.")
+    return folder
+
+
+def controlnet_problem(folder):
+    """Why the ControlNet directory `folder` cannot be loaded, or None when
+    it can. It must be a real directory holding CONTROLNET_FILES as regular
+    files, with no symlink anywhere inside it, since from_pretrained
+    follows links."""
+    if os.path.islink(folder):
+        return f"{folder} is a symlink, which this server does not follow."
+    if not os.path.isdir(folder):
+        return f"{folder} is not a folder."
+    for parent, dirs, files in os.walk(folder):
+        for entry in dirs + files:
+            path = os.path.join(parent, entry)
+            if os.path.islink(path):
+                return f"{path} is a symlink, which this server does not follow."
+    missing = [name for name in CONTROLNET_FILES if not os.path.isfile(os.path.join(folder, name))]
+    if missing:
+        return f"{folder} has no {join_names(missing)}."
+    return None
+
+
 def controlnet_names(controlnets_dir):
-    """The ControlNets in the folder, by name: the subfolders holding a
-    config.json. Read fresh each time."""
+    """The ControlNets in the folder, by name: the entries controlnet_problem
+    accepts, so the list holds exactly what a request can load. Read fresh
+    each time."""
     try:
         entries = os.listdir(controlnets_dir)
     except OSError:
         return []
     return sorted(
-        entry
-        for entry in entries
-        if os.path.isfile(os.path.join(controlnets_dir, entry, "config.json"))
+        entry for entry in entries if controlnet_problem(os.path.join(controlnets_dir, entry)) is None
     )
 
 
@@ -454,16 +489,36 @@ def _check_unknown_fields(body):
         )
 
 
+def _control_image_of(value):
+    """The bytes of the control image, from the request's base64. The
+    stdlib reads the file after the user approves it, so the server never
+    opens a path a request wrote."""
+    try:
+        return image_bytes_of(value)
+    except ImageDataError as err:
+        raise RequestError(f"control_image: {err}")
+
+
 def _controlnet_of(rules, body, controlnets_dir):
-    """(name or None, image path or None, scale) for a request. A ControlNet
-    and its image go together; one without the other is refused."""
+    """The ControlNet part of a checked request: the name or None, the
+    image's bytes or None, the scale, and whether to invert the image. A
+    ControlNet and its image go together; one without the other is
+    refused, and so are a scale or an invert without them."""
     name = body.get("controlnet")
     image = body.get("control_image")
     scale = body.get("control_scale")
+    invert = body.get("control_invert")
     if name is None and image is None:
-        if scale is not None:
-            raise RequestError("control_scale needs controlnet: it says how strongly to apply it.")
-        return None, None, DEFAULT_CONTROL_SCALE
+        if scale is not None or invert is not None:
+            raise RequestError(
+                "control_scale and control_invert need controlnet: they say how to apply it."
+            )
+        return {
+            "controlnet": None,
+            "control_image": None,
+            "control_scale": DEFAULT_CONTROL_SCALE,
+            "control_invert": False,
+        }
     if name is None or image is None:
         raise RequestError(
             "controlnet and control_image go together: the ControlNet's name, and the image "
@@ -477,17 +532,29 @@ def _controlnet_of(rules, body, controlnets_dir):
             "folder your ControlNets are in, and start the server again."
         )
     controlnet_path(controlnets_dir, name)
-    try:
-        image_path = check_image_path(image)
-    except ImagePathError as err:
-        raise RequestError(f"control_image: {err}")
-    if scale is None:
-        return name, image_path, DEFAULT_CONTROL_SCALE
-    if not _is_number(scale) or scale < 0 or scale > MAX_CONTROL_SCALE:
+    if scale is not None and (not _is_number(scale) or scale < 0 or scale > MAX_CONTROL_SCALE):
         raise RequestError(
             f"control_scale must be a number from 0 to {MAX_CONTROL_SCALE}. 1 applies it as the model card says."
         )
-    return name, image_path, float(scale)
+    if invert is not None and not isinstance(invert, bool):
+        raise RequestError("control_invert must be true or false.")
+    return {
+        "controlnet": name,
+        "control_image": _control_image_of(image),
+        "control_scale": DEFAULT_CONTROL_SCALE if scale is None else float(scale),
+        "control_invert": invert is True,
+    }
+
+
+def letterbox(source_width, source_height, width, height):
+    """Where a control image of the source size goes inside a width x height
+    canvas, keeping its aspect ratio: (scaled width, scaled height, left,
+    top). The image is scaled to fit and centered, and the rest of the
+    canvas is black, which a ControlNet reads as "no lines here"."""
+    scale = min(width / source_width, height / source_height)
+    fit_width = min(width, max(1, round(source_width * scale)))
+    fit_height = min(height, max(1, round(source_height * scale)))
+    return fit_width, fit_height, (width - fit_width) // 2, (height - fit_height) // 2
 
 
 def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
@@ -502,7 +569,7 @@ def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     _check_openai_fields(body)
     width, height = parse_size(body.get("size") or DEFAULT_SIZE)
     lora, lora_scale = _lora_of(rules, body, adapters_dir)
-    controlnet, control_image, control_scale = _controlnet_of(rules, body, controlnets_dir)
+    control = _controlnet_of(rules, body, controlnets_dir)
     return {
         "prompt": _prompt_of(body),
         "width": width,
@@ -514,9 +581,7 @@ def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
         "output_format": _format_of(body),
         "lora": lora,
         "lora_scale": lora_scale,
-        "controlnet": controlnet,
-        "control_image": control_image,
-        "control_scale": control_scale,
+        **control,
     }
 
 

@@ -102,7 +102,8 @@ The five properties of the speech server hold here too:
    for any other name.
 3. `trust_remote_code` and `custom_pipeline` are never passed.
 4. Everything binds `127.0.0.1`.
-5. Requests carry a JSON body, parsed strictly. A body over 64 KB is refused.
+5. Requests carry a JSON body, parsed strictly. A body over 64 KB plus the
+   base64 of the largest control image is refused. That is about 67 MB.
 
 diffusers adds three:
 
@@ -117,6 +118,24 @@ diffusers adds three:
    imports whatever library and class `model_index.json` names. The server
    checks the file against the family table before importing diffusers, and
    loads the pipeline class the table names, never the one in the file.
+
+ControlNets add a ninth:
+
+9. **The server never opens a path a request wrote.** A request names an
+   adapter or a ControlNet only by one plain name inside a folder the user
+   configured. The one file a caller picks freely, a ControlNet's control
+   image, reaches the server as bytes: `generateImageLocal` raises
+   `std::readImage` for the file's real path, and only after approval does
+   `approvedFileBytes` read it, refusing a symlink anywhere in the path and
+   a file over 50 MB. The server checks the size again in
+   `image_bytes_of`, as the vision server does. It decodes the bytes with
+   Pillow, which may try only PNG, JPEG, WebP, and GIF, and it refuses an
+   image over 40 megapixels before decoding it.
+
+   The approval is enforced by the stdlib, not by the server. Any process
+   on this machine that can reach `127.0.0.1` can post an image's bytes
+   and get back an image shaped by them, but it must already have read
+   those bytes itself. The server grants it no read it did not have.
 
 ## The rules module
 
@@ -222,9 +241,11 @@ format other than png, jpeg, or webp, and any model that is not a
 the accounting `generateImage` also uses: `meteredDispatch`, `recordUsage`,
 the `imageGeneration` statelog event, and the guards.
 
-It raises no interrupt. A local generation spends no money, sends nothing
-off the machine, and writes nothing. Saving the image goes through
-`writeBinary`, which raises its own effect.
+Without a control image it raises no interrupt. A local generation spends
+no money, sends nothing off the machine, and writes nothing. Saving the
+image goes through `writeBinary`, which raises its own effect. A call
+with a control image reads a file, so it raises `std::readImage` first;
+see ControlNets below.
 
 ## LoRA adapters
 
@@ -255,8 +276,8 @@ Three decisions:
    not one plain file name: empty, `.` or `..`, anything with a path
    separator, or one that already ends in `.safetensors`. So a program, or
    a model calling `generateImageLocal` as a tool, can pick from the
-   folder the user configured and nothing else, and the server never
-   opens a path a request wrote. The folder itself is refused at start-up
+   folder the user configured and nothing else. This is the adapters' half
+   of property 9 in Security. The folder itself is refused at start-up
    when it is a symlink or not a directory.
 2. **Only `.safetensors`.** A `.bin` or `.pt` adapter loads through
    `pickle`, which runs code. The extension is fixed by `adapter_path`, so
@@ -286,28 +307,57 @@ controlnet-scribble-sdxl` puts a catalog ControlNet there, keeping the
 config and the one weights file, and refuses when the folder is not
 configured, since there is nowhere else a ControlNet is useful.
 
-A request names one with `controlnet` and the drawing with
-`control_image`, an absolute path the server reads once after the checks
-in `localServerCommon.check_image_path`, the same read the vision server
-makes; `control_scale` is how strongly, 0 to 2 with 1 as the model card
-says. The stdlib raises `std::readImage` for that drawing before the
-request, so a call with a control image is the one local generation that
-raises anything. One without the other is refused; the pair is refused
-for Z-Image and Chroma; the name goes through `folder_entry`, the same
-one-segment rule adapters use.
+A request names one with `controlnet` and says how strongly with
+`control_scale`, 0 to 2 with 1 as the model card says. The name goes
+through `folder_entry`, the same one-segment rule adapters use. The pair
+is refused for Z-Image and Chroma.
 
     generateImageLocal("pen and ink, zxq_girl, surprised", "diffusers:Laxhar/noobai-XL-1.1",
       lora: "zxq", controlnet: "controlnet-scribble-sdxl", controlImage: "./poses/jump.png")
 
+The drawing travels as `control_image`, the file's bytes in base64. The
+server never gets its path. `generateImageLocal` checks that `controlnet`
+and `controlImage` come together before it asks for anything, so nobody
+approves a read that could never happen. Then it raises `std::readImage`
+with the real path, and a call with a control image is the one local
+generation that raises anything. After approval, `image.ts` reads the
+file through `approvedFileBytes` in `approvedPath.ts`. A rejection sends
+no request. `tests/agency-js/image-generation-local-controlnet` checks
+the interrupt's payload, that a rejection sends nothing, and that the
+bytes sent are the file's.
+
+A ControlNet folder must be a real directory holding `config.json` and
+`diffusion_pytorch_model.safetensors` as regular files, with no symlink
+anywhere inside it, because `from_pretrained` follows links.
+`controlnet_problem` in the rules module checks this before a load, and
+`controlnet_names` lists only folders it accepts, so `/health` and the
+missing-ControlNet message never name one a request cannot load.
+
 On first use the server loads the ControlNet and builds
 `StableDiffusionXLControlNetPipeline` from the base pipeline's
 components plus it, so the UNet and encoders are shared and a LoRA
-applied to the UNet applies to both. The control image is resized to
-the request's size; a scribble whose mean brightness is above half is
-inverted, since the scribble ControlNet was trained on white lines over
-black. Nothing else is preprocessed: edges, depth, and pose extraction
-are the vision server's job. `serve` refuses to plan a ControlNet, by
-catalog kind or by its `config.json`, and says where it is loaded from.
+applied to the UNet applies to both. `ControlNetModel.from_pretrained`
+always builds that class, so a ControlNet's `config.json` cannot choose
+what to import the way `model_index.json` could.
+
+Two decisions about the control image:
+
+1. **It is fitted, not stretched.** `letterbox` in the rules module
+   scales it to fit the request's size with its aspect ratio kept, and the
+   server centers it on black. diffusers alone would stretch a 4:3
+   drawing to a square, squashing the pose it describes. Black is what a
+   ControlNet reads as "nothing here", for scribbles and pose skeletons
+   alike, so the bands leave the model free there.
+2. **Inverting is the caller's choice.** The scribble ControlNet was
+   trained on white lines over black, and people draw dark lines on white.
+   `invertControlImage: true`, sent as `control_invert`, swaps them before
+   fitting. Nothing guesses from the folder's name or the image's
+   brightness, since a renamed folder or a dark drawing would then change
+   the output with no error.
+
+Nothing else is preprocessed: edges, depth, and pose extraction are the
+vision server's job. `serve` refuses to plan a ControlNet, by catalog kind
+or by its `config.json`, and says where it is loaded from.
 
 Measured on an M5 Ultra against NoobAI-XL 1.1 with a LoRA applied: 8.4 s
 for a 1024×1024 image without a ControlNet, 11.4 s for the first request

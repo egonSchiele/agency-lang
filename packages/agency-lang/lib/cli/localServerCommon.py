@@ -3,6 +3,8 @@ image servers through sys.path, since they run as plain scripts. Nothing
 here may import a model library.
 """
 
+import base64
+import binascii
 import os
 import select
 import socket
@@ -76,3 +78,30 @@ def read_image_bytes(path):
     fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     with os.fdopen(fd, "rb") as f:
         return f.read()
+
+
+class ImageDataError(ValueError):
+    """A request carried an image the server will not decode. The message
+    says why."""
+
+
+def base64_length(size):
+    """How many characters base64 turns `size` bytes into."""
+    return 4 * ((size + 2) // 3)
+
+
+def image_bytes_of(value):
+    """The bytes of an image a request sent as base64. Raises
+    ImageDataError for anything that is not base64 of at most
+    MAX_IMAGE_BYTES bytes. A request never names a path: the stdlib reads
+    the file after the user approved it and sends what it read, so the
+    server opens no file a request chose. Pillow decides later whether
+    the bytes are an image."""
+    if not isinstance(value, str) or value == "":
+        raise ImageDataError("image must be the image's bytes as base64.")
+    if len(value) > base64_length(MAX_IMAGE_BYTES):
+        raise ImageDataError(f"image is over {MAX_IMAGE_BYTES:,} bytes; this server reads images up to that size.")
+    try:
+        return base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        raise ImageDataError("image is not valid base64.")

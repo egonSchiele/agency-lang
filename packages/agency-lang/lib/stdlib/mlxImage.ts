@@ -66,6 +66,7 @@ const SETTINGS = [
   "controlnet",
   "control_image",
   "control_scale",
+  "control_invert",
 ];
 
 /** An image from the local server, with the seed that made it. */

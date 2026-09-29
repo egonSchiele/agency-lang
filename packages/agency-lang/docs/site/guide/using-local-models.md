@@ -362,6 +362,15 @@ const r = generateImageLocal("pen and ink, zxq_girl, surprised", "diffusers:Laxh
 
 The drawing is read on this machine under `std::readImage`, the one thing a local generation asks approval for. `controlScale` is how strongly the drawing constrains the image, 1 by default. `controlnet-openpose-sdxl` takes a rendered pose skeleton instead of a scribble.
 
+The scribble ControlNet reads white lines on a black background. A drawing made with dark lines on white paper needs `invertControlImage: true`:
+
+```ts
+const r = generateImageLocal("a dancer mid-leap", "diffusers:Laxhar/noobai-XL-1.1",
+  controlnet: "controlnet-scribble-sdxl", controlImage: "./poses/pen-sketch.png", invertControlImage: true)
+```
+
+The drawing is scaled to fit `size` with its shape kept, and centered on black. A 4:3 drawing in a square image gets black bands above and below. It is never stretched.
+
 ## Look at images on a Mac
 
 Two vision models turn a picture into words and boxes, on this machine, with nothing uploaded. `wd14-tagger` describes an image as booru tags, the vocabulary illustration models such as NoobAI-XL take in a prompt. `florence-2` finds the objects you name and returns a box for each, tags what it sees, and writes a caption. Download and serve them like any other model:

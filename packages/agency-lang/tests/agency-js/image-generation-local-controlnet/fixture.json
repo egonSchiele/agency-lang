@@ -1,0 +1,63 @@
+{
+  "rejectAsked": {
+    "interrupted": true,
+    "count": 1,
+    "effect": "std::readImage",
+    "dirIsReal": true,
+    "filename": "pose.png"
+  },
+  "rejected": {
+    "ok": false,
+    "error": "interrupt rejected"
+  },
+  "requestsAfterReject": 0,
+  "approveAsked": {
+    "interrupted": true,
+    "count": 1,
+    "effect": "std::readImage",
+    "dirIsReal": true,
+    "filename": "pose.png"
+  },
+  "approved": {
+    "ok": true,
+    "error": ""
+  },
+  "plainAsked": {
+    "interrupted": false
+  },
+  "plain": {
+    "ok": true,
+    "error": ""
+  },
+  "halfAsked": {
+    "interrupted": false
+  },
+  "half": {
+    "ok": false,
+    "error": "generateImageLocal failed: controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on."
+  },
+  "requests": [
+    {
+      "model": "Laxhar/noobai-XL-1.1",
+      "prompt": "a cat jumping",
+      "n": 1,
+      "response_format": "b64_json",
+      "size": "1024x1024",
+      "output_format": "png",
+      "seed": 7,
+      "controlnet": "scribble",
+      "control_scale": 0.8,
+      "control_invert": true,
+      "controlImageIsTheFile": true
+    },
+    {
+      "model": "Laxhar/noobai-XL-1.1",
+      "prompt": "a cat",
+      "n": 1,
+      "response_format": "b64_json",
+      "size": "1024x1024",
+      "output_format": "png",
+      "seed": 7
+    }
+  ]
+}

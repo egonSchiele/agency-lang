@@ -8,6 +8,7 @@ import * as smoltalk from "smoltalk";
 import { agencyStore } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { _generateImage, _generateImageLocal } from "./image.js";
+import { MAX_IMAGE_BYTES } from "./vision.js";
 import { registerMlxImageProvider } from "./mlxImage.js";
 
 type ImageImpl = (input: any, config: any) => Promise<any>;
@@ -248,8 +249,6 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(r.success).toBe(true);
@@ -288,8 +287,6 @@ describe("_generateImageLocal", () => {
         "webp",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(r.success && r.value.mimeType).toBe("image/webp");
@@ -318,8 +315,6 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(r.success === false && r.error).toBe(
@@ -345,8 +340,6 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(r.success === false && r.error).toBe(
@@ -369,8 +362,6 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(mlx.success === false && mlx.error).toMatch(
@@ -387,8 +378,6 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(gguf.success === false && gguf.error).toMatch(/is a GGUF model/);
@@ -403,8 +392,6 @@ describe("_generateImageLocal", () => {
         "gif",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(gif.success === false && gif.error).toBe(
@@ -421,8 +408,6 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(empty.success === false && empty.error).toBe(
@@ -432,13 +417,18 @@ describe("_generateImageLocal", () => {
     });
   });
 
-  it("sends the ControlNet, its image as a real path, and its scale, and refuses one without the other", async () => {
+  it("sends the ControlNet with its drawing's bytes, never the path, and refuses a link or a large file", async () => {
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "control-")));
     const pose = path.join(dir, "pose.png");
-    fs.writeFileSync(pose, "png");
+    fs.writeFileSync(pose, PNG);
+    fs.symlinkSync(pose, path.join(dir, "linked.png"));
+    fs.symlinkSync(dir, `${dir}-link`);
+    // Sparse, so the test writes no 50 MB.
+    fs.writeFileSync(path.join(dir, "huge.png"), "");
+    fs.truncateSync(path.join(dir, "huge.png"), MAX_IMAGE_BYTES + 1);
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
-    await withClient(realImage, async () => {
-      const r = await _generateImageLocal(
+    const generate = (image: string) =>
+      _generateImageLocal(
         "a cat",
         "diffusers:Laxhar/noobai-XL-1.1",
         "1024x1024",
@@ -449,52 +439,32 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "scribble",
-        pose,
-        0.8,
+        { name: "scribble", image, scale: 0.8, invert: true },
       );
+    await withClient(realImage, async () => {
+      const r = await generate(pose);
       expect(r.success).toBe(true);
       expect(requests[0]).toMatchObject({
         controlnet: "scribble",
-        control_image: pose,
+        control_image: PNG.toString("base64"),
         control_scale: 0.8,
+        control_invert: true,
       });
-      const half = await _generateImageLocal(
-        "a cat",
-        "diffusers:Laxhar/noobai-XL-1.1",
-        "1024x1024",
-        null,
-        null,
-        7,
-        "",
-        "png",
-        "",
-        null,
-        "scribble",
-        "",
-        null,
+      const linkedFile = await generate(path.join(dir, "linked.png"));
+      expect(linkedFile.success === false && linkedFile.error).toMatch(
+        /symlink|not a regular file/,
       );
-      expect(half.success === false && half.error).toBe(
-        "generateImageLocal failed: controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
+      const linkedDir = await generate(path.join(`${dir}-link`, "pose.png"));
+      expect(linkedDir.success === false && linkedDir.error).toMatch(/is a symlink/);
+      const huge = await generate(path.join(dir, "huge.png"));
+      expect(huge.success === false && huge.error).toBe(
+        `generateImageLocal failed: ${path.join(dir, "huge.png")} is 50,000,001 bytes; the most this reads is 50,000,000.`,
       );
-      const missing = await _generateImageLocal(
-        "a cat",
-        "diffusers:Laxhar/noobai-XL-1.1",
-        "1024x1024",
-        null,
-        null,
-        7,
-        "",
-        "png",
-        "",
-        null,
-        "scribble",
-        path.join(dir, "nope.png"),
-        null,
-      );
+      const missing = await generate(path.join(dir, "nope.png"));
       expect(missing.success === false && missing.error).toMatch(/no such file/);
       expect(requests).toHaveLength(1);
     });
+    fs.rmSync(`${dir}-link`);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -512,8 +482,6 @@ describe("_generateImageLocal", () => {
         "png",
         "sketch",
         0.8,
-        "",
-        "",
         null,
       );
       expect(r.success).toBe(true);
@@ -537,8 +505,6 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        "",
-        "",
         null,
       );
       expect(Object.keys(requests[0])).not.toContain("lora");

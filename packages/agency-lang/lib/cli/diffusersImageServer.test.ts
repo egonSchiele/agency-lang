@@ -81,7 +81,8 @@ except ValueError as e:
 
 /** Runs check_request for a family and prints the result, or the error.
  *  The body is parsed from JSON in Python, since JSON's true and null are
- *  not Python's. `adaptersDir` is the configured adapters folder, if any. */
+ *  not Python's. `adaptersDir` is the configured adapters folder, if any.
+ *  A control image's bytes print as their length. */
 function check(
   family: "ZImagePipeline" | "ChromaPipeline" | "StableDiffusionXLPipeline",
   body: unknown,
@@ -94,7 +95,8 @@ body = json.loads(${JSON.stringify(JSON.stringify(body))})
 adapters_dir = json.loads(${JSON.stringify(JSON.stringify(adaptersDir))})
 controlnets_dir = json.loads(${JSON.stringify(JSON.stringify(controlnetsDir))})
 try:
-    print(json.dumps(check_request(FAMILIES["${family}"], body, adapters_dir, controlnets_dir), sort_keys=True))
+    checked = check_request(FAMILIES["${family}"], body, adapters_dir, controlnets_dir)
+    print(json.dumps(checked, sort_keys=True, default=lambda b: f"{len(b)} bytes"))
 except RequestError as e:
     print("ERROR", e.status, e)
 `);
@@ -182,6 +184,7 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
       controlnet: null,
       control_image: null,
       control_scale: 1.0,
+      control_invert: false,
     });
     const chroma = JSON.parse(check("ChromaPipeline", { prompt: "a cat", seed: 7 }));
     expect([chroma.steps, chroma.guidance]).toEqual([40, 3.0]);
@@ -270,83 +273,157 @@ print(adapter_names(os.path.join(d, "missing")))
     expect(out.split("\n")).toEqual(["['a', 'b']", "[]"]);
   });
 
-  it("takes a ControlNet with its image and scale, only for SDXL, only from a folder", () => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "control-")));
-    const pose = path.join(dir, "pose.png");
-    fs.writeFileSync(pose, "png");
+  it("takes a ControlNet with its image's bytes, scale, and invert, only for SDXL, only from a folder", () => {
+    const pose = Buffer.from("png").toString("base64");
     const family = "StableDiffusionXLPipeline";
+    const body = { prompt: "a cat", controlnet: "scribble", control_image: pose };
     const out = JSON.parse(
-      check(
-        family,
-        { prompt: "a cat", controlnet: "scribble", control_image: pose, control_scale: 0.8 },
-        null,
-        "/c",
-      ),
+      check(family, { ...body, control_scale: 0.8, control_invert: true }, null, "/c"),
     );
-    expect([out.controlnet, out.control_image, out.control_scale]).toEqual(["scribble", pose, 0.8]);
-    const unscaled = JSON.parse(
-      check(family, { prompt: "a cat", controlnet: "scribble", control_image: pose }, null, "/c"),
-    );
-    expect(unscaled.control_scale).toBe(1.0);
+    expect([out.controlnet, out.control_image, out.control_scale, out.control_invert]).toEqual([
+      "scribble",
+      "3 bytes",
+      0.8,
+      true,
+    ]);
+    const plain = JSON.parse(check(family, body, null, "/c"));
+    expect([plain.control_scale, plain.control_invert]).toEqual([1.0, false]);
     expect(check(family, { prompt: "a cat", controlnet: "scribble" }, null, "/c")).toBe(
       "ERROR 400 controlnet and control_image go together: the ControlNet's name, and the image it conditions the generation on.",
     );
-    expect(check(family, { prompt: "a cat", control_scale: 1 }, null, "/c")).toBe(
-      "ERROR 400 control_scale needs controlnet: it says how strongly to apply it.",
-    );
-    expect(check(family, { prompt: "a cat", controlnet: "scribble", control_image: pose })).toBe(
+    for (const lone of [{ control_scale: 1 }, { control_invert: true }]) {
+      expect(check(family, { prompt: "a cat", ...lone }, null, "/c")).toBe(
+        "ERROR 400 control_scale and control_invert need controlnet: they say how to apply it.",
+      );
+    }
+    expect(check(family, body)).toBe(
       "ERROR 400 This server has no ControlNets folder. Set client.controlnetsDir in agency.json to the folder your ControlNets are in, and start the server again.",
     );
-    expect(
-      check(family, { prompt: "a cat", controlnet: "../x", control_image: pose }, null, "/c"),
-    ).toBe(
+    expect(check(family, { ...body, controlnet: "../x" }, null, "/c")).toBe(
       "ERROR 400 controlnet must be a ControlNet's name: its folder in the ControlNets folder, such as \"sketch\" for sketch/. Got '../x'.",
     );
-    expect(
-      check(
-        family,
-        { prompt: "a cat", controlnet: "scribble", control_image: "pose.png" },
-        null,
-        "/c",
-      ),
-    ).toBe("ERROR 400 control_image: image must be an absolute path. Got 'pose.png'.");
-    expect(
-      check(
-        family,
-        { prompt: "a cat", controlnet: "scribble", control_image: pose, control_scale: 5 },
-        null,
-        "/c",
-      ),
-    ).toBe(
+    expect(check(family, { ...body, control_scale: 5 }, null, "/c")).toBe(
       "ERROR 400 control_scale must be a number from 0 to 2.0. 1 applies it as the model card says.",
     );
-    expect(
-      check(
-        "ChromaPipeline",
-        { prompt: "a cat", controlnet: "s", control_image: pose },
-        null,
-        "/c",
-      ),
-    ).toBe("ERROR 400 Chroma does not take a ControlNet. Leave controlnet empty.");
-    fs.rmSync(dir, { recursive: true, force: true });
+    expect(check(family, { ...body, control_invert: "yes" }, null, "/c")).toBe(
+      "ERROR 400 control_invert must be true or false.",
+    );
+    expect(check("ChromaPipeline", body, null, "/c")).toBe(
+      "ERROR 400 Chroma does not take a ControlNet. Leave controlnet empty.",
+    );
   });
 
-  it("lists the ControlNets in a folder: the subfolders with a config.json", () => {
+  it("takes the control image only as base64 bytes, never as a path, up to a size", () => {
+    const family = "StableDiffusionXLPipeline";
+    const body = { prompt: "a cat", controlnet: "scribble" };
+    expect(check(family, { ...body, control_image: "/Users/me/pose.png" }, null, "/c")).toBe(
+      "ERROR 400 control_image: image is not valid base64.",
+    );
+    expect(check(family, { ...body, control_image: "" }, null, "/c")).toBe(
+      "ERROR 400 control_image: image must be the image's bytes as base64.",
+    );
+    // Built in Python: 67 MB of base64 is too long for a command line.
+    const tooBig = rules(`
+from localServerCommon import MAX_IMAGE_BYTES, base64_length
+body = {"prompt": "a cat", "controlnet": "scribble"}
+body["control_image"] = "A" * (base64_length(MAX_IMAGE_BYTES) + 4)
+try:
+    check_request(FAMILIES["${family}"], body, None, "/c")
+except RequestError as e:
+    print(e)
+`);
+    expect(tooBig).toBe(
+      "control_image: image is over 50,000,000 bytes; this server reads images up to that size.",
+    );
+  });
+
+  it("fits a control image inside the output with its shape kept", () => {
+    const out = rules(`
+print(letterbox(400, 300, 1024, 1024))
+print(letterbox(300, 400, 1024, 1024))
+print(letterbox(512, 512, 1344, 768))
+print(letterbox(2048, 1536, 1024, 768))
+`);
+    expect(out.split("\n")).toEqual([
+      "(1024, 768, 0, 128)",
+      "(768, 1024, 128, 0)",
+      "(768, 768, 288, 0)",
+      "(1024, 768, 0, 0)",
+    ]);
+  });
+
+  it("refuses a configured folder that is a symlink or not a folder", () => {
     const out = rules(`
 import os, tempfile
 d = tempfile.mkdtemp()
-os.makedirs(os.path.join(d, "scribble")); open(os.path.join(d, "scribble", "config.json"), "w").close()
-os.makedirs(os.path.join(d, "junk"))
+os.symlink(d, d + "-link")
+open(os.path.join(d, "file"), "w").close()
+print(check_folder(None, "--controlnets-dir"))
+print(check_folder(d, "--controlnets-dir") == d)
+for bad in [d + "-link", os.path.join(d, "file")]:
+    try:
+        check_folder(bad, "--controlnets-dir")
+    except ValueError as e:
+        print(str(e).replace(bad, "X"))
+`);
+    expect(out.split("\n")).toEqual([
+      "None",
+      "True",
+      "--controlnets-dir X is a symlink. Name the folder itself.",
+      "--controlnets-dir X is not a folder.",
+    ]);
+  });
+
+  it("lists only the ControlNets it can load: real folders with both files and no symlink inside", () => {
+    const out = rules(`
+import os, tempfile
+d = tempfile.mkdtemp()
+outside = tempfile.mkdtemp()
+open(os.path.join(outside, "weights.safetensors"), "w").close()
+def controlnet(name, weights_link=False, config_link=False, nested_link=False, weights=True):
+    folder = os.path.join(d, name)
+    os.makedirs(folder)
+    if config_link:
+        os.symlink(os.path.join(outside, "weights.safetensors"), os.path.join(folder, "config.json"))
+    else:
+        open(os.path.join(folder, "config.json"), "w").close()
+    weights_path = os.path.join(folder, "diffusion_pytorch_model.safetensors")
+    if weights_link:
+        os.symlink(os.path.join(outside, "weights.safetensors"), weights_path)
+    elif weights:
+        open(weights_path, "w").close()
+    if nested_link:
+        os.makedirs(os.path.join(folder, "extra"))
+        os.symlink(outside, os.path.join(folder, "extra", "away"))
+    return folder
+good = controlnet("scribble")
+linked_weights = controlnet("weights-link", weights_link=True)
+linked_config = controlnet("config-link", config_link=True)
+nested = controlnet("nested-link", nested_link=True)
+no_weights = controlnet("no-weights", weights=False)
+os.symlink(good, os.path.join(d, "folder-link"))
 open(os.path.join(d, "note.txt"), "w").close()
 print(controlnet_names(d))
 print(controlnet_names(os.path.join(d, "missing")))
+print(controlnet_problem(good))
+for folder in [linked_weights, linked_config, nested, no_weights, os.path.join(d, "folder-link")]:
+    print(controlnet_problem(folder).replace(d, "D"))
 `);
-    expect(out.split("\n")).toEqual(["['scribble']", "[]"]);
+    expect(out.split("\n")).toEqual([
+      "['scribble']",
+      "[]",
+      "None",
+      "D/weights-link/diffusion_pytorch_model.safetensors is a symlink, which this server does not follow.",
+      "D/config-link/config.json is a symlink, which this server does not follow.",
+      "D/nested-link/extra/away is a symlink, which this server does not follow.",
+      "D/no-weights has no diffusion_pytorch_model.safetensors.",
+      "D/folder-link is a symlink, which this server does not follow.",
+    ]);
   });
 
   it("refuses a field it does not know, naming the ones it takes", () => {
     expect(check("ZImagePipeline", { prompt: "a cat", style: "vivid" })).toBe(
-      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, and control_scale.",
+      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, and control_invert.",
     );
   });
 

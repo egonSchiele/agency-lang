@@ -94,6 +94,15 @@ one run, and a request it started can outlive that run, so the list of
 requests still on their way belongs to the process. `sendStatelogPost()` adds
 to the list and `flushPendingStatelogPosts()` waits for everything on it.
 
+### A refused key
+
+The sender reads only the status of each reply. A 401 or 403 means the server
+refused this key for this project. The sender records the host and project,
+sends nothing more to that pair until the process exits, and prints one
+warning. The record belongs to the process because a served program makes a
+new client for every request, and a record on the client would reset each
+time. Any other failure prints only in debug mode.
+
 ### Exiting
 
 A process that ends on its own needs no flush, because Node keeps running

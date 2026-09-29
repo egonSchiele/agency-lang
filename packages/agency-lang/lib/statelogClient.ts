@@ -1620,7 +1620,8 @@ export class StatelogClient {
     // returning. The sender tracks it so an exit can wait for it.
     try {
       sendStatelogPost({
-        url: new URL("/api/logs", this.host).toString(),
+        host: this.host,
+        projectId: this.projectId,
         apiKey: this.apiKey,
         body: postBody,
         timeoutMs: this.requestTimeoutMs,

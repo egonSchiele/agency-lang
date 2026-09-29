@@ -3,7 +3,8 @@ import { exitProcess, exitProcessNow } from "./exitProcess.js";
 import { sendStatelogPost } from "../statelogSender.js";
 
 const POST = {
-  url: "https://example.invalid/api/logs",
+  host: "https://example.invalid",
+  projectId: "p",
   apiKey: "secret",
   body: "{}",
   timeoutMs: 60_000,

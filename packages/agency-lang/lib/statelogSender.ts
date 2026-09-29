@@ -5,10 +5,15 @@
  * that run: nothing waits for a log upload while a program is running. So the
  * list of requests still on their way belongs to the process, not to a client.
  * `exitProcess` waits for that list before the process exits.
+ *
+ * The same reasoning covers a refused API key. A served program makes a new
+ * client for every request, so a refusal recorded on a client would be
+ * forgotten by the next request. It is recorded here, for the process.
  */
 
 export type StatelogPost = {
-  url: string;
+  host: string;
+  projectId: string;
   apiKey: string;
   body: string;
   timeoutMs: number;
@@ -16,6 +21,28 @@ export type StatelogPost = {
 };
 
 const pendingPosts: Promise<void>[] = [];
+
+// One entry per host and project whose key the server refused.
+const refusedTargets: string[] = [];
+
+function targetOf(post: StatelogPost): string {
+  return JSON.stringify([post.host, post.projectId]);
+}
+
+/**
+ * A 401 or 403 means the server refused this key for this project, and every
+ * later request would be refused the same way. Stop sending to that host and
+ * project for the rest of the process, and say so once. Requests already on
+ * their way come back refused too, so only the first one prints.
+ */
+function recordRefusal(post: StatelogPost, status: number): void {
+  const target = targetOf(post);
+  if (refusedTargets.includes(target)) return;
+  refusedTargets.push(target);
+  console.warn(
+    `Statelog: ${post.host} refused the API key for project "${post.projectId}" (HTTP ${status}). Remote logging to it is off until this process exits.`,
+  );
+}
 
 function removePendingPost(post: Promise<void>): void {
   const index = pendingPosts.indexOf(post);
@@ -27,10 +54,12 @@ function removePendingPost(post: Promise<void>): void {
 /**
  * Start sending one event and return at once. The request is bounded by
  * `timeoutMs`, so a slow or unreachable server cannot hold up an exit for
- * longer than that. A failure prints only in debug mode, and never throws.
+ * longer than that. A failure other than a refused key prints only in debug
+ * mode. Throws only when `host` is not a URL.
  */
 export function sendStatelogPost(post: StatelogPost): void {
-  const request = fetch(post.url, {
+  if (refusedTargets.includes(targetOf(post))) return;
+  const request = fetch(new URL("/api/logs", post.host).toString(), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -40,6 +69,10 @@ export function sendStatelogPost(post: StatelogPost): void {
     signal: AbortSignal.timeout(post.timeoutMs),
   })
     .then((response) => {
+      if (response.status === 401 || response.status === 403) {
+        recordRefusal(post, response.status);
+        return;
+      }
       if (!response.ok && post.debugMode) {
         console.error(`Failed to send statelog: HTTP ${response.status}`);
       }

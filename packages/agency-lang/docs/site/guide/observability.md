@@ -49,7 +49,7 @@ Agency never sends logs anywhere unless you ask it to. To send them to a Statelo
 }
 ```
 
-If any of the three is missing, Agency sends nothing and still writes to your other sinks.
+If any of the three is missing, Agency sends nothing and still writes to your other sinks. If the server refuses the key for that project, Agency prints one warning and stops sending until the program exits.
 
 Every event is sent, including prompts, model replies, and tool arguments and results. Values you marked for redaction are blanked first.
 

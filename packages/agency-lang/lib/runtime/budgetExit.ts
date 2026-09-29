@@ -1,5 +1,6 @@
 import { EXIT_CODE_BUDGET_EXCEEDED } from "../constants.js";
 import { readCause } from "./errors.js";
+import { exitProcess } from "./exitProcess.js";
 
 /** Dollars for the overrun message: bounded precision with float noise
  *  stripped, so accumulated token pricing can't surface artifacts like
@@ -33,10 +34,10 @@ export function formatBudgetExceeded(cause: {
  *  Only a ROOT guard's trip reaches the compiled entry's catch — a user
  *  guard() trip is converted to a Result at its boundary by _runGuarded,
  *  so this never misfires on those. */
-export function reportBudgetExceededAndExit(error: unknown): void {
+export async function reportBudgetExceededAndExit(error: unknown): Promise<void> {
   const cause = readCause(error);
   if (cause?.kind === "guardTrip") {
     console.error(formatBudgetExceeded(cause));
-    process.exit(EXIT_CODE_BUDGET_EXCEEDED);
+    await exitProcess(EXIT_CODE_BUDGET_EXCEEDED);
   }
 }

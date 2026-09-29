@@ -1,4 +1,5 @@
 import process from "process";
+import { exitProcessNow } from "../runtime/exitProcess.js";
 
 // All ANSI escapes for the hybrid-rendering scroll-region mechanism
 // live in this file. The rest of lib/stdlib/ goes through the helpers
@@ -50,11 +51,12 @@ function ensureCleanupInstalled(): void {
   process.on("exit", emergencyReset);
   process.on("SIGINT", () => {
     emergencyReset();
-    process.exit(130);
+    // A signal: leave at once, without waiting on log uploads.
+    exitProcessNow(130);
   });
   process.on("SIGTERM", () => {
     emergencyReset();
-    process.exit(143);
+    exitProcessNow(143);
   });
 }
 

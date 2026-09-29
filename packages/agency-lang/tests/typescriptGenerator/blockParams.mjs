@@ -576,10 +576,10 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
     });
     await resolveCliInterrupts(__result, respondToInterrupts)
   } catch (__error: any) {
-    await flushPendingStatelogPosts()
-    reportBudgetExceededAndExit(__error)
+    await reportBudgetExceededAndExit(__error)
     console.error(`
 Agent crashed: ${__error.message}`)
+    await flushPendingStatelogPosts()
     throw __error
   }
 }

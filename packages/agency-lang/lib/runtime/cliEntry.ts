@@ -7,6 +7,7 @@ import {
   EXIT_CODE_USAGE_ERROR,
 } from "../constants.js";
 import { verifyCheckpointChecksum } from "./checkpointChecksum.js";
+import { exitProcessNow } from "./exitProcess.js";
 import type { ResumeOverrides } from "./resumeSetup.js";
 import { Checkpoint } from "./state/checkpointStore.js";
 
@@ -29,7 +30,8 @@ function startEntryNode<T>(args: CliEntryArgs<T>): Promise<T> {
     console.error(
       `This file has no node named "${nodeName}". Its nodes are: ${args.nodeNames.join(", ")}`,
     );
-    process.exit(EXIT_CODE_USAGE_ERROR);
+    // No node has started, so there are no logs to send.
+    exitProcessNow(EXIT_CODE_USAGE_ERROR);
   }
   return args.startNode(nodeName);
 }

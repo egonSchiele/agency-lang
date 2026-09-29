@@ -593,6 +593,7 @@ describe("MCP exit", () => {
       apiKey: "secret",
       projectId: "p",
       traceId: "t",
+      debugMode: false,
       observability: true,
       requestTimeoutMs: 60_000,
     });

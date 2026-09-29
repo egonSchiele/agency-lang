@@ -1,3 +1,4 @@
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import {
   ScopedRuleFields,
   cliPolicyHandler,
@@ -83,7 +84,7 @@ export def getPolicyForAgent(
         }
       } else {
         print(color.red("Failed to load policy: ${f}"))
-        process.exit(1)
+        _exit(1)
       }
     } else {
       setPolicy(POLICY_PATH, policy.value)
@@ -103,7 +104,7 @@ export def getPolicyForAgent(
           "--policy '${_policyArg}' is neither a built-in policy (${builtinPolicyNames().join(", ")}) nor a readable policy file (${loaded.data.status}).",
         ),
         )
-        process.exit(1)
+        _exit(1)
       } else {
         policyFile = _policyArg
         basePolicy = loaded.value
@@ -119,7 +120,7 @@ export def getPolicyForAgent(
     const overlaid = try _policyOverlayFromFlags(approveArg, rejectArg, basePolicy)
     if (overlaid is failure(f)) {
       print(color.red("Failed to apply --approve/--reject: ${f}"))
-      process.exit(1)
+      _exit(1)
     } else {
       sessionPolicy = overlaid.value
       policyFile = SESSION_POLICY_PATH

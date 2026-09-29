@@ -49,11 +49,21 @@ Agency never sends logs anywhere unless you ask it to. To send them to a Statelo
 }
 ```
 
-If any of the three is missing, Agency sends nothing and still writes to your other sinks. If the server refuses the key for that project, Agency prints one warning and stops sending for the rest of the run.
+If any of the three is missing, Agency sends nothing and still writes to your other sinks.
 
 Every event is sent, including prompts, model replies, and tool arguments and results. Values you marked for redaction are blanked first.
 
 Logs are sent in the background. A node never waits for them before returning. A run from the command line waits for the last few to finish before it exits, at most 1.5 seconds per request (set `log.requestTimeoutMs` to change that).
+
+If you call a node from TypeScript and then call `process.exit()` yourself, wait for the logs first. Otherwise the last few are lost:
+
+```ts
+import { flushPendingStatelogPosts } from "agency-lang/runtime";
+
+const result = await main();
+await flushPendingStatelogPosts();
+process.exit(0);
+```
 
 ### LLM-call logs
 

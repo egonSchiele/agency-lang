@@ -4563,16 +4563,12 @@ export class TypeScriptBuilder {
                 ),
               ]),
               ts.statements([
-                // Both paths below end the process at once (an explicit
-                // exit, or an uncaught throw), which would kill any log
-                // POSTs still in flight. Send them first.
-                ts.await(ts.call(ts.id("flushPendingStatelogPosts"), [])),
                 // A root budget trip (--max-cost/--max-time) exits 3 with a
                 // user-facing overrun message and never returns; every other
                 // error falls through to the crash path below. User guard()
                 // trips never reach here — _runGuarded converts them to
                 // Results at their boundary.
-                ts.call(ts.id("reportBudgetExceededAndExit"), [ts.id("__error")]),
+                ts.await(ts.call(ts.id("reportBudgetExceededAndExit"), [ts.id("__error")])),
                 ts.consoleError(
                   ts.template([
                     {
@@ -4583,6 +4579,10 @@ export class TypeScriptBuilder {
                     },
                   ]),
                 ),
+                // The uncaught throw below ends the process at once, which
+                // would kill any log requests still on their way. The
+                // message is already printed, so it does not wait on them.
+                ts.await(ts.call(ts.id("flushPendingStatelogPosts"), [])),
                 ts.throw("__error"),
               ]),
               "__error: any",

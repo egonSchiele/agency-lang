@@ -42,17 +42,17 @@ the top-level `observability` master switch:
   and the remote sink needs one.
 - **`apiKey`** — bearer token for the remote sink. Also read from the
   `STATELOG_API_KEY` env var by `getStatelogClient`.
-
-The remote sink turns on only when `host`, `projectId`, and `apiKey` are all
-set. Missing any one keeps local sinks working but skips the HTTP POST. This
-is deliberate: a `STATELOG_API_KEY` exported for some other project must not
-turn on remote logging by itself.
 - **`logFile`** — append every event as one JSON line to this path (local dev
   and tests). Compatible with `host`/`stdout` — all configured sinks receive
   every event.
 - **`debugMode`** — extra console diagnostics.
 - **`requestTimeoutMs`** — per-request timeout for the remote POST (`DEFAULT_REQUEST_TIMEOUT_MS`,
   1500ms) so a slow or unreachable host can't wedge end-of-run cleanup.
+
+The remote sink turns on only when `host`, `projectId`, and `apiKey` are all
+set. Missing any one keeps local sinks working but skips the HTTP POST. This
+is deliberate: a `STATELOG_API_KEY` exported for some other project must not
+turn on remote logging by itself.
 
 A `traceId` is auto-generated per execution via `nanoid()` so every event from
 one run shares it.
@@ -86,24 +86,54 @@ Every event is serialized by `post()` into this envelope:
   bounded by `AbortSignal.timeout(requestTimeoutMs)`. Requires an apiKey.
 
 Remote sends are **fire-and-forget**: the fetch is not awaited, and nothing
-during a run waits for it. A node returning does not wait either; that wait
-used to add 600 ms or more to every node run. Each request is tracked twice:
-in the client's `inFlight` set (drained by `flush()`) and in a process-wide
-list (drained by `flushPendingStatelogPosts()`).
+during a run waits for it. A node returning does not wait either. That wait
+used to add 600 ms or more to every node run.
+
+One module sends every request, `lib/statelogSender.ts`. A client lives for
+one run, and a request it started can outlive that run, so the list of
+requests still on their way belongs to the process. `sendStatelogPost()` adds
+to the list and `flushPendingStatelogPosts()` waits for everything on it.
+
+### Exiting
 
 A process that ends on its own needs no flush, because Node keeps running
-until open requests finish. An explicit `process.exit()` kills them, so every
-place that exits on purpose awaits `flushPendingStatelogPosts()` first: the
-generated entry's crash and budget path, `resolveCliInterrupts` before it
-reports unhandled interrupts, the subprocess bootstrap after it has sent
-its result to the parent, the stdlib `exit()` (`_exit`), and the MCP stdio
-server's `exit` method. The per-request timeout bounds that wait. A new
-`process.exit()` call needs the same flush in front of it.
+until open requests finish. `process.exit()` kills them. Code in
+`lib/runtime`, `lib/serve`, and `lib/stdlib` exits through
+`lib/runtime/exitProcess.ts`, and a lint rule in `eslint.config.js` refuses a
+bare `process.exit()` in those directories. The module has two functions:
 
-The client reads only the status of each reply. A 401 or 403 means the server
-refused this key for this project, so the client turns the remote sink off
-for the rest of the run and prints one warning. Any other failure prints only
-in debug mode.
+- `exitProcess(code)` waits for the pending requests, then exits. The
+  per-request timeout bounds the wait. Print any message for the user before
+  calling it, so the message does not wait on the uploads.
+- `exitProcessNow(code)` exits at once and loses the pending requests. Each
+  call site says why it cannot wait.
+
+| Exit | Function |
+|---|---|
+| Budget trip (`reportBudgetExceededAndExit`) | `exitProcess` |
+| Unhandled interrupt (`reportUnhandledInterrupts`) | `exitProcess` |
+| Subprocess bootstrap, after its result is sent to the parent | `exitProcess` |
+| Stdlib `exit()` (`_exit`) | `exitProcess` |
+| MCP stdio server's `exit` method | `exitProcess` |
+| The agent's own exits, which call `_exit` | `exitProcess` |
+| Ctrl+C and signal handlers in `std::ui` and `std::ui/cli` | `exitProcessNow` |
+| Subprocess bootstrap, parent disconnected or no node run yet | `exitProcessNow` |
+| `std::args` help, version, and usage errors (a synchronous parse) | `exitProcessNow` |
+| Entry node name not found (`cliEntry.ts`) | `exitProcessNow` |
+
+The generated entry point has one more case. A crash ends with an uncaught
+throw, which also kills open requests. The generated code prints the crash
+message, awaits `flushPendingStatelogPosts()`, and then throws.
+
+A TypeScript program that imports a compiled module, runs a node, and then
+calls `process.exit()` itself must await `flushPendingStatelogPosts()` first.
+It is exported from `agency-lang/runtime`.
+
+The hosted server needs none of this. It runs programs inside its own
+long-lived process (`how-hosted-serving-works.md`), so requests finish in the
+background. The debugger (`lib/debugger/ui.ts`) and the language tools MCP
+server (`lib/mcp/server.ts`) are outside the lint rule. The first exits when
+the user quits, and the second never runs an Agency program.
 
 ## Redaction
 
@@ -267,7 +297,7 @@ given.
 
 - **Opt-in / graceful no-op** — disabled unless `observability` is true; with no
   host and no logFile, `post()` returns immediately.
-- **Non-blocking** — remote posts are detached; the process drains them once,
-  just before an explicit exit.
+- **Non-blocking** — remote posts are detached; `exitProcess` waits for them
+  once, before the process exits.
 - **Format versioning** — bump `STATELOG_FORMAT_VERSION` when the wire format
   changes in a way a viewer must notice; viewers should reject a higher version.

@@ -4,6 +4,7 @@
   preset tools make to the `presets` key of settings.json. The only side
   effects are startPreset's printing and the module's two globals.
 */
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { filterEntries, mapValues } from "std::object"
 
 import { SETTINGS_PATH } from "./config.agency"
@@ -232,7 +233,7 @@ export def startPreset(flag: string, settings: Settings) {
   const choice = choosePreset(flag, table)
   if (choice is failure(reason)) {
     print(color.red(reason))
-    process.exit(1)
+    _exit(1)
     return
   }
   for (warning in choice.value.warnings) {

@@ -4,7 +4,7 @@ import { abortableExec } from "./abortable.js";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { assertContained } from "./assertContained.js";
 import { fixedPath, resolveUnder } from "./contained.js";
-import { flushPendingStatelogPosts } from "../statelogClient.js";
+import { exitProcess } from "../runtime/exitProcess.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -23,9 +23,7 @@ export function _env(name: string): string | null {
 }
 
 export async function _exit(code: number): Promise<void> {
-  // process.exit kills any log POSTs still in flight; send them first.
-  await flushPendingStatelogPosts();
-  process.exit(code);
+  await exitProcess(code);
 }
 
 export function _isTTY(): boolean {

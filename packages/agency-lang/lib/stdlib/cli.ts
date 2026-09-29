@@ -11,6 +11,7 @@ import { isFailure } from "../runtime/result.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
 import type { AbortCause } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
+import { exitProcessNow } from "../runtime/exitProcess.js";
 // ---------------------------------------------------------------------------
 // TS bridge for `std::ui/cli` — the line-mode REPL.
 //
@@ -699,7 +700,8 @@ function stickyInterruptPrompt(rl: readline.Interface, opts: InterruptOpts): Pro
       const outcome = step.outcome;
       if (outcome.kind === "exit") {
         settle(() => {});
-        process.exit(130);
+        // Ctrl+C: leave at once, without waiting on log uploads.
+        exitProcessNow(130);
         return;
       }
       if (outcome.kind === "cancel") {

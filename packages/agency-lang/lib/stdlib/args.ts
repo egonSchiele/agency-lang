@@ -1,6 +1,7 @@
 import process from "process";
 import * as path from "path";
 import { parseArgs as nodeParseArgs } from "node:util";
+import { exitProcessNow } from "../runtime/exitProcess.js";
 
 // ---------------------------------------------------------------------------
 // TS bridge for `std::args` — CLI flag parser.
@@ -998,19 +999,22 @@ function buildResult(
   return { flags: visible, positionals };
 }
 
+// The three exits below run inside a synchronous parse, which cannot wait
+// for log uploads. A program parses its arguments first, so the only event
+// that can be lost is the start of the run.
 function exitWithError(error: ParseError, schema: NormalizedSchema): never {
   process.stderr.write(formatError(error, schema));
-  process.exit(2);
+  exitProcessNow(2);
 }
 
 function exitWithHelp(schema: NormalizedSchema): never {
   process.stdout.write(formatHelp(schema));
-  process.exit(0);
+  exitProcessNow(0);
 }
 
 function exitWithVersion(schema: NormalizedSchema): never {
   // schema.version is non-null whenever autoVersion is true; the cast
   // is safe given the dispatch in _parseArgsWith.
   process.stdout.write((schema.version ?? "") + "\n");
-  process.exit(0);
+  exitProcessNow(0);
 }

@@ -2,12 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import {
-  StatelogClient,
-  StatelogConfig,
-  flushPendingStatelogPosts,
-  getStatelogClient,
-} from "./statelogClient.js";
+import { StatelogClient, StatelogConfig, getStatelogClient } from "./statelogClient.js";
+import { flushPendingStatelogPosts } from "./statelogSender.js";
 
 /** Make a unique temp file path for a logFile-based test. The file is NOT
  *  created — the client should create the parent dir and append on first
@@ -271,48 +267,6 @@ describe("StatelogClient", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it("stops sending after the server refuses the key", async () => {
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValue(new Response("", { status: 403 }));
-      const client = new StatelogClient({
-        host: "https://example.invalid",
-        apiKey: "key-for-another-project",
-        projectId: "p",
-        traceId: "t",
-        debugMode: false,
-        observability: true,
-      });
-      await client.debug("first", {});
-      await client.flush();
-      await client.debug("second", {});
-      await client.debug("third", {});
-      await client.flush();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0][0]).toContain('refused the API key for project "p"');
-    });
-
-    it("keeps sending after a server error that is not a refusal", async () => {
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValue(new Response("", { status: 500 }));
-      const client = new StatelogClient({
-        host: "https://example.invalid",
-        apiKey: "secret",
-        projectId: "p",
-        traceId: "t",
-        debugMode: false,
-        observability: true,
-      });
-      await client.debug("first", {});
-      await client.flush();
-      await client.debug("second", {});
-      await client.flush();
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
-    });
-
     it("flushPendingStatelogPosts waits for posts from every client", async () => {
       const resolvers: ((r: Response) => void)[] = [];
       vi.spyOn(globalThis, "fetch").mockImplementation(
@@ -416,7 +370,7 @@ describe("StatelogClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
-    it("every event is fire-and-forget; flush() drains in-flight POSTs", async () => {
+    it("every event is fire-and-forget; a flush waits for the POSTs still in flight", async () => {
       // A remote POST that resolves only when we tell it to. If `debug`
       // awaited the fetch, the line after it could never run before we
       // resolve — proving non-blocking means `debug` returns first.
@@ -446,9 +400,9 @@ describe("StatelogClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(settled).toBe(false); // POST still in flight after debug() resolved
 
-      // flush() awaits the in-flight POST. Resolve it on the next tick so
+      // The flush awaits the in-flight POST. Resolve it on the next tick so
       // the flush promise is what actually unblocks.
-      const flushed = client.flush();
+      const flushed = flushPendingStatelogPosts();
       resolveFetch(new Response("", { status: 200 }));
       await flushed;
       expect(settled).toBe(true);

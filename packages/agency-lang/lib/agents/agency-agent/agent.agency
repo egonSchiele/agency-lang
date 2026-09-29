@@ -1,3 +1,4 @@
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { parseArgs } from "std::args"
 import { map } from "std::array"
 import { setLlmOptions } from "std::llm"
@@ -90,7 +91,7 @@ node main() {
   // silently doing nothing.
   if (args.flags.policy == "") {
     printPolicyHelp()
-    process.exit(0)
+    _exit(0)
   }
   setPolicyArg(
     args.flags.policy ?? "",
@@ -103,7 +104,7 @@ node main() {
   if (brain == null) {
     const names = map(allBrains(), \entry -> entry.name).join(", ")
     print(color.red("Unknown --brain value: ${brainName}. Valid: ${names}"))
-    process.exit(1)
+    _exit(1)
     return
   }
   setBrain(brain)
@@ -134,7 +135,7 @@ node main() {
         "Unknown --agent value: ${requestedStartTarget}. Valid for the ${brain.name} brain: ${validTargets}",
       ),
     )
-    process.exit(1)
+    _exit(1)
     return
   } else {
     startAgent = resolvedStartTarget
@@ -170,7 +171,7 @@ node main() {
   const effort = parseEffort(args.flags.effort ?? null)
   if (effort.error != "") {
     print(color.red(effort.error))
-    process.exit(1)
+    _exit(1)
   }
   if (effort.level != null) {
     setLlmOptions({
@@ -190,7 +191,7 @@ node main() {
         "--continue and --resume need an interactive session; one-shot runs are not saved.",
       ),
     )
-    process.exit(1)
+    _exit(1)
   }
   // Everything above is process-level: model resolution feeds the memory
   // layer, and memory, MCP, and the settings reads behind them must run
@@ -210,7 +211,7 @@ node main() {
     if (!hasQuery) {
       const fromStdin = readStdin()
       if (fromStdin == null || fromStdin == "") {
-        process.exit(0)
+        _exit(0)
       }
       prompt = fromStdin
     }

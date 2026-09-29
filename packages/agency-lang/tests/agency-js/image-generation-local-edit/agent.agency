@@ -1,4 +1,5 @@
-// generateImageLocal editing pictures with FLUX.2 [klein], against a
+// generateImageLocal editing pictures with FLUX.2 [klein], and redrawing
+// one with Z-Image Turbo, against a
 // stand-in for `agency local serve --image` that test.js starts. No model
 // and no network are used. The nodes have no handlers, so each
 // std::readImage reaches test.js, which approves or rejects it.
@@ -16,6 +17,14 @@ node edit(images: string[]) {
 
 node plain() {
   const r = generateImageLocal("a cat", model, seed: 7)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}
+
+node redraw(startImage: string) {
+  const r = generateImageLocal("a watercolor painting", "z-image-turbo", seed: 7, startImage: startImage, strength: 0.4)
   if (isFailure(r)) {
     return { ok: false, error: r.error }
   }

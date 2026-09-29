@@ -587,6 +587,38 @@ describe("_generateImageLocal", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  it("sends a start image as its bytes in base64, with the strength, never its path", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "start-")));
+    const photo = path.join(dir, "photo.png");
+    fs.writeFileSync(photo, PNG);
+    serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "a watercolor painting",
+        "z-image-turbo",
+        "",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+        {
+          field: "start_image",
+          files: [{ path: photo, dir, filename: "photo.png", question: "" }],
+          settings: { strength: 0.4 },
+        },
+      );
+      expect(r.success).toBe(true);
+      // One image is sent as a string, not a list of one.
+      expect(requests[0].start_image).toBe(PNG.toString("base64"));
+      expect(requests[0].strength).toBe(0.4);
+      expect(JSON.stringify(requests[0])).not.toContain(dir);
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it("sends the adapter name and scale when a LoRA is asked for", async () => {
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     await withClient(realImage, async () => {

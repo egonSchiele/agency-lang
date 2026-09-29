@@ -156,6 +156,20 @@ function controlSettings(
   return Object.fromEntries(given.filter(([, value]) => value !== null));
 }
 
+/** The request field that says how much of a start image to redraw. A
+ *  null strength is left out, so the server uses the family's default. */
+function strengthSettings(strength: number | null): Record<string, unknown> {
+  return strength === null ? {} : { strength };
+}
+
+/** "a", "a or b", or "a, b, or c". */
+function orList(names: string[]): string {
+  if (names.length <= 2) {
+    return names.join(" or ");
+  }
+  return `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`;
+}
+
 function refusal(message: string): Error {
   return new Error(`${CALLER} failed: ${message}`);
 }
@@ -202,20 +216,27 @@ export function _localImageInputs(
   controlScale: number | null,
   invertControlImage: boolean,
   images: string[],
+  startImage: string,
+  strength: number | null,
 ): LocalImageInputs {
   if ((controlnet === "") !== (controlImage === "")) {
     throw refusal(
       "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
     );
   }
+  if (strength !== null && startImage === "") {
+    throw refusal("strength goes with startImage, and this call has none.");
+  }
   const paths: Record<string, string[]> = {
     control_image: controlImage === "" ? [] : [controlImage],
     images,
+    start_image: startImage === "" ? [] : [startImage],
   };
   // The other request fields of each image field's mode.
   const settingsOf: Record<string, Record<string, unknown>> = {
     control_image: controlSettings(controlnet, controlScale, invertControlImage),
     images: {},
+    start_image: strengthSettings(strength),
   };
   const given = Object.keys(paths).filter((field) => paths[field].length > 0);
   if (given.length === 0) {
@@ -223,7 +244,7 @@ export function _localImageInputs(
   }
   if (given.length > 1) {
     const names = Object.keys(paths).map((field) => LOCAL_IMAGE_FIELDS[field].parameter);
-    throw refusal(`a call takes one of ${names.join(" or ")}.`);
+    throw refusal(`a call takes one of ${orList(names)}.`);
   }
   const field = given[0];
   const row = LOCAL_IMAGE_FIELDS[field];

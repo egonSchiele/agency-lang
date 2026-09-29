@@ -699,6 +699,30 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Detailed, cinematic images with no content filter. About 90 s per 1024x1024 image on an M5 Ultra.",
   },
+  "qwen-image-2512": {
+    backend: "diffusers",
+    uri: "diffusers:Qwen/Qwen-Image-2512",
+    params: "20B",
+    sizeBytes: 57704574910,
+    kind: "image",
+    tags: [],
+    contextWindow: 512,
+    license: "apache-2.0",
+    description:
+      "The best open model at legible text inside images: signs, posters, diagrams. Large and slow; time per image not measured yet.",
+  },
+  "flux2-klein-4b": {
+    backend: "diffusers",
+    uri: "diffusers:black-forest-labs/FLUX.2-klein-4B",
+    params: "4B",
+    sizeBytes: 15980131745,
+    kind: "image",
+    tags: [],
+    contextWindow: 512,
+    license: "apache-2.0",
+    description:
+      "Small and fast, for Macs with less memory: 4 steps per image. Safety fine-tuned. Time per image not measured yet.",
+  },
   // ── Vision ──────────────────────────────────────────────────────────────
   // Served by lib/cli/visionServer.py. The mlx: URI names the repo the
   // way every served repo is named; the kind picks the server. Sizes are

@@ -1,3 +1,9 @@
+## Unreleased
+
+### Local models
+
+- **`--draft` on `agency local serve` belongs to the model before it.** It used to draft for every chat model served; now it drafts only for the chat model written just before it, and each chat model can have its own. `serve a b --draft d` used to draft for `a` and `b` and now drafts for `b` alone; write `serve a --draft d b --draft d` for both. `--draft-tokens` works the same way. A `--draft` before every model, after a model that is not a chat model, or given twice for one model is refused with the order that works, and so is `--draft-tokens` with no `--draft` for its model.
+
 ## Sep 28 2026 — v0.25.0
 
 ### Language
@@ -71,7 +77,7 @@
 - **Bounded memory.** The server's prompt cache is capped at a sixteenth of RAM, the prefill step is sized from RAM (`--prefill-step` overrides), and `--max-tokens` is now a real ceiling on every request. A 235B model that used to die of GPU memory over a long run now survives it.
 - **Thinking on and off.** `setLlmOptions` takes `thinking: { enabled, budgetTokens? }`, and `reasoningEffort` maps to a budget (2048, 8192, 16384) on local models. Turning thinking off is the biggest saving there is on a small task. llama.cpp needs smoltalk-llama-cpp 0.7.0 for this.
 - **Sampling by default.** A local model gets temperature 0.7 and top_p 0.95 when the call names none, so it samples like a hosted model instead of running greedy and writing the same reply every time.
-- **Speculative decoding.** `agency run --local <model> --draft <small model>` on a GGUF model, and `agency local serve --draft <model>` on MLX, use a small model of the same family to draft tokens for the big one. Measure it: on llama.cpp it gave no speed-up in testing, and MLX refuses a draft for Qwen3.5 and Qwen3-Next.
+- **Speculative decoding.** `agency run --local <model> --draft <small model>` on a GGUF model, and `agency local serve <model> --draft <model>` on MLX (since the release after v0.25.0, the draft goes after the model it drafts for), use a small model of the same family to draft tokens for the big one. Measure it: on llama.cpp it gave no speed-up in testing, and MLX refuses a draft for Qwen3.5 and Qwen3-Next.
 - **Catalog.** Eight new MLX entries: `qwen3-0.6b-mlx`, `qwen3.5-0.8b-mlx`, `qwen3.5-2b-mlx`, `qwen3.5-9b-mlx`, `qwen3.5-27b-mlx`, `qwen3.5-35b-a3b-mlx`, `gpt-oss-20b-mlx`, and `gemma-4-26b-a4b-mlx`.
 - **Docs.** The local models guide has a new section, "What is different about a local model": greedy decoding, thinking, loops, memory, speculative decoding, and a side-by-side table of the two backends.
 

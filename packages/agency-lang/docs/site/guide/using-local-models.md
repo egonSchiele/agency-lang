@@ -341,7 +341,7 @@ Then name the adapter in the call, by its file name without `.safetensors`. A re
 const r = generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch", loraScale: 0.9)
 ```
 
-`loraScale` is how strongly the adapter is applied: 1 is as trained, less is subtler, and up to 2 is allowed. The server loads an adapter the first time it is asked for, so a file you drop into the folder after training works at once. Adapters are `.safetensors` files only, and a request can only pick a file from the folder you configured, never name a path itself.
+`loraScale` is how strongly the adapter is applied: 1 is as trained, less is subtler, and up to 2 is allowed. The server loads an adapter the first time it is asked for, so a file you drop into the folder after training works at once, and when you train it again under the same name, the next request uses the new weights. Adapters are `.safetensors` files only, and a request can only pick a file from the folder you configured, never name a path itself.
 
 ## What is different about a local model
 

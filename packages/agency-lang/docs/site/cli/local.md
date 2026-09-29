@@ -158,7 +158,7 @@ agency local serve diffusers:Laxhar/noobai-XL-1.1
 { "client": { "adaptersDir": "./adapters" } }
 ```
 
-A request then asks for an adapter by its file name without the extension: `generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch")` loads `./adapters/sketch.safetensors` the first time and keeps it. Only a request that names an adapter gets one, and a file dropped into the folder is usable with no restart.
+A request then asks for an adapter by its file name without the extension: `generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch")` loads `./adapters/sketch.safetensors` the first time and keeps it. Only a request that names an adapter gets one. A file dropped into the folder is usable with no restart, and a file trained again is read again the next time a request names it. A relative `adaptersDir` is taken from the folder `agency.json` is in.
 
 It prints a line for every request that reaches it:
 

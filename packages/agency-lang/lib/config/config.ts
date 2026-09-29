@@ -218,7 +218,7 @@ export interface AgencyConfig {
     /** The folder LoRA adapters are in, as `.safetensors` files. A local
      *  image server loads one the first time a request names it by its
      *  file name without the extension (`lora: "sketch"`). Relative to the
-     *  working directory. Unset means no request may name an adapter. */
+     *  folder the config file is in. Unset means no request may name an adapter. */
     adaptersDir: string;
     /** Where `agency local refresh` fetches the model catalog. Overridden by
      *  the `AGENCY_MODEL_CATALOG_URL` env var. Read at runtime. */

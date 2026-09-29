@@ -130,8 +130,9 @@ Generate an image on this machine with a local image model, such as
   whose success value is { base64, mimeType, seed }.
 
   A LoRA adapter is a small file that teaches an SDXL model a style or a
-  character. Load one when serving, `--lora sketch=./sketch.safetensors`,
-  and name it here with `lora: "sketch"`. Only the request that names it
+  character. Put the file in your adapters folder (`client.adaptersDir`
+  in agency.json) and pass its file name without .safetensors:
+  `lora: "sketch"` for sketch.safetensors. Only the request that names it
   gets it.
 
   @param prompt - What to draw
@@ -142,7 +143,7 @@ Generate an image on this machine with a local image model, such as
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
   @param negativePrompt - What the image should not contain. z-image-turbo takes none
   @param format - "png", "jpeg", or "webp"
-  @param lora - The name of a LoRA adapter the server loaded with --lora. Empty applies none
+  @param lora - The file name, without .safetensors, of an adapter in the adapters folder (client.adaptersDir). Empty applies none
   @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
 
 **Parameters:**

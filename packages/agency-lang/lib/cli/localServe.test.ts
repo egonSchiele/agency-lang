@@ -21,6 +21,9 @@ import {
   embedServeArgs,
   speechServeArgs,
   imageServeArgs,
+  groupServeArgv,
+  optionsByModel,
+  argvAfterServe,
   pickModelsToServe,
   type ServeDeps,
   type Child,
@@ -117,6 +120,59 @@ describe("embedServeArgs", () => {
       "--max-length",
       "8192",
     ]);
+  });
+});
+
+describe("groupServeArgv", () => {
+  it("attaches --draft and --draft-tokens to the model written before them", () => {
+    expect(groupServeArgv(["a", "--draft", "d", "--draft-tokens", "3", "b"])).toEqual([
+      { model: "a", draft: "d", draftTokens: 3 },
+      { model: "b" },
+    ]);
+  });
+
+  it("counts a model named with a kind flag as a target the options can follow", () => {
+    expect(groupServeArgv(["--image", "img", "a", "--draft", "d", "--embedding", "e"])).toEqual([
+      { model: "img" },
+      { model: "a", draft: "d" },
+      { model: "e" },
+    ]);
+  });
+
+  it("steps over command-wide flags and their values", () => {
+    expect(
+      groupServeArgv(["--port", "9090", "a", "--log-prompts", "--max-tokens=100", "--draft", "d"]),
+    ).toEqual([{ model: "a", draft: "d" }]);
+  });
+
+  it("refuses a per-model option before any model, naming the order", () => {
+    expect(() => groupServeArgv(["--draft", "d", "a"])).toThrow(
+      "--draft goes after the model it is for: agency local serve <model> --draft d",
+    );
+  });
+
+  it("returns nothing for no models", () => {
+    expect(groupServeArgv([])).toEqual([]);
+    expect(groupServeArgv(["--port", "8080"])).toEqual([]);
+  });
+});
+
+describe("optionsByModel", () => {
+  it("keeps only the models that have options", () => {
+    expect(optionsByModel([{ model: "a", draft: "d" }, { model: "b" }])).toEqual({
+      a: { draft: "d" },
+    });
+  });
+});
+
+describe("argvAfterServe", () => {
+  it("returns the tokens after the serve word", () => {
+    expect(argvAfterServe(["node", "agency", "local", "serve", "a", "--draft", "d"])).toEqual([
+      "a",
+      "--draft",
+      "d",
+    ]);
+    expect(argvAfterServe(["node", "agency", "local", "list"])).toEqual([]);
   });
 });
 
@@ -600,25 +656,47 @@ describe("runServe", () => {
     safeDeleteDirectoryWithin(os.tmpdir(), dir);
   });
 
-  it("drafts for every chat model with --draft, and counts the draft's memory once per chat model", async () => {
+  it("drafts for the model an option was written after, and counts that draft's memory once", async () => {
     recordedModel("org/a", true);
     recordedModel("org/b", true);
     const d = recordedModel("org/d", true);
     const handle = await runServe(
       ["mlx:org/a", "mlx:org/b"],
-      { port: 0, draft: "mlx:org/d", draftTokens: 3 },
+      { port: 0, options: { "mlx:org/a": { draft: "mlx:org/d", draftTokens: 3 } } },
       deps,
     );
-    for (const args of spawned) {
-      expect(args.slice(-4)).toEqual(["--draft-model", d, "--num-draft-tokens", "3"]);
-    }
-    // Two 0.6 GB models plus the 0.6 GB draft loaded by each of them, on a
+    expect(spawned[0].slice(-4)).toEqual(["--draft-model", d, "--num-draft-tokens", "3"]);
+    expect(spawned[1]).not.toContain("--draft-model");
+    // Two 0.6 GB models plus the 0.6 GB draft loaded by one of them, on a
     // 1 GB machine.
     expect(log[0]).toBe(
-      "Warning: these models total 2.40 GB and this machine has 1.00 GB of memory.",
+      "Warning: these models total 1.80 GB and this machine has 1.00 GB of memory.",
     );
-    expect(log).toContain("Drafting with org/d (0.60 GB)");
+    expect(log).toContain("Drafting for org/a with org/d (0.60 GB)");
     await handle.close();
+  });
+
+  it("refuses a draft for a model that is not a chat model, and a draft that is not one", async () => {
+    diffusersModel("org/img");
+    recordedModel("org/a", true);
+    recordedModel("org/tts", true, "speech");
+    await expect(
+      runServe(
+        ["diffusers:org/img"],
+        { port: 0, options: { "diffusers:org/img": { draft: "mlx:org/a" } } },
+        deps,
+      ),
+    ).rejects.toThrow("--draft goes after a chat model, and diffusers:org/img is an image model.");
+    await expect(
+      runServe(
+        ["mlx:org/a"],
+        { port: 0, options: { "mlx:org/a": { draft: "mlx:org/tts" } } },
+        deps,
+      ),
+    ).rejects.toThrow(
+      "mlx:org/tts is a speech model, not a chat model. Serve it with: agency local serve --speech mlx:org/tts",
+    );
+    expect(spawned).toEqual([]);
   });
 
   it("resolves, warns, starts one process per model, waits, then opens the door", async () => {

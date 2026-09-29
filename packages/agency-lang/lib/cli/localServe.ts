@@ -91,6 +91,73 @@ export function serveArgs(
 }
 
 /** What one chat server is started with, beyond its model and port. */
+/** One model from the `serve` command line with the options written after
+ *  it. */
+export type ServeTarget = { model: string } & ModelOptions;
+
+/** The per-model options and how each one is spelled. */
+const MODEL_OPTION_FLAGS = ["--draft", "--draft-tokens"];
+
+/** The flags that name a model rather than set an option, so the model
+ *  after them is a target too. */
+const MODEL_NAMING_FLAGS = ["--embedding", "--speech", "--image"];
+
+/** Groups the arguments after `serve` into one entry per model, each with
+ *  the per-model options that followed it. `agency local serve a --draft d
+ *  b` drafts for `a` and not `b`. Any other flag belongs to the command as
+ *  a whole and is left for the option parser; its value, if the next token
+ *  is not a flag, is skipped with it. A parser, so its order is its
+ *  nature; it holds nothing but what it returns. */
+export function groupServeArgv(argv: string[]): ServeTarget[] {
+  const targets: ServeTarget[] = [];
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index];
+    const value = argv[index + 1];
+    const current = targets[targets.length - 1];
+    if (MODEL_OPTION_FLAGS.includes(token)) {
+      if (current === undefined) {
+        throw new Error(
+          `${token} goes after the model it is for: agency local serve <model> ${token} ${value ?? "<value>"}`,
+        );
+      }
+      if (token === "--draft") {
+        current.draft = value;
+      } else {
+        current.draftTokens = Number(value);
+      }
+      index += 2;
+    } else if (MODEL_NAMING_FLAGS.includes(token)) {
+      if (value !== undefined) {
+        targets.push({ model: value });
+      }
+      index += 2;
+    } else if (token.startsWith("--")) {
+      // A command-wide flag. Its value, when it has one, is the next token
+      // unless that is itself a flag or the flag was written as --x=y.
+      const takesValue = !token.includes("=") && value !== undefined && !value.startsWith("--");
+      index += takesValue ? 2 : 1;
+    } else {
+      targets.push({ model: token });
+      index += 1;
+    }
+  }
+  return targets;
+}
+
+/** The per-model options from grouped targets, keyed by model, for
+ *  `ServeFlags.options`. */
+export function optionsByModel(targets: ServeTarget[]): Record<string, ModelOptions> {
+  const out: Record<string, ModelOptions> = {};
+  for (const target of targets) {
+    const { model, ...options } = target;
+    if (Object.keys(options).length > 0) {
+      out[model] = options;
+    }
+  }
+  return out;
+}
+
 export type ChatServerSettings = {
   maxTokens: number;
   promptCacheBytes: number;
@@ -666,14 +733,22 @@ export type ServeHandle = {
   close: () => Promise<void>;
 };
 
-export type ServeFlags = ReplyLimits & {
-  port?: number;
-  maxTokens?: number;
-  /** A model that drafts tokens for every chat model served, for
-   *  speculative decoding. The same forms as a served model. */
+/** The options one served model takes for itself, written after it on the
+ *  command line: `agency local serve <model> --draft <small> --draft-tokens 3`. */
+export type ModelOptions = {
+  /** A smaller model of the same family that drafts tokens for this one,
+   *  for speculative decoding. The same forms as a served model. */
   draft?: string;
   /** How many tokens the draft guesses at a time. Default DEFAULT_DRAFT_TOKENS. */
   draftTokens?: number;
+};
+
+export type ServeFlags = ReplyLimits & {
+  port?: number;
+  maxTokens?: number;
+  /** Per-model options, keyed by the model as it was named on the command
+   *  line. `groupServeArgv` builds this from the argv order. */
+  options?: Record<string, ModelOptions>;
   /** Tokens of prompt read per pass. Default from the machine's memory,
    *  see prefillStepSize. */
   prefillStep?: number;
@@ -713,7 +788,14 @@ function realDeps(): ServeDeps {
   };
 }
 
-type Planned = { name: string; dir: string; sizeBytes: number; kind: ServeKind };
+type Planned = {
+  name: string;
+  dir: string;
+  sizeBytes: number;
+  kind: ServeKind;
+  /** The chat model that drafts for this one, planned the same way. */
+  draft?: { name: string; dir: string; sizeBytes: number; tokens: number };
+};
 
 /** The flag a kind may be named with on the command line. None is needed:
  *  `serve` reads the kind from the model. A flag asserts it. */
@@ -797,6 +879,45 @@ function planModel(value: string, cacheDir: string): Planned {
   return { name, dir, sizeBytes, kind };
 }
 
+/** The planned model with its draft attached, when its options name one.
+ *  The draft is planned like a served model, so it is found, checked, and
+ *  sized the same way, but it gets no route: requests go to the model it
+ *  drafts for. Only a chat model can take one. */
+function withDraft(
+  value: string,
+  model: Planned,
+  options: ModelOptions | undefined,
+  cacheDir: string,
+): Planned {
+  if (options?.draft === undefined) {
+    return model;
+  }
+  if (model.kind !== "chat") {
+    throw new Error(
+      `--draft goes after a chat model, and ${value} is ${anArticle(model.kind)} model.`,
+    );
+  }
+  const draft = planModel(options.draft, cacheDir);
+  assertKind(options.draft, draft.kind, "chat");
+  return {
+    ...model,
+    draft: {
+      name: draft.name,
+      dir: draft.dir,
+      sizeBytes: draft.sizeBytes,
+      tokens: options.draftTokens ?? DEFAULT_DRAFT_TOKENS,
+    },
+  };
+}
+
+/** The chat server settings for one model: the shared ones plus its draft. */
+function settingsFor(model: Planned, shared: ChatServerSettings): ChatServerSettings {
+  if (model.draft === undefined) {
+    return shared;
+  }
+  return { ...shared, draft: { dir: model.draft.dir, tokens: model.draft.tokens } };
+}
+
 /** Resolves with a description once the child exits. */
 function exitOf(child: Child, name: string, kind: ServeKind): Promise<string> {
   return new Promise((resolve) => {
@@ -872,7 +993,9 @@ export async function runServe(
   const port = flags.port ?? 8080;
   const maxTokens = flags.maxTokens ?? 16384;
   // A model named on its own is served as whatever it is. One named with a
-  // flag must be that kind.
+  // flag must be that kind. Either way it gets the options written after it.
+  const planNamed = (value: string): Planned =>
+    withDraft(value, planModel(value, deps.cacheDir), flags.options?.[value], deps.cacheDir);
   const planFlagged = (flagged: ServeKind, named: string[] | undefined) =>
     (named ?? []).map((value) => {
       // The catalog can refuse before the files are even looked for.
@@ -880,12 +1003,12 @@ export async function runServe(
       if (known !== undefined) {
         assertKind(value, known, flagged);
       }
-      const model = planModel(value, deps.cacheDir);
+      const model = planNamed(value);
       assertKind(value, model.kind, flagged);
       return model;
     });
   const planned = [
-    ...values.map((value) => planModel(value, deps.cacheDir)),
+    ...values.map(planNamed),
     ...planFlagged("embedding", flags.embedding),
     ...planFlagged("speech", flags.speech),
     ...planFlagged("image", flags.image),
@@ -898,20 +1021,12 @@ export async function runServe(
   if (repeated !== undefined) {
     throw new Error(`${repeated} is named twice.`);
   }
-  // The draft, when there is one, is planned like a served model, so it is
-  // found, checked, and sized the same way, but it gets no route: requests
-  // go to the model it drafts for. Every chat server loads its own copy of
-  // it, so the memory warning counts it once per chat model.
-  const draft = flags.draft === undefined ? undefined : planModel(flags.draft, deps.cacheDir);
-  if (draft !== undefined) {
-    assertKind(flags.draft ?? "", draft.kind, "chat");
-  }
-  const chatCount = planned.filter((p) => p.kind === "chat").length;
+  // A draft is loaded by the server of the model it drafts for, so the
+  // memory warning counts it with that model.
   const warning = memoryWarning(
-    [
-      ...planned.map((p) => p.sizeBytes),
-      ...(draft === undefined ? [] : Array(chatCount).fill(draft.sizeBytes)),
-    ],
+    planned.flatMap((p) =>
+      p.draft === undefined ? [p.sizeBytes] : [p.sizeBytes, p.draft.sizeBytes],
+    ),
     deps.totalmem(),
   );
   if (warning !== null) {
@@ -942,7 +1057,7 @@ export async function runServe(
     }
   };
   const routes: Route[] = [];
-  const settings: ChatServerSettings = {
+  const shared: ChatServerSettings = {
     maxTokens,
     promptCacheBytes: promptCacheBudget(deps.totalmem()),
     prefillStepSize: flags.prefillStep ?? prefillStepSize(deps.totalmem()),
@@ -953,12 +1068,14 @@ export async function runServe(
       limitAnswers: flags.limitAnswers,
     },
   };
-  if (draft !== undefined) {
-    settings.draft = { dir: draft.dir, tokens: flags.draftTokens ?? DEFAULT_DRAFT_TOKENS };
-    deps.log(`Drafting with ${draft.name} (${formatGB(draft.sizeBytes)})`);
-  }
   for (const model of planned) {
     const internalPort = await deps.freePort();
+    const settings = settingsFor(model, shared);
+    if (model.draft !== undefined) {
+      deps.log(
+        `Drafting for ${model.name} with ${model.draft.name} (${formatGB(model.draft.sizeBytes)})`,
+      );
+    }
     const args = argsFor(model, internalPort, settings, deps.cacheDir);
     const child = deps.spawn(python, args);
     children.push(child);
@@ -1024,9 +1141,20 @@ export async function runServe(
 
 /** The CLI entry: serve until Ctrl-C, or until a process dies. With no
  *  model named, ask which of the downloaded ones to serve. */
-export async function localServe(values: string[], flags: ServeFlags): Promise<void> {
+/** The tokens after the `serve` word on the command line. */
+export function argvAfterServe(argv: string[]): string[] {
+  const at = argv.indexOf("serve");
+  return at === -1 ? [] : argv.slice(at + 1);
+}
+
+export async function localServe(
+  values: string[],
+  flags: ServeFlags,
+  argv: string[] = process.argv,
+): Promise<void> {
   let handle: ServeHandle;
   try {
+    flags.options = optionsByModel(groupServeArgv(argvAfterServe(argv)));
     const wantsPicker =
       values.length === 0 &&
       (flags.embedding ?? []).length === 0 &&

@@ -1999,11 +1999,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option(
       "--draft <model>",
-      "A smaller model of the same family that drafts tokens for the served models (speculative decoding)",
+      "Written after a chat model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
     )
     .option(
       "--draft-tokens <n>",
-      "Tokens the draft model guesses at a time (default: 4)",
+      "Written after a chat model: tokens its draft guesses at a time (default: 4)",
       parsePositiveInt,
     )
     .option(
@@ -2026,8 +2026,6 @@ export function createProgram(deps: CliDependencies = {}): Command {
           hedgeLimit?: number;
           repeatLimit?: number;
           limitAnswers?: boolean;
-          draft?: string;
-          draftTokens?: number;
           prefillStep?: number;
           python?: string;
           logPrompts?: boolean;
@@ -2037,7 +2035,10 @@ export function createProgram(deps: CliDependencies = {}): Command {
         },
       ) =>
         // `--verbose` is the whole CLI's own flag, so serve cannot declare it
-        // again; it means the same thing here, so honor it either way.
+        // again; it means the same thing here, so honor it either way. The
+        // per-model options, --draft and --draft-tokens, are read from the
+        // argv order inside localServe, since which model they follow is what
+        // decides what they mean.
         localServe(models, {
           ...opts,
           logPrompts: opts.logPrompts === true || program.opts().verbose === true,

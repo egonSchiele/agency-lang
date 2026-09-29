@@ -385,7 +385,8 @@ describe("runRemove", () => {
     runRemove("ext", { force: false });
     expect(output[0]).toBe(`Removed alias "ext" from ${aliasFile}.`);
     expect(output[1]).toContain("outside the models directory, so delete them yourself");
-    expect(output.some((l) => l.includes("-f"))).toBe(false);
+    // The flag on its own, not the "-f" inside a temp path like /tmp/cli-f3x9Qz.
+    expect(output.some((l) => /(^|\s)-f\b/.test(l))).toBe(false);
   });
 
   it("never deletes a model in a Hugging Face cache", () => {

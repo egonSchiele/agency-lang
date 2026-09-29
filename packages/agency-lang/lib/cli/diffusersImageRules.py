@@ -68,6 +68,11 @@ ADAPTER_EXTENSION = ".safetensors"
 MAX_LORA_SCALE = 2.0
 DEFAULT_LORA_SCALE = 1.0
 
+# How many adapters stay loaded at once. Two lets a user compare two
+# adapters without reloading either; more would hold GPU memory for
+# adapters no request is using.
+MAX_LOADED_ADAPTERS = 2
+
 # What each family takes, keyed by `_class_name` in model_index.json.
 #
 #   label            how the family is named in a message
@@ -320,8 +325,8 @@ def _format_of(body):
 def adapter_path(adapters_dir, name):
     """The file the adapter `name` is, inside the folder. Raises RequestError
     for a name that is not one plain file name: empty, a dot name, one with
-    a path separator, or one that already carries the extension. Whether
-    the file exists is found out when it is loaded."""
+    a path separator, or one that already carries the extension.
+    existing_adapter checks the file itself."""
     bad = (
         not isinstance(name, str)
         or name in ("", ".", "..")
@@ -337,16 +342,120 @@ def adapter_path(adapters_dir, name):
     return os.path.join(adapters_dir, name + ADAPTER_EXTENSION)
 
 
+def _adapter_name_of(entry):
+    """The name a request uses for a file in the folder, or None for a file
+    no request can name: another format, or a name adapter_path refuses,
+    such as "x.safetensors" for x.safetensors.safetensors."""
+    if not entry.endswith(ADAPTER_EXTENSION):
+        return None
+    name = entry[: -len(ADAPTER_EXTENSION)]
+    try:
+        adapter_path("", name)
+    except RequestError:
+        return None
+    return name
+
+
 def adapter_names(adapters_dir):
     """The adapters in the folder, by name, for a message or /health. Reads
-    the folder fresh, so an adapter dropped in after start-up is listed."""
+    the folder fresh, so an adapter dropped in after start-up is listed.
+    Lists only what existing_adapter would load: a symlink, a folder, or a
+    file whose name a request cannot spell is left out."""
     try:
         entries = os.listdir(adapters_dir)
     except OSError:
         return []
-    return sorted(
-        entry[: -len(ADAPTER_EXTENSION)] for entry in entries if entry.endswith(ADAPTER_EXTENSION)
-    )
+    names = []
+    for entry in entries:
+        name = _adapter_name_of(entry)
+        path = os.path.join(adapters_dir, entry)
+        if name is not None and not os.path.islink(path) and os.path.isfile(path):
+            names.append(name)
+    return sorted(names)
+
+
+def check_adapters_dir(adapters_dir):
+    """The folder, once it is known to be a directory and not a symlink, or
+    None when none is configured. Raises ValueError with the message to
+    fail with."""
+    if adapters_dir is None:
+        return None
+    if os.path.islink(adapters_dir):
+        raise ValueError(f"--adapters-dir {adapters_dir} is a symlink. Name the folder itself.")
+    if not os.path.isdir(adapters_dir):
+        raise ValueError(f"--adapters-dir {adapters_dir} is not a folder.")
+    return adapters_dir
+
+
+def existing_adapter(adapters_dir, name):
+    """(path, stamp) for the adapter `name`: its file, and the file's
+    modification time and size, which change when the adapter is trained
+    again. Raises RequestError for a name adapter_path refuses, and for a
+    file that is missing, is not a plain file, or is a symlink, naming what
+    the folder holds."""
+    path = adapter_path(adapters_dir, name)
+    try:
+        info = os.lstat(path)
+    except OSError:
+        info = None
+    if info is None or os.path.islink(path) or not os.path.isfile(path):
+        have = adapter_names(adapters_dir)
+        listing = join_names(have) if have else "no adapters"
+        raise RequestError(f'There is no adapter "{name}" in {adapters_dir}. It has {listing}.')
+    return path, [info.st_mtime_ns, info.st_size]
+
+
+class LoadedAdapters:
+    """Which adapters the pipeline holds, and the name each is loaded under.
+
+    The pipeline does not get the file name as the adapter's name: torch
+    refuses a dot in a module name, and "style.v2" is a common file name.
+    Each load gets a fresh name instead, adapter_0, adapter_1, and so on,
+    so a name left behind by a failed load is never reused.
+
+    At most `limit` adapters stay loaded. An SDXL adapter can be close to a
+    gigabyte, and a model calling generateImageLocal may try every adapter
+    in the folder, so the one used longest ago is unloaded to make room.
+
+    This class only keeps the books. The server does the loading and
+    unloading it says to do."""
+
+    def __init__(self, limit=MAX_LOADED_ADAPTERS):
+        self.limit = limit
+        # Oldest use first: [{"name", "loaded_as", "stamp"}].
+        self.entries = []
+        self.count = 0
+
+    def find(self, name, stamp):
+        """The name `name` is loaded under, or None when it is not loaded or
+        its file has changed since. Marks it as just used."""
+        for entry in self.entries:
+            if entry["name"] == name and entry["stamp"] == stamp:
+                self.entries.remove(entry)
+                self.entries.append(entry)
+                return entry["loaded_as"]
+        return None
+
+    def make_room(self, name):
+        """The loaded names to unload before `name` is loaded: its own
+        earlier load, whose file has changed, and the adapters used longest
+        ago, until one more fits. Forgets them."""
+        drop = [entry for entry in self.entries if entry["name"] == name]
+        kept = [entry for entry in self.entries if entry["name"] != name]
+        while len(kept) >= self.limit:
+            drop.append(kept.pop(0))
+        self.entries = kept
+        return [entry["loaded_as"] for entry in drop]
+
+    def next_name(self):
+        """A name no load has used yet."""
+        loaded_as = f"adapter_{self.count}"
+        self.count += 1
+        return loaded_as
+
+    def add(self, name, loaded_as, stamp):
+        """Records a load that finished."""
+        self.entries.append({"name": name, "loaded_as": loaded_as, "stamp": stamp})
 
 
 def _lora_of(rules, body, adapters_dir):

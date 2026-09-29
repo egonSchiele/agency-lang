@@ -1,4 +1,4 @@
-import { modelDirEntries, readModelJson } from "./modelBackend.js";
+import { isDiffusersDir, modelDirEntries, readModelJson } from "./modelBackend.js";
 
 /** What a local model takes and returns. The kind decides which server
  *  script runs it, which route serves it, and which stdlib function calls
@@ -12,11 +12,6 @@ export const MODEL_KINDS: ModelKind[] = ["chat", "embedding", "speech", "image",
 export function isModelKind(value: unknown): value is ModelKind {
   return typeof value === "string" && MODEL_KINDS.includes(value as ModelKind);
 }
-
-/** The pipeline classes the image server's family table serves, copied
- *  from `FAMILIES` in `lib/cli/diffusersImageRules.py` so a directory can
- *  be recognised without running Python. A test checks the two agree. */
-export const IMAGE_PIPELINES = ["ZImagePipeline", "ChromaPipeline", "StableDiffusionXLPipeline"];
 
 /** The `architectures` the vision server's family table serves through
  *  transformers, copied from `FAMILIES` in `lib/cli/visionRules.py`; a
@@ -37,7 +32,7 @@ const SPEECH_MODEL_TYPES = ["qwen3_tts"];
 type DirFacts = {
   names: string[];
   config: Record<string, unknown> | null;
-  modelIndex: Record<string, unknown> | null;
+  diffusers: boolean;
 };
 
 /** One row of the inference table: the kind, and whether the directory's
@@ -54,8 +49,12 @@ function architecture(config: Record<string, unknown> | null): string {
 
 const KIND_RULES: KindRule[] = [
   {
+    // Any diffusers pipeline is an image model. Which pipelines the image
+    // server can run is its own business: it refuses a family it does not
+    // serve, naming the ones it does, so this table never has to copy its
+    // list.
     kind: "image",
-    matches: (facts) => IMAGE_PIPELINES.includes(String(facts.modelIndex?._class_name)),
+    matches: (facts) => facts.diffusers,
   },
   {
     // Before the chat rule: Florence-2's class ends in ForConditionalGeneration too.
@@ -92,7 +91,7 @@ export function kindOfModelDir(dir: string): ModelKind | null {
   const facts: DirFacts = {
     names: modelDirEntries(dir).map((entry) => entry.name),
     config: readModelJson(dir, "config.json"),
-    modelIndex: readModelJson(dir, "model_index.json"),
+    diffusers: isDiffusersDir(dir),
   };
   return KIND_RULES.find((rule) => rule.matches(facts))?.kind ?? null;
 }

@@ -94,17 +94,22 @@ export {
   type ModelInfo,
   type ModelTag,
 } from "./modelCatalog.js";
-import { kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
+import { isModelKind, kindOfModelDir, MODEL_KINDS, type ModelKind } from "./modelKind.js";
 export { MODEL_KINDS, isModelKind, type ModelKind } from "./modelKind.js";
 
-/** The folder LoRA adapters come from, `client.adaptersDir`, made absolute
- *  against the working directory, or null when it is not set. */
-export function configuredAdaptersDir(): string | null {
-  const configured = readClientConfig().adaptersDir;
+/** The folder LoRA adapters come from, `client.adaptersDir`, or null when
+ *  it is not set. A relative path is taken from the folder the config file
+ *  is in, not the working directory: `"./adapters"` in `myproject/agency.json`
+ *  is `myproject/adapters` even when `agency local serve` runs in
+ *  `myproject/src`. */
+export function configuredAdaptersDir(startDir: string = process.cwd()): string | null {
+  const target = defaultAliasTarget(startDir);
+  const configured = readAliasConfig(target).client?.adaptersDir;
   if (typeof configured !== "string" || configured.length === 0) {
     return null;
   }
-  return path.resolve(configured);
+  const configDir = target.kind === "file" ? path.dirname(target.path) : target.dir;
+  return path.resolve(configDir, configured);
 }
 
 /** Where downloaded models live, in precedence order:
@@ -395,7 +400,7 @@ function metaFrom(src: string | MetaSource): EntryMeta {
   const out: EntryMeta = {};
   if (src.params !== undefined) out.params = src.params;
   if (src.sizeBytes !== undefined) out.sizeBytes = src.sizeBytes;
-  const kind = src.kind ?? kindOfCategory(src.category);
+  const kind = isModelKind(src.kind) ? src.kind : kindOfCategory(src.category);
   if (kind !== undefined) out.kind = kind;
   const tags = src.tags ?? tagsOfCategory(src.category);
   if (tags !== undefined) out.tags = tags;
@@ -1345,19 +1350,22 @@ function companionsFor(
   return catalogEntry(value, modelTarget)?.companions ?? [];
 }
 
-/** Download a model and return where it is: the `.gguf` path, or the MLX
- *  model directory. `hubOptions` lets the CLI watch progress and lets tests
- *  point at a fake hub. */
 /** The download options, plus the kind to record when the user says what
  *  the model is. Without it, the catalog or the files decide. */
 export type ModelDownloadOptions = DownloadOptions & { kind?: ModelKind };
 
+/** Download a model and return where it is: the `.gguf` path, or the MLX
+ *  model directory. `hubOptions` lets the CLI watch progress and lets tests
+ *  point at a fake hub. */
 export async function _downloadModel(
   value: string,
   cacheDir: string = "",
   hubOptions: ModelDownloadOptions = {},
 ): Promise<string> {
   const model = _resolveModel(value);
+  if (hubOptions.kind !== undefined) {
+    refuseUnrecordableKind(value, model);
+  }
   if (model.backend !== "llama-cpp") {
     if (isServedModelDir(model.target)) {
       return path.resolve(model.target);
@@ -1395,6 +1403,23 @@ export async function _downloadModel(
   // written into the manifest.
   recordDownload(dir, target, path.basename(resolved));
   return resolved;
+}
+
+/** `--kind` is written into the record an mlx: or diffusers: download
+ *  keeps. A GGUF file and a directory have no such record, so the kind
+ *  would be dropped without a word. Refuse instead, naming what works. */
+function refuseUnrecordableKind(value: string, model: ResolvedModel): void {
+  if (model.backend === "llama-cpp") {
+    throw new Error(
+      `${value} is a GGUF model, which is always a chat model. Download it without --kind.`,
+    );
+  }
+  if (isServedModelDir(model.target)) {
+    throw new Error(
+      `${value} is a directory, and --kind is only recorded for a download. ` +
+        `Name its kind when serving it instead, for example: agency local serve --embedding ${value}`,
+    );
+  }
 }
 
 /** Writes the kind into a finished download's record. A null kind leaves

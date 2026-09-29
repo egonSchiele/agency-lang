@@ -190,8 +190,9 @@ Generate an image on this machine with a local image model, such as
   whose success value is { base64, mimeType, seed }.
 
   A LoRA adapter is a small file that teaches an SDXL model a style or a
-  character. Load one when serving, `--lora sketch=./sketch.safetensors`,
-  and name it here with `lora: "sketch"`. Only the request that names it
+  character. Put the file in your adapters folder (`client.adaptersDir`
+  in agency.json) and pass its file name without .safetensors:
+  `lora: "sketch"` for sketch.safetensors. Only the request that names it
   gets it.
 
   @param prompt - What to draw
@@ -202,7 +203,7 @@ Generate an image on this machine with a local image model, such as
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which
   @param negativePrompt - What the image should not contain. z-image-turbo takes none
   @param format - "png", "jpeg", or "webp"
-  @param lora - The name of a LoRA adapter the server loaded with --lora. Empty applies none
+  @param lora - The file name, without .safetensors, of an adapter in the adapters folder (client.adaptersDir). Empty applies none
   @param loraScale - How strongly to apply the adapter, from 0 to 2. Null is 1, as trained
 
 **Parameters:**
@@ -261,7 +262,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L155))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L156))
 
 ### imageSize
 
@@ -283,7 +284,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L191))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L192))
 
 ### pasteImages
 
@@ -316,4 +317,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L208))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L209))

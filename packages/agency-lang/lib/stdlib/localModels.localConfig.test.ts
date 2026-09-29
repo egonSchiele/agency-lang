@@ -5,6 +5,7 @@ import * as path from "path";
 import {
   _aliasModel,
   _refreshCatalog,
+  configuredAdaptersDir,
   defaultAliasTarget,
   readClientConfig,
   readModelAliases,
@@ -66,6 +67,31 @@ describe("defaultAliasTarget", () => {
     write(path.join(home, "agency.local.json"), { client: { modelsDir: "/home-local" } });
     expect(defaultAliasTarget()).toEqual(fileTarget(path.join(home, "agency.json")));
     expect(readClientConfig()).toEqual({ modelsDir: "/home-base" });
+  });
+});
+
+describe("configuredAdaptersDir", () => {
+  it("takes a relative folder from the config file's folder, not the working directory", () => {
+    write(inProject("agency.json"), { client: { adaptersDir: "./adapters" } });
+    const src = inProject("src");
+    fs.mkdirSync(src);
+    process.chdir(src);
+    expect(configuredAdaptersDir()).toBe(inProject("adapters"));
+  });
+
+  it("takes it from ~/agency.json's folder when there is no project", () => {
+    const outside = path.join(root, "outside");
+    fs.mkdirSync(outside);
+    process.chdir(outside);
+    write(path.join(home, "agency.json"), { client: { adaptersDir: "adapters" } });
+    expect(configuredAdaptersDir()).toBe(path.join(home, "adapters"));
+  });
+
+  it("keeps an absolute folder, and is null when unset", () => {
+    write(inProject("agency.json"), { client: { adaptersDir: "/models/adapters" } });
+    expect(configuredAdaptersDir()).toBe("/models/adapters");
+    write(inProject("agency.json"), { client: {} });
+    expect(configuredAdaptersDir()).toBeNull();
   });
 });
 

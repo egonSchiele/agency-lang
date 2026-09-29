@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "async_hooks";
+import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
 import type { HandlerEntry } from "./types.js";
 
 /**

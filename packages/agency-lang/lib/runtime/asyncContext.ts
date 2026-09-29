@@ -45,7 +45,7 @@
  *
  * See docs/dev/runtime/async-context.md for the full picture.
  */
-import { AsyncLocalStorage } from "node:async_hooks";
+import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
 import process from "node:process";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import type { RuntimeContext } from "./state/context.js";

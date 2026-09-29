@@ -40,17 +40,7 @@ All four are apache-2.0. Z-Image Turbo and Chroma have no content filter in
 their weights; FLUX.2 [klein] is safety fine-tuned. The times come from a
 timing run with diffusers 0.40.0 and torch 2.14.0 in bfloat16, three images
 each. Loading took under 3 seconds from a warm file cache, and the warm-up
-generation 4 to 6 seconds. Qwen-Image and klein were added without a
-timing run: their rows were checked against the model cards, the
-`model_index.json` files, and the pipeline signatures in diffusers 0.40.0,
-but neither has been loaded on a Mac yet.
-
-Qwen-Image makes legible text inside an image, which the others do poorly.
-klein is the one to use on a Mac with less memory. Two models that were
-considered and left out: HiDream-I1, whose repo leaves out its Llama 3.1
-text encoder, so serving it would mean assembling one model from two
-repos; and SDXL fine-tunes such as Juggernaut XL, which ship only fp16
-variant weights in diffusers format, which the downloader refuses.
+generation 4 to 6 seconds.
 
 The memory warning `serve` prints adds up download sizes. An image model
 uses more than that while it generates: Chroma peaks at 36 GB against
@@ -156,6 +146,12 @@ To add a family, add a row: the pipeline class, the model card's steps and
 guidance, and the components copied from a real `model_index.json`. Then
 time it on a Mac and add it to the catalog.
 
+Two kinds of model cannot be served this way. One whose repo leaves out a
+component, such as HiDream-I1, which loads its Llama 3.1 text encoder from
+another repo: the server loads one directory. And one that ships only fp16
+variant weights in diffusers format, as most SDXL fine-tunes do: the
+downloader keeps only plain `.safetensors` files.
+
 The size rules: two multiples of 16 joined by `x`, each side from 256 to
 2048, and at most 4 million pixels, so `2048x1920` passes and `2048x2048`
 does not. `n` must be 1, because the diffusers MPS guide says batched
@@ -217,10 +213,8 @@ Its timeout scales with the request (`localImageTimeoutMs`): the slowest
 family's rate per step per megapixel, doubled for attention's growth, times the steps and size asked for, times two for a request that
 may be queued ahead. A request that leaves steps to the model is budgeted
 at the most any family allows, 80, which a test checks against the rules
-module. The slowest family is Qwen-Image, and its rate is an estimate until
-it is timed: 5 seconds, from its transformer being 2.25 times the size of
-Chroma's, which measured 2.25 seconds. At the caps the timeout is about
-107 minutes. It is there to catch a
+module. Qwen-Image's rate is estimated from its size until it is timed.
+At the caps the timeout is about 107 minutes. It is there to catch a
 server that has stopped answering, not to bound a slow one; the caps on
 steps and size do that.
 

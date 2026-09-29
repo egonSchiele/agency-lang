@@ -14,13 +14,11 @@ import { mlxBaseUrl } from "./mlxServerModels.js";
  *  image again), sends Agency's own settings, reads back the seed the
  *  server used, and costs nothing. */
 
-/** What one step over one megapixel is allowed to take. Chroma measured
- *  90 s for 40 steps at 1024x1024, which is 2.25 s per step per megapixel.
- *  Qwen-Image has not been timed; its transformer is 2.25 times the size of
- *  Chroma's and both run guidance as two passes per step, so it is
- *  estimated at about 5 s. Attention grows faster than the pixel count, so
- *  the allowance is about double that. Replace the estimate once
- *  Qwen-Image is timed. */
+/** What one step over one megapixel is allowed to take. Qwen-Image, the
+ *  slowest family, is estimated at about 5 s: Chroma measured 2.25 s, and
+ *  Qwen-Image's transformer is 2.25 times the size. Attention grows faster
+ *  than the pixel count, so the allowance is about double that. Replace the
+ *  estimate once Qwen-Image is timed. */
 const STEP_MEGAPIXEL_MS = 10_000;
 
 /** The most steps any family accepts: Chroma's and Qwen-Image's

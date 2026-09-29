@@ -642,7 +642,6 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Detailed, cinematic images with no content filter. About 90 s per 1024x1024 image on an M5 Ultra.",
   },
-  // Not timed yet: the descriptions say so until a timing run on a Mac.
   "qwen-image-2512": {
     backend: "diffusers",
     uri: "diffusers:Qwen/Qwen-Image-2512",

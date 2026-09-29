@@ -66,7 +66,7 @@ The first table has one row per image field:
 ```python
 INPUT_IMAGES = {
     "control_image": {"mode": "control",   "max_count": 1, "max_bytes": MAX_IMAGE_BYTES,       "fit": "letterbox", "on_white": False},
-    "images":        {"mode": "reference", "max_count": 4, "max_bytes": MAX_INPUT_IMAGE_BYTES, "fit": "none",      "on_white": True},
+    "images":        {"mode": "reference", "max_count": 4, "max_bytes": MAX_INPUT_IMAGE_BYTES, "fit": "shrink",    "on_white": True},
     "start_image":   {"mode": "img2img",   "max_count": 1, "max_bytes": MAX_INPUT_IMAGE_BYTES, "fit": "cover",     "on_white": True},
 }
 ```
@@ -338,8 +338,9 @@ A size the caller gives always wins.
 
 Each image is then fitted to the output size the way its row's `fit` says:
 
-- **`none`, for references.** They can stay any shape. The model only looks
-  at them.
+- **`shrink`, for references.** They can stay any shape, because the model
+  only looks at them. One over a megapixel is scaled down to a megapixel,
+  which klein would do itself under the generation lock.
 - **`cover`, for the start image.** It is scaled to cover the output size,
   and the overflow is cropped evenly from both sides. A 4:3 photo redrawn at
   1024x1024 loses a strip from its left and right edges.

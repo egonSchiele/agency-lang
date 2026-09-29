@@ -165,16 +165,18 @@ function bodyLimit(url: string | undefined): number | undefined {
 }
 
 /** The request body, or how to refuse it. Refusing is left to the caller so
- *  that every reply the door sends, including this one, reaches the log. */
+ *  that every reply the door sends, including this one, reaches the log.
+ *
+ *  A body over the limit is read to its end and thrown away, so the client
+ *  reads the 413 instead of seeing a dropped connection. That reading
+ *  stops, and the socket closes, once the client has sent as much past the
+ *  limit as the largest body the door takes. */
 async function readRequest(
   req: http.IncomingMessage,
   maxBytes: number | undefined,
 ): Promise<ReadResult> {
   try {
-    // No `destroy`: parseJsonBody would close the socket on a body over the
-    // limit, and the client would see a broken pipe instead of the 413. The
-    // rest of the body is read and dropped, never kept.
-    const parsed = await parseJsonBody({ on: req.on.bind(req) }, maxBytes);
+    const parsed = await parseJsonBody(req, maxBytes, localBodyBytes());
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return { refusal: { status: 400, message: "Request body is not a JSON object." } };
     }

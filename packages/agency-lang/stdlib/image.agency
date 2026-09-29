@@ -186,7 +186,7 @@ export def generateImageLocal(
 
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
-  @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768". Empty is 1024x1024. Leave it empty when editing or redrawing a picture, and the result keeps the picture's shape
+  @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768". Empty is 1024x1024. Leave it empty when editing a picture, and the result keeps the picture's shape
   @param steps - How many refinement passes to make. More is slower and usually more detailed. Null uses the model's own default
   @param guidance - How closely to follow the prompt; higher sticks to it more literally. Leave it null unless asked: null uses the model's own default, and some models refuse any guidance
   @param seed - A number that fixes the randomness, so the same prompt and seed make the same image. Null picks one; the result says which

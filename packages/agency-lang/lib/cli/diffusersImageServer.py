@@ -49,6 +49,7 @@ from diffusersImageRules import (  # noqa: E402
     family_of,
     fit_box,
     image_problem,
+    fit_has_canvas,
     join_names,
     output_size,
     pipeline_args,
@@ -75,28 +76,40 @@ MODE_MODELS = {"control": ["controlnet"]}
 def decode_image(data, field):
     """The picture in `data`, the bytes of one image in the request field
     `field`, as RGB. Pillow tries only INPUT_IMAGE_FORMATS, and an image over
-    MAX_INPUT_IMAGE_PIXELS is refused before its pixels are decoded. The
-    EXIF orientation is applied, so a portrait photo from a phone stays
-    upright. When the field's row says on_white, a transparent image is
-    pasted onto white first; converting it directly would turn its
-    background black. Then the check the field's row names, if any, runs
-    on the upright image's size."""
+    MAX_INPUT_IMAGE_PIXELS is refused before its pixels are decoded. A file
+    that is cut short or damaged is refused too. The EXIF orientation is
+    applied, so a portrait photo from a phone stays upright. When the
+    field's row says on_white, a transparent image is pasted onto white
+    first; converting it directly would turn its background black. Then the
+    check the field's row names, if any, runs on the upright image's
+    size."""
     from PIL import Image, ImageOps
 
+    unreadable = RequestError(
+        f"{field} is not an image this server reads. It reads "
+        f"{join_names([f.lower() for f in INPUT_IMAGE_FORMATS], 'or')}, and the file must be whole."
+    )
     try:
         image = Image.open(io.BytesIO(data), formats=INPUT_IMAGE_FORMATS)
     except (OSError, ValueError, Image.DecompressionBombError):
-        raise RequestError(
-            f"{field} is not an image this server reads. It reads "
-            f"{join_names([f.lower() for f in INPUT_IMAGE_FORMATS], 'or')}."
-        )
+        raise unreadable
     if image.width * image.height > MAX_INPUT_IMAGE_PIXELS:
         raise RequestError(
             f"{field} is {image.width}x{image.height}; this server takes images up to "
             f"{MAX_INPUT_IMAGE_PIXELS:,} pixels."
         )
+    # Image.open read the header only. The pixels are decoded here, after
+    # the size check, and this is where a damaged file fails.
+    try:
+        image.load()
+    except (OSError, ValueError, SyntaxError) as err:
+        print(f"Could not decode {field}: {err}", file=sys.stderr)
+        raise unreadable
     image = ImageOps.exif_transpose(image)
-    if INPUT_IMAGES[field]["on_white"] and image.mode in ("RGBA", "LA", "P"):
+    # A palette or RGB image marks its transparent color in `info`, with no
+    # alpha band.
+    transparent = image.mode in ("RGBA", "LA", "PA") or "transparency" in image.info
+    if INPUT_IMAGES[field]["on_white"] and transparent:
         image = image.convert("RGBA")
         white = Image.new("RGBA", image.size, (255, 255, 255, 255))
         image = Image.alpha_composite(white, image)
@@ -126,16 +139,18 @@ def prepared(image, field, request):
 
 
 def fitted(image, field, width, height):
-    """A decoded image fitted to width x height the way its row's `fit`
-    says. A letterboxed image goes on a black canvas."""
+    """A decoded image scaled the way its row's `fit` says for an output of
+    width x height, and pasted on a black canvas of that size when the fit
+    has one."""
     from PIL import Image
 
     fit = INPUT_IMAGES[field]["fit"]
-    if fit == "none":
-        return image
     fit_width, fit_height, left, top = fit_box(fit, image.width, image.height, width, height)
+    scaled = image.resize((fit_width, fit_height), Image.LANCZOS)
+    if not fit_has_canvas(fit):
+        return scaled
     canvas = Image.new("RGB", (width, height), (0, 0, 0))
-    canvas.paste(image.resize((fit_width, fit_height), Image.LANCZOS), (left, top))
+    canvas.paste(scaled, (left, top))
     return canvas
 
 PIL_FORMATS = {"png": "PNG", "jpeg": "JPEG", "webp": "WEBP"}

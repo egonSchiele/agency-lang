@@ -258,9 +258,12 @@ keeps 10 MiB, since its routes take a served agent's JSON arguments and
 have no use for a 100 MB body.
 
 A body over the limit gets a 413 with a JSON error. The door used to
-close the socket, and the client saw a dropped connection. Now it passes
-`parseJsonBody` no `destroy`, so it reads the rest of the body, drops it,
-and answers 413.
+close the socket at once, and a client that was still sending saw a
+dropped connection. Now it passes `parseJsonBody` a `drainBytes`, so it
+answers 413, reads the rest of the body, and throws it away. Nothing of
+a refused body is kept in memory. The reading is bounded: once the
+client has sent `localBodyBytes()` past the limit, the door closes the
+socket.
 
 **The request log.** The door takes a `DoorLogging` — where to print, whether
 to include prompts, and a color function — and writes one entry per request as

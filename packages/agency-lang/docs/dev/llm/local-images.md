@@ -133,7 +133,7 @@ exception: it adds `controlnet_conditioning_scale` in control mode.
 | `mode` | The mode the field puts a request in | `control` | `reference` |
 | `max_count` | How many images the field takes. One is a base64 string, more is a list | 1 | 4 |
 | `max_bytes` | The largest image, in bytes | 50 MB | 20 MB |
-| `fit` | How a decoded image is fitted to the output size | `letterbox` | `none` |
+| `fit` | How a decoded image is fitted to the output size | `letterbox` | `shrink` |
 | `on_white` | Paste a transparent image onto white before converting it to RGB | false | true |
 | `sets_size` | With no size in the request, take the output's shape from the first image | false | true |
 | `prepare` | Optional. A step in the server's `PREPARES` run on the decoded image before fitting | `invert` | none |
@@ -198,13 +198,17 @@ image's row and does these steps in order:
 
 1. Open the bytes with Pillow, allowing only PNG, JPEG, WebP, and GIF.
 2. Refuse an image over 40 megapixels before decoding its pixels.
-3. Apply the EXIF orientation with `ImageOps.exif_transpose`. A phone
+3. Decode the pixels with `image.load()`. `Image.open` reads the header
+   only, so a file that is cut short or damaged fails here. The server
+   answers 400 and prints Pillow's error to stderr.
+4. Apply the EXIF orientation with `ImageOps.exif_transpose`. A phone
    stores a portrait photo as landscape pixels plus a rotation tag.
    Without this step, an edit of a portrait photo comes back sideways.
-4. When the row's `on_white` is true, paste a transparent image onto
-   white.
-5. Run the row's `check` on the upright image's size.
-6. Convert to RGB.
+5. When the row's `on_white` is true, paste a transparent image onto
+   white. An image is transparent when it has an alpha band, or when it
+   marks one color as transparent, as a palette or RGB PNG can.
+6. Run the row's `check` on the upright image's size.
+7. Convert to RGB.
 
 After decoding, `prepared` runs the row's `prepare` step, and `fitted`
 fits the image to the output size. All of this happens before the
@@ -246,10 +250,18 @@ large photo takes about as long as a plain generation.
 
 The size is computed once and passed to `fit_box` and `pipeline_args`.
 The checked request is never changed after `check_request` returns it.
-`fit_box` places an image on the output canvas the way the row's `fit`
-says: `letterbox` scales it to fit inside and centers it on black, and
-`none` leaves it as it is. klein shrinks every reference to one
-megapixel itself.
+`fit_box` scales an image the way the row's `fit` says. The `FITS` table
+in the rules module has one row per fit:
+
+| Fit | What it does | Goes on a canvas of the output size |
+|---|---|---|
+| `letterbox` | Scales the image to fit inside the output and centers it | Yes, on black |
+| `shrink` | Scales an image over one megapixel down to one megapixel | No |
+
+klein shrinks a reference to one megapixel itself, but inside the
+pipeline call, under the generation lock. The server shrinks it first.
+Four references of 40 megapixels are about 480 MB as RGB, and with
+`shrink` the server holds them only while it decodes.
 
 ## Size limits on the inputs
 
@@ -500,7 +512,19 @@ upload approval, multiple inputs, rejection, and the bytes sent.
 `tests/agency-js/image-generation-local-controlnet` covers control-image
 approval and transmission. `tests/agency-js/image-generation-local-edit`
 covers one `std::readImage` per reference, a rejection that sends no
-request, and a bad path that asks nothing.
+request, and a bad path that asks nothing. Both agency-js tests start
+their stand-in server in `server.js`, which `test.js` imports before the
+program, so the environment is set before the program loads.
+
+`decode_image`, `prepared`, and `fitted` need Pillow and no torch. Their
+tests are the last block of `diffusersImageServer.test.ts`. The block
+runs with `AGENCY_IMAGE_PYTHON` when it is set and with `python3`
+otherwise, and it is skipped when that Python has no Pillow:
+
+```bash
+AGENCY_IMAGE_PYTHON=<a Python with Pillow> \
+pnpm vitest run lib/cli/diffusersImageServer.test.ts
+```
 
 The live server test requires a downloaded model and a Mac GPU:
 

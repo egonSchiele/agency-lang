@@ -111,7 +111,8 @@ MAX_REFERENCE_ASPECT = 8
 #              shape from the field's first image. False: the default size.
 #   fit        how the server fits a decoded image to the output size:
 #              "letterbox" scales it to fit inside and centers it on black,
-#              "none" leaves it as it is
+#              "shrink" scales a picture over REFERENCE_PIXELS down to that
+#              many and leaves a smaller one as it is
 #   on_white   True: a transparent image is pasted onto white before it is
 #              made RGB. False: its pixels are kept as drawn.
 #   refusal    the message for a family with no pipeline for the mode, with
@@ -139,7 +140,7 @@ INPUT_IMAGES = {
         "max_bytes": MAX_INPUT_IMAGE_BYTES,
         "sets_size": True,
         # The model only looks at a reference, so it can stay any shape.
-        "fit": "none",
+        "fit": "shrink",
         "on_white": True,
         "refusal": "{label} does not take reference images. Only {families} takes them.",
         "check": "reference_problem",
@@ -167,6 +168,12 @@ MAX_BODY_BYTES = REQUEST_SETTINGS_BYTES + max(
 
 # The pixel budget of a size taken from a picture: the default size's.
 DERIVED_PIXELS = 1024 * 1024
+
+# The most pixels of a reference the model reads. FLUX.2 [klein] shrinks a
+# larger one to this many inside the pipeline, under the generation lock.
+# The server shrinks it first, so it holds no full-size picture while it
+# waits for the lock.
+REFERENCE_PIXELS = 1024 * 1024
 
 # How many adapters stay loaded at once. Two lets a user compare two
 # adapters without reloading either; more would hold GPU memory for
@@ -790,17 +797,12 @@ def input_bytes(body, field):
 
 def _check_control_pairing(body):
     """A ControlNet and its image go together; one without the other is
-    refused, and so are a scale or an invert without them. Checked before
-    mode_of, so a request that is only missing its image hears that."""
+    refused. Checked before mode_of, so a request that is only missing its
+    image hears that. A scale or an invert with neither is mode_of's to
+    refuse, as a field of a mode the request is not in."""
     name = body.get("controlnet")
     image = body.get("control_image")
-    if name is None and image is None:
-        if body.get("control_scale") is not None or body.get("control_invert") is not None:
-            raise RequestError(
-                "control_scale and control_invert need controlnet: they say how to apply it."
-            )
-        return
-    if name is None or image is None:
+    if (name is None) != (image is None):
         raise RequestError(
             "controlnet and control_image go together: the ControlNet's name, and the image "
             "it conditions the generation on."
@@ -846,19 +848,38 @@ def letterbox(source_width, source_height, width, height):
     return fit_width, fit_height, (width - fit_width) // 2, (height - fit_height) // 2
 
 
-def _as_is(source_width, source_height, width, height):
-    return source_width, source_height, 0, 0
+def shrink(source_width, source_height, width, height):
+    """The size a reference of the source size is scaled to: its shape at
+    REFERENCE_PIXELS or fewer, as (scaled width, scaled height, 0, 0). A
+    smaller picture keeps its size. The output size plays no part: the
+    model only looks at a reference."""
+    if source_width * source_height <= REFERENCE_PIXELS:
+        return source_width, source_height, 0, 0
+    scale = (REFERENCE_PIXELS / (source_width * source_height)) ** 0.5
+    return max(1, int(source_width * scale)), max(1, int(source_height * scale)), 0, 0
 
 
-# How each fit in INPUT_IMAGES places an image of the source size on a
-# width x height canvas.
-FITS = {"letterbox": letterbox, "none": _as_is}
+# How each fit in INPUT_IMAGES scales an image of the source size.
+#
+#   box     the function that gives (scaled width, scaled height, left, top)
+#   canvas  True: the scaled image is pasted at left, top on a black canvas
+#           of the output size. False: the scaled image is used as it is.
+FITS = {
+    "letterbox": {"box": letterbox, "canvas": True},
+    "shrink": {"box": shrink, "canvas": False},
+}
 
 
 def fit_box(fit, source_width, source_height, width, height):
     """(scaled width, scaled height, left, top) for an image of the source
     size fitted to width x height the way `fit` says."""
-    return FITS[fit](source_width, source_height, width, height)
+    return FITS[fit]["box"](source_width, source_height, width, height)
+
+
+def fit_has_canvas(fit):
+    """Whether an image fitted the way `fit` says goes on a canvas of the
+    output size."""
+    return FITS[fit]["canvas"]
 
 
 def derived_size(width, height):
@@ -980,11 +1001,6 @@ def pipeline_args(rules, request, width, height):
     if request["mode"] == "control":
         args["controlnet_conditioning_scale"] = request["control_scale"]
     return args
-
-
-def steps_run(rules, request):
-    """How many denoising steps the pipeline runs for a checked request."""
-    return request["steps"]
 
 
 def warm_up_request():

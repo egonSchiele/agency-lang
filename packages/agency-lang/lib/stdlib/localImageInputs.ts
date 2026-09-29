@@ -7,8 +7,8 @@ import { MIME_TYPES } from "./mediaPathScan.js";
  *  field. `INPUT_IMAGES` in lib/cli/diffusersImageRules.py is the same
  *  table for the image server, and a test compares the two.
  *
- *  mode      which kind of request the field makes: a ControlNet request,
- *            an edit from reference pictures, or a redraw of a picture
+ *  mode      which kind of request the field makes: a ControlNet request
+ *            or an edit from reference pictures
  *  maxCount  how many images the field takes. One is sent as a base64
  *            string, more as a list of them
  *  maxBytes  the largest file each image may be
@@ -18,7 +18,7 @@ import { MIME_TYPES } from "./mediaPathScan.js";
  *            work as one more megapixel of output, and the provider's
  *            timeout budgets for it */
 export type LocalImageField = {
-  mode: "control" | "reference" | "img2img";
+  mode: "control" | "reference";
   maxCount: number;
   maxBytes: number;
   parameter: string;
@@ -28,8 +28,8 @@ export type LocalImageField = {
 
 /** A control image is read up to the size every local server takes. */
 export const MAX_CONTROL_IMAGE_BYTES = MAX_IMAGE_BYTES;
-/** A reference or start image. The model shrinks it to about one megapixel,
- *  so a larger file buys nothing. */
+/** A reference image. The model shrinks it to about one megapixel, so a
+ *  larger file buys nothing. */
 export const MAX_INPUT_IMAGE_BYTES = 20_000_000;
 export const MAX_REFERENCE_IMAGES = 4;
 /** Room in a request body for everything but its images: the prompt and
@@ -131,6 +131,21 @@ export type LocalImageInputs = {
 
 const CALLER = "generateImageLocal";
 
+/** The request fields that say how to apply a ControlNet. A null scale is
+ *  left out, so the server uses its default. */
+function controlSettings(
+  controlnet: string,
+  controlScale: number | null,
+  invertControlImage: boolean,
+): Record<string, unknown> {
+  const given: [string, unknown][] = [
+    ["controlnet", controlnet],
+    ["control_invert", invertControlImage],
+    ["control_scale", controlScale],
+  ];
+  return Object.fromEntries(given.filter(([, value]) => value !== null));
+}
+
 function refusal(message: string): Error {
   return new Error(`${CALLER} failed: ${message}`);
 }
@@ -189,11 +204,7 @@ export function _localImageInputs(
   };
   // The other request fields of each image field's mode.
   const settingsOf: Record<string, Record<string, unknown>> = {
-    control_image: {
-      controlnet,
-      control_invert: invertControlImage,
-      ...(controlScale === null ? {} : { control_scale: controlScale }),
-    },
+    control_image: controlSettings(controlnet, controlScale, invertControlImage),
     images: {},
   };
   const given = Object.keys(paths).filter((field) => paths[field].length > 0);

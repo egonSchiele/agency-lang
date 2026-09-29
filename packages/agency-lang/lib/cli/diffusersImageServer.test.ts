@@ -449,11 +449,14 @@ print(adapter_names(os.path.join(d, "missing")))
     expect(check(family, { prompt: "a cat", controlnet: "scribble" }, null, "/c")).toBe(
       "ERROR 400 controlnet and control_image go together: the ControlNet's name, and the image it conditions the generation on.",
     );
-    for (const lone of [{ control_scale: 1 }, { control_invert: true }]) {
-      expect(check(family, { prompt: "a cat", ...lone }, null, "/c")).toBe(
-        "ERROR 400 control_scale and control_invert need controlnet: they say how to apply it.",
-      );
-    }
+    expect(check(family, { prompt: "a cat", control_scale: 1 }, null, "/c")).toBe(
+      "ERROR 400 control_scale goes with control_image, and this request has none.",
+    );
+    expect(
+      check(family, { prompt: "a cat", control_scale: 1, control_invert: true }, null, "/c"),
+    ).toBe(
+      "ERROR 400 control_scale and control_invert go with control_image, and this request has none.",
+    );
     expect(check(family, body)).toBe(
       "ERROR 400 This server has no ControlNets folder. Set client.controlnetsDir in agency.json to the folder your ControlNets are in, and start the server again.",
     );
@@ -536,9 +539,16 @@ print(input_bytes({}, None))
   it("fits an image the way its row says", () => {
     const out = rules(`
 print(fit_box("letterbox", 400, 300, 1024, 1024))
-print(fit_box("none", 400, 300, 1024, 1024))
+print(fit_box("shrink", 400, 300, 1024, 1024))
+print(fit_box("shrink", 4000, 3000, 512, 512))
+print(fit_has_canvas("letterbox"), fit_has_canvas("shrink"))
 `);
-    expect(out.split("\n")).toEqual(["(1024, 768, 0, 128)", "(400, 300, 0, 0)"]);
+    expect(out.split("\n")).toEqual([
+      "(1024, 768, 0, 128)",
+      "(400, 300, 0, 0)",
+      "(1182, 886, 0, 0)",
+      "True False",
+    ]);
   });
 
   it("makes the size the request gave, else the first picture's, else the default", () => {
@@ -640,9 +650,8 @@ rules = FAMILIES["StableDiffusionXLPipeline"]
 body = {"prompt": "a cat", "controlnet": "scribble", "control_image": "${pose}", "control_scale": 0.8}
 print(pipeline_args(rules, check_request(rules, body, None, "/c"), 1024, 768)["controlnet_conditioning_scale"])
 print("controlnet_conditioning_scale" in pipeline_args(rules, check_request(rules, {"prompt": "a cat"}), 1024, 768))
-print(steps_run(rules, check_request(rules, {"prompt": "a cat", "steps": 12})))
 `);
-    expect(out.split("\n")).toEqual(["0.8", "False", "12"]);
+    expect(out.split("\n")).toEqual(["0.8", "False"]);
   });
 
   it("has the same image fields, counts, byte caps, and body limit as the stdlib", () => {
@@ -964,5 +973,127 @@ describe.skipIf(!hasPython3)("diffusersImageServer.py", () => {
     );
     expect(run.stderr.toString()).toBe("");
     expect(run.status).toBe(0);
+  });
+});
+
+// The server's image functions need Pillow and no torch, so they run
+// wherever a Python has Pillow: AGENCY_IMAGE_PYTHON when it is set, as in
+// the live test, or python3.
+const pillowPython = process.env.AGENCY_IMAGE_PYTHON || "python3";
+const hasPillow = spawnSync(pillowPython, ["-c", "import PIL"], { stdio: "ignore" }).status === 0;
+
+/** Runs `code` with the server module's image functions and a few helpers
+ *  that make test images, and returns stdout. */
+function images(code: string): string {
+  const helpers = `
+import io, sys
+sys.path.insert(0, sys.argv[1])
+from PIL import Image
+from diffusersImageServer import decode_image, prepared, fitted
+from diffusersImageRules import RequestError
+
+def saved(image, format="PNG", **options):
+    out = io.BytesIO()
+    image.save(out, format, **options)
+    return out.getvalue()
+
+def decoded(data, field):
+    try:
+        return decode_image(data, field)
+    except RequestError as e:
+        return f"ERROR {e.status} {e}"
+`;
+  const run = spawnSync(pillowPython, ["-c", `${helpers}\n${code}`, path.dirname(rulesModule)], {
+    stdio: "pipe",
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
+  });
+  expect(run.status).toBe(0);
+  return run.stdout.toString().trim();
+}
+
+describe.skipIf(!hasPillow)("diffusersImageServer.py's input images", () => {
+  it("turns a photo upright by its EXIF orientation", () => {
+    const out = images(`
+photo = Image.new("RGB", (400, 300), (255, 0, 0))
+exif = photo.getexif()
+exif[0x0112] = 6
+upright = decoded(saved(photo, "JPEG", exif=exif), "images")
+print(upright.size, upright.mode)
+`);
+    expect(out).toBe("(300, 400) RGB");
+  });
+
+  it("puts a transparent reference on white, and leaves a control image as drawn", () => {
+    const out = images(`
+clear = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+palette = Image.new("P", (100, 100), 0)
+palette.putpalette([10, 20, 30] + [0] * 765)
+keyed = Image.new("RGB", (100, 100), (1, 2, 3))
+print(decoded(saved(clear), "images").getpixel((5, 5)))
+print(decoded(saved(palette, transparency=0), "images").getpixel((5, 5)))
+print(decoded(saved(keyed, transparency=(1, 2, 3)), "images").getpixel((5, 5)))
+print(decoded(saved(palette), "images").getpixel((5, 5)))
+print(decoded(saved(clear), "control_image").getpixel((5, 5)))
+`);
+    expect(out.split("\n")).toEqual([
+      "(255, 255, 255)",
+      "(255, 255, 255)",
+      "(255, 255, 255)",
+      "(10, 20, 30)",
+      "(0, 0, 0)",
+    ]);
+  });
+
+  it("refuses bytes that are not an image, a format it does not read, and a file cut short", () => {
+    const out = images(`
+whole = saved(Image.new("RGB", (500, 500), (9, 9, 9)))
+print(decoded(b"hello", "images"))
+print(decoded(saved(Image.new("RGB", (80, 80)), "BMP"), "control_image"))
+print(decoded(whole[:200], "images"))
+`);
+    const unreadable = (field: string) =>
+      `ERROR 400 ${field} is not an image this server reads. It reads png, jpeg, webp, or gif, and the file must be whole.`;
+    expect(out.split("\n")).toEqual([
+      unreadable("images"),
+      unreadable("control_image"),
+      unreadable("images"),
+    ]);
+  });
+
+  it("refuses an image over the pixel cap, and a reference klein cannot take", () => {
+    const out = images(`
+print(decoded(saved(Image.new("L", (7000, 6000))), "images"))
+print(decoded(saved(Image.new("RGB", (63, 500))), "images"))
+print(decoded(saved(Image.new("RGB", (63, 500))), "control_image").size)
+`);
+    expect(out.split("\n")).toEqual([
+      "ERROR 400 images is 7000x6000; this server takes images up to 40,000,000 pixels.",
+      "ERROR 400 images: the picture is 63x500. A reference must be at least 64 pixels on each side.",
+      "(63, 500)",
+    ]);
+  });
+
+  it("letterboxes a control image on black, and inverts it when asked", () => {
+    const out = images(`
+drawing = decoded(saved(Image.new("RGB", (400, 300), (255, 255, 255))), "control_image")
+for invert in [False, True]:
+    ready = prepared(drawing, "control_image", {"control_invert": invert})
+    canvas = fitted(ready, "control_image", 1024, 1024)
+    print(canvas.size, canvas.getpixel((5, 5)), canvas.getpixel((512, 512)))
+`);
+    expect(out.split("\n")).toEqual([
+      "(1024, 1024) (0, 0, 0) (255, 255, 255)",
+      "(1024, 1024) (0, 0, 0) (0, 0, 0)",
+    ]);
+  });
+
+  it("shrinks a large reference to a megapixel and leaves a small one alone", () => {
+    const out = images(`
+large = decoded(saved(Image.new("RGB", (4000, 3000))), "images")
+small = decoded(saved(Image.new("RGB", (400, 300))), "images")
+print(fitted(large, "images", 512, 512).size)
+print(fitted(small, "images", 512, 512).size)
+`);
+    expect(out.split("\n")).toEqual(["(1182, 886)", "(400, 300)"]);
   });
 });

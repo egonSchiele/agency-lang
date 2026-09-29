@@ -91,7 +91,6 @@ export function serveArgs(
   return args;
 }
 
-/** What one chat server is started with, beyond its model and port. */
 /** One model from the `serve` command line with the options written after
  *  it. */
 export type ServeTarget = { model: string } & ModelOptions;
@@ -103,47 +102,152 @@ const MODEL_OPTION_FLAGS = ["--draft", "--draft-tokens"];
  *  after them is a target too. */
 const MODEL_NAMING_FLAGS = ["--embedding", "--speech", "--image"];
 
+/** The flags on a command line that take a value, by spelling: "required"
+ *  when the next token is always the value, "optional" when it is the value
+ *  only if it does not start with `-`. A flag not listed takes no value, as
+ *  `--limit-answers` does. */
+export type ValueFlags = Record<string, "required" | "optional">;
+
+/** An option as commander declares it. Only the parts `valueFlagsOf` reads. */
+type DeclaredOption = { long?: string; short?: string; required: boolean; optional: boolean };
+
+/** A command as commander declares it, with the commands above it. */
+type DeclaredCommand = { options: readonly DeclaredOption[]; parent: DeclaredCommand | null };
+
+/** The flags that take a value on `command` and every command above it,
+ *  since commander accepts an ancestor's flag after the subcommand too.
+ *  Read from the declarations, so a new flag is known here the moment it
+ *  is declared. */
+export function valueFlagsOf(command: DeclaredCommand): ValueFlags {
+  const out: ValueFlags = {};
+  for (let at: DeclaredCommand | null = command; at !== null; at = at.parent) {
+    for (const option of at.options) {
+      const arity = option.required ? "required" : option.optional ? "optional" : undefined;
+      if (arity === undefined) {
+        continue;
+      }
+      for (const spelling of [option.long, option.short]) {
+        if (spelling !== undefined) {
+          out[spelling] = arity;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** One token of a command line read as a flag: its spelling, the value
+ *  written into the token itself (`--draft=small`, `-p8080`), and how many
+ *  tokens the flag and its value take up. */
+type ReadFlag = { flag: string; value: string | undefined; width: number };
+
+/** Splits a flag token into its spelling and the value written into it:
+ *  `--draft=small` and `-p8080` carry one, `--draft` and `-p` do not. */
+function splitFlag(token: string): { flag: string; inline: string | undefined } {
+  if (token.startsWith("--")) {
+    const equals = token.indexOf("=");
+    return equals === -1
+      ? { flag: token, inline: undefined }
+      : { flag: token.slice(0, equals), inline: token.slice(equals + 1) };
+  }
+  return { flag: token.slice(0, 2), inline: token.length > 2 ? token.slice(2) : undefined };
+}
+
+/** Reads the flag at `argv[index]`, taking its value from the token itself
+ *  or from the next one as `valueFlags` says. */
+function readFlag(argv: string[], index: number, valueFlags: ValueFlags): ReadFlag {
+  const { flag, inline } = splitFlag(argv[index]);
+  const arity = valueFlags[flag];
+  if (inline !== undefined || arity === undefined) {
+    return { flag, value: inline, width: 1 };
+  }
+  const next = argv[index + 1];
+  if (arity === "optional" && (next === undefined || next.startsWith("-"))) {
+    return { flag, value: undefined, width: 1 };
+  }
+  return { flag, value: next, width: 2 };
+}
+
+/** The tokens after `local serve` on the command line, or none when the
+ *  command line is not `local serve`. Walks the operands the way commander
+ *  does, stepping over flags and their values, so a flag whose value
+ *  happens to be the word `serve` does not fool it. */
+export function argvAfterServe(argv: string[], valueFlags: ValueFlags): string[] {
+  const words = ["local", "serve"];
+  let matched = 0;
+  // argv[0] is node and argv[1] the script.
+  let index = 2;
+  while (index < argv.length && matched < words.length) {
+    const token = argv[index];
+    if (token.startsWith("-") && token.length > 1) {
+      index += readFlag(argv, index, valueFlags).width;
+      continue;
+    }
+    if (token !== words[matched]) {
+      return [];
+    }
+    matched += 1;
+    index += 1;
+  }
+  return matched === words.length ? argv.slice(index) : [];
+}
+
 /** Groups the arguments after `serve` into one entry per model, each with
  *  the per-model options that followed it. `agency local serve a --draft d
  *  b` drafts for `a` and not `b`. Any other flag belongs to the command as
- *  a whole and is left for the option parser; its value, if the next token
- *  is not a flag, is skipped with it. A parser, so its order is its
- *  nature; it holds nothing but what it returns. */
-export function groupServeArgv(argv: string[]): ServeTarget[] {
+ *  a whole and is left for the option parser; `valueFlags` says whether it
+ *  takes the next token as its value, so `a --limit-answers b` is two
+ *  models. A parser, so its order is its nature; it holds nothing but what
+ *  it returns. */
+export function groupServeArgv(argv: string[], valueFlags: ValueFlags): ServeTarget[] {
   const targets: ServeTarget[] = [];
   let index = 0;
   while (index < argv.length) {
     const token = argv[index];
-    const value = argv[index + 1];
-    const current = targets[targets.length - 1];
-    if (MODEL_OPTION_FLAGS.includes(token)) {
-      if (current === undefined) {
-        throw new Error(
-          `${token} goes after the model it is for: agency local serve <model> ${token} ${value ?? "<value>"}`,
-        );
-      }
-      if (token === "--draft") {
-        current.draft = value;
-      } else {
-        current.draftTokens = Number(value);
-      }
-      index += 2;
-    } else if (MODEL_NAMING_FLAGS.includes(token)) {
+    if (!token.startsWith("-") || token.length === 1) {
+      targets.push({ model: token });
+      index += 1;
+      continue;
+    }
+    const { flag, value, width } = readFlag(argv, index, valueFlags);
+    index += width;
+    if (MODEL_NAMING_FLAGS.includes(flag)) {
       if (value !== undefined) {
         targets.push({ model: value });
       }
-      index += 2;
-    } else if (token.startsWith("--")) {
-      // A command-wide flag. Its value, when it has one, is the next token
-      // unless that is itself a flag or the flag was written as --x=y.
-      const takesValue = !token.includes("=") && value !== undefined && !value.startsWith("--");
-      index += takesValue ? 2 : 1;
-    } else {
-      targets.push({ model: token });
-      index += 1;
+    } else if (MODEL_OPTION_FLAGS.includes(flag)) {
+      setModelOption(targets[targets.length - 1], flag, value ?? "<value>");
+    }
+  }
+  for (const target of targets) {
+    if (target.draftTokens !== undefined && target.draft === undefined) {
+      throw new Error(
+        `--draft-tokens needs a --draft for ${target.model}: agency local serve ${target.model} --draft <model> --draft-tokens ${target.draftTokens}`,
+      );
     }
   }
   return targets;
+}
+
+/** Sets one per-model option on the model it follows, refusing one written
+ *  before any model or given twice for the same model. */
+function setModelOption(target: ServeTarget | undefined, flag: string, value: string): void {
+  if (target === undefined) {
+    throw new Error(
+      `${flag} goes after the chat model it is for: agency local serve <model> ${flag} ${value}`,
+    );
+  }
+  const key = flag === "--draft" ? "draft" : "draftTokens";
+  if (target[key] !== undefined) {
+    throw new Error(
+      `${target.model} has ${flag} twice. Write it once after the model: agency local serve ${target.model} ${flag} ${value}`,
+    );
+  }
+  if (key === "draft") {
+    target.draft = value;
+  } else {
+    target.draftTokens = Number(value);
+  }
 }
 
 /** The per-model options from grouped targets, keyed by model, for
@@ -159,6 +263,7 @@ export function optionsByModel(targets: ServeTarget[]): Record<string, ModelOpti
   return out;
 }
 
+/** What one chat server is started with, beyond its model and port. */
 export type ChatServerSettings = {
   maxTokens: number;
   promptCacheBytes: number;
@@ -647,25 +752,28 @@ export type ServeChoice = { title: string; value: string };
 /** The models `serve` can start without downloading anything: every model
  *  under the models directory whose record says every file is there, of
  *  any kind. A GGUF model runs in the Agency process instead, so it is
- *  never a choice here. */
+ *  never a choice here. Nor is a model whose kind nothing says: the picker
+ *  cannot pass the flag that `serve` would need for it. */
 export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
   // One row per repo id. The same model can sit in both layouts, and two rows
   // with the same value would let you pick it twice, which `runServe` refuses.
   const byRepo: Record<string, DownloadedModel> = {};
   for (const model of downloaded) {
-    if (model.backend !== "llama-cpp" && model.complete && byRepo[model.name] === undefined) {
+    if (
+      model.backend !== "llama-cpp" &&
+      model.complete &&
+      model.kind !== undefined &&
+      byRepo[model.name] === undefined
+    ) {
       byRepo[model.name] = model;
     }
   }
   return Object.values(byRepo)
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((m) => {
-      const kind = m.kind === undefined ? "" : `, ${m.kind}`;
-      return {
-        title: `${m.name}  (${formatGB(m.sizeBytes)}${kind})`,
-        value: `${m.backend}:${m.name}`,
-      };
-    });
+    .map((m) => ({
+      title: `${m.name}  (${formatGB(m.sizeBytes)}, ${m.kind})`,
+      value: `${m.backend}:${m.name}`,
+    }));
 }
 
 export type PickDeps = {
@@ -813,8 +921,9 @@ type Planned = {
   draft?: { name: string; dir: string; sizeBytes: number; tokens: number };
 };
 
-/** The flag a kind may be named with on the command line. None is needed:
- *  `serve` reads the kind from the model. A flag asserts it. */
+/** The flag a kind may be named with on the command line. Usually none is
+ *  needed, because `serve` reads the kind from the model. A flag supplies
+ *  the kind when nothing else says it, and overrides what the files say. */
 const FLAG_FOR_KIND: Record<ServeKind, string> = {
   chat: "",
   embedding: "--embedding",
@@ -832,9 +941,10 @@ function serveCommand(value: string, kind: ServeKind): string {
   return `agency local serve ${flag === "" ? "" : `${flag} `}${value}`;
 }
 
-/** A model named with a kind's flag must be that kind. Serving an embedding
- *  model as a chat model, or the reverse, fails only after a long load, so
- *  the flag refuses up front and names the command that works. */
+/** A model the catalog knows must be served as that kind. Serving an
+ *  embedding model as a chat model, or the reverse, fails only after a long
+ *  load, so a flag that disagrees is refused up front, naming the command
+ *  that works. */
 function assertKind(value: string, actual: ServeKind, flagged: ServeKind): void {
   if (actual !== flagged) {
     throw new Error(
@@ -873,9 +983,20 @@ function servedModelLocation(
 
 /** One model to serve: the name requests will use, the directory to start
  *  the process on, its size for the memory warning, and its kind, which
- *  picks the program that serves it. The kind comes from the catalog, the
- *  download's record, or the files, in that order. */
-function planModel(value: string, cacheDir: string): Planned {
+ *  picks the program that serves it.
+ *
+ *  `flagged` is the kind the command line gave it, if any. The catalog
+ *  outranks a flag, since it knows the models whose files mislead. A flag
+ *  outranks the download's record and the files: it is the user saying
+ *  what the model is, and the file rules can be wrong (an embedding model
+ *  whose config names a `ForCausalLM` class). With no flag, the kind comes
+ *  from the catalog, the record, or the files, in that order. */
+function planModel(value: string, cacheDir: string, flagged?: ServeKind): Planned {
+  const listed = _catalogKind(value);
+  if (flagged !== undefined && listed !== undefined) {
+    // Refuse before the files are even looked for.
+    assertKind(value, listed, flagged);
+  }
   const resolved = _resolveModel(value);
   if (resolved.backend === "llama-cpp") {
     throw new Error(
@@ -885,12 +1006,9 @@ function planModel(value: string, cacheDir: string): Planned {
   }
   const name = _mlxServedName(resolved);
   const { dir, sizeBytes } = servedModelLocation(resolved, cacheDir);
-  const kind = _modelKind(value, dir);
+  const kind = flagged ?? _modelKind(value, dir);
   if (kind === null) {
-    throw new Error(
-      `${value} is a model directory of a shape agency does not know. Say what it is when ` +
-        `downloading: agency local download --kind <chat|embedding|speech|image> ${value}`,
-    );
+    throw new Error(unknownKindMessage(value));
   }
   return { name, dir, sizeBytes, kind };
 }
@@ -910,11 +1028,18 @@ function withDraft(
   }
   if (model.kind !== "chat") {
     throw new Error(
-      `--draft goes after a chat model, and ${value} is ${anArticle(model.kind)} model.`,
+      `--draft goes after a chat model, and ${value} is ${anArticle(model.kind)} model. ` +
+        `Write it after the chat model it drafts for: agency local serve <model> --draft ${options.draft}`,
     );
   }
-  const draft = planModel(options.draft, cacheDir);
-  assertKind(options.draft, draft.kind, "chat");
+  // Nobody named the draft's kind, so "chat" is a requirement here, not a
+  // flag: a draft the record or files say is something else is refused,
+  // and one whose kind nothing says is taken as chat.
+  const draft = planModel(options.draft, cacheDir, "chat");
+  const found = _modelKind(options.draft, draft.dir);
+  if (found !== null) {
+    assertKind(options.draft, found, "chat");
+  }
   return {
     ...model,
     draft: {
@@ -932,6 +1057,20 @@ function settingsFor(model: Planned, shared: ChatServerSettings): ChatServerSett
     return shared;
   }
   return { ...shared, draft: { dir: model.draft.dir, tokens: model.draft.tokens } };
+}
+
+/** What to do about a model whose kind nothing says. The flags work for
+ *  any model. A chat model has no flag, so it is told what the files need. */
+function unknownKindMessage(value: string): string {
+  return [
+    `agency cannot tell from its files what kind of model ${value} is.`,
+    `If it is an embedding, speech, or image model, name the kind with its flag:`,
+    `  ${serveCommand(value, "embedding")}`,
+    `  ${serveCommand(value, "speech")}`,
+    `  ${serveCommand(value, "image")}`,
+    `A chat model needs a config.json whose "architectures" names a class ending in ` +
+      `ForCausalLM or ForConditionalGeneration.`,
+  ].join("\n");
 }
 
 /** Resolves with a description once the child exits. */
@@ -1009,20 +1148,18 @@ export async function runServe(
   const port = flags.port ?? 8080;
   const maxTokens = flags.maxTokens ?? 16384;
   // A model named on its own is served as whatever it is. One named with a
-  // flag must be that kind. Either way it gets the options written after it.
-  const planNamed = (value: string): Planned =>
-    withDraft(value, planModel(value, deps.cacheDir), flags.options?.[value], deps.cacheDir);
+  // flag is served as that kind, unless the catalog says otherwise. Either
+  // way it gets the options written after it.
+  const planWith = (value: string, flagged?: ServeKind): Planned =>
+    withDraft(
+      value,
+      planModel(value, deps.cacheDir, flagged),
+      flags.options?.[value],
+      deps.cacheDir,
+    );
+  const planNamed = (value: string): Planned => planWith(value);
   const planFlagged = (flagged: ServeKind, named: string[] | undefined) =>
-    (named ?? []).map((value) => {
-      // The catalog can refuse before the files are even looked for.
-      const known = _catalogKind(value);
-      if (known !== undefined) {
-        assertKind(value, known, flagged);
-      }
-      const model = planNamed(value);
-      assertKind(value, model.kind, flagged);
-      return model;
-    });
+    (named ?? []).map((value) => planWith(value, flagged));
   const planned = [
     ...values.map(planNamed),
     ...planFlagged("embedding", flags.embedding),
@@ -1156,21 +1293,18 @@ export async function runServe(
 }
 
 /** The CLI entry: serve until Ctrl-C, or until a process dies. With no
- *  model named, ask which of the downloaded ones to serve. */
-/** The tokens after the `serve` word on the command line. */
-export function argvAfterServe(argv: string[]): string[] {
-  const at = argv.indexOf("serve");
-  return at === -1 ? [] : argv.slice(at + 1);
-}
-
+ *  model named, ask which of the downloaded ones to serve. `valueFlags`
+ *  says which of the command line's flags take a value, so the per-model
+ *  options can be read from `argv` in order. */
 export async function localServe(
   values: string[],
   flags: ServeFlags,
+  valueFlags: ValueFlags,
   argv: string[] = process.argv,
 ): Promise<void> {
   let handle: ServeHandle;
   try {
-    flags.options = optionsByModel(groupServeArgv(argvAfterServe(argv)));
+    flags.options = optionsByModel(groupServeArgv(argvAfterServe(argv, valueFlags), valueFlags));
     const wantsPicker =
       values.length === 0 &&
       (flags.embedding ?? []).length === 0 &&

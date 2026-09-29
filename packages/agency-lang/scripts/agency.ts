@@ -115,7 +115,7 @@ import {
   runAliasAdd as localAliasAdd,
   runAliasRemove as localAliasRemove,
 } from "@/cli/local.js";
-import { localServe } from "@/cli/localServe.js";
+import { localServe, valueFlagsOf } from "@/cli/localServe.js";
 import { modelsList, modelsRefresh } from "@/cli/hostedModels.js";
 import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
@@ -2032,17 +2032,24 @@ export function createProgram(deps: CliDependencies = {}): Command {
           embedding: string[];
           speech: string[];
           image: string[];
+          draft?: string;
+          draftTokens?: number;
         },
-      ) =>
+        command: Command,
+      ) => {
+        // The per-model options, --draft and --draft-tokens, are read from
+        // the argv order inside localServe, since which model they follow is
+        // what decides what they mean. Commander's own values for them are
+        // dropped on purpose.
+        const { draft: _draft, draftTokens: _draftTokens, ...rest } = opts;
         // `--verbose` is the whole CLI's own flag, so serve cannot declare it
-        // again; it means the same thing here, so honor it either way. The
-        // per-model options, --draft and --draft-tokens, are read from the
-        // argv order inside localServe, since which model they follow is what
-        // decides what they mean.
-        localServe(models, {
-          ...opts,
-          logPrompts: opts.logPrompts === true || program.opts().verbose === true,
-        }),
+        // again; it means the same thing here, so honor it either way.
+        return localServe(
+          models,
+          { ...rest, logPrompts: opts.logPrompts === true || program.opts().verbose === true },
+          valueFlagsOf(command),
+        );
+      },
     );
   localCmd
     .command("remove")

@@ -24,12 +24,14 @@ import {
   groupServeArgv,
   optionsByModel,
   argvAfterServe,
+  valueFlagsOf,
   pickModelsToServe,
   type ServeDeps,
   type Child,
   type PickDeps,
 } from "./localServe.js";
 import { CURATED_LOCAL_MODELS } from "../stdlib/localModels.js";
+import { createProgram } from "../../scripts/agency.js";
 
 describe("serveArgs", () => {
   it("builds the chat server command line, with mlx_lm.server's options", () => {
@@ -123,37 +125,123 @@ describe("embedServeArgs", () => {
   });
 });
 
-describe("groupServeArgv", () => {
-  it("attaches --draft and --draft-tokens to the model written before them", () => {
-    expect(groupServeArgv(["a", "--draft", "d", "--draft-tokens", "3", "b"])).toEqual([
-      { model: "a", draft: "d", draftTokens: 3 },
-      { model: "b" },
-    ]);
+// The flags of `agency local serve` and the commands above it, read from
+// the real declarations, so the table below checks the grouping against
+// what commander will accept.
+function serveCommand() {
+  const local = createProgram().commands.find((command) => command.name() === "local");
+  const serve = local?.commands.find((command) => command.name() === "serve");
+  if (serve === undefined) {
+    throw new Error("no local serve command");
+  }
+  return serve;
+}
+const SERVE_FLAGS = valueFlagsOf(serveCommand());
+
+describe("valueFlagsOf", () => {
+  it("lists the flags that take a value, and leaves out the on/off ones", () => {
+    expect(SERVE_FLAGS["--port"]).toBe("required");
+    expect(SERVE_FLAGS["--draft"]).toBe("required");
+    expect(SERVE_FLAGS["--draft-tokens"]).toBe("required");
+    expect(SERVE_FLAGS["--limit-answers"]).toBeUndefined();
+    expect(SERVE_FLAGS["--log-prompts"]).toBeUndefined();
+    // A flag of the `local` command above serve counts too.
+    expect(SERVE_FLAGS["--model-dir"]).toBe("required");
   });
 
-  it("counts a model named with a kind flag as a target the options can follow", () => {
-    expect(groupServeArgv(["--image", "img", "a", "--draft", "d", "--embedding", "e"])).toEqual([
-      { model: "img" },
-      { model: "a", draft: "d" },
-      { model: "e" },
-    ]);
-  });
-
-  it("steps over command-wide flags and their values", () => {
+  it("reads optional values and short spellings", () => {
     expect(
-      groupServeArgv(["--port", "9090", "a", "--log-prompts", "--max-tokens=100", "--draft", "d"]),
-    ).toEqual([{ model: "a", draft: "d" }]);
+      valueFlagsOf({
+        options: [{ long: "--color", short: "-c", required: false, optional: true }],
+        parent: null,
+      }),
+    ).toEqual({ "--color": "optional", "-c": "optional" });
+  });
+});
+
+describe("groupServeArgv", () => {
+  const cases: { argv: string[]; targets: object[] }[] = [
+    {
+      argv: ["a", "--draft", "d", "--draft-tokens", "3", "b"],
+      targets: [{ model: "a", draft: "d", draftTokens: 3 }, { model: "b" }],
+    },
+    // A model named with a kind flag is a target the options can follow.
+    {
+      argv: ["--image", "img", "a", "--draft", "d", "--embedding", "e"],
+      targets: [{ model: "img" }, { model: "a", draft: "d" }, { model: "e" }],
+    },
+    // Command-wide flags and their values are stepped over.
+    {
+      argv: ["--port", "9090", "a", "--log-prompts", "--max-tokens=100", "--draft", "d"],
+      targets: [{ model: "a", draft: "d" }],
+    },
+    // An on/off flag takes no value, so the model after it is a model.
+    {
+      argv: ["a", "--limit-answers", "b", "--draft", "d"],
+      targets: [{ model: "a" }, { model: "b", draft: "d" }],
+    },
+    {
+      argv: ["a", "--log-prompts", "b", "--draft", "d"],
+      targets: [{ model: "a" }, { model: "b", draft: "d" }],
+    },
+    {
+      argv: ["--limit-answers", "big", "--draft", "small"],
+      targets: [{ model: "big", draft: "small" }],
+    },
+    // The `--flag=value` forms.
+    {
+      argv: ["big", "--draft=small", "--draft-tokens=3"],
+      targets: [{ model: "big", draft: "small", draftTokens: 3 }],
+    },
+    {
+      argv: ["a", "--image=img", "b", "--draft", "d"],
+      targets: [{ model: "a" }, { model: "img" }, { model: "b", draft: "d" }],
+    },
+    {
+      argv: ["a", "--port=9090", "--draft", "d"],
+      targets: [{ model: "a", draft: "d" }],
+    },
+    { argv: [], targets: [] },
+    { argv: ["--port", "8080"], targets: [] },
+  ];
+  for (const { argv, targets } of cases) {
+    it(`groups ${JSON.stringify(argv)}`, () => {
+      expect(groupServeArgv(argv, SERVE_FLAGS)).toEqual(targets);
+    });
+  }
+
+  it("attaches a draft after --image=img to img, which serve then refuses", () => {
+    expect(groupServeArgv(["a", "--image=img", "--draft", "d"], SERVE_FLAGS)).toEqual([
+      { model: "a" },
+      { model: "img", draft: "d" },
+    ]);
   });
 
-  it("refuses a per-model option before any model, naming the order", () => {
-    expect(() => groupServeArgv(["--draft", "d", "a"])).toThrow(
-      "--draft goes after the model it is for: agency local serve <model> --draft d",
+  it("refuses the old form, a draft before any model, naming the new form", () => {
+    expect(() => groupServeArgv(["--draft", "d", "a"], SERVE_FLAGS)).toThrow(
+      "--draft goes after the chat model it is for: agency local serve <model> --draft d",
+    );
+    expect(() => groupServeArgv(["--draft=d", "a"], SERVE_FLAGS)).toThrow(
+      "--draft goes after the chat model it is for: agency local serve <model> --draft d",
     );
   });
 
-  it("returns nothing for no models", () => {
-    expect(groupServeArgv([])).toEqual([]);
-    expect(groupServeArgv(["--port", "8080"])).toEqual([]);
+  it("refuses --draft-tokens with no --draft for its model", () => {
+    expect(() => groupServeArgv(["a", "--draft-tokens", "3"], SERVE_FLAGS)).toThrow(
+      "--draft-tokens needs a --draft for a: agency local serve a --draft <model> --draft-tokens 3",
+    );
+    expect(() =>
+      groupServeArgv(["a", "--draft", "d", "b", "--draft-tokens", "3"], SERVE_FLAGS),
+    ).toThrow("--draft-tokens needs a --draft for b");
+  });
+
+  it("refuses two drafts for one model", () => {
+    expect(() => groupServeArgv(["a", "--draft", "d", "--draft", "e"], SERVE_FLAGS)).toThrow(
+      "a has --draft twice. Write it once after the model: agency local serve a --draft e",
+    );
+    expect(() =>
+      groupServeArgv(["a", "--draft", "d", "--draft-tokens", "2", "--draft-tokens=3"], SERVE_FLAGS),
+    ).toThrow("a has --draft-tokens twice.");
   });
 });
 
@@ -166,13 +254,23 @@ describe("optionsByModel", () => {
 });
 
 describe("argvAfterServe", () => {
-  it("returns the tokens after the serve word", () => {
-    expect(argvAfterServe(["node", "agency", "local", "serve", "a", "--draft", "d"])).toEqual([
-      "a",
-      "--draft",
-      "d",
-    ]);
-    expect(argvAfterServe(["node", "agency", "local", "list"])).toEqual([]);
+  it("returns the tokens after local serve", () => {
+    expect(
+      argvAfterServe(["node", "agency", "local", "serve", "a", "--draft", "d"], SERVE_FLAGS),
+    ).toEqual(["a", "--draft", "d"]);
+    expect(argvAfterServe(["node", "agency", "local", "list"], SERVE_FLAGS)).toEqual([]);
+  });
+
+  it("steps over a flag whose value is the word serve", () => {
+    expect(
+      argvAfterServe(
+        ["node", "agency", "local", "--model-dir", "serve", "serve", "a", "--draft", "d"],
+        SERVE_FLAGS,
+      ),
+    ).toEqual(["a", "--draft", "d"]);
+    expect(
+      argvAfterServe(["node", "agency", "--verbose", "local", "serve", "a"], SERVE_FLAGS),
+    ).toEqual(["a"]);
   });
 });
 
@@ -692,7 +790,10 @@ describe("runServe", () => {
         { port: 0, options: { "diffusers:org/img": { draft: "mlx:org/a" } } },
         deps,
       ),
-    ).rejects.toThrow("--draft goes after a chat model, and diffusers:org/img is an image model.");
+    ).rejects.toThrow(
+      "--draft goes after a chat model, and diffusers:org/img is an image model. " +
+        "Write it after the chat model it drafts for: agency local serve <model> --draft mlx:org/a",
+    );
     await expect(
       runServe(
         ["mlx:org/a"],
@@ -1095,23 +1196,43 @@ describe("runServe", () => {
     await handle.close();
   });
 
-  it("refuses a directory whose files say nothing about what the model is", async () => {
+  /** A model directory whose files match no kind rule. */
+  function mysteryModel(): string {
     const model = path.join(cacheDir, "mystery");
     fs.mkdirSync(model, { recursive: true });
     fs.writeFileSync(path.join(model, "config.json"), "{}");
     fs.writeFileSync(path.join(model, "model.safetensors"), "xxxxxxxx");
-    await expect(runServe([model], { port: 0 }, deps)).rejects.toThrow(
-      `${model} is a model directory of a shape agency does not know. Say what it is when ` +
-        `downloading: agency local download --kind <chat|embedding|speech|image> ${model}`,
+    return model;
+  }
+
+  it("refuses a directory whose files say nothing, naming the flags that say it", async () => {
+    const model = mysteryModel();
+    const refusal = runServe([model], { port: 0 }, deps);
+    await expect(refusal).rejects.toThrow(
+      `agency cannot tell from its files what kind of model ${model} is.`,
     );
+    await expect(refusal).rejects.toThrow(`agency local serve --embedding ${model}`);
+    await expect(refusal).rejects.not.toThrow("download --kind");
     expect(spawned).toEqual([]);
   });
 
-  it("refuses --image for a model that is not an image model", async () => {
-    recordedModel("org/a", true);
-    await expect(runServe([], { port: 0, image: ["mlx:org/a"] }, deps)).rejects.toThrow(
-      "mlx:org/a is a chat model, not an image model. Serve it with: agency local serve mlx:org/a",
-    );
+  it("takes the kind from a flag when the files say nothing", async () => {
+    const model = mysteryModel();
+    const handle = await runServe([], { port: 0, embedding: [model] }, deps);
+    expect(spawned[0][1].endsWith("/lib/cli/mlxEmbedServer.py")).toBe(true);
+    await handle.close();
+  });
+
+  it("takes the kind from a flag over the files, which can be wrong", async () => {
+    // An embedding model whose config names a ForCausalLM class, which the
+    // file rules read as chat.
+    recordedModel("org/emb-causal", true);
+    const handle = await runServe([], { port: 0, embedding: ["mlx:org/emb-causal"] }, deps);
+    expect(spawned[0][1].endsWith("/lib/cli/mlxEmbedServer.py")).toBe(true);
+    await handle.close();
+  });
+
+  it("refuses a flag the catalog disagrees with", async () => {
     await expect(runServe([], { port: 0, image: ["qwen3-tts-mlx"] }, deps)).rejects.toThrow(
       "qwen3-tts-mlx is a speech model, not an image model. Serve it with: agency local serve --speech qwen3-tts-mlx",
     );
@@ -1177,6 +1298,7 @@ describe("serveChoices", () => {
       backend: "mlx" as const,
       complete: true,
       layout: "agency" as const,
+      kind: "chat" as const,
     },
     {
       name: "org/a",
@@ -1185,6 +1307,7 @@ describe("serveChoices", () => {
       backend: "mlx" as const,
       complete: true,
       layout: "hub" as const,
+      kind: "chat" as const,
     },
     {
       name: "org/half",
@@ -1193,13 +1316,22 @@ describe("serveChoices", () => {
       backend: "mlx" as const,
       complete: false,
       layout: "agency" as const,
+      kind: "chat" as const,
+    },
+    {
+      name: "org/unknown",
+      path: "/m/mlx/org--unknown",
+      sizeBytes: 1e9,
+      backend: "mlx" as const,
+      complete: true,
+      layout: "agency" as const,
     },
   ];
 
   it("offers the complete served models by repo id, whichever layout holds them", () => {
     expect(serveChoices(downloaded)).toEqual([
-      { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
-      { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
+      { title: "org/a  (12.40 GB, chat)", value: "mlx:org/a" },
+      { title: "org/b  (4.20 GB, chat)", value: "mlx:org/b" },
     ]);
   });
 
@@ -1228,8 +1360,8 @@ describe("serveChoices", () => {
     ];
     expect(serveChoices(withEmb)).toEqual([
       { title: `${emb}  (2.28 GB, embedding)`, value: `mlx:${emb}` },
-      { title: "org/a  (12.40 GB)", value: "mlx:org/a" },
-      { title: "org/b  (4.20 GB)", value: "mlx:org/b" },
+      { title: "org/a  (12.40 GB, chat)", value: "mlx:org/a" },
+      { title: "org/b  (4.20 GB, chat)", value: "mlx:org/b" },
       { title: "org/img  (3.00 GB, image)", value: "diffusers:org/img" },
     ]);
   });
@@ -1243,6 +1375,7 @@ describe("serveChoices", () => {
         backend: "mlx" as const,
         complete: true,
         layout: "agency" as const,
+        kind: "chat" as const,
       },
       {
         name: "org/a",
@@ -1251,15 +1384,18 @@ describe("serveChoices", () => {
         backend: "mlx" as const,
         complete: true,
         layout: "hub" as const,
+        kind: "chat" as const,
       },
     ];
     expect(serveChoices(both).map((c) => c.value)).toEqual(["mlx:org/a"]);
   });
 
-  it("leaves out GGUF models and half-downloaded ones", () => {
+  it("leaves out GGUF models, half-downloaded ones, and ones of no known kind", () => {
     const titles = serveChoices(downloaded).map((c) => c.title);
     expect(titles.some((t) => t.includes("smollm2"))).toBe(false);
     expect(titles.some((t) => t.includes("half"))).toBe(false);
+    // serve would refuse it unflagged, and the picker cannot pass a flag.
+    expect(titles.some((t) => t.includes("unknown"))).toBe(false);
   });
 });
 
@@ -1271,6 +1407,7 @@ describe("pickModelsToServe", () => {
     backend: "mlx" as const,
     complete,
     layout: "agency" as const,
+    kind: "chat" as const,
   });
 
   function deps(over: Partial<PickDeps> = {}): PickDeps {

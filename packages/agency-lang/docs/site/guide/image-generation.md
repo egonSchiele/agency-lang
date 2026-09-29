@@ -725,9 +725,9 @@ const result = generateImageLocal(
 )
 ```
 
-`strength` says how much of the picture to redraw, from 0 to 1. A low
-strength such as 0.3 keeps the result close to the picture, and a high
-one such as 0.9 changes more. Leave it out to use the model's default.
+`strength` says how much of the picture to redraw. It must be above 0
+and can be at most 1. A low strength such as 0.3 keeps the result close
+to the picture, and a high one such as 0.9 changes more. Leave it out to use the model's default.
 
 Use `images` with FLUX.2 [klein] to change one thing and keep the rest,
 such as "add a hat to the fox". Use `startImage` with any other model to

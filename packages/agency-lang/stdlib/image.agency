@@ -210,7 +210,7 @@ export def generateImageLocal(
   @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
   @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] takes them, and at most 4
   @param startImage - A picture to redraw, as a path to a file on this machine. The layout stays and the style changes. Goes with strength. Every model but FLUX.2 [klein] takes one
-  @param strength - How much of startImage to redraw, from 0 to 1. Low keeps it close, high changes more. Null uses the model's default
+  @param strength - How much of startImage to redraw, above 0 and up to 1. Low keeps it close, high changes more. Null uses the model's default
   """
   // Every input path is checked before the first interrupt, so a call that
   // is going to fail asks for nothing.

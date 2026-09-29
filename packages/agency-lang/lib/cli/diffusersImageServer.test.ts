@@ -731,6 +731,26 @@ print(fit_has_canvas("cover"))
     ]);
   });
 
+  it("scales only the part of a picture that shows on the canvas", () => {
+    const out = rules(`
+def part(fit, source_width, source_height, width, height):
+    box = fit_box(fit, source_width, source_height, width, height)
+    source_box, size, position = visible_part(source_width, source_height, box, width, height)
+    print([round(side) for side in source_box], size, position)
+part("cover", 400, 300, 1024, 1024)
+part("cover", 64, 512, 2048, 256)
+part("letterbox", 400, 300, 1024, 1024)
+`);
+    expect(out.split("\n")).toEqual([
+      // The middle 300 columns of the picture fill the square.
+      "[50, 0, 350, 300] (1024, 1024) (0, 0)",
+      // The strip kept is 2048x256, not the 2048x16384 of the whole picture.
+      "[0, 252, 64, 260] (2048, 256) (0, 0)",
+      // A letterboxed picture shows whole, between two black bands.
+      "[0, 0, 400, 300] (1024, 768) (0, 128)",
+    ]);
+  });
+
   it("takes the output size from a start image, and refuses a start image too small or too thin", () => {
     const out = rules(`
 print(output_size(None, "start_image", (4000, 3000)))

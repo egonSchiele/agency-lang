@@ -50,6 +50,7 @@ from diffusersImageRules import (  # noqa: E402
     fit_box,
     image_problem,
     fit_has_canvas,
+    visible_part,
     join_names,
     output_size,
     pipeline_args,
@@ -141,16 +142,17 @@ def prepared(image, field, request):
 def fitted(image, field, width, height):
     """A decoded image scaled the way its row's `fit` says for an output of
     width x height, and pasted on a black canvas of that size when the fit
-    has one."""
+    has one. Only the part of the image that shows on the canvas is
+    scaled, so an image that overflows it is cropped first."""
     from PIL import Image
 
     fit = INPUT_IMAGES[field]["fit"]
-    fit_width, fit_height, left, top = fit_box(fit, image.width, image.height, width, height)
-    scaled = image.resize((fit_width, fit_height), Image.LANCZOS)
+    box = fit_box(fit, image.width, image.height, width, height)
     if not fit_has_canvas(fit):
-        return scaled
+        return image.resize(box[:2], Image.LANCZOS)
+    source_box, size, position = visible_part(image.width, image.height, box, width, height)
     canvas = Image.new("RGB", (width, height), (0, 0, 0))
-    canvas.paste(scaled, (left, top))
+    canvas.paste(image.resize(size, Image.LANCZOS, box=source_box), position)
     return canvas
 
 PIL_FORMATS = {"png": "PNG", "jpeg": "JPEG", "webp": "WEBP"}

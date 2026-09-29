@@ -99,7 +99,8 @@ describe.skipIf(modelDir === "" || python === "")("diffusersImageServer.py on a 
   it("redraws a start image, and leaves the next plain request as it was", async () => {
     // The img2img pipeline is built from the plain one's parts, scheduler
     // included. A plain request after it must make the same image as the
-    // same request made before it.
+    // same request made before it. FLUX.2 [klein] has no img2img pipeline
+    // and answers 400 here, so AGENCY_IMAGE_MODEL_DIR must not name one.
     const plain = { prompt: "a red apple", size: "512x512", steps: 4, seed: 3 };
     const before = await post(plain);
     expect(before.status).toBe(200);

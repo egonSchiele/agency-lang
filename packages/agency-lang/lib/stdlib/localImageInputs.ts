@@ -227,6 +227,13 @@ export function _localImageInputs(
   if (strength !== null && startImage === "") {
     throw refusal("strength goes with startImage, and this call has none.");
   }
+  // The server makes this check too, but after the file is approved and
+  // read. Written so that NaN is refused.
+  if (strength !== null && !(strength > 0 && strength <= 1)) {
+    throw refusal(
+      "strength must be a number above 0 and at most 1. Low keeps the start image close.",
+    );
+  }
   const paths: Record<string, string[]> = {
     control_image: controlImage === "" ? [] : [controlImage],
     images,

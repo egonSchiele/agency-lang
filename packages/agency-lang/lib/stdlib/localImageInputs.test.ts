@@ -138,6 +138,15 @@ describe("_localImageInputs", () => {
     );
   });
 
+  it("refuses a strength of 0, one over 1, and one that is not a number", () => {
+    for (const strength of [0, -0.2, 1.5, Number.NaN]) {
+      expect(() => redraw(pose, strength)).toThrow(
+        "generateImageLocal failed: strength must be a number above 0 and at most 1. Low keeps the start image close.",
+      );
+    }
+    expect(redraw(pose, 1).settings).toEqual({ strength: 1 });
+  });
+
   it("refuses a start image together with references or a control image", () => {
     const message =
       "generateImageLocal failed: a call takes one of controlImage, images, or startImage.";

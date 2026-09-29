@@ -97,8 +97,9 @@ MAX_REFERENCE_IMAGES = 4
 # reference. The pipeline checks both itself, but from inside the call,
 # where a failure is a server error; the server checks them on decode.
 # A start image is held to the same two limits for another reason: it is
-# scaled to cover the output size before its overflow is cropped, and a
-# tiny or thin picture would first be blown up to a huge one.
+# cropped to the output's shape, and a tiny or thin picture has too little
+# left after the crop to redraw. A 100x5000 picture cropped to a square
+# keeps a fiftieth of itself.
 MIN_REFERENCE_SIDE = 64
 MAX_REFERENCE_ASPECT = 8
 
@@ -929,8 +930,9 @@ def cover(source_width, source_height, width, height):
     """Where a start image of the source size goes on a width x height
     canvas: scaled, with its shape kept, until it covers the canvas, and
     centered. (scaled width, scaled height, left, top), where left and top
-    are 0 or below: the overflow hangs off both sides evenly and is cut
-    off when the image is pasted."""
+    are 0 or below: the overflow hangs off both sides evenly. visible_part
+    says which part of the picture is left, and only that part is
+    scaled."""
     scale = max(width / source_width, height / source_height)
     fit_width = max(width, round(source_width * scale))
     fit_height = max(height, round(source_height * scale))
@@ -940,8 +942,8 @@ def cover(source_width, source_height, width, height):
 # How each fit in INPUT_IMAGES scales an image of the source size.
 #
 #   box     the function that gives (scaled width, scaled height, left, top)
-#   canvas  True: the scaled image is pasted at left, top on a black canvas
-#           of the output size, and whatever falls outside it is cut off.
+#   canvas  True: the scaled image goes at left, top on a black canvas of
+#           the output size, and whatever falls outside it is cut off.
 #           False: the scaled image is used as it is.
 FITS = {
     "letterbox": {"box": letterbox, "canvas": True},
@@ -960,6 +962,24 @@ def fit_has_canvas(fit):
     """Whether an image fitted the way `fit` says goes on a canvas of the
     output size."""
     return FITS[fit]["canvas"]
+
+
+def visible_part(source_width, source_height, box, width, height):
+    """The part of a picture that shows on a width x height canvas, for a
+    `box` from fit_box: (source box, size, position). `source box` is the
+    (left, top, right, bottom) of the part in the picture's own pixels,
+    `size` is what that part is scaled to, and `position` is where it goes
+    on the canvas.
+
+    The server scales the part and never the whole picture. A 64x512
+    picture covering a 2048x256 output would be 2048x16384 if scaled whole,
+    about 100 MB, to keep a 2048x256 strip of it."""
+    fit_width, fit_height, left, top = box
+    x0, y0 = max(0, -left), max(0, -top)
+    x1, y1 = min(fit_width, width - left), min(fit_height, height - top)
+    across, down = source_width / fit_width, source_height / fit_height
+    source_box = (x0 * across, y0 * down, x1 * across, y1 * down)
+    return source_box, (x1 - x0, y1 - y0), (max(0, left), max(0, top))
 
 
 def derived_size(width, height):
@@ -1021,9 +1041,8 @@ def reference_problem(width, height):
 
 def start_image_problem(width, height):
     """Why the server will not redraw a start image of width x height, or
-    None when it will. Covering a 2048x256 output with a 64x512 picture
-    already scales it to 2048x16384 before the crop; a smaller or thinner
-    one would be scaled further."""
+    None when it will. The picture is cropped to the output's shape, and
+    a tiny or thin one has too little left after the crop to redraw."""
     return _shape_problem(width, height, "A start image")
 
 

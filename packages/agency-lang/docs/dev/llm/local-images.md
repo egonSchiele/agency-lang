@@ -162,11 +162,9 @@ checks itself, but from inside the pipeline call, where a failure is a
 server error.
 
 `start_image_problem` makes the same two checks on a start image, for
-another reason. A start image is scaled to cover the output before its
-overflow is cropped, so a tiny or thin picture would first be scaled up
-to a huge one. At the limits, a 64x512 picture covering a 2048x256
-output is scaled to 2048x16384, about 34 megapixels, which is under the
-40 megapixel decode cap.
+another reason. A start image is cropped to the output's shape, and a
+tiny or thin picture has too little left after the crop to redraw. A
+100x5000 picture cropped to a square keeps a fiftieth of itself.
 
 `LOCAL_IMAGE_FIELDS` in `lib/stdlib/localImageInputs.ts` is the same
 table for the stdlib, with the parameter name and the approval question
@@ -248,9 +246,12 @@ steps_run = steps - t_start
 Each formula is written as diffusers writes it, so floating point rounds
 the same way. `9 * 0.6` is `5.3999999999999995` in floating point, and
 the "up" formula runs 6 steps where a rounded-down count would say 5.
-Only "down" can reach 0 steps for a strength above 0. `check_request`
-refuses such a request, "strength 0.03 with 28 steps runs no steps;
-raise either", instead of letting the pipeline fail under the lock.
+For a strength a person would pass, only "down" can reach 0 steps. "up"
+reaches 0 only when the strength is too small for floating point to
+count: `9 - 9 * 1e-20` is exactly `9.0`. `check_request` refuses a
+request that runs no steps with either formula, "strength 0.03 with 28
+steps runs no steps; raise either", instead of letting the pipeline fail
+under the lock.
 
 `check_request` returns the count as `steps_run`, and the server's
 "Stopped after N of M steps" message uses it for M.
@@ -349,10 +350,16 @@ in the rules module has one row per fit:
 A start image is cropped with `cover`, not letterboxed. For a control
 image, black bands mean "no lines here". For a start image, black bands
 would be part of the picture, and the model would redraw them as black
-bars. `cover` returns a negative `left` or `top`, and pasting there
-cuts the overflow off. A 400x300 picture covering a 1024x1024 output is
-scaled to 1365x1024 and pasted at left -171, so a strip of about 170
-pixels is lost from each side.
+bars. `cover` returns a negative `left` or `top`: a 400x300 picture
+covering a 1024x1024 output would be 1365x1024 at left -171, so a strip
+of about 170 scaled pixels is lost from each side.
+
+The server never scales the whole picture. `visible_part` in the rules
+module turns the box into the part of the picture that shows on the
+canvas, here the middle 300 of its 400 columns, and `fitted` scales that
+part alone with Pillow's `resize(size, box=...)`. Scaled whole, a 64x512
+picture covering a 2048x256 output would be 2048x16384, about 100 MB,
+to keep a 2048x256 strip of it.
 
 klein shrinks a reference to one megapixel itself, but inside the
 pipeline call, under the generation lock. The server shrinks it first.
@@ -423,7 +430,8 @@ A call with input images keeps this order:
 
 1. `_localImageInputs` makes every check that can fail. It refuses a
    `controlnet` without a `controlImage` and the reverse, a `strength`
-   without a `startImage`, input images of two modes, more images than the field's `maxCount`, a URL or data URI,
+   without a `startImage`, a `strength` that is not above 0 and at most
+   1, input images of two modes, more images than the field's `maxCount`, a URL or data URI,
    and any path that is not a regular image file under the field's
    `maxBytes`. It reads no bytes. A call that is going to fail asks for
    nothing.

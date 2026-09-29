@@ -1,0 +1,24 @@
+// Render one prompt with an adapter off and on, same seed, side by side.
+// Needs the image model served with client.adaptersDir pointing at the
+// folder the adapter is in.
+//
+//   agency local serve diffusers:Laxhar/noobai-XL-1.1
+//   agency run --approve std::writeBinary --approve std::pasteImages examples/previewAdapter.agency
+import { generateImageLocal, pasteImages } from "std::image"
+
+node main() {
+  const model = "diffusers:Laxhar/noobai-XL-1.1"
+  const prompt = "pen and ink, a cat sitting on a chair, drinking tea"
+  const before = generateImageLocal(prompt, model, seed: 7)
+  const after = generateImageLocal(prompt, model, seed: 7, lora: "sketch")
+  if (isFailure(before) || isFailure(after)) {
+    print("generation failed")
+    return
+  }
+  writeBinary("before.png", before.value.base64, "./preview")
+  writeBinary("after.png", after.value.base64, "./preview")
+  const pair = pasteImages(["./preview/before.png", "./preview/after.png"], "./preview/pair.png")
+  if (isSuccess(pair)) {
+    print("wrote ${pair.value}")
+  }
+}

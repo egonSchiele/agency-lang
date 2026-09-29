@@ -1,0 +1,45 @@
+{
+  "name": "@agency-lang/lora",
+  "version": "0.0.1",
+  "description": "Train LoRA adapters for local SDXL image models from Agency",
+  "type": "module",
+  "agency": "./index.agency",
+  "main": "./dist/src/agency.js",
+  "exports": {
+    ".": {
+      "types": "./dist/src/agency.d.ts",
+      "import": "./dist/src/agency.js"
+    },
+    "./index.js": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "trainer/",
+    "index.agency",
+    "index.js",
+    "README.md"
+  ],
+  "author": "Aditya Bhargava",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/egonSchiele/agency-lang/issues"
+  },
+  "homepage": "https://github.com/egonSchiele/agency-lang",
+  "scripts": {
+    "build": "tsc && node ../agency-lang/dist/scripts/agency.js compile index.agency",
+    "agency": "agency",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:agency": "vitest run tests/agencyPrograms.test.ts"
+  },
+  "peerDependencies": {
+    "agency-lang": ">=0.26.0"
+  },
+  "devDependencies": {
+    "agency-lang": "workspace:*",
+    "@types/node": "^25.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -7,7 +7,7 @@ Agency is a domain-specific language for defining AI agent workflows. It compile
 This is a pnpm workspace. Nearly all the code is in one package:
 
 - `packages/agency-lang/` — the language: compiler, runtime, stdlib, CLI, and agent. **Almost all work happens here**, and it has its own `CLAUDE.md` with the commands, conventions, and architecture notes for it.
-- `packages/{email,github,mcp,web-fetch,whisper-local}/` — published Agency packages, each a thin Agency wrapper over a TypeScript implementation. See `docs/dev/creating-packages.md`.
+- `packages/{email,github,kokoro,lora,mcp,tesseract-local,web-fetch,whisper-local}/` — published Agency packages, each a thin Agency wrapper over a TypeScript implementation. See `docs/dev/creating-packages.md`.
 - `packages/examples/` — example programs.
 
 ## Creating worktrees

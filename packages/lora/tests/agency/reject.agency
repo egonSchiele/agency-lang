@@ -1,0 +1,17 @@
+import { trainLora } from "../../index.agency"
+
+// Trains on ./images in the working directory, printing the interrupt it
+// raises. The handler rejects, so the trainer must never start.
+node main() {
+  handle {
+    const r = trainLora("images", "sketch", "./model", "sketch.safetensors", steps: 20, samplePrompts: ["sketch, a cat"])
+    if (r is failure(why)) {
+      print("rejected: " + why)
+    } else {
+      print("trained " + r.value.path)
+    }
+  } with (intr) {
+    print("asked " + intr.effect + " for " + intr.data.imagesDir)
+    return reject()
+  }
+}

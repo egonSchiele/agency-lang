@@ -1,0 +1,36 @@
+// Write a caption file beside every image in a folder, from the WD14
+// tagger, dropping the tags that describe the style rather than the
+// subject. The loop is yours: change the drop list, the threshold, or
+// the model, and it is still four calls.
+//
+//   agency local serve wd14-tagger
+//   agency run --approve std::glob --approve std::vision --approve std::write examples/captionFolder.agency
+import { STYLE_TAGS } from "../index.agency"
+import { tagImage } from "std::vision"
+import { glob } from "std::shell"
+
+node main() {
+  const images = glob("*.png", "./drawings")
+  if (isFailure(images)) {
+    print("could not list ./drawings: ${images.error}")
+    return
+  }
+  // glob returns names relative to the folder, so each is joined back
+  // onto it before tagImage reads it.
+  for (image in images.value) {
+    const tagged = tagImage("./drawings/${image}", "wd14-tagger")
+    if (isFailure(tagged)) {
+      print("could not tag ${image}: ${tagged.error}")
+    } else {
+      const kept = filter(tagged.value) as tag {
+        return !STYLE_TAGS.includes(tag.tag)
+      }
+      const names = map(kept) as tag {
+        return tag.tag
+      }
+      const sidecar = image.replace(".png", ".txt")
+      write(sidecar, names.join(", "), "./drawings")
+      print("${sidecar}: ${names.join(", ")}")
+    }
+  }
+}

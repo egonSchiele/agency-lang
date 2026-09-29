@@ -32,9 +32,11 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import MAX_IMAGE_BYTES, base64_length, client_gone, fail  # noqa: E402
+from localServerCommon import client_gone, fail  # noqa: E402
 from diffusersImageRules import (  # noqa: E402
     DIFFUSERS_VERSION,
+    INPUT_IMAGES,
+    MAX_BODY_BYTES,
     LoadedAdapters,
     RequestError,
     adapter_names,
@@ -45,27 +47,91 @@ from diffusersImageRules import (  # noqa: E402
     controlnet_problem,
     existing_adapter,
     family_of,
+    fit_box,
     join_names,
-    letterbox,
+    output_size,
     pipeline_args,
     warm_up_request,
 )
 
 GENERATIONS_PATH = "/v1/images/generations"
 
-# A request body is a prompt and a few settings, plus a control image as
-# base64 when it names a ControlNet. Anything bigger is not a request this
-# server makes sense of.
-MAX_BODY_BYTES = 64 * 1024 + base64_length(MAX_IMAGE_BYTES)
-
-# The image formats a control image may be. Pillow is told to try these and
+# The image formats an input image may be. Pillow is told to try these and
 # nothing else.
-CONTROL_IMAGE_FORMATS = ["PNG", "JPEG", "WEBP", "GIF"]
+INPUT_IMAGE_FORMATS = ["PNG", "JPEG", "WEBP", "GIF"]
 
-# The most pixels a control image may have before it is decoded. A 50 MB
+# The most pixels an input image may have before it is decoded. A 50 MB
 # file can hold a far larger image, and decoding one would take the
 # memory the model needs. It is scaled down to the request's size anyway.
-MAX_CONTROL_IMAGE_PIXELS = 40_000_000
+MAX_INPUT_IMAGE_PIXELS = 40_000_000
+
+# The request fields that name a model a mode's pipeline takes on top of
+# the loaded pipeline's parts. Each is passed to the pipeline class under
+# its own name, loaded by the Generator method named in `loaders`.
+MODE_MODELS = {"control": ["controlnet"]}
+
+
+def decode_image(data, field):
+    """The picture in `data`, the bytes of one image in the request field
+    `field`, as RGB. Pillow tries only INPUT_IMAGE_FORMATS, and an image over
+    MAX_INPUT_IMAGE_PIXELS is refused before its pixels are decoded. The
+    EXIF orientation is applied, so a portrait photo from a phone stays
+    upright. When the field's row says on_white, a transparent image is
+    pasted onto white first; converting it directly would turn its
+    background black."""
+    from PIL import Image, ImageOps
+
+    try:
+        image = Image.open(io.BytesIO(data), formats=INPUT_IMAGE_FORMATS)
+    except (OSError, ValueError, Image.DecompressionBombError):
+        raise RequestError(
+            f"{field} is not an image this server reads. It reads "
+            f"{join_names([f.lower() for f in INPUT_IMAGE_FORMATS], 'or')}."
+        )
+    if image.width * image.height > MAX_INPUT_IMAGE_PIXELS:
+        raise RequestError(
+            f"{field} is {image.width}x{image.height}; this server takes images up to "
+            f"{MAX_INPUT_IMAGE_PIXELS:,} pixels."
+        )
+    image = ImageOps.exif_transpose(image)
+    if INPUT_IMAGES[field]["on_white"] and image.mode in ("RGBA", "LA", "P"):
+        image = image.convert("RGBA")
+        white = Image.new("RGBA", image.size, (255, 255, 255, 255))
+        image = Image.alpha_composite(white, image)
+    return image.convert("RGB")
+
+
+def _invert(image, request):
+    """A control image inverted when the request asked: a drawing of black
+    lines on white becomes the white lines on black a ControlNet reads."""
+    from PIL import ImageOps
+
+    return ImageOps.invert(image) if request["control_invert"] else image
+
+
+# The steps a row of INPUT_IMAGES names in `prepare`, run on a decoded
+# image before it is fitted.
+PREPARES = {"invert": _invert}
+
+
+def prepared(image, field, request):
+    """A decoded image after the step its row names, if any."""
+    step = INPUT_IMAGES[field].get("prepare")
+    return image if step is None else PREPARES[step](image, request)
+
+
+def fitted(image, field, width, height):
+    """A decoded image fitted to width x height the way its row's `fit`
+    says. A letterboxed image goes on a black canvas."""
+    from PIL import Image
+
+    fit = INPUT_IMAGES[field]["fit"]
+    if fit == "none":
+        return image
+    fit_width, fit_height, left, top = fit_box(fit, image.width, image.height, width, height)
+    canvas = Image.new("RGB", (width, height), (0, 0, 0))
+    canvas.paste(image.resize((fit_width, fit_height), Image.LANCZOS), (left, top))
+    return canvas
 
 PIL_FORMATS = {"png": "PNG", "jpeg": "JPEG", "webp": "WEBP"}
 
@@ -132,10 +198,12 @@ class Generator:
         except ValueError as err:
             fail(str(err))
         self.adapters = LoadedAdapters()
-        # The ControlNet pipelines built so far, by name. Each shares the
-        # base pipeline's components, so a LoRA applied to the UNet applies
-        # to both.
-        self.control_pipes = {}
+        # The pipelines built so far for modes other than plain, keyed by
+        # the mode and the names of the extra models it takes. Each shares
+        # the loaded pipeline's components, so a LoRA applied to the UNet
+        # applies to all of them.
+        self.mode_pipes = {}
+        self.loaders = {"controlnet": self.load_controlnet}
         # Never fetch anything while serving. Set before diffusers and
         # huggingface_hub are imported, since they read it at import time.
         os.environ["HF_HUB_OFFLINE"] = "1"
@@ -148,7 +216,7 @@ class Generator:
         if not torch.backends.mps.is_available():
             fail("diffusersImageServer.py needs the Mac GPU (torch's mps device), and it is not available.")
         # The class comes from the family table, never from the file.
-        pipeline_class = getattr(diffusers, self.rules["pipeline"])
+        pipeline_class = getattr(diffusers, self.rules["pipelines"]["plain"])
         # use_safetensors: a .bin weight loads through pickle, which runs
         # code. trust_remote_code and custom_pipeline are never passed.
         self.pipe = pipeline_class.from_pretrained(
@@ -214,14 +282,11 @@ class Generator:
         self.pipe.enable_lora()
         self.pipe.set_adapters([loaded_as], adapter_weights=[request["lora_scale"]])
 
-    def control_pipeline(self, name):
-        """The ControlNet pipeline for `name`, built the first time it is
-        asked for from the base pipeline's components plus the ControlNet
-        loaded from its folder. A missing folder is a 400 naming what the
-        ControlNets folder holds, and a folder with a symlink or a missing
-        file in it is a 400 saying which. Called under the lock."""
-        if name in self.control_pipes:
-            return self.control_pipes[name]
+    def load_controlnet(self, name):
+        """The ControlNet `name`, loaded from its folder in the ControlNets
+        folder. A missing folder is a 400 naming what the ControlNets folder
+        holds, and a folder with a symlink or a missing file in it is a 400
+        saying which. Called under the lock."""
         import diffusers
 
         folder = controlnet_path(self.controlnets_dir, name)
@@ -234,41 +299,30 @@ class Generator:
         problem = controlnet_problem(folder)
         if problem is not None:
             raise RequestError(f'The ControlNet "{name}" cannot be loaded: {problem}')
-        controlnet = diffusers.ControlNetModel.from_pretrained(
+        return diffusers.ControlNetModel.from_pretrained(
             folder, dtype=self.torch.bfloat16, use_safetensors=True, local_files_only=True
         ).to("mps")
-        pipeline_class = getattr(diffusers, self.rules["controlnet_pipeline"])
-        pipe = pipeline_class(**self.pipe.components, controlnet=controlnet)
+
+    def pipeline_for(self, request):
+        """The pipeline for the request's mode. The loaded pipeline when the
+        mode's class is the plain class; otherwise the mode's class, built
+        the first time it is asked for from the loaded pipeline's parts plus
+        the models the request names, and kept. Called under the lock."""
+        mode = request["mode"]
+        class_name = self.rules["pipelines"][mode]
+        if class_name == self.rules["pipelines"]["plain"]:
+            return self.pipe
+        fields = MODE_MODELS.get(mode, [])
+        key = (mode, *[request[field] for field in fields])
+        if key in self.mode_pipes:
+            return self.mode_pipes[key]
+        import diffusers
+
+        models = {field: self.loaders[field](request[field]) for field in fields}
+        pipe = getattr(diffusers, class_name)(**self.pipe.components, **models)
         pipe.set_progress_bar_config(disable=True)
-        self.control_pipes[name] = pipe
+        self.mode_pipes[key] = pipe
         return pipe
-
-    def control_image(self, request):
-        """The conditioning image at the request's size. It is decoded from
-        the bytes the request carried, inverted when the request asked, and
-        scaled to fit with its aspect ratio kept, centered on black."""
-        from PIL import Image, ImageOps
-
-        try:
-            image = Image.open(io.BytesIO(request["control_image"]), formats=CONTROL_IMAGE_FORMATS)
-        except (OSError, ValueError, Image.DecompressionBombError):
-            raise RequestError(
-                f"control_image is not an image this server reads. It reads "
-                f"{join_names([f.lower() for f in CONTROL_IMAGE_FORMATS], 'or')}."
-            )
-        if image.width * image.height > MAX_CONTROL_IMAGE_PIXELS:
-            raise RequestError(
-                f"control_image is {image.width}x{image.height}; this server takes images up to "
-                f"{MAX_CONTROL_IMAGE_PIXELS:,} pixels."
-            )
-        image = image.convert("RGB")
-        if request["control_invert"]:
-            image = ImageOps.invert(image)
-        width, height = request["width"], request["height"]
-        fit_width, fit_height, left, top = letterbox(image.width, image.height, width, height)
-        canvas = Image.new("RGB", (width, height), (0, 0, 0))
-        canvas.paste(image.resize((fit_width, fit_height), Image.LANCZOS), (left, top))
-        return canvas
 
     def generate(self, request, sock):
         """The image for a checked request, or None when the client hung up.
@@ -286,25 +340,28 @@ class Generator:
                 raise ClientGone(step + 1)
             return callback_kwargs
 
+        # Everything up to the lock runs first, so a bad image never waits
+        # for the GPU or loads a ControlNet.
+        field = request["image_field"]
+        images = [prepared(decode_image(data, field), field, request) for data in request["input_images"]]
+        first_size = images[0].size if images else None
+        width, height = output_size(request["size"], first_size)
+        fitted_images = [fitted(image, field, width, height) for image in images]
         kwargs = {
-            **pipeline_args(self.rules, request),
+            **pipeline_args(self.rules, request, width, height),
             "generator": torch.Generator("cpu").manual_seed(request["seed"]),
             "callback_on_step_end": on_step_end,
         }
-        # Decoded before the lock, so a bad image never waits for the GPU
-        # or loads a ControlNet.
-        if request["controlnet"] is not None:
-            kwargs["image"] = self.control_image(request)
-            kwargs["controlnet_conditioning_scale"] = request["control_scale"]
+        if fitted_images:
+            one = INPUT_IMAGES[field]["max_count"] == 1
+            kwargs["image"] = fitted_images[0] if one else fitted_images
         with self.lock:
             # A client that hung up while it waited for the lock gets
             # nothing started at all.
             if client_gone(sock):
                 return None
             self.apply_lora(request)
-            pipe = self.pipe
-            if request["controlnet"] is not None:
-                pipe = self.control_pipeline(request["controlnet"])
+            pipe = self.pipeline_for(request)
             try:
                 return pipe(**kwargs).images[0]
             except ClientGone as gone:

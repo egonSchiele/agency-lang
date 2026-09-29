@@ -45,17 +45,17 @@ def base64_length(size):
     return 4 * ((size + 2) // 3)
 
 
-def image_bytes_of(value):
+def image_bytes_of(value, max_bytes=MAX_IMAGE_BYTES):
     """The bytes of an image a request sent as base64. Raises
-    ImageDataError for anything that is not base64 of at most
-    MAX_IMAGE_BYTES bytes. A request never names a path: the stdlib reads
-    the file after the user approved it and sends what it read, so the
-    server opens no file a request chose. Pillow decides later whether
-    the bytes are an image."""
+    ImageDataError for anything that is not base64 of at most `max_bytes`
+    bytes. A request never names a path: the stdlib reads the file after
+    the user approved it and sends what it read, so the server opens no
+    file a request chose. Pillow decides later whether the bytes are an
+    image."""
     if not isinstance(value, str) or value == "":
         raise ImageDataError("image must be the image's bytes as base64.")
-    if len(value) > base64_length(MAX_IMAGE_BYTES):
-        raise ImageDataError(f"image is over {MAX_IMAGE_BYTES:,} bytes; this server reads images up to that size.")
+    if len(value) > base64_length(max_bytes):
+        raise ImageDataError(f"image is over {max_bytes:,} bytes; this server reads images up to that size.")
     try:
         return base64.b64decode(value, validate=True)
     except (binascii.Error, ValueError):

@@ -1,0 +1,74 @@
+{
+  "firstAsked": {
+    "interrupted": true,
+    "asks": [
+      {
+        "effect": "std::readImage",
+        "dirIsReal": true,
+        "filename": "cat.png"
+      }
+    ]
+  },
+  "secondAsked": {
+    "interrupted": true,
+    "asks": [
+      {
+        "effect": "std::readImage",
+        "dirIsReal": true,
+        "filename": "hat.png"
+      }
+    ]
+  },
+  "approved": {
+    "ok": true,
+    "error": ""
+  },
+  "requestsAfterApprove": 1,
+  "rejected": {
+    "ok": false,
+    "error": "interrupt rejected"
+  },
+  "requestsAfterReject": 1,
+  "missingAsked": {
+    "interrupted": false
+  },
+  "missing": {
+    "ok": false,
+    "error": "generateImageLocal failed: no such file: DIR/nope.png"
+  },
+  "fiveAsked": {
+    "interrupted": false
+  },
+  "five": {
+    "ok": false,
+    "error": "generateImageLocal failed: images takes at most 4 images. This call has 5."
+  },
+  "plainAsked": {
+    "interrupted": false
+  },
+  "plain": {
+    "ok": true,
+    "error": ""
+  },
+  "requests": [
+    {
+      "model": "black-forest-labs/FLUX.2-klein-4B",
+      "prompt": "add a hat to the cat",
+      "n": 1,
+      "response_format": "b64_json",
+      "size": "",
+      "output_format": "png",
+      "seed": 7,
+      "images": ["cat.png", "hat.png"]
+    },
+    {
+      "model": "black-forest-labs/FLUX.2-klein-4B",
+      "prompt": "a cat",
+      "n": 1,
+      "response_format": "b64_json",
+      "size": "",
+      "output_format": "png",
+      "seed": 7
+    }
+  ]
+}

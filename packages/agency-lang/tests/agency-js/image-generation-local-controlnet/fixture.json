@@ -42,7 +42,7 @@
       "prompt": "a cat jumping",
       "n": 1,
       "response_format": "b64_json",
-      "size": "1024x1024",
+      "size": "",
       "output_format": "png",
       "seed": 7,
       "controlnet": "scribble",
@@ -55,7 +55,7 @@
       "prompt": "a cat",
       "n": 1,
       "response_format": "b64_json",
-      "size": "1024x1024",
+      "size": "",
       "output_format": "png",
       "seed": 7
     }

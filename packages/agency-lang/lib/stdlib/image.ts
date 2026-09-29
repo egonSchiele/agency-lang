@@ -1,4 +1,6 @@
 import { performance } from "node:perf_hooks";
+import * as path from "node:path";
+import * as smoltalk from "smoltalk";
 import { getRuntimeContext } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
@@ -11,6 +13,9 @@ import { LOCAL_IMAGE_FORMATS, type LocalGeneratedImage } from "./mlxImage.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
 import { approvedFileBytes } from "./approvedPath.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
+import { _realTarget, wholePath, stat as statUnder } from "./contained.js";
+import { MIME_TYPES } from "./mediaPathScan.js";
+import { DEFAULT_IMAGE_MODEL } from "../constants.js";
 
 /** Drop keys whose value is "" or undefined; keep numbers/objects. */
 function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
@@ -21,10 +26,82 @@ function omitEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return out;
 }
 
-/** Build a smoltalk ImageInput from a prompt + input image source strings. */
-function buildInput(prompt: string, images: string[]): ImageInput {
+/** One input image for `generateImage`. A URL or a data: URI is sent as
+ *  it is. A local path is held as its real spelling, the one the
+ *  std::uploadImage interrupt shows, and read only after approval. */
+export type ImageSource = { source: string; local: boolean };
+
+/** The image types a local input may be, by extension. */
+const IMAGE_MIME_TYPES: Record<string, string> = Object.fromEntries(
+  Object.entries(MIME_TYPES).filter(([, mime]) => mime.startsWith("image/")),
+);
+
+function isRemoteSource(source: string): boolean {
+  return (
+    source.startsWith("data:") || source.startsWith("http://") || source.startsWith("https://")
+  );
+}
+
+/** Backs the checks `generateImage` makes before it asks anything. A
+ *  local path is resolved to its real spelling and checked by name and
+ *  stat: an image extension, a regular file, under the size cap. No byte
+ *  is read, so a bad path fails here, before any approval is asked for. */
+export function _imageSources(images: string[]): ImageSource[] {
+  return images.map((image) => {
+    if (isRemoteSource(image)) {
+      return { source: image, local: false };
+    }
+    const real = _realTarget(image);
+    const ext = path.extname(real).toLowerCase();
+    if (IMAGE_MIME_TYPES[ext] === undefined) {
+      const accepted = Object.keys(IMAGE_MIME_TYPES).join(", ");
+      throw new Error(`generateImage cannot send ${real}. Accepted: ${accepted}.`);
+    }
+    const located = wholePath(real);
+    const info = statUnder(located.root, located.target);
+    if (info === null) {
+      throw new Error(`no such file: ${real}`);
+    }
+    if (!info.isFile()) {
+      throw new Error(`not a regular file: ${real}`);
+    }
+    if (info.size > MAX_IMAGE_BYTES) {
+      throw new Error(
+        `${real} is ${info.size.toLocaleString("en-US")} bytes; the most generateImage sends is ${MAX_IMAGE_BYTES.toLocaleString("en-US")}.`,
+      );
+    }
+    return { source: real, local: true };
+  });
+}
+
+/** Where `generateImage` sends its request, as the default client will
+ *  resolve it: the model it names or the default image model, and the
+ *  provider it names or the one that model belongs to. A custom client may
+ *  route the request elsewhere; this is the best that is known before the
+ *  call. */
+export function _imageDestination(
+  model: string,
+  provider: string,
+): { model: string; provider: string } {
+  const chosen = model || DEFAULT_IMAGE_MODEL;
+  const owner = provider || smoltalk.getModel(chosen as smoltalk.ModelName)?.provider;
+  return { model: chosen, provider: owner || "unknown" };
+}
+
+/** The request's input images. A local file is read here, after the
+ *  approval, and sent as bytes, so the provider library never opens a
+ *  path. `approvedFileBytes` refuses a symlink that appeared while the
+ *  prompt was pending, and a file over the size cap. */
+function buildInput(prompt: string, images: ImageSource[]): ImageInput {
   if (images.length === 0) return prompt;
-  const refs: ImageRef[] = images.map((s) => classifySource(s, "", false) as ImageRef);
+  const refs: ImageRef[] = images.map((image) => {
+    if (!image.local) {
+      return classifySource(image.source, "", false) as ImageRef;
+    }
+    const mimeType = IMAGE_MIME_TYPES[path.extname(image.source).toLowerCase()];
+    const data = new Uint8Array(approvedFileBytes(image.source, MAX_IMAGE_BYTES));
+    return { kind: "bytes", data, mimeType };
+  });
   return { prompt, images: refs };
 }
 
@@ -109,7 +186,7 @@ export async function _generateImage(
   provider: string,
   size: string,
   quality: string,
-  images: string[],
+  images: ImageSource[],
   apiKey: string,
   baseUrl: string,
 ): Promise<ResultValue> {
@@ -126,7 +203,13 @@ export async function _generateImage(
       : undefined,
     baseUrl: baseUrl ? { liteLlm: baseUrl, openAiCompat: baseUrl } : undefined,
   });
-  const out = await generateOne(prompt, buildInput(prompt, images), config, model);
+  let input: ImageInput;
+  try {
+    input = buildInput(prompt, images);
+  } catch (err) {
+    return failure(`Image generation failed: ${(err as Error).message}`);
+  }
+  const out = await generateOne(prompt, input, config, model);
   if ("error" in out) {
     return failure(`Image generation failed: ${out.error}`);
   }

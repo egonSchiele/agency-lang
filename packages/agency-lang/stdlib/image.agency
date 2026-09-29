@@ -1,4 +1,4 @@
-import { _generateImage, _generateImageLocal } from "agency-lang/stdlib-lib/image.js"
+import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "agency-lang/stdlib-lib/image.js"
 import { _cropImage, _imageSize, _pasteImages } from "agency-lang/stdlib-lib/imageTools.js"
 import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
 import { dirname, basename } from "std::path"
@@ -25,6 +25,17 @@ persist with `writeBinary()` or send onward with `std::thread`'s `image(...)`.
   }
   ```
 */
+
+// Sending a local image to a hosted provider for generateImage to edit.
+// Its own effect, not std::readImage: reading a file on this machine and
+// sending it to a third party are different permissions, and a policy
+// that approves local reads must not approve uploads. The payload names
+// the file and where it goes: the provider and model the default client
+// resolves, and the base URL given for openai-compat or litellm ("" when
+// none was). An "always" answer pins both the folder and the model.
+@alwaysUnder(dir)
+@always(model)
+effect std::uploadImage { dir: string, filename: string, provider: string, model: string, baseUrl: string }
 
 // Cutting a box out of one image and writing it as another. Both paths are
 // real spellings, since one approval is for "read this, write that". An
@@ -69,28 +80,51 @@ export def generateImage(
   images: string[] = [],
   apiKey: string = "",
   baseUrl: string = "",
-): Result<GeneratedImage> {
+): Result<GeneratedImage> raises <std::uploadImage> {
   """
   Generate an image from a text prompt using a hosted provider, optionally
   editing input images. Returns a Result whose success value is
   { base64, mimeType }.
+
+  An input image that is a local file leaves the machine, so each one
+  raises std::uploadImage first, naming the file, the provider, and the
+  model. Nothing is read or sent until it is approved; a rejection sends
+  no request. A URL or a data: URI reads no local file and asks nothing.
 
   @param prompt - What to generate (or how to edit the input images)
   @param model - Image model (default: the provider's default image model)
   @param provider - Override the provider (normally derived from the model name)
   @param size - Image size, e.g. "1024x1024" (provider-dependent)
   @param quality - Image quality: "low", "medium", "high", or "auto"
-  @param images - Input images to edit/vary, as path / URL / data-URI strings
+  @param images - Input images to edit or vary: a local path (.png, .jpg, .jpeg, .gif, or .webp), an http(s) URL, or a data: URI
   @param apiKey - Override the API key
   @param baseUrl - Base URL for openai-compat / litellm providers
   """
+  // Every path is checked before the first interrupt, so a bad one fails
+  // here instead of after an approval.
+  const sources = try _imageSources(images)
+  if (isFailure(sources)) {
+    return sources
+  }
+  const destination = _imageDestination(model, provider)
+  for (source in sources.value) {
+    if (source.local) {
+      raise std::uploadImage("Send this image to ${destination.provider} (${destination.model} model)?", {
+        dir: dirname(source.source),
+        filename: basename(source.source),
+        provider: destination.provider,
+        model: destination.model,
+        baseUrl: baseUrl,
+      })
+    }
+  }
   return _generateImage(
     prompt,
     model,
     provider,
     size,
     quality,
-    images,
+    sources.value,
     apiKey,
     baseUrl,
   )

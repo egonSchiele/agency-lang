@@ -1,0 +1,13 @@
+// generateImage with input images, against a client test.js installs that
+// records every image request. No provider is called. The nodes have no
+// handlers, so std::uploadImage reaches test.js, which approves or
+// rejects it.
+import { generateImage } from "std::image"
+
+node edit(images: string[]) {
+  const r = generateImage("make it blue", model: "gpt-image-1", images: images)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}

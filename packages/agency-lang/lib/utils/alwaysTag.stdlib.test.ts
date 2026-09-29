@@ -64,6 +64,9 @@ const EXPECTED: Record<string, string[]> = {
   "std::readImage": ["dir/**"],
   "std::cropImage": ["dir/**", "outDir/**"],
   "std::pasteImages": [],
+  // An upload pins the folder and the model: "always" means "send images
+  // from here to this model", not "to anyone".
+  "std::uploadImage": ["model", "dir/**"],
   "std::vision": ["dir/**"],
   "std::write": ["dir/**"],
   "std::writeBinary": ["dir/**"],

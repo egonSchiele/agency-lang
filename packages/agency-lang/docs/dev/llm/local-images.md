@@ -1,476 +1,301 @@
 # Local image generation
 
-This command serves an image model on this Mac:
+Local image generation runs a diffusers model on an Apple silicon GPU.
+For setup and Agency examples, see the [image generation guide](../../site/guide/image-generation.md).
+This document covers the server, provider integration, and constraints to
+preserve when changing them.
 
-    agency local serve --image z-image-turbo
+## Source files
 
-Agency code calls it through `std::image`:
-
-    import { generateImageLocal } from "std::image"
-
-    node main() {
-      const r = generateImageLocal("a lighthouse in a storm", "z-image-turbo")
-      if (isFailure(r)) { print("failed: ${r.error}"); return }
-      writeBinary("lighthouse.png", r.value.base64)
-    }
-
-Each `--image` model gets its own process running
-`lib/cli/diffusersImageServer.py`, behind the same front door as chat,
-embedding, and speech processes. The process loads the model with Hugging
-Face's diffusers library on the Mac GPU (torch's `mps` device) and answers
-`POST /v1/images/generations` in the OpenAI shape:
-
-    curl -s http://127.0.0.1:8080/v1/images/generations \
-      -H 'content-type: application/json' \
-      -d '{"model": "Tongyi-MAI/Z-Image-Turbo", "prompt": "a lighthouse in a storm", "seed": 1}'
-
-A success is `{"created", "output_format", "data": [{"b64_json", "seed"}]}`.
-A failure is `{"error": {"message": "..."}}`.
-
-## The models
-
-| Catalog name | Repo | Download | Steps | 1024×1024 on an M5 Ultra | Peak GPU memory |
-|---|---|---|---|---|---|
-| `z-image-turbo` | `Tongyi-MAI/Z-Image-Turbo` | 32.8 GB | 9 | 8.2 s | 29 GB |
-| `chroma1-hd` | `lodestones/Chroma1-HD` | 27.5 GB | 40 | 90.5 s | 36 GB |
-| `qwen-image-2512` | `Qwen/Qwen-Image-2512` | 57.7 GB | 50 | not measured | not measured |
-| `flux2-klein-4b` | `black-forest-labs/FLUX.2-klein-4B` | 16.0 GB | 4 | not measured | not measured |
-
-All four are apache-2.0. Z-Image Turbo and Chroma have no content filter in
-their weights; FLUX.2 [klein] is safety fine-tuned. The times come from a
-timing run with diffusers 0.40.0 and torch 2.14.0 in bfloat16, three images
-each. Loading took under 3 seconds from a warm file cache, and the warm-up
-generation 4 to 6 seconds.
-
-The memory warning `serve` prints adds up download sizes. An image model
-uses more than that while it generates: Chroma peaks at 36 GB against
-27.5 GB on disk. The warning is left as it is.
-
-A fifth family, SDXL, is served but not in the catalog. Its finetunes for
-illustration (NoobAI-XL, Illustrious) are the models people train LoRA
-adapters for, and every one of them declares a restrictive license, so
-none qualifies for the catalog's permissive-only rule. Name one by its
-repo or directory:
-
-    agency local download diffusers:Laxhar/noobai-XL-1.1
-    agency local serve diffusers:Laxhar/noobai-XL-1.1
-
-NoobAI-XL 1.1 downloads 6.9 GB (the repo's 7.1 GB single-file copy is
-skipped) and makes a 1024×1024 image at 28 steps in about 6.5 s on an M5
-Ultra, or 7.5 s with a LoRA adapter applied.
-
-## The `diffusers` backend
-
-An image model has its own backend, `diffusers`, next to `llama-cpp` and
-`mlx`. It is named with a `diffusers:` URI, or by a directory with
-`model_index.json` at the top and `.safetensors` weights one level down:
-
-    agency local download diffusers:Tongyi-MAI/Z-Image-Turbo
-    agency local serve --image /Volumes/models/hf/hub/models--Tongyi-MAI--Z-Image-Turbo/snapshots/f332072a…
-
-`isDiffusersDir` in `lib/stdlib/modelBackend.ts` is the directory check.
-`isModelDir` stays the MLX check, and a diffusers directory has no top-level
-`config.json`, so a directory is never both. `servedDirBackend` says which
-one a directory is. `modelDirSizeBytes` counts a diffusers model's component
-folders too, since its weights are not at the top.
-
-A downloaded diffusers model lives in `<modelsDir>/diffusers/<org>--<repo>/`
-with the same `.agency-model.json` record an MLX model has, or in a Hugging
-Face cache, where `list` and `serve` find it as they find an MLX snapshot.
-
-What each command does with one:
-
-| Command | A `diffusers` model |
+| File | Responsibility |
 |---|---|
-| `agency local download` | Downloads only the files the pipeline reads (see "Downloading") |
-| `agency local serve` | Serves it as an image model, with or without `--image`: any diffusers directory is one. The server refuses a pipeline family it does not serve |
-| `agency local remove -f` | Deletes it from `<modelsDir>/diffusers/` |
-| `agency run --local`, `agency agent --local` | Refuses: it is an image model |
-| `speakLocal` | Refuses |
+| `stdlib/image.agency` | Public functions and approval interrupts |
+| `lib/stdlib/image.ts` | Input validation, approved file reads, dispatch, and usage accounting |
+| `lib/stdlib/mlxImage.ts` | The local image provider and request timeouts |
+| `lib/cli/diffusersImageServer.py` | Model loading and image generation |
+| `lib/cli/diffusersImageRules.py` | Supported families, request validation, and adapter bookkeeping |
+| `lib/cli/localServerCommon.py` | Shared HTTP helpers and image byte validation |
+| `lib/stdlib/modelBackend.ts` | Recognition of diffusers model directories |
+| `lib/stdlib/diffusersFiles.ts` | Selection of files to download |
 
-## Why Agency ships its own script
+The rules module must remain usable without torch or diffusers so CI can
+test validation without loading a model.
 
-The server is ours rather than a third-party image server, for the reasons
-`local-speech.md` gives for the speech server. The script defines which
-request fields exist, refuses the ones a model cannot use, and keeps the
-security properties below.
+## Serving a model
 
-## Security
+```bash
+agency local serve z-image-turbo
+```
 
-The five properties of the speech server hold here too:
+Each image model runs in its own `diffusersImageServer.py` process behind
+the local model server's shared HTTP endpoint. The process loads one model
+on torch's `mps` device and answers `POST /v1/images/generations`.
+The shared endpoint routes by model name and returns 404 for an unknown model.
 
-1. Nothing in Agency starts a third-party image server.
-2. No endpoint chooses a model. The process loads the one directory it was
-   started with. The front door rewrites the `model` field and answers 404
-   for any other name.
-3. `trust_remote_code` and `custom_pipeline` are never passed.
-4. Everything binds `127.0.0.1`.
-5. Requests carry a JSON body, parsed strictly. A body over 64 KB plus the
-   base64 of the largest control image is refused. That is about 67 MB.
+Successful responses contain `created`, `output_format`, and a `data`
+array with one `{ b64_json, seed }` entry. Errors use
+`{ error: { message } }`.
 
-diffusers adds three:
+A diffusers model can be named by its catalog alias, a `diffusers:` URI,
+or its directory. `isDiffusersDir` recognizes `model_index.json` and
+component weights. `servedDirBackend` selects the backend, and
+`modelDirSizeBytes` includes the component folders when counting size.
+The image server checks whether the directory contains a supported pipeline.
 
-6. **`use_safetensors=True` on every load.** A `.bin` or `.ckpt` weight file
-   loads through Python's `pickle`, which runs code. With the flag, diffusers
-   refuses a component that has no safetensors weights, and the downloader
-   refuses such a repo before it writes anything.
-7. **Offline at serve time.** The script sets `HF_HUB_OFFLINE=1` before
-   importing diffusers and loads with `local_files_only=True`, so
-   `from_pretrained` fetches nothing.
-8. **The family table decides what gets imported.** `from_pretrained`
-   imports whatever library and class `model_index.json` names. The server
-   checks the file against the family table before importing diffusers, and
-   loads the pipeline class the table names, never the one in the file.
+Downloads live in `<modelsDir>/diffusers/<org>--<repo>/` with an
+`.agency-model.json` record. The local commands also discover models in
+Hugging Face cache snapshots. Image models cannot be used as the chat
+model for `agency run --local` or `agency agent --local`.
 
-ControlNets add a ninth:
+## Model loading and request limits
 
-9. **The server never opens a path a request wrote.** A request names an
-   adapter or a ControlNet only by one plain name inside a folder the user
-   configured. The one file a caller picks freely, a ControlNet's control
-   image, reaches the server as bytes: `generateImageLocal` raises
-   `std::readImage` for the file's real path, and only after approval does
-   `approvedFileBytes` read it, refusing a symlink anywhere in the path and
-   a file over 50 MB. The server checks the size again in
-   `image_bytes_of`, as the vision server does. It decodes the bytes with
-   Pillow, which may try only PNG, JPEG, WebP, and GIF, and it refuses an
-   image over 40 megapixels before decoding it.
+The `FAMILIES` table in `diffusersImageRules.py` defines the supported
+pipeline classes and their defaults:
 
-   The approval is enforced by the stdlib, not by the server. Any process
-   on this machine that can reach `127.0.0.1` can post an image's bytes
-   and get back an image shaped by them, but it must already have read
-   those bytes itself. The server grants it no read it did not have.
-
-## The rules module
-
-`lib/cli/diffusersImageRules.py` holds every rule and imports nothing from
-torch or diffusers, so CI runs it with plain `python3`
-(`lib/cli/diffusersImageServer.test.ts`).
-
-The family table, `FAMILIES`, is keyed by `_class_name` in
-`model_index.json`:
-
-| `_class_name` | Default steps | Max steps | Default guidance | Guidance and negative prompt |
+| Pipeline | Default steps | Maximum steps | Default guidance | Accepts guidance and negative prompts |
 |---|---|---|---|---|
-| `ZImagePipeline` | 9 | 50 | 0.0 | refused |
-| `ChromaPipeline` | 40 | 80 | 3.0 | accepted |
-| `QwenImagePipeline` | 50 | 80 | 4.0 | accepted |
-| `Flux2KleinPipeline` | 4 | 50 | 1.0 | refused |
-| `StableDiffusionXLPipeline` | 28 | 80 | 5.5 | accepted |
+| `ZImagePipeline` | 9 | 50 | 0.0 | no |
+| `ChromaPipeline` | 40 | 80 | 3.0 | yes |
+| `QwenImagePipeline` | 50 | 80 | 4.0 | yes |
+| `Flux2KleinPipeline` | 4 | 50 | 1.0 | no |
+| `StableDiffusionXLPipeline` | 28 | 80 | 5.5 | yes |
 
-SDXL is the one family with `takes_lora`. Every family's pipeline class
-can load a LoRA adapter, but SDXL is the family people train adapters
-for, and the only one the adapter code has been tried with; a request
-naming an adapter for another family is refused. SDXL is also the one
-family with `takes_controlnet`, since every catalog ControlNet is an SDXL
-one; its row names `StableDiffusionXLControlNetPipeline` as
-`controlnet_pipeline`. Every row has the same keys, which a test checks.
+Each row lists the exact component libraries and classes allowed in
+`model_index.json`. The server rejects missing or extra components and
+unexpected classes before importing diffusers. It loads the pipeline
+class named by the table. It does not let the model file choose imports.
 
-Each row also lists every component its `model_index.json` must name, as
-`[library, class]`. A file that names another class, an extra component, or
-too few is refused at start-up. A few files carry settings as well as
-components, which `from_pretrained` passes to the pipeline: klein's says
-`"is_distilled": true`, and every SDXL file says
-`"force_zeros_for_empty_prompt": true`, which makes an empty negative
-prompt encode as zeros, as the model was trained. A row's `settings` lists each one with the one
-value allowed, and a file that leaves one out is refused too. This keeps out
-the klein base model, which needs guidance and about 50 steps.
+The table also specifies required settings. FLUX.2 klein requires
+`is_distilled: true`, which excludes the base model with different
+inference requirements. SDXL requires `force_zeros_for_empty_prompt: true`.
 
-`pipeline_args` turns a checked request into the pipeline's arguments, and
-two rows need it to do more than copy fields across:
+`pipeline_args` translates validated requests into pipeline arguments.
+Qwen-Image uses `true_cfg_scale` for guidance and needs a negative prompt
+to enable it. Its default negative prompt is a single space.
 
-- Qwen-Image is not guidance-distilled. It ignores `guidance_scale` and
-  reads its guidance from `true_cfg_scale`, which the row's `guidance_arg`
-  names.
-- Qwen-Image runs guidance only when it gets a negative prompt, even a
-  blank one, so its `default_negative_prompt` is `" "`, as its model card
-  suggests. The others send none.
+Only SDXL enables `takes_lora` and `takes_controlnet`. Its
+`controlnet_pipeline` is `StableDiffusionXLControlNetPipeline`.
+When adding a family, define its components, settings, defaults, and
+supported options in the table. Verify them against a model's
+`model_index.json` and test generation on a Mac before adding a catalog entry.
 
-To add a family, add a row: the pipeline class, the model card's steps and
-guidance, and the components copied from a real `model_index.json`. Then
-time it on a Mac and add it to the catalog.
+All components must be available in the model directory. Models that
+fetch a component from another repository cannot run on this server.
+The downloader also rejects components with only variant weights, such
+as fp16 copies, and no plain `.safetensors` weights.
 
-Two kinds of model cannot be served this way. One whose repo leaves out a
-component, such as HiDream-I1, which loads its Llama 3.1 text encoder from
-another repo: the server loads one directory. And one that ships only fp16
-variant weights in diffusers format, as most SDXL fine-tunes do: the
-downloader keeps only plain `.safetensors` files.
+A request generates one image. Width and height must each be a multiple
+of 16 between 256 and 2048, with at most 4 million pixels in total.
+For example, `2048x1920` is allowed and `2048x2048` is not. The size and
+step limits bound how long a request can hold the generation lock.
 
-The size rules: two multiples of 16 joined by `x`, each side from 256 to
-2048, and at most 4 million pixels, so `2048x1920` passes and `2048x2048`
-does not. `n` must be 1, because the diffusers MPS guide says batched
-generation can fail there. The caps bound how long one request holds the
-generation lock.
+## Security constraints
 
-## The version pin
+Preserve these constraints when changing loading or request handling:
 
-The server refuses to start under any diffusers other than 0.40.0, the
-version the rules were written against. `DIFFUSERS_VERSION` in
-`localServe.ts` gives the same version to the setup hint, and a test checks
-that the two constants match. `localServe.ts` also pins torch, transformers,
-and accelerate to the versions the timing run used.
+1. The server loads only the model directory selected at startup.
+2. All servers bind to `127.0.0.1`.
+3. Model loads use `use_safetensors=True`. Pickle-based weight formats
+   can execute code and must not be loaded.
+4. The server sets `HF_HUB_OFFLINE=1` before importing diffusers and
+   loads with `local_files_only=True`.
+5. Loads do not pass `trust_remote_code` or `custom_pipeline`.
+6. The family table controls pipeline imports and permitted components.
+7. Requests use strictly parsed JSON. The body limit allows 64 KB of
+   request fields plus the base64 representation of a 50 MB control image.
+8. Requests select adapters and ControlNets by a single name within
+   configured folders. They cannot supply arbitrary paths for the server
+   to open.
+9. Control images reach the server as bytes after stdlib approval.
+   `approvedFileBytes` rejects symlinks and files over 50 MB.
+   `image_bytes_of` checks the size again on the server. Pillow accepts
+   only PNG, JPEG, WebP, and GIF, and images over 40 megapixels are rejected
+   before decoding.
 
-accelerate is optional to diffusers, but without it a model loaded in 10
-seconds instead of 2.6 and diffusers warned about memory use, so `serve`
-checks for it.
+The stdlib enforces approval. A process that can reach the local HTTP
+endpoint can submit image bytes directly, but the server cannot be asked
+to read a control image from a path.
 
-## Readiness
+## Approval for input images
 
-The script loads the model, makes one 512×512 image in two steps, and only
-then opens its port. `waitUntilLoaded` probes an image process with
-`GET /health`, as it does a speech process.
+### Local generation
 
-## Cancellation
+`generateImageLocal` returns an image in memory. Without a control image,
+it raises no interrupt. Saving the result with `writeBinary` raises that
+function's own effect.
 
-diffusers calls `callback_on_step_end` after every step. The server's
-callback checks whether the client hung up and, if so, raises an exception
-that stops the pipeline. The server logs "Stopped after 4 of 30 steps: the
-client hung up." and writes nothing.
+A ControlNet call must provide both `controlnet` and `controlImage`.
+The Agency function checks that pair and resolves the image path before
+raising `std::readImage`. After approval, `image.ts` reads the file through
+`approvedFileBytes` and sends its base64 bytes as `control_image`.
+Rejection prevents the request.
 
-The callback calls `torch.mps.synchronize()` before it checks. The GPU runs
-behind Python: without the wait, the loop queues every step within the
-first second, the check runs before the client could have hung up, and the
-whole generation runs anyway. The wait did not change the timings.
+### Hosted generation
 
-A request waiting for the lock is checked once more when it gets the lock,
-so a client that left while queued starts nothing.
+`generateImage` accepts local paths, HTTP(S) URLs, and data URIs in its
+`images` argument. Each local file raises `std::uploadImage` before its
+contents are read or sent. URLs and data URIs do not raise this effect.
 
-The hung-up check, `client_gone`, and the `fail` helper live in
-`lib/cli/localServerCommon.py`, which the speech server imports too.
+`std::uploadImage` belongs to the `Network` capability set. It is separate
+from `std::readImage`, so approving `FileRead` does not authorize uploads.
+Its payload contains `dir`, `filename`, `provider`, `model`, and `baseUrl`.
+An interactive "always" approval covers the selected model and files
+under the selected directory.
 
-## The `mlx` image provider
+`_imageDestination` reports the model and provider that the default
+client would select. It uses `gpt-image-1` when no model is specified and
+`"unknown"` when it cannot determine the provider. A custom client can
+route differently. `baseUrl` contains the caller's explicit argument,
+or an empty string when omitted.
 
-smoltalk's `image()` has no provider for the local server, so Agency
-registers one with smoltalk's `registerImageProvider`, under the name `mlx`
-(`lib/stdlib/mlxImage.ts`). `loadProviderModules` registers it at start-up,
-before any user provider module, so `provider: "mlx"` works from the first
-image call.
+Keep the following order in `generateImage`:
 
-The name `mlx` is the server's, not the model's. `MLX_BASE_URL` and
-`client.baseUrl.mlx` point at the front door `agency local serve` runs, and
-every kind of model sits behind it. The provider sends no key, never retries
-(a retry would queue behind the request that just failed), sends `steps`,
-`guidance`, `seed`, and `negative_prompt` from `config.metadata`, reads the
-seed back onto the image, and reports a cost of zero.
+1. `_imageSources` resolves every local path through `_realTarget` and
+   checks the extension, file type, and size without reading its contents.
+   Invalid input fails before the first interrupt.
+2. The Agency function raises one `std::uploadImage` interrupt per local
+   file. Each payload describes one directory and filename for policy
+   matching. All files must be approved before any contents are read.
+3. `buildInput` reads through `approvedFileBytes` after approval. This
+   checks again for symlinks and the size limit. It passes bytes and a MIME
+   type to smoltalk, so the provider library never opens a local path.
 
-Its timeout scales with the request (`localImageTimeoutMs`): the slowest
-family's rate per step per megapixel, doubled for attention's growth, times the steps and size asked for, times two for a request that
-may be queued ahead. A request that leaves steps to the model is budgeted
-at the most any family allows, 80, which a test checks against the rules
-module. Qwen-Image's rate is estimated from its size until it is timed.
-At the caps the timeout is about 107 minutes. It is there to catch a
-server that has stopped answering, not to bound a slow one; the caps on
-steps and size do that.
-
-## generateImageLocal
-
-`_generateImageLocal` in `lib/stdlib/image.ts` refuses an empty prompt, a
-format other than png, jpeg, or webp, and any model that is not a
-`diffusers` model, before any request. It then goes through `generateOne`,
-the accounting `generateImage` also uses: `meteredDispatch`, `recordUsage`,
-the `imageGeneration` statelog event, and the guards.
-
-Without a control image it raises no interrupt. A local generation spends
-no money, sends nothing off the machine, and writes nothing. Saving the
-image goes through `writeBinary`, which raises its own effect. A call
-with a control image reads a file, so it raises `std::readImage` first;
-see ControlNets below.
+A rejection returns before `_generateImage` runs and sends no request.
+See [contained files](../stdlib/contained-files.md) for the path checks.
 
 ## LoRA adapters
 
-A LoRA adapter is a small file, tens of megabytes, that changes an SDXL
-model's attention weights to draw a style or a character it was not
-trained on. Training one is not the core package's job (see
-`docs/superpowers/specs/2026-09-28-lora-package.md`). Using one is a
-folder and a name. The folder is `client.adaptersDir` in `agency.json`:
+`client.adaptersDir` in `agency.json` selects the adapter folder.
+Relative paths resolve from the directory containing that config file.
+`serve` passes the folder to image processes with `--adapters-dir`.
 
-    { "client": { "adaptersDir": "./adapters" } }
+A request selects a `.safetensors` file by its name without the extension.
+`lora_scale` ranges from 0 to 2 and defaults to 1. The server rejects
+unsupported families, missing configuration, and invalid names.
 
-A relative path is taken from the folder that config file is in, not the
-working directory, so `agency local serve` finds the same folder from any
-subfolder of the project (`configuredAdaptersDir` in `localModels.ts`).
+The rules module owns folder validation and adapter bookkeeping through
+`check_folder`, `existing_adapter`, `adapter_names`, and `LoadedAdapters`.
+The loading code must preserve these behaviors:
 
-Every `.safetensors` file in it is an adapter, named by its file name
-without the extension. A request names one with the `lora` field, and
-says how strongly with `lora_scale`, from 0 to 2 with 1 as trained:
+- Accept only a single filename stem. Reject path separators, empty
+  names, `.` and `..`, and names ending in `.safetensors`.
+- Reject a configured folder that is a symlink or not a directory.
+  Reject symlinked adapter files and load with `use_safetensors=True`.
+- Apply the requested adapter and scale under the generation lock.
+  Disable adapters for a request that names none.
+- Assign a fresh internal name, such as `adapter_0`, to each load.
+  Torch module names cannot contain dots, even though filenames can.
+- Keep at most two adapters loaded. Evict the least recently used adapter
+  before loading another.
+- Reload a file when its modification time or size changes.
+- Undo partial loads with `delete_adapters` before returning an error.
+  SDXL can load the UNet adapter before failing on a text encoder.
+  For a plain request, inspect `get_list_adapters` to disable any weights
+  still held by the pipeline.
 
-    generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch")
-
-`serve` passes the folder to every image process as `--adapters-dir`. The
-process loads `sketch.safetensors` the first time a request names
-`sketch`, under the generation lock, and keeps it loaded until it needs
-the room. Dropping a new file into the folder makes it usable with no
-restart, and so does training `sketch.safetensors` again: the process
-keeps each file's modification time and size, and when either has changed
-it unloads the old weights and reads the file again. That is the
-train-try-adjust loop a person training adapters is in.
-
-The file checks and the bookkeeping live in `diffusersImageRules.py`, so
-CI tests them with python3: `check_folder`, which the ControlNets folder
-shares, `existing_adapter`, `adapter_names`, and `LoadedAdapters`. The
-server only calls diffusers.
-
-Six decisions:
-
-1. **A request names a file only by its stem.** `adapter_path` in the
-   rules module joins the name to the folder and refuses a name that is
-   not one plain file name: empty, `.` or `..`, anything with a path
-   separator, or one that already ends in `.safetensors`. So a program, or
-   a model calling `generateImageLocal` as a tool, can pick from the
-   folder the user configured and nothing else. This is the adapters' half
-   of property 9 in Security. The folder itself is refused at start-up
-   when it is a symlink or not a directory.
-2. **Only `.safetensors`.** A `.bin` or `.pt` adapter loads through
-   `pickle`, which runs code. The extension is fixed by `adapter_path`, so
-   no request can ask for another format, and a symlink at the file is
-   refused when it is loaded. `load_lora_weights` gets
-   `use_safetensors=True`, which turns off diffusers' fallback to a pickle
-   loader, so it reads tensors from the file and nothing else.
-3. **Only the request that asks gets it.** An adapter changes every image,
-   so `apply_lora` sets the pipeline to the request's adapter at its scale,
-   or to none, under the generation lock, before every generation. The
-   warm-up request names none. For a request that names none, it asks the
-   pipeline which adapters it holds (`get_list_adapters`) instead of
-   trusting its own list, because of decision 6.
-4. **The pipeline never sees the file name.** PEFT uses the adapter name
-   as a key in a torch `ModuleDict`, and torch refuses a dot in one, so
-   `style.v2.safetensors` would fail with "module name can't contain".
-   Each load gets a fresh name instead, `adapter_0`, `adapter_1`, and so
-   on, and `LoadedAdapters` maps file names to them. A fresh name for every
-   load, even a reload of the same file, means a name a failed load left
-   behind is never asked for again.
-5. **At most two adapters stay loaded.** An SDXL adapter runs from tens of
-   megabytes to nearly a gigabyte, and a model calling the tool may try
-   every file in the folder. Before a load, the adapter used longest ago is
-   unloaded with `delete_adapters` until one more fits. Two lets a person
-   compare two adapters without reloading either.
-6. **A failed load is undone.** SDXL's `load_lora_weights` loads the UNet
-   part, then each text encoder, and diffusers 0.40 does not undo the UNet
-   part when a text encoder fails. Left alone, the UNet would keep an
-   active adapter that a later plain request would draw with. The server
-   calls `delete_adapters` on the new name before it raises the error,
-   and records the load only once it has finished.
-
-A request naming an adapter when no folder is configured, or a family
-that takes none, is refused with the config key or the family named. A
-name the folder does not hold is a 400 listing what it does hold, read
-fresh each time. `GET /health` lists the folder's adapter names the same
-way. Both leave out what a request could not load: a symlink, a folder,
-and a file whose name `adapter_path` refuses.
+`GET /health` and missing-adapter errors list loadable files from the
+folder. Files added after startup are available without a restart.
 
 ## ControlNets
 
-A ControlNet constrains a generation to a drawing: a stick figure becomes
-the pose, a line drawing the composition. It is an inference-time input,
-loaded like a LoRA adapter, so it lives here beside adapter loading and
-not in the training package. The folder is `client.controlnetsDir`; each
-entry is a diffusers ControlNet directory (`config.json` and its
-`.safetensors`), named by its folder name. `agency local download
-controlnet-scribble-sdxl` puts a catalog ControlNet there, keeping the
-config and the one weights file, and refuses when the folder is not
-configured, since there is nowhere else a ControlNet is useful.
+`client.controlnetsDir` selects the ControlNet folder. Catalog downloads,
+such as `controlnet-scribble-sdxl`, require this setting and write into it.
+A ControlNet runs as part of an SDXL image request and cannot be served
+as a standalone model.
 
-A request names one with `controlnet` and says how strongly with
-`control_scale`, 0 to 2 with 1 as the model card says. The name goes
-through `folder_entry`, the same one-segment rule adapters use. The pair
-is refused for every family but SDXL.
+Each ControlNet occupies a subdirectory containing regular
+`config.json` and `diffusion_pytorch_model.safetensors` files.
+`controlnet_problem` rejects symlinks anywhere inside that directory.
+`controlnet_names` lists only directories that pass these checks.
+Requests select a directory through the same single-segment name check
+used for adapters. `control_scale` ranges from 0 to 2 and defaults to 1.
 
-    generateImageLocal("pen and ink, zxq_girl, surprised", "diffusers:Laxhar/noobai-XL-1.1",
-      lora: "zxq", controlnet: "controlnet-scribble-sdxl", controlImage: "./poses/jump.png")
+On first use, the server loads the ControlNet and builds a
+`StableDiffusionXLControlNetPipeline` using the base pipeline's components.
+The pipelines share the UNet and encoders, so a LoRA applied to the UNet
+also affects ControlNet generation. `ControlNetModel.from_pretrained`
+loads that fixed class without allowing `config.json` to choose an import.
 
-The drawing travels as `control_image`, the file's bytes in base64. The
-server never gets its path. `generateImageLocal` checks that `controlnet`
-and `controlImage` come together before it asks for anything, so nobody
-approves a read that could never happen. Then it raises `std::readImage`
-with the real path, and a call with a control image is the one local
-generation that raises anything. After approval, `image.ts` reads the
-file through `approvedFileBytes` in `approvedPath.ts`. A rejection sends
-no request. `tests/agency-js/image-generation-local-controlnet` checks
-the interrupt's payload, that a rejection sends nothing, and that the
-bytes sent are the file's.
+`letterbox` scales the control image to fit the requested output size
+while preserving its aspect ratio. The server centers it on black.
+The caller can invert the image with `invertControlImage`, sent as
+`control_invert`, before fitting. The server does not infer inversion
+from the filename or image brightness. It does not extract edges, depth,
+or poses from the input.
 
-A ControlNet folder must be a real directory holding `config.json` and
-`diffusion_pytorch_model.safetensors` as regular files, with no symlink
-anywhere inside it, because `from_pretrained` follows links.
-`controlnet_problem` in the rules module checks this before a load, and
-`controlnet_names` lists only folders it accepts, so `/health` and the
-missing-ControlNet message never name one a request cannot load.
+## Provider integration
 
-On first use the server loads the ControlNet and builds
-`StableDiffusionXLControlNetPipeline` from the base pipeline's
-components plus it, so the UNet and encoders are shared and a LoRA
-applied to the UNet applies to both. `ControlNetModel.from_pretrained`
-always builds that class, so a ControlNet's `config.json` cannot choose
-what to import the way `model_index.json` could.
+Agency registers the `mlx` image provider in `lib/stdlib/mlxImage.ts`.
+`loadProviderModules` registers it before user provider modules.
+`MLX_BASE_URL` and `client.baseUrl.mlx` select the shared local server
+endpoint, including its diffusers processes.
 
-Two decisions about the control image:
+The provider sends no API key and reports zero cost. It does not retry
+failed requests. It reads generation options from `config.metadata` and
+returns the server's seed with the image.
 
-1. **It is fitted, not stretched.** `letterbox` in the rules module
-   scales it to fit the request's size with its aspect ratio kept, and the
-   server centers it on black. diffusers alone would stretch a 4:3
-   drawing to a square, squashing the pose it describes. Black is what a
-   ControlNet reads as "nothing here", for scribbles and pose skeletons
-   alike, so the bands leave the model free there.
-2. **Inverting is the caller's choice.** The scribble ControlNet was
-   trained on white lines over black, and people draw dark lines on white.
-   `invertControlImage: true`, sent as `control_invert`, swaps them before
-   fitting. Nothing guesses from the folder's name or the image's
-   brightness, since a renamed folder or a dark drawing would then change
-   the output with no error.
+Both public image functions dispatch through `generateOne` in
+`lib/stdlib/image.ts`. This shares usage accounting, the `imageGeneration`
+statelog event, and guard enforcement.
 
-Nothing else is preprocessed: edges, depth, and pose extraction are the
-vision server's job. `serve` refuses to plan a ControlNet, by catalog kind
-or by its `config.json`, and says where it is loaded from.
+`localImageTimeoutMs` scales the timeout with the requested steps and
+pixel count, with allowances for attention cost and a queued request.
+When steps are omitted, it budgets for 80, the largest family limit.
+Keep that allowance in sync when changing the table. The timeout reaches
+about 107 minutes at the size and step caps.
 
-Measured on an M5 Ultra against NoobAI-XL 1.1 with a LoRA applied: 8.4 s
-for a 1024×1024 image without a ControlNet, 11.4 s for the first request
-with the scribble ControlNet, which included loading it.
+## Startup and cancellation
 
-## Downloading
+The server requires diffusers 0.40.0. `DIFFUSERS_VERSION` in
+`localServe.ts` must agree with the Python constant. The setup instructions
+also pin torch, transformers, and accelerate. `serve` checks that the
+required packages are installed.
 
-A diffusers repo often holds more than the pipeline reads. Chroma1-HD has
-a 17.8 GB single-file copy of its transformer at the top. Other repos carry
-`.bin` copies, fp16 variants, and README images.
+Image processes use the Python selected by `--python`, `client.mlx.python`,
+`AGENCY_MLX_PYTHON`, or the default `~/.agency-agent/mlx-env/bin/python`,
+in that order.
 
-`diffusersFiles` in `lib/stdlib/diffusersFiles.ts` keeps `model_index.json`
-and the files directly inside the component folders it names, and drops
-other weight formats and variant copies. A component folder with weights
-but no plain `.safetensors` file fails the download, naming the component.
+Before opening its port, the server loads the model and generates a
+512×512 warm-up image in two steps. `waitUntilLoaded` probes `GET /health`.
 
-It needs the contents of `model_index.json` to know the folders, so the
-download reads that one file into memory first with `fetchHubFileText`, then
-filters the list, then downloads. Nothing is written until the list is
-known, so an interrupted download never leaves a record that says a model
-of one file is complete.
+The generation callback checks for a disconnected client after every
+step. It calls `torch.mps.synchronize()` first so the GPU finishes the
+step before Python queues more work. Removing that wait can allow the
+entire generation to be queued before cancellation is detected.
+A request also checks for disconnection after acquiring the generation lock.
 
-## The front door's log
+`client_gone` and the HTTP error helper live in `localServerCommon.py`.
+The speech server shares them.
 
-A reply from an image process holds about a megabyte of base64. The door
-never parses it. It knows the request path, the request's `output_format`,
-and how many bytes went back, and every request makes one image:
+## Downloading and logging
 
-    POST /v1/images/generations  Tongyi-MAI/Z-Image-Turbo  200  8.6s  1 image, 1.6 MB png
+`diffusersFiles` keeps `model_index.json` and files directly inside the
+component folders it names. It excludes alternative weight formats,
+variant copies, and unrelated files. A component with weights but no
+plain `.safetensors` file fails validation.
 
-With `--verbose`, the reply shows as `<image reply, 1.6 MB>`. A failed reply
-on that path is small JSON and is shown as any other.
+The downloader reads `model_index.json` into memory with
+`fetchHubFileText` and validates the file list before writing downloads.
 
-## Python
+The shared HTTP server streams image replies without parsing their base64.
+It logs the request path, format, response size, and duration. Verbose
+logging replaces a successful response body with an image-size summary.
+Error responses remain visible as JSON.
 
-Image processes use the Python `serve` chooses for every kind: `--python`,
-`client.mlx.python`, `AGENCY_MLX_PYTHON`, then
-`~/.agency-agent/mlx-env/bin/python`. `serve` imports only the modules the
-requested kinds need, so an image-only user installs the image packages and
-no MLX:
+## Tests
 
-    ~/.agency-agent/mlx-env/bin/pip install torch==2.14.0 diffusers==0.40.0 transformers==5.17.0 accelerate==1.15.0 sentencepiece==0.2.2 protobuf==7.36.2
+The rules tests cover request validation and folder checks without
+loading torch. `tests/agency-js/image-upload-approval` covers hosted
+upload approval, multiple inputs, rejection, and the bytes sent.
+`tests/agency-js/image-generation-local-controlnet` covers control-image
+approval and transmission.
 
-The packages install and run under Python 3.14 as well as 3.12.
+The live server test requires a downloaded model and a Mac GPU:
 
-## The opt-in test
+```bash
+AGENCY_IMAGE_MODEL_DIR=<a Z-Image or Chroma directory> \
+AGENCY_IMAGE_PYTHON=<a Python with the image packages> \
+pnpm vitest run lib/cli/diffusersImageServer.live.test.ts
+```
 
-`lib/cli/diffusersImageServer.live.test.ts` starts the real server, makes a
-small image, and checks a cancelled request. It needs a model and a Mac GPU,
-so it runs only with both variables set:
-
-    AGENCY_IMAGE_MODEL_DIR=<a Z-Image or Chroma directory> \
-    AGENCY_IMAGE_PYTHON=<a Python with the packages above> \
-    pnpm vitest run lib/cli/diffusersImageServer.live.test.ts
+It generates a small image and checks cancellation.

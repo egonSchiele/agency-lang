@@ -16,6 +16,10 @@ Approving one never authorizes another. `std::viewFile` is separate from
 from `std::say`: reading bytes into a variable and sending them to a
 provider are different permissions.
 
+`std::uploadImage`, which `std::image.generateImage` raises before it
+sends a local file to a hosted provider to edit, follows the same rule:
+it is not `std::readImage`. See `docs/dev/llm/local-images.md`.
+
 The short names are the local ones. A model choosing among tools reaches
 for the shortest name, so the shortest must be the one that keeps the file
 on the machine.

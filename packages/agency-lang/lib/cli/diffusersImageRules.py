@@ -63,6 +63,8 @@ FIELDS = [
     "control_scale",
     "control_invert",
     "images",
+    "start_image",
+    "strength",
 ]
 
 # A request names a LoRA adapter by its file's name in the adapters folder
@@ -94,6 +96,9 @@ MAX_REFERENCE_IMAGES = 4
 # The smallest side and the most extreme shape FLUX.2 [klein] takes in a
 # reference. The pipeline checks both itself, but from inside the call,
 # where a failure is a server error; the server checks them on decode.
+# A start image is held to the same two limits for another reason: it is
+# scaled to cover the output size before its overflow is cropped, and a
+# tiny or thin picture would first be blown up to a huge one.
 MIN_REFERENCE_SIDE = 64
 MAX_REFERENCE_ASPECT = 8
 
@@ -112,7 +117,9 @@ MAX_REFERENCE_ASPECT = 8
 #   fit        how the server fits a decoded image to the output size:
 #              "letterbox" scales it to fit inside and centers it on black,
 #              "shrink" scales a picture over REFERENCE_PIXELS down to that
-#              many and leaves a smaller one as it is
+#              many and leaves a smaller one as it is, and "cover" scales
+#              it to cover the output and crops the overflow evenly from
+#              both sides
 #   on_white   True: a transparent image is pasted onto white before it is
 #              made RGB. False: its pixels are kept as drawn.
 #   refusal    the message for a family with no pipeline for the mode, with
@@ -145,6 +152,18 @@ INPUT_IMAGES = {
         "refusal": "{label} does not take reference images. Only {families} takes them.",
         "check": "reference_problem",
     },
+    "start_image": {
+        "mode": "img2img",
+        "max_count": 1,
+        "max_bytes": MAX_INPUT_IMAGE_BYTES,
+        "sets_size": True,
+        # Cropped, not letterboxed: black bands would be part of the
+        # picture, and the model would redraw them as black bars.
+        "fit": "cover",
+        "on_white": True,
+        "refusal": "{label} does not redraw a start image. {families} do.",
+        "check": "start_image_problem",
+    },
 }
 
 # Every field of each mode but plain, its image field among them. A field
@@ -152,6 +171,7 @@ INPUT_IMAGES = {
 MODE_FIELDS = {
     "control": ["controlnet", "control_image", "control_scale", "control_invert"],
     "reference": ["images"],
+    "img2img": ["start_image", "strength"],
 }
 
 # Room in a request body for everything but its images: the prompt and the
@@ -202,6 +222,16 @@ MAX_LOADED_ADAPTERS = 2
 #                    request may name one. Every family's pipeline can load
 #                    LoRA; only SDXL, the family people train adapters for,
 #                    has been tried with them.
+#   default_strength how much of a start image to redraw when the request
+#                    gives no strength. None for a family with no img2img
+#                    pipeline, and so for the next two keys.
+#   img2img_takes_size
+#                    True: the img2img pipeline takes width and height.
+#                    False: it has no such arguments and draws at the start
+#                    image's size. The server fits the start image to the
+#                    output size first, so the result is the same.
+#   img2img_steps    how the img2img pipeline rounds the steps it runs: a
+#                    key of STEP_FORMULAS
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
@@ -211,7 +241,7 @@ MAX_LOADED_ADAPTERS = 2
 FAMILIES = {
     "ZImagePipeline": {
         "label": "Z-Image Turbo",
-        "pipelines": {"plain": "ZImagePipeline"},
+        "pipelines": {"plain": "ZImagePipeline", "img2img": "ZImageImg2ImgPipeline"},
         "default_steps": 9,
         "max_steps": 50,
         "default_guidance": 0.0,
@@ -219,6 +249,9 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
+        "default_strength": 0.6,
+        "img2img_takes_size": True,
+        "img2img_steps": "up",
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -230,7 +263,7 @@ FAMILIES = {
     },
     "ChromaPipeline": {
         "label": "Chroma",
-        "pipelines": {"plain": "ChromaPipeline"},
+        "pipelines": {"plain": "ChromaPipeline", "img2img": "ChromaImg2ImgPipeline"},
         "default_steps": 40,
         "max_steps": 80,
         "default_guidance": 3.0,
@@ -238,6 +271,9 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
+        "default_strength": 0.9,
+        "img2img_takes_size": True,
+        "img2img_steps": "up",
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -251,7 +287,7 @@ FAMILIES = {
     },
     "QwenImagePipeline": {
         "label": "Qwen-Image",
-        "pipelines": {"plain": "QwenImagePipeline"},
+        "pipelines": {"plain": "QwenImagePipeline", "img2img": "QwenImageImg2ImgPipeline"},
         "default_steps": 50,
         "max_steps": 80,
         "default_guidance": 4.0,
@@ -261,6 +297,9 @@ FAMILIES = {
         "guidance_arg": "true_cfg_scale",
         "default_negative_prompt": " ",
         "takes_lora": False,
+        "default_strength": 0.6,
+        "img2img_takes_size": True,
+        "img2img_steps": "up",
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
@@ -283,6 +322,10 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
+        # klein edits from references instead: it has no img2img pipeline.
+        "default_strength": None,
+        "img2img_takes_size": None,
+        "img2img_steps": None,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3ForCausalLM"],
@@ -303,6 +346,7 @@ FAMILIES = {
         "pipelines": {
             "plain": "StableDiffusionXLPipeline",
             "control": "StableDiffusionXLControlNetPipeline",
+            "img2img": "StableDiffusionXLImg2ImgPipeline",
         },
         "default_steps": 28,
         "max_steps": 80,
@@ -311,6 +355,11 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": True,
+        # The pipeline's own default is 0.3, made for use after a refiner.
+        # It barely changes a style.
+        "default_strength": 0.6,
+        "img2img_takes_size": False,
+        "img2img_steps": "down",
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -472,6 +521,23 @@ def _negative_prompt_of(rules, body):
             "guidance. Leave negative_prompt empty."
         )
     return negative
+
+
+def _strength_of(rules, body, mode):
+    """How much of the start image to redraw: the request's strength, or
+    the family's default. None outside img2img mode, where mode_of has
+    already refused a strength."""
+    if mode != "img2img":
+        return None
+    strength = body.get("strength")
+    if strength is None:
+        return rules["default_strength"]
+    if not _is_number(strength) or strength <= 0 or strength > 1:
+        raise RequestError(
+            "strength must be a number above 0 and at most 1. Low keeps the start image close; "
+            f"{rules['label']} uses {rules['default_strength']} when strength is left out."
+        )
+    return float(strength)
 
 
 def _seed_of(body):
@@ -859,14 +925,28 @@ def shrink(source_width, source_height, width, height):
     return max(1, int(source_width * scale)), max(1, int(source_height * scale)), 0, 0
 
 
+def cover(source_width, source_height, width, height):
+    """Where a start image of the source size goes on a width x height
+    canvas: scaled, with its shape kept, until it covers the canvas, and
+    centered. (scaled width, scaled height, left, top), where left and top
+    are 0 or below: the overflow hangs off both sides evenly and is cut
+    off when the image is pasted."""
+    scale = max(width / source_width, height / source_height)
+    fit_width = max(width, round(source_width * scale))
+    fit_height = max(height, round(source_height * scale))
+    return fit_width, fit_height, (width - fit_width) // 2, (height - fit_height) // 2
+
+
 # How each fit in INPUT_IMAGES scales an image of the source size.
 #
 #   box     the function that gives (scaled width, scaled height, left, top)
 #   canvas  True: the scaled image is pasted at left, top on a black canvas
-#           of the output size. False: the scaled image is used as it is.
+#           of the output size, and whatever falls outside it is cut off.
+#           False: the scaled image is used as it is.
 FITS = {
     "letterbox": {"box": letterbox, "canvas": True},
     "shrink": {"box": shrink, "canvas": False},
+    "cover": {"box": cover, "canvas": True},
 }
 
 
@@ -917,24 +997,38 @@ def output_size(size, field, first_image_size):
     return parse_size(DEFAULT_SIZE)
 
 
-def reference_problem(width, height):
-    """Why FLUX.2 [klein] cannot take a reference of width x height, or
-    None when it can."""
+def _shape_problem(width, height, what):
+    """Why a picture of width x height is too small or too thin to be
+    `what`, such as "A reference", or None."""
     if min(width, height) < MIN_REFERENCE_SIDE:
         return (
-            f"the picture is {width}x{height}. A reference must be at least "
+            f"the picture is {width}x{height}. {what} must be at least "
             f"{MIN_REFERENCE_SIDE} pixels on each side."
         )
     if max(width, height) > MAX_REFERENCE_ASPECT * min(width, height):
         return (
-            f"the picture is {width}x{height}. A reference can be at most "
+            f"the picture is {width}x{height}. {what} can be at most "
             f"{MAX_REFERENCE_ASPECT} times as long as it is wide."
         )
     return None
 
 
+def reference_problem(width, height):
+    """Why FLUX.2 [klein] cannot take a reference of width x height, or
+    None when it can."""
+    return _shape_problem(width, height, "A reference")
+
+
+def start_image_problem(width, height):
+    """Why the server will not redraw a start image of width x height, or
+    None when it will. Covering a 2048x256 output with a 64x512 picture
+    already scales it to 2048x16384 before the crop; a smaller or thinner
+    one would be scaled further."""
+    return _shape_problem(width, height, "A start image")
+
+
 # The checks a row of INPUT_IMAGES names in `check`.
-CHECKS = {"reference_problem": reference_problem}
+CHECKS = {"reference_problem": reference_problem, "start_image_problem": start_image_problem}
 
 
 def image_problem(field, width, height):
@@ -944,12 +1038,45 @@ def image_problem(field, width, height):
     return None if check is None else CHECKS[check](width, height)
 
 
+def _steps_down(steps, strength):
+    # StableDiffusionXLImg2ImgPipeline.get_timesteps, which rounds down.
+    init_timestep = min(int(steps * strength), steps)
+    t_start = max(steps - init_timestep, 0)
+    return steps - t_start
+
+
+def _steps_up(steps, strength):
+    # The flow-matching img2img pipelines' get_timesteps, which round up.
+    init_timestep = min(steps * strength, steps)
+    t_start = int(max(steps - init_timestep, 0))
+    return steps - t_start
+
+
+# How an img2img pipeline counts the steps it runs from the steps asked
+# for and the strength. It skips the start of the schedule, and the
+# families round the part it skips differently. Each is written as
+# diffusers 0.40 writes it, so floating point rounds the same way: 9 steps
+# at 0.1 run 1 step "up", and 28 steps at 0.03 run none "down".
+STEP_FORMULAS = {"down": _steps_down, "up": _steps_up}
+
+
+def steps_run(rules, mode, steps, strength):
+    """How many steps the pipeline runs for a request in `mode` that asks
+    for `steps` at `strength`: all of them, except in img2img mode."""
+    if mode != "img2img":
+        return steps
+    return STEP_FORMULAS[rules["img2img_steps"]](steps, strength)
+
+
 def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     """The checked request, with the family's defaults filled in and a
     random seed when none was given. `adapters_dir` and `controlnets_dir`
     are the folders LoRA adapters and ControlNets come from, or None when
     not configured. Raises RequestError with a message that says what the
     model takes instead.
+
+    `steps_run` is how many of `steps` the pipeline runs, which is fewer
+    in img2img mode. A request that would run none is refused.
 
     `size` is the (width, height) the request gave, or None: with none,
     the size depends on the first input image, which only the server can
@@ -967,13 +1094,20 @@ def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     control = _controlnet_of(body, controlnets_dir)
     image_field = image_field_of(mode)
     input_images = input_bytes(body, image_field)
+    steps = _steps_of(rules, body)
+    strength = _strength_of(rules, body, mode)
+    run = steps_run(rules, mode, steps, strength)
+    if run == 0:
+        raise RequestError(f"strength {strength} with {steps} steps runs no steps; raise either.")
     return {
         "prompt": _prompt_of(body),
         "size": size,
         "mode": mode,
         "image_field": image_field,
         "input_images": input_images,
-        "steps": _steps_of(rules, body),
+        "steps": steps,
+        "strength": strength,
+        "steps_run": run,
         "guidance": _guidance_of(rules, body),
         "seed": _seed_of(body),
         "negative_prompt": _negative_prompt_of(rules, body),
@@ -1000,6 +1134,12 @@ def pipeline_args(rules, request, width, height):
         args["negative_prompt"] = negative
     if request["mode"] == "control":
         args["controlnet_conditioning_scale"] = request["control_scale"]
+    if request["mode"] == "img2img":
+        args["strength"] = request["strength"]
+        if not rules["img2img_takes_size"]:
+            # The pipeline draws at the start image's size, which the
+            # server has already fitted to width x height.
+            del args["width"], args["height"]
     return args
 
 

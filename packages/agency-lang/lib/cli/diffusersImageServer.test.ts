@@ -240,6 +240,8 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
       image_field: null,
       input_images: [],
       steps: 9,
+      strength: null,
+      steps_run: 9,
       guidance: 0.0,
       seed: 7,
       negative_prompt: "",
@@ -606,7 +608,7 @@ try:
 except RequestError as e:
     print(e)
 `);
-    expect(out).toBe("a request takes one of control_image or images.");
+    expect(out).toBe("a request takes one of control_image, images, or start_image.");
   });
 
   it("refuses a reference with a side under 64 pixels or a shape past 8 to 1", () => {
@@ -652,6 +654,117 @@ print(pipeline_args(rules, check_request(rules, body, None, "/c"), 1024, 768)["c
 print("controlnet_conditioning_scale" in pipeline_args(rules, check_request(rules, {"prompt": "a cat"}), 1024, 768))
 `);
     expect(out.split("\n")).toEqual(["0.8", "False"]);
+  });
+
+  it("refuses a strength with no start image", () => {
+    expect(check("ZImagePipeline", { prompt: "a watercolor", strength: 0.5 })).toBe(
+      "ERROR 400 strength goes with start_image, and this request has none.",
+    );
+  });
+
+  it("refuses a start image for FLUX.2 [klein], naming the four families that take one", () => {
+    const start = Buffer.from("png").toString("base64");
+    expect(check("Flux2KleinPipeline", { prompt: "a watercolor", start_image: start })).toBe(
+      "ERROR 400 FLUX.2 [klein] does not redraw a start image. Z-Image Turbo, Chroma, Qwen-Image, and SDXL do.",
+    );
+  });
+
+  it("refuses a start image together with a control image", () => {
+    const image = Buffer.from("png").toString("base64");
+    const body = {
+      prompt: "a cat",
+      controlnet: "scribble",
+      control_image: image,
+      start_image: image,
+    };
+    expect(check("StableDiffusionXLPipeline", body, null, "/c")).toBe(
+      "ERROR 400 a request takes one of control_image, images, or start_image.",
+    );
+  });
+
+  it("refuses a strength of 0 and one over 1, and fills in the family's default", () => {
+    const start = Buffer.from("png").toString("base64");
+    const body = { prompt: "a watercolor", start_image: start };
+    const message =
+      "ERROR 400 strength must be a number above 0 and at most 1. Low keeps the start image close; Chroma uses 0.9 when strength is left out.";
+    expect(check("ChromaPipeline", { ...body, strength: 0 })).toBe(message);
+    expect(check("ChromaPipeline", { ...body, strength: 1.5 })).toBe(message);
+    expect(check("ChromaPipeline", { ...body, strength: true })).toBe(message);
+    const filled = JSON.parse(check("ChromaPipeline", body));
+    expect([filled.mode, filled.image_field, filled.strength, filled.steps_run]).toEqual([
+      "img2img",
+      "start_image",
+      0.9,
+      36,
+    ]);
+  });
+
+  it("counts the steps an img2img pipeline runs the way each family rounds them", () => {
+    const start = Buffer.from("png").toString("base64");
+    const run = (family: Family, steps: number, strength: number) =>
+      check(family, { prompt: "a watercolor", start_image: start, steps, strength });
+    const cases: [Family, number, number, number][] = [
+      ["ZImagePipeline", 9, 0.1, 1],
+      ["ZImagePipeline", 9, 0.6, 6],
+      ["StableDiffusionXLPipeline", 28, 0.6, 16],
+    ];
+    for (const [family, steps, strength, expected] of cases) {
+      expect(JSON.parse(run(family, steps, strength)).steps_run).toBe(expected);
+    }
+    expect(run("StableDiffusionXLPipeline", 28, 0.03)).toBe(
+      "ERROR 400 strength 0.03 with 28 steps runs no steps; raise either.",
+    );
+  });
+
+  it("covers the output with a start image, cropping the overflow evenly", () => {
+    const out = rules(`
+print(fit_box("cover", 400, 300, 1024, 1024))
+print(fit_box("cover", 512, 512, 1344, 768))
+print(fit_box("cover", 1024, 1024, 1024, 1024))
+print(fit_has_canvas("cover"))
+`);
+    expect(out.split("\n")).toEqual([
+      "(1365, 1024, -171, 0)",
+      "(1344, 1344, 0, -288)",
+      "(1024, 1024, 0, 0)",
+      "True",
+    ]);
+  });
+
+  it("takes the output size from a start image, and refuses a start image too small or too thin", () => {
+    const out = rules(`
+print(output_size(None, "start_image", (4000, 3000)))
+print(image_problem("start_image", 63, 500))
+print(image_problem("start_image", 100, 801))
+print(image_problem("start_image", 4000, 3000))
+`);
+    expect(out.split("\n")).toEqual([
+      "(1168, 880)",
+      "the picture is 63x500. A start image must be at least 64 pixels on each side.",
+      "the picture is 100x801. A start image can be at most 8 times as long as it is wide.",
+      "None",
+    ]);
+  });
+
+  it("passes strength to an img2img pipeline, and no size to SDXL's, which draws at the start image's", () => {
+    const start = Buffer.from("png").toString("base64");
+    const out = rules(`
+import json
+for family in ["ZImagePipeline", "ChromaPipeline", "QwenImagePipeline", "StableDiffusionXLPipeline"]:
+    rules = FAMILIES[family]
+    request = check_request(rules, {"prompt": "a watercolor", "start_image": "${start}", "strength": 0.5})
+    args = pipeline_args(rules, request, 1024, 768)
+    print(family, args["strength"], args.get("width"), args.get("height"))
+plain = FAMILIES["StableDiffusionXLPipeline"]
+print("strength" in pipeline_args(plain, check_request(plain, {"prompt": "a cat"}), 1024, 768))
+`);
+    expect(out.split("\n")).toEqual([
+      "ZImagePipeline 0.5 1024 768",
+      "ChromaPipeline 0.5 1024 768",
+      "QwenImagePipeline 0.5 1024 768",
+      "StableDiffusionXLPipeline 0.5 None None",
+      "False",
+    ]);
   });
 
   it("has the same image fields, counts, byte caps, and body limit as the stdlib", () => {
@@ -874,7 +987,7 @@ print(use("style.v2", [2, 11]))
 
   it("refuses a field it does not know, naming the ones it takes", () => {
     expect(check("ZImagePipeline", { prompt: "a cat", style: "vivid" })).toBe(
-      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, control_invert, and images.",
+      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, control_invert, images, start_image, and strength.",
     );
   });
 
@@ -1085,6 +1198,19 @@ for invert in [False, True]:
       "(1024, 1024) (0, 0, 0) (255, 255, 255)",
       "(1024, 1024) (0, 0, 0) (0, 0, 0)",
     ]);
+  });
+
+  it("crops a start image to cover the output, keeping its middle", () => {
+    // A 400x300 picture: a red middle 300 wide, with blue strips 50 wide at
+    // each side. Covering a square crops the strips away.
+    const out = images(`
+picture = Image.new("RGB", (400, 300), (0, 0, 255))
+picture.paste(Image.new("RGB", (300, 300), (255, 0, 0)), (50, 0))
+start = decoded(saved(picture), "start_image")
+canvas = fitted(start, "start_image", 512, 512)
+print(canvas.size, canvas.getpixel((10, 256)), canvas.getpixel((501, 256)))
+`);
+    expect(out).toBe("(512, 512) (255, 0, 0) (255, 0, 0)");
   });
 
   it("shrinks a large reference to a megapixel and leaves a small one alone", () => {

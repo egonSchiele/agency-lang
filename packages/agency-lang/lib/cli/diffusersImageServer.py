@@ -7,7 +7,7 @@ GPU, loads LoRA adapters from `--adapters-dir` and ControlNets from
   POST /v1/images/generations  {"prompt", "size"?, "steps"?, "guidance"?, "seed"?,
                                 "negative_prompt"?, "output_format"?, "response_format"?, "n"?,
                                 "lora"?, "lora_scale"?, "controlnet"?, "control_image"?, "control_scale"?,
-                                "control_invert"?, "images"?}
+                                "control_invert"?, "images"?, "start_image"?, "strength"?}
   GET  /v1/models
   GET  /health                 {"status": "ok", "adapters": [names], "controlnets": [names]}
 
@@ -348,7 +348,7 @@ class Generator:
         """The image for a checked request, or None when the client hung up.
         `sock` is None for the warm-up, which nobody can hang up on."""
         torch = self.torch
-        total = request["steps"]
+        total = request["steps_run"]
 
         def on_step_end(pipe, step, timestep, callback_kwargs):
             # The GPU runs behind Python: without this wait, the loop queues

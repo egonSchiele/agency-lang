@@ -115,7 +115,7 @@ import {
   runAliasAdd as localAliasAdd,
   runAliasRemove as localAliasRemove,
 } from "@/cli/local.js";
-import { localServe } from "@/cli/localServe.js";
+import { localServe, valueFlagsOf } from "@/cli/localServe.js";
 import { modelsList, modelsRefresh } from "@/cli/hostedModels.js";
 import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
@@ -1999,11 +1999,11 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option(
       "--draft <model>",
-      "A smaller model of the same family that drafts tokens for the served models (speculative decoding)",
+      "Written after a chat model: a smaller model of the same family that drafts tokens for it (speculative decoding)",
     )
     .option(
       "--draft-tokens <n>",
-      "Tokens the draft model guesses at a time (default: 4)",
+      "Written after a chat model: tokens its draft guesses at a time (default: 4)",
       parsePositiveInt,
     )
     .option(
@@ -2026,22 +2026,30 @@ export function createProgram(deps: CliDependencies = {}): Command {
           hedgeLimit?: number;
           repeatLimit?: number;
           limitAnswers?: boolean;
-          draft?: string;
-          draftTokens?: number;
           prefillStep?: number;
           python?: string;
           logPrompts?: boolean;
           embedding: string[];
           speech: string[];
           image: string[];
+          draft?: string;
+          draftTokens?: number;
         },
-      ) =>
+        command: Command,
+      ) => {
+        // The per-model options, --draft and --draft-tokens, are read from
+        // the argv order inside localServe, since which model they follow is
+        // what decides what they mean. Commander's own values for them are
+        // dropped on purpose.
+        const { draft: _draft, draftTokens: _draftTokens, ...rest } = opts;
         // `--verbose` is the whole CLI's own flag, so serve cannot declare it
         // again; it means the same thing here, so honor it either way.
-        localServe(models, {
-          ...opts,
-          logPrompts: opts.logPrompts === true || program.opts().verbose === true,
-        }),
+        return localServe(
+          models,
+          { ...rest, logPrompts: opts.logPrompts === true || program.opts().verbose === true },
+          valueFlagsOf(command),
+        );
+      },
     );
   localCmd
     .command("remove")

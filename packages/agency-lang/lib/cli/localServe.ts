@@ -90,6 +90,178 @@ export function serveArgs(
   return args;
 }
 
+/** One model from the `serve` command line with the options written after
+ *  it. */
+export type ServeTarget = { model: string } & ModelOptions;
+
+/** The per-model options and how each one is spelled. */
+const MODEL_OPTION_FLAGS = ["--draft", "--draft-tokens"];
+
+/** The flags that name a model rather than set an option, so the model
+ *  after them is a target too. */
+const MODEL_NAMING_FLAGS = ["--embedding", "--speech", "--image"];
+
+/** The flags on a command line that take a value, by spelling: "required"
+ *  when the next token is always the value, "optional" when it is the value
+ *  only if it does not start with `-`. A flag not listed takes no value, as
+ *  `--limit-answers` does. */
+export type ValueFlags = Record<string, "required" | "optional">;
+
+/** An option as commander declares it. Only the parts `valueFlagsOf` reads. */
+type DeclaredOption = { long?: string; short?: string; required: boolean; optional: boolean };
+
+/** A command as commander declares it, with the commands above it. */
+type DeclaredCommand = { options: readonly DeclaredOption[]; parent: DeclaredCommand | null };
+
+/** The flags that take a value on `command` and every command above it,
+ *  since commander accepts an ancestor's flag after the subcommand too.
+ *  Read from the declarations, so a new flag is known here the moment it
+ *  is declared. */
+export function valueFlagsOf(command: DeclaredCommand): ValueFlags {
+  const out: ValueFlags = {};
+  for (let at: DeclaredCommand | null = command; at !== null; at = at.parent) {
+    for (const option of at.options) {
+      const arity = option.required ? "required" : option.optional ? "optional" : undefined;
+      if (arity === undefined) {
+        continue;
+      }
+      for (const spelling of [option.long, option.short]) {
+        if (spelling !== undefined) {
+          out[spelling] = arity;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** One token of a command line read as a flag: its spelling, the value
+ *  written into the token itself (`--draft=small`, `-p8080`), and how many
+ *  tokens the flag and its value take up. */
+type ReadFlag = { flag: string; value: string | undefined; width: number };
+
+/** Splits a flag token into its spelling and the value written into it:
+ *  `--draft=small` and `-p8080` carry one, `--draft` and `-p` do not. */
+function splitFlag(token: string): { flag: string; inline: string | undefined } {
+  if (token.startsWith("--")) {
+    const equals = token.indexOf("=");
+    return equals === -1
+      ? { flag: token, inline: undefined }
+      : { flag: token.slice(0, equals), inline: token.slice(equals + 1) };
+  }
+  return { flag: token.slice(0, 2), inline: token.length > 2 ? token.slice(2) : undefined };
+}
+
+/** Reads the flag at `argv[index]`, taking its value from the token itself
+ *  or from the next one as `valueFlags` says. */
+function readFlag(argv: string[], index: number, valueFlags: ValueFlags): ReadFlag {
+  const { flag, inline } = splitFlag(argv[index]);
+  const arity = valueFlags[flag];
+  if (inline !== undefined || arity === undefined) {
+    return { flag, value: inline, width: 1 };
+  }
+  const next = argv[index + 1];
+  if (arity === "optional" && (next === undefined || next.startsWith("-"))) {
+    return { flag, value: undefined, width: 1 };
+  }
+  return { flag, value: next, width: 2 };
+}
+
+/** The tokens after `local serve` on the command line, or none when the
+ *  command line is not `local serve`. Walks the operands the way commander
+ *  does, stepping over flags and their values, so a flag whose value
+ *  happens to be the word `serve` does not fool it. */
+export function argvAfterServe(argv: string[], valueFlags: ValueFlags): string[] {
+  const words = ["local", "serve"];
+  let matched = 0;
+  // argv[0] is node and argv[1] the script.
+  let index = 2;
+  while (index < argv.length && matched < words.length) {
+    const token = argv[index];
+    if (token.startsWith("-") && token.length > 1) {
+      index += readFlag(argv, index, valueFlags).width;
+      continue;
+    }
+    if (token !== words[matched]) {
+      return [];
+    }
+    matched += 1;
+    index += 1;
+  }
+  return matched === words.length ? argv.slice(index) : [];
+}
+
+/** Groups the arguments after `serve` into one entry per model, each with
+ *  the per-model options that followed it. `agency local serve a --draft d
+ *  b` drafts for `a` and not `b`. Any other flag belongs to the command as
+ *  a whole and is left for the option parser; `valueFlags` says whether it
+ *  takes the next token as its value, so `a --limit-answers b` is two
+ *  models. A parser, so its order is its nature; it holds nothing but what
+ *  it returns. */
+export function groupServeArgv(argv: string[], valueFlags: ValueFlags): ServeTarget[] {
+  const targets: ServeTarget[] = [];
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index];
+    if (!token.startsWith("-") || token.length === 1) {
+      targets.push({ model: token });
+      index += 1;
+      continue;
+    }
+    const { flag, value, width } = readFlag(argv, index, valueFlags);
+    index += width;
+    if (MODEL_NAMING_FLAGS.includes(flag)) {
+      if (value !== undefined) {
+        targets.push({ model: value });
+      }
+    } else if (MODEL_OPTION_FLAGS.includes(flag)) {
+      setModelOption(targets[targets.length - 1], flag, value ?? "<value>");
+    }
+  }
+  for (const target of targets) {
+    if (target.draftTokens !== undefined && target.draft === undefined) {
+      throw new Error(
+        `--draft-tokens needs a --draft for ${target.model}: agency local serve ${target.model} --draft <model> --draft-tokens ${target.draftTokens}`,
+      );
+    }
+  }
+  return targets;
+}
+
+/** Sets one per-model option on the model it follows, refusing one written
+ *  before any model or given twice for the same model. */
+function setModelOption(target: ServeTarget | undefined, flag: string, value: string): void {
+  if (target === undefined) {
+    throw new Error(
+      `${flag} goes after the chat model it is for: agency local serve <model> ${flag} ${value}`,
+    );
+  }
+  const key = flag === "--draft" ? "draft" : "draftTokens";
+  if (target[key] !== undefined) {
+    throw new Error(
+      `${target.model} has ${flag} twice. Write it once after the model: agency local serve ${target.model} ${flag} ${value}`,
+    );
+  }
+  if (key === "draft") {
+    target.draft = value;
+  } else {
+    target.draftTokens = Number(value);
+  }
+}
+
+/** The per-model options from grouped targets, keyed by model, for
+ *  `ServeFlags.options`. */
+export function optionsByModel(targets: ServeTarget[]): Record<string, ModelOptions> {
+  const out: Record<string, ModelOptions> = {};
+  for (const target of targets) {
+    const { model, ...options } = target;
+    if (Object.keys(options).length > 0) {
+      out[model] = options;
+    }
+  }
+  return out;
+}
+
 /** What one chat server is started with, beyond its model and port. */
 export type ChatServerSettings = {
   maxTokens: number;
@@ -669,14 +841,22 @@ export type ServeHandle = {
   close: () => Promise<void>;
 };
 
-export type ServeFlags = ReplyLimits & {
-  port?: number;
-  maxTokens?: number;
-  /** A model that drafts tokens for every chat model served, for
-   *  speculative decoding. The same forms as a served model. */
+/** The options one served model takes for itself, written after it on the
+ *  command line: `agency local serve <model> --draft <small> --draft-tokens 3`. */
+export type ModelOptions = {
+  /** A smaller model of the same family that drafts tokens for this one,
+   *  for speculative decoding. The same forms as a served model. */
   draft?: string;
   /** How many tokens the draft guesses at a time. Default DEFAULT_DRAFT_TOKENS. */
   draftTokens?: number;
+};
+
+export type ServeFlags = ReplyLimits & {
+  port?: number;
+  maxTokens?: number;
+  /** Per-model options, keyed by the model as it was named on the command
+   *  line. `groupServeArgv` builds this from the argv order. */
+  options?: Record<string, ModelOptions>;
   /** Tokens of prompt read per pass. Default from the machine's memory,
    *  see prefillStepSize. */
   prefillStep?: number;
@@ -716,7 +896,14 @@ function realDeps(): ServeDeps {
   };
 }
 
-type Planned = { name: string; dir: string; sizeBytes: number; kind: ServeKind };
+type Planned = {
+  name: string;
+  dir: string;
+  sizeBytes: number;
+  kind: ServeKind;
+  /** The chat model that drafts for this one, planned the same way. */
+  draft?: { name: string; dir: string; sizeBytes: number; tokens: number };
+};
 
 /** The flag a kind may be named with on the command line. Usually none is
  *  needed, because `serve` reads the kind from the model. A flag supplies
@@ -810,6 +997,52 @@ function planModel(value: string, cacheDir: string, flagged?: ServeKind): Planne
   return { name, dir, sizeBytes, kind };
 }
 
+/** The planned model with its draft attached, when its options name one.
+ *  The draft is planned like a served model, so it is found, checked, and
+ *  sized the same way, but it gets no route: requests go to the model it
+ *  drafts for. Only a chat model can take one. */
+function withDraft(
+  value: string,
+  model: Planned,
+  options: ModelOptions | undefined,
+  cacheDir: string,
+): Planned {
+  if (options?.draft === undefined) {
+    return model;
+  }
+  if (model.kind !== "chat") {
+    throw new Error(
+      `--draft goes after a chat model, and ${value} is ${anArticle(model.kind)} model. ` +
+        `Write it after the chat model it drafts for: agency local serve <model> --draft ${options.draft}`,
+    );
+  }
+  // Nobody named the draft's kind, so "chat" is a requirement here, not a
+  // flag: a draft the record or files say is something else is refused,
+  // and one whose kind nothing says is taken as chat.
+  const draft = planModel(options.draft, cacheDir, "chat");
+  const found = _modelKind(options.draft, draft.dir);
+  if (found !== null) {
+    assertKind(options.draft, found, "chat");
+  }
+  return {
+    ...model,
+    draft: {
+      name: draft.name,
+      dir: draft.dir,
+      sizeBytes: draft.sizeBytes,
+      tokens: options.draftTokens ?? DEFAULT_DRAFT_TOKENS,
+    },
+  };
+}
+
+/** The chat server settings for one model: the shared ones plus its draft. */
+function settingsFor(model: Planned, shared: ChatServerSettings): ChatServerSettings {
+  if (model.draft === undefined) {
+    return shared;
+  }
+  return { ...shared, draft: { dir: model.draft.dir, tokens: model.draft.tokens } };
+}
+
 /** What to do about a model whose kind nothing says. The flags work for
  *  any model. A chat model has no flag, so it is told what the files need. */
 function unknownKindMessage(value: string): string {
@@ -899,11 +1132,20 @@ export async function runServe(
   const port = flags.port ?? 8080;
   const maxTokens = flags.maxTokens ?? 16384;
   // A model named on its own is served as whatever it is. One named with a
-  // flag is served as that kind, unless the catalog says otherwise.
+  // flag is served as that kind, unless the catalog says otherwise. Either
+  // way it gets the options written after it.
+  const planWith = (value: string, flagged?: ServeKind): Planned =>
+    withDraft(
+      value,
+      planModel(value, deps.cacheDir, flagged),
+      flags.options?.[value],
+      deps.cacheDir,
+    );
+  const planNamed = (value: string): Planned => planWith(value);
   const planFlagged = (flagged: ServeKind, named: string[] | undefined) =>
-    (named ?? []).map((value) => planModel(value, deps.cacheDir, flagged));
+    (named ?? []).map((value) => planWith(value, flagged));
   const planned = [
-    ...values.map((value) => planModel(value, deps.cacheDir)),
+    ...values.map(planNamed),
     ...planFlagged("embedding", flags.embedding),
     ...planFlagged("speech", flags.speech),
     ...planFlagged("image", flags.image),
@@ -916,18 +1158,12 @@ export async function runServe(
   if (repeated !== undefined) {
     throw new Error(`${repeated} is named twice.`);
   }
-  // The draft, when there is one, is planned like a served model, so it is
-  // found, checked, and sized the same way, but it gets no route: requests
-  // go to the model it drafts for. Every chat server loads its own copy of
-  // it, so the memory warning counts it once per chat model.
-  const draft =
-    flags.draft === undefined ? undefined : planModel(flags.draft, deps.cacheDir, "chat");
-  const chatCount = planned.filter((p) => p.kind === "chat").length;
+  // A draft is loaded by the server of the model it drafts for, so the
+  // memory warning counts it with that model.
   const warning = memoryWarning(
-    [
-      ...planned.map((p) => p.sizeBytes),
-      ...(draft === undefined ? [] : Array(chatCount).fill(draft.sizeBytes)),
-    ],
+    planned.flatMap((p) =>
+      p.draft === undefined ? [p.sizeBytes] : [p.sizeBytes, p.draft.sizeBytes],
+    ),
     deps.totalmem(),
   );
   if (warning !== null) {
@@ -958,7 +1194,7 @@ export async function runServe(
     }
   };
   const routes: Route[] = [];
-  const settings: ChatServerSettings = {
+  const shared: ChatServerSettings = {
     maxTokens,
     promptCacheBytes: promptCacheBudget(deps.totalmem()),
     prefillStepSize: flags.prefillStep ?? prefillStepSize(deps.totalmem()),
@@ -969,12 +1205,14 @@ export async function runServe(
       limitAnswers: flags.limitAnswers,
     },
   };
-  if (draft !== undefined) {
-    settings.draft = { dir: draft.dir, tokens: flags.draftTokens ?? DEFAULT_DRAFT_TOKENS };
-    deps.log(`Drafting with ${draft.name} (${formatGB(draft.sizeBytes)})`);
-  }
   for (const model of planned) {
     const internalPort = await deps.freePort();
+    const settings = settingsFor(model, shared);
+    if (model.draft !== undefined) {
+      deps.log(
+        `Drafting for ${model.name} with ${model.draft.name} (${formatGB(model.draft.sizeBytes)})`,
+      );
+    }
     const args = argsFor(model, internalPort, settings, deps.cacheDir);
     const child = deps.spawn(python, args);
     children.push(child);
@@ -1039,10 +1277,18 @@ export async function runServe(
 }
 
 /** The CLI entry: serve until Ctrl-C, or until a process dies. With no
- *  model named, ask which of the downloaded ones to serve. */
-export async function localServe(values: string[], flags: ServeFlags): Promise<void> {
+ *  model named, ask which of the downloaded ones to serve. `valueFlags`
+ *  says which of the command line's flags take a value, so the per-model
+ *  options can be read from `argv` in order. */
+export async function localServe(
+  values: string[],
+  flags: ServeFlags,
+  valueFlags: ValueFlags,
+  argv: string[] = process.argv,
+): Promise<void> {
   let handle: ServeHandle;
   try {
+    flags.options = optionsByModel(groupServeArgv(argvAfterServe(argv, valueFlags), valueFlags));
     const wantsPicker =
       values.length === 0 &&
       (flags.embedding ?? []).length === 0 &&

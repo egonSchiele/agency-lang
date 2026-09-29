@@ -7,7 +7,7 @@ import type { AddressInfo } from "node:net";
 import * as smoltalk from "smoltalk";
 import { agencyStore } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
-import { _generateImage, _generateImageLocal } from "./image.js";
+import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "./image.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import { registerMlxImageProvider } from "./mlxImage.js";
 
@@ -175,19 +175,90 @@ describe("_generateImage", () => {
     });
   });
 
-  it("classifies input images into ImageRefs (edit/variation path)", async () => {
+  it("sends a local image as its bytes and a URL as a URL, never a path", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "gen-image-")));
+    const file = path.join(dir, "a.png");
+    fs.writeFileSync(file, Buffer.from("png bytes"));
     let captured: any;
     const impl: ImageImpl = async (input) => {
       captured = input;
       return okResult({ costEstimate: { totalCost: 0, currency: "USD" } });
     };
-    await withClient(impl, async () => {
-      await _generateImage("edit", "", "", "", "", ["./a.png", "https://x/b.png"], "", "");
-      expect(captured.prompt).toBe("edit");
-      expect(captured.images).toEqual([
-        { kind: "path", path: "./a.png" },
-        { kind: "url", url: "https://x/b.png" },
-      ]);
+    try {
+      await withClient(impl, async () => {
+        const sources = [
+          { source: file, local: true },
+          { source: "https://x/b.png", local: false },
+        ];
+        await _generateImage("edit", "", "", "", "", sources, "", "");
+        expect(captured.prompt).toBe("edit");
+        expect(captured.images).toEqual([
+          { kind: "bytes", data: new Uint8Array(Buffer.from("png bytes")), mimeType: "image/png" },
+          { kind: "url", url: "https://x/b.png" },
+        ]);
+      });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails without a request when an approved file has become a symlink", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "gen-image-")));
+    fs.writeFileSync(path.join(dir, "real.png"), "x");
+    fs.symlinkSync(path.join(dir, "real.png"), path.join(dir, "a.png"));
+    const impl = vi.fn(async () => okResult());
+    try {
+      await withClient(impl, async () => {
+        const sources = [{ source: path.join(dir, "a.png"), local: true }];
+        const r = await _generateImage("edit", "", "", "", "", sources, "", "");
+        expect(r.success).toBe(false);
+        expect(impl).not.toHaveBeenCalled();
+      });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("_imageSources", () => {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "image-sources-")));
+  fs.writeFileSync(path.join(dir, "a.png"), "x");
+  fs.writeFileSync(path.join(dir, "notes.txt"), "x");
+  fs.mkdirSync(path.join(dir, "folder.png"));
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  it("passes URLs and data: URIs through and marks only local paths", () => {
+    const data = "data:image/png;base64,eA==";
+    expect(_imageSources(["https://x/b.png", data, path.join(dir, "a.png")])).toEqual([
+      { source: "https://x/b.png", local: false },
+      { source: data, local: false },
+      { source: path.join(dir, "a.png"), local: true },
+    ]);
+  });
+
+  it("refuses a missing file, a directory, and a file that is not an image", () => {
+    expect(() => _imageSources([path.join(dir, "missing.png")])).toThrow(/no such file/);
+    expect(() => _imageSources([path.join(dir, "folder.png")])).toThrow(/not a regular file/);
+    expect(() => _imageSources([path.join(dir, "notes.txt")])).toThrow(/Accepted: .png/);
+  });
+});
+
+describe("_imageDestination", () => {
+  it("names the default model and the provider it belongs to", () => {
+    expect(_imageDestination("", "")).toEqual({ model: "gpt-image-1", provider: "openai" });
+  });
+
+  it("keeps a provider the caller names", () => {
+    expect(_imageDestination("my-model", "litellm")).toEqual({
+      model: "my-model",
+      provider: "litellm",
+    });
+  });
+
+  it("says unknown for a model no provider is known for", () => {
+    expect(_imageDestination("not-a-real-model", "")).toEqual({
+      model: "not-a-real-model",
+      provider: "unknown",
     });
   });
 });

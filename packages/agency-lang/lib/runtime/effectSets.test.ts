@@ -22,6 +22,11 @@ describe("builtinEffectSets", () => {
     expect(sets["FileWrite"].members).toContain("std::pasteImages");
   });
 
+  it("puts image uploads in Network and not FileRead, so approving local reads never approves sending a file away", () => {
+    expect(sets["Network"].members).toContain("std::uploadImage");
+    expect(sets["FileRead"].members).not.toContain("std::uploadImage");
+  });
+
   it("flattens a nested set to the union of its parts", () => {
     expect(sets["FileSystem"].members).toEqual([
       ...sets["FileRead"].members,

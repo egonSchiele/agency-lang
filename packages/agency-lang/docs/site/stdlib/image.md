@@ -43,7 +43,7 @@ export type ImageBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L43))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L54))
 
 ### ImageSize
 
@@ -57,7 +57,7 @@ export type ImageSize = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L51))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L62))
 
 ### GeneratedImage
 
@@ -68,7 +68,7 @@ export type GeneratedImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L56))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L67))
 
 ### ImageQuality
 
@@ -76,7 +76,7 @@ export type GeneratedImage = {
 export type ImageQuality = "low" | "medium" | "high" | "auto"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L72))
 
 ### LocalImage
 
@@ -88,9 +88,25 @@ export type LocalImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L99))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L133))
 
 ## Effects
+
+### std::uploadImage
+
+```ts
+@alwaysUnder(dir)
+@always(model)
+effect std::uploadImage {
+  dir: string;
+  filename: string;
+  provider: string;
+  model: string;
+  baseUrl: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L38))
 
 ### std::cropImage
 
@@ -104,7 +120,7 @@ effect std::cropImage {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L34))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L45))
 
 ### std::pasteImages
 
@@ -116,7 +132,7 @@ effect std::pasteImages {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L50))
 
 ## Functions
 
@@ -132,19 +148,24 @@ generateImage(
   images: string[] = [],
   apiKey: string = "",
   baseUrl: string = "",
-): Result<GeneratedImage>
+): Result<GeneratedImage> raises <std::uploadImage>
 ```
 
 Generate an image from a text prompt using a hosted provider, optionally
   editing input images. Returns a Result whose success value is
   { base64, mimeType }.
 
+  An input image that is a local file leaves the machine, so each one
+  raises std::uploadImage first, naming the file, the provider, and the
+  model. Nothing is read or sent until it is approved; a rejection sends
+  no request. A URL or a data: URI reads no local file and asks nothing.
+
   @param prompt - What to generate (or how to edit the input images)
   @param model - Image model (default: the provider's default image model)
   @param provider - Override the provider (normally derived from the model name)
   @param size - Image size, e.g. "1024x1024" (provider-dependent)
   @param quality - Image quality: "low", "medium", "high", or "auto"
-  @param images - Input images to edit/vary, as path / URL / data-URI strings
+  @param images - Input images to edit or vary: a local path (.png, .jpg, .jpeg, .gif, or .webp), an http(s) URL, or a data: URI
   @param apiKey - Override the API key
   @param baseUrl - Base URL for openai-compat / litellm providers
 
@@ -163,7 +184,9 @@ Generate an image from a text prompt using a hosted provider, optionally
 
 **Returns:** `Result<GeneratedImage>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L63))
+**Throws:** `std::uploadImage`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L74))
 
 ### generateImageLocal
 
@@ -247,7 +270,7 @@ Generate an image on this machine with a local image model. The model
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L105))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L139))
 
 ### cropImage
 
@@ -286,7 +309,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L190))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L224))
 
 ### imageSize
 
@@ -308,7 +331,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L226))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L260))
 
 ### pasteImages
 
@@ -341,4 +364,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L243))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L277))

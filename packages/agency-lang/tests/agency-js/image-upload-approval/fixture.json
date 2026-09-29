@@ -1,0 +1,106 @@
+{
+  "rejectAsked": [
+    {
+      "effect": "std::uploadImage",
+      "dirIsReal": true,
+      "filename": "cat.png",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "baseUrl": ""
+    }
+  ],
+  "rejected": {
+    "ok": false,
+    "error": "interrupt rejected"
+  },
+  "requestsAfterReject": 0,
+  "approveAsked": [
+    {
+      "effect": "std::uploadImage",
+      "dirIsReal": true,
+      "filename": "cat.png",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "baseUrl": ""
+    }
+  ],
+  "approved": {
+    "ok": true,
+    "error": ""
+  },
+  "firstOfTwo": [
+    {
+      "effect": "std::uploadImage",
+      "dirIsReal": true,
+      "filename": "cat.png",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "baseUrl": ""
+    }
+  ],
+  "secondOfTwo": [
+    {
+      "effect": "std::uploadImage",
+      "dirIsReal": true,
+      "filename": "dog.png",
+      "provider": "openai",
+      "model": "gpt-image-1",
+      "baseUrl": ""
+    }
+  ],
+  "both": {
+    "ok": true,
+    "error": ""
+  },
+  "urlAsked": {
+    "interrupted": false
+  },
+  "url": {
+    "ok": true,
+    "error": ""
+  },
+  "missingAsked": {
+    "interrupted": false
+  },
+  "missingFailed": true,
+  "requests": [
+    {
+      "model": "gpt-image-1",
+      "images": [
+        {
+          "kind": "bytes",
+          "mimeType": "image/png",
+          "bytes": "cat.png"
+        }
+      ]
+    },
+    {
+      "model": "gpt-image-1",
+      "images": [
+        {
+          "kind": "bytes",
+          "mimeType": "image/png",
+          "bytes": "cat.png"
+        },
+        {
+          "kind": "url",
+          "url": "https://example.com/cat.png"
+        },
+        {
+          "kind": "bytes",
+          "mimeType": "image/png",
+          "bytes": "dog.png"
+        }
+      ]
+    },
+    {
+      "model": "gpt-image-1",
+      "images": [
+        {
+          "kind": "url",
+          "url": "https://example.com/cat.png"
+        }
+      ]
+    }
+  ]
+}

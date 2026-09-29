@@ -275,6 +275,54 @@ image goes through `writeBinary`, which raises its own effect. A call
 with a control image reads a file, so it raises `std::readImage` first;
 see ControlNets below.
 
+## generateImage's input images, and std::uploadImage
+
+The hosted `generateImage` can edit images, and each entry of its
+`images` list is a local path, an http(s) URL, or a data: URI. A local
+path is the one that matters: its bytes leave the machine for a third
+party. So each local file raises `std::uploadImage` before anything is
+read, and a call with only URLs and data: URIs raises nothing.
+
+It is a separate effect from `std::readImage` on purpose. A rule or a
+`--approve` flag that allows reading images on this machine must not
+also allow sending them to OpenAI. For the same reason it sits in the
+`Network` capability set and not in `FileRead`, so `--approve FileRead`
+never approves an upload. The split is the one `std::ocr` and
+`std::ocrCloud` make (see `docs/dev/stdlib/ocr.md`).
+
+The payload is `{ dir, filename, provider, model, baseUrl }`.
+`_imageDestination` fills in `model` and `provider` the way the default
+client will: the model the caller named or `gpt-image-1`, and the
+provider named or the one smoltalk lists for that model, or `"unknown"`.
+A custom client may route the request somewhere else, so this is the
+best that is known before the call. `baseUrl` is the argument as given,
+empty when there is none. An "always" answer pins `model` and everything
+under `dir`: send images from this folder to this model.
+
+There is one interrupt per local file, raised in a loop after every path
+has been checked, the way `safeBash` asks every question before it runs
+anything. One interrupt per file keeps each payload a single
+`dir` and `filename`, which is what policy rules and the always scope
+match on. A list of files, as `pasteImages` raises, can be neither
+pinned nor matched by folder.
+
+The order in `generateImage`:
+
+1. `_imageSources` resolves each local path with `_realTarget` and
+   checks it by name and stat only: an image extension, a regular file,
+   and no more than `MAX_IMAGE_BYTES`. A bad path fails here, before any
+   prompt.
+2. One `std::uploadImage` per local file.
+3. After approval, `buildInput` in `image.ts` reads each file through
+   `approvedFileBytes` and sends it as a `bytes` reference with its MIME
+   type. smoltalk never gets a path, so it never opens one. A symlink
+   that appeared while the prompt was up is refused there.
+
+A rejection returns before `_generateImage` runs, so no request is sent.
+`tests/agency-js/image-upload-approval` checks the payload, that a
+rejection sends nothing, that two files are asked about one at a time,
+that the bytes sent are the files', and that a URL asks nothing.
+
 ## LoRA adapters
 
 A LoRA adapter is a small file, tens of megabytes, that changes an SDXL

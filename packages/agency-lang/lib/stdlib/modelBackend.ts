@@ -308,25 +308,52 @@ export function hubSnapshotRevision(snapshotDir: string): string {
   return path.basename(snapshotDir);
 }
 
+/** The largest `config.json` or `model_index.json` read. Real ones are a
+ *  few kilobytes. The cap keeps a file that links to something huge or
+ *  endless from hanging `agency local list`, which reads every model's. */
+const MAX_MODEL_JSON_BYTES = 1024 * 1024;
+
 /** The parsed contents of one JSON file in a model directory, or null when
- *  it is missing or not JSON. Follows a symlink the way `modelDirEntries`
- *  does, for the same reason: a Hub cache snapshot links every file into
- *  `blobs/`. The server that loads the model reads the same file. Only
- *  `config.json` and `model_index.json` are read this way, and only to
- *  decide what the directory holds. */
+ *  it is missing, not JSON, not a regular file, or over
+ *  `MAX_MODEL_JSON_BYTES`. Only `config.json` and `model_index.json` are
+ *  read this way, and only to decide what the directory holds.
+ *
+ *  A symlink is refused, except in a Hub cache snapshot, which links every
+ *  file into its repo folder's `blobs/`. There the link is followed only
+ *  when it stays inside that repo folder. */
 export function readModelJson(dir: string, name: string): Record<string, unknown> | null {
-  let text: string;
-  try {
-    text = fs.readFileSync(path.join(dir, name), "utf8");
-  } catch {
+  const file = path.join(dir, name);
+  if (!isReadableModelJson(dir, file)) {
     return null;
   }
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
     return parsed !== null && typeof parsed === "object"
       ? (parsed as Record<string, unknown>)
       : null;
   } catch {
     return null;
   }
+}
+
+function isReadableModelJson(dir: string, file: string): boolean {
+  try {
+    if (fs.lstatSync(file).isSymbolicLink() && !isHubBlobLink(dir, file)) {
+      return false;
+    }
+    const info = fs.statSync(file);
+    return info.isFile() && info.size <= MAX_MODEL_JSON_BYTES;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether `file`, a symlink in `dir`, is a Hub cache snapshot's link into
+ *  its own repo folder (`models--org--repo/`). */
+function isHubBlobLink(dir: string, file: string): boolean {
+  if (!isHubSnapshotPath(dir)) {
+    return false;
+  }
+  const repoFolder = fs.realpathSync(path.dirname(path.dirname(dir)));
+  return fs.realpathSync(file).startsWith(repoFolder + path.sep);
 }

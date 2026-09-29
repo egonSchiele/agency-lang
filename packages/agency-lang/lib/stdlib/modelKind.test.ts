@@ -2,10 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { spawnSync } from "node:child_process";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import { kindOfModelDir, isModelKind, IMAGE_PIPELINES, MODEL_KINDS } from "./modelKind.js";
-import { imageServerScript } from "../cli/localServe.js";
+import { kindOfModelDir, isModelKind, MODEL_KINDS } from "./modelKind.js";
 
 describe("kindOfModelDir", () => {
   let dir: string;
@@ -29,20 +27,20 @@ describe("kindOfModelDir", () => {
     return model;
   }
 
-  it("says image for a model_index.json naming a served pipeline", () => {
-    const zImage = modelDir("zimage", {
-      "model_index.json": { _class_name: "ZImagePipeline", vae: ["diffusers", "AutoencoderKL"] },
-    });
-    expect(kindOfModelDir(zImage)).toBe("image");
-    const chroma = modelDir("chroma", { "model_index.json": { _class_name: "ChromaPipeline" } });
-    expect(kindOfModelDir(chroma)).toBe("image");
+  it("says image for any diffusers directory, whatever its pipeline", () => {
+    // The image server decides which pipelines it runs, so a family it does
+    // not serve (or one added after this build) is still an image model.
+    for (const pipeline of ["ZImagePipeline", "QwenImagePipeline", "StableDiffusionPipeline"]) {
+      const model = modelDir(pipeline, { "model_index.json": { _class_name: pipeline } });
+      fs.mkdirSync(path.join(model, "transformer"));
+      fs.writeFileSync(path.join(model, "transformer", "model.safetensors"), "x");
+      expect(kindOfModelDir(model)).toBe("image");
+    }
   });
 
-  it("says nothing for a diffusers pipeline the image server does not serve", () => {
-    const other = modelDir("sd15", {
-      "model_index.json": { _class_name: "StableDiffusionPipeline" },
-    });
-    expect(kindOfModelDir(other)).toBeNull();
+  it("says nothing for a model_index.json with no weights beside it", () => {
+    const bare = modelDir("bare", { "model_index.json": { _class_name: "ZImagePipeline" } });
+    expect(kindOfModelDir(bare)).toBeNull();
   });
 
   it("says chat for a causal language model, and for a GGUF file's directory", () => {
@@ -82,14 +80,41 @@ describe("kindOfModelDir", () => {
     expect(kindOfModelDir(notJson)).toBeNull();
   });
 
-  it("reads through a Hub cache snapshot's symlinks", () => {
-    const blobs = modelDir("blobs", {
-      abc: JSON.stringify({ architectures: ["LlamaForCausalLM"] }),
+  /** A Hub cache snapshot whose config.json links to `target`. */
+  function snapshotLinkingTo(target: string): string {
+    const snapshot = path.join(dir, "models--org--repo", "snapshots", "abc");
+    fs.mkdirSync(snapshot, { recursive: true });
+    fs.symlinkSync(target, path.join(snapshot, "config.json"));
+    return snapshot;
+  }
+
+  const llamaConfig = JSON.stringify({ architectures: ["LlamaForCausalLM"] });
+
+  it("reads through a Hub cache snapshot's links into its own blobs", () => {
+    const blobs = path.join(dir, "models--org--repo", "blobs");
+    fs.mkdirSync(blobs, { recursive: true });
+    fs.writeFileSync(path.join(blobs, "abc"), llamaConfig);
+    expect(kindOfModelDir(snapshotLinkingTo(path.join(blobs, "abc")))).toBe("chat");
+  });
+
+  it("refuses a link that leaves the Hub repo folder, or any link outside a Hub cache", () => {
+    const outside = modelDir("outside", { "config.json": llamaConfig });
+    expect(kindOfModelDir(snapshotLinkingTo(path.join(outside, "config.json")))).toBeNull();
+    const plain = path.join(dir, "plain");
+    fs.mkdirSync(plain);
+    fs.symlinkSync(path.join(outside, "config.json"), path.join(plain, "config.json"));
+    expect(kindOfModelDir(plain)).toBeNull();
+  });
+
+  it("does not read a config.json over 1 MB, or one that is not a regular file", () => {
+    const padding = " ".repeat(1024 * 1024);
+    const big = modelDir("big", {
+      "config.json": `{"architectures": ["LlamaForCausalLM"]}${padding}`,
     });
-    const snapshot = path.join(dir, "snapshot");
-    fs.mkdirSync(snapshot);
-    fs.symlinkSync(path.join(blobs, "abc"), path.join(snapshot, "config.json"));
-    expect(kindOfModelDir(snapshot)).toBe("chat");
+    expect(kindOfModelDir(big)).toBeNull();
+    const notFile = path.join(dir, "notfile");
+    fs.mkdirSync(path.join(notFile, "config.json"), { recursive: true });
+    expect(kindOfModelDir(notFile)).toBeNull();
   });
 });
 
@@ -100,24 +125,5 @@ describe("isModelKind", () => {
     }
     expect(isModelKind("vision")).toBe(false);
     expect(isModelKind(3)).toBe(false);
-  });
-});
-
-const hasPython3 = spawnSync("python3", ["--version"], { stdio: "ignore" }).error === undefined;
-
-describe.skipIf(!hasPython3)("IMAGE_PIPELINES", () => {
-  it("lists the same pipelines as the image server's family table", () => {
-    const rules = path.join(path.dirname(imageServerScript()), "diffusersImageRules.py");
-    const run = spawnSync(
-      "python3",
-      [
-        "-c",
-        "import sys, json; sys.path.insert(0, sys.argv[1]); from diffusersImageRules import FAMILIES; print(json.dumps(sorted(FAMILIES)))",
-        path.dirname(rules),
-      ],
-      { stdio: "pipe", env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } },
-    );
-    expect(run.stderr.toString()).toBe("");
-    expect(JSON.parse(run.stdout.toString())).toEqual([...IMAGE_PIPELINES].sort());
   });
 });

@@ -739,25 +739,28 @@ export type ServeChoice = { title: string; value: string };
 /** The models `serve` can start without downloading anything: every model
  *  under the models directory whose record says every file is there, of
  *  any kind. A GGUF model runs in the Agency process instead, so it is
- *  never a choice here. */
+ *  never a choice here. Nor is a model whose kind nothing says: the picker
+ *  cannot pass the flag that `serve` would need for it. */
 export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
   // One row per repo id. The same model can sit in both layouts, and two rows
   // with the same value would let you pick it twice, which `runServe` refuses.
   const byRepo: Record<string, DownloadedModel> = {};
   for (const model of downloaded) {
-    if (model.backend !== "llama-cpp" && model.complete && byRepo[model.name] === undefined) {
+    if (
+      model.backend !== "llama-cpp" &&
+      model.complete &&
+      model.kind !== undefined &&
+      byRepo[model.name] === undefined
+    ) {
       byRepo[model.name] = model;
     }
   }
   return Object.values(byRepo)
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((m) => {
-      const kind = m.kind === undefined ? "" : `, ${m.kind}`;
-      return {
-        title: `${m.name}  (${formatGB(m.sizeBytes)}${kind})`,
-        value: `${m.backend}:${m.name}`,
-      };
-    });
+    .map((m) => ({
+      title: `${m.name}  (${formatGB(m.sizeBytes)}, ${m.kind})`,
+      value: `${m.backend}:${m.name}`,
+    }));
 }
 
 export type PickDeps = {
@@ -902,8 +905,9 @@ type Planned = {
   draft?: { name: string; dir: string; sizeBytes: number; tokens: number };
 };
 
-/** The flag a kind may be named with on the command line. None is needed:
- *  `serve` reads the kind from the model. A flag asserts it. */
+/** The flag a kind may be named with on the command line. Usually none is
+ *  needed, because `serve` reads the kind from the model. A flag supplies
+ *  the kind when nothing else says it, and overrides what the files say. */
 const FLAG_FOR_KIND: Record<ServeKind, string> = {
   chat: "",
   embedding: "--embedding",
@@ -921,9 +925,10 @@ function serveCommand(value: string, kind: ServeKind): string {
   return `agency local serve ${flag === "" ? "" : `${flag} `}${value}`;
 }
 
-/** A model named with a kind's flag must be that kind. Serving an embedding
- *  model as a chat model, or the reverse, fails only after a long load, so
- *  the flag refuses up front and names the command that works. */
+/** A model the catalog knows must be served as that kind. Serving an
+ *  embedding model as a chat model, or the reverse, fails only after a long
+ *  load, so a flag that disagrees is refused up front, naming the command
+ *  that works. */
 function assertKind(value: string, actual: ServeKind, flagged: ServeKind): void {
   if (actual !== flagged) {
     throw new Error(
@@ -962,9 +967,20 @@ function servedModelLocation(
 
 /** One model to serve: the name requests will use, the directory to start
  *  the process on, its size for the memory warning, and its kind, which
- *  picks the program that serves it. The kind comes from the catalog, the
- *  download's record, or the files, in that order. */
-function planModel(value: string, cacheDir: string): Planned {
+ *  picks the program that serves it.
+ *
+ *  `flagged` is the kind the command line gave it, if any. The catalog
+ *  outranks a flag, since it knows the models whose files mislead. A flag
+ *  outranks the download's record and the files: it is the user saying
+ *  what the model is, and the file rules can be wrong (an embedding model
+ *  whose config names a `ForCausalLM` class). With no flag, the kind comes
+ *  from the catalog, the record, or the files, in that order. */
+function planModel(value: string, cacheDir: string, flagged?: ServeKind): Planned {
+  const listed = _catalogKind(value);
+  if (flagged !== undefined && listed !== undefined) {
+    // Refuse before the files are even looked for.
+    assertKind(value, listed, flagged);
+  }
   const resolved = _resolveModel(value);
   if (resolved.backend === "llama-cpp") {
     throw new Error(
@@ -974,12 +990,9 @@ function planModel(value: string, cacheDir: string): Planned {
   }
   const name = _mlxServedName(resolved);
   const { dir, sizeBytes } = servedModelLocation(resolved, cacheDir);
-  const kind = _modelKind(value, dir);
+  const kind = flagged ?? _modelKind(value, dir);
   if (kind === null) {
-    throw new Error(
-      `${value} is a model directory of a shape agency does not know. Say what it is when ` +
-        `downloading: agency local download --kind <chat|embedding|speech|image> ${value}`,
-    );
+    throw new Error(unknownKindMessage(value));
   }
   return { name, dir, sizeBytes, kind };
 }
@@ -1003,8 +1016,14 @@ function withDraft(
         `Write it after the chat model it drafts for: agency local serve <model> --draft ${options.draft}`,
     );
   }
-  const draft = planModel(options.draft, cacheDir);
-  assertKind(options.draft, draft.kind, "chat");
+  // Nobody named the draft's kind, so "chat" is a requirement here, not a
+  // flag: a draft the record or files say is something else is refused,
+  // and one whose kind nothing says is taken as chat.
+  const draft = planModel(options.draft, cacheDir, "chat");
+  const found = _modelKind(options.draft, draft.dir);
+  if (found !== null) {
+    assertKind(options.draft, found, "chat");
+  }
   return {
     ...model,
     draft: {
@@ -1022,6 +1041,20 @@ function settingsFor(model: Planned, shared: ChatServerSettings): ChatServerSett
     return shared;
   }
   return { ...shared, draft: { dir: model.draft.dir, tokens: model.draft.tokens } };
+}
+
+/** What to do about a model whose kind nothing says. The flags work for
+ *  any model. A chat model has no flag, so it is told what the files need. */
+function unknownKindMessage(value: string): string {
+  return [
+    `agency cannot tell from its files what kind of model ${value} is.`,
+    `If it is an embedding, speech, or image model, name the kind with its flag:`,
+    `  ${serveCommand(value, "embedding")}`,
+    `  ${serveCommand(value, "speech")}`,
+    `  ${serveCommand(value, "image")}`,
+    `A chat model needs a config.json whose "architectures" names a class ending in ` +
+      `ForCausalLM or ForConditionalGeneration.`,
+  ].join("\n");
 }
 
 /** Resolves with a description once the child exits. */
@@ -1099,20 +1132,18 @@ export async function runServe(
   const port = flags.port ?? 8080;
   const maxTokens = flags.maxTokens ?? 16384;
   // A model named on its own is served as whatever it is. One named with a
-  // flag must be that kind. Either way it gets the options written after it.
-  const planNamed = (value: string): Planned =>
-    withDraft(value, planModel(value, deps.cacheDir), flags.options?.[value], deps.cacheDir);
+  // flag is served as that kind, unless the catalog says otherwise. Either
+  // way it gets the options written after it.
+  const planWith = (value: string, flagged?: ServeKind): Planned =>
+    withDraft(
+      value,
+      planModel(value, deps.cacheDir, flagged),
+      flags.options?.[value],
+      deps.cacheDir,
+    );
+  const planNamed = (value: string): Planned => planWith(value);
   const planFlagged = (flagged: ServeKind, named: string[] | undefined) =>
-    (named ?? []).map((value) => {
-      // The catalog can refuse before the files are even looked for.
-      const known = _catalogKind(value);
-      if (known !== undefined) {
-        assertKind(value, known, flagged);
-      }
-      const model = planNamed(value);
-      assertKind(value, model.kind, flagged);
-      return model;
-    });
+    (named ?? []).map((value) => planWith(value, flagged));
   const planned = [
     ...values.map(planNamed),
     ...planFlagged("embedding", flags.embedding),

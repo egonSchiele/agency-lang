@@ -1,13 +1,18 @@
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import { _resolveModel, _mlxServedName, _localModelKindOf } from "./localModels.js";
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
-import { _approvedFilePath } from "./approvedPath.js";
+import { approvedFileBytes } from "./approvedPath.js";
 
 /** The TypeScript half of `std::vision`: one HTTP call behind three thin
  *  exports. The Agency side has already raised `std::vision` for the
  *  image's real path; this side re-validates that spelling, checks the
- *  model is a vision model, and posts to the server `agency local serve`
- *  runs. */
+ *  model is a vision model, reads the image, and posts its bytes to the
+ *  server `agency local serve` runs. The server never opens a path a
+ *  request names. */
+
+/** The largest image sent. `MAX_IMAGE_BYTES` in
+ *  lib/cli/localServerCommon.py is the same, and a test compares them. */
+export const MAX_IMAGE_BYTES = 50_000_000;
 
 /** The route each task answers on, under the server's `/v1`. */
 const ROUTE_FOR_TASK = {
@@ -55,9 +60,9 @@ async function visionRequest(
   if ("error" in checked) {
     return checked;
   }
-  let imagePath: string;
+  let image: string;
   try {
-    imagePath = _approvedFilePath(spelling);
+    image = approvedFileBytes(spelling, MAX_IMAGE_BYTES).toString("base64");
   } catch (err) {
     return { error: (err as Error).message };
   }
@@ -66,7 +71,7 @@ async function visionRequest(
     res = await fetch(`${mlxBaseUrl()}${ROUTE_FOR_TASK[task]}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: checked.servedName, image: imagePath, ...fields }),
+      body: JSON.stringify({ model: checked.servedName, image, ...fields }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {

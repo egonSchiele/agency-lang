@@ -96,6 +96,7 @@ build:
 	cp lib/cli/visionServer.py dist/lib/cli/visionServer.py
 	cp lib/cli/visionRules.py dist/lib/cli/visionRules.py
 	cp lib/cli/imageTools.py dist/lib/cli/imageTools.py
+	cp lib/cli/imageToolsRules.py dist/lib/cli/imageToolsRules.py
 	rm -rf dist/lib/stdlib/providers
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
 	cp lib/stdlib/visionOcr.jxa dist/lib/stdlib/visionOcr.jxa

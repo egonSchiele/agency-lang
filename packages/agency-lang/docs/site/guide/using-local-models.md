@@ -207,7 +207,7 @@ Browse what is available with `agency local list`. MLX entries show `mlx` in the
 agency local serve
 ```
 
-With no model named, this shows you the MLX models you have downloaded, and you pick the ones to serve. Name them yourself to skip the picker:
+With no model named, this shows you the MLX and diffusers models you have downloaded, each with its kind (chat, embedding, speech, or image), and you pick the ones to serve. Name them yourself to skip the picker:
 
 ```bash
 agency local serve mlx:mlx-community/Qwen3.8-27B-4bit
@@ -341,7 +341,7 @@ Then name the adapter in the call, by its file name without `.safetensors`. A re
 const r = generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/noobai-XL-1.1", lora: "sketch", loraScale: 0.9)
 ```
 
-`loraScale` is how strongly the adapter is applied: 1 is as trained, less is subtler, and up to 2 is allowed. The server loads an adapter the first time it is asked for, so a file you drop into the folder after training works at once. Adapters are `.safetensors` files only, and a request can only pick a file from the folder you configured, never name a path itself.
+`loraScale` is how strongly the adapter is applied: 1 is as trained, less is subtler, and up to 2 is allowed. The server loads an adapter the first time it is asked for, so a file you drop into the folder after training works at once, and when you train it again under the same name, the next request uses the new weights. Adapters are `.safetensors` files only, and a request can only pick a file from the folder you configured, never name a path itself.
 
 ## Look at images on a Mac
 
@@ -357,23 +357,26 @@ Then ask. Each function does one thing and returns a `Result`, so a loop over a 
 ```ts
 import { detectObjects, tagImage } from "std::vision"
 import { cropImage } from "std::image"
-import { glob, write } from "std::shell"
+import { glob } from "std::shell"
 
 node main() {
-  const pages = glob("*.png", "./comics") with approve
+  const pages = glob("comics/*.png") catch []
   for (page in pages) {
     const found = detectObjects(page, ["person", "desk", "chair"], "florence-2") catch []
     for (hit in found) {
-      const out = "./dataset/${hit.label}_${hit.id}.png"
+      const out = "dataset/${hit.label}_${hit.id}.png"
       cropImage(page, hit.box, out, pad: 0.05)
       const tags = tagImage(out, "wd14-tagger") catch []
-      write("${out}.txt", map(tags, \t -> t.tag).join(", "))
+      const names = map(tags) as t {
+        return t.tag
+      }
+      write("${out}.txt", names.join(", "))
     }
   }
 }
 ```
 
-Run it with `--approve std::vision --approve std::cropImage --approve std::write` and it labels a few hundred crops unattended. Every call raises an effect naming the file it reads or writes, so a policy can allow tagging under `./dataset` and nothing else. Partial application narrows a tool before an agent gets it: `detectObjects.partial(labels: ["person"], model: "florence-2")` is a person-finder, and `cropImage` only ever writes a file that does not exist yet.
+Run it with `--approve std::glob --approve std::vision --approve std::cropImage --approve std::write` and it labels a few hundred crops unattended. Every call raises an effect naming the file it reads or writes, so a policy can allow tagging under `./dataset` and nothing else. Partial application narrows a tool before an agent gets it: `detectObjects.partial(labels: ["person"], model: "florence-2")` is a person-finder, and `cropImage` only ever writes a file that does not exist yet.
 
 ## What is different about a local model
 

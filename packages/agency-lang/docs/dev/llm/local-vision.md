@@ -25,8 +25,10 @@ is what shipped and why.
 Both are catalogued with an `mlx:` URI, because that is how every served
 repo is named and downloaded; the kind, not the backend, picks the
 server. `visionFiles` in `lib/stdlib/visionFiles.ts` cuts a vision
-download to what the server reads: the WD14 repo ships the same weights
-as `.onnx`, `.safetensors`, and `.msgpack`, and only the first is kept.
+download to what the server reads. The WD14 repo ships the same weights
+as `.onnx`, `.safetensors`, and `.msgpack`. The server reads only the
+`.onnx`, so a snapshot with `model.onnx` beside `selected_tags.csv`
+keeps that file and drops the other two.
 Florence-2 is the community conversion, which transformers 5.17 loads
 with its own `Florence2ForConditionalGeneration`; the original
 `microsoft/Florence-2-large` ships a `modeling_florence2.py`, which is
@@ -51,8 +53,8 @@ Florence-2, so a tagger-only user installs no torch.
 `visionServer.py` has the properties `local-images.md` lists for the
 image server: bound to `127.0.0.1`, one model per process chosen at
 start, a family table that decides what is imported, `HF_HUB_OFFLINE=1`
-before any import, `use_safetensors`, no `trust_remote_code`, a 64 KB
-request body, one request at a time under a lock, and a warm-up before
+before any import, `use_safetensors`, no `trust_remote_code`, a request body
+of one image as base64 plus 64 KB, one request at a time under a lock, and a warm-up before
 the port opens. The rules are in `visionRules.py`, which imports nothing
 from torch or onnxruntime, so `visionServer.test.ts` runs them with
 `python3`.
@@ -63,7 +65,8 @@ runner has one method per route it lists and nothing else; the handler
 dispatches by route name after `check_request` confirmed the family
 lists it. No route method asks which family it is.
 
-The routes, all `POST`, all taking `{"model", "image", ...}`:
+The routes, all `POST`, all taking `{"model", "image", ...}`, where
+`image` is the image's bytes as base64:
 
 | Route | Extra fields | Reply |
 |---|---|---|
@@ -73,20 +76,37 @@ The routes, all `POST`, all taking `{"model", "image", ...}`:
 
 Boxes are normalized to 0..1 with the origin at the top left, the shape
 `std::ocr` returns, so a box from either goes to `cropImage`. Florence-2
-gives no scores, so its detections and tags score 1. A route the family
+gives no scores, so its detections and tags score 1, and the
+`threshold` of `detectObjects` drops nothing from it.
+
+Florence-2's detection task takes one phrase: the prompt is "Locate
+{phrase} in the image." Sent `"person, desk, chair"`, it looks for that
+whole phrase and labels boxes with it. So `detections_of` runs the task
+once per label, and labels each box with the label that was asked for,
+not the text the model wrote back. Each label is one more generation,
+which is why the docstring says each label adds to the time. A route the family
 does not answer is a 404 naming the ones it does; `GET /health` lists
 them, and `serve` waits on it as it does for an image process.
 
-**Images are named, not sent.** A request carries the image's absolute
-path. `check_image_path` in `localServerCommon.py` refuses a relative
-path, a symlink at any component, a directory, a missing file, an
-extension that is not an image, and a file over 50 MB, and
-`read_image_bytes` opens what passed with `O_NOFOLLOW`. The stdlib sends
-the real spelling it raised an effect for, so the server reading it is
-the same read the approver saw. The server never lists a directory and
-never writes. macOS's `/tmp` and `/var` are symlinks, which is why a
-test that hands the server a temp path realpaths it first, as the
-stdlib does.
+**Images are sent, not named.** A request carries the image's bytes as
+base64, never a path. The stdlib raises `std::vision` for the file,
+reads it after approval, and sends what it read. So the server opens no
+file a request chose. Any local process can reach the port, and so can
+an Agency program whose `fetch` to `127.0.0.1` was approved. With a
+path in the request, either could have the server describe any image on
+the machine without the user seeing a file prompt. With bytes, it can
+describe only images it could already read. The adapters folder in
+`local-images.md` follows the same rule.
+
+`image_bytes_of` in `localServerCommon.py` refuses anything that is not
+base64 of at most 50 MB, checking the length before decoding.
+`visionServer.py` then decodes the bytes with Pillow, allowing only PNG,
+JPEG, WebP, and GIF. It refuses an image over 100 million pixels, which
+is a small file that would decode to a huge one. The body limit is the
+base64 length of 50 MB plus 64 KB for the settings. `vision.ts` has the
+same 50 MB limit in `MAX_IMAGE_BYTES`, and refuses a larger file before
+reading it. A test keeps the two limits equal. The server never lists a
+directory and never writes.
 
 ## The stdlib
 
@@ -97,7 +117,10 @@ one permission covers them; the task and model are in the payload for a
 policy that wants to allow tagging under `./dataset` and nothing else.
 Each function follows `readTextBlocks` in `std::ocr`: `_realTarget`
 before the interrupt, the real `dir` and `filename` in the payload, and
-`_approvedFilePath` on that spelling after approval, in `vision.ts`.
+`approvedFileBytes` on that spelling after approval, in `vision.ts`.
+`approvedFileBytes` holds the spelling with `fixedPath`, so a symlink
+planted while the prompt was pending is refused, and reads through
+`readBytes` in `contained.ts`.
 
 `vision.ts` is one HTTP call, `visionRequest`, behind three thin exports.
 It refuses a model whose kind is known and is not `vision` before any
@@ -120,10 +143,23 @@ model needs. Each command is a function of its arguments returning one
 dict, and `main` is a table lookup, so adding one is a row.
 
 `cropImage` raises `std::cropImage` with both real paths, since one
-approval is "read this, write that"; `pasteImages` raises
-`std::pasteImages` with every input in `files`, as `applyPatch` lists
-the files it touches. Output files are created with mode `x`, so an
-existing file is refused, never overwritten. `imageSize` raises
+approval is "read this, write that". Its "approve always" answer pins
+both folders with `@alwaysUnder(dir, outDir)`, as `std::copy` does. A
+rule saved for one crop into `./crops` does not let a later crop read
+from another folder. `pasteImages` raises `std::pasteImages` with every
+input in `files`, as `applyPatch` lists the files it touches. Like
+`applyPatch`, it has no "always" tag, because a list of files cannot be
+pinned to one folder. It checks every path before the interrupt, so a
+bad one fails before anyone is asked. Both effects are in the
+`FileWrite` capability set, so `--reject FileWrite` refuses them.
+`std::vision` is in `FileRead`. Output files are created with mode `x`, so an
+existing file is refused, never overwritten. The arithmetic, where a
+crop box lands and where each image goes on a paste canvas, is in
+`imageToolsRules.py`, which imports no Pillow. `paste` reads each input's
+size from its header first, and refuses a canvas over 100 million pixels
+before allocating it. Pillow refuses an input over the same limit, and
+its decompression-bomb error comes back as a failure message, not a
+traceback. `imageSize` raises
 `std::readImage`, the effect for reading an image's bytes, because that
 is what it does.
 
@@ -141,18 +177,26 @@ model: "florence-2")` is a person-finder.
 ## Tests
 
 - `visionServer.test.ts` runs the rules module with `python3`: the
-  families, every refusal, the path rules against real files and
-  symlinks in a temp directory, the version pins, and the warm-up.
+  families, every refusal, the base64 and size rules, the limits the
+  stdlib shares, the version pins, and the warm-up. It also runs
+  Florence-2's `detections_of` with a fake model, to check one pass per
+  label.
 - `vision.test.ts` drives the three helpers against a stand-in HTTP
   server: the body per function, the numbering, the refusals of a model
   of another kind and of a symlinked image, and the no-server message.
-- `imageTools.test.ts` runs the real script against PNGs it makes with
-  the same Pillow, skipped where that Python is not there.
+- `imageTools.test.ts` runs `imageToolsRules.py` with `python3`, so CI
+  covers the crop box, the paste layout, and the canvas limit. It also
+  runs the real script against PNGs it makes with the same Pillow,
+  skipped where that Python is not there.
 - `visionFiles.test.ts`, the kind rules in `modelKind.test.ts`, the serve
   test that starts a tagger and a Florence-2 with the right imports, and
   the log summary in `serveLog.test.ts`.
-- `tests/agency/vision.agency` checks the effect's payload with a
-  handler that rejects, so it runs with no model.
+- `tests/agency/vision.agency` and `tests/agency/imageEffects.agency`
+  check the payloads of `std::vision`, `std::cropImage`,
+  `std::pasteImages`, and `std::readImage` with a handler that rejects,
+  so they run with no model and no Pillow.
+- `alwaysTag.stdlib.test.ts` pins what "approve always" means for each
+  of those effects.
 
 ## Timings
 

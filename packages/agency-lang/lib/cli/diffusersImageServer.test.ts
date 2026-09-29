@@ -183,6 +183,99 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
     expect([sdxl.steps, sdxl.guidance]).toEqual([28, 5.5]);
   });
 
+  it("picks a seed when the request names none", () => {
+    const out = JSON.parse(check("ZImagePipeline", { prompt: "a cat" }));
+    expect(Number.isInteger(out.seed)).toBe(true);
+    expect(out.seed).toBeGreaterThanOrEqual(0);
+    expect(out.seed).toBeLessThanOrEqual(2 ** 32 - 1);
+  });
+
+  it("takes a negative prompt and guidance for Chroma", () => {
+    const out = JSON.parse(
+      check("ChromaPipeline", {
+        prompt: "a cat",
+        negative_prompt: "blurry",
+        guidance: 4.5,
+        steps: 30,
+        size: "2048x1920",
+        output_format: "webp",
+        n: 1,
+        response_format: "b64_json",
+        model: "/some/dir",
+      }),
+    );
+    expect(out).toMatchObject({
+      negative_prompt: "blurry",
+      guidance: 4.5,
+      steps: 30,
+      width: 2048,
+      height: 1920,
+      output_format: "webp",
+    });
+  });
+
+  it("refuses what Z-Image Turbo cannot use", () => {
+    expect(check("ZImagePipeline", { prompt: "a cat", negative_prompt: "blurry" })).toBe(
+      "ERROR 400 Z-Image Turbo does not use a negative prompt, because it runs without guidance. Leave negative_prompt empty.",
+    );
+    expect(check("ZImagePipeline", { prompt: "a cat", guidance: 3 })).toBe(
+      "ERROR 400 Z-Image Turbo runs without guidance. Leave guidance empty.",
+    );
+  });
+
+  it("accepts a guidance equal to the family's own value", () => {
+    // A caller that copies the default from the docs is not asking for guidance.
+    const out = JSON.parse(check("ZImagePipeline", { prompt: "a cat", guidance: 0 }));
+    expect(out.guidance).toBe(0);
+  });
+
+  it("refuses steps outside the family's range", () => {
+    const message =
+      "ERROR 400 steps must be between 1 and 50 for Z-Image Turbo. Its model card uses 9.";
+    expect(check("ZImagePipeline", { prompt: "a cat", steps: 0 })).toBe(message);
+    expect(check("ZImagePipeline", { prompt: "a cat", steps: 51 })).toBe(message);
+    expect(check("ZImagePipeline", { prompt: "a cat", steps: 2.5 })).toBe(message);
+    expect(check("ZImagePipeline", { prompt: "a cat", steps: true })).toBe(message);
+  });
+
+  it("refuses sizes that are malformed, not multiples of 16, or too large", () => {
+    const shape = 'ERROR 400 size must be two multiples of 16 joined by "x", such as "1024x1024".';
+    expect(check("ZImagePipeline", { prompt: "a cat", size: "1000x1000" })).toBe(shape);
+    expect(check("ZImagePipeline", { prompt: "a cat", size: "big" })).toBe(shape);
+    expect(check("ZImagePipeline", { prompt: "a cat", size: 1024 })).toBe(shape);
+    expect(check("ZImagePipeline", { prompt: "a cat", size: "4096x4096" })).toBe(
+      "ERROR 400 Each side of size must be from 256 to 2048.",
+    );
+    expect(check("ZImagePipeline", { prompt: "a cat", size: "4096x960" })).toBe(
+      "ERROR 400 Each side of size must be from 256 to 2048.",
+    );
+    expect(check("ZImagePipeline", { prompt: "a cat", size: "2048x2048" })).toBe(
+      "ERROR 400 size 2048x2048 is 4,194,304 pixels; this server makes at most 4,000,000.",
+    );
+  });
+
+  it("refuses a missing or empty prompt", () => {
+    const message = "ERROR 400 prompt must be a non-empty string.";
+    expect(check("ZImagePipeline", {})).toBe(message);
+    expect(check("ZImagePipeline", { prompt: "  " })).toBe(message);
+    expect(check("ZImagePipeline", { prompt: 5 })).toBe(message);
+  });
+
+  it("refuses OpenAI settings it does not take", () => {
+    expect(check("ZImagePipeline", { prompt: "a cat", quality: "high" })).toBe(
+      "ERROR 400 quality is not a setting of this server. Use steps instead.",
+    );
+    expect(check("ZImagePipeline", { prompt: "a cat", n: 2 })).toBe(
+      "ERROR 400 n must be 1. Make one request per image.",
+    );
+    expect(check("ZImagePipeline", { prompt: "a cat", response_format: "url" })).toBe(
+      'ERROR 400 response_format "url" is not supported. This server returns b64_json only.',
+    );
+    expect(check("ZImagePipeline", { prompt: "a cat", output_format: "gif" })).toBe(
+      'ERROR 400 output_format "gif" is not supported. Use png, jpeg, or webp.',
+    );
+  });
+
   it("applies an adapter from the folder only to the request that names it", () => {
     const named = JSON.parse(
       check(
@@ -242,6 +335,7 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
   it("joins an adapter name to the folder, and refuses a name that is not one file name", () => {
     expect(adapterPath("sketch")).toBe("/a/sketch.safetensors");
     expect(adapterPath("my-style_2")).toBe("/a/my-style_2.safetensors");
+    expect(adapterPath("style.v2")).toBe("/a/style.v2.safetensors");
     const refused =
       'REFUSED lora must be an adapter\'s name: its file name in the adapters folder without .safetensors, such as "sketch" for sketch.safetensors. Got ';
     expect(adapterPath("../x")).toBe(`${refused}'../x'.`);
@@ -262,6 +356,100 @@ print(adapter_names(d))
 print(adapter_names(os.path.join(d, "missing")))
 `);
     expect(out.split("\n")).toEqual(["['a', 'b']", "[]"]);
+  });
+
+  it("lists only the adapters a request could load", () => {
+    // A symlink, a folder, and a file whose name a request cannot spell
+    // are all left out, so /health never lists an adapter that then fails.
+    const out = rules(`
+import os, shutil, tempfile
+d = tempfile.mkdtemp()
+open(os.path.join(d, "style.v2.safetensors"), "w").close()
+open(os.path.join(d, "x.safetensors.safetensors"), "w").close()
+os.mkdir(os.path.join(d, "folder.safetensors"))
+os.symlink(os.path.join(d, "style.v2.safetensors"), os.path.join(d, "link.safetensors"))
+print(adapter_names(d))
+shutil.rmtree(d)
+`);
+    expect(out).toBe("['style.v2']");
+  });
+
+  it("finds an adapter's file and its stamp, and refuses a symlink or a missing file", () => {
+    const out = rules(`
+import os, shutil, tempfile
+d = tempfile.mkdtemp()
+target = os.path.join(d, "sketch.safetensors")
+with open(target, "w") as f:
+    f.write("one")
+path, stamp = existing_adapter(d, "sketch")
+print(path == target, stamp[1])
+with open(target, "w") as f:
+    f.write("retrained")
+print(existing_adapter(d, "sketch")[1] != stamp)
+os.symlink(target, os.path.join(d, "link.safetensors"))
+for name in ["link", "missing"]:
+    try:
+        existing_adapter(d, name)
+    except RequestError as e:
+        print(str(e).replace(d, "DIR"))
+shutil.rmtree(d)
+`);
+    expect(out.split("\n")).toEqual([
+      "True 3",
+      "True",
+      'There is no adapter "link" in DIR. It has sketch.',
+      'There is no adapter "missing" in DIR. It has sketch.',
+    ]);
+  });
+
+  it("refuses an adapters folder that is a symlink or not a folder", () => {
+    const out = rules(`
+import os, shutil, tempfile
+d = tempfile.mkdtemp()
+folder = os.path.join(d, "adapters")
+os.mkdir(folder)
+os.symlink(folder, os.path.join(d, "link"))
+print(check_adapters_dir(folder) == folder, check_adapters_dir(None))
+for name in ["link", "missing"]:
+    try:
+        check_adapters_dir(os.path.join(d, name))
+    except ValueError as e:
+        print(str(e).replace(d, "DIR"))
+shutil.rmtree(d)
+`);
+    expect(out.split("\n")).toEqual([
+      "True None",
+      "--adapters-dir DIR/link is a symlink. Name the folder itself.",
+      "--adapters-dir DIR/missing is not a folder.",
+    ]);
+  });
+
+  it("loads each adapter under a fresh name without dots, and keeps at most two", () => {
+    const out = rules(`
+a = LoadedAdapters(limit=2)
+def use(name, stamp):
+    found = a.find(name, stamp)
+    if found is not None:
+        return f"{name}: kept {found}"
+    dropped = a.make_room(name)
+    loaded_as = a.next_name()
+    a.add(name, loaded_as, stamp)
+    return f"{name}: load {loaded_as}, unload {dropped}"
+print(use("style.v2", [1, 10]))
+print(use("sketch", [1, 20]))
+print(use("style.v2", [1, 10]))
+print(use("inky", [1, 30]))
+print(use("style.v2", [2, 11]))
+`);
+    expect(out.split("\n")).toEqual([
+      "style.v2: load adapter_0, unload []",
+      "sketch: load adapter_1, unload []",
+      "style.v2: kept adapter_0",
+      // sketch was used longest ago, so it makes room for inky.
+      "inky: load adapter_2, unload ['adapter_1']",
+      // A retrained file has a new stamp: the old load goes, the new one gets a new name.
+      "style.v2: load adapter_3, unload ['adapter_0']",
+    ]);
   });
 
   it("refuses a field it does not know, naming the ones it takes", () => {

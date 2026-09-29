@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from localServerCommon import ImagePathError, check_image_path  # noqa: E402
+from localServerCommon import MAX_IMAGE_BYTES, ImageDataError, base64_length, image_bytes_of  # noqa: E402
 
 # The releases these rules and the server were written against. The server
 # refuses any other, because it reaches into each library's processor and
@@ -19,9 +19,10 @@ from localServerCommon import ImagePathError, check_image_path  # noqa: E402
 TRANSFORMERS_VERSION = "5.17.0"
 ONNXRUNTIME_VERSION = "1.30.0"
 
-# A request body is a path and a few settings. Anything bigger is not a
-# request this server makes sense of.
-MAX_BODY_BYTES = 64 * 1024
+# A request body is one image as base64 and a few settings. Anything
+# bigger is not a request this server makes sense of.
+MAX_SETTINGS_BYTES = 64 * 1024
+MAX_BODY_BYTES = base64_length(MAX_IMAGE_BYTES) + MAX_SETTINGS_BYTES
 
 # An open-vocabulary detector takes the labels as text. Fifty is a long
 # list already; a longer one is a sign the caller wants "everything", and
@@ -151,8 +152,8 @@ def _is_integer(value):
 
 def _image_of(body):
     try:
-        return check_image_path(body.get("image"))
-    except ImagePathError as err:
+        return image_bytes_of(body.get("image"))
+    except ImageDataError as err:
         raise RequestError(str(err))
 
 
@@ -217,7 +218,7 @@ def _check_fields(route, body):
 
 
 def check_request(rules, route, body):
-    """The checked request for one route: the image's path and the route's
+    """The checked request for one route: the image's bytes and the route's
     settings with defaults filled in. Raises RequestError with a message
     that says what the route takes instead, or 404 for a route the family
     does not answer."""
@@ -242,12 +243,12 @@ def check_request(rules, route, body):
     return checked
 
 
-def warm_up_request(rules, image_path):
+def warm_up_request(rules, image_base64):
     """The route and body of the one request the server makes to itself
     before it opens its port: the family's first route, on a small image
     the server drew."""
     route = rules["routes"][0]
-    body = {"image": image_path}
+    body = {"image": image_base64}
     if route == "detections":
         body["labels"] = ["square"]
     return route, body

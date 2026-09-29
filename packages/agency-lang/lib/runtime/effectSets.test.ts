@@ -13,7 +13,13 @@ describe("builtinEffectSets", () => {
       "std::ls",
       "std::glob",
       "std::grep",
+      "std::vision",
     ]);
+  });
+
+  it("puts the image functions that write a file in FileWrite, so --reject FileWrite stops them", () => {
+    expect(sets["FileWrite"].members).toContain("std::cropImage");
+    expect(sets["FileWrite"].members).toContain("std::pasteImages");
   });
 
   it("flattens a nested set to the union of its parts", () => {

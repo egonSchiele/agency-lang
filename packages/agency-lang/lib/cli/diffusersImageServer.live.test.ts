@@ -95,6 +95,34 @@ describe.skipIf(modelDir === "" || python === "")("diffusersImageServer.py on a 
     }
     expect(server.stderr).toMatch(/Stopped after \d+ of 40 steps: the client hung up\./);
   }, 120_000);
+
+  it("redraws a start image, and leaves the next plain request as it was", async () => {
+    // The img2img pipeline is built from the plain one's parts, scheduler
+    // included. A plain request after it must make the same image as the
+    // same request made before it. FLUX.2 [klein] has no img2img pipeline
+    // and answers 400 here, so AGENCY_IMAGE_MODEL_DIR must not name one.
+    const plain = { prompt: "a red apple", size: "512x512", steps: 4, seed: 3 };
+    const before = await post(plain);
+    expect(before.status).toBe(200);
+    const picture = ((await before.json()) as ImageReply).data[0].b64_json;
+
+    const redrawn = await post({
+      prompt: "a watercolor painting of a red apple",
+      size: "",
+      steps: 4,
+      seed: 3,
+      start_image: picture,
+      strength: 0.6,
+    });
+    expect(redrawn.status).toBe(200);
+    const bytes = Buffer.from(((await redrawn.json()) as ImageReply).data[0].b64_json, "base64");
+    expect([...bytes.subarray(0, 4)]).toEqual(PNG_SIGNATURE);
+    expect(pngSize(bytes)).toEqual([512, 512]);
+
+    const after = await post(plain);
+    expect(after.status).toBe(200);
+    expect(((await after.json()) as ImageReply).data[0].b64_json).toBe(picture);
+  }, 300_000);
 });
 
 describe.skipIf(kleinDir === "" || python === "")(

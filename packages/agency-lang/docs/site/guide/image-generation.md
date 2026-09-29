@@ -709,6 +709,44 @@ Only FLUX.2 [klein] takes `images`. Another model refuses the request
 with a message naming the models that take them. You cannot combine
 `images` with a ControlNet in one call.
 
+### Redraw a picture in a new style
+
+The other models can't follow an edit instruction, but they can redraw
+a picture. Pass the picture in `startImage`, and describe the result in
+the prompt. The model starts from your picture instead of from noise, so
+the layout stays and the style changes:
+
+```ts
+const result = generateImageLocal(
+  "a watercolor painting of a fox in a forest",
+  "z-image-turbo",
+  startImage: "fox.png",
+  strength: 0.6,
+)
+```
+
+`strength` says how much of the picture to redraw. It must be above 0
+and can be at most 1. A low strength such as 0.3 keeps the result close
+to the picture, and a high one such as 0.9 changes more. Leave it out to use the model's default.
+
+Use `images` with FLUX.2 [klein] to change one thing and keep the rest,
+such as "add a hat to the fox". Use `startImage` with any other model to
+keep the layout and change everything else, such as turning a photo into
+a watercolor. Only FLUX.2 [klein] takes `images`, and every other model
+takes `startImage`.
+
+As with `images`, leaving `size` empty keeps the picture's shape. When
+you pass a size of another shape, the picture is scaled to cover it and
+the extra is cropped evenly from both sides. For example, a 4:3 photo
+redrawn at `"1024x1024"` loses a strip from its left and right edges.
+The picture must be at least 64 pixels on each side and at most 8 times
+as long as it is wide. Reading it raises a `std::readImage` interrupt,
+and you cannot combine `startImage` with `images` or a ControlNet.
+
+A lower strength runs fewer steps, so it is also faster. With SDXL at 28
+steps, a strength of 0.6 runs 16 of them. A strength so low that no step
+runs is refused.
+
 ### Let an agent edit pictures
 
 This agent gives a model a tool that edits a picture and saves the

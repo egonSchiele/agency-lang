@@ -93,7 +93,7 @@ step limits bound how long a request can hold the generation lock.
 
 ## Modes
 
-A request is in one of three modes. The image field it carries decides
+A request is in one of four modes. The image field it carries decides
 which:
 
 | Mode | Image field | Other fields of the mode | Families |
@@ -101,17 +101,29 @@ which:
 | plain | none | none | all five |
 | control | `control_image` | `controlnet`, `control_scale`, `control_invert` | SDXL |
 | reference | `images` | none | FLUX.2 [klein] |
+| img2img | `start_image` | `strength` | the other four |
 
 In reference mode, klein draws a new image from pure noise and reads
 each reference as extra tokens on every step. It copies from the
 reference instead of repainting it, so an edit keeps the character.
 There is no `strength`.
 
+In img2img mode, the model starts from the start image with noise added,
+instead of from pure noise. `strength` says how much noise, and so how
+much of the picture is redrawn. The layout stays and the style changes.
+
+Reference editing and image-to-image are different operations, so they
+are different parameters: `images` and `startImage`. A caller who asks
+klein for an edit never silently gets image-to-image from another
+family. The request is refused instead, with a message naming the
+families that take the mode.
+
 `mode_of` in the rules module decides the mode and makes three
 refusals:
 
-1. Image fields of two modes: "a request takes one of control_image or
-   images."
+1. Image fields of two modes: "a request takes one of control_image,
+   images, or start_image." SDXL has a pipeline for a ControlNet with a
+   start image, but nothing asks for it yet.
 2. A field of a mode the request is not in, such as `control_scale`
    without `control_image`. The message names the image field the
    setting goes with. `MODE_FIELDS` lists each mode's fields.
@@ -126,19 +138,20 @@ every pipeline of the family sees it.
 `INPUT_IMAGES` in the rules module has one row per image field. The code
 that checks a request, decodes an image, fits it, and picks a pipeline
 reads the row. It has no branch per mode. `pipeline_args` is the one
-exception: it adds `controlnet_conditioning_scale` in control mode.
+exception: it adds `controlnet_conditioning_scale` in control mode, and
+`strength` in img2img mode, where it also leaves out the size for SDXL.
 
-| Key | Meaning | `control_image` | `images` |
-|---|---|---|---|
-| `mode` | The mode the field puts a request in | `control` | `reference` |
-| `max_count` | How many images the field takes. One is a base64 string, more is a list | 1 | 4 |
-| `max_bytes` | The largest image, in bytes | 50 MB | 20 MB |
-| `fit` | How a decoded image is fitted to the output size | `letterbox` | `shrink` |
-| `on_white` | Paste a transparent image onto white before converting it to RGB | false | true |
-| `sets_size` | With no size in the request, take the output's shape from the first image | false | true |
-| `prepare` | Optional. A step in the server's `PREPARES` run on the decoded image before fitting | `invert` | none |
-| `check` | Optional. A check in the rules module's `CHECKS` run on the decoded image's size | none | `reference_problem` |
-| `refusal` | The message for a family with no pipeline for the mode, with `{label}` and `{families}` | "does not take a ControlNet" | "does not take reference images" |
+| Key | Meaning | `control_image` | `images` | `start_image` |
+|---|---|---|---|---|
+| `mode` | The mode the field puts a request in | `control` | `reference` | `img2img` |
+| `max_count` | How many images the field takes. One is a base64 string, more is a list | 1 | 4 | 1 |
+| `max_bytes` | The largest image, in bytes | 50 MB | 20 MB | 20 MB |
+| `fit` | How a decoded image is fitted to the output size | `letterbox` | `shrink` | `cover` |
+| `on_white` | Paste a transparent image onto white before converting it to RGB | false | true | true |
+| `sets_size` | With no size in the request, take the output's shape from the first image | false | true | true |
+| `prepare` | Optional. A step in the server's `PREPARES` run on the decoded image before fitting | `invert` | none | none |
+| `check` | Optional. A check in the rules module's `CHECKS` run on the decoded image's size | none | `reference_problem` | `start_image_problem` |
+| `refusal` | The message for a family with no pipeline for the mode, with `{label}` and `{families}` | "does not take a ControlNet" | "does not take reference images" | "does not redraw a start image" |
 
 A control image has `on_white` false because its background must stay
 as drawn. A reference has it true because character art is often a PNG
@@ -147,6 +160,11 @@ background black. `reference_problem` refuses a reference with a side
 under 64 pixels or a shape more extreme than 8 to 1. klein makes both
 checks itself, but from inside the pipeline call, where a failure is a
 server error.
+
+`start_image_problem` makes the same two checks on a start image, for
+another reason. A start image is cropped to the output's shape, and a
+tiny or thin picture has too little left after the crop to redraw. A
+100x5000 picture cropped to a square keeps a fiftieth of itself.
 
 `LOCAL_IMAGE_FIELDS` in `lib/stdlib/localImageInputs.ts` is the same
 table for the stdlib, with the parameter name and the approval question
@@ -158,13 +176,13 @@ both tables have the same fields, counts, and byte caps.
 The `pipelines` key of each family row names a diffusers class per mode.
 A family takes a mode when it has a class for it:
 
-| Family | `plain` | `control` | `reference` |
-|---|---|---|---|
-| Z-Image Turbo | `ZImagePipeline` | | |
-| Chroma | `ChromaPipeline` | | |
-| Qwen-Image | `QwenImagePipeline` | | |
-| FLUX.2 [klein] | `Flux2KleinPipeline` | | `Flux2KleinPipeline` |
-| SDXL | `StableDiffusionXLPipeline` | `StableDiffusionXLControlNetPipeline` | |
+| Family | `plain` | `control` | `reference` | `img2img` |
+|---|---|---|---|---|
+| Z-Image Turbo | `ZImagePipeline` | | | `ZImageImg2ImgPipeline` |
+| Chroma | `ChromaPipeline` | | | `ChromaImg2ImgPipeline` |
+| Qwen-Image | `QwenImagePipeline` | | | `QwenImageImg2ImgPipeline` |
+| FLUX.2 [klein] | `Flux2KleinPipeline` | | `Flux2KleinPipeline` | |
+| SDXL | `StableDiffusionXLPipeline` | `StableDiffusionXLControlNetPipeline` | | `StableDiffusionXLImg2ImgPipeline` |
 
 The server loads the `plain` class. `pipeline_for` returns the loaded
 pipeline when a mode's class is the plain class, as klein's reference
@@ -173,7 +191,77 @@ pipeline's components and keeps it. The two pipelines share weights, so
 the second one costs no extra memory or load time. A mode that needs a
 model on top of those components names its request fields in the
 server's `MODE_MODELS`. Control mode names `controlnet`, which
-`load_controlnet` loads.
+`load_controlnet` loads. Img2img mode needs no extra model.
+
+### Image-to-image
+
+The four img2img pipelines disagree on three things, and each family row
+records them in three keys. klein has no img2img pipeline, so its three
+are `None`.
+
+| Family | `default_strength` | `img2img_takes_size` | `img2img_steps` |
+|---|---|---|---|
+| Z-Image Turbo | 0.6 | true | `"up"` |
+| Chroma | 0.9 | true | `"up"` |
+| Qwen-Image | 0.6 | true | `"up"` |
+| SDXL | 0.6 | false | `"down"` |
+
+`default_strength` is the strength a request gets when it gives none.
+Three are the pipeline's own default in diffusers 0.40. SDXL's own
+default is 0.3, which suits its use after a refiner and barely changes
+a style, so SDXL starts at 0.6. These are first guesses, to be checked
+by redrawing one picture with each family at 0.3, 0.6, and 0.9.
+
+`img2img_takes_size` is false for SDXL because
+`StableDiffusionXLImg2ImgPipeline` has no `width` or `height` argument.
+It draws at the size of the image it is given. The other three take
+both. The server fits the start image to the output size before the
+call either way, so every family returns an image of the output size.
+
+`img2img_steps` names how the pipeline counts the steps it runs.
+Image-to-image skips the start of the schedule, so a request for 28
+steps runs fewer. The families round the skipped part differently, and
+`STEP_FORMULAS` in the rules module holds both formulas:
+
+```python
+# "down": SDXL rounds the steps it runs down
+init_timestep = min(int(steps * strength), steps)
+t_start = max(steps - init_timestep, 0)
+
+# "up": the flow-matching pipelines round the steps they skip down,
+# which rounds the steps they run up
+init_timestep = min(steps * strength, steps)
+t_start = int(max(steps - init_timestep, 0))
+
+steps_run = steps - t_start
+```
+
+| Family | Steps | Strength | Steps that run |
+|---|---|---|---|
+| Z-Image Turbo | 9 | 0.1 | 1 |
+| Z-Image Turbo | 9 | 0.6 | 6 |
+| SDXL | 28 | 0.03 | 0 |
+| SDXL | 28 | 0.6 | 16 |
+
+Each formula is written as diffusers writes it, so floating point rounds
+the same way. `9 * 0.6` is `5.3999999999999995` in floating point, and
+the "up" formula runs 6 steps where a rounded-down count would say 5.
+For a strength a person would pass, only "down" can reach 0 steps. "up"
+reaches 0 only when the strength is too small for floating point to
+count: `9 - 9 * 1e-20` is exactly `9.0`. `check_request` refuses a
+request that runs no steps with either formula, "strength 0.03 with 28
+steps runs no steps; raise either", instead of letting the pipeline fail
+under the lock.
+
+`check_request` returns the count as `steps_run`, and the server's
+"Stopped after N of M steps" message uses it for M.
+
+The img2img pipeline is built from the loaded pipeline's components,
+scheduler included. In diffusers 0.40, `set_timesteps` resets the
+scheduler's `_begin_index` on both schedulers these families use, so an
+img2img request does not change the next plain one. The live test
+checks this: a plain request after an img2img request makes the same
+image as the same request made before it.
 
 ### Adding a mode
 
@@ -257,6 +345,21 @@ in the rules module has one row per fit:
 |---|---|---|
 | `letterbox` | Scales the image to fit inside the output and centers it | Yes, on black |
 | `shrink` | Scales an image over one megapixel down to one megapixel | No |
+| `cover` | Scales the image until it covers the output, and centers it. The overflow is cut off evenly from both sides | Yes, and the image covers all of it |
+
+A start image is cropped with `cover`, not letterboxed. For a control
+image, black bands mean "no lines here". For a start image, black bands
+would be part of the picture, and the model would redraw them as black
+bars. `cover` returns a negative `left` or `top`: a 400x300 picture
+covering a 1024x1024 output would be 1365x1024 at left -171, so a strip
+of about 170 scaled pixels is lost from each side.
+
+The server never scales the whole picture. `visible_part` in the rules
+module turns the box into the part of the picture that shows on the
+canvas, here the middle 300 of its 400 columns, and `fitted` scales that
+part alone with Pillow's `resize(size, box=...)`. Scaled whole, a 64x512
+picture covering a 2048x256 output would be 2048x16384, about 100 MB,
+to keep a 2048x256 strip of it.
 
 klein shrinks a reference to one megapixel itself, but inside the
 pipeline call, under the generation lock. The server shrinks it first.
@@ -269,7 +372,7 @@ Three limits apply, from the outside in:
 
 | Limit | Value | Where |
 |---|---|---|
-| One reference | 20 MB | `_localImageInputs` before approval, `approvedFileBytes` after it, `image_bytes_of` on the server |
+| One reference or start image | 20 MB | `_localImageInputs` before approval, `approvedFileBytes` after it, `image_bytes_of` on the server |
 | One control image | 50 MB | the same three places |
 | One request body | 64 KB plus the base64 of 80 MB, 106,732,204 bytes | the local front door and the image server |
 
@@ -282,7 +385,8 @@ The front door holds requests for `/v1/images/generations` to it, as
 `mlx-local-models.md` describes.
 
 A reference over 20 MB buys nothing, because klein shrinks every
-reference to one megapixel.
+reference to one megapixel. A start image is scaled to the output size,
+which is at most 4 megapixels.
 
 ## Security constraints
 
@@ -325,21 +429,23 @@ function's own effect.
 A call with input images keeps this order:
 
 1. `_localImageInputs` makes every check that can fail. It refuses a
-   `controlnet` without a `controlImage` and the reverse, input images of
-   two modes, more images than the field's `maxCount`, a URL or data URI,
+   `controlnet` without a `controlImage` and the reverse, a `strength`
+   without a `startImage`, a `strength` that is not above 0 and at most
+   1, input images of two modes, more images than the field's `maxCount`, a URL or data URI,
    and any path that is not a regular image file under the field's
    `maxBytes`. It reads no bytes. A call that is going to fail asks for
    nothing.
 2. The Agency function raises one `std::readImage` per file, with the
    file's `dir` and `filename` and the field's question. The control
-   image asks "Read this drawing to condition the image on?" and each
-   reference asks "Read this picture to edit it?". Every file is
+   image asks "Read this drawing to condition the image on?", each
+   reference asks "Read this picture to edit it?", and the start image
+   asks "Read this picture to redraw it?". Every file is
    approved before any is read.
 3. `image.ts` reads each file through `approvedFileBytes` and sends the
    base64 bytes in the field's request field.
 
 A rejection of any one file returns before the request is sent. A
-reference stays on this machine, so it raises `std::readImage` and not
+reference or a start image stays on this machine, so it raises `std::readImage` and not
 `std::uploadImage`.
 
 ### Hosted generation
@@ -465,6 +571,10 @@ reference. The stdlib passes the count as `metadata.references`, from
 `readEachStep` is true. The provider does not look inside the request's
 image fields.
 
+A start image's `readEachStep` is false: the model starts from it once
+and does not read it again. The timeout budgets the steps the request
+asks for, which is more than an img2img request runs.
+
 ## Startup and cancellation
 
 The server requires diffusers 0.40.0. `DIFFUSERS_VERSION` in
@@ -511,8 +621,8 @@ loading torch. `tests/agency-js/image-upload-approval` covers hosted
 upload approval, multiple inputs, rejection, and the bytes sent.
 `tests/agency-js/image-generation-local-controlnet` covers control-image
 approval and transmission. `tests/agency-js/image-generation-local-edit`
-covers one `std::readImage` per reference, a rejection that sends no
-request, and a bad path that asks nothing. Both agency-js tests start
+covers one `std::readImage` per reference and one for a start image, a
+rejection that sends no request, and a bad path that asks nothing. Both agency-js tests start
 their stand-in server in `server.js`, which `test.js` imports before the
 program, so the environment is set before the program loads.
 
@@ -534,6 +644,8 @@ AGENCY_IMAGE_PYTHON=<a Python with the image packages> \
 pnpm vitest run lib/cli/diffusersImageServer.live.test.ts
 ```
 
-It generates a small image and checks cancellation. Set
+It generates a small image, checks cancellation, and redraws a start
+image, then checks that the next plain request makes the same image as
+before. Set
 `AGENCY_KLEIN_MODEL_DIR` to a FLUX.2 [klein] directory to also run an
 edit with one reference.

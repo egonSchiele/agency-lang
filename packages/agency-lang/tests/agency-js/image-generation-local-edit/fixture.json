@@ -50,6 +50,33 @@
     "ok": true,
     "error": ""
   },
+  "startAsked": {
+    "interrupted": true,
+    "asks": [
+      {
+        "effect": "std::readImage",
+        "dirIsReal": true,
+        "filename": "cat.png"
+      }
+    ]
+  },
+  "redrawn": {
+    "ok": true,
+    "error": ""
+  },
+  "requestsAfterRedraw": 3,
+  "startRejected": {
+    "ok": false,
+    "error": "interrupt rejected"
+  },
+  "requestsAfterStartReject": 3,
+  "startMissingAsked": {
+    "interrupted": false
+  },
+  "startMissing": {
+    "ok": false,
+    "error": "generateImageLocal failed: no such file: DIR/nope.png"
+  },
   "requests": [
     {
       "model": "black-forest-labs/FLUX.2-klein-4B",
@@ -69,6 +96,17 @@
       "size": "",
       "output_format": "png",
       "seed": 7
+    },
+    {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "a watercolor painting",
+      "n": 1,
+      "response_format": "b64_json",
+      "size": "",
+      "output_format": "png",
+      "seed": 7,
+      "start_image": "cat.png",
+      "strength": 0.4
     }
   ]
 }

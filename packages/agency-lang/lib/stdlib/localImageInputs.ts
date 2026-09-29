@@ -7,8 +7,8 @@ import { MIME_TYPES } from "./mediaPathScan.js";
  *  field. `INPUT_IMAGES` in lib/cli/diffusersImageRules.py is the same
  *  table for the image server, and a test compares the two.
  *
- *  mode      which kind of request the field makes: a ControlNet request
- *            or an edit from reference pictures
+ *  mode      which kind of request the field makes: a ControlNet request,
+ *            an edit from reference pictures, or a redraw of a start image
  *  maxCount  how many images the field takes. One is sent as a base64
  *            string, more as a list of them
  *  maxBytes  the largest file each image may be
@@ -18,7 +18,7 @@ import { MIME_TYPES } from "./mediaPathScan.js";
  *            work as one more megapixel of output, and the provider's
  *            timeout budgets for it */
 export type LocalImageField = {
-  mode: "control" | "reference";
+  mode: "control" | "reference" | "img2img";
   maxCount: number;
   maxBytes: number;
   parameter: string;
@@ -28,8 +28,9 @@ export type LocalImageField = {
 
 /** A control image is read up to the size every local server takes. */
 export const MAX_CONTROL_IMAGE_BYTES = MAX_IMAGE_BYTES;
-/** A reference image. The model shrinks it to about one megapixel, so a
- *  larger file buys nothing. */
+/** A reference image or a start image. The model shrinks a reference to
+ *  about one megapixel, and a start image is scaled to the output size,
+ *  so a larger file buys nothing. */
 export const MAX_INPUT_IMAGE_BYTES = 20_000_000;
 export const MAX_REFERENCE_IMAGES = 4;
 /** Room in a request body for everything but its images: the prompt and
@@ -52,6 +53,15 @@ export const LOCAL_IMAGE_FIELDS: Record<string, LocalImageField> = {
     parameter: "images",
     question: "Read this picture to edit it?",
     readEachStep: true,
+  },
+  start_image: {
+    mode: "img2img",
+    maxCount: 1,
+    maxBytes: MAX_INPUT_IMAGE_BYTES,
+    parameter: "startImage",
+    question: "Read this picture to redraw it?",
+    // The model starts from it once, instead of from noise.
+    readEachStep: false,
   },
 };
 
@@ -146,6 +156,20 @@ function controlSettings(
   return Object.fromEntries(given.filter(([, value]) => value !== null));
 }
 
+/** The request field that says how much of a start image to redraw. A
+ *  null strength is left out, so the server uses the family's default. */
+function strengthSettings(strength: number | null): Record<string, unknown> {
+  return strength === null ? {} : { strength };
+}
+
+/** "a", "a or b", or "a, b, or c". */
+function orList(names: string[]): string {
+  if (names.length <= 2) {
+    return names.join(" or ");
+  }
+  return `${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}`;
+}
+
 function refusal(message: string): Error {
   return new Error(`${CALLER} failed: ${message}`);
 }
@@ -192,20 +216,34 @@ export function _localImageInputs(
   controlScale: number | null,
   invertControlImage: boolean,
   images: string[],
+  startImage: string,
+  strength: number | null,
 ): LocalImageInputs {
   if ((controlnet === "") !== (controlImage === "")) {
     throw refusal(
       "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
     );
   }
+  if (strength !== null && startImage === "") {
+    throw refusal("strength goes with startImage, and this call has none.");
+  }
+  // The server makes this check too, but after the file is approved and
+  // read. Written so that NaN is refused.
+  if (strength !== null && !(strength > 0 && strength <= 1)) {
+    throw refusal(
+      "strength must be a number above 0 and at most 1. Low keeps the start image close.",
+    );
+  }
   const paths: Record<string, string[]> = {
     control_image: controlImage === "" ? [] : [controlImage],
     images,
+    start_image: startImage === "" ? [] : [startImage],
   };
   // The other request fields of each image field's mode.
   const settingsOf: Record<string, Record<string, unknown>> = {
     control_image: controlSettings(controlnet, controlScale, invertControlImage),
     images: {},
+    start_image: strengthSettings(strength),
   };
   const given = Object.keys(paths).filter((field) => paths[field].length > 0);
   if (given.length === 0) {
@@ -213,7 +251,7 @@ export function _localImageInputs(
   }
   if (given.length > 1) {
     const names = Object.keys(paths).map((field) => LOCAL_IMAGE_FIELDS[field].parameter);
-    throw refusal(`a call takes one of ${names.join(" or ")}.`);
+    throw refusal(`a call takes one of ${orList(names)}.`);
   }
   const field = given[0];
   const row = LOCAL_IMAGE_FIELDS[field];

@@ -89,6 +89,8 @@ const SETTINGS = [
   "control_scale",
   "control_invert",
   "images",
+  "start_image",
+  "strength",
 ];
 
 /** An image from the local server, with the seed that made it. */

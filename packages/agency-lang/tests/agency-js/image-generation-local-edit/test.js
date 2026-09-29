@@ -2,7 +2,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { PNG, requests, server } from "./server.js";
-import { edit, plain, hasInterrupts, approve, reject, respondToInterrupts } from "./agent.js";
+import {
+  edit,
+  plain,
+  redraw,
+  hasInterrupts,
+  approve,
+  reject,
+  respondToInterrupts,
+} from "./agent.js";
 
 // Two pictures with different bytes, in a folder spelled without links so
 // each interrupt's payload can be compared with it.
@@ -29,21 +37,25 @@ function asked(result) {
   };
 }
 
-/** A request with each reference replaced by the name of the file whose
- *  bytes it decodes to. */
-function sent(body) {
-  if (body.images === undefined) {
-    return body;
+/** The name of the file whose bytes a base64 image decodes to. */
+function named(image) {
+  const bytes = Buffer.from(image, "base64");
+  if (bytes.equals(catBytes)) {
+    return "cat.png";
   }
-  const { images, ...rest } = body;
-  const named = images.map((image) => {
-    const bytes = Buffer.from(image, "base64");
-    if (bytes.equals(catBytes)) {
-      return "cat.png";
-    }
-    return bytes.equals(hatBytes) ? "hat.png" : "other bytes";
-  });
-  return { ...rest, images: named };
+  return bytes.equals(hatBytes) ? "hat.png" : "other bytes";
+}
+
+/** A request with each input image replaced by the name of its file. */
+function sent(body) {
+  const out = { ...body };
+  if (body.images !== undefined) {
+    out.images = body.images.map(named);
+  }
+  if (body.start_image !== undefined) {
+    out.start_image = named(body.start_image);
+  }
+  return out;
 }
 
 const out = {};
@@ -79,6 +91,28 @@ out.five = five.data;
 const none = await plain();
 out.plainAsked = asked(none);
 out.plain = none.data;
+
+// A start image raises one read. After approval the server gets its bytes
+// as one string, with the strength.
+const start = await redraw(cat);
+out.startAsked = asked(start);
+const redrawn = await respondToInterrupts(start.data, [approve()]);
+out.redrawn = redrawn.data;
+out.requestsAfterRedraw = requests.length;
+
+// Rejecting the read sends nothing.
+const startAgain = await redraw(cat);
+const startRejected = await respondToInterrupts(startAgain.data, [reject()]);
+out.startRejected = startRejected.data;
+out.requestsAfterStartReject = requests.length;
+
+// A missing start image fails before anything is asked.
+const startMissing = await redraw(path.join(dir, "nope.png"));
+out.startMissingAsked = asked(startMissing);
+out.startMissing = {
+  ok: startMissing.data.ok,
+  error: startMissing.data.error.replace(dir, "DIR"),
+};
 
 out.requests = requests.map(sent);
 server.close();

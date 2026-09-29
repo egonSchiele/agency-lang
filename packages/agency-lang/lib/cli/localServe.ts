@@ -14,7 +14,8 @@ import { IMAGES_PATH } from "./serveLog.js";
 import {
   _resolveModel,
   _mlxServedName,
-  _localModelCategory,
+  _modelKind,
+  _catalogKind,
   _listDownloadedModels,
   _findDownloadedServedModel,
   defaultCacheDir,
@@ -23,14 +24,14 @@ import {
   type DownloadedModel,
   type ResolvedModel,
 } from "../stdlib/localModels.js";
-import type { ModelCategory } from "../stdlib/modelCatalog.js";
+import type { ModelKind } from "../stdlib/modelKind.js";
 import { startFrontDoor, type FrontDoor, type Route } from "./mlxServer.js";
 import { formatElapsed } from "../eval/run/statusBoard.js";
 import { color, plainColor, autoUseColor } from "../utils/termcolors.js";
 
 export { formatElapsed };
 
-export type ServeKind = "chat" | "embedding" | "speech" | "image";
+export type ServeKind = ModelKind;
 
 /** Inputs an embedding model accepts, in tokens: the Qwen3 Embedding
  *  card's value. */
@@ -563,28 +564,31 @@ export function freePort(): Promise<number> {
 
 export type ServeChoice = { title: string; value: string };
 
-/** The models `serve` can start without downloading anything: the MLX ones
- *  under the models directory whose record says every file is there. A GGUF
- *  model runs in the Agency process instead, so it is never a choice here,
- *  and an embedding or speech model needs a flag, which the picker cannot
- *  say. */
+/** The models `serve` can start without downloading anything: every model
+ *  under the models directory whose record says every file is there, of
+ *  any kind. A GGUF model runs in the Agency process instead, so it is
+ *  never a choice here. Nor is a model whose kind nothing says: the picker
+ *  cannot pass the flag that `serve` would need for it. */
 export function serveChoices(downloaded: DownloadedModel[]): ServeChoice[] {
   // One row per repo id. The same model can sit in both layouts, and two rows
   // with the same value would let you pick it twice, which `runServe` refuses.
   const byRepo: Record<string, DownloadedModel> = {};
   for (const model of downloaded) {
     if (
-      model.backend === "mlx" &&
+      model.backend !== "llama-cpp" &&
       model.complete &&
-      byRepo[model.name] === undefined &&
-      !needsFlag(_localModelCategory(`mlx:${model.name}`))
+      model.kind !== undefined &&
+      byRepo[model.name] === undefined
     ) {
       byRepo[model.name] = model;
     }
   }
   return Object.values(byRepo)
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((m) => ({ title: `${m.name}  (${formatGB(m.sizeBytes)})`, value: `mlx:${m.name}` }));
+    .map((m) => ({
+      title: `${m.name}  (${formatGB(m.sizeBytes)}, ${m.kind})`,
+      value: `${m.backend}:${m.name}`,
+    }));
 }
 
 export type PickDeps = {
@@ -602,13 +606,13 @@ export type PickDeps = {
 export async function pickModelsToServe(deps: PickDeps): Promise<string[]> {
   const choices = serveChoices(deps.downloaded());
   if (choices.length === 0) {
-    throw new Error("No MLX models are downloaded. Run:\n  agency local download mlx:<org>/<repo>");
+    throw new Error("No models are downloaded. Run:\n  agency local download <name>");
   }
   if (!deps.tty) {
     // A script asked for a server and named no model. Say what it could
     // have named rather than waiting on a prompt nobody can answer.
     const names = choices.map((c) => `  ${c.value}`).join("\n");
-    throw new Error(`Pass a model: agency local serve <name>\nDownloaded MLX models:\n${names}`);
+    throw new Error(`Pass a model: agency local serve <name>\nDownloaded models:\n${names}`);
   }
   const picked = await deps.ask(choices);
   return picked ?? [];
@@ -714,71 +718,83 @@ function realDeps(): ServeDeps {
 
 type Planned = { name: string; dir: string; sizeBytes: number; kind: ServeKind };
 
-/** The flag a catalog category has to be served with. Chat models take no
- *  flag. */
-const FLAG_FOR_CATEGORY: Partial<Record<ModelCategory, string>> = {
+/** The flag a kind may be named with on the command line. Usually none is
+ *  needed, because `serve` reads the kind from the model. A flag supplies
+ *  the kind when nothing else says it, and overrides what the files say. */
+const FLAG_FOR_KIND: Record<ServeKind, string> = {
+  chat: "",
   embedding: "--embedding",
   speech: "--speech",
   image: "--image",
 };
 
-/** Whether a catalog category has to be served with a flag. */
-function needsFlag(category: ModelCategory | undefined): boolean {
-  return category !== undefined && FLAG_FOR_CATEGORY[category] !== undefined;
-}
-
 function anArticle(word: string): string {
   return /^[aeiou]/.test(word) ? `an ${word}` : `a ${word}`;
 }
 
-/** The catalog knows what some models are for. Serving an embedding model
- *  as a chat model, or the reverse, fails only after a long load, so refuse
- *  it up front when the catalog can tell, from the name or from what it
- *  resolves to. */
-function checkKind(value: string, resolved: ResolvedModel, kind: ServeKind): void {
-  // The backend knows an image model even when the catalog does not.
-  if (resolved.backend === "diffusers" && kind !== "image") {
+/** The command that serves `value` as what it is. */
+function serveCommand(value: string, kind: ServeKind): string {
+  const flag = FLAG_FOR_KIND[kind];
+  return `agency local serve ${flag === "" ? "" : `${flag} `}${value}`;
+}
+
+/** A model the catalog knows must be served as that kind. Serving an
+ *  embedding model as a chat model, or the reverse, fails only after a long
+ *  load, so a flag that disagrees is refused up front, naming the command
+ *  that works. */
+function assertKind(value: string, actual: ServeKind, flagged: ServeKind): void {
+  if (actual !== flagged) {
     throw new Error(
-      `${value} is an image model. Serve it with: agency local serve --image ${value}`,
-    );
-  }
-  const target = resolved.target;
-  const category = _localModelCategory(value) ?? _localModelCategory(target);
-  if (category === undefined) {
-    // Only the backend can say that an unknown model is not an image model.
-    if (kind === "image" && resolved.backend !== "diffusers") {
-      throw new Error(
-        `${value} is not an image model. --image serves diffusers models, named with a ` +
-          `diffusers: URI or a directory holding model_index.json.`,
-      );
-    }
-    return;
-  }
-  const wanted = FLAG_FOR_CATEGORY[category];
-  if (kind === "chat" && wanted !== undefined) {
-    throw new Error(
-      `${value} is ${anArticle(category)} model. Serve it with: agency local serve ${wanted} ${value}`,
-    );
-  }
-  if (kind !== "chat" && category !== kind) {
-    // Name the flag that works, so the user is not sent through a second
-    // refusal on the way there.
-    const fix =
-      wanted === undefined
-        ? `Pass it without ${FLAG_FOR_CATEGORY[kind]}.`
-        : `Serve it with: agency local serve ${wanted} ${value}`;
-    throw new Error(
-      `${value} is ${anArticle(category)} model, not ${anArticle(kind)} model. ${fix}`,
+      `${value} is ${anArticle(actual)} model, not ${anArticle(flagged)} model. ` +
+        `Serve it with: ${serveCommand(value, actual)}`,
     );
   }
 }
 
+/** The directory a resolved served model is in, at the revision asked for,
+ *  in whichever layout holds it: our own directory with a record, or a
+ *  Hugging Face cache someone else downloaded into. */
+function servedModelLocation(
+  resolved: ResolvedModel,
+  cacheDir: string,
+): { dir: string; sizeBytes: number } {
+  if (!isServedUri(resolved.target)) {
+    const dir = path.resolve(resolved.target);
+    return { dir, sizeBytes: modelDirSizeBytes(dir) };
+  }
+  const { backend, repo, revision } = parseServedUri(resolved.target);
+  const found = _findDownloadedServedModel(backend, repo, cacheDir, revision);
+  if (found !== null) {
+    return { dir: found.path, sizeBytes: found.sizeBytes };
+  }
+  const anyRevision = _findDownloadedServedModel(backend, repo, cacheDir);
+  if (anyRevision === null) {
+    throw new Error(`${repo} is not downloaded. Run:\n  agency local download ${resolved.target}`);
+  }
+  const at = (anyRevision.revision ?? "").slice(0, 7);
+  throw new Error(
+    `${anyRevision.path} holds ${repo} at ${at}, and you asked for ${revision}. Run:\n` +
+      `  agency local download ${resolved.target}`,
+  );
+}
+
 /** One model to serve: the name requests will use, the directory to start
- *  the process on, its size for the memory warning, and which program
- *  serves it. */
-function planModel(value: string, cacheDir: string, kind: ServeKind): Planned {
+ *  the process on, its size for the memory warning, and its kind, which
+ *  picks the program that serves it.
+ *
+ *  `flagged` is the kind the command line gave it, if any. The catalog
+ *  outranks a flag, since it knows the models whose files mislead. A flag
+ *  outranks the download's record and the files: it is the user saying
+ *  what the model is, and the file rules can be wrong (an embedding model
+ *  whose config names a `ForCausalLM` class). With no flag, the kind comes
+ *  from the catalog, the record, or the files, in that order. */
+function planModel(value: string, cacheDir: string, flagged?: ServeKind): Planned {
+  const listed = _catalogKind(value);
+  if (flagged !== undefined && listed !== undefined) {
+    // Refuse before the files are even looked for.
+    assertKind(value, listed, flagged);
+  }
   const resolved = _resolveModel(value);
-  checkKind(value, resolved, kind);
   if (resolved.backend === "llama-cpp") {
     throw new Error(
       `"${value}" is a GGUF model. agency local serve is for MLX and diffusers models; ` +
@@ -786,28 +802,26 @@ function planModel(value: string, cacheDir: string, kind: ServeKind): Planned {
     );
   }
   const name = _mlxServedName(resolved);
-  if (isServedUri(resolved.target)) {
-    const { backend, repo, revision } = parseServedUri(resolved.target);
-    // Whichever layout holds it, at the revision asked for: our own directory
-    // with a record, or a Hugging Face cache someone else downloaded into.
-    const found = _findDownloadedServedModel(backend, repo, cacheDir, revision);
-    if (found !== null) {
-      return { name, dir: found.path, sizeBytes: found.sizeBytes, kind };
-    }
-    const anyRevision = _findDownloadedServedModel(backend, repo, cacheDir);
-    if (anyRevision === null) {
-      throw new Error(
-        `${repo} is not downloaded. Run:\n  agency local download ${resolved.target}`,
-      );
-    }
-    const at = (anyRevision.revision ?? "").slice(0, 7);
-    throw new Error(
-      `${anyRevision.path} holds ${repo} at ${at}, and you asked for ${revision}. Run:\n` +
-        `  agency local download ${resolved.target}`,
-    );
+  const { dir, sizeBytes } = servedModelLocation(resolved, cacheDir);
+  const kind = flagged ?? _modelKind(value, dir);
+  if (kind === null) {
+    throw new Error(unknownKindMessage(value));
   }
-  const dir = path.resolve(resolved.target);
-  return { name, dir, sizeBytes: modelDirSizeBytes(dir), kind };
+  return { name, dir, sizeBytes, kind };
+}
+
+/** What to do about a model whose kind nothing says. The flags work for
+ *  any model. A chat model has no flag, so it is told what the files need. */
+function unknownKindMessage(value: string): string {
+  return [
+    `agency cannot tell from its files what kind of model ${value} is.`,
+    `If it is an embedding, speech, or image model, name the kind with its flag:`,
+    `  ${serveCommand(value, "embedding")}`,
+    `  ${serveCommand(value, "speech")}`,
+    `  ${serveCommand(value, "image")}`,
+    `A chat model needs a config.json whose "architectures" names a class ending in ` +
+      `ForCausalLM or ForConditionalGeneration.`,
+  ].join("\n");
 }
 
 /** Resolves with a description once the child exits. */
@@ -884,11 +898,15 @@ export async function runServe(
 ): Promise<ServeHandle> {
   const port = flags.port ?? 8080;
   const maxTokens = flags.maxTokens ?? 16384;
+  // A model named on its own is served as whatever it is. One named with a
+  // flag is served as that kind, unless the catalog says otherwise.
+  const planFlagged = (flagged: ServeKind, named: string[] | undefined) =>
+    (named ?? []).map((value) => planModel(value, deps.cacheDir, flagged));
   const planned = [
-    ...values.map((v) => planModel(v, deps.cacheDir, "chat")),
-    ...(flags.embedding ?? []).map((v) => planModel(v, deps.cacheDir, "embedding")),
-    ...(flags.speech ?? []).map((v) => planModel(v, deps.cacheDir, "speech")),
-    ...(flags.image ?? []).map((v) => planModel(v, deps.cacheDir, "image")),
+    ...values.map((value) => planModel(value, deps.cacheDir)),
+    ...planFlagged("embedding", flags.embedding),
+    ...planFlagged("speech", flags.speech),
+    ...planFlagged("image", flags.image),
   ];
   if (planned.length === 0) {
     throw new Error("Name at least one model to serve.");

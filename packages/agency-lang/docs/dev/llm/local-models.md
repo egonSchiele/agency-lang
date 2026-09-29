@@ -81,13 +81,75 @@ the `agency local list` view and nothing else. Concurrent downloaders race
 on the whole file, and the last writer wins, which is acceptable for
 display metadata.
 
+## Kinds
+
+Every local model has a kind: what it takes and returns. `ModelKind` in
+`lib/stdlib/modelKind.ts` is `chat`, `embedding`, `speech`, or `image`.
+The kind decides which server script `serve` starts, which route serves
+it, and which stdlib function calls it. What a model is good for
+(coding, reasoning) is a catalog category, not a kind; `kindOfCategory`
+in `localModels.ts` maps the categories that name a return type to
+themselves and everything else to `chat`.
+
+A kind comes from three places, tried in this order by `_modelKind(value,
+dir)` in `localModels.ts`, the one function every reader calls:
+
+1. The catalog or alias entry for `value`, because the catalog knows the
+   models whose files are ambiguous. An Orpheus speech model has a Llama
+   chat config.
+2. The `kind` field of the download's `.agency-model.json`, written by
+   `_downloadModel` when the download finishes, from `--kind` when the
+   user gave one, else from the catalog or the files. `--kind` is refused
+   for a directory or a GGUF model, since neither keeps a record.
+3. The files, through `kindOfModelDir` in `modelKind.ts`, the one place a
+   kind is decided from files. Its rule table, first match wins:
+
+   | Files | Kind |
+   |---|---|
+   | a diffusers directory (`isDiffusersDir`: `model_index.json` with weights one folder down), whatever its pipeline | `image` |
+   | `config.json` whose `model_type` is `qwen3_tts` | `speech` |
+   | a `.gguf` file | `chat` |
+   | `config.json` whose `architectures[0]` ends in `ForCausalLM` or `ForConditionalGeneration` | `chat` |
+   | `config.json` whose `architectures[0]` ends in `Model` | `embedding` |
+
+   The image rule does not check the pipeline class. Which families the
+   image server runs is decided in `diffusersImageRules.py`, and the server
+   refuses any other with a message naming the ones it serves. Keeping a
+   copy of that list here would go stale each time a family is added.
+
+   The files are read through `readModelJson` in `modelBackend.ts`. It
+   reads only a regular file of at most 1 MB, so a `config.json` that is
+   huge or links to a device cannot hang `list`, which reads every
+   model's. It refuses a symlink, except in a Hub cache snapshot, which
+   links every file into `blobs/`; there it follows a link only when the
+   target stays inside the repo's cache folder.
+
+A record whose `kind` names a kind this build does not know is read as
+if it had none.
+
+`serve` plans every model with its kind and starts the script for it; no
+flag is needed. `--embedding`, `--speech`, and `--image` still work, and
+give the kind for the models named with them. A flag outranks the record
+and the files, because the file rules can be wrong: an embedding model
+whose `config.json` names a `ForCausalLM` class reads as chat. Only the
+catalog outranks a flag, and a flag the catalog disagrees with is
+refused, naming the command that works. When nothing gives a kind and no
+flag was passed, `serve` refuses and lists the flags.
+
+The picker offers every complete downloaded model whose kind is known,
+with the kind in the title. A model of no known kind is left out, since
+the picker cannot pass the flag it would need. `list` prints a `KIND`
+column, orders rows by kind, and takes `--kind` to show one. A plain
+alias has no category, so its kind comes from its downloaded files.
+
 ## The `agency local` CLI surface
 
 - `list` (`runList` → `formatLocalList`) is UNGATED — browsing needs no
   provider package. First line names the resolved models directory; catalog
   rows get a `✓` + on-disk size when the manifest maps their target URI to a
   file that still exists; files no catalog row claims (raw-URI downloads,
-  pre-manifest downloads) appear under `OTHER FILES`.
+  pre-manifest downloads) appear under `OTHER FILES` with their kind.
+  Rows are in kind order, and `--kind` keeps one kind.
 - `download` with no argument opens a `prompts` picker over
   `downloadChoices(_listModelNames())`, with a trailing custom choice for an
   `hf:` URI / `.gguf` path. Non-TTY prints the catalog plus a

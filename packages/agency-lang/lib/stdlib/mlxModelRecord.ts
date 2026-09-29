@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { root, stat, readText, writeText, mkdir } from "./contained.js";
 import type { ServedBackend } from "./modelBackend.js";
+import { isModelKind, type ModelKind } from "./modelKind.js";
 
 /** MLX models live under `<modelsDir>/mlx/<org>--<repo>/`. */
 export const MLX_SUBDIR = "mlx";
@@ -30,6 +31,10 @@ export type MlxModelRecord = {
   repo: string;
   revision: string;
   files: Record<string, MlxFileRecord>;
+  /** What the model takes and returns, written when the download finished.
+   *  Absent in records written before kinds existed, and for a directory
+   *  whose files matched no rule; readers infer it then. */
+  kind?: ModelKind;
 };
 
 export function mlxModelDirName(repo: string): string {
@@ -75,7 +80,17 @@ export function readMlxModelRecord(dir: string): MlxModelRecord | null {
     ) {
       return null;
     }
-    return { ...rec, files: Object.assign(Object.create(null), rec.files) };
+    const record: MlxModelRecord = {
+      repo: rec.repo,
+      revision: rec.revision,
+      files: Object.assign(Object.create(null), rec.files),
+    };
+    // A kind this build does not know is left out rather than trusted: the
+    // readers infer one from the files, as for a record with none.
+    if (isModelKind(rec.kind)) {
+      record.kind = rec.kind;
+    }
+    return record;
   } catch {
     return null;
   }

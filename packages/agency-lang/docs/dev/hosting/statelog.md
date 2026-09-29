@@ -95,8 +95,10 @@ A process that ends on its own needs no flush, because Node keeps running
 until open requests finish. An explicit `process.exit()` kills them, so every
 place that exits on purpose awaits `flushPendingStatelogPosts()` first: the
 generated entry's crash and budget path, `resolveCliInterrupts` before it
-reports unhandled interrupts, and the subprocess bootstrap after it has sent
-its result to the parent. The per-request timeout bounds that wait.
+reports unhandled interrupts, the subprocess bootstrap after it has sent
+its result to the parent, the stdlib `exit()` (`_exit`), and the MCP stdio
+server's `exit` method. The per-request timeout bounds that wait. A new
+`process.exit()` call needs the same flush in front of it.
 
 The client reads only the status of each reply. A 401 or 403 means the server
 refused this key for this project, so the client turns the remote sink off

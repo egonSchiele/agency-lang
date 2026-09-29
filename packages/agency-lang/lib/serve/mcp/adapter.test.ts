@@ -1,10 +1,11 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { z } from "zod";
 import { createMcpHandler, mcpToolSummaryLines } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ServedExportedItem } from "../types.js";
 import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { PolicyStore } from "../policyStore.js";
+import { StatelogClient } from "../../statelogClient.js";
 import { mkdtempSync, rmSync } from "fs";
 import path from "path";
 import os from "os";
@@ -573,5 +574,42 @@ describe("mcpToolSummaryLines", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("MCP exit", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("waits for log POSTs still in flight before exiting", async () => {
+    let resolveFetch: (response: Response) => void = () => {};
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => new Promise<Response>((resolve) => (resolveFetch = resolve)),
+    );
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
+    const client = new StatelogClient({
+      host: "https://example.invalid",
+      apiKey: "secret",
+      projectId: "p",
+      traceId: "t",
+      observability: true,
+      requestTimeoutMs: 60_000,
+    });
+    // The last event of a tool call, still on its way to the server.
+    await client.debug("agentEnd", {});
+
+    const handler = createMcpHandler({
+      serverName: "test-server",
+      serverVersion: "1.0.0",
+      exports: makeTestExports(),
+    });
+    const exiting = handler({ jsonrpc: "2.0", method: "exit" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(exitSpy).not.toHaveBeenCalled();
+
+    resolveFetch(new Response("", { status: 200 }));
+    await exiting;
+    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 });

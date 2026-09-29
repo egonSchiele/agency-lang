@@ -5,6 +5,7 @@ import type { PolicyStore } from "../policyStore.js";
 import type { InterruptHandlers } from "./interruptLoop.js";
 import { runWithPolicy } from "./interruptLoop.js";
 import { errorMessage } from "../util.js";
+import { flushPendingStatelogPosts } from "../../statelogClient.js";
 import { unwrapServedInvocationOutcome } from "../../runtime/invocationUsage.js";
 
 function formatToolDescription(description: string, interruptEffects: InterruptEffect[]): string {
@@ -356,6 +357,9 @@ export function createMcpHandler(config: McpConfig): McpHandler {
         return success(message.id ?? null, {});
 
       case "exit":
+        // The last tool call's log POSTs may still be in flight, and
+        // process.exit would kill them.
+        await flushPendingStatelogPosts();
         process.exit(0);
 
       default:

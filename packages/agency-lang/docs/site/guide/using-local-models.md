@@ -352,6 +352,41 @@ const r = generateImageLocal("sketch, a cat on a chair", "diffusers:Laxhar/nooba
 
 `loraScale` is how strongly the adapter is applied: 1 is as trained, less is subtler, and up to 2 is allowed. The server loads an adapter the first time it is asked for, so a file you drop into the folder after training works at once, and when you train it again under the same name, the next request uses the new weights. Adapters are `.safetensors` files only, and a request can only pick a file from the folder you configured, never name a path itself.
 
+## Look at images on a Mac
+
+Two vision models turn a picture into words and boxes, on this machine, with nothing uploaded. `wd14-tagger` describes an image as booru tags, the vocabulary illustration models such as NoobAI-XL take in a prompt. `florence-2` finds the objects you name and returns a box for each, tags what it sees, and writes a caption. Download and serve them like any other model:
+
+```bash
+agency local download wd14-tagger florence-2
+agency local serve wd14-tagger florence-2
+```
+
+Then ask. Each function does one thing and returns a `Result`, so a loop over a folder is your own code, and `cropImage` from `std::image` turns a box into a new file:
+
+```ts
+import { detectObjects, tagImage } from "std::vision"
+import { cropImage } from "std::image"
+import { glob } from "std::shell"
+
+node main() {
+  const pages = glob("comics/*.png") catch []
+  for (page in pages) {
+    const found = detectObjects(page, ["person", "desk", "chair"], "florence-2") catch []
+    for (hit in found) {
+      const out = "dataset/${hit.label}_${hit.id}.png"
+      cropImage(page, hit.box, out, pad: 0.05)
+      const tags = tagImage(out, "wd14-tagger") catch []
+      const names = map(tags) as t {
+        return t.tag
+      }
+      write("${out}.txt", names.join(", "))
+    }
+  }
+}
+```
+
+Run it with `--approve std::glob --approve std::vision --approve std::cropImage --approve std::write` and it labels a few hundred crops unattended. Every call raises an effect naming the file it reads or writes, so a policy can allow tagging under `./dataset` and nothing else. Partial application narrows a tool before an agent gets it: `detectObjects.partial(labels: ["person"], model: "florence-2")` is a person-finder, and `cropImage` only ever writes a file that does not exist yet.
+
 ## What is different about a local model
 
 A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.

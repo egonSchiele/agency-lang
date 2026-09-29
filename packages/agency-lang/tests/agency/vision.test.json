@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "nodeName": "detectPayload",
+      "input": "",
+      "expectedOutput": "\"std::vision|vision-probe.png|detections|florence-2\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "tagPayload",
+      "input": "",
+      "expectedOutput": "\"tags|wd14-tagger\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "captionPayload",
+      "input": "",
+      "expectedOutput": "\"captions\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "rejectedIsFailure",
+      "input": "",
+      "expectedOutput": "\"rejected\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

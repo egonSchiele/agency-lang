@@ -39,6 +39,7 @@ import {
 } from "./hubDownload.js";
 import { fetchHubFileText, type HubSnapshot } from "./hubClient.js";
 import { diffusersFiles, hasModelIndex, MODEL_INDEX } from "./diffusersFiles.js";
+import { visionFiles } from "./visionFiles.js";
 export { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {
   type Backend,
@@ -1270,12 +1271,22 @@ async function downloadServedRepo(
   target: string,
   cacheDir: string,
   opts: DownloadOptions,
+  kind?: ModelKind,
 ): Promise<string> {
   const { backend, repo, revision } = parseServedUri(target);
   const snapshot = await fetchHubSnapshot(repo, revision, opts);
   const dir = servedModelDir(resolveCacheDir(cacheDir), backend, repo);
   if (backend === "diffusers") {
     return await downloadHubSnapshot(await diffusersSnapshot(snapshot, opts), dir, opts);
+  }
+  if (kind === "vision") {
+    // A vision repo often ships the same weights three ways. Keep the one
+    // the server reads.
+    return await downloadHubSnapshot(
+      { ...snapshot, files: visionFiles(snapshot.files) },
+      dir,
+      opts,
+    );
   }
   return await downloadHubSnapshot(snapshot, dir, opts);
 }
@@ -1365,8 +1376,9 @@ export async function _downloadModel(
       ...rest,
       token: hubOptions.token ?? process.env.HF_TOKEN,
     };
-    const dir = await downloadServedRepo(model.target, cacheDir, opts);
-    recordKind(dir, givenKind ?? _modelKind(value, dir));
+    const kind = givenKind ?? _catalogKind(value);
+    const dir = await downloadServedRepo(model.target, cacheDir, opts, kind);
+    recordKind(dir, kind ?? _modelKind(value, dir));
     // A model that loads other repos by name at runtime needs them on disk
     // too, or it cannot start offline. Only a catalog entry lists them.
     for (const companion of companionsFor(value, model.target)) {
@@ -1465,6 +1477,26 @@ export function _modelKind(value: string, dir: string): ModelKind | null {
   } catch {
     return null;
   }
+}
+
+/** The kind of the model `value` names, from the catalog, its record, or
+ *  its files, or null when it is not downloaded or nothing knows. For a
+ *  stdlib function refusing a model of the wrong kind before any request. */
+export function _localModelKindOf(value: string, cacheDir: string = ""): ModelKind | null {
+  const fromCatalog = _catalogKind(value);
+  if (fromCatalog !== undefined) {
+    return fromCatalog;
+  }
+  const resolved = _resolveModel(value);
+  if (resolved.backend === "llama-cpp") {
+    return "chat";
+  }
+  if (isServedUri(resolved.target)) {
+    const { backend, repo, revision } = parseServedUri(resolved.target);
+    const found = _findDownloadedServedModel(backend, repo, cacheDir, revision);
+    return found === null ? null : _modelKind(value, found.path);
+  }
+  return _modelKind(value, path.resolve(resolved.target));
 }
 
 /** The kind the catalog or an alias entry gives `value`, before any file is

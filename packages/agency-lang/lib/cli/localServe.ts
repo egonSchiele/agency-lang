@@ -8,9 +8,13 @@ import {
   isServedUri,
   parseServedUri,
   modelDirSizeBytes,
+  modelDirEntries,
   type ServedBackend,
 } from "../stdlib/modelBackend.js";
-import { IMAGES_PATH } from "./serveLog.js";
+import { IMAGES_PATH, VISION_PATHS } from "./serveLog.js";
+import { choosePython, defaultMlxEnv } from "../stdlib/localPython.js";
+export { choosePython, defaultMlxEnv } from "../stdlib/localPython.js";
+import { VISION_ONNX_FILES } from "../stdlib/modelKind.js";
 import {
   _resolveModel,
   _mlxServedName,
@@ -402,6 +406,9 @@ function argsFor(
   if (model.kind === "image") {
     return imageServeArgs(imageServerScript(), model.dir, internalPort, adaptersDir);
   }
+  if (model.kind === "vision") {
+    return visionServeArgs(visionServerScript(), model.dir, internalPort);
+  }
   return serveArgs(chatServerScript(), model.dir, internalPort, settings);
 }
 
@@ -416,11 +423,10 @@ function processLabel(kind: ServeKind, name: string): string {
   if (kind === "image") {
     return `the image server for ${name}`;
   }
+  if (kind === "vision") {
+    return `the vision server for ${name}`;
+  }
   return `mlx_lm.server for ${name}`;
-}
-
-export function defaultMlxEnv(home: string): string {
-  return path.join(home, ".agency-agent", "mlx-env");
 }
 
 /** The chat server shipped next to this file: mlx_lm.server with
@@ -483,7 +489,24 @@ export function imageServerScript(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "diffusersImageServer.py");
 }
 
-/** The Python modules each kind of process imports. */
+/** The vision server shipped next to this file, copied into dist like the
+ *  image one. */
+export function visionServerScript(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "visionServer.py");
+}
+
+/** The argv for one vision server process, after the Python path. */
+export function visionServeArgs(script: string, modelDir: string, internalPort: number): string[] {
+  return [script, "--model", modelDir, "--host", "127.0.0.1", "--port", String(internalPort)];
+}
+
+/** The onnxruntime release the vision server's tagger family was tested
+ *  with; `visionRules.py` pins the same one. */
+export const ONNXRUNTIME_VERSION = "1.30.0";
+
+/** The Python modules each kind of process imports. A vision model's
+ *  depend on its family, so its entry is empty here and `modulesFor` reads
+ *  the directory. */
 const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
   chat: ["mlx_lm", "llguidance"],
   embedding: ["mlx_lm"],
@@ -491,7 +514,21 @@ const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
   // accelerate is optional to diffusers, but without it a model loads
   // several times slower and with more memory.
   image: ["torch", "diffusers", "transformers", "accelerate"],
+  vision: [],
 };
+
+/** The modules one planned model's process imports. A vision model that
+ *  is an ONNX tagger needs onnxruntime alone; one that is a transformers
+ *  model needs torch and transformers. Which it is shows in its files, the
+ *  same way its kind did. */
+function modulesFor(model: Planned): string[] {
+  if (model.kind !== "vision") {
+    return MODULES_FOR_KIND[model.kind];
+  }
+  const names = modelDirEntries(model.dir).map((entry) => entry.name);
+  const isOnnx = VISION_ONNX_FILES.every((name) => names.includes(name));
+  return isOnnx ? ["onnxruntime"] : ["torch", "transformers"];
+}
 
 /** The pip requirement that provides each module. */
 const PIP_FOR_MODULE: Record<string, string> = {
@@ -502,6 +539,7 @@ const PIP_FOR_MODULE: Record<string, string> = {
   diffusers: IMAGE_REQUIREMENTS,
   transformers: IMAGE_REQUIREMENTS,
   accelerate: IMAGE_REQUIREMENTS,
+  onnxruntime: `onnxruntime==${ONNXRUNTIME_VERSION}`,
 };
 
 /** The pip requirements for `modules`, each once. The image modules share
@@ -510,22 +548,6 @@ function requirementsFor(modules: string[]): string[] {
   return modules
     .map((m) => PIP_FOR_MODULE[m])
     .filter((requirement, index, all) => all.indexOf(requirement) === index);
-}
-
-/** `--python`, then `client.mlx.python`, then `AGENCY_MLX_PYTHON`, then the
- *  default environment under the home directory. */
-export function choosePython(
-  flag: string | undefined,
-  configured: string | undefined,
-  env: string | undefined,
-  home: string,
-): string {
-  for (const candidate of [flag, configured, env]) {
-    if (candidate !== undefined && candidate !== "") {
-      return candidate;
-    }
-  }
-  return path.join(defaultMlxEnv(home), "bin", "python");
 }
 
 /** A line to print when the models add up to more than the machine has.
@@ -552,6 +574,7 @@ const SERVE_FOR_PATH: Record<string, { flag: string; backend: ServedBackend }> =
   [IMAGES_PATH]: { flag: "--image", backend: "diffusers" },
   "/v1/audio/speech": { flag: "--speech", backend: "mlx" },
   "/v1/embeddings": { flag: "--embedding", backend: "mlx" },
+  ...Object.fromEntries(VISION_PATHS.map((p) => [p, { flag: "", backend: "mlx" }])),
 };
 
 /** The 404 body for a request naming a model this server was not started
@@ -563,7 +586,7 @@ export function notServedMessage(served: string[], requested: string, requestPat
   const backend = serve?.backend ?? "mlx";
   const target =
     path.isAbsolute(requested) || isServedUri(requested) ? requested : `${backend}:${requested}`;
-  const args = serve === undefined ? target : `${serve.flag} ${target}`;
+  const args = serve === undefined || serve.flag === "" ? target : `${serve.flag} ${target}`;
   return (
     `This server is serving ${joinNames(served)}. It is not serving ${requested}. ` +
     `Start it with: agency local serve ${args}`
@@ -641,7 +664,7 @@ function readinessRequest(kind: ServeKind, upstreamModel: string): Probe {
       body: JSON.stringify({ model: upstreamModel, input: "hi" }),
     };
   }
-  if (kind === "speech" || kind === "image") {
+  if (kind === "speech" || kind === "image" || kind === "vision") {
     return { method: "GET", path: "/health" };
   }
   return {
@@ -929,6 +952,7 @@ const FLAG_FOR_KIND: Record<ServeKind, string> = {
   embedding: "--embedding",
   speech: "--speech",
   image: "--image",
+  vision: "",
 };
 
 function anArticle(word: string): string {
@@ -1091,6 +1115,7 @@ const BANNER_SUFFIX: Record<ServeKind, string> = {
   embedding: "  (embeddings)",
   speech: "  (speech)",
   image: "  (images)",
+  vision: "  (vision)",
 };
 
 /** What `serve` prints once every process is ready: the models, in plan
@@ -1135,6 +1160,15 @@ export function servingBanner(port: number, models: ServedModel[]): string[] {
       "  In Agency code:",
       `    import { generateImageLocal } from "std::image"`,
       `    generateImageLocal("a lighthouse in a storm", "${image}")`,
+    );
+  }
+  const vision = first("vision");
+  if (vision !== undefined) {
+    lines.push(
+      "",
+      "  In Agency code:",
+      `    import { tagImage, detectObjects } from "std::vision"`,
+      `    tagImage("drawing.png", "${vision}")`,
     );
   }
   return lines;
@@ -1193,7 +1227,7 @@ export async function runServe(
   );
   // The modules the planned kinds import, each once, in plan order.
   const modules = planned
-    .flatMap((model) => MODULES_FOR_KIND[model.kind])
+    .flatMap(modulesFor)
     .filter((module, index, all) => all.indexOf(module) === index);
   const problem = checkPython(python, deps.exec, modules);
   if (problem !== "ok") {

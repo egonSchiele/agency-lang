@@ -1,4 +1,7 @@
 import { _generateImage, _generateImageLocal } from "agency-lang/stdlib-lib/image.js"
+import { _cropImage, _imageSize, _pasteImages } from "agency-lang/stdlib-lib/imageTools.js"
+import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
+import { dirname, basename } from "std::path"
 
 /** @module
   @summary Generate images from a text prompt with a hosted provider or a model on this machine, returning base64 you can persist.
@@ -22,6 +25,33 @@ persist with `writeBinary()` or send onward with `std::thread`'s `image(...)`.
   }
   ```
 */
+
+// Cutting a box out of one image and writing it as another. Both paths are
+// real spellings, since one approval is for "read this, write that". An
+// "always" answer pins both folders, as std::copy does, so a rule saved
+// for one crop cannot read an image from anywhere else.
+@alwaysUnder(dir, outDir)
+effect std::cropImage { dir: string, filename: string, outDir: string, outFilename: string }
+
+// Laying several images out on one canvas. Every input is listed the way
+// applyPatch lists the files a patch touches. No "always" tag, as with
+// applyPatch: a list of inputs cannot be pinned to one folder.
+effect std::pasteImages { files: string[], outDir: string, outFilename: string }
+
+/** A region of an image, normalized to 0..1 with the origin at the top
+left, as std::ocr and std::vision return it. */
+export type ImageBox = {
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+}
+
+/** Width and height in pixels. */
+export type ImageSize = {
+  width: number,
+  height: number,
+}
 
 export type GeneratedImage = {
   base64: string;
@@ -120,4 +150,94 @@ export def generateImageLocal(
     lora,
     loraScale,
   )
+}
+
+export def cropImage(
+  path: string,
+  box: ImageBox,
+  outPath: string,
+  pad: number = 0,
+  square: boolean = false,
+): Result<string> raises <std::cropImage> {
+  """
+  Cut a box out of an image and write it as a new image. Returns the path
+  written. The box is normalized 0..1 from the top left, the shape
+  detectObjects and readTextBlocks return. An existing output file is never
+  overwritten.
+
+  @param path - The image to cut from: PNG, JPEG, or WebP
+  @param box - The region, as { x, y, width, height } in 0..1
+  @param outPath - Where to write the cut. The extension picks the format
+  @param pad - Grow the box by this fraction of its size on every side, so a tight detection keeps a margin. 0.05 is a small one
+  @param square - Pad the cut to a square with its edge color, so a wide crop keeps its whole width in a square training image
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  const out = try _realTarget(outPath)
+  if (isFailure(out)) {
+    return out
+  }
+  return interrupt std::cropImage("Cut a region out of this image and write it as a new file?", {
+    dir: dirname(real.value),
+    filename: basename(real.value),
+    outDir: dirname(out.value),
+    outFilename: basename(out.value),
+  })
+  return try _cropImage(real.value, box, out.value, pad, square)
+}
+
+export idempotent def imageSize(path: string): Result<ImageSize> raises <std::readImage> {
+  """
+  The width and height of an image in pixels.
+
+  @param path - The image: PNG, JPEG, WebP, or GIF
+  """
+  const real = try _realTarget(path)
+  if (isFailure(real)) {
+    return real
+  }
+  return interrupt std::readImage("Read this image's size?", {
+    dir: dirname(real.value),
+    filename: basename(real.value),
+  })
+  return try _imageSize(real.value)
+}
+
+export def pasteImages(
+  paths: string[],
+  outPath: string,
+  columns: number = 2,
+): Result<string> raises <std::pasteImages> {
+  """
+  Lay images out on one white canvas, in rows of `columns`, each at its own
+  size, and write the result. Two images side by side is a before and
+  after; a folder in rows of eight is a contact sheet. Returns the path
+  written. An existing output file is never overwritten.
+
+  @param paths - The images, in reading order
+  @param outPath - Where to write the canvas. The extension picks the format
+  @param columns - How many images per row
+  """
+  // Every path is checked before the interrupt, so a bad one fails here
+  // instead of being approved and failing afterwards.
+  const reals: string[] = []
+  for (p in paths) {
+    const real = try _realTarget(p)
+    if (isFailure(real)) {
+      return real
+    }
+    reals.push(real.value)
+  }
+  const out = try _realTarget(outPath)
+  if (isFailure(out)) {
+    return out
+  }
+  return interrupt std::pasteImages("Paste these images onto one canvas and write it as a new file?", {
+    files: reals,
+    outDir: dirname(out.value),
+    outFilename: basename(out.value),
+  })
+  return try _pasteImages(reals, out.value, columns)
 }

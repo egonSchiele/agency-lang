@@ -57,6 +57,47 @@ describe("describeRequest", () => {
 });
 
 describe("describeReply", () => {
+  it("counts a vision reply", () => {
+    const boxes = JSON.stringify({ detections: [{ label: "a" }, { label: "b" }, { label: "c" }] });
+    const summary = describeReply(
+      {
+        status: 200,
+        body: boxes,
+        contentType: "application/json",
+        truncated: false,
+        totalBytes: 1,
+      },
+      { path: "/v1/vision/detections" },
+    );
+    expect(summary.vision).toBe("3 detections");
+    const tags = JSON.stringify({ tags: [{ tag: "a" }] });
+    expect(
+      describeReply(
+        {
+          status: 200,
+          body: tags,
+          contentType: "application/json",
+          truncated: false,
+          totalBytes: 1,
+        },
+        { path: "/v1/vision/tags" },
+      ).vision,
+    ).toBe("1 tag");
+    const caption = JSON.stringify({ caption: "x" });
+    expect(
+      describeReply(
+        {
+          status: 200,
+          body: caption,
+          contentType: "application/json",
+          truncated: false,
+          totalBytes: 1,
+        },
+        { path: "/v1/vision/captions" },
+      ).vision,
+    ).toBe("1 caption");
+  });
+
   it("indents a JSON reply and reads its usage", () => {
     const body = JSON.stringify({
       choices: [{ message: { content: "ok" } }],

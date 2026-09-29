@@ -27,6 +27,38 @@ persist with `writeBinary()` or send onward with `std::thread`'s `image(...)`.
 
 ## Types
 
+### ImageBox
+
+A region of an image, normalized to 0..1 with the origin at the top
+left, as std::ocr and std::vision return it.
+
+```ts
+/** A region of an image, normalized to 0..1 with the origin at the top
+left, as std::ocr and std::vision return it. */
+export type ImageBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L43))
+
+### ImageSize
+
+Width and height in pixels.
+
+```ts
+/** Width and height in pixels. */
+export type ImageSize = {
+  width: number;
+  height: number
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L51))
+
 ### GeneratedImage
 
 ```ts
@@ -36,7 +68,7 @@ export type GeneratedImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L26))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L56))
 
 ### ImageQuality
 
@@ -44,7 +76,7 @@ export type GeneratedImage = {
 export type ImageQuality = "low" | "medium" | "high" | "auto"
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L31))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L61))
 
 ### LocalImage
 
@@ -56,7 +88,35 @@ export type LocalImage = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L69))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L99))
+
+## Effects
+
+### std::cropImage
+
+```ts
+@alwaysUnder(dir, outDir)
+effect std::cropImage {
+  dir: string;
+  filename: string;
+  outDir: string;
+  outFilename: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L34))
+
+### std::pasteImages
+
+```ts
+effect std::pasteImages {
+  files: string[];
+  outDir: string;
+  outFilename: string
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L39))
 
 ## Functions
 
@@ -103,7 +163,7 @@ Generate an image from a text prompt using a hosted provider, optionally
 
 **Returns:** `Result<GeneratedImage>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L33))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L63))
 
 ### generateImageLocal
 
@@ -162,4 +222,98 @@ Generate an image on this machine with a local image model. The model
 
 **Returns:** `Result<LocalImage>`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L75))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L105))
+
+### cropImage
+
+```ts
+cropImage(
+  path: string,
+  box: ImageBox,
+  outPath: string,
+  pad: number = 0,
+  square: boolean = false,
+): Result<string> raises <std::cropImage>
+```
+
+Cut a box out of an image and write it as a new image. Returns the path
+  written. The box is normalized 0..1 from the top left, the shape
+  detectObjects and readTextBlocks return. An existing output file is never
+  overwritten.
+
+  @param path - The image to cut from: PNG, JPEG, or WebP
+  @param box - The region, as { x, y, width, height } in 0..1
+  @param outPath - Where to write the cut. The extension picks the format
+  @param pad - Grow the box by this fraction of its size on every side, so a tight detection keeps a margin. 0.05 is a small one
+  @param square - Pad the cut to a square with its edge color, so a wide crop keeps its whole width in a square training image
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| path | `string` |  |
+| box | [ImageBox](#imagebox) |  |
+| outPath | `string` |  |
+| pad | `number` | 0 |
+| square | `boolean` | false |
+
+**Returns:** `Result<string>`
+
+**Throws:** `std::cropImage`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L155))
+
+### imageSize
+
+```ts
+imageSize(path: string): Result<ImageSize> raises <std::readImage>
+```
+
+The width and height of an image in pixels.
+
+  @param path - The image: PNG, JPEG, WebP, or GIF
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| path | `string` |  |
+
+**Returns:** `Result<ImageSize>`
+
+**Throws:** `std::readImage`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L191))
+
+### pasteImages
+
+```ts
+pasteImages(
+  paths: string[],
+  outPath: string,
+  columns: number = 2,
+): Result<string> raises <std::pasteImages>
+```
+
+Lay images out on one white canvas, in rows of `columns`, each at its own
+  size, and write the result. Two images side by side is a before and
+  after; a folder in rows of eight is a contact sheet. Returns the path
+  written. An existing output file is never overwritten.
+
+  @param paths - The images, in reading order
+  @param outPath - Where to write the canvas. The extension picks the format
+  @param columns - How many images per row
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| paths | `string[]` |  |
+| outPath | `string` |  |
+| columns | `number` | 2 |
+
+**Returns:** `Result<string>`
+
+**Throws:** `std::pasteImages`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L208))

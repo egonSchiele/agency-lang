@@ -100,7 +100,11 @@ export function isModelDir(p: string): boolean {
   }
   const entries = modelDirEntries(p);
   const hasConfig = entries.some((e) => e.name === "config.json");
-  const hasWeights = entries.some((e) => e.name.endsWith(".safetensors"));
+  // An ONNX vision model, such as the WD14 tagger, keeps its weights in
+  // model.onnx and has no .safetensors at all.
+  const hasWeights = entries.some(
+    (e) => e.name.endsWith(".safetensors") || e.name.endsWith(".onnx"),
+  );
   return hasConfig && hasWeights;
 }
 

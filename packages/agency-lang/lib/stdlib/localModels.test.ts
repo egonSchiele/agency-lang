@@ -81,7 +81,7 @@ describe("name resolution", () => {
 
 describe("curated catalog shape", () => {
   it("every entry has a non-empty uri, params, description, a kind, and tags", () => {
-    const validKinds = new Set(["chat", "embedding", "speech", "image"]);
+    const validKinds = new Set(["chat", "embedding", "speech", "image", "vision"]);
     const validTags = new Set(["coding", "reasoning", "writing", "science", "uncensored"]);
     // Curated set is permissive-licensed only.
     const permissiveLicenses = new Set(["apache-2.0", "mit"]);
@@ -1632,7 +1632,7 @@ describe("model kinds", () => {
       );
     write("speech");
     expect(readMlxModelRecord(model)?.kind).toBe("speech");
-    write("vision");
+    write("video");
     const record = readMlxModelRecord(model);
     expect(record?.repo).toBe("org/rec");
     expect(record?.kind).toBeUndefined();

@@ -13,7 +13,7 @@ import { registerMlxImageProvider } from "./mlxImage.js";
 import type { LocalImageInputs } from "./localImageInputs.js";
 
 /** The input images of a call with none. */
-const NO_INPUTS: LocalImageInputs = { field: null, files: [], settings: {} };
+const NO_INPUTS: LocalImageInputs = { files: [], settings: {} };
 
 type ImageImpl = (input: any, config: any) => Promise<any>;
 
@@ -531,9 +531,14 @@ describe("_generateImageLocal", () => {
         "",
         null,
         {
-          field: "control_image",
           files: [
-            { path: image, dir: path.dirname(image), filename: path.basename(image), question: "" },
+            {
+              field: "control_image",
+              path: image,
+              dir: path.dirname(image),
+              filename: path.basename(image),
+              question: "",
+            },
           ],
           settings: { controlnet: "scribble", control_scale: 0.8, control_invert: true },
         },
@@ -574,6 +579,7 @@ describe("_generateImageLocal", () => {
     fs.writeFileSync(hat, HAT);
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     const file = (image: string) => ({
+      field: "images",
       path: image,
       dir,
       filename: path.basename(image),
@@ -591,7 +597,7 @@ describe("_generateImageLocal", () => {
         "png",
         "",
         null,
-        { field: "images", files: [file(cat), file(hat)], settings: {} },
+        { files: [file(cat), file(hat)], settings: {} },
       );
       expect(r.success).toBe(true);
       expect(requests[0].images).toEqual([PNG.toString("base64"), HAT.toString("base64")]);
@@ -621,8 +627,7 @@ describe("_generateImageLocal", () => {
         "",
         null,
         {
-          field: "start_image",
-          files: [{ path: photo, dir, filename: "photo.png", question: "" }],
+          files: [{ field: "start_image", path: photo, dir, filename: "photo.png", question: "" }],
           settings: { strength: 0.4 },
         },
       );
@@ -630,6 +635,43 @@ describe("_generateImageLocal", () => {
       // One image is sent as a string, not a list of one.
       expect(requests[0].start_image).toBe(PNG.toString("base64"));
       expect(requests[0].strength).toBe(0.4);
+      expect(JSON.stringify(requests[0])).not.toContain(dir);
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sends a start image and its mask, each as its bytes in base64, never their paths", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "inpaint-")));
+    const photo = path.join(dir, "photo.png");
+    const mask = path.join(dir, "mask.png");
+    const MASK = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d]);
+    fs.writeFileSync(photo, PNG);
+    fs.writeFileSync(mask, MASK);
+    serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
+    await withClient(realImage, async () => {
+      const r = await _generateImageLocal(
+        "a vase of sunflowers",
+        "z-image-turbo",
+        "",
+        null,
+        null,
+        7,
+        "",
+        "png",
+        "",
+        null,
+        {
+          files: [
+            { field: "start_image", path: photo, dir, filename: "photo.png", question: "" },
+            { field: "mask_image", path: mask, dir, filename: "mask.png", question: "" },
+          ],
+          settings: { strength: 0.9 },
+        },
+      );
+      expect(r.success).toBe(true);
+      expect(requests[0].start_image).toBe(PNG.toString("base64"));
+      expect(requests[0].mask_image).toBe(MASK.toString("base64"));
+      expect(requests[0].strength).toBe(0.9);
       expect(JSON.stringify(requests[0])).not.toContain(dir);
     });
     fs.rmSync(dir, { recursive: true, force: true });

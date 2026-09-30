@@ -247,8 +247,8 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
       prompt: "a cat",
       size: null,
       mode: "plain",
-      image_field: null,
-      input_images: [],
+      image_fields: [],
+      input_images: {},
       steps: 9,
       strength: null,
       steps_run: 9,
@@ -450,12 +450,12 @@ print(adapter_names(os.path.join(d, "missing")))
     const out = JSON.parse(
       check(family, { ...body, control_scale: 0.8, control_invert: true }, null, "/c"),
     );
-    expect([out.controlnet, out.input_images[0], out.control_scale, out.control_invert]).toEqual([
-      "scribble",
-      "3 bytes",
-      0.8,
-      true,
-    ]);
+    expect([
+      out.controlnet,
+      out.input_images.control_image[0],
+      out.control_scale,
+      out.control_invert,
+    ]).toEqual(["scribble", "3 bytes", 0.8, true]);
     const plain = JSON.parse(check(family, body, null, "/c"));
     expect([plain.control_scale, plain.control_invert]).toEqual([1.0, false]);
     expect(check(family, { prompt: "a cat", controlnet: "scribble" }, null, "/c")).toBe(
@@ -701,9 +701,9 @@ print("controlnet_conditioning_scale" in pipeline_args(rules, check_request(rule
     expect(check("ChromaPipeline", { ...body, strength: 1.5 })).toBe(message);
     expect(check("ChromaPipeline", { ...body, strength: true })).toBe(message);
     const filled = JSON.parse(check("ChromaPipeline", body));
-    expect([filled.mode, filled.image_field, filled.strength, filled.steps_run]).toEqual([
+    expect([filled.mode, filled.image_fields, filled.strength, filled.steps_run]).toEqual([
       "img2img",
-      "start_image",
+      ["start_image"],
       0.9,
       36,
     ]);
@@ -794,6 +794,82 @@ print("strength" in pipeline_args(plain, check_request(plain, {"prompt": "a cat"
       "QwenImagePipeline 0.5 1024 768",
       "StableDiffusionXLPipeline 0.5 None None",
       "False",
+    ]);
+  });
+
+  it("puts a start image with a mask in inpaint mode, and refuses a mask on its own", () => {
+    const out = rules(`
+picture = "cG5n"
+def mode(family, body):
+    try:
+        return mode_of(FAMILIES[family], body)
+    except RequestError as e:
+        return f"ERROR {e}"
+print(mode("ZImagePipeline", {"prompt": "a vase", "start_image": picture, "mask_image": picture}))
+print(mode("ZImagePipeline", {"prompt": "a vase", "mask_image": picture}))
+print(mode("Flux2KleinPipeline", {"prompt": "a vase", "images": [picture], "mask_image": picture}))
+print(mode("Flux2KleinPipeline", {"prompt": "a vase", "start_image": picture, "mask_image": picture}))
+print(mode("StableDiffusionXLPipeline", {"prompt": "a vase", "start_image": picture, "mask_image": picture, "controlnet": "scribble", "control_image": picture}))
+`);
+    expect(out.split("\n")).toEqual([
+      "inpaint",
+      "ERROR mask_image goes with start_image, and this request has none.",
+      "ERROR mask_image goes with start_image, and this request has none.",
+      "ERROR FLUX.2 [klein] does not redraw part of a picture. Z-Image Turbo, Chroma, Qwen-Image, and SDXL do.",
+      "ERROR a request takes one of control_image, images, or start_image.",
+    ]);
+  });
+
+  it("checks an inpaint request with both images, the family's inpaint strength, and its steps", () => {
+    const picture = Buffer.from("png").toString("base64");
+    const mask = Buffer.from("mask").toString("base64");
+    const body = { prompt: "a vase", start_image: picture, mask_image: mask };
+    const sdxl = JSON.parse(check("StableDiffusionXLPipeline", body));
+    expect([
+      sdxl.mode,
+      sdxl.image_fields,
+      sdxl.input_images,
+      sdxl.strength,
+      sdxl.steps_run,
+    ]).toEqual([
+      "inpaint",
+      ["start_image", "mask_image"],
+      { start_image: ["3 bytes"], mask_image: ["4 bytes"] },
+      0.9999,
+      27,
+    ]);
+    const chroma = JSON.parse(check("ChromaPipeline", { ...body, strength: 0.5 }));
+    expect([chroma.strength, chroma.steps_run]).toEqual([0.5, 20]);
+    expect(check("ChromaPipeline", { ...body, strength: 0 })).toBe(
+      "ERROR 400 strength must be a number above 0 and at most 1. Low keeps the start image close; Chroma uses 0.6 when strength is left out.",
+    );
+  });
+
+  it("passes strength and a size to every inpaint pipeline, SDXL's too", () => {
+    const picture = Buffer.from("png").toString("base64");
+    const out = rules(`
+for family in ["ZImagePipeline", "ChromaPipeline", "QwenImagePipeline", "StableDiffusionXLPipeline"]:
+    rules = FAMILIES[family]
+    request = check_request(rules, {"prompt": "a vase", "start_image": "${picture}", "mask_image": "${picture}", "strength": 0.8})
+    args = pipeline_args(rules, request, 1024, 768)
+    print(family, args["strength"], args["width"], args["height"])
+`);
+    expect(out.split("\n")).toEqual([
+      "ZImagePipeline 0.8 1024 768",
+      "ChromaPipeline 0.8 1024 768",
+      "QwenImagePipeline 0.8 1024 768",
+      "StableDiffusionXLPipeline 0.8 1024 768",
+    ]);
+  });
+
+  it("refuses a mask that is not the size of its picture", () => {
+    const out = rules(`
+print(size_match_problem("mask_image", (800, 600), "start_image", (1024, 768)))
+print(size_match_problem("mask_image", (1024, 768), "start_image", (1024, 768)))
+`);
+    expect(out.split("\n")).toEqual([
+      "mask_image is 800x600 and start_image is 1024x768. They must be the same size.",
+      "None",
     ]);
   });
 
@@ -1017,7 +1093,7 @@ print(use("style.v2", [2, 11]))
 
   it("refuses a field it does not know, naming the ones it takes", () => {
     expect(check("ZImagePipeline", { prompt: "a cat", style: "vivid" })).toBe(
-      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, control_invert, images, start_image, and strength.",
+      "ERROR 400 style is not a setting of this server. It takes prompt, size, steps, guidance, seed, negative_prompt, output_format, response_format, n, lora, lora_scale, controlnet, control_image, control_scale, control_invert, images, start_image, mask_image, and strength.",
     );
   });
 
@@ -1132,7 +1208,7 @@ function images(code: string): string {
 import io, sys
 sys.path.insert(0, sys.argv[1])
 from PIL import Image
-from diffusersImageServer import decode_image, prepared, fitted
+from diffusersImageServer import decode_image, prepared, fitted, input_images
 from diffusersImageRules import RequestError
 
 def saved(image, format="PNG", **options):
@@ -1241,6 +1317,47 @@ canvas = fitted(start, "start_image", 512, 512)
 print(canvas.size, canvas.getpixel((10, 256)), canvas.getpixel((501, 256)))
 `);
     expect(out).toBe("(512, 512) (255, 0, 0) (255, 0, 0)");
+  });
+
+  it("turns the transparent part of a mask black, whatever color is stored under it", () => {
+    // Editors often save a fully transparent pixel as white. A mask painted
+    // white over such a layer must keep what was not painted.
+    const out = images(`
+mask = Image.new("RGBA", (400, 300), (255, 255, 255, 0))
+mask.paste(Image.new("RGBA", (100, 300), (255, 255, 255, 255)), (150, 0))
+decoded_mask = decoded(saved(mask), "mask_image")
+print(decoded_mask.getpixel((10, 150)), decoded_mask.getpixel((200, 150)))
+`);
+    expect(out).toBe("(0, 0, 0) (255, 255, 255)");
+  });
+
+  it("gives an inpaint pipeline the picture and its mask cropped alike, and refuses a mask of another size", () => {
+    // A 400x300 picture and its mask: white over the middle, black at the
+    // sides. Covering a square crops the sides of both the same way.
+    const out = images(`
+import base64
+picture = saved(Image.new("RGB", (400, 300), (255, 0, 0)))
+mask = Image.new("RGB", (400, 300), (0, 0, 0))
+mask.paste(Image.new("RGB", (100, 300), (255, 255, 255)), (150, 0))
+def request(mask_bytes):
+    return {
+        "size": (512, 512),
+        "image_fields": ["start_image", "mask_image"],
+        "input_images": {"start_image": [picture], "mask_image": [mask_bytes]},
+    }
+width, height, fitted_images = input_images(request(saved(mask)))
+print(width, height, sorted(fitted_images))
+print(fitted_images["mask_image"].size, fitted_images["mask_image"].getpixel((256, 256)), fitted_images["mask_image"].getpixel((10, 256)))
+try:
+    input_images(request(saved(Image.new("RGB", (200, 150)))))
+except RequestError as e:
+    print(e)
+`);
+    expect(out.split("\n")).toEqual([
+      "512 512 ['image', 'mask_image']",
+      "(512, 512) (255, 255, 255) (0, 0, 0)",
+      "mask_image is 200x150 and start_image is 400x300. They must be the same size.",
+    ]);
   });
 
   it("shrinks a large reference to a megapixel and leaves a small one alone", () => {

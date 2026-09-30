@@ -238,24 +238,30 @@ function checkLocalImageArgs(
   return { servedName: _mlxServedName(resolved) };
 }
 
-/** The request field that carries a call's input images, with each file's
+/** The request fields that carry a call's input images, with each file's
  *  bytes as base64: one string when the field takes one image, a list
  *  otherwise. The files are read here, after the Agency side raised
  *  std::readImage for each, so the server never opens a path a request
  *  wrote. `approvedFileBytes` refuses a symlink that appeared while the
  *  prompt was pending, and a file over the field's size cap. */
 function imageFields(inputs: LocalImageInputs): Record<string, unknown> {
-  if (inputs.field === null) {
-    return {};
+  const encoded: Record<string, string[]> = {};
+  for (const file of inputs.files) {
+    const row = LOCAL_IMAGE_FIELDS[file.field];
+    if (row === undefined) {
+      throw new Error(`${file.field} is not an image field of the image server.`);
+    }
+    encoded[file.field] = [
+      ...(encoded[file.field] ?? []),
+      approvedFileBytes(file.path, row.maxBytes).toString("base64"),
+    ];
   }
-  const row = LOCAL_IMAGE_FIELDS[inputs.field];
-  if (row === undefined) {
-    throw new Error(`${inputs.field} is not an image field of the image server.`);
-  }
-  const encoded = inputs.files.map((file) =>
-    approvedFileBytes(file.path, row.maxBytes).toString("base64"),
+  return Object.fromEntries(
+    Object.entries(encoded).map(([field, images]) => [
+      field,
+      LOCAL_IMAGE_FIELDS[field].maxCount === 1 ? images[0] : images,
+    ]),
   );
-  return { [inputs.field]: row.maxCount === 1 ? encoded[0] : encoded };
 }
 
 /** The settings a call gives, as the request fields the server takes. A

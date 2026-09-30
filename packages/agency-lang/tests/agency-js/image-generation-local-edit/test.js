@@ -6,6 +6,7 @@ import {
   edit,
   plain,
   redraw,
+  inpaint,
   hasInterrupts,
   approve,
   reject,
@@ -54,6 +55,9 @@ function sent(body) {
   }
   if (body.start_image !== undefined) {
     out.start_image = named(body.start_image);
+  }
+  if (body.mask_image !== undefined) {
+    out.mask_image = named(body.mask_image);
   }
   return out;
 }
@@ -113,6 +117,29 @@ out.startMissing = {
   ok: startMissing.data.ok,
   error: startMissing.data.error.replace(dir, "DIR"),
 };
+
+// A start image with a mask raises two reads, the picture and then the
+// mask. After both are approved the server gets both files' bytes, each as
+// one string, with the strength.
+const inpainting = await inpaint(cat, hat);
+out.inpaintFirstAsked = asked(inpainting);
+const inpaintSecond = await respondToInterrupts(inpainting.data, [approve()]);
+out.inpaintSecondAsked = asked(inpaintSecond);
+const inpainted = await respondToInterrupts(inpaintSecond.data, [approve()]);
+out.inpainted = inpainted.data;
+out.requestsAfterInpaint = requests.length;
+
+// Rejecting the mask's read sends nothing.
+const inpaintAgain = await inpaint(cat, hat);
+const inpaintAgainSecond = await respondToInterrupts(inpaintAgain.data, [approve()]);
+const maskRejected = await respondToInterrupts(inpaintAgainSecond.data, [reject()]);
+out.maskRejected = maskRejected.data;
+out.requestsAfterMaskReject = requests.length;
+
+// A mask with no start image fails before anything is asked.
+const maskAlone = await inpaint("", hat);
+out.maskAloneAsked = asked(maskAlone);
+out.maskAlone = maskAlone.data;
 
 out.requests = requests.map(sent);
 server.close();

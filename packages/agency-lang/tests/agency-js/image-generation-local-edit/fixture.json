@@ -77,6 +77,43 @@
     "ok": false,
     "error": "generateImageLocal failed: no such file: DIR/nope.png"
   },
+  "inpaintFirstAsked": {
+    "interrupted": true,
+    "asks": [
+      {
+        "effect": "std::readImage",
+        "dirIsReal": true,
+        "filename": "cat.png"
+      }
+    ]
+  },
+  "inpaintSecondAsked": {
+    "interrupted": true,
+    "asks": [
+      {
+        "effect": "std::readImage",
+        "dirIsReal": true,
+        "filename": "hat.png"
+      }
+    ]
+  },
+  "inpainted": {
+    "ok": true,
+    "error": ""
+  },
+  "requestsAfterInpaint": 4,
+  "maskRejected": {
+    "ok": false,
+    "error": "interrupt rejected"
+  },
+  "requestsAfterMaskReject": 4,
+  "maskAloneAsked": {
+    "interrupted": false
+  },
+  "maskAlone": {
+    "ok": false,
+    "error": "generateImageLocal failed: mask goes with startImage, and this call has none."
+  },
   "requests": [
     {
       "model": "black-forest-labs/FLUX.2-klein-4B",
@@ -107,6 +144,18 @@
       "seed": 7,
       "start_image": "cat.png",
       "strength": 0.4
+    },
+    {
+      "model": "Tongyi-MAI/Z-Image-Turbo",
+      "prompt": "a vase of sunflowers",
+      "n": 1,
+      "response_format": "b64_json",
+      "size": "",
+      "output_format": "png",
+      "seed": 7,
+      "start_image": "cat.png",
+      "mask_image": "hat.png",
+      "strength": 0.9
     }
   ]
 }

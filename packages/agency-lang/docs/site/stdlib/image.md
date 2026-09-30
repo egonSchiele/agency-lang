@@ -209,6 +209,7 @@ generateImageLocal(
   images: string[] = [],
   startImage: string = "",
   strength: number | null = null,
+  mask: string = "",
 ): Result<LocalImage> raises <std::readImage>
 ```
 
@@ -249,6 +250,9 @@ Generate an image on this machine with a local image model. The model
   scaled to cover `size` and the overflow is cropped from both sides, so a
   4:3 photo redrawn as a square loses a strip at its left and right.
 
+  To redraw only part of the picture, also pass a `mask`: white is
+  redrawn and black is kept.
+
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
   @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768". Empty is 1024x1024. Leave it empty when editing or redrawing a picture, and the result keeps the picture's shape
@@ -265,7 +269,28 @@ Generate an image on this machine with a local image model. The model
   @param invertControlImage - Swap black and white in the drawing before using it. Set it for dark lines on white with the scribble ControlNet, which reads white lines on black
   @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] takes them, and at most 4
   @param startImage - A picture to redraw, as a path to a file on this machine. The layout stays and the style changes. Goes with strength. Every model but FLUX.2 [klein] takes one
-  @param strength - How much of startImage to redraw, above 0 and up to 1. Low keeps it close, high changes more. Null uses the model's default
+  @param strength - How much of startImage to redraw, above 0 and up to 1. Low keeps it close, high changes more. Null uses the model's default, which can change when a mask is added: for Z-Image Turbo it goes from 0.6 to 1.0, which redraws the white part from scratch
+  @param mask - A black-and-white picture the same size as startImage, as a path to a file on this machine. White is redrawn and black is kept. Goes with startImage. Every model but FLUX.2 [klein] takes one
+
+Redrawing part of a picture: pass a `mask` with `startImage`. The mask
+is a picture the same size as the start image. White marks the part to
+redraw and black the part to keep, so a white shape over a vase changes
+only the vase:
+
+  ```ts
+  generateImageLocal("a vase of sunflowers", "z-image-turbo",
+    startImage: "photo.png", mask: "vase-mask.png")
+  ```
+
+Grey redraws partly, so a mask whose edge fades from white to black
+blends the new part in, where a hard edge can leave a faint seam. A
+transparent part of a mask counts as black. The mask is read from this
+machine under std::readImage, like the start image.
+
+Each model has its own default strength with a mask, which can differ
+from its default without one. Z-Image Turbo's goes from 0.6 to 1.0, and
+1.0 draws the white part from scratch, keeping nothing of what was
+there. Pass a lower strength to keep some of it.
 
 **Parameters:**
 
@@ -288,12 +313,13 @@ Generate an image on this machine with a local image model. The model
 | images | `string[]` | [] |
 | startImage | `string` | "" |
 | strength | `number \| null` | null |
+| mask | `string` | "" |
 
 **Returns:** `Result<LocalImage>`
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L140))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L159))
 
 ### cropImage
 
@@ -332,7 +358,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L247))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L272))
 
 ### imageSize
 
@@ -354,7 +380,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L283))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L308))
 
 ### pasteImages
 
@@ -387,4 +413,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L300))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L325))

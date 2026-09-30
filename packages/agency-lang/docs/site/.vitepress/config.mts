@@ -102,7 +102,7 @@ export default defineConfig({
             {
               text: "LLM Calls, Part 2",
               link: "/guide/llm-part-2",
-            },            
+            },
             {
               text: "Streaming",
               link: "/guide/streaming",
@@ -173,7 +173,7 @@ export default defineConfig({
             {
               text: "Decision Models",
               link: "/guide/decision-models",
-            },            
+            },
             { text: "Template Agency", link: "/guide/template-agency" },
             { text: "Splices", link: "/guide/splices" },
             { text: "Memory", link: "/guide/memory" },
@@ -493,6 +493,7 @@ export default defineConfig({
             { text: "email", link: "/packages/email/" },
             { text: "github", link: "/packages/github/" },
             { text: "kokoro", link: "/packages/kokoro/" },
+            { text: "lora", link: "/packages/lora/" },
             { text: "mcp", link: "/packages/mcp/" },
             { text: "tesseract-local", link: "/packages/tesseract-local/" },
             { text: "web-fetch", link: "/packages/web-fetch/" },

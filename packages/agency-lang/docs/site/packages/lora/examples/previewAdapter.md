@@ -1,0 +1,5 @@
+---
+name: "previewAdapter"
+---
+
+# previewAdapter

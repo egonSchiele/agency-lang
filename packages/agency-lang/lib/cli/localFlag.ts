@@ -1,6 +1,11 @@
 import * as path from "node:path";
 import type { ResolvedModelFlag } from "@/config/config.js";
-import { _registerLocalModel, _resolveModel, _mlxServedName } from "@/stdlib/localModels.js";
+import {
+  _registerLocalModel,
+  _resolveModel,
+  _mlxServedName,
+  _catalogKind,
+} from "@/stdlib/localModels.js";
 
 /** Turn `agency run --local <value>` into the shared model-flag shape:
  *  resolve the name, and for a GGUF model download and verify if needed
@@ -18,6 +23,11 @@ export async function resolveLocalRunFlag(
   draft?: string,
 ): Promise<ResolvedModelFlag> {
   const resolved = _resolveModel(value);
+  if (_catalogKind(value) === "controlnet") {
+    throw new Error(
+      `${value} is a ControlNet, which an SDXL image server loads for a request. Pass it to generateImageLocal as the controlnet argument.`,
+    );
+  }
   if (resolved.backend === "diffusers") {
     throw new Error(
       `${value} is an image model. Serve it with agency local serve --image ${value} and call generateImageLocal.`,

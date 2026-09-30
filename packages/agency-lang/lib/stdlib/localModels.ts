@@ -6,6 +6,7 @@ import {
   remove,
   readText,
   writeText,
+  isContained,
   type Root,
 } from "./contained.js";
 import * as os from "node:os";
@@ -776,7 +777,9 @@ export function _removeServedModel(
 
 /** Where a resolved model's files are on disk, or null when nothing is
  *  there. A GGUF model is found through the download manifest; an MLX model
- *  through its record under the cache, or the directory it points at. */
+ *  through its record under the cache, or the directory it points at.
+ *  `insideCache` is false for a ControlNet, whose files are listed with the
+ *  models but live in `client.controlnetsDir`, where remove cannot reach. */
 export function _modelFilesOnDisk(
   resolved: ResolvedModel,
   cacheDir: string = "",
@@ -792,7 +795,12 @@ export function _modelFilesOnDisk(
     const f = onDisk.find(match);
     return f === undefined
       ? null
-      : { path: f.path, sizeBytes: f.sizeBytes, insideCache: true, layout: f.layout };
+      : {
+          path: f.path,
+          sizeBytes: f.sizeBytes,
+          insideCache: isContained(f.path, dir),
+          layout: f.layout,
+        };
   };
   if (resolved.backend === "llama-cpp") {
     if (isGgufPath(resolved.target)) {

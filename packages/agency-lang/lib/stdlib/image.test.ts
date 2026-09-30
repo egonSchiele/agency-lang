@@ -442,6 +442,22 @@ describe("_generateImageLocal", () => {
       expect(mlx.success === false && mlx.error).toMatch(
         /is an MLX model\. Local image models are diffusers models/,
       );
+      const controlnet = await _generateImageLocal(
+        "a cat",
+        "controlnet-scribble-sdxl",
+        "1024x1024",
+        null,
+        null,
+        null,
+        "",
+        "png",
+        "",
+        null,
+        NO_INPUTS,
+      );
+      expect(controlnet.success === false && controlnet.error).toBe(
+        'generateImageLocal failed: "controlnet-scribble-sdxl" is a ControlNet, not an image model. Pass it as the controlnet argument, with a controlImage, and name an SDXL image model as the model.',
+      );
       const gguf = await _generateImageLocal(
         "a cat",
         "smollm2-135m",

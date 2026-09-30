@@ -49,12 +49,23 @@ import { formatModelCatalog, formatLocalList } from "./localModelList.js";
 
 let dir: string;
 let aliasFile: string;
+let startCwd: string;
 
+// Each test starts in an empty project of its own. Code that reads the
+// config from the working directory, such as the ControlNets listing,
+// would otherwise read this repo's agency.local.json, or ~/agency.json,
+// and list the developer's real models.
 beforeEach(() => {
   dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "lm-")));
   aliasFile = path.join(dir, "agency.json");
+  const project = path.join(dir, "project");
+  fs.mkdirSync(project);
+  fs.writeFileSync(path.join(project, "agency.json"), "{}");
+  startCwd = process.cwd();
+  process.chdir(project);
 });
 afterEach(() => {
+  process.chdir(startCwd);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -1609,6 +1620,14 @@ describe("ControlNets", () => {
             kind: "controlnet",
           },
         ]);
+        const table = formatLocalList({
+          dir: path.join(dir, "models"),
+          entries: _listModelNames(fileTarget(aliasFile)),
+          manifest: {},
+          files: listed,
+        });
+        expect(table).toMatch(/^✓\s+controlnet-scribble-sdxl\s+controlnet\s+diffusers\s/m);
+        expect(table).not.toContain("OTHER FILES");
       });
     } finally {
       await hub.close();

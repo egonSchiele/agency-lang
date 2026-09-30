@@ -7,7 +7,7 @@ import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
 import { classifySource } from "./thread.js";
 // One image type surface — imported from llmClient.ts, not smoltalk directly.
 import type { ImageConfig, ImageGenResult, ImageInput, ImageRef } from "../runtime/llmClient.js";
-import { _resolveModel, _mlxServedName, type ResolvedModel } from "./localModels.js";
+import { _resolveModel, _mlxServedName, _catalogKind, type ResolvedModel } from "./localModels.js";
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 import { LOCAL_IMAGE_FORMATS, type LocalGeneratedImage } from "./mlxImage.js";
 import { PROMPT_PREVIEW_MAX } from "../statelogClient.js";
@@ -219,6 +219,13 @@ function checkLocalImageArgs(
     resolved = _resolveModel(model);
   } catch (err) {
     return { error: (err as Error).message };
+  }
+  if (_catalogKind(model) === "controlnet") {
+    return {
+      error:
+        `"${model}" is a ControlNet, not an image model. Pass it as the controlnet ` +
+        "argument, with a controlImage, and name an SDXL image model as the model.",
+    };
   }
   if (resolved.backend !== "diffusers") {
     const what = resolved.backend === "mlx" ? "an MLX model" : "a GGUF model";

@@ -1,3 +1,10 @@
+## Sep 30 2026 — v0.26.1
+
+### Local models
+
+- Add support for inpainting.
+- Bug fix: `agency local list` now shows a tick next to a downloaded ControlNet.
+
 ## Sep 29 2026 — v0.26.0
 
 ### Runtime

@@ -17,6 +17,7 @@ import {
   DEFAULT_MCP_PORT,
 } from "../serve/mcp/httpTransport.js";
 import { startHttpServer } from "../serve/http/adapter.js";
+import { exitOnShutdownSignal } from "../serve/shutdown.js";
 import { DEFAULT_HOST } from "../serve/http/security.js";
 import { createLogger } from "../logger.js";
 import { VERSION } from "../stdlib/version.js";
@@ -169,7 +170,7 @@ export async function serveMcp(
     const { port, host, mcpPath, apiKey } = resolveMcpHttpOptions(options, {
       readApiKeyAtServeTime: true,
     });
-    startMcpHttpServer({
+    const server = startMcpHttpServer({
       handler,
       port,
       host,
@@ -178,10 +179,12 @@ export async function serveMcp(
       logger: createLogger("info"),
       toolSummary,
     });
+    exitOnShutdownSignal(server);
     return;
   }
 
   startStdioServer(handler, toolSummary);
+  exitOnShutdownSignal();
 }
 
 function parseTransport(value: string | undefined): McpTransport {
@@ -321,7 +324,7 @@ export async function serveHttp(
   const { exports, moduleExports } = await loadAndDiscover(compileResult);
   const logger = createLogger("info");
 
-  startHttpServer({
+  const server = startHttpServer({
     exports,
     port,
     host: options.host,
@@ -333,6 +336,7 @@ export async function serveHttp(
       responses: unknown[],
     ) => Promise<ServedInvocationOutcome<unknown>>,
   });
+  exitOnShutdownSignal(server);
 }
 
 type StandaloneHttpOptions = {

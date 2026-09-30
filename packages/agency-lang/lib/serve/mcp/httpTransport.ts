@@ -134,3 +134,7 @@ export function startMcpHttpServer(config: McpHttpConfig): http.Server {
 function isJsonRpcMessage(value: unknown): value is JsonRpcMessage {
   return value != null && typeof value === "object" && !Array.isArray(value);
 }
+
+// Re-exported so a standalone server script can import it from the adapter it
+// already loads.
+export { exitOnShutdownSignal } from "../shutdown.js";

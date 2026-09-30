@@ -425,3 +425,7 @@ export function startStdioServer(handler: McpHandler, toolSummary?: string[]): v
     }
   });
 }
+
+// Re-exported so a standalone server script can import it from the adapter it
+// already loads.
+export { exitOnShutdownSignal } from "../shutdown.js";

@@ -62,7 +62,9 @@ jobs:
       - run: make
         working-directory: packages/agency-lang
 
-      # The host and project come from agency.json (log.host, log.projectId).
+      # The host and project are written to agency.local.json in the upload
+      # step. The checked-in agency.json names no host, because it is compiled
+      # into the code that ships to users.
       - name: Check configuration
         env:
           AGENT_EVALS_OPENAI_API_KEY: ${{ secrets.AGENT_EVALS_OPENAI_API_KEY }}
@@ -132,7 +134,9 @@ jobs:
         working-directory: packages/agency-lang
         env:
           STATELOG_API_KEY: ${{ secrets.STATELOG_API_KEY }}
-        run: node ./dist/scripts/agency.js eval upload "$RUN_DIR"
+        run: |
+          printf '{"log":{"host":"https://statelog.adit.io","projectId":"agency-lang"}}\n' > agency.local.json
+          node ./dist/scripts/agency.js eval upload "$RUN_DIR"
 
       - name: Save the run directory for a by-hand upload
         if: failure() && steps.upload.outcome == 'failure'

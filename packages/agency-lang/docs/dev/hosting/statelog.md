@@ -54,6 +54,15 @@ set. Missing any one keeps local sinks working but skips the HTTP POST. This
 is deliberate: a `STATELOG_API_KEY` exported for some other project must not
 turn on remote logging by itself.
 
+This package's own `agency.json` names no host and no project. That file is
+compiled into everything the package ships (the agents, the standard
+library), so a host there would be a default host for every user.
+`agency.local.json` is merged over it at compile time too, so do not publish
+from a checkout whose local file names a host. A test in
+`lib/backends/statelog.codegen.test.ts` checks the checked-in file. Commands
+that need a host (`agency eval upload`, `agency remote`, `agency deploy`)
+read it from `agency.local.json` or `--host`.
+
 A `traceId` is auto-generated per execution via `nanoid()` so every event from
 one run shares it.
 
@@ -119,6 +128,7 @@ bare `process.exit()` in those directories. The module has two functions:
 | Ctrl+C and signal handlers in `std::ui` and `std::ui/cli` | `exitProcessNow` |
 | Subprocess bootstrap, parent disconnected or no node run yet | `exitProcessNow` |
 | `std::args` help, version, and usage errors (a synchronous parse) | `exitProcessNow` |
+| A served program told to stop by SIGTERM or SIGINT (`lib/serve/shutdown.ts`) | `exitProcess` |
 | Entry node name not found (`cliEntry.ts`) | `exitProcessNow` |
 
 The generated entry point has one more case. A crash ends with an uncaught
@@ -128,6 +138,12 @@ message, awaits `flushPendingStatelogPosts()`, and then throws.
 A TypeScript program that imports a compiled module, runs a node, and then
 calls `process.exit()` itself must await `flushPendingStatelogPosts()` first.
 It is exported from `agency-lang/runtime`.
+
+A served program does not end on its own. A hosting platform stops it with
+SIGTERM, and Node's default for that signal is to die at once. `agency serve`
+and the standalone server scripts call `exitOnShutdownSignal(server)`, which
+stops accepting connections, waits for the pending log requests, and exits 0.
+Requests still running at that moment are cut off, as they were before.
 
 The hosted server needs none of this. It runs programs inside its own
 long-lived process (`how-hosted-serving-works.md`), so requests finish in the

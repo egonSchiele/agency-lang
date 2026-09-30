@@ -5,7 +5,7 @@ import { apply } from "typestache";
 
 export const template = `import * as mod from {{{compiledModulePath:string}}};
 import { discoverExports } from {{{discoveryPath:string}}};
-import { startHttpServer } from {{{httpAdapterPath:string}}};
+import { startHttpServer, exitOnShutdownSignal } from {{{httpAdapterPath:string}}};
 import { createLogger } from {{{loggerPath:string}}};
 
 const exportedNodeNames = {{{exportedNodeNamesJson:string}}};
@@ -29,7 +29,7 @@ const host = process.env.HOST ?? {{{defaultHost:string}}};
 const apiKey = process.env[{{{apiKeyEnv:string}}}];
 
 try {
-  startHttpServer({
+  const server = startHttpServer({
     exports,
     port,
     host,
@@ -38,6 +38,7 @@ try {
     hasInterrupts: mod.hasInterrupts,
     respondToInterrupts: mod.__respondToInterruptsForServe,
   });
+  exitOnShutdownSignal(server);
 } catch (err) {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);

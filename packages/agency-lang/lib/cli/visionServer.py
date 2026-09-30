@@ -43,12 +43,14 @@ from visionRules import (  # noqa: E402
     ONNXRUNTIME_VERSION,
     TRANSFORMERS_VERSION,
     RequestError,
+    box_pixels,
     check_request,
     family_of,
     join_names,
     normalized_box,
     route_of_path,
     route_paths,
+    square_padding,
     warm_up_request,
 )
 
@@ -67,6 +69,9 @@ WD14_GENERAL = "0"
 # Florence-2 generation settings from the model card.
 FLORENCE_MAX_NEW_TOKENS = 1024
 FLORENCE_BEAMS = 3
+
+# The side DINOv2 takes a picture at: the size its model card crops to.
+DINOV2_INPUT_SIZE = 224
 
 
 def parse_args():
@@ -113,6 +118,17 @@ def open_image(data):
         raise RequestError(f"The image has more than {MAX_IMAGE_PIXELS:,} pixels; this server refuses it.")
     except UnidentifiedImageError:
         raise RequestError(f"The image is not one this server reads. It reads {join_names(IMAGE_FORMATS, 'or')}.")
+
+
+def padded_square(image, color):
+    """`image` centered on a square of `color`, so a processor that makes
+    a picture square does not cut the ends off a long, thin one."""
+    from PIL import Image
+
+    side, offset = square_padding(*image.size)
+    square = Image.new("RGB", (side, side), color)
+    square.paste(image, offset)
+    return square
 
 
 class Wd14Runner:
@@ -222,7 +238,51 @@ class Florence2Runner:
         return {"caption": str(self._run(image, task)).strip()}
 
 
-RUNNERS = {"Wd14Runner": Wd14Runner, "Florence2Runner": Florence2Runner}
+class Dinov2Runner:
+    """DINOv2: a picture, or parts of one, as vectors that say how it
+    looks. Answers `embeddings`."""
+
+    def __init__(self, model_dir, rules):
+        check_version("transformers", TRANSFORMERS_VERSION)
+        import torch
+        import transformers
+
+        transformers.utils.logging.disable_progress_bar()
+        self.torch = torch
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        # The Pillow processor is named on purpose. AutoImageProcessor picks
+        # a class that needs torchvision, which the serve environment does
+        # not install, so the server would fail as it starts.
+        self.processor = transformers.BitImageProcessorPil.from_pretrained(model_dir, local_files_only=True)
+        self.model = transformers.Dinov2Model.from_pretrained(
+            model_dir, use_safetensors=True, local_files_only=True, dtype=torch.float32
+        ).to(self.device)
+        # The color the processor subtracts as its mean, so the padding
+        # around a crop normalizes to zero.
+        self.padding = tuple(round(channel * 255) for channel in self.processor.image_mean)
+
+    def _embed(self, crops):
+        """One unit-length vector, as a list, per Pillow image."""
+        if not crops:
+            # The processor turns no images into a tensor the model cannot take.
+            return []
+        size = {"height": DINOV2_INPUT_SIZE, "width": DINOV2_INPUT_SIZE}
+        inputs = self.processor(images=crops, do_center_crop=False, size=size, return_tensors="pt").to(self.device)
+        with self.torch.no_grad():
+            pooled = self.model(**inputs).pooler_output
+        return self.torch.nn.functional.normalize(pooled, dim=-1).tolist()
+
+    def embeddings_of(self, image, request):
+        # The rules turned "no boxes" into one box over the whole image.
+        width, height = image.size
+        crops = [
+            padded_square(image.crop(box_pixels(box, width, height, index)), self.padding)
+            for index, box in enumerate(request["boxes"])
+        ]
+        return {"embeddings": self._embed(crops)}
+
+
+RUNNERS = {"Wd14Runner": Wd14Runner, "Florence2Runner": Florence2Runner, "Dinov2Runner": Dinov2Runner}
 
 
 class Server:

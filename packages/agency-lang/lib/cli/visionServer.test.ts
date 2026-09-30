@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { visionServerScript, ONNXRUNTIME_VERSION, TRANSFORMERS_VERSION } from "./localServe.js";
 import { VISION_ARCHITECTURES, VISION_ONNX_FILES } from "../stdlib/modelKind.js";
 import { MAX_IMAGE_BYTES } from "../stdlib/vision.js";
+import { configuredPython } from "../stdlib/localPython.js";
 
 const cliDir = path.dirname(visionServerScript());
 const rulesModule = path.join(cliDir, "visionRules.py");
@@ -427,5 +428,66 @@ print(json.dumps(asked + [d["label"] for d in runner.detections_of(FakeImage(), 
       expect(run.stderr.toString()).toBe("");
       expect(run.status).toBe(0);
     }
+  });
+});
+
+// These run the server's Pillow code, so they need a Python with Pillow:
+// the one `agency local serve` uses. Without it the block skips, as the
+// imageTools tests do. The model itself is never loaded; its torch method
+// is faked.
+const pillowPython = configuredPython();
+const hasPillow = spawnSync(pillowPython, ["-c", "import PIL"], { stdio: "ignore" }).status === 0;
+
+/** Runs `code` with visionServer importable, in the Pillow Python. */
+function server(code: string): string {
+  const run = spawnSync(
+    pillowPython,
+    ["-c", `import sys; sys.path.insert(0, sys.argv[1]); import visionServer\n${code}`, cliDir],
+    { stdio: "pipe", env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } },
+  );
+  expect(run.stderr.toString()).toBe("");
+  expect(run.status).toBe(0);
+  return run.stdout.toString().trim();
+}
+
+describe.skipIf(!hasPillow)("visionServer.py's Pillow code", () => {
+  it("embeds the whole image, each box, or nothing, each as a padded square", () => {
+    const out = server(`
+import json
+from PIL import Image
+from visionRules import WHOLE_IMAGE
+runner = visionServer.Dinov2Runner.__new__(visionServer.Dinov2Runner)
+runner.padding = (124, 116, 104)
+given = []
+def fake_embed(crops):
+    given.append([crop.size for crop in crops])
+    return [[1.0] for _ in crops]
+runner._embed = fake_embed
+image = Image.new("RGB", (300, 100), (255, 255, 255))
+half = {"x": 0, "y": 0, "width": 0.5, "height": 1}
+runner.embeddings_of(image, {"boxes": [WHOLE_IMAGE]})
+runner.embeddings_of(image, {"boxes": [half, WHOLE_IMAGE]})
+print(json.dumps([given, runner.embeddings_of(image, {"boxes": []})]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      [
+        [[300, 300]],
+        [
+          [150, 150],
+          [300, 300],
+        ],
+        [],
+      ],
+      { embeddings: [] },
+    ]);
+  });
+
+  it("centers a crop on a square of the padding color", () => {
+    const out = server(`
+from PIL import Image
+square = visionServer.padded_square(Image.new("RGB", (300, 100), (255, 0, 0)), (124, 116, 104))
+print(square.size, square.getpixel((0, 0)), square.getpixel((150, 150)), square.getpixel((0, 100)))
+`);
+    expect(out).toBe("(300, 300) (124, 116, 104) (255, 0, 0) (255, 0, 0)");
   });
 });

@@ -218,6 +218,14 @@ export idempotent def captionImage(
   return try _captionImage(files.value.image, model, detail)
 }
 
+/** Similarity between two embeddings is `cosineSimilarity` from
+`std::embedding`, where 1 is identical. As a starting point, in one test
+on a photo of two tabby cats and two TV remotes on a couch, a tight crop
+of one cat scored 1.0 against that cat's box, 0.55 against the other
+cat's, and at most 0.29 against the remotes and the couch. Pen-and-ink
+drawings have not been measured. Rather than pick a cut-off, compare
+each box with crops of your own things and of other things, and keep
+the nearer side: the module doc comment shows how. */
 export idempotent def embedImage(
   path: string,
   model: string,

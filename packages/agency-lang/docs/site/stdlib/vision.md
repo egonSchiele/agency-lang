@@ -318,6 +318,15 @@ Turn an image into an embedding, a list of numbers that says how it
   @param model - A local vision model that embeds, such as "dinov2-base"
   @param boxes - Boxes to embed, as detectObjects and findRegions return them, at most 100. Null embeds the whole image
 
+Similarity between two embeddings is `cosineSimilarity` from
+`std::embedding`, where 1 is identical. As a starting point, in one test
+on a photo of two tabby cats and two TV remotes on a couch, a tight crop
+of one cat scored 1.0 against that cat's box, 0.55 against the other
+cat's, and at most 0.29 against the remotes and the couch. Pen-and-ink
+drawings have not been measured. Rather than pick a cut-off, compare
+each box with crops of your own things and of other things, and keep
+the nearer side: the module doc comment shows how.
+
 **Parameters:**
 
 | Name | Type | Default |
@@ -330,7 +339,7 @@ Turn an image into an embedding, a list of numbers that says how it
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L221))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L229))
 
 ### findRegions
 
@@ -363,4 +372,4 @@ Box every thing in an image with a local model, with no names: for
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L247))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L255))

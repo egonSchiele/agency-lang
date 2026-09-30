@@ -587,7 +587,8 @@ This task fixes that.
 This task needs a Mac, about 1 GB of downloads, and the owner's
 drawings. The owner runs it, or provides ten pages and a few photos.
 
-1. `agency local download dinov2-base owlv2-base`, then
+1. `agency local download dinov2-base` and
+   `agency local download owlv2-base` (download takes one model), then
    `agency local serve dinov2-base owlv2-base florence-2`. Confirm
    both new models load on `mps`, and that each warm-up passes.
 2. Run the photo half and the drawing half from the spec's test list.

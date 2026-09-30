@@ -8,7 +8,8 @@ import { MIME_TYPES } from "./mediaPathScan.js";
  *  table for the image server, and a test compares the two.
  *
  *  mode      which kind of request the field makes: a ControlNet request,
- *            an edit from reference pictures, or a redraw of a start image
+ *            an edit from reference pictures, a redraw of a start image, or
+ *            a redraw of the part of a start image a mask marks
  *  maxCount  how many images the field takes. One is sent as a base64
  *            string, more as a list of them
  *  maxBytes  the largest file each image may be
@@ -16,14 +17,17 @@ import { MIME_TYPES } from "./mediaPathScan.js";
  *  question  what the std::readImage interrupt asks before the file is read
  *  readEachStep  true: the model reads each image at every step, as much
  *            work as one more megapixel of output, and the provider's
- *            timeout budgets for it */
+ *            timeout budgets for it
+ *  goesWith  optional: the field this one comes only with. A mask goes
+ *            with a start image */
 export type LocalImageField = {
-  mode: "control" | "reference" | "img2img";
+  mode: "control" | "reference" | "img2img" | "inpaint";
   maxCount: number;
   maxBytes: number;
   parameter: string;
   question: string;
   readEachStep: boolean;
+  goesWith?: string;
 };
 
 /** A control image is read up to the size every local server takes. */
@@ -63,7 +67,31 @@ export const LOCAL_IMAGE_FIELDS: Record<string, LocalImageField> = {
     // The model starts from it once, instead of from noise.
     readEachStep: false,
   },
+  mask_image: {
+    mode: "inpaint",
+    maxCount: 1,
+    maxBytes: MAX_INPUT_IMAGE_BYTES,
+    parameter: "mask",
+    question: "Read this mask to choose which part of the picture to redraw?",
+    readEachStep: false,
+    goesWith: "start_image",
+  },
 };
+
+/** The image fields a request in `mode` carries, the one that sets the size
+ *  first. A field that goes with another brings it along, so inpaint is
+ *  start_image and mask_image. `image_fields_of` in diffusersImageRules.py
+ *  is the same. */
+export function imageFieldsOf(mode: LocalImageField["mode"]): string[] {
+  const fields = Object.keys(LOCAL_IMAGE_FIELDS).filter(
+    (field) => LOCAL_IMAGE_FIELDS[field].mode === mode,
+  );
+  const partners = fields.flatMap((field) => {
+    const partner = LOCAL_IMAGE_FIELDS[field].goesWith;
+    return partner === undefined ? [] : [partner];
+  });
+  return [...partners, ...fields];
+}
 
 /** How many characters base64 turns `bytes` bytes into. */
 export function base64Length(bytes: number): number {
@@ -71,14 +99,19 @@ export function base64Length(bytes: number): number {
 }
 
 /** The largest request body the image server takes: the settings, plus the
- *  base64 of the most image bytes any one field may carry. A request
- *  carries images of one field only. `MAX_BODY_BYTES` in
- *  diffusersImageRules.py is computed the same way. */
+ *  base64 of the most image bytes one mode's fields may carry.
+ *  `MAX_BODY_BYTES` in diffusersImageRules.py is computed the same way. */
 export function localBodyBytes(): number {
+  const modes = Object.values(LOCAL_IMAGE_FIELDS).map((row) => row.mode);
   const most = Math.max(
-    ...Object.values(LOCAL_IMAGE_FIELDS).map((row) => row.maxCount * row.maxBytes),
+    ...modes.map((mode) =>
+      imageFieldsOf(mode).reduce((total, field) => {
+        const row = LOCAL_IMAGE_FIELDS[field];
+        return total + base64Length(row.maxCount * row.maxBytes);
+      }, 0),
+    ),
   );
-  return REQUEST_SETTINGS_BYTES + base64Length(most);
+  return REQUEST_SETTINGS_BYTES + most;
 }
 
 /** The image types a local input may be, by extension. */
@@ -121,20 +154,20 @@ export function checkedImageFile(spelling: string, maxBytes: number, caller: str
 
 /** One file a `generateImageLocal` call reads, after the std::readImage
  *  interrupt that shows its folder and name asks `question`. `path` is its
- *  real spelling, the one the interrupt shows. */
+ *  real spelling, the one the interrupt shows, and `field` is the request
+ *  field it goes in. */
 export type LocalImageFile = {
+  field: string;
   path: string;
   dir: string;
   filename: string;
   question: string;
 };
 
-/** The input images of one `generateImageLocal` call. `field` is the
- *  request field the files go in, or null for a call with none.
- *  `settings` holds the other request fields of the field's mode, such as
- *  `controlnet` and `control_scale`. */
+/** The input images of one `generateImageLocal` call, none for a call
+ *  with none. `settings` holds the other request fields of the call's
+ *  mode, such as `controlnet` and `control_scale`. */
 export type LocalImageInputs = {
-  field: string | null;
   files: LocalImageFile[];
   settings: Record<string, unknown>;
 };
@@ -177,7 +210,8 @@ function refusal(message: string): Error {
 /** A local path checked for the row's byte cap, with what its interrupt
  *  shows. A URL or a data URI is refused: the image server never fetches
  *  anything, so every input is a file on this machine. */
-function localImageFile(spelling: string, row: LocalImageField): LocalImageFile {
+function localImageFile(spelling: string, field: string): LocalImageFile {
+  const row = LOCAL_IMAGE_FIELDS[field];
   if (isRemoteSource(spelling)) {
     throw new Error(`${CALLER} reads files on this machine only.`);
   }
@@ -188,6 +222,7 @@ function localImageFile(spelling: string, row: LocalImageField): LocalImageFile 
     throw refusal((err as Error).message);
   }
   return {
+    field,
     path: real,
     dir: path.dirname(real),
     filename: path.basename(real),
@@ -198,10 +233,7 @@ function localImageFile(spelling: string, row: LocalImageField): LocalImageFile 
 /** How many images of `inputs` the model reads at every step, which the
  *  provider's timeout budgets for. 0 for a call with none. */
 export function referenceCount(inputs: LocalImageInputs): number {
-  if (inputs.field === null || !LOCAL_IMAGE_FIELDS[inputs.field].readEachStep) {
-    return 0;
-  }
-  return inputs.files.length;
+  return inputs.files.filter((file) => LOCAL_IMAGE_FIELDS[file.field].readEachStep).length;
 }
 
 /** Backs the checks `generateImageLocal` makes before it asks anything:
@@ -218,11 +250,17 @@ export function _localImageInputs(
   images: string[],
   startImage: string,
   strength: number | null,
+  mask: string,
 ): LocalImageInputs {
   if ((controlnet === "") !== (controlImage === "")) {
     throw refusal(
       "controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.",
     );
+  }
+  // The mask is checked first, as the server does, so a call with a mask
+  // and a strength but no start image hears about the mask.
+  if (mask !== "" && startImage === "") {
+    throw refusal("mask goes with startImage, and this call has none.");
   }
   if (strength !== null && startImage === "") {
     throw refusal("strength goes with startImage, and this call has none.");
@@ -238,31 +276,46 @@ export function _localImageInputs(
     control_image: controlImage === "" ? [] : [controlImage],
     images,
     start_image: startImage === "" ? [] : [startImage],
+    mask_image: mask === "" ? [] : [mask],
   };
   // The other request fields of each image field's mode.
   const settingsOf: Record<string, Record<string, unknown>> = {
     control_image: controlSettings(controlnet, controlScale, invertControlImage),
     images: {},
     start_image: strengthSettings(strength),
+    mask_image: {},
   };
-  const given = Object.keys(paths).filter((field) => paths[field].length > 0);
+  // A field that goes with another, such as the mask, is not a choice of
+  // its own: it comes along with its partner.
+  const leads = Object.keys(paths).filter(
+    (field) => LOCAL_IMAGE_FIELDS[field].goesWith === undefined,
+  );
+  const given = leads.filter((field) => paths[field].length > 0);
   if (given.length === 0) {
-    return { field: null, files: [], settings: {} };
+    return { files: [], settings: {} };
   }
   if (given.length > 1) {
-    const names = Object.keys(paths).map((field) => LOCAL_IMAGE_FIELDS[field].parameter);
+    const names = leads.map((field) => LOCAL_IMAGE_FIELDS[field].parameter);
     throw refusal(`a call takes one of ${orList(names)}.`);
   }
-  const field = given[0];
-  const row = LOCAL_IMAGE_FIELDS[field];
-  if (paths[field].length > row.maxCount) {
-    throw refusal(
-      `${row.parameter} takes at most ${row.maxCount} images. This call has ${paths[field].length}.`,
-    );
+  const fields = [
+    given[0],
+    ...Object.keys(paths).filter(
+      (field) => LOCAL_IMAGE_FIELDS[field].goesWith === given[0] && paths[field].length > 0,
+    ),
+  ];
+  for (const field of fields) {
+    const row = LOCAL_IMAGE_FIELDS[field];
+    if (paths[field].length > row.maxCount) {
+      throw refusal(
+        `${row.parameter} takes at most ${row.maxCount} images. This call has ${paths[field].length}.`,
+      );
+    }
   }
   return {
-    field,
-    files: paths[field].map((spelling) => localImageFile(spelling, row)),
-    settings: settingsOf[field],
+    files: fields.flatMap((field) =>
+      paths[field].map((spelling) => localImageFile(spelling, field)),
+    ),
+    settings: Object.assign({}, ...fields.map((field) => settingsOf[field])),
   };
 }

@@ -64,6 +64,7 @@ FIELDS = [
     "control_invert",
     "images",
     "start_image",
+    "mask_image",
     "strength",
 ]
 
@@ -105,7 +106,8 @@ MAX_REFERENCE_ASPECT = 8
 
 # The images a request can carry, one row per request field. The field a
 # request carries decides its mode; a request with no image is in "plain"
-# mode. `LOCAL_IMAGE_FIELDS` in lib/stdlib/localImageInputs.ts is the same
+# mode. A field with `goes_with` comes only with that other field, and the
+# pair decides the mode: a start image with a mask is "inpaint". `LOCAL_IMAGE_FIELDS` in lib/stdlib/localImageInputs.ts is the same
 # table for the stdlib, and a test compares the two.
 #
 #   mode       the mode the field puts a request in. A family takes a mode
@@ -130,6 +132,12 @@ MAX_REFERENCE_ASPECT = 8
 #              when the request asks.
 #   check      optional: the name of a check in CHECKS the server runs on a
 #              decoded image's size. It returns a refusal or None.
+#   arg        the pipeline argument the field's images are passed as
+#   goes_with  optional: the field this one comes with. A request with this
+#              field and not the other is refused.
+#   same_size_as
+#              optional: the field whose image this one's must match in
+#              width and height, so both are cropped the same way
 INPUT_IMAGES = {
     "control_image": {
         "mode": "control",
@@ -141,6 +149,7 @@ INPUT_IMAGES = {
         "on_white": False,
         "refusal": "{label} does not take a ControlNet. Leave controlnet empty.",
         "prepare": "invert",
+        "arg": "image",
     },
     "images": {
         "mode": "reference",
@@ -152,6 +161,7 @@ INPUT_IMAGES = {
         "on_white": True,
         "refusal": "{label} does not take reference images. Only {families} takes them.",
         "check": "reference_problem",
+        "arg": "image",
     },
     "start_image": {
         "mode": "img2img",
@@ -164,6 +174,25 @@ INPUT_IMAGES = {
         "on_white": True,
         "refusal": "{label} does not redraw a start image. {families} do.",
         "check": "start_image_problem",
+        "arg": "image",
+    },
+    # White marks the part of the start image to redraw, and black the part
+    # to keep. Grey redraws partly.
+    "mask_image": {
+        "mode": "inpaint",
+        "max_count": 1,
+        "max_bytes": MAX_INPUT_IMAGE_BYTES,
+        # The start image sets the size.
+        "sets_size": False,
+        # Cropped exactly as the start image is, since the two are the same
+        # size.
+        "fit": "cover",
+        # A transparent part of a mask is black, and so kept.
+        "on_white": False,
+        "refusal": "{label} does not redraw part of a picture. {families} do.",
+        "arg": "mask_image",
+        "goes_with": "start_image",
+        "same_size_as": "start_image",
     },
 }
 
@@ -173,18 +202,35 @@ MODE_FIELDS = {
     "control": ["controlnet", "control_image", "control_scale", "control_invert"],
     "reference": ["images"],
     "img2img": ["start_image", "strength"],
+    "inpaint": ["start_image", "mask_image", "strength"],
 }
+
+# The modes that start from a start image and take a strength.
+REDRAW_MODES = ["img2img", "inpaint"]
+
+
+def image_fields_of(mode):
+    """The image fields a request in `mode` carries, the one that sets the
+    size first: [] for plain. A field that goes with another brings it
+    along, so inpaint is [start_image, mask_image]."""
+    fields = [field for field, row in INPUT_IMAGES.items() if row["mode"] == mode]
+    partners = [INPUT_IMAGES[field]["goes_with"] for field in fields if "goes_with" in INPUT_IMAGES[field]]
+    return partners + fields
 
 # Room in a request body for everything but its images: the prompt and the
 # settings.
 REQUEST_SETTINGS_BYTES = 64 * 1024
 
 # The largest request body: the settings, plus the base64 of the most image
-# bytes one field may carry. A request carries one image field, never two.
-# `localBodyBytes()` in lib/stdlib/localImageInputs.ts is the same number,
-# and the front door holds image requests to it.
+# bytes one mode's fields may carry. `localBodyBytes()` in
+# lib/stdlib/localImageInputs.ts is the same number, and the front door
+# holds image requests to it.
 MAX_BODY_BYTES = REQUEST_SETTINGS_BYTES + max(
-    base64_length(row["max_count"] * row["max_bytes"]) for row in INPUT_IMAGES.values()
+    sum(
+        base64_length(INPUT_IMAGES[field]["max_count"] * INPUT_IMAGES[field]["max_bytes"])
+        for field in image_fields_of(mode)
+    )
+    for mode in MODE_FIELDS
 )
 
 # The pixel budget of a size taken from a picture: the default size's.
@@ -231,8 +277,14 @@ MAX_LOADED_ADAPTERS = 2
 #                    False: it has no such arguments and draws at the start
 #                    image's size. The server fits the start image to the
 #                    output size first, so the result is the same.
-#   img2img_steps    how the img2img pipeline rounds the steps it runs: a
-#                    key of STEP_FORMULAS
+#   img2img_steps    how the img2img and inpaint pipelines round the steps
+#                    they run: a key of STEP_FORMULAS. A family's two
+#                    pipelines round the same way.
+#   inpaint_default_strength
+#                    how much of the masked part of a start image to redraw
+#                    when the request gives no strength: the inpaint
+#                    pipeline's own default. None for a family with no
+#                    inpaint pipeline.
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
@@ -242,7 +294,11 @@ MAX_LOADED_ADAPTERS = 2
 FAMILIES = {
     "ZImagePipeline": {
         "label": "Z-Image Turbo",
-        "pipelines": {"plain": "ZImagePipeline", "img2img": "ZImageImg2ImgPipeline"},
+        "pipelines": {
+            "plain": "ZImagePipeline",
+            "img2img": "ZImageImg2ImgPipeline",
+            "inpaint": "ZImageInpaintPipeline",
+        },
         "default_steps": 9,
         "max_steps": 50,
         "default_guidance": 0.0,
@@ -253,6 +309,7 @@ FAMILIES = {
         "default_strength": 0.6,
         "img2img_takes_size": True,
         "img2img_steps": "up",
+        "inpaint_default_strength": 1.0,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3Model"],
@@ -264,7 +321,11 @@ FAMILIES = {
     },
     "ChromaPipeline": {
         "label": "Chroma",
-        "pipelines": {"plain": "ChromaPipeline", "img2img": "ChromaImg2ImgPipeline"},
+        "pipelines": {
+            "plain": "ChromaPipeline",
+            "img2img": "ChromaImg2ImgPipeline",
+            "inpaint": "ChromaInpaintPipeline",
+        },
         "default_steps": 40,
         "max_steps": 80,
         "default_guidance": 3.0,
@@ -275,6 +336,7 @@ FAMILIES = {
         "default_strength": 0.9,
         "img2img_takes_size": True,
         "img2img_steps": "up",
+        "inpaint_default_strength": 0.6,
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -288,7 +350,11 @@ FAMILIES = {
     },
     "QwenImagePipeline": {
         "label": "Qwen-Image",
-        "pipelines": {"plain": "QwenImagePipeline", "img2img": "QwenImageImg2ImgPipeline"},
+        "pipelines": {
+            "plain": "QwenImagePipeline",
+            "img2img": "QwenImageImg2ImgPipeline",
+            "inpaint": "QwenImageInpaintPipeline",
+        },
         "default_steps": 50,
         "max_steps": 80,
         "default_guidance": 4.0,
@@ -301,6 +367,7 @@ FAMILIES = {
         "default_strength": 0.6,
         "img2img_takes_size": True,
         "img2img_steps": "up",
+        "inpaint_default_strength": 0.6,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
@@ -323,10 +390,12 @@ FAMILIES = {
         "guidance_arg": "guidance_scale",
         "default_negative_prompt": "",
         "takes_lora": False,
-        # klein edits from references instead: it has no img2img pipeline.
+        # klein edits from references instead. diffusers has an inpaint
+        # pipeline for it, but no img2img one, and neither is served yet.
         "default_strength": None,
         "img2img_takes_size": None,
         "img2img_steps": None,
+        "inpaint_default_strength": None,
         "components": {
             "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
             "text_encoder": ["transformers", "Qwen3ForCausalLM"],
@@ -348,6 +417,7 @@ FAMILIES = {
             "plain": "StableDiffusionXLPipeline",
             "control": "StableDiffusionXLControlNetPipeline",
             "img2img": "StableDiffusionXLImg2ImgPipeline",
+            "inpaint": "StableDiffusionXLInpaintPipeline",
         },
         "default_steps": 28,
         "max_steps": 80,
@@ -361,6 +431,8 @@ FAMILIES = {
         "default_strength": 0.6,
         "img2img_takes_size": False,
         "img2img_steps": "down",
+        # Just under 1, so the masked part keeps a trace of the start image.
+        "inpaint_default_strength": 0.9999,
         "components": {
             "feature_extractor": [None, None],
             "image_encoder": [None, None],
@@ -526,17 +598,18 @@ def _negative_prompt_of(rules, body):
 
 def _strength_of(rules, body, mode):
     """How much of the start image to redraw: the request's strength, or
-    the family's default. None outside img2img mode, where mode_of has
-    already refused a strength."""
-    if mode != "img2img":
+    the family's default for the mode. None outside REDRAW_MODES, where
+    mode_of has already refused a strength."""
+    if mode not in REDRAW_MODES:
         return None
+    default = rules["default_strength"] if mode == "img2img" else rules["inpaint_default_strength"]
     strength = body.get("strength")
     if strength is None:
-        return rules["default_strength"]
+        return default
     if not _is_number(strength) or strength <= 0 or strength > 1:
         raise RequestError(
             "strength must be a number above 0 and at most 1. Low keeps the start image close; "
-            f"{rules['label']} uses {rules['default_strength']} when strength is left out."
+            f"{rules['label']} uses {default} when strength is left out."
         )
     return float(strength)
 
@@ -804,16 +877,28 @@ def _check_unknown_fields(body):
 
 def mode_of(rules, body):
     """The request's mode: the mode of the image field it carries, or
-    "plain" when it carries none. Refuses image fields of two modes, a
-    field of a mode the request is not in, and a mode the family has no
-    pipeline for."""
+    "plain" when it carries none. A field that goes with another decides
+    the mode of the pair: a start image with a mask is inpaint. Refuses
+    such a field without its partner, image fields of two modes, a field
+    of a mode the request is not in, and a mode the family has no pipeline
+    for."""
     present = [field for field in INPUT_IMAGES if body.get(field) is not None]
-    if len(present) > 1:
-        raise RequestError(f"a request takes one of {join_names(list(INPUT_IMAGES), 'or')}.")
-    field = present[0] if present else None
+    for field in present:
+        partner = INPUT_IMAGES[field].get("goes_with")
+        if partner is not None and partner not in present:
+            raise RequestError(f"{field} goes with {partner}, and this request has none.")
+    leads = [field for field in present if "goes_with" not in INPUT_IMAGES[field]]
+    if len(leads) > 1:
+        choices = [field for field in INPUT_IMAGES if "goes_with" not in INPUT_IMAGES[field]]
+        raise RequestError(f"a request takes one of {join_names(choices, 'or')}.")
+    deciding = [field for field in present if "goes_with" in INPUT_IMAGES[field]] or leads
+    field = deciding[0] if deciding else None
     mode = "plain" if field is None else INPUT_IMAGES[field]["mode"]
+    allowed = MODE_FIELDS.get(mode, [])
+    # A field of several modes, such as strength, is named with the first
+    # mode that has it.
     for other, fields in MODE_FIELDS.items():
-        stray = [name for name in fields if other != mode and body.get(name) is not None]
+        stray = [name for name in fields if name not in allowed and body.get(name) is not None]
         if stray:
             verb = "goes" if len(stray) == 1 else "go"
             raise RequestError(
@@ -833,6 +918,12 @@ def image_field_of(mode):
         if row["mode"] == mode:
             return field
     return None
+
+
+def input_images_of(body, fields):
+    """The bytes of each image the request carries, by field, for the image
+    fields of its mode."""
+    return {field: input_bytes(body, field) for field in fields}
 
 
 def input_bytes(body, field):
@@ -1046,6 +1137,18 @@ def start_image_problem(width, height):
     return _shape_problem(width, height, "A start image")
 
 
+def size_match_problem(field, size, other, other_size):
+    """Why an image of `size` in `field` cannot go with one of `other_size`
+    in the field `other`, which its row says it must match, or None. Sizes
+    are (width, height)."""
+    if size == other_size:
+        return None
+    return (
+        f"{field} is {size[0]}x{size[1]} and {other} is {other_size[0]}x{other_size[1]}. "
+        "They must be the same size."
+    )
+
+
 # The checks a row of INPUT_IMAGES names in `check`.
 CHECKS = {"reference_problem": reference_problem, "start_image_problem": start_image_problem}
 
@@ -1081,8 +1184,8 @@ STEP_FORMULAS = {"down": _steps_down, "up": _steps_up}
 
 def steps_run(rules, mode, steps, strength):
     """How many steps the pipeline runs for a request in `mode` that asks
-    for `steps` at `strength`: all of them, except in img2img mode."""
-    if mode != "img2img":
+    for `steps` at `strength`: all of them, except in REDRAW_MODES."""
+    if mode not in REDRAW_MODES:
         return steps
     return STEP_FORMULAS[rules["img2img_steps"]](steps, strength)
 
@@ -1095,13 +1198,13 @@ def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     model takes instead.
 
     `steps_run` is how many of `steps` the pipeline runs, which is fewer
-    in img2img mode. A request that would run none is refused.
+    in REDRAW_MODES. A request that would run none is refused.
 
     `size` is the (width, height) the request gave, or None: with none,
     the size depends on the first input image, which only the server can
-    open, so output_size decides it there. `image_field` is the image field
-    the request carries, or None in plain mode, and `input_images` holds the
-    bytes of each image in it."""
+    open, so output_size decides it there. `image_fields` lists the image
+    fields the request carries, the one that sets the size first, and
+    `input_images` holds the bytes of each image in each of them."""
     if not isinstance(body, dict):
         raise RequestError("The request body must be a JSON object.")
     _check_unknown_fields(body)
@@ -1111,8 +1214,8 @@ def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
     _check_control_pairing(body)
     mode = mode_of(rules, body)
     control = _controlnet_of(body, controlnets_dir)
-    image_field = image_field_of(mode)
-    input_images = input_bytes(body, image_field)
+    image_fields = image_fields_of(mode)
+    input_images = input_images_of(body, image_fields)
     steps = _steps_of(rules, body)
     strength = _strength_of(rules, body, mode)
     run = steps_run(rules, mode, steps, strength)
@@ -1122,7 +1225,7 @@ def check_request(rules, body, adapters_dir=None, controlnets_dir=None):
         "prompt": _prompt_of(body),
         "size": size,
         "mode": mode,
-        "image_field": image_field,
+        "image_fields": image_fields,
         "input_images": input_images,
         "steps": steps,
         "strength": strength,
@@ -1153,9 +1256,10 @@ def pipeline_args(rules, request, width, height):
         args["negative_prompt"] = negative
     if request["mode"] == "control":
         args["controlnet_conditioning_scale"] = request["control_scale"]
-    if request["mode"] == "img2img":
+    if request["mode"] in REDRAW_MODES:
         args["strength"] = request["strength"]
-        if not rules["img2img_takes_size"]:
+        # Every inpaint pipeline takes a size.
+        if request["mode"] == "img2img" and not rules["img2img_takes_size"]:
             # The pipeline draws at the start image's size, which the
             # server has already fitted to width x height.
             del args["width"], args["height"]

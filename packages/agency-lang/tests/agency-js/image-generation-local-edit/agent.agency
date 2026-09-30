@@ -30,3 +30,11 @@ node redraw(startImage: string) {
   }
   return { ok: true, error: "" }
 }
+
+node inpaint(startImage: string, mask: string) {
+  const r = generateImageLocal("a vase of sunflowers", "z-image-turbo", seed: 7, startImage: startImage, mask: mask, strength: 0.9)
+  if (isFailure(r)) {
+    return { ok: false, error: r.error }
+  }
+  return { ok: true, error: "" }
+}

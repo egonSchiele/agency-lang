@@ -209,6 +209,7 @@ generateImageLocal(
   images: string[] = [],
   startImage: string = "",
   strength: number | null = null,
+  mask: string = "",
 ): Result<LocalImage> raises <std::readImage>
 ```
 
@@ -249,6 +250,14 @@ Generate an image on this machine with a local image model. The model
   scaled to cover `size` and the overflow is cropped from both sides, so a
   4:3 photo redrawn as a square loses a strip at its left and right.
 
+  To redraw only part of the picture, add a `mask`: a black-and-white
+  picture the same size as `startImage`. White marks the part to redraw
+  and black the part to keep, so a white shape over a vase changes only
+  the vase: `generateImageLocal("a vase of sunflowers", "z-image-turbo",
+  startImage: "photo.png", mask: "vase-mask.png")`. The mask is read under
+  std::readImage too. With a mask, `strength` says how much of the white
+  part changes.
+
   @param prompt - What to draw
   @param model - The image model: a catalog name such as "z-image-turbo", a diffusers: URI, or a model directory
   @param size - Width and height joined by "x", each a multiple of 16, such as "1024x1024" or "1344x768". Empty is 1024x1024. Leave it empty when editing or redrawing a picture, and the result keeps the picture's shape
@@ -266,6 +275,7 @@ Generate an image on this machine with a local image model. The model
   @param images - Pictures to edit, as paths to files on this machine. The prompt says what to change: 'add a hat to the character'. Only FLUX.2 [klein] takes them, and at most 4
   @param startImage - A picture to redraw, as a path to a file on this machine. The layout stays and the style changes. Goes with strength. Every model but FLUX.2 [klein] takes one
   @param strength - How much of startImage to redraw, above 0 and up to 1. Low keeps it close, high changes more. Null uses the model's default
+  @param mask - A black-and-white picture the same size as startImage, as a path to a file on this machine. White is redrawn and black is kept. Goes with startImage. Every model but FLUX.2 [klein] takes one
 
 **Parameters:**
 
@@ -288,6 +298,7 @@ Generate an image on this machine with a local image model. The model
 | images | `string[]` | [] |
 | startImage | `string` | "" |
 | strength | `number \| null` | null |
+| mask | `string` | "" |
 
 **Returns:** `Result<LocalImage>`
 
@@ -332,7 +343,7 @@ Cut a box out of an image and write it as a new image. Returns the path
 
 **Throws:** `std::cropImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L247))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L258))
 
 ### imageSize
 
@@ -354,7 +365,7 @@ The width and height of an image in pixels.
 
 **Throws:** `std::readImage`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L283))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L294))
 
 ### pasteImages
 
@@ -387,4 +398,4 @@ Lay images out on one white canvas, in rows of `columns`, each at its own
 
 **Throws:** `std::pasteImages`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L300))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/image.agency#L311))

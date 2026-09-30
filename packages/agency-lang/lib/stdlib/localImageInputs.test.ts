@@ -27,18 +27,17 @@ describe("_localImageInputs", () => {
     "generateImageLocal failed: controlnet and controlImage go together: the ControlNet's name, and the image it conditions the generation on.";
 
   it("has nothing to read for a call with no input image", () => {
-    expect(_localImageInputs("", "", 0.5, true, [], "", null)).toEqual({
-      field: null,
+    expect(_localImageInputs("", "", 0.5, true, [], "", null, "")).toEqual({
       files: [],
       settings: {},
     });
   });
 
   it("returns the control image to ask about, and the ControlNet settings", () => {
-    expect(_localImageInputs("scribble", pose, 0.8, true, [], "", null)).toEqual({
-      field: "control_image",
+    expect(_localImageInputs("scribble", pose, 0.8, true, [], "", null, "")).toEqual({
       files: [
         {
+          field: "control_image",
           path: pose,
           dir,
           filename: "pose.png",
@@ -48,29 +47,29 @@ describe("_localImageInputs", () => {
       settings: { controlnet: "scribble", control_scale: 0.8, control_invert: true },
     });
     // A null scale is left out, so the server uses its default.
-    expect(_localImageInputs("scribble", pose, null, false, [], "", null).settings).toEqual({
+    expect(_localImageInputs("scribble", pose, null, false, [], "", null, "").settings).toEqual({
       controlnet: "scribble",
       control_invert: false,
     });
   });
 
   it("refuses a ControlNet without an image, and an image without a ControlNet", () => {
-    expect(() => _localImageInputs("scribble", "", null, false, [], "", null)).toThrow(pairing);
-    expect(() => _localImageInputs("", pose, null, false, [], "", null)).toThrow(pairing);
+    expect(() => _localImageInputs("scribble", "", null, false, [], "", null, "")).toThrow(pairing);
+    expect(() => _localImageInputs("", pose, null, false, [], "", null, "")).toThrow(pairing);
   });
 
   it("refuses a missing file, a symlink, and a file over the cap", () => {
     expect(() =>
-      _localImageInputs("scribble", path.join(dir, "nope.png"), null, false, [], "", null),
+      _localImageInputs("scribble", path.join(dir, "nope.png"), null, false, [], "", null, ""),
     ).toThrow(`generateImageLocal failed: no such file: ${path.join(dir, "nope.png")}`);
     expect(() =>
-      _localImageInputs("scribble", path.join(dir, "linked.png"), null, false, [], "", null),
+      _localImageInputs("scribble", path.join(dir, "linked.png"), null, false, [], "", null, ""),
     ).toThrow(
       // The contained-files layer refuses a symlink by not seeing it.
       `generateImageLocal failed: no such file: ${path.join(dir, "linked.png")}`,
     );
     expect(() =>
-      _localImageInputs("scribble", path.join(dir, "huge.png"), null, false, [], "", null),
+      _localImageInputs("scribble", path.join(dir, "huge.png"), null, false, [], "", null, ""),
     ).toThrow(
       `generateImageLocal failed: ${path.join(dir, "huge.png")} is 50,000,001 bytes; the most generateImageLocal sends is 50,000,000.`,
     );
@@ -78,28 +77,41 @@ describe("_localImageInputs", () => {
 
   it("refuses a URL or a data URI", () => {
     for (const remote of ["https://example.com/pose.png", "data:image/png;base64,cG5n"]) {
-      expect(() => _localImageInputs("scribble", remote, null, false, [], "", null)).toThrow(
+      expect(() => _localImageInputs("scribble", remote, null, false, [], "", null, "")).toThrow(
         "generateImageLocal reads files on this machine only.",
       );
     }
   });
 
-  const edit = (images: string[]) => _localImageInputs("", "", null, false, images, "", null);
+  const edit = (images: string[]) => _localImageInputs("", "", null, false, images, "", null, "");
 
   it("returns each reference to ask about, in order, with no other settings", () => {
     const hat = path.join(dir, "hat.png");
     fs.writeFileSync(hat, "png");
     const inputs = edit([pose, hat]);
     expect(inputs).toEqual({
-      field: "images",
       files: [
-        { path: pose, dir, filename: "pose.png", question: "Read this picture to edit it?" },
-        { path: hat, dir, filename: "hat.png", question: "Read this picture to edit it?" },
+        {
+          field: "images",
+          path: pose,
+          dir,
+          filename: "pose.png",
+          question: "Read this picture to edit it?",
+        },
+        {
+          field: "images",
+          path: hat,
+          dir,
+          filename: "hat.png",
+          question: "Read this picture to edit it?",
+        },
       ],
       settings: {},
     });
     expect(referenceCount(inputs)).toBe(2);
-    expect(referenceCount(_localImageInputs("scribble", pose, null, false, [], "", null))).toBe(0);
+    expect(referenceCount(_localImageInputs("scribble", pose, null, false, [], "", null, ""))).toBe(
+      0,
+    );
   });
 
   it("refuses five references", () => {
@@ -109,20 +121,25 @@ describe("_localImageInputs", () => {
   });
 
   it("refuses references together with a control image", () => {
-    expect(() => _localImageInputs("scribble", pose, null, false, [pose], "", null)).toThrow(
+    expect(() => _localImageInputs("scribble", pose, null, false, [pose], "", null, "")).toThrow(
       "generateImageLocal failed: a call takes one of controlImage, images, or startImage.",
     );
   });
 
   const redraw = (startImage: string, strength: number | null = null) =>
-    _localImageInputs("", "", null, false, [], startImage, strength);
+    _localImageInputs("", "", null, false, [], startImage, strength, "");
 
   it("returns the start image to ask about, with the strength when one is given", () => {
     const inputs = redraw(pose, 0.4);
     expect(inputs).toEqual({
-      field: "start_image",
       files: [
-        { path: pose, dir, filename: "pose.png", question: "Read this picture to redraw it?" },
+        {
+          field: "start_image",
+          path: pose,
+          dir,
+          filename: "pose.png",
+          question: "Read this picture to redraw it?",
+        },
       ],
       settings: { strength: 0.4 },
     });
@@ -150,8 +167,10 @@ describe("_localImageInputs", () => {
   it("refuses a start image together with references or a control image", () => {
     const message =
       "generateImageLocal failed: a call takes one of controlImage, images, or startImage.";
-    expect(() => _localImageInputs("", "", null, false, [pose], pose, null)).toThrow(message);
-    expect(() => _localImageInputs("scribble", pose, null, false, [], pose, null)).toThrow(message);
+    expect(() => _localImageInputs("", "", null, false, [pose], pose, null, "")).toThrow(message);
+    expect(() => _localImageInputs("scribble", pose, null, false, [], pose, null, "")).toThrow(
+      message,
+    );
   });
 
   it("refuses a start image over its cap, a missing one, and a URL", () => {
@@ -177,6 +196,47 @@ describe("_localImageInputs", () => {
     );
     expect(() => edit(["https://example.com/cat.png"])).toThrow(
       "generateImageLocal reads files on this machine only.",
+    );
+  });
+  const inpaint = (startImage: string, mask: string, strength: number | null = null) =>
+    _localImageInputs("", "", null, false, [], startImage, strength, mask);
+
+  it("returns the start image and then its mask to ask about, with the strength", () => {
+    const mask = path.join(dir, "mask.png");
+    fs.writeFileSync(mask, "png");
+    const inputs = inpaint(pose, mask, 0.9);
+    expect(inputs).toEqual({
+      files: [
+        {
+          field: "start_image",
+          path: pose,
+          dir,
+          filename: "pose.png",
+          question: "Read this picture to redraw it?",
+        },
+        {
+          field: "mask_image",
+          path: mask,
+          dir,
+          filename: "mask.png",
+          question: "Read this mask to choose which part of the picture to redraw?",
+        },
+      ],
+      settings: { strength: 0.9 },
+    });
+    expect(referenceCount(inputs)).toBe(0);
+  });
+
+  it("refuses a mask with no start image, even with references", () => {
+    const message = "generateImageLocal failed: mask goes with startImage, and this call has none.";
+    expect(() => inpaint("", pose)).toThrow(message);
+    expect(() => _localImageInputs("", "", null, false, [pose], "", null, pose)).toThrow(message);
+  });
+
+  it("refuses a mask over its cap", () => {
+    const photo = path.join(dir, "photo.png");
+    expect(() => inpaint(pose, photo)).toThrow(
+      `generateImageLocal failed: ${photo} is 21,000,000 bytes; the most generateImageLocal sends is ${MAX_INPUT_IMAGE_BYTES.toLocaleString("en-US")}.`,
     );
   });
 });

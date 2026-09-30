@@ -90,6 +90,7 @@ const SETTINGS = [
   "control_invert",
   "images",
   "start_image",
+  "mask_image",
   "strength",
 ];
 

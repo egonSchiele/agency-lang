@@ -93,7 +93,7 @@ step limits bound how long a request can hold the generation lock.
 
 ## Modes
 
-A request is in one of four modes. The image field it carries decides
+A request is in one of five modes. The image fields it carries decide
 which:
 
 | Mode | Image field | Other fields of the mode | Families |
@@ -102,6 +102,7 @@ which:
 | control | `control_image` | `controlnet`, `control_scale`, `control_invert` | SDXL |
 | reference | `images` | none | FLUX.2 [klein] |
 | img2img | `start_image` | `strength` | the other four |
+| inpaint | `start_image` and `mask_image` | `strength` | the same four as img2img |
 
 In reference mode, klein draws a new image from pure noise and reads
 each reference as extra tokens on every step. It copies from the
@@ -112,22 +113,35 @@ In img2img mode, the model starts from the start image with noise added,
 instead of from pure noise. `strength` says how much noise, and so how
 much of the picture is redrawn. The layout stays and the style changes.
 
+Inpaint mode is img2img that redraws only part of the picture. The mask
+is a picture the same size as the start image: white marks the part to
+redraw, black the part to keep, and grey redraws partly. A mask never
+comes alone. Its row in `INPUT_IMAGES` says `goes_with: "start_image"`,
+and a request with a mask and no start image is refused. The mask's
+field decides the mode of the pair, so a start image with a mask is
+inpaint and a start image alone is img2img.
+
 Reference editing and image-to-image are different operations, so they
 are different parameters: `images` and `startImage`. A caller who asks
 klein for an edit never silently gets image-to-image from another
 family. The request is refused instead, with a message naming the
 families that take the mode.
 
-`mode_of` in the rules module decides the mode and makes three
+`mode_of` in the rules module decides the mode and makes four
 refusals:
 
-1. Image fields of two modes: "a request takes one of control_image,
-   images, or start_image." SDXL has a pipeline for a ControlNet with a
-   start image, but nothing asks for it yet.
-2. A field of a mode the request is not in, such as `control_scale`
+1. A field that goes with another, without it: "mask_image goes with
+   start_image, and this request has none."
+2. Image fields of two modes: "a request takes one of control_image,
+   images, or start_image." The mask is not in the list, because it is
+   never a choice of its own. SDXL has a pipeline for a ControlNet with
+   a start image, but nothing asks for it yet.
+3. A field of a mode the request is not in, such as `control_scale`
    without `control_image`. The message names the image field the
-   setting goes with. `MODE_FIELDS` lists each mode's fields.
-3. A mode the family has no pipeline for. The message comes from the
+   setting goes with. `MODE_FIELDS` lists each mode's fields. `strength`
+   is in two modes' lists, and the message names the first,
+   `start_image`.
+4. A mode the family has no pipeline for. The message comes from the
    image field's `refusal` and names the families that take the mode.
 
 A LoRA works in every mode. It is loaded into the shared weights, so
@@ -139,19 +153,36 @@ every pipeline of the family sees it.
 that checks a request, decodes an image, fits it, and picks a pipeline
 reads the row. It has no branch per mode. `pipeline_args` is the one
 exception: it adds `controlnet_conditioning_scale` in control mode, and
-`strength` in img2img mode, where it also leaves out the size for SDXL.
+`strength` in img2img and inpaint mode. In img2img mode it also leaves
+out the size for SDXL.
 
-| Key | Meaning | `control_image` | `images` | `start_image` |
-|---|---|---|---|---|
-| `mode` | The mode the field puts a request in | `control` | `reference` | `img2img` |
-| `max_count` | How many images the field takes. One is a base64 string, more is a list | 1 | 4 | 1 |
-| `max_bytes` | The largest image, in bytes | 50 MB | 20 MB | 20 MB |
-| `fit` | How a decoded image is fitted to the output size | `letterbox` | `shrink` | `cover` |
-| `on_white` | Paste a transparent image onto white before converting it to RGB | false | true | true |
-| `sets_size` | With no size in the request, take the output's shape from the first image | false | true | true |
-| `prepare` | Optional. A step in the server's `PREPARES` run on the decoded image before fitting | `invert` | none | none |
-| `check` | Optional. A check in the rules module's `CHECKS` run on the decoded image's size | none | `reference_problem` | `start_image_problem` |
-| `refusal` | The message for a family with no pipeline for the mode, with `{label}` and `{families}` | "does not take a ControlNet" | "does not take reference images" | "does not redraw a start image" |
+| Key | Meaning | `control_image` | `images` | `start_image` | `mask_image` |
+|---|---|---|---|---|---|
+| `mode` | The mode the field puts a request in | `control` | `reference` | `img2img` | `inpaint` |
+| `max_count` | How many images the field takes. One is a base64 string, more is a list | 1 | 4 | 1 | 1 |
+| `max_bytes` | The largest image, in bytes | 50 MB | 20 MB | 20 MB | 20 MB |
+| `fit` | How a decoded image is fitted to the output size | `letterbox` | `shrink` | `cover` | `cover` |
+| `on_white` | Paste a transparent image onto white before converting it to RGB | false | true | true | false |
+| `sets_size` | With no size in the request, take the output's shape from the first image | false | true | true | false |
+| `prepare` | Optional. A step in the server's `PREPARES` run on the decoded image before fitting | `invert` | none | none | none |
+| `check` | Optional. A check in the rules module's `CHECKS` run on the decoded image's size | none | `reference_problem` | `start_image_problem` | none |
+| `arg` | The pipeline argument the field's images are passed as | `image` | `image` | `image` | `mask_image` |
+| `goes_with` | Optional. The field this one comes only with | none | none | none | `start_image` |
+| `same_size_as` | Optional. The field whose picture this one's must match in width and height | none | none | none | `start_image` |
+| `refusal` | The message for a family with no pipeline for the mode, with `{label}` and `{families}` | "does not take a ControlNet" | "does not take reference images" | "does not redraw a start image" | "does not redraw part of a picture" |
+
+`image_fields_of` gives the fields a request in a mode carries, the one
+that sets the size first: `[start_image, mask_image]` for inpaint. The
+server's `input_images` decodes each one, checks `same_size_as`, takes
+the output size from the first, and fits each to it. The mask has the
+same size and the same `cover` fit as the start image, so both are
+cropped alike and the white part still lies over the part it marked. A
+mask of another size is refused before either is fitted, since a
+different shape would crop differently.
+
+A mask has `on_white` false, so a transparent part of it turns black and
+is kept. Painting white over a transparent layer makes a mask that
+redraws only what was painted.
 
 A control image has `on_white` false because its background must stay
 as drawn. A reference has it true because character art is often a PNG
@@ -168,21 +199,22 @@ tiny or thin picture has too little left after the crop to redraw. A
 
 `LOCAL_IMAGE_FIELDS` in `lib/stdlib/localImageInputs.ts` is the same
 table for the stdlib, with the parameter name and the approval question
-for each field. A test in `diffusersImageServer.test.ts` checks that
-both tables have the same fields, counts, and byte caps.
+for each field, and `goesWith` for the mask. A test in
+`diffusersImageServer.test.ts` checks that both tables have the same
+fields, counts, and byte caps.
 
 ### The pipelines table
 
 The `pipelines` key of each family row names a diffusers class per mode.
 A family takes a mode when it has a class for it:
 
-| Family | `plain` | `control` | `reference` | `img2img` |
-|---|---|---|---|---|
-| Z-Image Turbo | `ZImagePipeline` | | | `ZImageImg2ImgPipeline` |
-| Chroma | `ChromaPipeline` | | | `ChromaImg2ImgPipeline` |
-| Qwen-Image | `QwenImagePipeline` | | | `QwenImageImg2ImgPipeline` |
-| FLUX.2 [klein] | `Flux2KleinPipeline` | | `Flux2KleinPipeline` | |
-| SDXL | `StableDiffusionXLPipeline` | `StableDiffusionXLControlNetPipeline` | | `StableDiffusionXLImg2ImgPipeline` |
+| Family | `plain` | `control` | `reference` | `img2img` | `inpaint` |
+|---|---|---|---|---|---|
+| Z-Image Turbo | `ZImagePipeline` | | | `ZImageImg2ImgPipeline` | `ZImageInpaintPipeline` |
+| Chroma | `ChromaPipeline` | | | `ChromaImg2ImgPipeline` | `ChromaInpaintPipeline` |
+| Qwen-Image | `QwenImagePipeline` | | | `QwenImageImg2ImgPipeline` | `QwenImageInpaintPipeline` |
+| FLUX.2 [klein] | `Flux2KleinPipeline` | | `Flux2KleinPipeline` | | |
+| SDXL | `StableDiffusionXLPipeline` | `StableDiffusionXLControlNetPipeline` | | `StableDiffusionXLImg2ImgPipeline` | `StableDiffusionXLInpaintPipeline` |
 
 The server loads the `plain` class. `pipeline_for` returns the loaded
 pipeline when a mode's class is the plain class, as klein's reference
@@ -191,7 +223,11 @@ pipeline's components and keeps it. The two pipelines share weights, so
 the second one costs no extra memory or load time. A mode that needs a
 model on top of those components names its request fields in the
 server's `MODE_MODELS`. Control mode names `controlnet`, which
-`load_controlnet` loads. Img2img mode needs no extra model.
+`load_controlnet` loads. Img2img and inpaint mode need no extra model.
+
+diffusers 0.40 has `Flux2KleinInpaintPipeline` too. It is not served:
+klein's row has no img2img keys to build on, and klein already edits
+from references.
 
 ### Image-to-image
 
@@ -263,6 +299,38 @@ img2img request does not change the next plain one. The live test
 checks this: a plain request after an img2img request makes the same
 image as the same request made before it.
 
+### Inpainting
+
+Each family's inpaint pipeline counts its steps the way its img2img
+pipeline does, so `steps_run` uses the same `img2img_steps` formula in
+both modes. Every inpaint pipeline takes a width and height, SDXL's too,
+so `pipeline_args` always passes the size in inpaint mode.
+
+The default strength differs. `inpaint_default_strength` holds each
+inpaint pipeline's own default in diffusers 0.40:
+
+| Family | `inpaint_default_strength` | Steps that run by default |
+|---|---|---|
+| Z-Image Turbo | 1.0 | 9 of 9 |
+| Chroma | 0.6 | 24 of 40 |
+| Qwen-Image | 0.6 | 30 of 50 |
+| SDXL | 0.9999 | 27 of 28 |
+
+SDXL's is just under 1, so the masked part keeps a trace of the start
+image. The others are first guesses in the same way the img2img
+strengths are.
+
+The inpaint pipeline works with the family's ordinary weights. An SDXL
+checkpoint trained for inpainting, with a 9-channel UNet and
+`StableDiffusionXLInpaintPipeline` as its `_class_name`, blends better
+at the mask's edge, but the server does not load one: its family has no
+plain mode to load.
+
+One test run with Z-Image Turbo redrew a 280x340 box in a 768x768
+picture in about 6 seconds, end to end. Pixels outside the mask moved by about 2
+out of 255 on average. A mask with a hard edge leaves a faint seam at
+the edge; a mask whose edge fades through grey blends better.
+
 ### Adding a mode
 
 1. Add a row to `INPUT_IMAGES` and to `LOCAL_IMAGE_FIELDS`, with the
@@ -273,7 +341,9 @@ image as the same request made before it.
    it. Check in the diffusers source that the class can be built from
    the plain pipeline's components.
 4. Add a fit to `FITS`, a step to `PREPARES`, or a check to `CHECKS` if
-   the existing ones do not fit the mode.
+   the existing ones do not fit the mode. A mode with a second image
+   that only comes with another names it in `goes_with`, as inpaint's
+   mask does.
 5. Add the parameter to `generateImageLocal` and `_localImageInputs`.
    The body limits on both sides follow from the tables.
 6. Add rules tests for the refusals, and an agency-js test for the
@@ -401,9 +471,10 @@ Preserve these constraints when changing loading or request handling:
 5. Loads do not pass `trust_remote_code` or `custom_pipeline`.
 6. The family table controls pipeline imports and permitted components.
 7. Requests use strictly parsed JSON. The body limit allows 64 KB of
-   request fields plus the base64 of the most image bytes one image
-   field may carry, from `INPUT_IMAGES`. Today that is 4 references of
-   20 MB each.
+   request fields plus the base64 of the most image bytes one mode's
+   image fields may carry, from `INPUT_IMAGES`. Today that is 4
+   references of 20 MB each. An inpaint request carries a start image
+   and a mask, 40 MB at most.
 8. Requests select adapters and ControlNets by a single name within
    configured folders. They cannot supply arbitrary paths for the server
    to open.

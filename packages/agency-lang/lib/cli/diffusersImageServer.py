@@ -54,6 +54,7 @@ from diffusersImageRules import (  # noqa: E402
     join_names,
     output_size,
     pipeline_args,
+    size_match_problem,
     warm_up_request,
 )
 
@@ -154,6 +155,35 @@ def fitted(image, field, width, height):
     canvas = Image.new("RGB", (width, height), (0, 0, 0))
     canvas.paste(image.resize(size, Image.LANCZOS, box=source_box), position)
     return canvas
+
+def input_images(request):
+    """(width, height, images) for a checked request: the output size, and
+    the request's input images decoded, prepared, and fitted to that size,
+    by the pipeline argument each field's row names. One image when the
+    field takes one, a list otherwise. The first image field sets the size,
+    and a field whose row names `same_size_as` must match that field's
+    picture before either is fitted."""
+    fields = request["image_fields"]
+    decoded = {
+        field: [prepared(decode_image(data, field), field, request) for data in request["input_images"][field]]
+        for field in fields
+    }
+    for field in fields:
+        other = INPUT_IMAGES[field].get("same_size_as")
+        if other is not None:
+            problem = size_match_problem(field, decoded[field][0].size, other, decoded[other][0].size)
+            if problem is not None:
+                raise RequestError(problem)
+    first_size = decoded[fields[0]][0].size if fields else None
+    lead = fields[0] if fields else None
+    width, height = output_size(request["size"], lead, first_size)
+    images = {}
+    for field in fields:
+        row = INPUT_IMAGES[field]
+        fitted_images = [fitted(image, field, width, height) for image in decoded[field]]
+        images[row["arg"]] = fitted_images[0] if row["max_count"] == 1 else fitted_images
+    return width, height, images
+
 
 PIL_FORMATS = {"png": "PNG", "jpeg": "JPEG", "webp": "WEBP"}
 
@@ -364,19 +394,13 @@ class Generator:
 
         # Everything up to the lock runs first, so a bad image never waits
         # for the GPU or loads a ControlNet.
-        field = request["image_field"]
-        images = [prepared(decode_image(data, field), field, request) for data in request["input_images"]]
-        first_size = images[0].size if images else None
-        width, height = output_size(request["size"], field, first_size)
-        fitted_images = [fitted(image, field, width, height) for image in images]
+        width, height, images = input_images(request)
         kwargs = {
             **pipeline_args(self.rules, request, width, height),
+            **images,
             "generator": torch.Generator("cpu").manual_seed(request["seed"]),
             "callback_on_step_end": on_step_end,
         }
-        if fitted_images:
-            one = INPUT_IMAGES[field]["max_count"] == 1
-            kwargs["image"] = fitted_images[0] if one else fitted_images
         with self.lock:
             # A client that hung up while it waited for the lock gets
             # nothing started at all.

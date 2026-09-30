@@ -290,6 +290,7 @@ MAX_LOADED_ADAPTERS = 2
 #   components       every component model_index.json must name, as
 #                    [library, class]. [None, None] is a slot the file
 #                    lists and leaves empty.
+
 #   settings         the other values model_index.json may carry, which
 #                    from_pretrained passes to the pipeline, each with the
 #                    one value allowed
@@ -313,11 +314,11 @@ FAMILIES = {
         "img2img_steps": "up",
         "inpaint_default_strength": 1.0,
         "components": {
-            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
-            "text_encoder": ["transformers", "Qwen3Model"],
-            "tokenizer": ["transformers", "Qwen2Tokenizer"],
-            "transformer": ["diffusers", "ZImageTransformer2DModel"],
-            "vae": ["diffusers", "AutoencoderKL"],
+            "scheduler": [["diffusers", "FlowMatchEulerDiscreteScheduler"]],
+            "text_encoder": [["transformers", "Qwen3Model"]],
+            "tokenizer": [["transformers", "Qwen2Tokenizer"]],
+            "transformer": [["diffusers", "ZImageTransformer2DModel"]],
+            "vae": [["diffusers", "AutoencoderKL"]],
         },
         "settings": {},
     },
@@ -340,13 +341,13 @@ FAMILIES = {
         "img2img_steps": "up",
         "inpaint_default_strength": 0.6,
         "components": {
-            "feature_extractor": [None, None],
-            "image_encoder": [None, None],
-            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
-            "text_encoder": ["transformers", "T5EncoderModel"],
-            "tokenizer": ["transformers", "T5Tokenizer"],
-            "transformer": ["diffusers", "ChromaTransformer2DModel"],
-            "vae": ["diffusers", "AutoencoderKL"],
+            "feature_extractor": [[None, None]],
+            "image_encoder": [[None, None]],
+            "scheduler": [["diffusers", "FlowMatchEulerDiscreteScheduler"]],
+            "text_encoder": [["transformers", "T5EncoderModel"]],
+            "tokenizer": [["transformers", "T5Tokenizer"]],
+            "transformer": [["diffusers", "ChromaTransformer2DModel"]],
+            "vae": [["diffusers", "AutoencoderKL"]],
         },
         "settings": {},
     },
@@ -371,11 +372,11 @@ FAMILIES = {
         "img2img_steps": "up",
         "inpaint_default_strength": 0.6,
         "components": {
-            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
-            "text_encoder": ["transformers", "Qwen2_5_VLForConditionalGeneration"],
-            "tokenizer": ["transformers", "Qwen2Tokenizer"],
-            "transformer": ["diffusers", "QwenImageTransformer2DModel"],
-            "vae": ["diffusers", "AutoencoderKLQwenImage"],
+            "scheduler": [["diffusers", "FlowMatchEulerDiscreteScheduler"]],
+            "text_encoder": [["transformers", "Qwen2_5_VLForConditionalGeneration"]],
+            "tokenizer": [["transformers", "Qwen2Tokenizer"]],
+            "transformer": [["diffusers", "QwenImageTransformer2DModel"]],
+            "vae": [["diffusers", "AutoencoderKLQwenImage"]],
         },
         "settings": {},
     },
@@ -399,11 +400,11 @@ FAMILIES = {
         "img2img_steps": None,
         "inpaint_default_strength": None,
         "components": {
-            "scheduler": ["diffusers", "FlowMatchEulerDiscreteScheduler"],
-            "text_encoder": ["transformers", "Qwen3ForCausalLM"],
-            "tokenizer": ["transformers", "Qwen2TokenizerFast"],
-            "transformer": ["diffusers", "Flux2Transformer2DModel"],
-            "vae": ["diffusers", "AutoencoderKLFlux2"],
+            "scheduler": [["diffusers", "FlowMatchEulerDiscreteScheduler"]],
+            "text_encoder": [["transformers", "Qwen3ForCausalLM"]],
+            "tokenizer": [["transformers", "Qwen2TokenizerFast"]],
+            "transformer": [["diffusers", "Flux2Transformer2DModel"]],
+            "vae": [["diffusers", "AutoencoderKLFlux2"]],
         },
         # Only the step-distilled checkpoint is served. The base model
         # needs guidance and about 50 steps, which this row does not allow.
@@ -436,15 +437,21 @@ FAMILIES = {
         # Just under 1, so the masked part keeps a trace of the start image.
         "inpaint_default_strength": 0.9999,
         "components": {
-            "feature_extractor": [None, None],
-            "image_encoder": [None, None],
-            "scheduler": ["diffusers", "EulerDiscreteScheduler"],
-            "text_encoder": ["transformers", "CLIPTextModel"],
-            "text_encoder_2": ["transformers", "CLIPTextModelWithProjection"],
-            "tokenizer": ["transformers", "CLIPTokenizer"],
-            "tokenizer_2": ["transformers", "CLIPTokenizer"],
-            "unet": ["diffusers", "UNet2DConditionModel"],
-            "vae": ["diffusers", "AutoencoderKL"],
+            "feature_extractor": [[None, None]],
+            "image_encoder": [[None, None]],
+            # Many community SDXL finetunes ship the ancestral Euler
+            # sampler. Both classes read the same
+            # scheduler_config.json.
+            "scheduler": [
+                ["diffusers", "EulerDiscreteScheduler"],
+                ["diffusers", "EulerAncestralDiscreteScheduler"],
+            ],
+            "text_encoder": [["transformers", "CLIPTextModel"]],
+            "text_encoder_2": [["transformers", "CLIPTextModelWithProjection"]],
+            "tokenizer": [["transformers", "CLIPTokenizer"]],
+            "tokenizer_2": [["transformers", "CLIPTokenizer"]],
+            "unet": [["diffusers", "UNet2DConditionModel"]],
+            "vae": [["diffusers", "AutoencoderKL"]],
         },
         # Every SDXL checkpoint sets this; it makes an empty negative prompt
         # encode as zeros, as the model was trained.
@@ -495,15 +502,16 @@ def family_of(model_index):
             )
     named = {key: value for key, value in named.items() if key not in rules["settings"]}
     for component, value in named.items():
-        expected = rules["components"].get(component)
-        if expected is None:
+        allowed = rules["components"].get(component)
+        if allowed is None:
             raise ValueError(
                 f'{rules["label"]} has no component "{component}", '
                 "and this model_index.json names one."
             )
-        if value != expected:
+        if value not in allowed:
             raise ValueError(
-                f'{rules["label"]}\'s "{component}" must be {expected}. '
+                f'{rules["label"]}\'s "{component}" must be '
+                f"{join_names([str(pair) for pair in allowed], 'or')}. "
                 f"This model_index.json says {value}."
             )
     missing = [c for c in rules["components"] if c not in named]

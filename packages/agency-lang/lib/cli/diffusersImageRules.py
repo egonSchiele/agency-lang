@@ -107,8 +107,9 @@ MAX_REFERENCE_ASPECT = 8
 # The images a request can carry, one row per request field. The field a
 # request carries decides its mode; a request with no image is in "plain"
 # mode. A field with `goes_with` comes only with that other field, and the
-# pair decides the mode: a start image with a mask is "inpaint". `LOCAL_IMAGE_FIELDS` in lib/stdlib/localImageInputs.ts is the same
-# table for the stdlib, and a test compares the two.
+# pair decides the mode: a start image with a mask is "inpaint".
+# `LOCAL_IMAGE_FIELDS` in lib/stdlib/localImageInputs.ts is the same table
+# for the stdlib, and a test compares the two.
 #
 #   mode       the mode the field puts a request in. A family takes a mode
 #              when its row in FAMILIES has a pipeline for it.
@@ -123,8 +124,9 @@ MAX_REFERENCE_ASPECT = 8
 #              many and leaves a smaller one as it is, and "cover" scales
 #              it to cover the output and crops the overflow evenly from
 #              both sides
-#   on_white   True: a transparent image is pasted onto white before it is
-#              made RGB. False: its pixels are kept as drawn.
+#   background the color a transparent image is pasted onto before it is
+#              made RGB: "white" or "black". None: its color channels are
+#              kept as stored, and the alpha band is dropped.
 #   refusal    the message for a family with no pipeline for the mode, with
 #              {label} for the family and {families} for those that have one
 #   prepare    optional: the name of a step the server runs on a decoded
@@ -146,7 +148,7 @@ INPUT_IMAGES = {
         # A control image is a drawing to follow, not a picture to keep.
         "sets_size": False,
         "fit": "letterbox",
-        "on_white": False,
+        "background": None,
         "refusal": "{label} does not take a ControlNet. Leave controlnet empty.",
         "prepare": "invert",
         "arg": "image",
@@ -158,7 +160,7 @@ INPUT_IMAGES = {
         "sets_size": True,
         # The model only looks at a reference, so it can stay any shape.
         "fit": "shrink",
-        "on_white": True,
+        "background": "white",
         "refusal": "{label} does not take reference images. Only {families} takes them.",
         "check": "reference_problem",
         "arg": "image",
@@ -171,7 +173,7 @@ INPUT_IMAGES = {
         # Cropped, not letterboxed: black bands would be part of the
         # picture, and the model would redraw them as black bars.
         "fit": "cover",
-        "on_white": True,
+        "background": "white",
         "refusal": "{label} does not redraw a start image. {families} do.",
         "check": "start_image_problem",
         "arg": "image",
@@ -188,7 +190,7 @@ INPUT_IMAGES = {
         # size.
         "fit": "cover",
         # A transparent part of a mask is black, and so kept.
-        "on_white": False,
+        "background": "black",
         "refusal": "{label} does not redraw part of a picture. {families} do.",
         "arg": "mask_image",
         "goes_with": "start_image",

@@ -139,7 +139,8 @@ refusals:
 3. A field of a mode the request is not in, such as `control_scale`
    without `control_image`. The message names the image field the
    setting goes with. `MODE_FIELDS` lists each mode's fields. `strength`
-   is in two modes' lists, and the message names the first,
+   is in two modes' lists, and the message names the image field of the
+   first, so img2img must stay before inpaint for it to say
    `start_image`.
 4. A mode the family has no pipeline for. The message comes from the
    image field's `refusal` and names the families that take the mode.
@@ -162,7 +163,7 @@ out the size for SDXL.
 | `max_count` | How many images the field takes. One is a base64 string, more is a list | 1 | 4 | 1 | 1 |
 | `max_bytes` | The largest image, in bytes | 50 MB | 20 MB | 20 MB | 20 MB |
 | `fit` | How a decoded image is fitted to the output size | `letterbox` | `shrink` | `cover` | `cover` |
-| `on_white` | Paste a transparent image onto white before converting it to RGB | false | true | true | false |
+| `background` | The color a transparent image is pasted onto before it is made RGB, or none to keep its stored colors | none | white | white | black |
 | `sets_size` | With no size in the request, take the output's shape from the first image | false | true | true | false |
 | `prepare` | Optional. A step in the server's `PREPARES` run on the decoded image before fitting | `invert` | none | none | none |
 | `check` | Optional. A check in the rules module's `CHECKS` run on the decoded image's size | none | `reference_problem` | `start_image_problem` | none |
@@ -176,18 +177,18 @@ that sets the size first: `[start_image, mask_image]` for inpaint. The
 server's `input_images` decodes each one, checks `same_size_as`, takes
 the output size from the first, and fits each to it. The mask has the
 same size and the same `cover` fit as the start image, so both are
-cropped alike and the white part still lies over the part it marked. A
-mask of another size is refused before either is fitted, since a
-different shape would crop differently.
+cropped alike and the white part still lies over the part it marked.
 
-A mask has `on_white` false, so a transparent part of it turns black and
-is kept. Painting white over a transparent layer makes a mask that
-redraws only what was painted.
+A mask's background is black, so a transparent part of it is kept.
+Pasting onto a color matters because converting to RGB only drops the
+alpha band: the color stored under a transparent pixel stays, and
+editors often store white there. Without the paste, a mask painted over
+a transparent layer would come out all white and redraw everything.
 
-A control image has `on_white` false because its background must stay
-as drawn. A reference has it true because character art is often a PNG
-with a transparent background, and converting it directly turns that
-background black. `reference_problem` refuses a reference with a side
+A control image has no background because its pixels must stay as
+drawn. A reference has a white one because character art is often a PNG
+with a transparent background, which would otherwise come out in
+whatever color is stored under it, often black. `reference_problem` refuses a reference with a side
 under 64 pixels or a shape more extreme than 8 to 1. klein makes both
 checks itself, but from inside the pipeline call, where a failure is a
 server error.
@@ -306,30 +307,16 @@ pipeline does, so `steps_run` uses the same `img2img_steps` formula in
 both modes. Every inpaint pipeline takes a width and height, SDXL's too,
 so `pipeline_args` always passes the size in inpaint mode.
 
-The default strength differs. `inpaint_default_strength` holds each
-inpaint pipeline's own default in diffusers 0.40:
+The default strength differs from img2img's. `inpaint_default_strength`
+holds each inpaint pipeline's own default in diffusers 0.40, untuned:
+1.0 for Z-Image Turbo, 0.6 for Chroma and Qwen-Image, and 0.9999 for
+SDXL, which keeps a trace of the start image under the mask.
 
-| Family | `inpaint_default_strength` | Steps that run by default |
-|---|---|---|
-| Z-Image Turbo | 1.0 | 9 of 9 |
-| Chroma | 0.6 | 24 of 40 |
-| Qwen-Image | 0.6 | 30 of 50 |
-| SDXL | 0.9999 | 27 of 28 |
-
-SDXL's is just under 1, so the masked part keeps a trace of the start
-image. The others are first guesses in the same way the img2img
-strengths are.
-
-The inpaint pipeline works with the family's ordinary weights. An SDXL
+The inpaint pipeline runs on the family's ordinary weights. An SDXL
 checkpoint trained for inpainting, with a 9-channel UNet and
 `StableDiffusionXLInpaintPipeline` as its `_class_name`, blends better
-at the mask's edge, but the server does not load one: its family has no
+at the mask's edge. The server refuses one, because a family must have a
 plain mode to load.
-
-One test run with Z-Image Turbo redrew a 280x340 box in a 768x768
-picture in about 6 seconds, end to end. Pixels outside the mask moved by about 2
-out of 255 on average. A mask with a hard edge leaves a faint seam at
-the edge; a mask whose edge fades through grey blends better.
 
 ### Adding a mode
 
@@ -362,8 +349,8 @@ image's row and does these steps in order:
 4. Apply the EXIF orientation with `ImageOps.exif_transpose`. A phone
    stores a portrait photo as landscape pixels plus a rotation tag.
    Without this step, an edit of a portrait photo comes back sideways.
-5. When the row's `on_white` is true, paste a transparent image onto
-   white. An image is transparent when it has an alpha band, or when it
+5. When the row names a `background`, paste a transparent image onto
+   that color. An image is transparent when it has an alpha band, or when it
    marks one color as transparent, as a palette or RGB PNG can.
 6. Run the row's `check` on the upright image's size.
 7. Convert to RGB.

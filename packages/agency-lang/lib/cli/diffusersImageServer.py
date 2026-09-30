@@ -81,10 +81,11 @@ def decode_image(data, field):
     MAX_INPUT_IMAGE_PIXELS is refused before its pixels are decoded. A file
     that is cut short or damaged is refused too. The EXIF orientation is
     applied, so a portrait photo from a phone stays upright. When the
-    field's row says on_white, a transparent image is pasted onto white
-    first; converting it directly would turn its background black. Then the
-    check the field's row names, if any, runs on the upright image's
-    size."""
+    field's row names a background, a transparent image is pasted onto that
+    color first. Converting it directly would drop the alpha band and keep
+    whatever color is stored under a transparent pixel, which editors often
+    save as white. Then the check the field's row names, if any, runs on the
+    upright image's size."""
     from PIL import Image, ImageOps
 
     unreadable = RequestError(
@@ -111,10 +112,10 @@ def decode_image(data, field):
     # A palette or RGB image marks its transparent color in `info`, with no
     # alpha band.
     transparent = image.mode in ("RGBA", "LA", "PA") or "transparency" in image.info
-    if INPUT_IMAGES[field]["on_white"] and transparent:
+    background = INPUT_IMAGES[field]["background"]
+    if background is not None and transparent:
         image = image.convert("RGBA")
-        white = Image.new("RGBA", image.size, (255, 255, 255, 255))
-        image = Image.alpha_composite(white, image)
+        image = Image.alpha_composite(Image.new("RGBA", image.size, background), image)
     problem = image_problem(field, image.width, image.height)
     if problem is not None:
         raise RequestError(f"{field}: {problem}")

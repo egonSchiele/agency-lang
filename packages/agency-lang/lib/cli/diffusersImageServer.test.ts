@@ -1309,6 +1309,18 @@ print(canvas.size, canvas.getpixel((10, 256)), canvas.getpixel((501, 256)))
     expect(out).toBe("(512, 512) (255, 0, 0) (255, 0, 0)");
   });
 
+  it("turns the transparent part of a mask black, whatever color is stored under it", () => {
+    // Editors often save a fully transparent pixel as white. A mask painted
+    // white over such a layer must keep what was not painted.
+    const out = images(`
+mask = Image.new("RGBA", (400, 300), (255, 255, 255, 0))
+mask.paste(Image.new("RGBA", (100, 300), (255, 255, 255, 255)), (150, 0))
+decoded_mask = decoded(saved(mask), "mask_image")
+print(decoded_mask.getpixel((10, 150)), decoded_mask.getpixel((200, 150)))
+`);
+    expect(out).toBe("(0, 0, 0) (255, 255, 255)");
+  });
+
   it("gives an inpaint pipeline the picture and its mask cropped alike, and refuses a mask of another size", () => {
     // A 400x300 picture and its mask: white over the middle, black at the
     // sides. Covering a square crops the sides of both the same way.

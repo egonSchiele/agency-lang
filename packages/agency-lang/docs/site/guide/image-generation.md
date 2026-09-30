@@ -246,6 +246,12 @@ model by listing their names after `serve`:
 agency local serve z-image-turbo chroma1-hd
 ```
 
+Every model you serve stays in memory, so their memory use adds up.
+Serving Z-Image Turbo, Chroma, and an SDXL model together used about
+80 GB on an M5 Ultra once each had made an image. Check that your Mac
+has room before you serve several: a Mac that runs out of memory slows
+to a halt instead of reporting an error.
+
 ### Generate and save an image
 
 Save this program as `lighthouse.agency`:
@@ -721,13 +727,27 @@ const result = generateImageLocal(
   "a watercolor painting of a fox in a forest",
   "z-image-turbo",
   startImage: "fox.png",
-  strength: 0.6,
+  strength: 0.7,
 )
 ```
 
 `strength` says how much of the picture to redraw. It must be above 0
-and can be at most 1. A low strength such as 0.3 keeps the result close
-to the picture, and a high one such as 0.9 changes more. Leave it out to use the model's default.
+and can be at most 1. Leave it out to use the model's default.
+
+The useful values are at the high end. In a test that redrew a cartoon
+fox as a watercolor, a strength of 0.5 or less changed nothing you could
+see, with every model. The style started to change around 0.7. Past a
+certain strength the model stops following the layout and draws its own:
+
+| Model | Default strength | Style starts to change | Layout is lost |
+|---|---|---|---|
+| `z-image-turbo` | 0.6 | 0.7 | 0.8 |
+| `chroma1-hd` | 0.9 | 0.8 | Kept at 0.9 |
+| SDXL | 0.6 | 0.8 | Kept at 0.9 |
+
+These numbers come from one picture and one prompt, so use them as a
+place to start. Keep the seed fixed and try a few strengths to find the
+one that suits your picture.
 
 Use `images` with FLUX.2 [klein] to change one thing and keep the rest,
 such as "add a hat to the fox". Use `startImage` with any other model to

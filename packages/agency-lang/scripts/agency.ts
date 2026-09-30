@@ -121,6 +121,7 @@ import { doctor } from "@/cli/doctor.js";
 import { review } from "@/cli/review.js";
 import { policyGen } from "@/cli/policy.js";
 import { resolveRunPolicy } from "@/cli/runPolicy.js";
+import { joinEffectFlags } from "@/runtime/policyFlags.js";
 import { interruptsCmd } from "@/cli/interrupts.js";
 import { effectsCmd } from "@/cli/effects.js";
 import {
@@ -500,10 +501,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
         .option(
           "--approve <effects>",
           "Comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve",
+          joinEffectFlags,
         )
         .option(
           "--reject <effects>",
           "Comma-separated interrupt effects or capability set names to auto-reject",
+          joinEffectFlags,
         )
         .option(
           "-i, --interactive",
@@ -686,10 +689,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option(
       "--approve <effects>",
       "comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve",
+      joinEffectFlags,
     )
     .option(
       "--reject <effects>",
       "comma-separated interrupt effects or capability set names to auto-reject",
+      joinEffectFlags,
     )
     .option("--host <url>", "statelog host (overrides agency.json log.host)")
     .option("--project <slug>", "project slug (overrides agency.json log.projectId)")
@@ -1356,10 +1361,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
     .option(
       "--approve <effects>",
       "Comma-separated interrupt effects or capability set names (e.g. FileRead; see: agency effects) to auto-approve in every test case",
+      joinEffectFlags,
     )
     .option(
       "--reject <effects>",
       "Comma-separated interrupt effects or capability set names to auto-reject in every test case ('*' rejects every effect)",
+      joinEffectFlags,
     )
     .option(
       "--max-cost <dollars>",

@@ -23,6 +23,10 @@ flags:
   approve for the same effect.
 
 `--approve` and `--reject` take a comma- or whitespace-separated list.
+With `agency run`, `agency test`, and `agency remote call`, you can also
+give either flag more than once: `--approve std::read --approve std::write`
+means the same as `--approve std::read,std::write`. `agency agent` takes
+each flag once and refuses a repeat.
 Each entry is an effect name (`std::write`), or the name of a built-in
 capability set from [`std::capabilities`](/stdlib/capabilities), which
 stands for every effect in the set:

@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { policyOverlayFromFlags, splitEffects } from "./policyFlags.js";
+import { joinEffectFlags, policyOverlayFromFlags, splitEffects } from "./policyFlags.js";
 import type { Policy } from "./policy.js";
+
+describe("joinEffectFlags", () => {
+  it("keeps every value of a flag given more than once", () => {
+    // Commander passes undefined as `previous` for the first value.
+    const once = joinEffectFlags("std::read", undefined);
+    expect(once).toBe("std::read");
+    const twice = joinEffectFlags("std::write,std::ls", once);
+    expect(splitEffects(twice)).toEqual(["std::read", "std::write", "std::ls"]);
+  });
+});
 
 describe("splitEffects", () => {
   it("splits on commas, whitespace, or both", () => {

@@ -387,6 +387,69 @@ print(json.dumps(asked + [d["label"] for d in runner.detections_of(FakeImage(), 
     ]);
   });
 
+  it("labels each OWLv2 box with its best label, and keeps overlapping boxes", () => {
+    // The runner is built without loading a model; only its torch method is faked.
+    const out = rules(`
+import json
+import visionServer
+runner = visionServer.Owlv2Runner.__new__(visionServer.Owlv2Runner)
+def fake_label_scores(image, labels):
+    boxes = [[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.45], [0.6, 0.6, 0.9, 0.9]]
+    return [0.9, 0.8, 0.05], boxes, [1, 0, 0]
+runner._label_scores = fake_label_scores
+class FakeImage:
+    size = (100, 100)
+found = runner.detections_of(FakeImage(), {"labels": ["cat", "remote"], "threshold": 0.1})["detections"]
+print(json.dumps([(d["label"], d["score"]) for d in found]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      ["remote", 0.9],
+      ["cat", 0.8],
+    ]);
+  });
+
+  it("gives OWLv2 regions in score order, merged, and at most the limit", () => {
+    const out = rules(`
+import json
+import visionServer
+runner = visionServer.Owlv2Runner.__new__(visionServer.Owlv2Runner)
+def fake_objectness(image):
+    boxes = [[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.45], [0.6, 0.6, 0.9, 0.9], [0.1, 0.6, 0.3, 0.9]]
+    return [0.9, 0.8, 0.5, 0.4], boxes
+runner._objectness = fake_objectness
+class FakeImage:
+    size = (100, 100)
+print(json.dumps([r["score"] for r in runner.regions_of(FakeImage(), {"limit": 2})["regions"]]))
+`);
+    // The second box overlaps the first, so it is merged away.
+    expect(JSON.parse(out)).toEqual([0.9, 0.5]);
+  });
+
+  it("asks Florence-2 for region proposals, each scoring 1, at most the limit", () => {
+    const out = rules(`
+import json
+import visionServer
+runner = visionServer.Florence2Runner.__new__(visionServer.Florence2Runner)
+runner.rules = FAMILIES["Florence2ForConditionalGeneration"]
+asked = []
+def fake_run(image, task, text=""):
+    asked.append(task)
+    return {"bboxes": [[0, 0, 50, 50], [50, 50, 100, 100], [10, 10, 20, 20]], "labels": ["", "", ""]}
+runner._run = fake_run
+class FakeImage:
+    size = (100, 100)
+regions = runner.regions_of(FakeImage(), {"limit": 2})["regions"]
+print(json.dumps([asked, regions]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      ["<REGION_PROPOSAL>"],
+      [
+        { score: 1, box: { x: 0, y: 0, width: 0.5, height: 0.5 } },
+        { score: 1, box: { x: 0.5, y: 0.5, width: 0.5, height: 0.5 } },
+      ],
+    ]);
+  });
+
   it("ship next to localServe and are valid Python 3", () => {
     for (const script of ["visionServer.py", "imageTools.py"]) {
       const file = path.join(cliDir, script);

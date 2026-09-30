@@ -1,5 +1,5 @@
-"""A server for one vision model: boxes, tags, or a caption for an image
-on this machine.
+"""A server for one vision model: boxes, tags, a caption, or embeddings
+for an image on this machine.
 
 Started by `agency local serve <model>` for a model whose kind is vision.
 Loads the model once, then answers, each with {"model", "image": <base64
@@ -8,6 +8,8 @@ of the image's bytes>, ...}:
   POST /v1/vision/detections  {"labels": [...], "threshold"?}  -> {"detections": [{"label", "score", "box"}]}
   POST /v1/vision/tags        {"threshold"?, "limit"?}          -> {"tags": [{"tag", "score"}]}
   POST /v1/vision/captions    {"detail"?: "short" | "long"}     -> {"caption": "..."}
+  POST /v1/vision/embeddings  {"boxes"?: [...]}                 -> {"embeddings": [[...], ...]}
+  POST /v1/vision/regions     {"limit"?}                        -> {"regions": [{"score", "box"}]}
   GET  /health                                                  -> {"status": "ok", "routes": [...]}
 
 A failure is {"error": {"message": "..."}}. A route the model does not
@@ -42,11 +44,15 @@ from visionRules import (  # noqa: E402
     MAX_BODY_BYTES,
     ONNXRUNTIME_VERSION,
     TRANSFORMERS_VERSION,
+    KEEP_OVERLAPS,
+    MAX_REPLY_BOXES,
+    MERGE_IOU,
     RequestError,
     box_pixels,
     check_request,
     family_of,
     join_names,
+    kept_boxes,
     normalized_box,
     route_of_path,
     route_paths,
@@ -72,6 +78,9 @@ FLORENCE_BEAMS = 3
 
 # The side DINOv2 takes a picture at: the size its model card crops to.
 DINOV2_INPUT_SIZE = 224
+
+# The gray OWLv2's processor pads an image with: 0.5 of full brightness.
+OWLV2_PADDING = (128, 128, 128)
 
 
 def parse_args():
@@ -128,6 +137,18 @@ def padded_square(image, color):
     side, offset = square_padding(*image.size)
     square = Image.new("RGB", (side, side), color)
     square.paste(image, offset)
+    return square
+
+
+def padded_bottom_right(image, color):
+    """`image` in the top-left corner of a square of `color`, the way
+    OWLv2's processor pads it, so a box in 0..1 of the square times the
+    square's side is a box in the image's own pixels."""
+    from PIL import Image
+
+    side = max(image.size)
+    square = Image.new("RGB", (side, side), color)
+    square.paste(image, (0, 0))
     return square
 
 
@@ -237,6 +258,15 @@ class Florence2Runner:
         task = self.rules["task_caption_" + request["detail"]]
         return {"caption": str(self._run(image, task)).strip()}
 
+    def regions_of(self, image, request):
+        # Boxes around the things in the picture, with no names. Florence-2
+        # gives no score, so each region scores 1, in the order the model
+        # wrote them.
+        width, height = image.size
+        answer = self._run(image, self.rules["task_regions"])
+        boxes = [normalized_box(box, width, height) for box in answer.get("bboxes", [])]
+        return {"regions": [{"score": 1.0, "box": box} for box in boxes[: request["limit"]]]}
+
 
 class Dinov2Runner:
     """DINOv2: a picture, or parts of one, as vectors that say how it
@@ -282,7 +312,101 @@ class Dinov2Runner:
         return {"embeddings": self._embed(crops)}
 
 
-RUNNERS = {"Wd14Runner": Wd14Runner, "Florence2Runner": Florence2Runner, "Dinov2Runner": Dinov2Runner}
+class Owlv2Runner:
+    """OWLv2: finds the things named in a label list in one pass, and boxes
+    every thing in a picture by how much it looks like an object at all.
+    Answers `detections` and `regions`.
+
+    Its torch methods return plain lists: scores, and boxes as [x1, y1,
+    x2, y2] in 0..1 of the square the image was padded to. kept_boxes in
+    visionRules.py does the rest, so the route methods hold no
+    arithmetic."""
+
+    def __init__(self, model_dir, rules):
+        check_version("transformers", TRANSFORMERS_VERSION)
+        import torch
+        import transformers
+        from transformers.models.owlv2.modeling_owlv2 import center_to_corners_format
+
+        transformers.utils.logging.disable_progress_bar()
+        self.torch = torch
+        self.corners = center_to_corners_format
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        # Both classes are named on purpose, as in Dinov2Runner.
+        # AutoProcessor reaches the Pillow image processor only by falling
+        # back when torchvision is missing.
+        self.image_processor = transformers.Owlv2ImageProcessorPil.from_pretrained(model_dir, local_files_only=True)
+        self.tokenizer = transformers.CLIPTokenizer.from_pretrained(model_dir, local_files_only=True)
+        self.model = transformers.Owlv2ForObjectDetection.from_pretrained(
+            model_dir, use_safetensors=True, local_files_only=True, dtype=torch.float32
+        ).to(self.device)
+        self.side = self.image_processor.size["height"]
+
+    def _pixel_values(self, image):
+        """The model's input for `image`. The processor's own resize needs
+        scipy, which the serve environment does not install, so the image
+        is padded and resized here with Pillow, and the processor only
+        rescales and normalizes it."""
+        from PIL import Image
+
+        square = padded_bottom_right(image, OWLV2_PADDING).resize((self.side, self.side), Image.BILINEAR)
+        inputs = self.image_processor(images=square, do_pad=False, do_resize=False, return_tensors="pt")
+        return inputs["pixel_values"].to(self.device)
+
+    def _features(self, image):
+        """The image's feature map, and the same map as (1, patches, dim)."""
+        feature_map = self.model.image_embedder(pixel_values=self._pixel_values(image))[0]
+        batch, rows, columns, dim = feature_map.shape
+        return feature_map, feature_map.reshape(batch, rows * columns, dim)
+
+    def _label_scores(self, image, labels):
+        """For every box OWLv2 predicts: the sigmoid of its best label's
+        logit, the box, and the index of that label."""
+        tokens = self.tokenizer(labels, padding="max_length", truncation=True, return_tensors="pt").to(self.device)
+        with self.torch.no_grad():
+            out = self.model(
+                input_ids=tokens["input_ids"],
+                attention_mask=tokens["attention_mask"],
+                pixel_values=self._pixel_values(image),
+            )
+        best = out.logits[0].max(dim=-1)
+        boxes = self.corners(out.pred_boxes[0])
+        return self.torch.sigmoid(best.values).tolist(), boxes.tolist(), best.indices.tolist()
+
+    def _objectness(self, image):
+        """For every box OWLv2 predicts: the sigmoid of how much it looks
+        like an object of any kind, and the box. No text runs."""
+        with self.torch.no_grad():
+            feature_map, features = self._features(image)
+            objectness = self.model.objectness_predictor(features)[0]
+            boxes = self.corners(self.model.box_predictor(features, feature_map)[0])
+        return self.torch.sigmoid(objectness).tolist(), boxes.tolist()
+
+    def detections_of(self, image, request):
+        labels = request["labels"]
+        scores, boxes, best_label = self._label_scores(image, labels)
+        # Overlapping boxes are kept, as transformers' own post-processing
+        # keeps them: two labels can name the same thing.
+        kept = kept_boxes(scores, boxes, *image.size, request["threshold"], KEEP_OVERLAPS, MAX_REPLY_BOXES)
+        return {
+            "detections": [
+                {"label": labels[best_label[found["index"]]], "score": found["score"], "box": found["box"]}
+                for found in kept
+            ]
+        }
+
+    def regions_of(self, image, request):
+        scores, boxes = self._objectness(image)
+        kept = kept_boxes(scores, boxes, *image.size, 0.0, MERGE_IOU, request["limit"])
+        return {"regions": [{"score": found["score"], "box": found["box"]} for found in kept]}
+
+
+RUNNERS = {
+    "Wd14Runner": Wd14Runner,
+    "Florence2Runner": Florence2Runner,
+    "Dinov2Runner": Dinov2Runner,
+    "Owlv2Runner": Owlv2Runner,
+}
 
 
 class Server:

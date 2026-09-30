@@ -267,6 +267,138 @@ describe("StatelogClient", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
+    it("stops sending after the server refuses the key, across clients", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("", { status: 403 }));
+      const config = {
+        host: "https://refused.example.invalid",
+        apiKey: "key-for-another-project",
+        projectId: "refused-project",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      };
+      await new StatelogClient(config).debug("first", {});
+      await flushPendingStatelogPosts();
+      // A served program makes a new client for every request.
+      await new StatelogClient(config).debug("second", {});
+      await new StatelogClient(config).debug("third", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('refused the API key for project "refused-project"');
+    });
+
+    it("warns once when several requests were already on their way", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 401 }));
+      const client = new StatelogClient({
+        host: "https://refused.example.invalid",
+        apiKey: "bad",
+        projectId: "several-in-flight",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("first", {});
+      await client.debug("second", {});
+      await flushPendingStatelogPosts();
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("a refusal for one project does not stop another", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response("", { status: 403 }))
+        .mockResolvedValue(new Response("", { status: 200 }));
+      const config = {
+        host: "https://refused.example.invalid",
+        apiKey: "k",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      };
+      await new StatelogClient({ ...config, projectId: "refused-one" }).debug("a", {});
+      await flushPendingStatelogPosts();
+      await new StatelogClient({ ...config, projectId: "accepted-one" }).debug("b", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("a refused key does not stop another key for the same project", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response("", { status: 401 }))
+        .mockResolvedValue(new Response("", { status: 200 }));
+      const config = {
+        host: "https://refused.example.invalid",
+        projectId: "two-keys",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      };
+      await new StatelogClient({ ...config, apiKey: "revoked" }).debug("a", {});
+      await flushPendingStatelogPosts();
+      await new StatelogClient({ ...config, apiKey: "valid" }).debug("b", {});
+      await new StatelogClient({ ...config, apiKey: "revoked" }).debug("c", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("sends again once a refusal is five minutes old", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response("", { status: 401 }))
+        .mockResolvedValue(new Response("", { status: 200 }));
+      const now = vi.spyOn(Date, "now");
+      const start = 1_000_000;
+      now.mockReturnValue(start);
+      const client = new StatelogClient({
+        host: "https://refused.example.invalid",
+        apiKey: "k",
+        projectId: "expiring-refusal",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("refused", {});
+      await flushPendingStatelogPosts();
+
+      now.mockReturnValue(start + 5 * 60 * 1000 - 1);
+      await client.debug("still inside the wait", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(start + 5 * 60 * 1000);
+      await client.debug("after the wait", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps sending after a server error that is not a refusal", async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response("", { status: 500 }));
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "server-error",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("first", {});
+      await flushPendingStatelogPosts();
+      await client.debug("second", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
     it("flushPendingStatelogPosts waits for posts from every client", async () => {
       const resolvers: ((r: Response) => void)[] = [];
       vi.spyOn(globalThis, "fetch").mockImplementation(

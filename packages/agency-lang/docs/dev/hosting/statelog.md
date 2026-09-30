@@ -106,13 +106,21 @@ to the list and `flushPendingStatelogPosts()` waits for everything on it.
 ### A refused key
 
 The sender reads only the status of each reply. A 401 or 403 means the server
-refused this key for this project. The sender records the host, the project, and a
-hash of the key. It sends nothing more with that key to that host and project
-until the process exits, and prints one warning. The key is part of the
-record because a hosted server runs invocations with different keys in one
-process. The record belongs to the process because a served program makes a
-new client for every request, and a record on the client would reset each
-time. Any other failure prints only in debug mode.
+refused this key for this project. The sender records the host, the project,
+and a hash of the key. It sends nothing more with that key to that host and
+project for five minutes (`REFUSAL_MS`), and prints one warning.
+
+- The record belongs to the process because a served program makes a new
+  client for every request, and a record on the client would reset each
+  time.
+- The key is part of the record because a hosted server runs invocations
+  with different keys in one process.
+- The record expires because a refusal can stop being true. The Statelog
+  server answers 401 when its own user or project lookup fails, and 403 for
+  an account that is not approved yet (`src/backend/lib/middleware/auth.ts`
+  in the statelog repo).
+
+Any other failure prints only in debug mode.
 
 ### Exiting
 

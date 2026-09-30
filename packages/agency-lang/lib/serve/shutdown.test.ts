@@ -33,7 +33,8 @@ describe("exitOnShutdownSignal", () => {
 
     // The log of the last request, still on its way.
     sendStatelogPost({
-      url: "https://example.invalid/api/logs",
+      host: "https://example.invalid",
+      projectId: "p",
       apiKey: "secret",
       body: "{}",
       timeoutMs: 60_000,

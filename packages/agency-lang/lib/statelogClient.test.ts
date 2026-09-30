@@ -349,6 +349,37 @@ describe("StatelogClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
 
+    it("sends again once a refusal is five minutes old", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response("", { status: 401 }))
+        .mockResolvedValue(new Response("", { status: 200 }));
+      const now = vi.spyOn(Date, "now");
+      const start = 1_000_000;
+      now.mockReturnValue(start);
+      const client = new StatelogClient({
+        host: "https://refused.example.invalid",
+        apiKey: "k",
+        projectId: "expiring-refusal",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("refused", {});
+      await flushPendingStatelogPosts();
+
+      now.mockReturnValue(start + 5 * 60 * 1000 - 1);
+      await client.debug("still inside the wait", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      now.mockReturnValue(start + 5 * 60 * 1000);
+      await client.debug("after the wait", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
     it("keeps sending after a server error that is not a refusal", async () => {
       const fetchSpy = vi
         .spyOn(globalThis, "fetch")

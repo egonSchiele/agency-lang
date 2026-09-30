@@ -223,7 +223,11 @@ except ImageDataError as e:
   it("fills in each family's defaults for the new routes", () => {
     const owl = "Owlv2ForObjectDetection";
     expect(JSON.parse(check(owl, "detections", { image, labels: ["cat"] })).threshold).toBe(0.1);
-    expect(JSON.parse(check(owl, "regions", { image }))).toEqual({ image, limit: 50 });
+    expect(JSON.parse(check(owl, "regions", { image }))).toEqual({
+      image,
+      limit: 50,
+      threshold: 0.1,
+    });
     expect(JSON.parse(check("Florence2ForConditionalGeneration", "regions", { image })).limit).toBe(
       50,
     );
@@ -315,6 +319,21 @@ print(json.dumps([indexes(MERGE_IOU, 10), indexes(KEEP_OVERLAPS, 10), indexes(KE
   it("pads a crop to a centered square", () => {
     expect(rules("print(square_padding(300, 100))")).toBe("(300, (0, 100))");
     expect(rules("print(square_padding(100, 300))")).toBe("(300, (100, 0))");
+  });
+
+  it("scales a picture so its longer side is the model's, keeping at least a pixel", () => {
+    expect(rules("print(fitted_size(640, 480, 960))")).toBe("(960, 720)");
+    expect(rules("print(fitted_size(100, 300, 224))")).toBe("(75, 224)");
+    expect(rules("print(fitted_size(50, 50, 224))")).toBe("(224, 224)");
+    // A long page screenshot: padded to a square first, it would be 40000 pixels a side.
+    expect(rules("print(fitted_size(1200, 40000, 960))")).toBe("(29, 960)");
+    expect(rules("print(fitted_size(100000, 10, 224))")).toBe("(224, 1)");
+  });
+
+  it("rounds an embedding's numbers to six places", () => {
+    expect(rules("print(rounded_vectors([[0.12345678901234567, -0.5], []]))")).toBe(
+      "[[0.123457, -0.5], []]",
+    );
   });
 
   it("turns a normalized box into pixels, refusing one under a pixel", () => {
@@ -428,10 +447,16 @@ def fake_objectness(image):
 runner._objectness = fake_objectness
 class FakeImage:
     size = (100, 100)
-print(json.dumps([r["score"] for r in runner.regions_of(FakeImage(), {"limit": 2})["regions"]]))
+def scores(request):
+    return [r["score"] for r in runner.regions_of(FakeImage(), request)["regions"]]
+print(json.dumps([scores({"limit": 2, "threshold": 0.0}), scores({"limit": 10, "threshold": 0.45})]))
 `);
-    // The second box overlaps the first, so it is merged away.
-    expect(JSON.parse(out)).toEqual([0.9, 0.5]);
+    // The second box overlaps the first, so it is merged away. The
+    // threshold drops the last.
+    expect(JSON.parse(out)).toEqual([
+      [0.9, 0.5],
+      [0.9, 0.5],
+    ]);
   });
 
   it("asks Florence-2 for region proposals, each scoring 1, at most the limit", () => {
@@ -447,7 +472,7 @@ def fake_run(image, task, text=""):
 runner._run = fake_run
 class FakeImage:
     size = (100, 100)
-regions = runner.regions_of(FakeImage(), {"limit": 2})["regions"]
+regions = runner.regions_of(FakeImage(), {"limit": 2, "threshold": 0.1})["regions"]
 print(json.dumps([asked, regions]))
 `);
     expect(JSON.parse(out)).toEqual([
@@ -512,12 +537,13 @@ runner.embeddings_of(image, {"boxes": [WHOLE_IMAGE]})
 runner.embeddings_of(image, {"boxes": [half, WHOLE_IMAGE]})
 print(json.dumps([given, runner.embeddings_of(image, {"boxes": []})]))
 `);
+    // Every crop reaches the model at its input size, whatever the box.
     expect(JSON.parse(out)).toEqual([
       [
-        [[300, 300]],
+        [[224, 224]],
         [
-          [150, 150],
-          [300, 300],
+          [224, 224],
+          [224, 224],
         ],
         [],
       ],
@@ -525,12 +551,32 @@ print(json.dumps([given, runner.embeddings_of(image, {"boxes": []})]))
     ]);
   });
 
-  it("centers a crop on a square of the padding color", () => {
+  it("scales a crop to fit a square of the padding color, and centers it", () => {
     const out = server(`
 from PIL import Image
-square = visionServer.padded_square(Image.new("RGB", (300, 100), (255, 0, 0)), (124, 116, 104))
-print(square.size, square.getpixel((0, 0)), square.getpixel((150, 150)), square.getpixel((0, 100)))
+square = visionServer.centered_square(Image.new("RGB", (300, 100), (255, 0, 0)), 224, (124, 116, 104))
+print(square.size, square.getpixel((0, 0)), square.getpixel((112, 112)), square.getpixel((0, 75)), square.getpixel((0, 149)))
 `);
-    expect(out).toBe("(300, 300) (124, 116, 104) (255, 0, 0) (255, 0, 0)");
+    // 300x100 becomes 224x75, so it sits in rows 74 to 148.
+    expect(out).toBe("(224, 224) (124, 116, 104) (255, 0, 0) (255, 0, 0) (124, 116, 104)");
+  });
+
+  it("scales an image to fit OWLv2's square, in the top-left corner", () => {
+    const out = server(`
+from PIL import Image
+square = visionServer.top_left_square(Image.new("RGB", (200, 100), (255, 0, 0)), 960, (128, 128, 128))
+print(square.size, square.getpixel((0, 0)), square.getpixel((959, 479)), square.getpixel((0, 480)))
+`);
+    expect(out).toBe("(960, 960) (255, 0, 0) (255, 0, 0) (128, 128, 128)");
+  });
+
+  it("never builds a square larger than the model's input, however long the image", () => {
+    // Padding before scaling would make this a 20000x20000 square.
+    const out = server(`
+from PIL import Image
+long = Image.new("RGB", (20000, 10), (255, 0, 0))
+print(visionServer.top_left_square(long, 960, (128, 128, 128)).size, visionServer.centered_square(long, 224, (0, 0, 0)).size)
+`);
+    expect(out).toBe("(960, 960) (224, 224)");
   });
 });

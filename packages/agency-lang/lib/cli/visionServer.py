@@ -9,7 +9,7 @@ of the image's bytes>, ...}:
   POST /v1/vision/tags        {"threshold"?, "limit"?}          -> {"tags": [{"tag", "score"}]}
   POST /v1/vision/captions    {"detail"?: "short" | "long"}     -> {"caption": "..."}
   POST /v1/vision/embeddings  {"boxes"?: [...]}                 -> {"embeddings": [[...], ...]}
-  POST /v1/vision/regions     {"limit"?}                        -> {"regions": [{"score", "box"}]}
+  POST /v1/vision/regions     {"threshold"?, "limit"?}          -> {"regions": [{"score", "box"}]}
   GET  /health                                                  -> {"status": "ok", "routes": [...]}
 
 A failure is {"error": {"message": "..."}}. A route the model does not
@@ -51,10 +51,12 @@ from visionRules import (  # noqa: E402
     box_pixels,
     check_request,
     family_of,
+    fitted_size,
     join_names,
     kept_boxes,
     normalized_box,
     route_of_path,
+    rounded_vectors,
     route_paths,
     square_padding,
     warm_up_request,
@@ -129,26 +131,33 @@ def open_image(data):
         raise RequestError(f"The image is not one this server reads. It reads {join_names(IMAGE_FORMATS, 'or')}.")
 
 
-def padded_square(image, color):
-    """`image` centered on a square of `color`, so a processor that makes
-    a picture square does not cut the ends off a long, thin one."""
+def fitted(image, side, resample):
+    """`image` scaled so its longer side is `side`, keeping its shape."""
+    return image.resize(fitted_size(*image.size, side), resample)
+
+
+def centered_square(image, side, color):
+    """`image` scaled to fit a `side` by `side` square of `color` and
+    centered on it, so a processor that makes a picture square does not
+    cut the ends off a long, thin one."""
     from PIL import Image
 
-    side, offset = square_padding(*image.size)
+    small = fitted(image, side, Image.BICUBIC)
+    _, offset = square_padding(*small.size)
     square = Image.new("RGB", (side, side), color)
-    square.paste(image, offset)
+    square.paste(small, offset)
     return square
 
 
-def padded_bottom_right(image, color):
-    """`image` in the top-left corner of a square of `color`, the way
-    OWLv2's processor pads it, so a box in 0..1 of the square times the
-    square's side is a box in the image's own pixels."""
+def top_left_square(image, side, color):
+    """`image` scaled to fit a `side` by `side` square of `color`, in its
+    top-left corner. OWLv2's processor pads on the bottom and the right,
+    so a box in 0..1 of the square, times the image's longer side, is a
+    box in the image's own pixels."""
     from PIL import Image
 
-    side = max(image.size)
     square = Image.new("RGB", (side, side), color)
-    square.paste(image, (0, 0))
+    square.paste(fitted(image, side, Image.BILINEAR), (0, 0))
     return square
 
 
@@ -292,21 +301,22 @@ class Dinov2Runner:
         self.padding = tuple(round(channel * 255) for channel in self.processor.image_mean)
 
     def _embed(self, crops):
-        """One unit-length vector, as a list, per Pillow image."""
+        """One unit-length vector, as a list, per Pillow image. Each image
+        is already a DINOV2_INPUT_SIZE square, so the processor only
+        rescales and normalizes it."""
         if not crops:
             # The processor turns no images into a tensor the model cannot take.
             return []
-        size = {"height": DINOV2_INPUT_SIZE, "width": DINOV2_INPUT_SIZE}
-        inputs = self.processor(images=crops, do_center_crop=False, size=size, return_tensors="pt").to(self.device)
+        inputs = self.processor(images=crops, do_resize=False, do_center_crop=False, return_tensors="pt").to(self.device)
         with self.torch.no_grad():
             pooled = self.model(**inputs).pooler_output
-        return self.torch.nn.functional.normalize(pooled, dim=-1).tolist()
+        return rounded_vectors(self.torch.nn.functional.normalize(pooled, dim=-1).tolist())
 
     def embeddings_of(self, image, request):
         # The rules turned "no boxes" into one box over the whole image.
         width, height = image.size
         crops = [
-            padded_square(image.crop(box_pixels(box, width, height, index)), self.padding)
+            centered_square(image.crop(box_pixels(box, width, height, index)), DINOV2_INPUT_SIZE, self.padding)
             for index, box in enumerate(request["boxes"])
         ]
         return {"embeddings": self._embed(crops)}
@@ -345,11 +355,9 @@ class Owlv2Runner:
     def _pixel_values(self, image):
         """The model's input for `image`. The processor's own resize needs
         scipy, which the serve environment does not install, so the image
-        is padded and resized here with Pillow, and the processor only
+        is resized and padded here with Pillow, and the processor only
         rescales and normalizes it."""
-        from PIL import Image
-
-        square = padded_bottom_right(image, OWLV2_PADDING).resize((self.side, self.side), Image.BILINEAR)
+        square = top_left_square(image, self.side, OWLV2_PADDING)
         inputs = self.image_processor(images=square, do_pad=False, do_resize=False, return_tensors="pt")
         return inputs["pixel_values"].to(self.device)
 
@@ -397,7 +405,7 @@ class Owlv2Runner:
 
     def regions_of(self, image, request):
         scores, boxes = self._objectness(image)
-        kept = kept_boxes(scores, boxes, *image.size, 0.0, MERGE_IOU, request["limit"])
+        kept = kept_boxes(scores, boxes, *image.size, request["threshold"], MERGE_IOU, request["limit"])
         return {"regions": [{"score": found["score"], "box": found["box"]} for found in kept]}
 
 

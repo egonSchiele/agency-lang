@@ -265,7 +265,7 @@ Describe an image as booru tags with a local tagger: "1girl, glasses,
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L170))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L173))
 
 ### captionImage
 
@@ -296,7 +296,7 @@ Write a sentence about an image with a local model. Runs on this
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L198))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L204))
 
 ### embedImage
 
@@ -319,13 +319,13 @@ Turn an image into an embedding, a list of numbers that says how it
   @param boxes - Boxes to embed, as detectObjects and findRegions return them, at most 100. Null embeds the whole image
 
 Similarity between two embeddings is `cosineSimilarity` from
-`std::embedding`, where 1 is identical. As a starting point, in one test
-on a photo of two tabby cats and two TV remotes on a couch, a tight crop
-of one cat scored 1.0 against that cat's box, 0.55 against the other
-cat's, and at most 0.29 against the remotes and the couch. Pen-and-ink
-drawings have not been measured. Rather than pick a cut-off, compare
-each box with crops of your own things and of other things, and keep
-the nearer side: the module doc comment shows how.
+`std::embedding`, where 1 is identical. As a starting point, on one
+photo of two cats and two TV remotes, the two cats scored 0.55 against
+each other, the two remotes 0.57, and a cat against a remote at most
+0.26. The same object in two different photos has not been measured,
+and neither have pen-and-ink drawings. Rather than pick a cut-off,
+compare each box with crops of your own things and of other things, and
+keep the nearer side: the module doc comment shows how.
 
 **Parameters:**
 
@@ -339,7 +339,7 @@ the nearer side: the module doc comment shows how.
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L229))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L238))
 
 ### findRegions
 
@@ -348,6 +348,7 @@ findRegions(
   path: string,
   model: string,
   limit: number = 50,
+  threshold: number | null = null,
 ): Result<Region[]> raises <std::vision>
 ```
 
@@ -359,6 +360,7 @@ Box every thing in an image with a local model, with no names: for
   @param path - Path to a PNG, JPEG, WebP, or GIF image
   @param model - A local vision model that finds regions, such as "owlv2-base" or "florence-2"
   @param limit - At most this many regions, 1 to 100
+  @param threshold - Drop regions scoring below this, 0 to 1. Null uses 0.1, which drops the many boxes OWLv2 puts on nothing. Florence-2 gives no scores: every region scores 1, so the threshold drops nothing
 
 **Parameters:**
 
@@ -367,9 +369,10 @@ Box every thing in an image with a local model, with no names: for
 | path | `string` |  |
 | model | `string` |  |
 | limit | `number` | 50 |
+| threshold | `number \| null` | null |
 
 **Returns:** `Result<Region[]>`
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L255))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L267))

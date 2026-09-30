@@ -101,12 +101,12 @@ describe("std::vision helpers", () => {
         { score: 0.4, box },
       ],
     });
-    const r = await _findRegions(image, "owlv2-base", 2);
+    const r = await _findRegions(image, "owlv2-base", 2, null);
     expect(r.success && r.value).toEqual([
       { id: 0, score: 0.9, box },
       { id: 1, score: 0.4, box },
     ]);
-    expect(requests[0]).toMatchObject({ path: "/v1/vision/regions", limit: 2 });
+    expect(requests[0]).toMatchObject({ path: "/v1/vision/regions", limit: 2, threshold: null });
   });
 
   it("sends the threshold and limit to the tags route", async () => {

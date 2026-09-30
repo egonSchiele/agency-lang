@@ -64,7 +64,8 @@ export type ReplySummary = {
   /** Set for a successful image reply, whose base64 is never logged: how
    *  many bytes the reply had, and the format the request asked for. */
   image?: { bytes: number; format: string };
-  /** Set for a successful vision reply: what it was, counted. */
+  /** Set for a successful vision reply: what it was, counted, or its size
+   *  when the reply is too long to count. */
   vision?: string;
 };
 
@@ -195,14 +196,15 @@ function isAudio(contentType: string | undefined): boolean {
  *  base64, which does not belong in a terminal. */
 export const IMAGES_PATH = "/v1/images/generations";
 
-/** The vision task a path is for, from `VISION_TASKS`, or undefined. A
- *  reply there is logged by its count. */
+const VISION_TASK_ROWS: VisionTaskRow[] = Object.values(VISION_TASKS);
+
+/** The vision task a path is for, from `VISION_TASKS`, or undefined. */
 function visionTaskAt(requestPath: string): VisionTaskRow | undefined {
-  return Object.values(VISION_TASKS).find((row) => `/v1${row.route}` === requestPath);
+  return VISION_TASK_ROWS.find((row) => `/v1${row.route}` === requestPath);
 }
 
 /** Where vision servers answer. */
-export const VISION_PATHS = Object.values(VISION_TASKS).map((row) => `/v1${row.route}`);
+export const VISION_PATHS = VISION_TASK_ROWS.map((row) => `/v1${row.route}`);
 
 /** What the log knows about the request a reply answers. */
 export type RequestFacts = { path: string; outputFormat?: string };
@@ -230,15 +232,22 @@ export function describeReply(reply: Reply, request?: RequestFacts): ReplySummar
   if (streamed) {
     return { body, streamed, truncated, ...streamedUsage(body) };
   }
-  const parsed = parseObject(body);
+  const succeeded = reply.status >= 200 && reply.status < 300;
   const visionTask = request === undefined ? undefined : visionTaskAt(request.path);
-  if (visionTask !== undefined && reply.status >= 200 && reply.status < 300 && parsed !== null) {
-    const count = describeVision(parsed, visionTask);
+  if (visionTask !== undefined && succeeded && !visionTask.logBody) {
+    // Summarized from the byte count alone and never parsed, like an image
+    // reply: a hundred embeddings are more than the capture keeps, and a
+    // capture cut short is not JSON.
+    const size = `${visionTask.logNoun}s, ${megabytes(reply.totalBytes)}`;
+    return { body: `<${size}>`, streamed: false, truncated: false, vision: size };
+  }
+  const parsed = parseObject(body);
+  if (visionTask !== undefined && succeeded && parsed !== null) {
     return {
-      body: visionTask.logBody ? JSON.stringify(parsed, null, 2) : `<${count}>`,
+      body: JSON.stringify(parsed, null, 2),
       streamed: false,
       truncated,
-      vision: count,
+      vision: describeVision(parsed, visionTask),
     };
   }
   return {
@@ -303,8 +312,12 @@ function megabytes(bytes: number): string {
   return `${(bytes / 1e6).toFixed(1)} MB`;
 }
 
-/** The counts after a reply: its audio or image size, or its token counts. */
+/** The counts after a reply: its audio or image size, what a vision reply
+ *  held, or its token counts. */
 function replyCounts(reply: ReplySummary | null): string | null {
+  if (reply?.vision !== undefined) {
+    return reply.vision;
+  }
   if (reply?.audioBytes !== undefined) {
     return `${reply.audioBytes.toLocaleString("en-US")} bytes of audio`;
   }

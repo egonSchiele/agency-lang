@@ -173,16 +173,21 @@ an empty reply and the model does not run.
 
 1. Crop the box out of the decoded image. A box with no area is
    refused, naming its index.
-2. Pad the crop to a square, centered, with the color the processor
-   subtracts as its mean (ImageNet's mean, about `(124, 116, 104)`).
-3. Run the processor with `do_center_crop=False` and a size of 224×224.
+2. Scale the crop so its longer side is 224 pixels, then center it on
+   a 224×224 square of the color the processor subtracts as its mean
+   (ImageNet's mean, about `(124, 116, 104)`). Scaling comes first so
+   the square is never larger than the model's input. Padding first
+   would turn a 1200×40000 screenshot into a 40000×40000 square.
+3. Run the processor with `do_resize=False` and `do_center_crop=False`.
    The model card's settings resize the short side to 256 and then cut
    out the middle 224×224, which would cut the ends off a long, thin
-   object. Padding first keeps the whole object in view.
+   object. The square keeps the whole object in view.
 4. Take `pooler_output`, the model's summary of the whole picture, and
    scale it to length 1. Two such vectors' cosine similarity is then
    their dot product, and `cosineSimilarity` in `std::embedding` gives
    the same answer either way.
+5. Round each number to six places. A float32 holds about seven digits
+   and Python prints seventeen, so this halves the reply.
 
 The padding color in step 2 is gray, which suits photos. On a drawing
 it puts two gray bars beside a crop of white paper. Every crop gets the
@@ -255,6 +260,7 @@ second tool, not a third, answers "find this thing".
 |---|---|
 | `image` | The image to look at |
 | `limit` | Optional. At most this many regions, 1 to 100. The default is 50 |
+| `threshold` | Optional. Drop regions scoring below this, 0 to 1. The default is 0.1 |
 
 The reply is `{"regions": [{"score", "box"}]}`, best first. The limit
 of 100 is the same as the limit on `boxes` in `/v1/vision/embeddings`,
@@ -264,9 +270,15 @@ so every region of one reply can be embedded in one request.
 it predicts, OWLv2 also says how likely the box is to hold a thing of
 any kind. The runner calls the model with one placeholder label, reads
 `objectness_logits` and `pred_boxes` from the output, and ignores the
-label scores. It sorts the boxes by objectness, runs
-`merge_overlapping`, and keeps the first `limit`. The score is the
-sigmoid of the objectness logit.
+label scores. It drops the boxes under `threshold`, sorts the rest by
+objectness, runs `merge_overlapping`, and keeps the first `limit`. The
+score is the sigmoid of the objectness logit.
+
+OWLv2 scores every one of its 3,600 boxes, and most hold nothing. With
+no threshold, a page with three things on it comes back as three real
+regions and 47 boxes on nothing. On two test photos the real things
+scored 0.23 and up, and the default of 0.1 kept 8 or 9 regions of the
+best 50. Drawings have not been measured, and may want another value.
 
 `Florence2Runner.regions_of` runs the `<REGION_PROPOSAL>` task, which
 returns boxes with no names. Florence-2 gives no scores, so each region
@@ -358,6 +370,7 @@ export idempotent def findRegions(
   path: string,
   model: string,
   limit: number = 50,
+  threshold: number | null = null,
 ): Result<Region[]> raises <std::vision>
 ```
 

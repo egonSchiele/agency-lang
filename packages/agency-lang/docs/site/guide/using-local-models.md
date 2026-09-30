@@ -482,6 +482,8 @@ node main(page: string, catCrops: string[], otherCrops: string[]) {
 
 Run it with `--approve std::vision`. Make the crops with `findRegions` and `cropImage` on a few pages, then sort the files into two folders by hand. Compare like with like: a tight crop and a box around the same thing compare well, but a whole photo of a mug on a desk mostly describes the desk. For your mug, use `detectObjects(photo, ["mug"], "owlv2-base")` for the boxes, since the detector does know what a mug is, and crops of other people's mugs as the other side.
 
+How well this works has been measured on one photo so far. Two cats scored 0.55 against each other and at most 0.26 against a TV remote, so telling kinds of thing apart works. Telling your own mug from a lookalike in another photo has not been measured yet, and neither have drawings.
+
 ## What is different about a local model
 
 A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.

@@ -37,7 +37,9 @@ export function visionBodyBytes(): number {
  *  numbered    true: each item of the answer gets an `id`, its index, so
  *              a caller can name crops after it
  *  logNoun     what the serve log counts the answer in, such as "tag"
- *  logBody     false: the serve log shows the count alone, not the reply */
+ *  logBody     false: the serve log shows the reply's size alone and never
+ *              reads it, because the reply is too long to print or to
+ *              capture whole */
 export type VisionTaskRow = {
   route: string;
   replyField: string;
@@ -49,7 +51,7 @@ export type VisionTaskRow = {
 /** One row per task the vision server answers. `ROUTE_TABLE` in
  *  lib/cli/visionRules.py is the server's side, and a test compares the
  *  routes. */
-export const VISION_TASKS: Record<string, VisionTaskRow> = {
+export const VISION_TASKS = {
   detections: {
     route: "/vision/detections",
     replyField: "detections",
@@ -71,7 +73,8 @@ export const VISION_TASKS: Record<string, VisionTaskRow> = {
     logNoun: "caption",
     logBody: true,
   },
-  // A hundred vectors of 768 numbers each is no use in a terminal.
+  // A hundred vectors of 768 numbers each is no use in a terminal, and is
+  // more than the log keeps of one reply.
   embeddings: {
     route: "/vision/embeddings",
     replyField: "embeddings",
@@ -86,7 +89,7 @@ export const VISION_TASKS: Record<string, VisionTaskRow> = {
     logNoun: "region",
     logBody: true,
   },
-};
+} satisfies Record<string, VisionTaskRow>;
 
 type VisionTask = keyof typeof VISION_TASKS;
 
@@ -203,21 +206,15 @@ async function visionCall(
   return success(items.map((item, id) => ({ id, ...item })));
 }
 
-/** One file a vision function reads, and what the std::vision interrupt
- *  asks before it does. */
-export type VisionAsk = { question: string; dir: string; filename: string };
+/** The file a vision function reads: its real spelling, and the folder and
+ *  name the std::vision interrupt shows. */
+export type VisionFile = { image: string; dir: string; filename: string };
 
-/** The files a vision function reads: the image's real spelling, and one
- *  ask per file, in the order the function raises them. Throws for a path
- *  that cannot be resolved, before anything is asked. */
-export type VisionFiles = { image: string; asks: VisionAsk[] };
-
-export function _visionFiles(spelling: string, question: string): VisionFiles {
+/** Resolves the image a vision function was given. Throws for a path that
+ *  cannot be resolved, so the function fails before it asks anything. */
+export function _visionFile(spelling: string): VisionFile {
   const image = _realTarget(spelling);
-  return {
-    image,
-    asks: [{ question, dir: path.dirname(image), filename: path.basename(image) }],
-  };
+  return { image, dir: path.dirname(image), filename: path.basename(image) };
 }
 
 /** Backs `std::vision.detectObjects`. A null threshold is sent as JSON
@@ -260,11 +257,13 @@ export async function _embedImage(
   return visionCall("embedImage", "embeddings", spelling, model, { boxes });
 }
 
-/** Backs `std::vision.findRegions`. */
+/** Backs `std::vision.findRegions`. A null threshold is sent as JSON null,
+ *  which the server reads as its default. */
 export async function _findRegions(
   spelling: string,
   model: string,
   limit: number,
+  threshold: number | null,
 ): Promise<ResultValue> {
-  return visionCall("findRegions", "regions", spelling, model, { limit });
+  return visionCall("findRegions", "regions", spelling, model, { limit, threshold });
 }

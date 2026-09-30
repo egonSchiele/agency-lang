@@ -761,7 +761,7 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     contextWindow: 224,
     license: "apache-2.0",
     description:
-      "Turns a picture, or boxes in it, into embeddings, so you can tell your own mug from other mugs.",
+      "Turns a picture, or boxes in it, into embeddings, so you can find the boxes that look like your own things.",
   },
   "owlv2-base": {
     backend: "mlx",

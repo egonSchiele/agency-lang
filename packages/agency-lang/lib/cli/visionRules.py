@@ -41,6 +41,12 @@ KEEP_OVERLAPS = 1.0
 # candidate, so it gets a bounded amount of work.
 MAX_MERGE_CANDIDATES = 500
 
+# How many decimal places an embedding's numbers are sent with. A float32
+# holds about seven significant digits, and Python prints seventeen, so
+# rounding halves the reply without changing a similarity before its sixth
+# place.
+EMBEDDING_DECIMALS = 6
+
 # A box over the whole image, in the normalized shape. An embeddings
 # request with no boxes embeds this one.
 WHOLE_IMAGE = {"x": 0, "y": 0, "width": 1, "height": 1}
@@ -91,7 +97,11 @@ ROUTE_TABLE = {
     },
     "regions": {
         "path": "/v1/vision/regions",
-        "fields": ["limit"],
+        "fields": ["threshold", "limit"],
+        # OWLv2 scores every one of its 3,600 boxes, and most hold nothing.
+        # On two test photos the real things scored 0.23 and up.
+        # Florence-2 scores every region 1, so this drops none of its.
+        "default_threshold": 0.1,
         "limit_max": MAX_REPLY_BOXES,
         "limit_default": 50,
     },
@@ -389,14 +399,29 @@ def box_pixels(box, width, height, index):
     """The pixel rectangle (left, top, right, bottom) of normalized box
     number `index` on a `width` by `height` image. Raises RequestError
     for a box that covers less than a pixel once it is rounded."""
+    too_small = RequestError(f"boxes[{index}] covers less than a pixel of the {width}x{height} image.")
     try:
         left, top, right, bottom = crop_box(box["x"], box["y"], box["width"], box["height"], 0, width, height)
     except ValueError:
-        right = left = 0
-        top = bottom = 0
+        raise too_small
     if right <= left or bottom <= top:
-        raise RequestError(f"boxes[{index}] covers less than a pixel of the {width}x{height} image.")
+        raise too_small
     return left, top, right, bottom
+
+
+def fitted_size(width, height, side):
+    """The (width, height) a `width` by `height` picture has once it is
+    scaled so its longer side is `side`. The shorter side keeps at least
+    one pixel. A picture is scaled to this before it is padded to a
+    square, so the square is never larger than the model's input: padding
+    first would make a 1200x40000 screenshot a 40000x40000 square."""
+    longest = max(width, height)
+    return max(1, round(width * side / longest)), max(1, round(height * side / longest))
+
+
+def rounded_vectors(vectors):
+    """`vectors` with each number rounded to EMBEDDING_DECIMALS places."""
+    return [[round(value, EMBEDDING_DECIMALS) for value in vector] for vector in vectors]
 
 
 def square_padding(width, height):

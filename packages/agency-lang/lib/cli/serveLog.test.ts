@@ -125,32 +125,53 @@ describe("describeReply", () => {
     ).toBe("1 caption");
   });
 
-  it("counts regions, and logs embeddings by their count with no numbers", () => {
-    const reply = (body: unknown) => ({
-      status: 200,
-      body: JSON.stringify(body),
-      contentType: "application/json",
-      truncated: false,
-      totalBytes: 1,
-    });
-    const regions = describeReply(reply({ regions: [{ score: 0.9 }, { score: 0.5 }] }), {
-      path: "/v1/vision/regions",
-    });
-    expect(regions.vision).toBe("2 regions");
-    const embeddings = describeReply(
-      reply({
-        embeddings: [
-          [0.125, 0.5],
-          [0.25, 0.75],
-        ],
-      }),
-      {
-        path: "/v1/vision/embeddings",
-      },
+  it("counts regions", () => {
+    const regions = describeReply(
+      reply({ body: JSON.stringify({ regions: [{ score: 0.9 }, { score: 0.5 }] }) }),
+      { path: "/v1/vision/regions" },
     );
-    expect(embeddings.vision).toBe("2 embeddings");
-    expect(embeddings.body).toBe("<2 embeddings>");
-    expect(embeddings.body).not.toContain("0.125");
+    expect(regions.vision).toBe("2 regions");
+  });
+
+  it("logs an embeddings reply by its size, even when the capture cut it short", () => {
+    // A hundred vectors are about 0.8 MB of JSON, and the capture keeps
+    // one megabyte, so a large reply arrives here cut off and is not JSON.
+    const cutOff = describeReply(
+      reply({ body: '{"embeddings": [[0.125, 0.5', truncated: true, totalBytes: 1_700_000 }),
+      { path: "/v1/vision/embeddings" },
+    );
+    expect(cutOff).toEqual({
+      body: "<embeddings, 1.7 MB>",
+      streamed: false,
+      truncated: false,
+      vision: "embeddings, 1.7 MB",
+    });
+    const whole = describeReply(
+      reply({ body: JSON.stringify({ embeddings: [[0.125, 0.5]] }), totalBytes: 28 }),
+      { path: "/v1/vision/embeddings" },
+    );
+    expect(whole.body).not.toContain("0.125");
+  });
+
+  it("leaves a failed embeddings reply readable", () => {
+    const failed = describeReply(
+      reply({
+        status: 400,
+        body: '{"error": {"message": "boxes[0] must be {x, y, width, height}."}}',
+      }),
+      { path: "/v1/vision/embeddings" },
+    );
+    expect(failed.body).toContain("boxes[0]");
+    expect(failed.vision).toBeUndefined();
+  });
+
+  it("prints what a vision reply held on its line", () => {
+    const e = entry({
+      path: "/v1/vision/regions",
+      reply: { body: "{}", streamed: false, truncated: false, vision: "2 regions" },
+    });
+    const [line] = serveLogLines(e, { verbose: false, color: plainColor });
+    expect(line.endsWith("  2 regions")).toBe(true);
   });
 
   it("indents a JSON reply and reads its usage", () => {

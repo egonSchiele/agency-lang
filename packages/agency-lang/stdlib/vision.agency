@@ -98,7 +98,7 @@ file embedded whole is cut the same way as a box embedded from a page,
 so the two compare fairly. A whole photo of a mug on a desk and a tight
 crop of a mug do not: the first vector mostly describes the desk.
 */
-import { _detectObjects, _tagImage, _captionImage, _embedImage, _findRegions, _visionFiles } from "agency-lang/stdlib-lib/vision.js"
+import { _detectObjects, _tagImage, _captionImage, _embedImage, _findRegions, _visionFile } from "agency-lang/stdlib-lib/vision.js"
 
 // One effect for the five functions, because all five do the same thing
 // to the file: read it once and hand it to a local model. The task and
@@ -157,14 +157,17 @@ export idempotent def detectObjects(
   @param model - A local vision model that detects, such as "owlv2-base" or "florence-2"
   @param threshold - Drop detections scoring below this, 0 to 1. Null uses the model's default: 0.1 for OWLv2, whose real objects often score 0.2 to 0.4. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
   """
-  const files = try _visionFiles(path, "Look for ${labels.join(", ")} in this image with a local model?")
-  if (isFailure(files)) {
-    return files
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
-  for (ask in files.value.asks) {
-    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "detections", model: model })
-  }
-  return try _detectObjects(files.value.image, labels, model, threshold)
+  return interrupt std::vision("Look for ${labels.join(", ")} in this image with a local model?", {
+    dir: file.value.dir,
+    filename: file.value.filename,
+    task: "detections",
+    model: model,
+  })
+  return try _detectObjects(file.value.image, labels, model, threshold)
 }
 
 export idempotent def tagImage(
@@ -185,14 +188,17 @@ export idempotent def tagImage(
   @param threshold - Drop tags scoring below this, 0 to 1
   @param limit - At most this many tags, 1 to 500
   """
-  const files = try _visionFiles(path, "Tag this image with a local model?")
-  if (isFailure(files)) {
-    return files
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
-  for (ask in files.value.asks) {
-    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "tags", model: model })
-  }
-  return try _tagImage(files.value.image, model, threshold, limit)
+  return interrupt std::vision("Tag this image with a local model?", {
+    dir: file.value.dir,
+    filename: file.value.filename,
+    task: "tags",
+    model: model,
+  })
+  return try _tagImage(file.value.image, model, threshold, limit)
 }
 
 export idempotent def captionImage(
@@ -208,24 +214,27 @@ export idempotent def captionImage(
   @param model - A local vision model that captions, such as "florence-2"
   @param detail - "short" for one sentence, "long" for a paragraph
   """
-  const files = try _visionFiles(path, "Caption this image with a local model?")
-  if (isFailure(files)) {
-    return files
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
-  for (ask in files.value.asks) {
-    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "captions", model: model })
-  }
-  return try _captionImage(files.value.image, model, detail)
+  return interrupt std::vision("Caption this image with a local model?", {
+    dir: file.value.dir,
+    filename: file.value.filename,
+    task: "captions",
+    model: model,
+  })
+  return try _captionImage(file.value.image, model, detail)
 }
 
 /** Similarity between two embeddings is `cosineSimilarity` from
-`std::embedding`, where 1 is identical. As a starting point, in one test
-on a photo of two tabby cats and two TV remotes on a couch, a tight crop
-of one cat scored 1.0 against that cat's box, 0.55 against the other
-cat's, and at most 0.29 against the remotes and the couch. Pen-and-ink
-drawings have not been measured. Rather than pick a cut-off, compare
-each box with crops of your own things and of other things, and keep
-the nearer side: the module doc comment shows how. */
+`std::embedding`, where 1 is identical. As a starting point, on one
+photo of two cats and two TV remotes, the two cats scored 0.55 against
+each other, the two remotes 0.57, and a cat against a remote at most
+0.26. The same object in two different photos has not been measured,
+and neither have pen-and-ink drawings. Rather than pick a cut-off,
+compare each box with crops of your own things and of other things, and
+keep the nearer side: the module doc comment shows how. */
 export idempotent def embedImage(
   path: string,
   model: string,
@@ -242,20 +251,24 @@ export idempotent def embedImage(
   @param model - A local vision model that embeds, such as "dinov2-base"
   @param boxes - Boxes to embed, as detectObjects and findRegions return them, at most 100. Null embeds the whole image
   """
-  const files = try _visionFiles(path, "Describe this image as numbers with a local model?")
-  if (isFailure(files)) {
-    return files
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
-  for (ask in files.value.asks) {
-    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "embeddings", model: model })
-  }
-  return try _embedImage(files.value.image, model, boxes)
+  return interrupt std::vision("Describe this image as numbers with a local model?", {
+    dir: file.value.dir,
+    filename: file.value.filename,
+    task: "embeddings",
+    model: model,
+  })
+  return try _embedImage(file.value.image, model, boxes)
 }
 
 export idempotent def findRegions(
   path: string,
   model: string,
   limit: number = 50,
+  threshold: number | null = null,
 ): Result<Region[]> raises <std::vision> {
   """
   Box every thing in an image with a local model, with no names: for
@@ -266,13 +279,17 @@ export idempotent def findRegions(
   @param path - Path to a PNG, JPEG, WebP, or GIF image
   @param model - A local vision model that finds regions, such as "owlv2-base" or "florence-2"
   @param limit - At most this many regions, 1 to 100
+  @param threshold - Drop regions scoring below this, 0 to 1. Null uses 0.1, which drops the many boxes OWLv2 puts on nothing. Florence-2 gives no scores: every region scores 1, so the threshold drops nothing
   """
-  const files = try _visionFiles(path, "Box the things in this image with a local model?")
-  if (isFailure(files)) {
-    return files
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
-  for (ask in files.value.asks) {
-    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "regions", model: model })
-  }
-  return try _findRegions(files.value.image, model, limit)
+  return interrupt std::vision("Box the things in this image with a local model?", {
+    dir: file.value.dir,
+    filename: file.value.filename,
+    task: "regions",
+    model: model,
+  })
+  return try _findRegions(file.value.image, model, limit, threshold)
 }

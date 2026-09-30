@@ -84,7 +84,6 @@ the code that acts on a row is written once:
 | A family | a row of `FAMILIES` | the runner class the row names |
 | What to do with OWLv2's boxes | the arguments of `kept_boxes` | `kept_boxes` |
 | A task, on the client | a row of `VISION_TASKS` in `vision.ts` | `visionCall`, and the serve log |
-| The files a function reads | the list `_visionFiles` returns | a three-line loop in each Agency function |
 | A body limit at the front door | `bodyLimits` in `mlxServer.ts` | `bodyLimit` |
 
 The family table is flat, one key per value. Each row names a runner
@@ -108,7 +107,7 @@ The routes, all `POST`, all taking `{"model", "image", ...}`, where
 | `/v1/vision/tags` | `threshold`, `limit` (1 to 500) | `{"tags": [{"tag", "score"}]}` |
 | `/v1/vision/captions` | `detail`: `short` or `long` | `{"caption": "..."}` |
 | `/v1/vision/embeddings` | `boxes`: 0 to 100 boxes, or null for the whole image | `{"embeddings": [[...], ...]}` |
-| `/v1/vision/regions` | `limit` (1 to 100) | `{"regions": [{"score", "box"}]}` |
+| `/v1/vision/regions` | `threshold`, `limit` (1 to 100) | `{"regions": [{"score", "box"}]}` |
 
 Boxes are normalized to 0..1 with the origin at the top left, the shape
 `std::ocr` returns, so a box from either goes to `cropImage`. Florence-2
@@ -126,14 +125,26 @@ them, and `serve` waits on it as it does for an image process.
 
 ### DINOv2 and embeddings
 
-`Dinov2Runner.embeddings_of` crops each box, pads the crop to a
-centered square in the color the processor subtracts as its mean, and
-returns one 768-number vector of length 1 per box. The model card's
-preprocessing resizes the short side to 256 and cuts out the middle
-224×224, which would cut the ends off a long, thin object; padding
-first, and calling the processor with `do_center_crop=False` and a
-224×224 size, keeps the whole object in view. The padding color
-normalizes to zero, so it carries no signal.
+`Dinov2Runner.embeddings_of` crops each box, scales the crop so its
+longer side is 224 pixels, centers it on a 224×224 square in the color
+the processor subtracts as its mean, and returns one 768-number vector
+of length 1 per box. The model card's preprocessing resizes the short
+side to 256 and cuts out the middle 224×224, which would cut the ends
+off a long, thin object. The square keeps the whole object in view, so
+the processor is called with `do_resize=False` and
+`do_center_crop=False`. The padding color normalizes to zero, so it
+carries no signal.
+
+A picture is scaled before it is padded, here and in `Owlv2Runner`. The
+pixel limit on a request is width times height, and a square padded
+first has the longer side on both sides: a 1200×40000 screenshot passes
+the limit and would then need a 40000×40000 square, 4.8 GB.
+`fitted_size` in `visionRules.py` gives the scaled size, so no square is
+larger than the model's input. `Wd14Runner._prepare` still pads first.
+
+Each number of a vector is rounded to six places. A float32 holds about
+seven digits and Python prints seventeen, so rounding halves the reply:
+a hundred vectors are about 0.8 MB of JSON.
 
 `_boxes_of` turns a missing or null `boxes` into one box over the whole
 image, `WHOLE_IMAGE`, so the runner has one path. An empty list stays
@@ -147,6 +158,10 @@ cannot take, so `_embed` returns `[]` itself.
 `Owlv2Runner` answers `detections` with every label in one pass,
 unlike Florence-2, and `regions` from `model.objectness_predictor`: how
 much each box looks like a thing of any kind, with no text run at all.
+OWLv2 scores every one of its 3,600 boxes, and most hold nothing, so
+`regions` has a threshold with a default of 0.1. On two test photos the
+real things scored 0.23 and up, and 0.1 kept 8 or 9 regions of the best
+50. Drawings have not been measured.
 Its three torch methods return plain lists, scores and boxes as [x1,
 y1, x2, y2] in 0..1 of the square the image was padded to. Everything
 else is `kept_boxes` in `visionRules.py`, which CI tests without torch:
@@ -163,34 +178,27 @@ with every region scoring 1.
 ### Processor classes are named, not looked up
 
 The serve environment has neither torchvision nor scipy.
-`AutoImageProcessor` picks a class that needs torchvision for both new
-models, so the server would fail as it starts. `Dinov2Runner` loads
+`AutoImageProcessor` picks a class that needs torchvision for DINOv2
+and OWLv2, so the server would fail as it starts. `Dinov2Runner` loads
 `BitImageProcessorPil` by name, and `Owlv2Runner` loads
 `Owlv2ImageProcessorPil` and `CLIPTokenizer` by name. `AutoProcessor`
 happens to fall back to the Pillow class when torchvision is missing,
 but the family table, not a fallback, should decide what is imported.
 
 `Owlv2ImageProcessorPil` also needs scipy for its resize, a Gaussian
-blur and a linear zoom. `Owlv2Runner._pixel_values` pads the image and
-resizes it with Pillow instead, and calls the processor with
+blur and a linear zoom. `Owlv2Runner._pixel_values` resizes the image
+and pads it with Pillow instead, and calls the processor with
 `do_pad=False` and `do_resize=False`, so it only rescales and
-normalizes. Detection through this path found every object in the test
-photo, in the right place.
+normalizes. Its scores have not been compared with the scores through
+the library's own resize.
 
-### Search by example, tried and dropped
+### No search by example
 
-OWLv2 can take a picture of a thing instead of its name
-(`embed_image_query` and `image_guided_detection`). A `/matches` route
-and a `findByExample` function were specified on it, and measured before
-they were built. On two public COCO photos, two tabby cats and two
-remotes on a couch and a black-and-white cat on a laptop, it did not
-work: a remote as the example ranked both cats above both remotes, and
-boxes on nothing scored 0.96 to 1.0, as high as real matches.
-Transformers' own `image_guided_detection` made the same mistakes, and
-centering the example on a square made them worse. Boxing everything
-with `findRegions` and comparing the boxes with `embedImage` did the
-job instead, so the route was dropped. Reopen it only with a model that
-does better on that test.
+OWLv2 can take a picture of a thing instead of its name, through
+`image_guided_detection`. There is no route for it, because it failed
+a test: with a remote as the example it ranked both cats in a photo
+above both remotes, and boxes on nothing scored as high as real
+matches. The spec has the test. A model that replaces it must pass it.
 
 **Images are sent, not named.** A request carries the image's bytes as
 base64, never a path. The stdlib raises `std::vision` for the file,
@@ -216,8 +224,8 @@ writes.
 The `serve` front door, `mlxServer.ts`, reads every request body before
 it passes it on, and its default limit is 10 MB. `bodyLimits` gives each
 vision path `visionBodyBytes()`, as it gives the image server's path its
-own limit. Without it, a photo over about 7.5 MB, over 10 MB once it is
-base64, was refused at the door though the vision server takes 50 MB.
+own limit. A photo over about 7.5 MB is over 10 MB once it is base64,
+so the default would refuse a photo the vision server takes.
 
 ### Adding a route
 
@@ -236,12 +244,10 @@ with `dir`, `filename`, `task`, and `model`. All five functions do the
 same thing to the file, read it once and hand it to a local model, so
 one permission covers them; the task and model are in the payload for a
 policy that wants to allow tagging under `./dataset` and nothing else.
-Each function resolves its file with `_visionFiles` before the first
-interrupt, raises `std::vision` in a loop over the asks it returns, with
-the real `dir` and `filename` in each payload, and reads the file with
-`approvedFileBytes` after approval, in `vision.ts`. That is the shape
-`generateImageLocal` has; today every function reads one file, and a
-function that reads more would have the same shape.
+Each function resolves its file with `_visionFile` before the
+interrupt, raises `std::vision` with the real `dir` and `filename` in
+the payload, and reads the file with `approvedFileBytes` after
+approval, in `vision.ts`.
 `approvedFileBytes` holds the spelling with `fixedPath`, so a symlink
 planted while the prompt was pending is refused, and reads through
 `readBytes` in `contained.ts`.
@@ -249,7 +255,9 @@ planted while the prompt was pending is refused, and reads through
 `vision.ts` is one HTTP call, `visionRequest`, behind five thin exports,
 each one call to `visionCall` with a row of `VISION_TASKS`. The row says
 the route, the reply field that holds the answer, whether each item gets
-an `id`, and how the serve log counts it.
+an `id`, and how the serve log counts it. An embeddings reply is logged
+by its size and never parsed: the log keeps the first megabyte of a
+reply, and a hundred vectors can be more than that.
 It refuses a model whose kind is known and is not `vision` before any
 request (`_localModelKindOf` in `localModels.ts`), and lets the front
 door's 404 speak for a model that is not served. `labels` is required on
@@ -320,8 +328,8 @@ model: "florence-2")` is a person-finder.
   same routes. It runs each runner's route methods with a fake in place
   of its torch methods: one Florence-2 pass per label, OWLv2's labels
   and merging, and the region proposals. With the serve Python's
-  Pillow, it checks the square padding and which crops `Dinov2Runner`
-  embeds.
+  Pillow, it checks the squares, that none is larger than the model's
+  input however long the image, and which crops `Dinov2Runner` embeds.
 - `vision.test.ts` drives the five helpers against a stand-in HTTP
   server: the body per function, null boxes and a null threshold sent
   as null, the numbering, the refusals of a model of another kind and
@@ -358,13 +366,28 @@ regions in 0.09 s, and DINOv2 embeds three crops in 0.25 s. An Agency program th
 crops, proposes regions, embeds them, and asks Florence-2 for regions
 ran end to end in 2.6 s.
 
-In that run, the photo of two cats and two remotes on a couch, a crop
-of the left cat as the example scored 1.0 against the left cat's
-region, 0.55 against the right cat's, and at most 0.29 against the
-remotes and the couch. So DINOv2 told the two cats apart, and told both
-from everything else. These numbers come from photos. How DINOv2
-separates pen-and-ink drawings has not been measured, and neither has
-white padding against gray on drawings.
+## What the embeddings have been measured on
+
+One photo, of two cats and two remotes on a couch, with the boxes
+`detectObjects` gave:
+
+| Pair | Cosine similarity |
+|---|---|
+| the two cats | 0.55 |
+| the two remotes | 0.57 |
+| a cat and a remote | 0.19 to 0.26 |
+
+So things of one kind scored well above things of different kinds.
+
+Three things have not been measured:
+
+1. The same object in two different photos, against a lookalike. This
+   is the "my mug, not that mug" case, and nothing here supports it
+   yet.
+2. Pen-and-ink drawings, and white padding against gray on them.
+3. How steady a small crop's vector is. The remotes are 135 and 32
+   pixels wide. A change of under a pixel in how they were scaled moved
+   their similarity from 0.66 to 0.57, while the cats stayed at 0.55.
 
 ## Not here yet
 

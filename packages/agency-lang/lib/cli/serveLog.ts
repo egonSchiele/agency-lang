@@ -1,5 +1,6 @@
 import { type ColorFunction } from "../utils/termcolors.js";
 import { LOCAL_IMAGE_FIELDS } from "../stdlib/localImageInputs.js";
+import { VISION_TASKS, type VisionTaskRow } from "../stdlib/vision.js";
 
 /** What `agency local serve` prints about one request that reached its front
  *  door. The front door times the request and collects the reply; everything
@@ -189,9 +190,14 @@ function isAudio(contentType: string | undefined): boolean {
  *  base64, which does not belong in a terminal. */
 export const IMAGES_PATH = "/v1/images/generations";
 
-/** Where vision servers answer. A reply there is a list of boxes or tags,
- *  or one caption, and is logged by its count. */
-export const VISION_PATHS = ["/v1/vision/detections", "/v1/vision/tags", "/v1/vision/captions"];
+/** The vision task a path is for, from `VISION_TASKS`, or undefined. A
+ *  reply there is logged by its count. */
+function visionTaskAt(requestPath: string): VisionTaskRow | undefined {
+  return Object.values(VISION_TASKS).find((row) => `/v1${row.route}` === requestPath);
+}
+
+/** Where vision servers answer. */
+export const VISION_PATHS = Object.values(VISION_TASKS).map((row) => `/v1${row.route}`);
 
 /** What the log knows about the request a reply answers. */
 export type RequestFacts = { path: string; outputFormat?: string };
@@ -220,18 +226,14 @@ export function describeReply(reply: Reply, request?: RequestFacts): ReplySummar
     return { body, streamed, truncated, ...streamedUsage(body) };
   }
   const parsed = parseObject(body);
-  if (
-    request !== undefined &&
-    VISION_PATHS.includes(request.path) &&
-    reply.status >= 200 &&
-    reply.status < 300 &&
-    parsed !== null
-  ) {
+  const visionTask = request === undefined ? undefined : visionTaskAt(request.path);
+  if (visionTask !== undefined && reply.status >= 200 && reply.status < 300 && parsed !== null) {
+    const count = describeVision(parsed, visionTask);
     return {
-      body: JSON.stringify(parsed, null, 2),
+      body: visionTask.logBody ? JSON.stringify(parsed, null, 2) : `<${count}>`,
       streamed: false,
       truncated,
-      vision: describeVision(parsed),
+      vision: count,
     };
   }
   return {
@@ -242,15 +244,16 @@ export function describeReply(reply: Reply, request?: RequestFacts): ReplySummar
   };
 }
 
-/** A vision reply in a few words: `3 detections`, `24 tags`, `1 caption`. */
-function describeVision(parsed: Record<string, unknown>): string {
-  for (const field of ["detections", "tags"]) {
-    const items = parsed[field];
-    if (Array.isArray(items)) {
-      return `${items.length} ${field.slice(0, -1)}${items.length === 1 ? "" : "s"}`;
-    }
+/** A vision reply in a few words: `3 detections`, `24 tags`, `1 caption`.
+ *  A reply field that is a list counts its items; any other counts as
+ *  one. */
+function describeVision(parsed: Record<string, unknown>, row: VisionTaskRow): string {
+  const answer = parsed[row.replyField];
+  if (answer === undefined) {
+    return "vision reply";
   }
-  return typeof parsed.caption === "string" ? "1 caption" : "vision reply";
+  const count = Array.isArray(answer) ? answer.length : 1;
+  return `${count} ${row.logNoun}${count === 1 ? "" : "s"}`;
 }
 
 /** Milliseconds as something quick to read: under a second in whole

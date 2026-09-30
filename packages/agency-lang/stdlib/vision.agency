@@ -28,9 +28,7 @@ lines of your own code over them, and partial application narrows each:
 `detectObjects.partial(labels: ["person"], model: "florence-2")` is a
 person-finder.
 */
-import { _detectObjects, _tagImage, _captionImage } from "agency-lang/stdlib-lib/vision.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
-import { dirname, basename } from "std::path"
+import { _detectObjects, _tagImage, _captionImage, _visionFiles } from "agency-lang/stdlib-lib/vision.js"
 
 // One effect for the three functions, because all three do the same thing
 // to the file: read it once and hand it to a local model. The task and
@@ -80,17 +78,14 @@ export idempotent def detectObjects(
   @param model - A local vision model that detects, such as "florence-2"
   @param threshold - Drop detections scoring below this, 0 to 1. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
   """
-  const real = try _realTarget(path)
-  if (isFailure(real)) {
-    return real
+  const files = try _visionFiles(path, "Look for ${labels.join(", ")} in this image with a local model?")
+  if (isFailure(files)) {
+    return files
   }
-  return interrupt std::vision("Look for ${labels.join(", ")} in this image with a local model?", {
-    dir: dirname(real.value),
-    filename: basename(real.value),
-    task: "detections",
-    model: model,
-  })
-  return try _detectObjects(real.value, labels, model, threshold)
+  for (ask in files.value.asks) {
+    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "detections", model: model })
+  }
+  return try _detectObjects(files.value.image, labels, model, threshold)
 }
 
 export idempotent def tagImage(
@@ -111,17 +106,14 @@ export idempotent def tagImage(
   @param threshold - Drop tags scoring below this, 0 to 1
   @param limit - At most this many tags, 1 to 500
   """
-  const real = try _realTarget(path)
-  if (isFailure(real)) {
-    return real
+  const files = try _visionFiles(path, "Tag this image with a local model?")
+  if (isFailure(files)) {
+    return files
   }
-  return interrupt std::vision("Tag this image with a local model?", {
-    dir: dirname(real.value),
-    filename: basename(real.value),
-    task: "tags",
-    model: model,
-  })
-  return try _tagImage(real.value, model, threshold, limit)
+  for (ask in files.value.asks) {
+    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "tags", model: model })
+  }
+  return try _tagImage(files.value.image, model, threshold, limit)
 }
 
 export idempotent def captionImage(
@@ -137,15 +129,12 @@ export idempotent def captionImage(
   @param model - A local vision model that captions, such as "florence-2"
   @param detail - "short" for one sentence, "long" for a paragraph
   """
-  const real = try _realTarget(path)
-  if (isFailure(real)) {
-    return real
+  const files = try _visionFiles(path, "Caption this image with a local model?")
+  if (isFailure(files)) {
+    return files
   }
-  return interrupt std::vision("Caption this image with a local model?", {
-    dir: dirname(real.value),
-    filename: basename(real.value),
-    task: "captions",
-    model: model,
-  })
-  return try _captionImage(real.value, model, detail)
+  for (ask in files.value.asks) {
+    raise std::vision(ask.question, { dir: ask.dir, filename: ask.filename, task: "captions", model: model })
+  }
+  return try _captionImage(files.value.image, model, detail)
 }

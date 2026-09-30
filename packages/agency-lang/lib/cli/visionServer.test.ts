@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { visionServerScript, ONNXRUNTIME_VERSION, TRANSFORMERS_VERSION } from "./localServe.js";
 import { VISION_ARCHITECTURES, VISION_ONNX_FILES } from "../stdlib/modelKind.js";
-import { MAX_IMAGE_BYTES } from "../stdlib/vision.js";
+import { MAX_IMAGE_BYTES, VISION_TASKS } from "../stdlib/vision.js";
 import { configuredPython } from "../stdlib/localPython.js";
 
 const cliDir = path.dirname(visionServerScript());
@@ -126,6 +126,15 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
       image,
       detail: "short",
     });
+  });
+
+  it("serves every route the stdlib calls", () => {
+    const served = JSON.parse(
+      rules("import json; print(json.dumps([row['path'] for row in ROUTE_TABLE.values()]))"),
+    );
+    for (const row of Object.values(VISION_TASKS)) {
+      expect(served).toContain(`/v1${row.route}`);
+    }
   });
 
   it("has a checker for every field a route takes", () => {

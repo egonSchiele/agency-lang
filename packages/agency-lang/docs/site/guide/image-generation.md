@@ -1,6 +1,6 @@
 ---
 name: Image Generation
-description: Generate and edit images, run image models on your Mac, and use LoRA adapters and ControlNets.
+description: Generate and edit images, run image models on your Mac, redraw part of a picture with a mask, and use LoRA adapters and ControlNets.
 ---
 
 # Image Generation
@@ -279,8 +279,8 @@ agency run --approve std::writeBinary lighthouse.agency
 `generateImageLocal` returns a `Result` containing `base64`, `mimeType`,
 and `seed` on success. This generation call needs no approval. Saving
 the image requires `std::writeBinary` approval, which the command grants.
-A call that reads a ControlNet drawing or a picture to edit also requires
-`std::readImage` approval, as described in
+A call that reads a ControlNet drawing, a picture to edit, or a mask also
+requires `std::readImage` approval, as described in
 [Pose an image with a ControlNet](#pose-an-image-with-a-controlnet) and
 [Edit an image on your Mac](#edit-an-image-on-your-mac).
 
@@ -767,6 +767,57 @@ A lower strength runs fewer steps, so it is also faster. With SDXL at 28
 steps, a strength of 0.6 runs 16 of them. A strength so low that no step
 runs is refused.
 
+### Redraw part of a picture
+
+To change one part of a picture and keep the rest exactly as it is, pass
+a `mask` with `startImage`:
+
+```ts
+const result = generateImageLocal(
+  "a vase of sunflowers",
+  "z-image-turbo",
+  startImage: "photo.png",
+  mask: "vase-mask.png",
+)
+```
+
+The mask is a black-and-white picture the same size as the start image.
+White marks the part to redraw, and black marks the part to keep. Here
+`vase-mask.png` is black with a white shape over the vase, so only the
+vase changes. The prompt describes what to draw in the white part.
+
+You can make a mask in any image editor: fill a copy of the picture with
+black and paint white over the part to change.
+
+Grey redraws partly. A mask whose edge fades from white to black blends
+the new part into the old, where a hard edge can leave a faint seam. A
+transparent part of a mask counts as black, so it is kept.
+
+Each model has its own default `strength` with a mask, and it can differ
+from the model's default without one:
+
+| Model | Default strength with a mask | Without one |
+|---|---|---|
+| `z-image-turbo` | 1.0 | 0.6 |
+| `chroma1-hd` | 0.6 | 0.9 |
+| `qwen-image-2512` | 0.6 | 0.6 |
+| SDXL | Just under 1.0 | 0.6 |
+
+A strength of 1.0 draws the white part from scratch and keeps nothing of
+what was there. Pass a lower strength to keep some of it, such as the
+shape of the vase.
+
+A mask always goes with `startImage`, and a call with a mask alone is
+refused. Every model that takes `startImage` takes a mask, so FLUX.2
+[klein] does not. Reading the mask raises its own `std::readImage`
+interrupt, after the one for the start image, and both are approved
+before either file is read. When you pass a `size` of another shape,
+the mask is cropped the same way as the picture, so the white part still
+lies over the part it marked.
+
+An SDXL model made only for inpainting, with its own 9-channel weights,
+is not supported. Use an ordinary SDXL model with a mask.
+
 ### Let an agent edit pictures
 
 This agent gives a model a tool that edits a picture and saves the
@@ -820,7 +871,7 @@ save the image.
 ## Limitations
 
 - Each call generates one image.
-- `generateImage` does not support mask-based inpainting.
+- `generateImage`, the hosted function, does not take a mask. To redraw part of a picture, use `generateImageLocal` with a [mask](#redraw-part-of-a-picture).
 - Local image generation requires Apple silicon.
 
 ## See also

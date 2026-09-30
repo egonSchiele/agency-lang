@@ -25,11 +25,23 @@ export function isModelKind(value: unknown): value is ModelKind {
   return typeof value === "string" && MODEL_KINDS.includes(value as ModelKind);
 }
 
-/** The `architectures` the vision server's family table serves through
- *  transformers, copied from `FAMILIES` in `lib/cli/visionRules.py`; a
- *  test checks the two agree. The ONNX tagger family has no config and is
- *  known by its files instead. */
-export const VISION_ARCHITECTURES = ["Florence2ForConditionalGeneration"];
+/** What TypeScript knows about a vision family the server runs through
+ *  transformers. `tryIt` is the std::vision function the serve banner
+ *  suggests trying first: one the family answers. */
+export type VisionFamily = { tryIt: "tagImage" | "detectObjects" | "embedImage" };
+
+/** The vision families the server runs through transformers, keyed by the
+ *  first of `architectures` in their config.json. The keys are copied from
+ *  `FAMILIES` in `lib/cli/visionRules.py`, and a test checks the two agree.
+ *  The ONNX tagger family has no config and is known by its files
+ *  instead. */
+export const VISION_FAMILIES: Record<string, VisionFamily> = {
+  Florence2ForConditionalGeneration: { tryIt: "tagImage" },
+  Dinov2Model: { tryIt: "embedImage" },
+  Owlv2ForObjectDetection: { tryIt: "detectObjects" },
+};
+
+export const VISION_ARCHITECTURES = Object.keys(VISION_FAMILIES);
 
 /** The two files that mark the WD14 tagger family. */
 export const VISION_ONNX_FILES = ["model.onnx", "selected_tags.csv"];
@@ -73,7 +85,8 @@ const KIND_RULES: KindRule[] = [
     matches: (facts) => facts.config?._class_name === CONTROLNET_CLASS,
   },
   {
-    // Before the chat rule: Florence-2's class ends in ForConditionalGeneration too.
+    // Before the chat rule: Florence-2's class ends in ForConditionalGeneration
+    // too. Before the embedding rule: DINOv2's class ends in Model.
     kind: "vision",
     matches: (facts) =>
       VISION_ARCHITECTURES.includes(architecture(facts.config)) ||
@@ -110,4 +123,11 @@ export function kindOfModelDir(dir: string): ModelKind | null {
     diffusers: isDiffusersDir(dir),
   };
   return KIND_RULES.find((rule) => rule.matches(facts))?.kind ?? null;
+}
+
+/** The transformers vision family of the model in `dir`, from its
+ *  config.json, or undefined for a directory with no such config, such as
+ *  the ONNX tagger. */
+export function visionFamilyOf(dir: string): VisionFamily | undefined {
+  return VISION_FAMILIES[architecture(readModelJson(dir, "config.json"))];
 }

@@ -415,6 +415,75 @@ node main() {
 
 Run it with `--approve std::glob --approve std::vision --approve std::cropImage --approve std::write` and it labels a few hundred crops unattended. Every call raises an effect naming the file it reads or writes, so a policy can allow tagging under `./dataset` and nothing else. Partial application narrows a tool before an agent gets it: `detectObjects.partial(labels: ["person"], model: "florence-2")` is a person-finder, and `cropImage` only ever writes a file that does not exist yet.
 
+### Find your own things
+
+A detector finds things by the name of their kind. Ask for "mug" and it finds every mug, with no way to tell yours from the one next to it. Ask for "cat" on a pen-and-ink page and it may find nothing, because it learned mostly from photos. Two more models close both gaps without training anything:
+
+- `owlv2-base` finds the things you name, like `florence-2`, and `findRegions` asks it to box every thing in a picture with no names at all.
+- `dinov2-base` turns a picture, or boxes in it, into embeddings: lists of numbers that say how each looks. Things that look alike get embeddings that are close together.
+
+```bash
+agency local download owlv2-base
+agency local download dinov2-base
+agency local serve owlv2-base dinov2-base
+```
+
+To find your cats on a page: box everything, embed each box, and keep the boxes that are closer to crops of your cats than to crops of other things you draw.
+
+```ts
+import { findRegions, embedImage } from "std::vision"
+import { cosineSimilarity } from "std::embedding"
+
+// How alike `vector` is to the closest of `references`, where 1 is identical.
+def closest(vector: number[], references: number[][]): number {
+  let best = 0
+  for (reference in references) {
+    const similarity = cosineSimilarity(vector, reference)
+    if (isSuccess(similarity) && similarity.value > best) {
+      best = similarity.value
+    }
+  }
+  return best
+}
+
+// One embedding per crop file.
+def embedCrops(paths: string[]): number[][] {
+  let vectors: number[][] = []
+  for (path in paths) {
+    const embedded = embedImage(path, "dinov2-base")
+    if (isSuccess(embedded)) {
+      vectors.push(embedded.value[0])
+    }
+  }
+  return vectors
+}
+
+node main(page: string, catCrops: string[], otherCrops: string[]) {
+  const cats = embedCrops(catCrops)
+  const others = embedCrops(otherCrops)
+  const regions = findRegions(page, "owlv2-base")
+  if (isFailure(regions)) {
+    return regions.error
+  }
+  const boxes = map(regions.value) as region {
+    return region.box
+  }
+  const vectors = embedImage(page, "dinov2-base", boxes: boxes)
+  if (isFailure(vectors)) {
+    return vectors.error
+  }
+  for (vector, i in vectors.value) {
+    if (closest(vector, cats) > closest(vector, others)) {
+      print("Cat in region ${i}")
+    }
+  }
+}
+```
+
+Run it with `--approve std::vision`. Make the crops with `findRegions` and `cropImage` on a few pages, then sort the files into two folders by hand. Compare like with like: a tight crop and a box around the same thing compare well, but a whole photo of a mug on a desk mostly describes the desk. For your mug, use `detectObjects(photo, ["mug"], "owlv2-base")` for the boxes, since the detector does know what a mug is, and crops of other people's mugs as the other side.
+
+How well this works has been measured on one photo so far. Two cats scored 0.55 against each other and at most 0.26 against a TV remote, so telling kinds of thing apart works. Telling your own mug from a lookalike in another photo has not been measured yet, and neither have drawings.
+
 ## What is different about a local model
 
 A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.

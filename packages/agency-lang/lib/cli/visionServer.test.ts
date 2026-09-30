@@ -4,7 +4,8 @@ import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { visionServerScript, ONNXRUNTIME_VERSION, TRANSFORMERS_VERSION } from "./localServe.js";
 import { VISION_ARCHITECTURES, VISION_ONNX_FILES } from "../stdlib/modelKind.js";
-import { MAX_IMAGE_BYTES } from "../stdlib/vision.js";
+import { MAX_IMAGE_BYTES, VISION_TASKS, visionBodyBytes } from "../stdlib/vision.js";
+import { configuredPython } from "../stdlib/localPython.js";
 
 const cliDir = path.dirname(visionServerScript());
 const rulesModule = path.join(cliDir, "visionRules.py");
@@ -44,7 +45,7 @@ except ValueError as e:
 /** Runs check_request for a family and route and prints the result, or
  *  the error. The checked image is bytes, printed back as base64. */
 function check(
-  family: "wd14" | "Florence2ForConditionalGeneration",
+  family: "wd14" | "Florence2ForConditionalGeneration" | "Dinov2Model" | "Owlv2ForObjectDetection",
   route: string,
   body: unknown,
 ): string {
@@ -74,16 +75,18 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
     expect(text).not.toMatch(/^\s*(import|from)\s+(torch|transformers|onnxruntime|PIL)/m);
   });
 
-  it("knows the tagger by its two files and Florence-2 by its config", () => {
+  it("knows the tagger by its two files and the others by their config", () => {
     expect(familyOf(["model.onnx", "selected_tags.csv", "config.json"], {})).toBe("WD14 tagger");
     expect(
       familyOf(["config.json"], { architectures: ["Florence2ForConditionalGeneration"] }),
     ).toBe("Florence-2");
+    expect(familyOf(["config.json"], { architectures: ["Dinov2Model"] })).toBe("DINOv2");
+    expect(familyOf(["config.json"], { architectures: ["Owlv2ForObjectDetection"] })).toBe("OWLv2");
   });
 
   it("refuses a directory that is neither", () => {
     expect(familyOf(["model.onnx"], null)).toBe(
-      "REFUSED visionServer.py serves WD14 tagger and Florence-2 models. This directory has neither model.onnx beside selected_tags.csv nor a config.json naming Florence2ForConditionalGeneration.",
+      "REFUSED visionServer.py serves WD14 tagger, Florence-2, DINOv2, and OWLv2 models. This directory has none of model.onnx beside selected_tags.csv or a config.json naming Florence2ForConditionalGeneration, Dinov2Model, or Owlv2ForObjectDetection.",
     );
     expect(familyOf(["config.json"], { architectures: ["LlamaForCausalLM"] })).toContain("REFUSED");
   });
@@ -125,6 +128,32 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
     });
   });
 
+  it("serves exactly the routes the stdlib calls", () => {
+    const served = JSON.parse(
+      rules("import json; print(json.dumps(sorted(row['path'] for row in ROUTE_TABLE.values())))"),
+    );
+    const called = Object.values(VISION_TASKS).map((row) => `/v1${row.route}`);
+    expect(served).toEqual([...called].sort());
+  });
+
+  it("has a checker for every field a route takes", () => {
+    const out = rules(
+      "print(sorted({f for row in ROUTE_TABLE.values() for f in row['fields']} - set(FIELD_CHECKS)))",
+    );
+    expect(out).toBe("[]");
+  });
+
+  it("gives every family that detects its own default threshold", () => {
+    const out = rules(`
+for family in FAMILIES.values():
+    if "detections" in family["routes"]:
+        value = family.get("default_threshold_detections")
+        print(family["label"], isinstance(value, (int, float)) and not isinstance(value, bool))
+`);
+    expect(out.split("\n").every((line) => line.endsWith("True"))).toBe(true);
+    expect(out).not.toBe("");
+  });
+
   it("refuses a route the family does not answer, with 404 and the ones it does", () => {
     expect(check("wd14", "detections", { image, labels: ["x"] })).toBe(
       "ERROR 404 WD14 tagger does not answer /v1/vision/detections. It answers /v1/vision/tags.",
@@ -155,6 +184,7 @@ except ImageDataError as e:
   it("takes a body big enough for the largest image, and the same limit as the stdlib", () => {
     expect(rules("print(MAX_IMAGE_BYTES)")).toBe(String(MAX_IMAGE_BYTES));
     expect(Number(rules("print(MAX_BODY_BYTES - base64_length(MAX_IMAGE_BYTES))"))).toBe(64 * 1024);
+    expect(Number(rules("print(MAX_BODY_BYTES)"))).toBe(visionBodyBytes());
   });
 
   it("refuses the labels a detector cannot use", () => {
@@ -188,6 +218,135 @@ except ImageDataError as e:
     expect(check("wd14", "tags", { image, labels: ["x"] })).toBe(
       "ERROR 400 labels is not a setting of /v1/vision/tags. It takes image, threshold, and limit.",
     );
+  });
+
+  it("fills in each family's defaults for the new routes", () => {
+    const owl = "Owlv2ForObjectDetection";
+    expect(JSON.parse(check(owl, "detections", { image, labels: ["cat"] })).threshold).toBe(0.1);
+    expect(JSON.parse(check(owl, "regions", { image }))).toEqual({
+      image,
+      limit: 50,
+      threshold: 0.1,
+    });
+    expect(JSON.parse(check("Florence2ForConditionalGeneration", "regions", { image })).limit).toBe(
+      50,
+    );
+  });
+
+  it("takes boxes to embed, with no boxes meaning the whole image and an empty list meaning none", () => {
+    const whole = [{ x: 0, y: 0, width: 1, height: 1 }];
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image })).boxes).toEqual(whole);
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image, boxes: null })).boxes).toEqual(
+      whole,
+    );
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image, boxes: [] })).boxes).toEqual([]);
+    const box = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image, boxes: [box] })).boxes).toEqual([
+      box,
+    ]);
+  });
+
+  it("refuses boxes that are not normalized boxes, naming the bad one", () => {
+    const d = "Dinov2Model";
+    const ok = { x: 0, y: 0, width: 0.5, height: 0.5 };
+    expect(check(d, "embeddings", { image, boxes: "all" })).toBe(
+      "ERROR 400 boxes must be a list of {x, y, width, height} boxes in 0..1, or null for the whole image.",
+    );
+    expect(check(d, "embeddings", { image, boxes: Array(101).fill(ok) })).toBe(
+      "ERROR 400 boxes may hold at most 100. Got 101.",
+    );
+    expect(check(d, "embeddings", { image, boxes: [ok, { x: 0, y: 0, width: 1 }] })).toBe(
+      "ERROR 400 boxes[1] must be {x, y, width, height}.",
+    );
+    expect(check(d, "embeddings", { image, boxes: [{ ...ok, x: 1.5 }] })).toBe(
+      "ERROR 400 boxes[0] must hold numbers from 0 to 1.",
+    );
+    expect(check(d, "embeddings", { image, boxes: [{ ...ok, width: 0 }] })).toBe(
+      "ERROR 400 boxes[0] must have a width and a height above 0.",
+    );
+  });
+
+  it("refuses a regions limit out of range", () => {
+    expect(check("Owlv2ForObjectDetection", "regions", { image, limit: 101 })).toBe(
+      "ERROR 400 limit must be a whole number from 1 to 100. The default is 50.",
+    );
+  });
+
+  it("refuses embeddings on OWLv2, naming the routes it answers", () => {
+    expect(check("Owlv2ForObjectDetection", "embeddings", { image })).toBe(
+      "ERROR 404 OWLv2 does not answer /v1/vision/embeddings. It answers /v1/vision/detections and /v1/vision/regions.",
+    );
+  });
+
+  it("keeps a model's boxes in score order, clamped to the image, above the threshold", () => {
+    // A 200x100 image is padded to a 200x200 square, so its bottom half is
+    // padding. Boxes are [x1, y1, x2, y2] in 0..1 of that square.
+    const out = rules(`
+import json
+scores = [0.2, 0.9, 0.05, 0.5, 0.7]
+boxes = [
+    [0.0, 0.0, 0.5, 0.25],   # top-left, inside the image
+    [0.5, 0.0, 1.0, 0.25],   # top-right, inside the image
+    [0.0, 0.0, 1.0, 0.5],    # below the threshold
+    [0.0, 0.25, 0.5, 0.75],  # crosses into the padding
+    [0.0, 0.6, 0.5, 0.9],    # wholly in the padding
+]
+print(json.dumps(kept_boxes(scores, boxes, 200, 100, 0.1, KEEP_OVERLAPS, 10)))
+`);
+    expect(JSON.parse(out)).toEqual([
+      { index: 1, score: 0.9, box: { x: 0.5, y: 0, width: 0.5, height: 0.5 } },
+      { index: 3, score: 0.5, box: { x: 0, y: 0.5, width: 0.5, height: 0.5 } },
+      { index: 0, score: 0.2, box: { x: 0, y: 0, width: 0.5, height: 0.5 } },
+    ]);
+  });
+
+  it("merges overlapping boxes only when asked, and stops at the limit", () => {
+    const out = rules(`
+import json
+scores = [0.9, 0.8, 0.7]
+boxes = [[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.45], [0.6, 0.6, 0.9, 0.9]]
+def indexes(iou, limit):
+    return [found["index"] for found in kept_boxes(scores, boxes, 100, 100, 0.0, iou, limit)]
+print(json.dumps([indexes(MERGE_IOU, 10), indexes(KEEP_OVERLAPS, 10), indexes(KEEP_OVERLAPS, 2)]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      [0, 2],
+      [0, 1, 2],
+      [0, 1],
+    ]);
+  });
+
+  it("pads a crop to a centered square", () => {
+    expect(rules("print(square_padding(300, 100))")).toBe("(300, (0, 100))");
+    expect(rules("print(square_padding(100, 300))")).toBe("(300, (100, 0))");
+  });
+
+  it("scales a picture so its longer side is the model's, keeping at least a pixel", () => {
+    expect(rules("print(fitted_size(640, 480, 960))")).toBe("(960, 720)");
+    expect(rules("print(fitted_size(100, 300, 224))")).toBe("(75, 224)");
+    expect(rules("print(fitted_size(50, 50, 224))")).toBe("(224, 224)");
+    // A long page screenshot: padded to a square first, it would be 40000 pixels a side.
+    expect(rules("print(fitted_size(1200, 40000, 960))")).toBe("(29, 960)");
+    expect(rules("print(fitted_size(100000, 10, 224))")).toBe("(224, 1)");
+  });
+
+  it("rounds an embedding's numbers to six places", () => {
+    expect(rules("print(rounded_vectors([[0.12345678901234567, -0.5], []]))")).toBe(
+      "[[0.123457, -0.5], []]",
+    );
+  });
+
+  it("turns a normalized box into pixels, refusing one under a pixel", () => {
+    expect(
+      rules("print(box_pixels({'x': 0.1, 'y': 0.2, 'width': 0.5, 'height': 0.5}, 100, 50, 0))"),
+    ).toBe("(10, 10, 60, 35)");
+    const out = rules(`
+try:
+    box_pixels({"x": 0.1, "y": 0.1, "width": 0.001, "height": 0.5}, 100, 100, 3)
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe("boxes[3] covers less than a pixel of the 100x100 image.");
   });
 
   it("normalizes a pixel box to the top-left 0..1 shape, clamped", () => {
@@ -225,6 +384,8 @@ for family in FAMILIES.values():
     expect(out.split("\n")).toEqual([
       `tags {"image": "${image}", "limit": 30, "threshold": 0.35}`,
       `detections {"image": "${image}", "labels": ["square"], "threshold": 0.3}`,
+      `embeddings {"boxes": [{"height": 1, "width": 1, "x": 0, "y": 0}], "image": "${image}"}`,
+      `detections {"image": "${image}", "labels": ["square"], "threshold": 0.1}`,
     ]);
   });
 });
@@ -254,6 +415,75 @@ print(json.dumps(asked + [d["label"] for d in runner.detections_of(FakeImage(), 
     ]);
   });
 
+  it("labels each OWLv2 box with its best label, and keeps overlapping boxes", () => {
+    // The runner is built without loading a model; only its torch method is faked.
+    const out = rules(`
+import json
+import visionServer
+runner = visionServer.Owlv2Runner.__new__(visionServer.Owlv2Runner)
+def fake_label_scores(image, labels):
+    boxes = [[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.45], [0.6, 0.6, 0.9, 0.9]]
+    return [0.9, 0.8, 0.05], boxes, [1, 0, 0]
+runner._label_scores = fake_label_scores
+class FakeImage:
+    size = (100, 100)
+found = runner.detections_of(FakeImage(), {"labels": ["cat", "remote"], "threshold": 0.1})["detections"]
+print(json.dumps([(d["label"], d["score"]) for d in found]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      ["remote", 0.9],
+      ["cat", 0.8],
+    ]);
+  });
+
+  it("gives OWLv2 regions in score order, merged, and at most the limit", () => {
+    const out = rules(`
+import json
+import visionServer
+runner = visionServer.Owlv2Runner.__new__(visionServer.Owlv2Runner)
+def fake_objectness(image):
+    boxes = [[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.45], [0.6, 0.6, 0.9, 0.9], [0.1, 0.6, 0.3, 0.9]]
+    return [0.9, 0.8, 0.5, 0.4], boxes
+runner._objectness = fake_objectness
+class FakeImage:
+    size = (100, 100)
+def scores(request):
+    return [r["score"] for r in runner.regions_of(FakeImage(), request)["regions"]]
+print(json.dumps([scores({"limit": 2, "threshold": 0.0}), scores({"limit": 10, "threshold": 0.45})]))
+`);
+    // The second box overlaps the first, so it is merged away. The
+    // threshold drops the last.
+    expect(JSON.parse(out)).toEqual([
+      [0.9, 0.5],
+      [0.9, 0.5],
+    ]);
+  });
+
+  it("asks Florence-2 for region proposals, each scoring 1, at most the limit", () => {
+    const out = rules(`
+import json
+import visionServer
+runner = visionServer.Florence2Runner.__new__(visionServer.Florence2Runner)
+runner.rules = FAMILIES["Florence2ForConditionalGeneration"]
+asked = []
+def fake_run(image, task, text=""):
+    asked.append(task)
+    return {"bboxes": [[0, 0, 50, 50], [50, 50, 100, 100], [10, 10, 20, 20]], "labels": ["", "", ""]}
+runner._run = fake_run
+class FakeImage:
+    size = (100, 100)
+regions = runner.regions_of(FakeImage(), {"limit": 2, "threshold": 0.1})["regions"]
+print(json.dumps([asked, regions]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      ["<REGION_PROPOSAL>"],
+      [
+        { score: 1, box: { x: 0, y: 0, width: 0.5, height: 0.5 } },
+        { score: 1, box: { x: 0.5, y: 0.5, width: 0.5, height: 0.5 } },
+      ],
+    ]);
+  });
+
   it("ship next to localServe and are valid Python 3", () => {
     for (const script of ["visionServer.py", "imageTools.py"]) {
       const file = path.join(cliDir, script);
@@ -266,5 +496,87 @@ print(json.dumps(asked + [d["label"] for d in runner.detections_of(FakeImage(), 
       expect(run.stderr.toString()).toBe("");
       expect(run.status).toBe(0);
     }
+  });
+});
+
+// These run the server's Pillow code, so they need a Python with Pillow:
+// the one `agency local serve` uses. Without it the block skips, as the
+// imageTools tests do. The model itself is never loaded; its torch method
+// is faked.
+const pillowPython = configuredPython();
+const hasPillow = spawnSync(pillowPython, ["-c", "import PIL"], { stdio: "ignore" }).status === 0;
+
+/** Runs `code` with visionServer importable, in the Pillow Python. */
+function server(code: string): string {
+  const run = spawnSync(
+    pillowPython,
+    ["-c", `import sys; sys.path.insert(0, sys.argv[1]); import visionServer\n${code}`, cliDir],
+    { stdio: "pipe", env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } },
+  );
+  expect(run.stderr.toString()).toBe("");
+  expect(run.status).toBe(0);
+  return run.stdout.toString().trim();
+}
+
+describe.skipIf(!hasPillow)("visionServer.py's Pillow code", () => {
+  it("embeds the whole image, each box, or nothing, each as a padded square", () => {
+    const out = server(`
+import json
+from PIL import Image
+from visionRules import WHOLE_IMAGE
+runner = visionServer.Dinov2Runner.__new__(visionServer.Dinov2Runner)
+runner.padding = (124, 116, 104)
+given = []
+def fake_embed(crops):
+    given.append([crop.size for crop in crops])
+    return [[1.0] for _ in crops]
+runner._embed = fake_embed
+image = Image.new("RGB", (300, 100), (255, 255, 255))
+half = {"x": 0, "y": 0, "width": 0.5, "height": 1}
+runner.embeddings_of(image, {"boxes": [WHOLE_IMAGE]})
+runner.embeddings_of(image, {"boxes": [half, WHOLE_IMAGE]})
+print(json.dumps([given, runner.embeddings_of(image, {"boxes": []})]))
+`);
+    // Every crop reaches the model at its input size, whatever the box.
+    expect(JSON.parse(out)).toEqual([
+      [
+        [[224, 224]],
+        [
+          [224, 224],
+          [224, 224],
+        ],
+        [],
+      ],
+      { embeddings: [] },
+    ]);
+  });
+
+  it("scales a crop to fit a square of the padding color, and centers it", () => {
+    const out = server(`
+from PIL import Image
+square = visionServer.centered_square(Image.new("RGB", (300, 100), (255, 0, 0)), 224, (124, 116, 104))
+print(square.size, square.getpixel((0, 0)), square.getpixel((112, 112)), square.getpixel((0, 75)), square.getpixel((0, 149)))
+`);
+    // 300x100 becomes 224x75, so it sits in rows 74 to 148.
+    expect(out).toBe("(224, 224) (124, 116, 104) (255, 0, 0) (255, 0, 0) (124, 116, 104)");
+  });
+
+  it("scales an image to fit OWLv2's square, in the top-left corner", () => {
+    const out = server(`
+from PIL import Image
+square = visionServer.top_left_square(Image.new("RGB", (200, 100), (255, 0, 0)), 960, (128, 128, 128))
+print(square.size, square.getpixel((0, 0)), square.getpixel((959, 479)), square.getpixel((0, 480)))
+`);
+    expect(out).toBe("(960, 960) (255, 0, 0) (255, 0, 0) (128, 128, 128)");
+  });
+
+  it("never builds a square larger than the model's input, however long the image", () => {
+    // Padding before scaling would make this a 20000x20000 square.
+    const out = server(`
+from PIL import Image
+long = Image.new("RGB", (20000, 10), (255, 0, 0))
+print(visionServer.top_left_square(long, 960, (128, 128, 128)).size, visionServer.centered_square(long, 224, (0, 0, 0)).size)
+`);
+    expect(out).toBe("(960, 960) (224, 224)");
   });
 });

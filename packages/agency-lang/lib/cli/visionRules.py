@@ -11,6 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from imageToolsRules import crop_box  # noqa: E402
 from localServerCommon import MAX_IMAGE_BYTES, ImageDataError, base64_length, image_bytes_of  # noqa: E402
 
 # The releases these rules and the server were written against. The server
@@ -19,10 +20,36 @@ from localServerCommon import MAX_IMAGE_BYTES, ImageDataError, base64_length, im
 TRANSFORMERS_VERSION = "5.17.0"
 ONNXRUNTIME_VERSION = "1.30.0"
 
+# The most boxes a reply holds, and the most an embeddings request takes,
+# so every box of one reply can be embedded in one request.
+MAX_REPLY_BOXES = 100
+
 # A request body is one image as base64 and a few settings. Anything
 # bigger is not a request this server makes sense of.
 MAX_SETTINGS_BYTES = 64 * 1024
 MAX_BODY_BYTES = base64_length(MAX_IMAGE_BYTES) + MAX_SETTINGS_BYTES
+
+# Two boxes that overlap by more than this much (intersection over union)
+# are one object, and the lower-scoring one is dropped. 0.3 is the value
+# transformers uses for the same job. KEEP_OVERLAPS is more than any two
+# boxes can overlap, so nothing is dropped.
+MERGE_IOU = 0.3
+KEEP_OVERLAPS = 1.0
+
+# How many of the best-scoring boxes kept_boxes considers. OWLv2 predicts
+# 3,600 boxes for every image; the merge compares each kept box with each
+# candidate, so it gets a bounded amount of work.
+MAX_MERGE_CANDIDATES = 500
+
+# How many decimal places an embedding's numbers are sent with. A float32
+# holds about seven significant digits, and Python prints seventeen, so
+# rounding halves the reply without changing a similarity before its sixth
+# place.
+EMBEDDING_DECIMALS = 6
+
+# A box over the whole image, in the normalized shape. An embeddings
+# request with no boxes embeds this one.
+WHOLE_IMAGE = {"x": 0, "y": 0, "width": 1, "height": 1}
 
 # An open-vocabulary detector takes the labels as text. Fifty is a long
 # list already; a longer one is a sign the caller wants "everything", and
@@ -30,31 +57,55 @@ MAX_BODY_BYTES = base64_length(MAX_IMAGE_BYTES) + MAX_SETTINGS_BYTES
 MAX_LABELS = 50
 MAX_LABEL_CHARS = 64
 
-# The most tags one request may ask for. The WD14 vocabulary has about ten
-# thousand; a caption wants thirty.
-MAX_TAG_LIMIT = 500
-DEFAULT_TAG_LIMIT = 30
-
-# Scores below this are left out. The detection default is the value
-# Florence-2's own examples use; the tag default is the WD14 model card's.
-DEFAULT_THRESHOLD = {"detections": 0.3, "tags": 0.35}
-
-# Route name -> path. A family lists the route names it answers.
-ROUTES = {
-    "detections": "/v1/vision/detections",
-    "tags": "/v1/vision/tags",
-    "captions": "/v1/vision/captions",
-}
-
-# The fields every request carries, and the fields each route adds.
-# `model` is the front door's routing field.
+# The fields every request carries. `model` is the front door's routing
+# field.
 COMMON_FIELDS = ["model", "image"]
-ROUTE_FIELDS = {
-    "detections": ["labels", "threshold"],
-    "tags": ["threshold", "limit"],
-    "captions": ["detail"],
-}
 DETAILS = ["short", "long"]
+
+# What each route is. One row per route; a family lists the route names it
+# answers.
+#
+#   path               where the route is served
+#   fields             the fields the route takes beside COMMON_FIELDS, each
+#                      checked by its entry in FIELD_CHECKS, in this order
+#   default_threshold  the threshold a request gets when it gives none. A
+#                      family's own `default_threshold_<route>` wins over it.
+#   limit_max          the largest `limit` a request may ask for
+#   limit_default      the `limit` a request gets when it gives none
+ROUTE_TABLE = {
+    "detections": {
+        "path": "/v1/vision/detections",
+        "fields": ["labels", "threshold"],
+    },
+    "tags": {
+        "path": "/v1/vision/tags",
+        "fields": ["threshold", "limit"],
+        # The WD14 model card's threshold.
+        "default_threshold": 0.35,
+        # The WD14 vocabulary has about ten thousand tags; a caption wants
+        # thirty.
+        "limit_max": 500,
+        "limit_default": 30,
+    },
+    "captions": {
+        "path": "/v1/vision/captions",
+        "fields": ["detail"],
+    },
+    "embeddings": {
+        "path": "/v1/vision/embeddings",
+        "fields": ["boxes"],
+    },
+    "regions": {
+        "path": "/v1/vision/regions",
+        "fields": ["threshold", "limit"],
+        # OWLv2 scores every one of its 3,600 boxes, and most hold nothing.
+        # On two test photos the real things scored 0.23 and up.
+        # Florence-2 scores every region 1, so this drops none of its.
+        "default_threshold": 0.1,
+        "limit_max": MAX_REPLY_BOXES,
+        "limit_default": 50,
+    },
+}
 
 # What each family is and does. One row per family, flat: one key per
 # value, so a test can compare a row to a literal.
@@ -65,6 +116,10 @@ DETAILS = ["short", "long"]
 #   identify_* what marks a directory as this family: a file beside
 #              another, or the first entry of config.json's architectures
 #   routes     the route names it answers
+#   default_threshold_<route>
+#              the threshold a request on that route gets when it gives
+#              none, when this family's scores need their own. Every family
+#              that answers detections has one.
 #   task_*     for a Florence-2 model, the task token each route sends
 FAMILIES = {
     "wd14": {
@@ -80,11 +135,32 @@ FAMILIES = {
         "engine": "transformers",
         "runner": "Florence2Runner",
         "identify_architecture": "Florence2ForConditionalGeneration",
-        "routes": ["detections", "tags", "captions"],
+        "routes": ["detections", "tags", "captions", "regions"],
+        # The value Florence-2's own examples use. Florence-2 gives no
+        # scores, so it drops nothing.
+        "default_threshold_detections": 0.3,
         "task_detections": "<OPEN_VOCABULARY_DETECTION>",
         "task_tags": "<DENSE_REGION_CAPTION>",
         "task_caption_short": "<CAPTION>",
         "task_caption_long": "<MORE_DETAILED_CAPTION>",
+        "task_regions": "<REGION_PROPOSAL>",
+    },
+    "Dinov2Model": {
+        "label": "DINOv2",
+        "engine": "transformers",
+        "runner": "Dinov2Runner",
+        "identify_architecture": "Dinov2Model",
+        "routes": ["embeddings"],
+    },
+    "Owlv2ForObjectDetection": {
+        "label": "OWLv2",
+        "engine": "transformers",
+        "runner": "Owlv2Runner",
+        "identify_architecture": "Owlv2ForObjectDetection",
+        "routes": ["detections", "regions"],
+        # The OWLv2 model card's threshold. A real object often scores 0.2
+        # to 0.4, so Florence-2's 0.3 would drop many.
+        "default_threshold_detections": 0.1,
     },
 }
 
@@ -122,23 +198,36 @@ def family_of(names, config):
         if _identifies(rules, names, config):
             return rules
     labels = join_names([rules["label"] for rules in FAMILIES.values()])
+    marks = [
+        f"{rules['identify_file']} beside {rules['identify_beside']}"
+        for rules in FAMILIES.values()
+        if "identify_file" in rules
+    ]
+    architectures = [rules["identify_architecture"] for rules in FAMILIES.values() if "identify_architecture" in rules]
+    marks.append(f"a config.json naming {join_names(architectures, 'or')}")
     raise ValueError(
-        f"visionServer.py serves {labels} models. This directory has neither model.onnx "
-        f"beside selected_tags.csv nor a config.json naming Florence2ForConditionalGeneration."
+        f"visionServer.py serves {labels} models. This directory has none of "
+        f"{join_names(marks, 'or')}."
     )
 
 
 def route_of_path(path):
     """The route name a request path is for, or None."""
-    for name, route_path in ROUTES.items():
-        if path == route_path:
+    for name, row in ROUTE_TABLE.items():
+        if path == row["path"]:
             return name
     return None
 
 
 def route_paths(rules):
     """The paths a family answers, for /health and the 404."""
-    return [ROUTES[name] for name in rules["routes"]]
+    return [ROUTE_TABLE[name]["path"] for name in rules["routes"]]
+
+
+def default_threshold(rules, route):
+    """The threshold a request on `route` gets when it gives none: the
+    family's own when its row has one, else the route's."""
+    return rules.get(f"default_threshold_{route}", ROUTE_TABLE[route].get("default_threshold"))
 
 
 def _is_number(value):
@@ -157,7 +246,7 @@ def _image_of(body):
         raise RequestError(str(err))
 
 
-def _labels_of(body):
+def _labels_of(rules, route, body):
     labels = body.get("labels")
     if not isinstance(labels, list) or not labels:
         raise RequestError(
@@ -175,29 +264,30 @@ def _labels_of(body):
     return [label.strip() for label in labels]
 
 
-def _threshold_of(route, body):
+def _threshold_of(rules, route, body):
+    default = default_threshold(rules, route)
     threshold = body.get("threshold")
     if threshold is None:
-        return DEFAULT_THRESHOLD[route]
+        return default
     if not _is_number(threshold) or threshold < 0 or threshold > 1:
-        raise RequestError(
-            f"threshold must be a number from 0 to 1. The default is {DEFAULT_THRESHOLD[route]}."
-        )
+        raise RequestError(f"threshold must be a number from 0 to 1. The default is {default}.")
     return float(threshold)
 
 
-def _limit_of(body):
+def _limit_of(rules, route, body):
+    row = ROUTE_TABLE[route]
     limit = body.get("limit")
     if limit is None:
-        return DEFAULT_TAG_LIMIT
-    if not _is_integer(limit) or limit < 1 or limit > MAX_TAG_LIMIT:
+        return row["limit_default"]
+    if not _is_integer(limit) or limit < 1 or limit > row["limit_max"]:
         raise RequestError(
-            f"limit must be a whole number from 1 to {MAX_TAG_LIMIT}. The default is {DEFAULT_TAG_LIMIT}."
+            f"limit must be a whole number from 1 to {row['limit_max']}. "
+            f"The default is {row['limit_default']}."
         )
     return limit
 
 
-def _detail_of(body):
+def _detail_of(rules, route, body):
     detail = body.get("detail")
     if detail is None:
         return DETAILS[0]
@@ -206,13 +296,53 @@ def _detail_of(body):
     return detail
 
 
+def _box_problem(box):
+    """Why `box` is not a normalized box, or None."""
+    if not isinstance(box, dict) or sorted(box) != ["height", "width", "x", "y"]:
+        return "must be {x, y, width, height}"
+    if not all(_is_number(box[key]) and 0 <= box[key] <= 1 for key in box):
+        return "must hold numbers from 0 to 1"
+    if box["width"] <= 0 or box["height"] <= 0:
+        return "must have a width and a height above 0"
+    return None
+
+
+def _boxes_of(rules, route, body):
+    """The boxes to embed. None or a missing field is the whole image, so
+    the runner has one path; an empty list is no boxes at all."""
+    boxes = body.get("boxes")
+    if boxes is None:
+        return [WHOLE_IMAGE]
+    if not isinstance(boxes, list):
+        raise RequestError("boxes must be a list of {x, y, width, height} boxes in 0..1, or null for the whole image.")
+    if len(boxes) > MAX_REPLY_BOXES:
+        raise RequestError(f"boxes may hold at most {MAX_REPLY_BOXES}. Got {len(boxes)}.")
+    for index, box in enumerate(boxes):
+        problem = _box_problem(box)
+        if problem is not None:
+            raise RequestError(f"boxes[{index}] {problem}.")
+    return [{key: float(box[key]) for key in ("x", "y", "width", "height")} for box in boxes]
+
+
+# The one function that checks each field a route may take. Each takes
+# (rules, route, body) and returns the field's checked value, or raises
+# RequestError saying what the field takes.
+FIELD_CHECKS = {
+    "labels": _labels_of,
+    "threshold": _threshold_of,
+    "limit": _limit_of,
+    "detail": _detail_of,
+    "boxes": _boxes_of,
+}
+
+
 def _check_fields(route, body):
-    allowed = COMMON_FIELDS + ROUTE_FIELDS[route]
+    allowed = COMMON_FIELDS + ROUTE_TABLE[route]["fields"]
     unknown = sorted(key for key in body if key not in allowed)
     if unknown:
         raise RequestError(
             f"{join_names(unknown)} {'is' if len(unknown) == 1 else 'are'} not "
-            f"{'a setting' if len(unknown) == 1 else 'settings'} of {ROUTES[route]}. "
+            f"{'a setting' if len(unknown) == 1 else 'settings'} of {ROUTE_TABLE[route]['path']}. "
             f"It takes {join_names(allowed[1:])}."
         )
 
@@ -224,7 +354,7 @@ def check_request(rules, route, body):
     does not answer."""
     if route not in rules["routes"]:
         raise RequestError(
-            f"{rules['label']} does not answer {ROUTES[route]}. It answers "
+            f"{rules['label']} does not answer {ROUTE_TABLE[route]['path']}. It answers "
             f"{join_names(route_paths(rules))}.",
             status=404,
         )
@@ -232,14 +362,8 @@ def check_request(rules, route, body):
         raise RequestError("The request body must be a JSON object.")
     _check_fields(route, body)
     checked = {"image": _image_of(body)}
-    if route == "detections":
-        checked["labels"] = _labels_of(body)
-        checked["threshold"] = _threshold_of(route, body)
-    elif route == "tags":
-        checked["threshold"] = _threshold_of(route, body)
-        checked["limit"] = _limit_of(body)
-    else:
-        checked["detail"] = _detail_of(body)
+    for field in ROUTE_TABLE[route]["fields"]:
+        checked[field] = FIELD_CHECKS[field](rules, route, body)
     return checked
 
 
@@ -269,3 +393,100 @@ def normalized_box(box, width, height):
         "width": max(right - left, 0.0) / width,
         "height": max(bottom - top, 0.0) / height,
     }
+
+
+def box_pixels(box, width, height, index):
+    """The pixel rectangle (left, top, right, bottom) of normalized box
+    number `index` on a `width` by `height` image. Raises RequestError
+    for a box that covers less than a pixel once it is rounded."""
+    too_small = RequestError(f"boxes[{index}] covers less than a pixel of the {width}x{height} image.")
+    try:
+        left, top, right, bottom = crop_box(box["x"], box["y"], box["width"], box["height"], 0, width, height)
+    except ValueError:
+        raise too_small
+    if right <= left or bottom <= top:
+        raise too_small
+    return left, top, right, bottom
+
+
+def fitted_size(width, height, side):
+    """The (width, height) a `width` by `height` picture has once it is
+    scaled so its longer side is `side`. The shorter side keeps at least
+    one pixel. A picture is scaled to this before it is padded to a
+    square, so the square is never larger than the model's input: padding
+    first would make a 1200x40000 screenshot a 40000x40000 square."""
+    longest = max(width, height)
+    return max(1, round(width * side / longest)), max(1, round(height * side / longest))
+
+
+def rounded_vectors(vectors):
+    """`vectors` with each number rounded to EMBEDDING_DECIMALS places."""
+    return [[round(value, EMBEDDING_DECIMALS) for value in vector] for vector in vectors]
+
+
+def square_padding(width, height):
+    """The side of the square a `width` by `height` crop is padded to, and
+    the (left, top) offset that centers the crop in it."""
+    side = max(width, height)
+    return side, ((side - width) // 2, (side - height) // 2)
+
+
+def square_box_to_image(box, width, height):
+    """A box [x1, y1, x2, y2] in 0..1 of the square OWLv2 padded a `width`
+    by `height` image to, as a normalized box on the image itself, or None
+    when it lay wholly in the padding. OWLv2 pads on the bottom and the
+    right, so scaling by the longer side gives pixels."""
+    side = max(width, height)
+    found = normalized_box([value * side for value in box], width, height)
+    if found["width"] <= 0 or found["height"] <= 0:
+        return None
+    return found
+
+
+def _overlap(a, b):
+    """Intersection over union of two normalized boxes."""
+    left = max(a["x"], b["x"])
+    top = max(a["y"], b["y"])
+    right = min(a["x"] + a["width"], b["x"] + b["width"])
+    bottom = min(a["y"] + a["height"], b["y"] + b["height"])
+    inter = max(right - left, 0.0) * max(bottom - top, 0.0)
+    union = a["width"] * a["height"] + b["width"] * b["height"] - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _best_candidates(scores, threshold):
+    """The indexes scoring at or above `threshold`, best first, with the
+    index breaking ties, cut to MAX_MERGE_CANDIDATES."""
+    passing = [index for index, score in enumerate(scores) if score >= threshold]
+    passing.sort(key=lambda index: (-scores[index], index))
+    return passing[:MAX_MERGE_CANDIDATES]
+
+
+def merge_overlapping(candidates, iou, limit):
+    """`candidates` in order, each kept unless it overlaps an already kept
+    one by more than `iou`, stopping once `limit` are kept."""
+    kept = []
+    for candidate in candidates:
+        if len(kept) == limit:
+            break
+        if all(_overlap(candidate["box"], other["box"]) <= iou for other in kept):
+            kept.append(candidate)
+    return kept
+
+
+def kept_boxes(scores, boxes, width, height, threshold, iou, limit):
+    """The boxes of a reply, best first.
+
+    scores[i] is the score of boxes[i]. Each box is [x1, y1, x2, y2] in
+    0..1 of the square OWLv2 padded the image to. Returns dicts
+    {"index", "score", "box"}, where index is the box's position in the
+    input and box is normalized to the image itself. Boxes below
+    `threshold` and boxes wholly in the padding are left out, a box that
+    overlaps a better one by more than `iou` is dropped, and at most
+    `limit` are kept."""
+    candidates = []
+    for index in _best_candidates(scores, threshold):
+        box = square_box_to_image(boxes[index], width, height)
+        if box is not None:
+            candidates.append({"index": index, "score": float(scores[index]), "box": box})
+    return merge_overlapping(candidates, iou, limit)

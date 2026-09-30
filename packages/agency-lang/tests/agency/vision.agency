@@ -1,7 +1,7 @@
 // std::vision raises one effect for the image it will read, with the real
 // directory, the file name, the task, and the model. These nodes check the
 // payload with a handler that rejects, so no model runs.
-import { detectObjects, tagImage, captionImage } from "std::vision"
+import { detectObjects, tagImage, captionImage, embedImage, findRegions } from "std::vision"
 
 def probe(): string {
   const w = write("vision-probe.png", "not a png", "/tmp") with approve
@@ -39,6 +39,30 @@ node captionPayload(): string {
     captionImage(path, "florence-2", detail: "long")
   } with (data) {
     seen = "${data.data.task}"
+    return reject()
+  }
+  return seen
+}
+
+node embedPayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    embedImage(path, "dinov2-base")
+  } with (data) {
+    seen = "${data.effect}|${data.data.filename}|${data.data.task}|${data.data.model}"
+    return reject()
+  }
+  return seen
+}
+
+node regionsPayload(): string {
+  const path = probe()
+  let seen = ""
+  handle {
+    findRegions(path, "owlv2-base", limit: 10)
+  } with (data) {
+    seen = "${data.data.task}|${data.data.model}"
     return reject()
   }
   return seen

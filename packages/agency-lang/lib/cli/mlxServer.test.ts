@@ -3,6 +3,7 @@ import * as http from "node:http";
 import { defaultRoute, startFrontDoor, type FrontDoor } from "./mlxServer.js";
 import { plainColor } from "../utils/termcolors.js";
 import { localBodyBytes } from "../stdlib/localImageInputs.js";
+import { visionBodyBytes } from "../stdlib/vision.js";
 
 type Hit = {
   url: string;
@@ -324,6 +325,19 @@ describe("front door", () => {
     it("refuses a 20 MB request to any other route with a 413", async () => {
       const before = a.hits.length;
       const res = await bigPost("/v1/chat/completions", 20_000_000);
+      expect(res.status).toBe(413);
+      expect(a.hits.length).toBe(before);
+    });
+
+    it("forwards a 20 MB vision request whole, which the default limit refused", async () => {
+      const res = await bigPost("/v1/vision/detections", 20_000_000);
+      expect(res.status).toBe(200);
+      expect(a.hits[a.hits.length - 1].url).toBe("/v1/vision/detections");
+    });
+
+    it("refuses a vision request over the vision server's limit with a 413", async () => {
+      const before = a.hits.length;
+      const res = await bigPost("/v1/vision/detections", visionBodyBytes());
       expect(res.status).toBe(413);
       expect(a.hits.length).toBe(before);
     });

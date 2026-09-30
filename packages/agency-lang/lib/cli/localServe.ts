@@ -14,7 +14,7 @@ import {
 import { IMAGES_PATH, VISION_PATHS } from "./serveLog.js";
 import { choosePython, defaultMlxEnv } from "../stdlib/localPython.js";
 export { choosePython, defaultMlxEnv } from "../stdlib/localPython.js";
-import { VISION_ONNX_FILES } from "../stdlib/modelKind.js";
+import { VISION_ONNX_FILES, visionFamilyOf, type VisionFamily } from "../stdlib/modelKind.js";
 import {
   _resolveModel,
   _mlxServedName,
@@ -1137,7 +1137,17 @@ function exitOf(child: Child, name: string, kind: ServeKind): Promise<string> {
   });
 }
 
-export type ServedModel = { name: string; kind: ServeKind };
+/** A model in the banner. `dir` is where it was found, when there is one,
+ *  so the banner can read which vision family it is. */
+export type ServedModel = { name: string; kind: ServeKind; dir?: string };
+
+/** The line of Agency code the banner suggests for each vision function,
+ *  given the served model's name. */
+const TRY_VISION: Record<VisionFamily["tryIt"], (name: string) => string> = {
+  tagImage: (name) => `tagImage("drawing.png", "${name}")`,
+  detectObjects: (name) => `detectObjects("drawing.png", ["cat"], "${name}")`,
+  embedImage: (name) => `embedImage("drawing.png", "${name}")`,
+};
 
 /** The suffix after a model's name in the banner. Chat models get none. */
 const BANNER_SUFFIX: Record<ServeKind, string> = {
@@ -1193,13 +1203,16 @@ export function servingBanner(port: number, models: ServedModel[]): string[] {
       `    generateImageLocal("a lighthouse in a storm", "${image}")`,
     );
   }
-  const vision = first("vision");
+  const vision = models.find((model) => model.kind === "vision");
   if (vision !== undefined) {
+    // The ONNX tagger has no config, and so no family here: it tags.
+    const family = vision.dir === undefined ? undefined : visionFamilyOf(vision.dir);
+    const tryIt = family?.tryIt ?? "tagImage";
     lines.push(
       "",
       "  In Agency code:",
-      `    import { tagImage, detectObjects } from "std::vision"`,
-      `    tagImage("drawing.png", "${vision}")`,
+      `    import { ${tryIt} } from "std::vision"`,
+      `    ${TRY_VISION[tryIt](vision.name)}`,
     );
   }
   return lines;

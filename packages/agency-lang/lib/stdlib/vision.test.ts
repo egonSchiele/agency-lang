@@ -5,7 +5,7 @@ import * as path from "node:path";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import { _detectObjects, _tagImage, _captionImage } from "./vision.js";
+import { _detectObjects, _tagImage, _captionImage, _embedImage, _findRegions } from "./vision.js";
 
 describe("std::vision helpers", () => {
   // A stand-in for `agency local serve` with a vision model: records each
@@ -71,6 +71,44 @@ describe("std::vision helpers", () => {
     ]);
   });
 
+  it("sends a null threshold as null, so the server uses the model's default", async () => {
+    serve(200, { detections: [] });
+    await _detectObjects(image, ["cat"], "owlv2-base", null);
+    expect(requests[0]).toMatchObject({ path: "/v1/vision/detections", threshold: null });
+  });
+
+  it("sends boxes to the embeddings route as given, and null boxes as null", async () => {
+    serve(200, { embeddings: [[0.6, 0.8]] });
+    const boxes = [{ x: 0.1, y: 0.2, width: 0.3, height: 0.4 }];
+    const r = await _embedImage(image, "dinov2-base", boxes);
+    expect(r.success && r.value).toEqual([[0.6, 0.8]]);
+    expect(requests[0]).toEqual({
+      path: "/v1/vision/embeddings",
+      model: "facebook/dinov2-base",
+      image: imageBase64,
+      boxes,
+    });
+    serve(200, { embeddings: [[1, 0]] });
+    await _embedImage(image, "dinov2-base", null);
+    expect(requests[0]).toMatchObject({ boxes: null });
+  });
+
+  it("sends the limit to the regions route and numbers the regions", async () => {
+    const box = { x: 0, y: 0, width: 0.5, height: 0.5 };
+    serve(200, {
+      regions: [
+        { score: 0.9, box },
+        { score: 0.4, box },
+      ],
+    });
+    const r = await _findRegions(image, "owlv2-base", 2, null);
+    expect(r.success && r.value).toEqual([
+      { id: 0, score: 0.9, box },
+      { id: 1, score: 0.4, box },
+    ]);
+    expect(requests[0]).toMatchObject({ path: "/v1/vision/regions", limit: 2, threshold: null });
+  });
+
   it("sends the threshold and limit to the tags route", async () => {
     serve(200, { tags: [{ tag: "1girl", score: 0.98 }] });
     const r = await _tagImage(image, "wd14-tagger", 0.35, 30);
@@ -108,7 +146,7 @@ describe("std::vision helpers", () => {
     serve(200, {});
     const chat = await _tagImage(image, "qwen3-coder-next-mlx", 0.35, 30);
     expect(chat.success === false && chat.error).toBe(
-      'tagImage failed: "qwen3-coder-next-mlx" is a chat model, not a vision model. Local vision models are detectors and taggers such as wd14-tagger and florence-2.',
+      'tagImage failed: "qwen3-coder-next-mlx" is a chat model, not a vision model. Local vision models are detectors, taggers, and embedding models such as florence-2, owlv2-base, wd14-tagger, and dinov2-base.',
     );
     const imageModel = await _tagImage(image, "z-image-turbo", 0.35, 30);
     expect(imageModel.success === false && imageModel.error).toContain("is an image model");

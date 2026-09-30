@@ -73,6 +73,15 @@ describe("kindOfModelDir", () => {
     expect(kindOfModelDir(florence)).toBe("vision");
   });
 
+  it("says vision for DINOv2 and OWLv2, before the embedding rule sees DINOv2's Model suffix", () => {
+    const dinov2 = modelDir("dinov2", { "config.json": { architectures: ["Dinov2Model"] } });
+    expect(kindOfModelDir(dinov2)).toBe("vision");
+    const owlv2 = modelDir("owlv2", {
+      "config.json": { architectures: ["Owlv2ForObjectDetection"] },
+    });
+    expect(kindOfModelDir(owlv2)).toBe("vision");
+  });
+
   it("says controlnet for a diffusers ControlNet directory", () => {
     const controlnet = modelDir("cn", {
       "config.json": { _class_name: "ControlNetModel" },

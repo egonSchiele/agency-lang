@@ -16,6 +16,7 @@ import {
   freePort,
   formatElapsed,
   servingBanner,
+  type ServedModel,
   runServe,
   serveChoices,
   embedServeArgs,
@@ -639,6 +640,40 @@ describe("servingBanner", () => {
       `    import { speakLocal } from "std::speech"`,
       `    speakLocal("Hello there.", "org/tts")`,
     ]);
+  });
+
+  it("suggests a vision function each vision family answers", () => {
+    const made: string[] = [];
+    const dirWith = (architecture: string) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "banner-"));
+      made.push(dir);
+      fs.writeFileSync(
+        path.join(dir, "config.json"),
+        JSON.stringify({ architectures: [architecture] }),
+      );
+      return dir;
+    };
+    const tryLine = (model: ServedModel) => servingBanner(8080, [model]).slice(-2);
+    expect(tryLine({ name: "org/dino", kind: "vision", dir: dirWith("Dinov2Model") })).toEqual([
+      `    import { embedImage } from "std::vision"`,
+      `    embedImage("drawing.png", "org/dino")`,
+    ]);
+    expect(
+      tryLine({ name: "org/owl", kind: "vision", dir: dirWith("Owlv2ForObjectDetection") }),
+    ).toEqual([
+      `    import { detectObjects } from "std::vision"`,
+      `    detectObjects("drawing.png", ["cat"], "org/owl")`,
+    ]);
+    // The ONNX tagger has no config.json, and tags.
+    const tagger = fs.mkdtempSync(path.join(os.tmpdir(), "banner-"));
+    expect(tryLine({ name: "org/tagger", kind: "vision", dir: tagger })).toEqual([
+      `    import { tagImage } from "std::vision"`,
+      `    tagImage("drawing.png", "org/tagger")`,
+    ]);
+    for (const dir of made) {
+      safeDeleteDirectoryWithin(os.tmpdir(), dir);
+    }
+    safeDeleteDirectoryWithin(os.tmpdir(), tagger);
   });
 
   it("marks embedding models and shows the memory config for the first", () => {

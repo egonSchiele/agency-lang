@@ -751,6 +751,30 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
     description:
       "Finds the objects you name, tags what it sees, and writes captions. One model for boxes and words.",
   },
+  "dinov2-base": {
+    backend: "mlx",
+    uri: "mlx:facebook/dinov2-base",
+    params: "86M",
+    sizeBytes: 346351462,
+    kind: "vision",
+    tags: [],
+    contextWindow: 224,
+    license: "apache-2.0",
+    description:
+      "Turns a picture, or boxes in it, into embeddings, so you can find the boxes that look like your own things.",
+  },
+  "owlv2-base": {
+    backend: "mlx",
+    uri: "mlx:google/owlv2-base-patch16-ensemble",
+    params: "155M",
+    sizeBytes: 621511889,
+    kind: "vision",
+    tags: [],
+    contextWindow: 960,
+    license: "apache-2.0",
+    description:
+      "Finds the objects you name in one pass, and boxes every thing in a picture with no names at all.",
+  },
   // ── ControlNets ────────────────────────────────────────────────────────
   // Not served: `agency local download` puts one in client.controlnetsDir,
   // and an SDXL image server loads it when a request names it with a

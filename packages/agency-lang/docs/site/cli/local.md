@@ -177,6 +177,8 @@ const tags = tagImage("page.png", "wd14-tagger") with approve
 
 The image is read on this machine and never sent anywhere; each call raises one `std::vision` effect naming the file, the task, and the model.
 
+Two more vision models find a particular thing rather than any thing of its kind. `owlv2-base` finds the objects you name in one pass, and `findRegions` asks it for a box around every thing in a picture. `dinov2-base` answers `embedImage`, which turns a picture, or boxes in it, into embeddings you can compare. The guide's "Find your own things" section shows the two together.
+
 It prints a line for every request that reaches it:
 
 ```

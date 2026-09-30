@@ -1,8 +1,9 @@
 /** @module
-  @summary Find objects, tags, or a caption in an image with a vision model on this machine.
+  @summary Find objects, tags, a caption, or embeddings in an image with a vision model on this machine.
   Ask a local vision model about an image: which objects are where, which
-booru tags describe it, or a caption. The model must be running: start
-it with `agency local serve <model>`. The image never leaves the machine.
+booru tags describe it, a caption, or embeddings that say how parts of
+it look. The model must be running: start it with
+`agency local serve <model>`. The image never leaves the machine.
 
   ```ts
   import { detectObjects, tagImage } from "std::vision"
@@ -27,12 +28,79 @@ Each function is one job with a `Result`, so a labeling loop is a few
 lines of your own code over them, and partial application narrows each:
 `detectObjects.partial(labels: ["person"], model: "florence-2")` is a
 person-finder.
-*/
-import { _detectObjects, _tagImage, _captionImage } from "agency-lang/stdlib-lib/vision.js"
-import { _realTarget } from "agency-lang/stdlib-lib/contained.js"
-import { dirname, basename } from "std::path"
 
-// One effect for the three functions, because all three do the same thing
+## Finding your own things
+
+A detector finds things by the name of their kind. It finds every mug,
+and cannot tell yours from the one next to it. To find your own mug, or
+the cats you draw, compare instead:
+
+1. `findRegions` boxes every thing in a picture, with no names. Where a
+   detector knows the kind, `detectObjects` gives the boxes instead.
+2. `embedImage` turns each box into an embedding: a list of numbers
+   that says how it looks. Things that look alike get embeddings that
+   are close together.
+3. Compare each box with embeddings of crops of your own things, and of
+   other things, and keep the boxes nearest yours.
+
+```ts
+import { findRegions, embedImage } from "std::vision"
+import { cosineSimilarity } from "std::embedding"
+
+// How alike `vector` is to the closest of `references`, where 1 is identical.
+def closest(vector: number[], references: number[][]): number {
+  let best = 0
+  for (reference in references) {
+    const similarity = cosineSimilarity(vector, reference)
+    if (isSuccess(similarity) && similarity.value > best) {
+      best = similarity.value
+    }
+  }
+  return best
+}
+
+// One vector per crop file.
+def embedCrops(paths: string[]): number[][] {
+  let vectors: number[][] = []
+  for (path in paths) {
+    const embedded = embedImage(path, "dinov2-base")
+    if (isSuccess(embedded)) {
+      vectors.push(embedded.value[0])
+    }
+  }
+  return vectors
+}
+
+node main(page: string, catCrops: string[], otherCrops: string[]) {
+  const cats = embedCrops(catCrops)
+  const others = embedCrops(otherCrops)
+  const regions = findRegions(page, "owlv2-base")
+  if (isFailure(regions)) {
+    return regions.error
+  }
+  const boxes = map(regions.value) as region {
+    return region.box
+  }
+  const vectors = embedImage(page, "dinov2-base", boxes: boxes)
+  if (isFailure(vectors)) {
+    return vectors.error
+  }
+  for (vector, i in vectors.value) {
+    if (closest(vector, cats) > closest(vector, others)) {
+      print("Cat in region ${i}")
+    }
+  }
+}
+```
+
+The crops are tight crops made with `cropImage`, one file each. A crop
+file embedded whole is cut the same way as a box embedded from a page,
+so the two compare fairly. A whole photo of a mug on a desk and a tight
+crop of a mug do not: the first vector mostly describes the desk.
+*/
+import { _detectObjects, _tagImage, _captionImage, _embedImage, _findRegions, _visionFile } from "agency-lang/stdlib-lib/vision.js"
+
+// One effect for the five functions, because all five do the same thing
 // to the file: read it once and hand it to a local model. The task and
 // the model are in the payload for a policy that wants them.
 @alwaysUnder(dir)
@@ -57,6 +125,15 @@ export type Detection = {
   box: BoundingBox,
 }
 
+/** One box around a thing in a picture, found with no name. `id` is its
+index in the reply, so crops can be named after it. The score says how
+much it looks like a thing at all, 0..1. */
+export type Region = {
+  id: number,
+  score: number,
+  box: BoundingBox,
+}
+
 /** One tag a tagger gave, with how sure it was, 0..1. */
 export type Tag = {
   tag: string,
@@ -67,7 +144,7 @@ export idempotent def detectObjects(
   path: string,
   labels: string[],
   model: string,
-  threshold: number = 0.3,
+  threshold: number | null = null,
 ): Result<Detection[]> raises <std::vision> {
   """
   Find the named things in an image with a local detector and return
@@ -76,21 +153,21 @@ export idempotent def detectObjects(
   on this machine; nothing is uploaded.
 
   @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required. Florence-2 looks for each label in its own pass, so each label adds to the time
-  @param model - A local vision model that detects, such as "florence-2"
-  @param threshold - Drop detections scoring below this, 0 to 1. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
+  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required. OWLv2 looks for every label in one pass; Florence-2 looks for each in its own pass, so each label adds to the time
+  @param model - A local vision model that detects, such as "owlv2-base" or "florence-2"
+  @param threshold - Drop detections scoring below this, 0 to 1. Null uses the model's default: 0.1 for OWLv2, whose real objects often score 0.2 to 0.4. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
   """
-  const real = try _realTarget(path)
-  if (isFailure(real)) {
-    return real
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
   return interrupt std::vision("Look for ${labels.join(", ")} in this image with a local model?", {
-    dir: dirname(real.value),
-    filename: basename(real.value),
+    dir: file.value.dir,
+    filename: file.value.filename,
     task: "detections",
     model: model,
   })
-  return try _detectObjects(real.value, labels, model, threshold)
+  return try _detectObjects(file.value.image, labels, model, threshold)
 }
 
 export idempotent def tagImage(
@@ -111,17 +188,17 @@ export idempotent def tagImage(
   @param threshold - Drop tags scoring below this, 0 to 1
   @param limit - At most this many tags, 1 to 500
   """
-  const real = try _realTarget(path)
-  if (isFailure(real)) {
-    return real
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
   return interrupt std::vision("Tag this image with a local model?", {
-    dir: dirname(real.value),
-    filename: basename(real.value),
+    dir: file.value.dir,
+    filename: file.value.filename,
     task: "tags",
     model: model,
   })
-  return try _tagImage(real.value, model, threshold, limit)
+  return try _tagImage(file.value.image, model, threshold, limit)
 }
 
 export idempotent def captionImage(
@@ -137,15 +214,82 @@ export idempotent def captionImage(
   @param model - A local vision model that captions, such as "florence-2"
   @param detail - "short" for one sentence, "long" for a paragraph
   """
-  const real = try _realTarget(path)
-  if (isFailure(real)) {
-    return real
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
   }
   return interrupt std::vision("Caption this image with a local model?", {
-    dir: dirname(real.value),
-    filename: basename(real.value),
+    dir: file.value.dir,
+    filename: file.value.filename,
     task: "captions",
     model: model,
   })
-  return try _captionImage(real.value, model, detail)
+  return try _captionImage(file.value.image, model, detail)
+}
+
+/** Similarity between two embeddings is `cosineSimilarity` from
+`std::embedding`, where 1 is identical. As a starting point, on one
+photo of two cats and two TV remotes, the two cats scored 0.55 against
+each other, the two remotes 0.57, and a cat against a remote at most
+0.26. The same object in two different photos has not been measured,
+and neither have pen-and-ink drawings. Rather than pick a cut-off,
+compare each box with crops of your own things and of other things, and
+keep the nearer side: the module doc comment shows how. */
+export idempotent def embedImage(
+  path: string,
+  model: string,
+  boxes: BoundingBox[] | null = null,
+): Result<number[][]> raises <std::vision> {
+  """
+  Turn an image into an embedding, a list of numbers that says how it
+  looks, so things that look alike come out close together. Pass boxes to
+  embed each box instead of the whole image, one embedding per box.
+  Compare two embeddings only when both were cut the same way, such as a
+  tight crop and a box around the same thing.
+
+  @param path - Path to a PNG, JPEG, WebP, or GIF image
+  @param model - A local vision model that embeds, such as "dinov2-base"
+  @param boxes - Boxes to embed, as detectObjects and findRegions return them, at most 100. Null embeds the whole image
+  """
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
+  }
+  return interrupt std::vision("Describe this image as numbers with a local model?", {
+    dir: file.value.dir,
+    filename: file.value.filename,
+    task: "embeddings",
+    model: model,
+  })
+  return try _embedImage(file.value.image, model, boxes)
+}
+
+export idempotent def findRegions(
+  path: string,
+  model: string,
+  limit: number = 50,
+  threshold: number | null = null,
+): Result<Region[]> raises <std::vision> {
+  """
+  Box every thing in an image with a local model, with no names: for
+  finding things a detector has no word for, such as the characters in a
+  drawing. Each region comes with a score for how much it looks like a
+  thing at all, best first. Runs on this machine; nothing is uploaded.
+
+  @param path - Path to a PNG, JPEG, WebP, or GIF image
+  @param model - A local vision model that finds regions, such as "owlv2-base" or "florence-2"
+  @param limit - At most this many regions, 1 to 100
+  @param threshold - Drop regions scoring below this, 0 to 1. Null uses 0.1, which drops the many boxes OWLv2 puts on nothing. Florence-2 gives no scores: every region scores 1, so the threshold drops nothing
+  """
+  const file = try _visionFile(path)
+  if (isFailure(file)) {
+    return file
+  }
+  return interrupt std::vision("Box the things in this image with a local model?", {
+    dir: file.value.dir,
+    filename: file.value.filename,
+    task: "regions",
+    model: model,
+  })
+  return try _findRegions(file.value.image, model, limit, threshold)
 }

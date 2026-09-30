@@ -30,31 +30,41 @@ MAX_BODY_BYTES = base64_length(MAX_IMAGE_BYTES) + MAX_SETTINGS_BYTES
 MAX_LABELS = 50
 MAX_LABEL_CHARS = 64
 
-# The most tags one request may ask for. The WD14 vocabulary has about ten
-# thousand; a caption wants thirty.
-MAX_TAG_LIMIT = 500
-DEFAULT_TAG_LIMIT = 30
-
-# Scores below this are left out. The detection default is the value
-# Florence-2's own examples use; the tag default is the WD14 model card's.
-DEFAULT_THRESHOLD = {"detections": 0.3, "tags": 0.35}
-
-# Route name -> path. A family lists the route names it answers.
-ROUTES = {
-    "detections": "/v1/vision/detections",
-    "tags": "/v1/vision/tags",
-    "captions": "/v1/vision/captions",
-}
-
-# The fields every request carries, and the fields each route adds.
-# `model` is the front door's routing field.
+# The fields every request carries. `model` is the front door's routing
+# field.
 COMMON_FIELDS = ["model", "image"]
-ROUTE_FIELDS = {
-    "detections": ["labels", "threshold"],
-    "tags": ["threshold", "limit"],
-    "captions": ["detail"],
-}
 DETAILS = ["short", "long"]
+
+# What each route is. One row per route; a family lists the route names it
+# answers.
+#
+#   path               where the route is served
+#   fields             the fields the route takes beside COMMON_FIELDS, each
+#                      checked by its entry in FIELD_CHECKS, in this order
+#   default_threshold  the threshold a request gets when it gives none. A
+#                      family's own `default_threshold_<route>` wins over it.
+#   limit_max          the largest `limit` a request may ask for
+#   limit_default      the `limit` a request gets when it gives none
+ROUTE_TABLE = {
+    "detections": {
+        "path": "/v1/vision/detections",
+        "fields": ["labels", "threshold"],
+    },
+    "tags": {
+        "path": "/v1/vision/tags",
+        "fields": ["threshold", "limit"],
+        # The WD14 model card's threshold.
+        "default_threshold": 0.35,
+        # The WD14 vocabulary has about ten thousand tags; a caption wants
+        # thirty.
+        "limit_max": 500,
+        "limit_default": 30,
+    },
+    "captions": {
+        "path": "/v1/vision/captions",
+        "fields": ["detail"],
+    },
+}
 
 # What each family is and does. One row per family, flat: one key per
 # value, so a test can compare a row to a literal.
@@ -65,6 +75,10 @@ DETAILS = ["short", "long"]
 #   identify_* what marks a directory as this family: a file beside
 #              another, or the first entry of config.json's architectures
 #   routes     the route names it answers
+#   default_threshold_<route>
+#              the threshold a request on that route gets when it gives
+#              none, when this family's scores need their own. Every family
+#              that answers detections has one.
 #   task_*     for a Florence-2 model, the task token each route sends
 FAMILIES = {
     "wd14": {
@@ -81,6 +95,9 @@ FAMILIES = {
         "runner": "Florence2Runner",
         "identify_architecture": "Florence2ForConditionalGeneration",
         "routes": ["detections", "tags", "captions"],
+        # The value Florence-2's own examples use. Florence-2 gives no
+        # scores, so it drops nothing.
+        "default_threshold_detections": 0.3,
         "task_detections": "<OPEN_VOCABULARY_DETECTION>",
         "task_tags": "<DENSE_REGION_CAPTION>",
         "task_caption_short": "<CAPTION>",
@@ -130,15 +147,21 @@ def family_of(names, config):
 
 def route_of_path(path):
     """The route name a request path is for, or None."""
-    for name, route_path in ROUTES.items():
-        if path == route_path:
+    for name, row in ROUTE_TABLE.items():
+        if path == row["path"]:
             return name
     return None
 
 
 def route_paths(rules):
     """The paths a family answers, for /health and the 404."""
-    return [ROUTES[name] for name in rules["routes"]]
+    return [ROUTE_TABLE[name]["path"] for name in rules["routes"]]
+
+
+def default_threshold(rules, route):
+    """The threshold a request on `route` gets when it gives none: the
+    family's own when its row has one, else the route's."""
+    return rules.get(f"default_threshold_{route}", ROUTE_TABLE[route].get("default_threshold"))
 
 
 def _is_number(value):
@@ -157,7 +180,7 @@ def _image_of(body):
         raise RequestError(str(err))
 
 
-def _labels_of(body):
+def _labels_of(rules, route, body):
     labels = body.get("labels")
     if not isinstance(labels, list) or not labels:
         raise RequestError(
@@ -175,29 +198,30 @@ def _labels_of(body):
     return [label.strip() for label in labels]
 
 
-def _threshold_of(route, body):
+def _threshold_of(rules, route, body):
+    default = default_threshold(rules, route)
     threshold = body.get("threshold")
     if threshold is None:
-        return DEFAULT_THRESHOLD[route]
+        return default
     if not _is_number(threshold) or threshold < 0 or threshold > 1:
-        raise RequestError(
-            f"threshold must be a number from 0 to 1. The default is {DEFAULT_THRESHOLD[route]}."
-        )
+        raise RequestError(f"threshold must be a number from 0 to 1. The default is {default}.")
     return float(threshold)
 
 
-def _limit_of(body):
+def _limit_of(rules, route, body):
+    row = ROUTE_TABLE[route]
     limit = body.get("limit")
     if limit is None:
-        return DEFAULT_TAG_LIMIT
-    if not _is_integer(limit) or limit < 1 or limit > MAX_TAG_LIMIT:
+        return row["limit_default"]
+    if not _is_integer(limit) or limit < 1 or limit > row["limit_max"]:
         raise RequestError(
-            f"limit must be a whole number from 1 to {MAX_TAG_LIMIT}. The default is {DEFAULT_TAG_LIMIT}."
+            f"limit must be a whole number from 1 to {row['limit_max']}. "
+            f"The default is {row['limit_default']}."
         )
     return limit
 
 
-def _detail_of(body):
+def _detail_of(rules, route, body):
     detail = body.get("detail")
     if detail is None:
         return DETAILS[0]
@@ -206,13 +230,24 @@ def _detail_of(body):
     return detail
 
 
+# The one function that checks each field a route may take. Each takes
+# (rules, route, body) and returns the field's checked value, or raises
+# RequestError saying what the field takes.
+FIELD_CHECKS = {
+    "labels": _labels_of,
+    "threshold": _threshold_of,
+    "limit": _limit_of,
+    "detail": _detail_of,
+}
+
+
 def _check_fields(route, body):
-    allowed = COMMON_FIELDS + ROUTE_FIELDS[route]
+    allowed = COMMON_FIELDS + ROUTE_TABLE[route]["fields"]
     unknown = sorted(key for key in body if key not in allowed)
     if unknown:
         raise RequestError(
             f"{join_names(unknown)} {'is' if len(unknown) == 1 else 'are'} not "
-            f"{'a setting' if len(unknown) == 1 else 'settings'} of {ROUTES[route]}. "
+            f"{'a setting' if len(unknown) == 1 else 'settings'} of {ROUTE_TABLE[route]['path']}. "
             f"It takes {join_names(allowed[1:])}."
         )
 
@@ -224,7 +259,7 @@ def check_request(rules, route, body):
     does not answer."""
     if route not in rules["routes"]:
         raise RequestError(
-            f"{rules['label']} does not answer {ROUTES[route]}. It answers "
+            f"{rules['label']} does not answer {ROUTE_TABLE[route]['path']}. It answers "
             f"{join_names(route_paths(rules))}.",
             status=404,
         )
@@ -232,14 +267,8 @@ def check_request(rules, route, body):
         raise RequestError("The request body must be a JSON object.")
     _check_fields(route, body)
     checked = {"image": _image_of(body)}
-    if route == "detections":
-        checked["labels"] = _labels_of(body)
-        checked["threshold"] = _threshold_of(route, body)
-    elif route == "tags":
-        checked["threshold"] = _threshold_of(route, body)
-        checked["limit"] = _limit_of(body)
-    else:
-        checked["detail"] = _detail_of(body)
+    for field in ROUTE_TABLE[route]["fields"]:
+        checked[field] = FIELD_CHECKS[field](rules, route, body)
     return checked
 
 

@@ -125,6 +125,24 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
     });
   });
 
+  it("has a checker for every field a route takes", () => {
+    const out = rules(
+      "print(sorted({f for row in ROUTE_TABLE.values() for f in row['fields']} - set(FIELD_CHECKS)))",
+    );
+    expect(out).toBe("[]");
+  });
+
+  it("gives every family that detects its own default threshold", () => {
+    const out = rules(`
+for family in FAMILIES.values():
+    if "detections" in family["routes"]:
+        value = family.get("default_threshold_detections")
+        print(family["label"], isinstance(value, (int, float)) and not isinstance(value, bool))
+`);
+    expect(out.split("\n").every((line) => line.endsWith("True"))).toBe(true);
+    expect(out).not.toBe("");
+  });
+
   it("refuses a route the family does not answer, with 404 and the ones it does", () => {
     expect(check("wd14", "detections", { image, labels: ["x"] })).toBe(
       "ERROR 404 WD14 tagger does not answer /v1/vision/detections. It answers /v1/vision/tags.",

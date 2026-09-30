@@ -2,12 +2,14 @@ import * as http from "node:http";
 import { parseJsonBody } from "../serve/util.js";
 import { notServedMessage } from "./localServe.js";
 import { localBodyBytes } from "../stdlib/localImageInputs.js";
+import { visionBodyBytes } from "../stdlib/vision.js";
 import {
   createCapture,
   describeReply,
   describeRequest,
   IMAGES_PATH,
   serveLogLines,
+  VISION_PATHS,
   type LogEntry,
   type LogOptions,
   type Reply,
@@ -157,11 +159,21 @@ function forward(
 type ReadResult =
   { body: Record<string, unknown> } | { refusal: { status: number; message: string } };
 
-/** The largest body the door reads for a request to `url`. An image
- *  request may carry input images, up to what the image server takes.
- *  Every other route keeps parseJsonBody's default. */
+/** The largest body the door reads for a request to each path whose
+ *  server takes more than parseJsonBody's default: an image request may
+ *  carry input images, and a vision request carries its image. Each limit
+ *  is the one its server holds requests to. */
+function bodyLimits(): Record<string, number> {
+  return {
+    [IMAGES_PATH]: localBodyBytes(),
+    ...Object.fromEntries(VISION_PATHS.map((visionPath) => [visionPath, visionBodyBytes()])),
+  };
+}
+
+/** The largest body the door reads for a request to `url`. A path not in
+ *  `bodyLimits` keeps parseJsonBody's default. */
 function bodyLimit(url: string | undefined): number | undefined {
-  return url === IMAGES_PATH ? localBodyBytes() : undefined;
+  return url === undefined ? undefined : bodyLimits()[url];
 }
 
 /** The request body, or how to refuse it. Refusing is left to the caller so

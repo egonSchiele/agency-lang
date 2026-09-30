@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { spawnSync } from "node:child_process";
 import { visionServerScript, ONNXRUNTIME_VERSION, TRANSFORMERS_VERSION } from "./localServe.js";
 import { VISION_ARCHITECTURES, VISION_ONNX_FILES } from "../stdlib/modelKind.js";
-import { MAX_IMAGE_BYTES, VISION_TASKS } from "../stdlib/vision.js";
+import { MAX_IMAGE_BYTES, VISION_TASKS, visionBodyBytes } from "../stdlib/vision.js";
 import { configuredPython } from "../stdlib/localPython.js";
 
 const cliDir = path.dirname(visionServerScript());
@@ -185,6 +185,7 @@ except ImageDataError as e:
   it("takes a body big enough for the largest image, and the same limit as the stdlib", () => {
     expect(rules("print(MAX_IMAGE_BYTES)")).toBe(String(MAX_IMAGE_BYTES));
     expect(Number(rules("print(MAX_BODY_BYTES - base64_length(MAX_IMAGE_BYTES))"))).toBe(64 * 1024);
+    expect(Number(rules("print(MAX_BODY_BYTES)"))).toBe(visionBodyBytes());
   });
 
   it("refuses the labels a detector cannot use", () => {

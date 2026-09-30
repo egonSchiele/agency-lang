@@ -3,6 +3,7 @@ import { _resolveModel, _mlxServedName, _localModelKindOf } from "./localModels.
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 import { approvedFileBytes } from "./approvedPath.js";
 import { _realTarget } from "./contained.js";
+import { base64Length, REQUEST_SETTINGS_BYTES } from "./localImageInputs.js";
 import * as path from "node:path";
 
 /** The TypeScript half of `std::vision`: one HTTP call behind three thin
@@ -15,6 +16,14 @@ import * as path from "node:path";
 /** The largest image sent. `MAX_IMAGE_BYTES` in
  *  lib/cli/localServerCommon.py is the same, and a test compares them. */
 export const MAX_IMAGE_BYTES = 50_000_000;
+
+/** The largest request body the vision server takes: the base64 of the
+ *  largest image, and room for the settings. `MAX_BODY_BYTES` in
+ *  lib/cli/visionRules.py is computed the same way, and a test compares
+ *  them. The serve front door holds vision requests to it. */
+export function visionBodyBytes(): number {
+  return base64Length(MAX_IMAGE_BYTES) + REQUEST_SETTINGS_BYTES;
+}
 
 /** What the client knows about one vision task.
  *

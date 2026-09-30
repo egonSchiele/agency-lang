@@ -43,8 +43,7 @@ except ValueError as e:
 }
 
 /** Runs check_request for a family and route and prints the result, or
- *  the error. The checked image and examples are bytes, printed back as
- *  base64. */
+ *  the error. The checked image is bytes, printed back as base64. */
 function check(
   family: "wd14" | "Florence2ForConditionalGeneration" | "Dinov2Model" | "Owlv2ForObjectDetection",
   route: string,
@@ -56,8 +55,6 @@ body = json.loads(${JSON.stringify(JSON.stringify(body))})
 try:
     checked = check_request(FAMILIES["${family}"], "${route}", body)
     checked["image"] = base64.b64encode(checked["image"]).decode("ascii")
-    if "examples" in checked:
-        checked["examples"] = [base64.b64encode(e).decode("ascii") for e in checked["examples"]]
     print(json.dumps(checked, sort_keys=True))
 except RequestError as e:
     print("ERROR", e.status, e)
@@ -176,12 +173,9 @@ except ImageDataError as e:
     expect(out).toBe("image is over 50,000,000 bytes; this server reads images up to that size.");
   });
 
-  it("takes a body big enough for the largest image and every example, and the same limit as the stdlib", () => {
+  it("takes a body big enough for the largest image, and the same limit as the stdlib", () => {
     expect(rules("print(MAX_IMAGE_BYTES)")).toBe(String(MAX_IMAGE_BYTES));
-    const settings = rules(
-      "print(MAX_BODY_BYTES - base64_length(MAX_IMAGE_BYTES) - MAX_EXAMPLES * base64_length(MAX_EXAMPLE_BYTES))",
-    );
-    expect(Number(settings)).toBe(64 * 1024);
+    expect(Number(rules("print(MAX_BODY_BYTES - base64_length(MAX_IMAGE_BYTES))"))).toBe(64 * 1024);
   });
 
   it("refuses the labels a detector cannot use", () => {
@@ -220,7 +214,6 @@ except ImageDataError as e:
   it("fills in each family's defaults for the new routes", () => {
     const owl = "Owlv2ForObjectDetection";
     expect(JSON.parse(check(owl, "detections", { image, labels: ["cat"] })).threshold).toBe(0.1);
-    expect(JSON.parse(check(owl, "matches", { image, examples: [image] })).threshold).toBe(0.6);
     expect(JSON.parse(check(owl, "regions", { image }))).toEqual({ image, limit: 50 });
     expect(JSON.parse(check("Florence2ForConditionalGeneration", "regions", { image })).limit).toBe(
       50,
@@ -260,27 +253,6 @@ except ImageDataError as e:
     );
   });
 
-  it("refuses examples that are missing, too many, or too large, naming the bad one", () => {
-    const owl = "Owlv2ForObjectDetection";
-    const message =
-      "ERROR 400 examples must be a list of 1 to 4 pictures of the thing to find, each as base64.";
-    expect(check(owl, "matches", { image })).toBe(message);
-    expect(check(owl, "matches", { image, examples: [] })).toBe(message);
-    expect(check(owl, "matches", { image, examples: Array(5).fill(image) })).toBe(message);
-    expect(check(owl, "matches", { image, examples: [image, "/Users/me/cat.png"] })).toBe(
-      "ERROR 400 examples[1]: image is not valid base64.",
-    );
-    const out = rules(`
-try:
-    check_request(FAMILIES["${owl}"], "matches", {"image": "${image}", "examples": ["A" * (base64_length(MAX_EXAMPLE_BYTES) + 4)]})
-except RequestError as e:
-    print(e)
-`);
-    expect(out).toBe(
-      "examples[0]: image is over 10,000,000 bytes; this server reads images up to that size.",
-    );
-  });
-
   it("refuses a regions limit out of range", () => {
     expect(check("Owlv2ForObjectDetection", "regions", { image, limit: 101 })).toBe(
       "ERROR 400 limit must be a whole number from 1 to 100. The default is 50.",
@@ -289,7 +261,7 @@ except RequestError as e:
 
   it("refuses embeddings on OWLv2, naming the routes it answers", () => {
     expect(check("Owlv2ForObjectDetection", "embeddings", { image })).toBe(
-      "ERROR 404 OWLv2 does not answer /v1/vision/embeddings. It answers /v1/vision/detections, /v1/vision/matches, and /v1/vision/regions.",
+      "ERROR 404 OWLv2 does not answer /v1/vision/embeddings. It answers /v1/vision/detections and /v1/vision/regions.",
     );
   });
 
@@ -331,10 +303,9 @@ print(json.dumps([indexes(MERGE_IOU, 10), indexes(KEEP_OVERLAPS, 10), indexes(KE
     ]);
   });
 
-  it("pads a crop to a centered square, and averages directions, not lengths", () => {
+  it("pads a crop to a centered square", () => {
     expect(rules("print(square_padding(300, 100))")).toBe("(300, (0, 100))");
     expect(rules("print(square_padding(100, 300))")).toBe("(300, (100, 0))");
-    expect(rules("print(average_directions([[2, 0], [0, 1]]))")).toBe("[0.5, 0.5]");
   });
 
   it("turns a normalized box into pixels, refusing one under a pixel", () => {

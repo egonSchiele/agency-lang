@@ -2,7 +2,7 @@
 
 Builds on `2026-09-28-vision-models.md`, which added the vision server,
 its family table, and `detectObjects`, `tagImage`, and `captionImage`.
-This spec adds two model families to that server and three functions to
+This spec adds two model families to that server and two functions to
 `std::vision`, so a program can find the things one person cares about
 from a few examples of them.
 
@@ -21,22 +21,22 @@ appear in many of them. The detector learned mostly from photos. Asked
 for "cat" on one of your pages, it may return nothing, because your
 cats are a few ink lines on white paper.
 
-Three tools close these gaps without training a model:
+Two tools close these gaps without training a model:
 
 1. **Compare.** Turn a region of an image into an embedding, a list of
    numbers that describes how it looks. Regions that look alike get
    embeddings that are close together. This needs an image embedding
    model: DINOv2. It fixes confusion.
-2. **Search by example.** Hand a detector a picture of the thing
-   instead of its name, and it finds things that look like the
-   picture. OWLv2 can do this. It helps with misses.
-3. **Box everything.** Ask a model for a box around every drawn or
+2. **Box everything.** Ask a model for a box around every drawn or
    photographed thing, with no names at all, and let the comparison
    decide which boxes matter. OWLv2 and Florence-2 can both do this. It
    helps with misses.
 
-The mug needs the first. The cats need the third and the first
-together, or the second alone. "Putting it together" shows the code.
+The mug needs the first. The cats need the second and the first
+together. "Putting it together" shows the code.
+
+A third tool, searching by example, was tried and dropped. See
+"Search by example, tried and dropped".
 
 Fine-tuning a detector is left out on purpose; see "Not in this spec".
 
@@ -44,10 +44,10 @@ Fine-tuning a detector is left out on purpose; see "Not in this spec".
 
 1. A DINOv2 family on the vision server, answering a new route,
    `/v1/vision/embeddings`.
-2. An OWLv2 family, answering `/v1/vision/detections` and two new
-   routes, `/v1/vision/matches` and `/v1/vision/regions`.
+2. An OWLv2 family, answering `/v1/vision/detections` and a new route,
+   `/v1/vision/regions`.
 3. `/v1/vision/regions` on Florence-2 as well.
-4. `embedImage`, `findByExample`, and `findRegions` in `std::vision`.
+4. `embedImage` and `findRegions` in `std::vision`.
 5. A per-family default threshold for detections, and a nullable
    `threshold` on `detectObjects`, because OWLv2's scores run much lower
    than Florence-2's.
@@ -59,7 +59,7 @@ Fine-tuning a detector is left out on purpose; see "Not in this spec".
 | Catalog name | Repo | License | Download | Routes |
 |---|---|---|---|---|
 | `dinov2-base` | `facebook/dinov2-base` | Apache-2.0 | 346 MB | embeddings |
-| `owlv2-base` | `google/owlv2-base-patch16-ensemble` | Apache-2.0 | 620 MB | detections, matches, regions |
+| `owlv2-base` | `google/owlv2-base-patch16-ensemble` | Apache-2.0 | 620 MB | detections, regions |
 
 Both load with transformers 5.17, which the vision server already pins,
 through `Dinov2Model` and `Owlv2ForObjectDetection`. Each runner names
@@ -123,7 +123,7 @@ Two rows join `FAMILIES` in `visionRules.py`:
     "engine": "transformers",
     "runner": "Owlv2Runner",
     "identify_architecture": "Owlv2ForObjectDetection",
-    "routes": ["detections", "matches", "regions"],
+    "routes": ["detections", "regions"],
     "default_threshold_detections": 0.1,
 },
 ```
@@ -141,8 +141,8 @@ can read the key. A row that does not detect leaves the key out. A new
 test checks that every row whose `routes` include `detections` has a
 number there.
 
-The defaults for `tags` and `matches`, 0.35 and 0.6, are the same for
-every family, so they sit in the route's row of the route table. A
+The default for `tags`, 0.35, is the same for every family, so it sits
+in the route's row of the route table. A
 family's own default, when it has one, wins over the route's.
 
 The `family_of` error message names every family. It lists the
@@ -201,8 +201,7 @@ docstring's warning about time per label becomes Florence-2's alone.
 
 OWLv2's processor pads each image to a square, on the bottom and the
 right, before it detects. The boxes the model returns are positions in
-that square, from 0 to 1. All three OWLv2 routes get their boxes this
-way, so one plain Python function in `visionRules.py` finishes the job
+that square, from 0 to 1. Both OWLv2 routes get their boxes this way, so one plain Python function in `visionRules.py` finishes the job
 for all of them:
 
 1. Drop boxes scoring below the threshold.
@@ -222,77 +221,33 @@ not call `post_process_grounded_object_detection`: it does steps 1 and
 2 and nothing else, and sharing the function above keeps every route's
 boxes in one set of units.
 
-### `/v1/vision/matches`
+### Search by example, tried and dropped
 
-| Field | Meaning |
-|---|---|
-| `image` | The image to search |
-| `examples` | 1 to 4 pictures of the thing to find, each as base64 |
-| `threshold` | Optional. Drop matches scoring below this, 0 to 1. The default is 0.6 |
+OWLv2 can take a picture of a thing instead of its name, through
+`embed_image_query`, and find things that look like the picture. The
+first version of this spec had a `/v1/vision/matches` route and a
+`findByExample` function built on it. A measurement before building
+them showed it does not work well enough to ship.
 
-The reply has the detections shape, so the stdlib reuses `Detection`:
-`{"detections": [{"label", "score", "box"}]}`. Every `label` is
-`"match"`.
+The test used two public COCO photos: two tabby cats and two TV remotes
+on a couch, and a black-and-white cat on a laptop. Examples were crops
+from one photo, searched for in the other, or in the same photo.
 
-`Owlv2Runner.matches_of` turns the examples into one query and searches
-the image once:
+- With a crop of one remote as the example, OWLv2 ranked both cats
+  above both remotes.
+- Boxes on nothing at all scored 0.96 to 1.0 on every search, as high
+  as the real matches, so no threshold could separate them.
+- Transformers' own `image_guided_detection`, with its rescaled scores,
+  made the same mistakes, so the problem is the model and not the
+  runner.
+- Centering each example on a square, the fix this spec had planned
+  for wide examples, made the results worse.
 
-1. For each example, `embed_image_query` looks at the boxes OWLv2 would
-   predict inside the example, keeps the ones that best cover the whole
-   picture, and returns the embedding of one of them.
-2. The runner scales each embedding to length 1 and averages them
-   into one query. Four examples of a cat in four poses make a broader
-   query than any one of them. Without the scaling, a long embedding
-   would count for more than a short one.
-3. `class_predictor` scores every box in the searched image against
-   that query, and `box_predictor` gives the boxes.
-4. The score of a box is the sigmoid of its logit. Boxes below
-   `threshold` are dropped.
-5. `merge_overlapping` removes boxes that overlap a higher-scoring box,
-   and keeps at most 100.
-
-The runner does not call `post_process_image_guided_detection`. That
-function rescales the scores so the best box in every image scores 1,
-which suits drawing boxes in a demo. A caller here needs the real
-score, to compare matches across photos and to choose a threshold.
-
-`merge_overlapping(detections, iou)` is a plain Python function in
-`visionRules.py`, so CI tests it without torch. Two boxes that overlap
-by more than 0.3 (intersection over union) count as one object, and the
-higher score is kept. 0.3 is the value transformers uses for the same
-job. The `regions` route uses the same function and the same value.
-
-The 0.6 default is a guess. The transformers example uses 0.9, for
-near-identical objects, and a different angle or a different drawing of
-the same cat will score lower. It must be checked against real photos
-and real drawings before this ships.
-
-An example works best as a tight crop that the object fills. A photo of
-the mug on a cluttered desk searches for the desk. The docstring says
-so, and `cropImage` makes a tight crop from a detection.
-
-OWLv2 also pads an example to a square before it looks at it. A wide
-example then fills only the top half of the square, and the box that
-"best covers the whole picture" fits the object less well. The manual
-run includes a wide and a tall example. If they do poorly, the runner
-pads each example to a centered square itself, as `Dinov2Runner` does.
-
-Each example gets the same decode and pixel limit as `image`, and may
-be at most 10 MB. `MAX_BODY_BYTES` grows to hold them. It becomes the
-sum of three parts:
-
-1. the base64 length of the image's 50 MB,
-2. four times the base64 length of an example's 10 MB,
-3. 64 KB for the settings.
-
-The handler checks the body size before it knows the route, so the
-larger limit applies to every route of every family. That is accepted:
-the limit exists to refuse a body that is not a request, and 120 MB
-still does.
-
-`MAX_EXAMPLE_BYTES` in `vision.ts` matches the 10 MB. The existing test
-that pins the body limit to the image limit plus 64 KB changes to the
-new sum, and a new test compares `MAX_EXAMPLE_BYTES` on both sides.
+Boxing everything and comparing the boxes with DINOv2 did the same job
+on the same photos. With a crop of the left cat as the example, the
+left cat's box scored 0.97 and the other cat's 0.57. With a remote as
+the example, that remote scored 0.96 and the other remote 0.66. So the
+second tool, not a third, answers "find this thing".
 
 ### `/v1/vision/regions`
 
@@ -342,11 +297,10 @@ server's own limit. This also fixes detection on a large photo, which
 is broken on main.
 
 **The log.** `describeRequest` in `serveLog.ts` shows a vision
-request's `image` and `examples` as a note of their count and size,
-as it does for the image server's fields. `describeReply` indents a vision reply's
+request's `image` as a note of its size, as it does for the image
+server's fields. `describeReply` indents a vision reply's
 JSON and counts what is in it, such as `3 detections`. `VISION_PATHS`
-gains the three new paths. A matches reply counts as detections, and a
-regions reply as regions. An embeddings reply is handled like an image
+gains the two new paths. A regions reply counts as regions. An embeddings reply is handled like an image
 reply: it can hold 76,800 numbers, so the log shows
 `<100 embeddings>` and never the numbers.
 
@@ -390,30 +344,6 @@ compared when both were cut the same way. The last one is the mistake
 the examples below avoid. A whole photo of a mug on a desk and a tight
 crop of a mug do not compare well, because the first vector mostly
 describes the desk.
-
-### `findByExample`
-
-```ts
-export idempotent def findByExample(
-  path: string,
-  examples: string[],
-  model: string,
-  threshold: number | null = null,
-): Result<Detection[]> raises <std::vision>
-```
-
-It raises `std::vision` once for the image and once for each example,
-all with `task: "matches"`. The payloads have the same shape, so the
-message tells them apart:
-
-- for the image: "Search this image for things that look like the
-  examples, with a local model?"
-- for each example: "Use this image as an example of what to find,
-  with a local model?"
-
-Every file is checked with `_realTarget` before the first interrupt, so
-a call with a missing example asks for nothing. This is the order
-`generateImageLocal` uses for its input images.
 
 ### `findRegions`
 
@@ -536,7 +466,7 @@ more than a handful of examples. That is the subject of
 
 No new effect. `std::vision` already carries `task` and `model`, so a
 policy can allow `embeddings` under `./refs` and nothing else. The
-three new task names, `embeddings`, `matches`, and `regions`, go in the
+two new task names, `embeddings` and `regions`, go in the
 effect's documentation, and `tests/agency/vision.agency` gains a case
 for each payload with a rejecting handler.
 
@@ -546,18 +476,16 @@ for each payload with a rejecting handler.
   - the two new rows and `family_of` for both architectures
   - the rule that every row that detects has a default threshold, and
     the default each family fills in
-  - every refusal of the three new routes: too many boxes, a box with
-    no area, zero or five examples, an oversized example, a `limit` out
-    of range, and a field the route does not take
+  - every refusal of the two new routes: too many boxes, a box with
+    no area, a `limit` out of range, and a field the route does not
+    take
   - the 404 for a route the family does not answer, such as
     `embeddings` on OWLv2
   - an empty `boxes` list giving an empty reply
   - `merge_overlapping`
-  - the new body limit, and `MAX_EXAMPLE_BYTES` against `vision.ts`
 - The same file, with a fake model and a fake processor: a box that
   reaches into the padding is clamped, and a box wholly in the padding
-  is dropped. `matches_of` averages its examples and reports the real
-  score. `regions_of` sorts by objectness and keeps `limit`.
+  is dropped. `regions_of` sorts by objectness and keeps `limit`.
   `detections_of` labels each box with its best label. These check the
   runner's own arithmetic. They cannot check where the real
   model puts a box, which is in the manual run.
@@ -565,18 +493,14 @@ for each payload with a rejecting handler.
   300×300, with the crop centered and the padding in the mean color.
 - `mlxServer.test.ts`: a vision request over 10 MB and under the
   vision limit reaches the model's server.
-- `serveLog.test.ts`: a request's `image` and `examples` shown as a
-  note, the count for a matches and a regions reply, and
+- `serveLog.test.ts`: a request's `image` shown as a note, the count
+  for a regions reply, and
   an embeddings reply logged by its vector count with no numbers.
 - `localServe.test.ts`: the banner line for a DINOv2 and an OWLv2
   model.
 - `vision.test.ts` against the stand-in server: the body each new
   function sends, that `boxes` are sent as given, that null `boxes`
   is sent as null, and the refusal of a model of another kind.
-- An agency-js test in the shape of `image-generation-local-edit`:
-  `findByExample` asks about the image and then each example in order,
-  each with its own message, a rejected example sends nothing, and a
-  missing example fails before anything is asked.
 - `modelKind.test.ts`: a directory whose `config.json` names
   `Dinov2Model` is a vision model and is not an embedding model.
 - A manual run on a Mac with all three models, recorded in the dev
@@ -588,23 +512,19 @@ for each payload with a rejecting handler.
      them.
   2. Detect one object in a 2:1 photo with OWLv2 and crop it with
      `cropImage`. The crop must show the object.
-  3. Run `findByExample` with one example, with four, with a wide one,
-     and with a tall one. Note the scores, and settle the default
-     threshold.
 
   Drawings, on ten pen-and-ink pages:
   1. What `detectObjects(page, ["cat"])` finds with Florence-2 and with
      OWLv2.
-  2. What `findByExample` finds from four cat crops.
-  3. Whether `findRegions` puts one box around each cat, with each
+  2. Whether `findRegions` puts one box around each cat, with each
      model.
-  4. Whether cat crops embed closer to each other than to other crops.
-  5. The same comparison with white padding instead of gray.
+  3. Whether cat crops embed closer to each other than to other crops.
+  4. The same comparison with white padding instead of gray.
 
 ## Docs
 
-`docs/dev/llm/local-vision.md` gains the two families, the three
-routes, why `matches_of` reads scores itself, and the results of the
+`docs/dev/llm/local-vision.md` gains the two families, the two
+routes, why search by example was dropped, and the results of the
 manual run. Its "Not here yet" list loses OWLv2.
 
 ## Not in this spec

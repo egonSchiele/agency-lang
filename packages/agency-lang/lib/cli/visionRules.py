@@ -24,19 +24,10 @@ ONNXRUNTIME_VERSION = "1.30.0"
 # so every box of one reply can be embedded in one request.
 MAX_REPLY_BOXES = 100
 
-# How many example pictures a matches request may send, and how large each
-# may be. An example is a tight crop of one object, so 10 MB is plenty.
-# `MAX_EXAMPLES` and `MAX_EXAMPLE_BYTES` in lib/stdlib/vision.ts are the
-# same, and a test compares them.
-MAX_EXAMPLES = 4
-MAX_EXAMPLE_BYTES = 10_000_000
-
-# A request body is one image, up to MAX_EXAMPLES examples, and a few
-# settings. Anything bigger is not a request this server makes sense of.
+# A request body is one image as base64 and a few settings. Anything
+# bigger is not a request this server makes sense of.
 MAX_SETTINGS_BYTES = 64 * 1024
-MAX_BODY_BYTES = (
-    base64_length(MAX_IMAGE_BYTES) + MAX_EXAMPLES * base64_length(MAX_EXAMPLE_BYTES) + MAX_SETTINGS_BYTES
-)
+MAX_BODY_BYTES = base64_length(MAX_IMAGE_BYTES) + MAX_SETTINGS_BYTES
 
 # Two boxes that overlap by more than this much (intersection over union)
 # are one object, and the lower-scoring one is dropped. 0.3 is the value
@@ -98,12 +89,6 @@ ROUTE_TABLE = {
         "path": "/v1/vision/embeddings",
         "fields": ["boxes"],
     },
-    "matches": {
-        "path": "/v1/vision/matches",
-        "fields": ["examples", "threshold"],
-        # A guess, to be measured on real photos and drawings.
-        "default_threshold": 0.6,
-    },
     "regions": {
         "path": "/v1/vision/regions",
         "fields": ["limit"],
@@ -162,7 +147,7 @@ FAMILIES = {
         "engine": "transformers",
         "runner": "Owlv2Runner",
         "identify_architecture": "Owlv2ForObjectDetection",
-        "routes": ["detections", "matches", "regions"],
+        "routes": ["detections", "regions"],
         # The OWLv2 model card's threshold. A real object often scores 0.2
         # to 0.4, so Florence-2's 0.3 would drop many.
         "default_threshold_detections": 0.1,
@@ -329,22 +314,6 @@ def _boxes_of(rules, route, body):
     return [{key: float(box[key]) for key in ("x", "y", "width", "height")} for box in boxes]
 
 
-def _examples_of(rules, route, body):
-    """The bytes of each example picture."""
-    examples = body.get("examples")
-    if not isinstance(examples, list) or not examples or len(examples) > MAX_EXAMPLES:
-        raise RequestError(
-            f"examples must be a list of 1 to {MAX_EXAMPLES} pictures of the thing to find, each as base64."
-        )
-    found = []
-    for index, example in enumerate(examples):
-        try:
-            found.append(image_bytes_of(example, MAX_EXAMPLE_BYTES))
-        except ImageDataError as err:
-            raise RequestError(f"examples[{index}]: {err}")
-    return found
-
-
 # The one function that checks each field a route may take. Each takes
 # (rules, route, body) and returns the field's checked value, or raises
 # RequestError saying what the field takes.
@@ -354,7 +323,6 @@ FIELD_CHECKS = {
     "limit": _limit_of,
     "detail": _detail_of,
     "boxes": _boxes_of,
-    "examples": _examples_of,
 }
 
 
@@ -436,17 +404,6 @@ def square_padding(width, height):
     the (left, top) offset that centers the crop in it."""
     side = max(width, height)
     return side, ((side - width) // 2, (side - height) // 2)
-
-
-def average_directions(vectors):
-    """The element-wise mean of `vectors`, each first scaled to length 1.
-    Without the scaling, a long vector would count for more than a short
-    one."""
-    scaled = []
-    for vector in vectors:
-        length = sum(value * value for value in vector) ** 0.5
-        scaled.append([value / length for value in vector] if length > 0 else list(vector))
-    return [sum(values) / len(scaled) for values in zip(*scaled)]
 
 
 def square_box_to_image(box, width, height):

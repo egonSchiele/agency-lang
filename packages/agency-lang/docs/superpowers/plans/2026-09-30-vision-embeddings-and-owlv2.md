@@ -1,4 +1,4 @@
-# `std::vision` embeddings, matches, and regions: implementation plan
+# `std::vision` embeddings and regions: implementation plan
 
 **Spec:** `docs/superpowers/specs/2026-09-30-vision-embeddings-and-owlv2.md`.
 Read it first, then `docs/dev/llm/local-vision.md`, which describes the
@@ -8,9 +8,17 @@ server this plan extends, and
 **Branch:** `vision-embed-spec`, based on main. One PR.
 
 **Goal:** Two model families on the vision server, DINOv2 and OWLv2,
-three new routes, and `embedImage`, `findByExample`, and `findRegions`
-in `std::vision`, so a program can find one person's own objects from a
-few example crops.
+two new routes, and `embedImage` and `findRegions` in `std::vision`, so
+a program can find one person's own objects from a few example crops.
+
+**Changed after Task 4's measurement.** The plan first had a third
+route, `/matches`, and a `findByExample` function: search by example
+with OWLv2. The measurement at the start of Task 4 showed it does not
+work (see "Search by example, tried and dropped" in the spec), and the
+owner chose to drop it. Tasks 1 to 3 were built with it, and a commit
+after Task 3 removes the `matches` route, the `examples` field, the
+larger body limit, and `average_directions`. Tasks 4 to 9 below no
+longer mention it.
 
 ## Architecture
 
@@ -43,8 +51,8 @@ row in `VISION_TASKS`, a method on a runner, and a function in
   onnxruntime, or Pillow. The existing import test covers it.
 - No route method on a runner holds a threshold comparison, a sort, a
   unit conversion, or a merge. Those are in `kept_boxes`.
-- An image still reaches the server as bytes. The examples of
-  `/matches` are bytes too. The server opens no file a request names.
+- An image still reaches the server as bytes. The server opens no file
+  a request names.
 - Every file a stdlib function reads is resolved before the first
   interrupt and read with `approvedFileBytes` after approval.
 - No new effect.
@@ -310,25 +318,25 @@ about its three routes into the shape the new routes need.
 
 **Files:** `lib/cli/visionServer.py`, `lib/cli/visionServer.test.ts`.
 
-1. Before writing any of this task, measure the two things it rests
-   on. Download `google/owlv2-base-patch16-ensemble` and write a
-   throwaway script, not committed, that runs `embed_image_query` and
-   `class_predictor` on a few photos and a few drawings. Print the
-   sigmoid scores for boxes that are the object and boxes that are
-   not, with one example and with four averaged.
-
-   - If the scores of true matches sit clearly above the others, note
-     the range and go on. It sets the `matches` default in Task 9.
-   - If they do not, or if averaging is worse than one example, stop.
-     The design of `/matches` needs to change, and that is a question
-     for the owner.
+1. The measurement this task started with is done, and it dropped
+   `/matches`. It also showed two things the runner must do:
+   - `Owlv2ImageProcessorPil` resizes with scipy, which the serve
+     environment does not install. The runner pads the image to a
+     square on the bottom and the right, in the processor's mid-gray,
+     and resizes it to the processor's size with Pillow. It then calls
+     the processor with `do_pad=False` and `do_resize=False`, so the
+     processor only rescales and normalizes. Detection through this
+     path found all four objects in the test photo.
+   - Regions come from `model.objectness_predictor` on the image
+     features, with no text. Running the whole model with a
+     placeholder label gives the same scores and also runs the text
+     encoder.
 2. `Owlv2Runner`, loaded with `transformers.Owlv2ForObjectDetection`
-   and the same flags as the others. Build its processor by name:
-   `Owlv2Processor` from `Owlv2ImageProcessorPil` and the tokenizer.
-   `AutoProcessor` reaches the Pillow class today only by falling back
-   when torchvision is missing, and the family table is meant to
-   decide what is imported.
-3. Five torch methods. The three that score boxes return the same
+   and the same flags as the others. Load `Owlv2ImageProcessorPil` and
+   the tokenizer by name. `AutoProcessor` reaches the Pillow class
+   today only by falling back when torchvision is missing, and the
+   family table is meant to decide what is imported.
+3. Three torch methods. The two that score boxes return the same
    shape: a list of scores, and a list of boxes as `[x1, y1, x2, y2]`
    in 0..1 of the padded square, made with `center_to_corners_format`.
    The line numbers are in `modeling_owlv2.py` of transformers 5.17.
@@ -340,15 +348,9 @@ about its three routes into the shape the new routes need.
    - `_label_scores(image, labels)`: run the model with the labels as
      text. Returns scores, boxes, and a third list, the index of each
      box's best label. The score is the sigmoid of that label's logit.
-   - `_query_of(example)`: `_features`, then `model.embed_image_query`
-     (line 1289). Returns the embedding as a list of numbers, or `None`
-     when it found no box.
-   - `_query_scores(image, query)`: `_features`, then
-     `model.class_predictor` with the query as a `(1, 1, dim)` tensor,
-     and `model.box_predictor`. Returns scores and boxes.
-   - `_objectness(image)`: run the model with the one label
-     `PLACEHOLDER_LABEL = "object"`. Returns the sigmoid of
-     `objectness_logits`, and the boxes.
+   - `_objectness(image)`: `_features`, then
+     `model.objectness_predictor` and `model.box_predictor`. Returns
+     the sigmoid of each objectness logit, and the boxes.
 4. The route methods. Each gets raw boxes from one torch method and
    says what it wants from `kept_boxes`:
 
@@ -362,27 +364,13 @@ about its three routes into the shape the new routes need.
            for found in kept
        ]}
 
-   def matches_of(self, image, request):
-       query = average_directions(self._queries_of(request["examples"]))
-       scores, boxes = self._query_scores(image, query)
-       kept = kept_boxes(scores, boxes, *image.size, request["threshold"], MERGE_IOU, MAX_REPLY_BOXES)
-       return {"detections": [
-           {"label": MATCH_LABEL, "score": found["score"], "box": found["box"]}
-           for found in kept
-       ]}
-
    def regions_of(self, image, request):
        scores, boxes = self._objectness(image)
        kept = kept_boxes(scores, boxes, *image.size, 0.0, MERGE_IOU, request["limit"])
        return {"regions": [{"score": found["score"], "box": found["box"]} for found in kept]}
    ```
 
-   The real code breaks the long lines. `MATCH_LABEL = "match"`.
-
-   `_queries_of(examples)` opens each example with `open_image` and
-   calls `_query_of`. When one returns `None`, it raises a
-   `RequestError` that names the example's index and says an example
-   should be a tight crop.
+   The real code breaks the long lines.
 5. `Florence2Runner.regions_of`: `_run` with the row's `task_regions`.
    Its boxes are already in pixels, so it uses `normalized_box` as
    `detections_of` does. Each scores 1. It keeps the first `limit`.
@@ -393,14 +381,9 @@ about its three routes into the shape the new routes need.
    check only what each route asks of it:
    - `detections_of` labels each box with the label at its best index,
      and keeps two overlapping boxes
-   - `matches_of` with fake queries `[2, 0]` and `[0, 1]` calls
-     `_query_scores` with `[0.5, 0.5]`, reports the fake scores
-     unchanged, merges two overlapping boxes, and labels each `match`
-   - `matches_of` refuses, naming index 1, when the second `_query_of`
-     gives `None`
    - `regions_of` returns at most `limit` boxes in score order
    - Florence-2's `regions_of` sends `<REGION_PROPOSAL>` and scores 1
-8. Commit: `Serve OWLv2 detections, matches, and regions`.
+8. Commit: `Serve OWLv2 detections and regions`.
 
 ## Task 5: One table for tasks, and the file list
 
@@ -449,10 +432,10 @@ the new functions need.
 
    ```ts
    type VisionAsk = { question: string; dir: string; filename: string };
-   type VisionFiles = { image: string; examples: string[]; asks: VisionAsk[] };
+   type VisionFiles = { image: string; asks: VisionAsk[] };
    ```
 
-   with one ask, for the image. Task 7 gives it examples.
+   with one ask, for the image.
 5. `vision.agency`: the three functions each become the same three
    statements, which is the shape `generateImageLocal` has:
 
@@ -498,17 +481,14 @@ path but the image server's, that limit is the 10 MB default in
 `lib/serve/constants.ts`. So a vision request over 10 MB is refused at
 the door today, though `vision.ts` and `visionRules.py` both allow a
 50 MB image. An 8 MB photo is already too large once it is base64.
-This task fixes that, and the new routes need it: a `matches` request
-can be far larger.
+This task fixes that.
 
 **Files:** `lib/stdlib/vision.ts`, `lib/cli/mlxServer.ts`,
 `lib/cli/mlxServer.test.ts`, `lib/cli/visionServer.test.ts`.
 
-1. `vision.ts` gains `MAX_EXAMPLE_BYTES = 10_000_000` and
-   `MAX_EXAMPLES = 4`, each with a comment naming its twin in
-   `visionRules.py`, and `visionBodyBytes()`: the largest body a vision
+1. `vision.ts` gains `visionBodyBytes()`: the largest body a vision
    request may have, computed the way `MAX_BODY_BYTES` in
-   `visionRules.py` is since Task 2.
+   `visionRules.py` is.
 2. `bodyLimit` in `mlxServer.ts` becomes a lookup in a small table from
    path to limit: the image path to `localBodyBytes()`, and each path
    in `VISION_TASKS` to `visionBodyBytes()`. A path that is not in the
@@ -517,8 +497,8 @@ can be far larger.
    - `mlxServer.test.ts`: a vision request over 10 MB and under the
      vision limit reaches the stand-in server, and one over the vision
      limit is refused
-   - `visionServer.test.ts`: `visionBodyBytes()`, `MAX_EXAMPLE_BYTES`,
-     and `MAX_EXAMPLES` equal the rules module's
+   - `visionServer.test.ts`: `visionBodyBytes()` equals the rules
+     module's `MAX_BODY_BYTES`
 4. Commit: `Let a vision request be as large as the vision server allows`.
    Say in the PR description that this fixes a bug on main.
 
@@ -527,68 +507,49 @@ can be far larger.
 **Files:** `lib/stdlib/vision.ts`, `lib/stdlib/vision.test.ts`,
 `stdlib/vision.agency`, `tests/agency/vision.agency`,
 `tests/agency/vision.test.json`, `lib/cli/serveLog.ts`,
-`lib/cli/serveLog.test.ts`, `lib/cli/visionServer.test.ts`, and a new
-`tests/agency-js/vision-find-by-example/`.
+`lib/cli/serveLog.test.ts`, and `lib/cli/visionServer.test.ts`.
 
-1. Three rows in `VISION_TASKS`:
+1. Two rows in `VISION_TASKS`:
 
    | Task | `replyField` | `numbered` | `logNoun` | `logBody` |
    |---|---|---|---|---|
    | `embeddings` | `embeddings` | no | `embedding` | no |
-   | `matches` | `detections` | yes | `detection` | yes |
-   | `regions` | `regions` | yes | `region` | yes |
+      | `regions` | `regions` | yes | `region` | yes |
 
 2. `describeRequest` in `serveLog.ts` shows a vision request's `image`
-   and `examples` as a note of their count and size, as it already
-   does for the image server's fields. Without this, one verbose log
-   line could hold 120 MB of base64.
-3. `_visionFiles` takes two more arguments, `examples` and
-   `exampleQuestion`, both with defaults that mean "none". It refuses
-   more than `MAX_EXAMPLES`, resolves every path, and returns the
-   image's ask followed by one ask per example.
-4. Three exports, each one call to `visionCall`:
+   as a note of its size, as it already does for the image server's
+   fields. Without this, one verbose log line could hold 67 MB of
+   base64.
+3. (Dropped with `findByExample`.)
+4. Two exports, each one call to `visionCall`:
    - `_embedImage(spelling, model, boxes)` sends `boxes` as given. A
      null goes as JSON `null`, which the server reads as the whole
      image.
    - `_findRegions(spelling, model, limit)`.
-   - `_findByExample(spelling, examples, model, threshold)` reads each
-     example with `approvedBase64(example, MAX_EXAMPLE_BYTES)`, returns
-     the first error if there is one, and sends the rest as
-     `examples`.
 5. `_detectObjects` takes `threshold: number | null` and sends it as
    given. The message in `checkVisionModel` names an embedding model
    as well as detectors and taggers.
 6. `vision.agency`:
    - `detectObjects`: `threshold: number | null = null`. The `@param`
      lines for `labels` and `threshold` say which model does what.
-   - `Region`, `embedImage`, `findRegions`, and `findByExample`, with
-     the spec's signatures. Each is the three statements from Task 5.
-     `findByExample` checks that `examples` is not empty first, and
-     passes the two questions from the spec to `_visionFiles`.
-   - The docstrings follow the spec: three sentences for `embedImage`,
-     and the tight-crop advice for `findByExample`. The longer
-     explanation and the cat example go in the module doc comment.
-   - The comment above the effect says six functions.
+   - `Region`, `embedImage`, and `findRegions`, with the spec's
+     signatures. Each is the three statements from Task 5.
+   - The docstrings follow the spec: three sentences for `embedImage`.
+     The longer explanation and the cat example go in the module doc
+     comment.
+   - The comment above the effect says five functions.
 7. Tests:
    - `vision.test.ts`, against the stand-in server: the body each new
      function sends, `boxes` sent as given, null `boxes` sent as
-     `null`, a null threshold sent as `null`, an example over 10 MB
-     refused before any request, and regions numbered
-   - `serveLog.test.ts`: a vision request's `image` and `examples` are
-     shown as a note, a matches reply counts detections, a regions
-     reply counts regions, and an embeddings reply is logged as
+     `null`, a null threshold sent as `null`, and regions numbered
+   - `serveLog.test.ts`: a vision request's `image` is shown as a
+     note, a regions reply counts regions, and an embeddings reply is
+     logged as
      `<2 embeddings>` with no numbers in the body
    - `tests/agency/vision.agency`: a payload node for each new task,
      with a rejecting handler
-   - `tests/agency-js/vision-find-by-example/`, in the shape of
-     `image-generation-local-edit`, with a stand-in server:
-     - the image is asked about first, then each example in order,
-       each with its own message
-     - all approved: one request, holding the image and both examples
-     - one example rejected: no request
-     - a missing example: a failure, and no interrupt at all
 8. Run `make`, which also regenerates `docs/site/stdlib/vision.md`.
-9. Commit: `embedImage, findByExample, and findRegions in std::vision`.
+9. Commit: `embedImage and findRegions in std::vision`.
 
 ## Task 8: The catalog and the banner
 
@@ -632,12 +593,6 @@ drawings. The owner runs it, or provides ten pages and a few photos.
 2. Run the photo half and the drawing half from the spec's test list.
    Record every number.
 3. Settle from the results:
-   - the default threshold of `/matches`, in its `ROUTE_TABLE` row,
-     starting from the range Task 4 measured
-   - whether averaging the examples beats the best single example. If
-     it does not, the spec needs a change before this ships, and that
-     is a question for the owner.
-   - whether a wide or tall example needs the runner to pad it
    - whether white padding beats gray on drawings. If it does, add the
      `padding` field in a follow-up.
    - whether DINOv2 separates the drawings. If it does not, write that
@@ -660,9 +615,5 @@ drawings. The owner runs it, or provides ten pages and a few photos.
 
 ## Not in this plan
 
-- Splitting this into two PRs, DINOv2 first and OWLv2 second. The
-  DINOv2 half carries little risk and could land while `/matches` is
-  being measured. That is the owner's call. Task 4 is the only task that
-  waits on that measurement.
 - Anything in `2026-09-30-std-vectors.md`. The cat example here uses a
   few lines of Agency and does not wait for it.

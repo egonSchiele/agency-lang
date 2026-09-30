@@ -61,9 +61,12 @@ pipeline classes and their defaults:
 | `Flux2KleinPipeline` | 4 | 50 | 1.0 | no |
 | `StableDiffusionXLPipeline` | 28 | 80 | 5.5 | yes |
 
-Each row lists the exact component libraries and classes allowed in
-`model_index.json`. The server rejects missing or extra components and
-unexpected classes before importing diffusers. It loads the pipeline
+Each row lists the component libraries and classes allowed in
+`model_index.json`. Most components allow exactly one class. SDXL's
+scheduler allows two, `EulerDiscreteScheduler` and
+`EulerAncestralDiscreteScheduler`, because many community finetunes
+ship the second. The server rejects missing or
+extra components and unexpected classes before importing diffusers. It loads the pipeline
 class named by the table. It does not let the model file choose imports.
 
 The table also specifies required settings. FLUX.2 klein requires

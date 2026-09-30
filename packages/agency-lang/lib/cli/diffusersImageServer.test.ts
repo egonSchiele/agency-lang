@@ -221,6 +221,16 @@ describe.skipIf(!hasPython3)("diffusersImageRules.py", () => {
     );
   });
 
+  it("takes any class the table allows for a component, and names them all in a refusal", () => {
+    // Many community SDXL finetunes name the ancestral sampler.
+    expect(
+      familyOf({ ...SDXL_INDEX, scheduler: ["diffusers", "EulerAncestralDiscreteScheduler"] }),
+    ).toBe("SDXL");
+    expect(familyOf({ ...SDXL_INDEX, scheduler: ["diffusers", "DDIMScheduler"] })).toBe(
+      "REFUSED SDXL's \"scheduler\" must be ['diffusers', 'EulerDiscreteScheduler'] or ['diffusers', 'EulerAncestralDiscreteScheduler']. This model_index.json says ['diffusers', 'DDIMScheduler'].",
+    );
+  });
+
   it("refuses a component the table does not list, and one it is missing", () => {
     expect(familyOf({ ...ZIMAGE_INDEX, safety_checker: ["mymodule", "Checker"] })).toBe(
       'REFUSED Z-Image Turbo has no component "safety_checker", and this model_index.json names one.',

@@ -3,6 +3,7 @@
   ABOVE the resolution / slot / shared layers: it imports from them, and
   nothing they own imports back, so there is no import cycle. */
 
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import {
   printLocalCatalog,
   localModelsSupported,
@@ -343,12 +344,12 @@ export def parseModelsFilters(cmd: string): ModelFilters {
 def pickGuidedLocalModel(): string {
   if (!isTTY()) {
     printLocalCatalog()
-    process.exit(0)
+    _exit(0)
   }
   if (!localModelsSupported()) {
     print(color.yellow("Local models need the smoltalk-llama-cpp package."))
     print("Install it, then re-run:  ! npm i -g smoltalk-llama-cpp")
-    process.exit(1)
+    _exit(1)
   }
   const items = map(listModelNames(), \modelName -> { key: modelName.name, label: modelName.name })
   const choice = chooseOption(
@@ -359,7 +360,7 @@ def pickGuidedLocalModel(): string {
     allowCancel: true,
   )
   if (choice == "" || choice == null) {
-    process.exit(0)
+    _exit(0)
   }
   return choice
 }
@@ -381,7 +382,7 @@ export def pickModelsForAgent(args: Record<string, any>) {
   const parsed = modelFlagsFromArgs(args)
   if (parsed is failure(reason)) {
     print(color.red(reason))
-    process.exit(1)
+    _exit(1)
     return
   }
   setStartupModelFlags(withGuidedLocal(parsed.value), getModelSettings(loadSettings()))
@@ -389,7 +390,7 @@ export def pickModelsForAgent(args: Record<string, any>) {
   const applied = applyModelRequest(request, _startupModelSettings)
   if (applied is failure(reason)) {
     print(reason)
-    process.exit(1)
+    _exit(1)
     return
   }
   configureSearch(requestIsLocal(request))

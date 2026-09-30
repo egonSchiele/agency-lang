@@ -8,6 +8,7 @@ import { JSONEdge } from "./types.js";
 import { makeRedactReplacer } from "./runtime/redactForStatelog.js";
 import type { GlobalStore } from "./runtime/state/globalStore.js";
 import { __globals } from "./runtime/asyncContext.js";
+import { sendStatelogPost } from "./statelogSender.js";
 
 // Bump this when the wire format changes in a way the viewer needs
 // to notice. The viewer rejects files with a higher version.
@@ -155,11 +156,6 @@ export class StatelogClient {
   // apiKey disables ONLY the remote send; local sinks (logFile, stdout)
   // still receive events.
   private remoteEnabled: boolean = false;
-  // In-flight remote POSTs. Each event's network round-trip is fired
-  // without being awaited (so execution never blocks on telemetry), and
-  // tracked here so `flush()` can drain them at the end of a run before
-  // the process exits.
-  private inFlight: Set<Promise<unknown>> = new Set();
   // The "root" span stack — used by the outer agent run thread. Code
   // running inside `runInBranchContext` sees a branch-local stack
   // delivered via AsyncLocalStorage instead.
@@ -208,17 +204,19 @@ export class StatelogClient {
     }
 
     // Decide whether the remote sink is usable. The remote sink (any
-    // host that isn't "stdout") requires an apiKey. If the host is set
-    // but the key is missing, we keep the client enabled (so local
+    // host that isn't "stdout") needs a host, a project id, and an apiKey,
+    // all three. There is no default host or project: an apiKey exported
+    // for some other project must never turn on remote logging by itself.
+    // When any of the three is missing we keep the client enabled (so local
     // sinks still work) but skip the http POST inside `post()`.
     const hostLower = this.host.toLowerCase();
     const isRemoteHost = !!this.host && hostLower !== "stdout";
     if (isRemoteHost) {
-      if (this.apiKey) {
+      if (this.apiKey && this.projectId) {
         this.remoteEnabled = true;
       } else if (this.debugMode) {
         console.warn(
-          "StatelogClient: remote host configured without apiKey — remote sink disabled. Local sinks (stdout/logFile) will still receive events.",
+          "StatelogClient: remote host configured without a projectId or apiKey — remote sink disabled. Local sinks (stdout/logFile) will still receive events.",
         );
       }
     }
@@ -1618,55 +1616,22 @@ export class StatelogClient {
     // sink keeps working without firing unauthenticated requests.
     if (!this.remoteEnabled) return;
 
+    // Nothing waits for the request during a run, not even a node
+    // returning. The sender tracks it so an exit can wait for it.
     try {
-      const fullUrl = new URL("/api/logs", this.host);
-      const url = fullUrl.toString();
-
-      // Bound each remote send by `requestTimeoutMs` so a slow or
-      // unreachable statelog host cannot wedge process exit. The
-      // request still completes asynchronously; on timeout it just
-      // aborts with no retry.
-      const request = fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+      sendStatelogPost({
+        url: new URL("/api/logs", this.host).toString(),
+        apiKey: this.apiKey,
         body: postBody,
-        signal: AbortSignal.timeout(this.requestTimeoutMs),
-      }).catch((err) => {
-        if (this.debugMode) console.error("Failed to send statelog:", err);
+        timeoutMs: this.requestTimeoutMs,
+        debugMode: this.debugMode,
       });
-
-      // Detach the network round-trip from the caller's await chain so
-      // execution never blocks on telemetry delivery. Awaiting each POST
-      // used to add ~1.8s to agent startup — one blocked round-trip per
-      // init-time interrupt. Track the request so `flush()` can drain it
-      // before the process exits; the `.catch` above guarantees no
-      // UnhandledPromiseRejection if it later fails or aborts. (`noWait`
-      // is now the default for every event; the option is kept for
-      // source compatibility.)
-      const tracked: Promise<unknown> = request.finally(() => {
-        this.inFlight.delete(tracked);
-      });
-      this.inFlight.add(tracked);
     } catch (err) {
       if (this.debugMode)
         console.error("Error sending log in statelog client:", err, {
           host: this.host,
         });
     }
-  }
-
-  /**
-   * Await every in-flight remote POST. Remote sends are fire-and-forget
-   * (see `post`), so call this at the end of a run — before the process
-   * exits — to make sure detached telemetry is actually delivered. A
-   * no-op when observability is off or nothing is in flight.
-   */
-  async flush(): Promise<void> {
-    if (this.inFlight.size === 0) return;
-    await Promise.allSettled([...this.inFlight]);
   }
 }
 

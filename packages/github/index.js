@@ -16,7 +16,6 @@ import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync } from "fs";
 import { z } from "agency-lang/zod";
-import { nanoid } from "agency-lang";
 import path from "path";
 import {
   RuntimeContext,
@@ -67,7 +66,7 @@ const __dirname = path.dirname(__filename);
 const __cwd = __process.cwd();
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://statelog.adit.io",
+    host: "",
     apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false,
@@ -89,12 +88,6 @@ const __globalCtx = new RuntimeContext({
     },
     model: "gpt-5-mini",
     logLevel: "warn",
-    statelog: {
-      host: "https://statelog.adit.io",
-      projectId: "smoltalk",
-      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
-      traceId: nanoid()
-    },
     provider: "openai-responses"
   },
   dirname: __dirname,
@@ -116,7 +109,7 @@ function propagate() {
 function pass() {
   return { type: "pass" };
 }
-const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 const resumeFromCheckpoint = (paused, opts) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 const rewindFrom = (checkpoint2, overrides, opts) => _rewindFrom({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, metadata: opts?.metadata });
 const __resumeFromCheckpoint = (checkpoint2, overrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint: checkpoint2, overrides });
@@ -162,7 +155,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "be96120e84db6dd2c7567471c0fac66c013b4d02adcd2e3bce608d91cfd90ae5", import.meta.url);
+__registerModuleFingerprint("index.agency", "00869fdb3a7eb4a1eff5f8619bfb30abf7e3613656d24de2eb0143792ce3362e", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);

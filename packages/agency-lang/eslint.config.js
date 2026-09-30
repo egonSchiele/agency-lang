@@ -101,6 +101,27 @@ export default [
     },
   },
   {
+    // process.exit() kills log requests still on their way to a Statelog
+    // server. These directories run inside a user's program, so they exit
+    // through lib/runtime/exitProcess.ts (docs/dev/hosting/statelog.md).
+    files: ["lib/runtime/**/*.ts", "lib/serve/**/*.ts", "lib/stdlib/**/*.ts"],
+    ignores: ["**/*.test.ts", "lib/stdlib/__tests__/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportExpression",
+          message: "Dynamic imports are not allowed. Use static import statements.",
+        },
+        {
+          selector: "MemberExpression[object.name='process'][property.name='exit']",
+          message:
+            "Exit through exitProcess() in lib/runtime/exitProcess.ts, which sends pending logs first. Use exitProcessNow() where the exit cannot wait, and say why.",
+        },
+      ],
+    },
+  },
+  {
     files: ["lib/logsViewer/**/*.ts", "lib/eval/**/*.ts", "lib/runsExplorer/**/*.ts"],
     ignores: ["**/*.test.ts"],
     rules: {

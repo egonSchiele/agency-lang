@@ -158,7 +158,7 @@ screencapture.
 exit(code: number = 0)
 ```
 
-Terminate the process immediately with the given exit code. Use with caution. This skips any cleanup or pending operations.
+Terminate the process with the given exit code. Use with caution. This skips any cleanup or pending operations, except that it first sends any logs still on their way to a Statelog server.
   @param code - Exit code (0 for success, non-zero for failure)
 
 **Parameters:**

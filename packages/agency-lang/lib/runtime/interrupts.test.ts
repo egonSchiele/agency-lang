@@ -304,21 +304,21 @@ describe("reportUnhandledInterrupts", () => {
     vi.restoreAllMocks();
   });
 
-  it("does nothing when the result has no interrupts", () => {
+  it("does nothing when the result has no interrupts", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 
-    reportUnhandledInterrupts({ data: "the answer" });
+    await reportUnhandledInterrupts({ data: "the answer" });
 
     expect(err).not.toHaveBeenCalled();
     expect(exit).not.toHaveBeenCalled();
   });
 
-  it("prints a helpful message and exits non-zero for an unhandled interrupt", () => {
+  it("prints a helpful message and exits non-zero for an unhandled interrupt", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 
-    reportUnhandledInterrupts({
+    await reportUnhandledInterrupts({
       data: [
         interrupt({
           effect: "std::edit",
@@ -339,11 +339,11 @@ describe("reportUnhandledInterrupts", () => {
     expect(printed).toContain("https://agency-lang.com/guide/handlers.html");
   });
 
-  it("reports every interrupt when several are unhandled", () => {
+  it("reports every interrupt when several are unhandled", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 
-    reportUnhandledInterrupts({
+    await reportUnhandledInterrupts({
       data: [
         interrupt({ effect: "std::read", message: "read", data: {}, origin: "", runId: "r" }),
         interrupt({ effect: "std::edit", message: "edit", data: {}, origin: "", runId: "r" }),
@@ -502,11 +502,11 @@ describe("interrupt response API (moved to interruptResponse leaf, re-exported)"
     expect(approve()).toEqual({ type: "approve", value: undefined });
   });
 
-  it("reportUnhandledInterrupts accepts a minimal { data } InterruptResult", () => {
+  it("reportUnhandledInterrupts accepts a minimal { data } InterruptResult", async () => {
     const exit = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     vi.spyOn(console, "error").mockImplementation(() => {});
     // No RunNodeResult fields — just { data }, proving the generalized param.
-    reportUnhandledInterrupts({
+    await reportUnhandledInterrupts({
       data: [
         interrupt({
           effect: "std::edit",

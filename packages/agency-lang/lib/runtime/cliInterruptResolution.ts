@@ -39,7 +39,7 @@ export async function resolveCliInterrupts(
     return result;
   }
   if (isIpcMode() || !hasRunPolicyMechanism()) {
-    reportUnhandledInterrupts(result);
+    await reportUnhandledInterrupts(result);
     return result;
   }
 

@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { StatelogClient, StatelogConfig, getStatelogClient } from "./statelogClient.js";
+import { flushPendingStatelogPosts } from "./statelogSender.js";
 
 /** Make a unique temp file path for a logFile-based test. The file is NOT
  *  created — the client should create the parent dir and append on first
@@ -238,6 +239,63 @@ describe("StatelogClient", () => {
   });
 
   describe("apiKey requirement", () => {
+    it("remote host with no projectId sends nothing", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      const client = new StatelogClient({
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("hi", {});
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("an apiKey with no host sends nothing", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      const client = new StatelogClient({
+        host: "",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      });
+      await client.debug("hi", {});
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("flushPendingStatelogPosts waits for posts from every client", async () => {
+      const resolvers: ((r: Response) => void)[] = [];
+      vi.spyOn(globalThis, "fetch").mockImplementation(
+        () => new Promise<Response>((resolve) => resolvers.push(resolve)),
+      );
+      const config = {
+        host: "https://example.invalid",
+        apiKey: "secret",
+        projectId: "p",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+        requestTimeoutMs: 60_000,
+      };
+      await new StatelogClient(config).debug("a", {});
+      await new StatelogClient(config).debug("b", {});
+
+      let flushed = false;
+      const flushing = flushPendingStatelogPosts().then(() => {
+        flushed = true;
+      });
+      resolvers[0](new Response("", { status: 200 }));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(flushed).toBe(false);
+      resolvers[1](new Response("", { status: 200 }));
+      await flushing;
+      expect(flushed).toBe(true);
+    });
+
     it("remote host with no apiKey disables the client", async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch");
       const client = new StatelogClient({
@@ -285,11 +343,17 @@ describe("StatelogClient", () => {
     });
 
     it("agentEnd does not await the remote fetch (fire-and-forget)", async () => {
-      // fetch never resolves; if agentEnd awaited it, this test would
-      // hang. With noWait the call returns immediately.
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockImplementation(() => new Promise<Response>(() => {}));
+      // fetch settles only when the request times out; if agentEnd awaited
+      // it, this call would take 500ms. The timeout keeps the post from
+      // sitting in the process-wide pending list for the rest of the file.
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            (init as RequestInit | undefined)?.signal?.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            );
+          }),
+      );
       const client = new StatelogClient({
         host: "https://example.invalid",
         apiKey: "secret",
@@ -297,7 +361,7 @@ describe("StatelogClient", () => {
         traceId: "t",
         debugMode: false,
         observability: true,
-        requestTimeoutMs: 60_000,
+        requestTimeoutMs: 500,
       });
       const start = Date.now();
       await client.agentEnd({ entryNode: "main", timeTaken: 1 });
@@ -306,7 +370,7 @@ describe("StatelogClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
 
-    it("every event is fire-and-forget; flush() drains in-flight POSTs", async () => {
+    it("every event is fire-and-forget; a flush waits for the POSTs still in flight", async () => {
       // A remote POST that resolves only when we tell it to. If `debug`
       // awaited the fetch, the line after it could never run before we
       // resolve — proving non-blocking means `debug` returns first.
@@ -336,9 +400,9 @@ describe("StatelogClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(settled).toBe(false); // POST still in flight after debug() resolved
 
-      // flush() awaits the in-flight POST. Resolve it on the next tick so
+      // The flush awaits the in-flight POST. Resolve it on the next tick so
       // the flush promise is what actually unblocks.
-      const flushed = client.flush();
+      const flushed = flushPendingStatelogPosts();
       resolveFetch(new Response("", { status: 200 }));
       await flushed;
       expect(settled).toBe(true);

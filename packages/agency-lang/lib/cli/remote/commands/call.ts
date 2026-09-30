@@ -44,7 +44,7 @@ export async function runCall(
     if (!decide) {
       // No interrupt flag: a surfaced interrupt is reported unhandled and exits,
       // exactly like `agency run` with no policy flag.
-      reportUnhandledInterrupts(initialResult);
+      await reportUnhandledInterrupts(initialResult);
       console.log(renderResult(initialResult.data));
       return;
     }

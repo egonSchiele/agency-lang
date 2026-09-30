@@ -12,7 +12,7 @@ import {
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   __codeLiteral,
-  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
@@ -50,7 +50,7 @@ const __cwd = __process.cwd();
 
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://statelog.adit.io",
+    host: "",
     apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false,
@@ -72,12 +72,6 @@ const __globalCtx = new RuntimeContext({
     },
     model: "gpt-5-mini",
     logLevel: "warn",
-    statelog: {
-      host: "https://statelog.adit.io",
-      projectId: "smoltalk",
-      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
-      traceId: nanoid()
-    },
     provider: "openai-responses"
   },
   dirname: __dirname,
@@ -812,9 +806,10 @@ if (__process.argv[1] === fileURLToPath(import.meta.url)) {
     });
     await resolveCliInterrupts(__result, respondToInterrupts)
   } catch (__error: any) {
-    reportBudgetExceededAndExit(__error)
+    await reportBudgetExceededAndExit(__error)
     console.error(`
 Agent crashed: ${__error.message}`)
+    await flushPendingStatelogPosts()
     throw __error
   }
 }

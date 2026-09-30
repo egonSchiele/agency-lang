@@ -18,6 +18,7 @@ import { isFailure, success, failure } from "../runtime/result.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import prompts from "prompts";
 import { color } from "@/utils/termcolors.js";
+import { exitProcessNow } from "../runtime/exitProcess.js";
 
 // ---------------------------------------------------------------------------
 // Declarative TS bridge for `std::ui`. Exposes the existing
@@ -759,8 +760,9 @@ async function _runPrompt(question: prompts.PromptObject): Promise<any> {
     if (ctrlC) {
       // Ctrl+C escapes the entire prompt session. Drop straight out
       // of the process — even if the surrounding agency code has a
-      // retry loop, the user has signalled "quit, not retry."
-      process.exit(130);
+      // retry loop, the user has signalled "quit, not retry." Leave at
+      // once, without waiting on log uploads.
+      exitProcessNow(130);
     }
 
     // Cancellation paths:

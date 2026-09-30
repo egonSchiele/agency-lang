@@ -5,6 +5,7 @@ import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
 import { runInBootstrapFrame } from "./asyncContext.js";
+import { exitProcess } from "./exitProcess.js";
 import {
   resolveInvocation,
   type InvocationOptions,
@@ -157,7 +158,7 @@ export function hasInterrupts(data: any): data is Interrupt[] {
  * and this is never reached — there, the caller is expected to inspect
  * `result.data` / `respondToInterrupts` itself, so a returned interrupt is fine.
  */
-export function reportUnhandledInterrupts(result: InterruptResult): void {
+export async function reportUnhandledInterrupts(result: InterruptResult): Promise<void> {
   if (!hasInterrupts(result.data)) return;
   for (const it of result.data) {
     console.error(
@@ -168,7 +169,7 @@ export function reportUnhandledInterrupts(result: InterruptResult): void {
         `See the guide: https://agency-lang.com/guide/handlers.html`,
     );
   }
-  process.exit(1);
+  await exitProcess(1);
 }
 
 export function isDebugger(obj: any): obj is Interrupt {
@@ -802,12 +803,12 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
   }
   const failed = outcome.status === "threw";
   const served = await finishServedInvocation(execCtx, outcome, async () => {
+    // Remote statelog POSTs are not awaited here; see finalizeExecCtx.
     try {
       // A run that returned has already closed or paused its trace.
       if (failed) {
         await execCtx.closeTraceWriter();
       }
-      await execCtx.statelogClient.flush();
     } finally {
       execCtx.cleanup();
     }

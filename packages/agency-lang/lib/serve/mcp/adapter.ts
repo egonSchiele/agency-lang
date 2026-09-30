@@ -5,6 +5,7 @@ import type { PolicyStore } from "../policyStore.js";
 import type { InterruptHandlers } from "./interruptLoop.js";
 import { runWithPolicy } from "./interruptLoop.js";
 import { errorMessage } from "../util.js";
+import { exitProcess } from "../../runtime/exitProcess.js";
 import { unwrapServedInvocationOutcome } from "../../runtime/invocationUsage.js";
 
 function formatToolDescription(description: string, interruptEffects: InterruptEffect[]): string {
@@ -356,7 +357,8 @@ export function createMcpHandler(config: McpConfig): McpHandler {
         return success(message.id ?? null, {});
 
       case "exit":
-        process.exit(0);
+        // The last tool call's log requests may still be on their way.
+        return exitProcess(0);
 
       default:
         if (message.id !== undefined) {
@@ -423,3 +425,7 @@ export function startStdioServer(handler: McpHandler, toolSummary?: string[]): v
     }
   });
 }
+
+// Re-exported so a standalone server script can import it from the adapter it
+// already loads.
+export { exitOnShutdownSignal } from "../shutdown.js";

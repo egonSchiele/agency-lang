@@ -36,17 +36,32 @@ the top-level `observability` master switch:
   events, no network, no file writes, and the span helpers short-circuit.
   Everything below only happens when this is `true`.
 - **`host`** — remote Statelog server URL, or the literal `"stdout"` to print
-  JSON events to the console. If unset (and no `logFile`), `post()` returns early.
-- **`projectId`** — groups events by project in the dashboard.
+  JSON events to the console. There is no default: if unset (and no
+  `logFile`), `post()` returns early.
+- **`projectId`** — the project the events belong to. There is no default,
+  and the remote sink needs one.
 - **`apiKey`** — bearer token for the remote sink. Also read from the
-  `STATELOG_API_KEY` env var by `getStatelogClient`. A configured remote host
-  with no key keeps local sinks working but skips the HTTP POST.
+  `STATELOG_API_KEY` env var by `getStatelogClient`.
 - **`logFile`** — append every event as one JSON line to this path (local dev
   and tests). Compatible with `host`/`stdout` — all configured sinks receive
   every event.
 - **`debugMode`** — extra console diagnostics.
 - **`requestTimeoutMs`** — per-request timeout for the remote POST (`DEFAULT_REQUEST_TIMEOUT_MS`,
   1500ms) so a slow or unreachable host can't wedge end-of-run cleanup.
+
+The remote sink turns on only when `host`, `projectId`, and `apiKey` are all
+set. Missing any one keeps local sinks working but skips the HTTP POST. This
+is deliberate: a `STATELOG_API_KEY` exported for some other project must not
+turn on remote logging by itself.
+
+This package's own `agency.json` names no host and no project. That file is
+compiled into everything the package ships (the agents, the standard
+library), so a host there would be a default host for every user.
+`agency.local.json` is merged over it at compile time too, so do not publish
+from a checkout whose local file names a host. A test in
+`lib/backends/statelog.codegen.test.ts` checks the checked-in file. Commands
+that need a host (`agency eval upload`, `agency remote`, `agency deploy`)
+read it from `agency.local.json` or `--host`.
 
 A `traceId` is auto-generated per execution via `nanoid()` so every event from
 one run shares it.
@@ -79,9 +94,62 @@ Every event is serialized by `post()` into this envelope:
 - **Remote** — `POST {host}/api/logs` with `Authorization: Bearer <apiKey>`,
   bounded by `AbortSignal.timeout(requestTimeoutMs)`. Requires an apiKey.
 
-Remote sends are **fire-and-forget**: the fetch is not awaited (telemetry never
-blocks execution), but it is tracked in an `inFlight` set. Call `flush()` at
-end-of-run to drain in-flight POSTs before the process exits.
+Remote sends are **fire-and-forget**: the fetch is not awaited, and nothing
+during a run waits for it. A node returning does not wait either. That wait
+used to add 600 ms or more to every node run.
+
+One module sends every request, `lib/statelogSender.ts`. A client lives for
+one run, and a request it started can outlive that run, so the list of
+requests still on their way belongs to the process. `sendStatelogPost()` adds
+to the list and `flushPendingStatelogPosts()` waits for everything on it.
+
+### Exiting
+
+A process that ends on its own needs no flush, because Node keeps running
+until open requests finish. `process.exit()` kills them. Code in
+`lib/runtime`, `lib/serve`, and `lib/stdlib` exits through
+`lib/runtime/exitProcess.ts`, and a lint rule in `eslint.config.js` refuses a
+bare `process.exit()` in those directories. The module has two functions:
+
+- `exitProcess(code)` waits for the pending requests, then exits. The
+  per-request timeout bounds the wait. Print any message for the user before
+  calling it, so the message does not wait on the uploads.
+- `exitProcessNow(code)` exits at once and loses the pending requests. Each
+  call site says why it cannot wait.
+
+| Exit | Function |
+|---|---|
+| Budget trip (`reportBudgetExceededAndExit`) | `exitProcess` |
+| Unhandled interrupt (`reportUnhandledInterrupts`) | `exitProcess` |
+| Subprocess bootstrap, after its result is sent to the parent | `exitProcess` |
+| Stdlib `exit()` (`_exit`) | `exitProcess` |
+| MCP stdio server's `exit` method | `exitProcess` |
+| The agent's own exits, which call `_exit` | `exitProcess` |
+| Ctrl+C and signal handlers in `std::ui` and `std::ui/cli` | `exitProcessNow` |
+| Subprocess bootstrap, parent disconnected or no node run yet | `exitProcessNow` |
+| `std::args` help, version, and usage errors (a synchronous parse) | `exitProcessNow` |
+| A served program told to stop by SIGTERM or SIGINT (`lib/serve/shutdown.ts`) | `exitProcess` |
+| Entry node name not found (`cliEntry.ts`) | `exitProcessNow` |
+
+The generated entry point has one more case. A crash ends with an uncaught
+throw, which also kills open requests. The generated code prints the crash
+message, awaits `flushPendingStatelogPosts()`, and then throws.
+
+A TypeScript program that imports a compiled module, runs a node, and then
+calls `process.exit()` itself must await `flushPendingStatelogPosts()` first.
+It is exported from `agency-lang/runtime`.
+
+A served program does not end on its own. A hosting platform stops it with
+SIGTERM, and Node's default for that signal is to die at once. `agency serve`
+and the standalone server scripts call `exitOnShutdownSignal(server)`, which
+stops accepting connections, waits for the pending log requests, and exits 0.
+Requests still running at that moment are cut off, as they were before.
+
+The hosted server needs none of this. It runs programs inside its own
+long-lived process (`how-hosted-serving-works.md`), so requests finish in the
+background. The debugger (`lib/debugger/ui.ts`) and the language tools MCP
+server (`lib/mcp/server.ts`) are outside the lint rule. The first exits when
+the user quits, and the second never runs an Agency program.
 
 ## Redaction
 
@@ -245,6 +313,7 @@ given.
 
 - **Opt-in / graceful no-op** — disabled unless `observability` is true; with no
   host and no logFile, `post()` returns immediately.
-- **Non-blocking** — remote posts are detached; `flush()` drains them at exit.
+- **Non-blocking** — remote posts are detached; `exitProcess` waits for them
+  once, before the process exits.
 - **Format versioning** — bump `STATELOG_FORMAT_VERSION` when the wire format
   changes in a way a viewer must notice; viewers should reject a higher version.

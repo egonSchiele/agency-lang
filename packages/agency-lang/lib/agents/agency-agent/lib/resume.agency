@@ -4,6 +4,7 @@
   record. The files live in sessions.agency and the title in
   sessionTitle.agency.
 */
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { now } from "std::date"
 import { cwd } from "std::system"
 import { chooseOption, ChoiceItem } from "std::ui"
@@ -89,7 +90,7 @@ export def chooseSession(
     const found = findSession(resumeArg)
     if (found == null) {
       print(color.red("No saved session with id ${resumeArg} in ${cwd()}."))
-      process.exit(1)
+      _exit(1)
     }
     return found
   }
@@ -161,7 +162,7 @@ export def startSession(chosen: SessionRecord | null, brain: AgentBrain) {
   const cp = readCheckpointFile(chosen.id)
   if (cp == null) {
     print(color.red("The checkpoint file for session ${chosen.id} is missing or malformed."))
-    process.exit(1)
+    _exit(1)
   }
   print(color.dim("Resuming: ${chosen.title}"))
   showTranscript(_readTranscript(cp, brain.session))

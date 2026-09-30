@@ -6,6 +6,7 @@
  *   - Enable persistent memory so each subagent's `remember`/`recall`
  *     calls land in a stable on-disk knowledge graph.
  */
+import { _exit } from "agency-lang/stdlib-lib/system.js"
 import { registerLocalModel, localModelBackend, mlxServedName } from "std::agency/local"
 import { keys } from "std::object"
 import { setLlmOptions, envVarFor } from "std::llm"
@@ -520,7 +521,7 @@ export def configureLocalModel(value: string, embeddingSpec: string = "") {
     const resolvedEmbedding = resolveLocalEmbedding(embeddingSpec)
     if (isFailure(resolvedEmbedding)) {
       print(resolvedEmbedding.error)
-      process.exit(1)
+      _exit(1)
       return
     }
     embedding = resolvedEmbedding.value
@@ -530,7 +531,7 @@ export def configureLocalModel(value: string, embeddingSpec: string = "") {
   const backendResult = try localModelBackend(value)
   if (isFailure(backendResult)) {
     print(backendResult.error)
-    process.exit(1)
+    _exit(1)
     return
   }
   if (backendResult.value == "mlx") {
@@ -560,7 +561,7 @@ export def configureLocalModel(value: string, embeddingSpec: string = "") {
   const result = try registerLocalModel(value)
   if (isFailure(result)) {
     print(result.error)
-    process.exit(1)
+    _exit(1)
     return
   }
   const modelPath = result.value

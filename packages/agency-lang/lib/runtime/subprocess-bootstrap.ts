@@ -25,6 +25,9 @@ import {
   serializeInterruptsForIpc,
 } from "./ipc.js";
 import { hasInterrupts } from "./interrupts.js";
+// The exits below that use exitProcessNow happen before any node has run,
+// so there are no logs to send.
+import { exitProcess, exitProcessNow } from "./exitProcess.js";
 import { setRuntimeConfigOverrides } from "./configOverrides.js";
 import { setSubprocessRunInfo } from "./subprocessRunInfo.js";
 
@@ -40,12 +43,13 @@ let ipcPayloadLimit = Infinity;
 // else so no window exists where the parent can die unobserved.
 process.on("disconnect", () => {
   process.stderr.write("[bootstrap] parent disconnected — exiting\n");
-  process.exit(1);
+  // The parent is gone and nothing bounds this process any more: leave now.
+  exitProcessNow(1);
 });
 
 /**
  * Send an IPC message and wait for the channel to flush before resolving.
- * Callers that follow with `process.exit(...)` MUST `await` this — otherwise
+ * Callers that follow with an exit MUST `await` this — otherwise
  * the immediate exit can race with the async send and the parent will see
  * only an abnormal close, missing the structured message entirely.
  */
@@ -54,7 +58,7 @@ function sendOrDie(msg: IpcResultMessage | IpcErrorMessage | IpcInterruptedMessa
     console.error(
       "[bootstrap] No IPC channel — was this script run directly? It should only be forked by _run().",
     );
-    process.exit(1);
+    exitProcessNow(1);
   }
   ipcLog("send", msg);
   return new Promise<void>((resolve) => {
@@ -89,7 +93,7 @@ async function sendResultOrLimitError(
         samplePrefix,
       }),
     });
-    process.exit(1);
+    await exitProcess(1);
   }
   await sendOrDie(msg);
 }
@@ -103,7 +107,7 @@ async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
       type: "error",
       error: `Node "${msg.node}" not found in compiled module. Available exports: ${Object.keys(mod).join(", ")}`,
     });
-    process.exit(1);
+    exitProcessNow(1);
   }
 
   // Compiled nodes export a params list as __<nodeName>NodeParams.
@@ -114,14 +118,14 @@ async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
       type: "error",
       error: `Node params metadata "${paramsKey}" not found in compiled module. The module may have been compiled with an incompatible version.`,
     });
-    process.exit(1);
+    exitProcessNow(1);
   }
   const paramNames: string[] = mod[paramsKey];
 
   const call = resolveNodeCallArgs(msg, paramNames);
   if ("error" in call) {
     await sendOrDie({ type: "error", error: call.error });
-    process.exit(1);
+    exitProcessNow(1);
   }
   const positionalArgs = call.args;
 
@@ -150,7 +154,7 @@ async function executeResume(mod: any, msg: ResumeInstruction): Promise<any> {
       type: "error",
       error: `respondToInterrupts export not found in compiled module. The module may have been compiled with an incompatible version.`,
     });
-    process.exit(1);
+    exitProcessNow(1);
   }
   const interrupts = msg.interrupts.map((intr) => ({ ...intr, checkpoint: msg.checkpoint }));
   ipcLog("send", {
@@ -175,7 +179,7 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
       type: "error",
       error: `Unknown message type: ${(msg as any).type ?? "undefined"}`,
     });
-    process.exit(1);
+    exitProcessNow(1);
   }
 
   if (typeof msg.ipcPayload === "number") {
@@ -212,7 +216,7 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
       // applies to BOTH modes — a resumed child that pauses again
       // re-enters the same cycle (multi-cycle).
       await sendResultOrLimitError(serializeInterruptsForIpc(result.data));
-      process.exit(0);
+      await exitProcess(0);
     }
 
     await sendResultOrLimitError({
@@ -223,13 +227,13 @@ const bootstrapHandler = async (msg: RunInstruction | ResumeInstruction) => {
         messages: result.messages?.toJSON?.() ?? result.messages,
       },
     });
-    process.exit(0);
+    await exitProcess(0);
   } catch (err: any) {
     await sendOrDie({
       type: "error",
       error: err instanceof Error ? err.message : String(err),
     });
-    process.exit(1);
+    await exitProcess(1);
   }
 };
 process.on("message", bootstrapHandler);

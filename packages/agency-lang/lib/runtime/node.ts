@@ -206,11 +206,15 @@ async function initFreshExecCtx(
 
 /**
  * Tear down an execution context after a fresh run: persist any cached
- * MemoryManager state, drain fire-and-forget statelog POSTs, then release
- * resources. Memory writes are best-effort — a save failure is logged,
- * never thrown — and every cached manager is iterated so a fork branch's
- * side store isn't lost. Shared by `runNode` and `runExportedFunction`;
- * callers run their own span/trace teardown around this.
+ * MemoryManager state, then release resources. Memory writes are
+ * best-effort — a save failure is logged, never thrown — and every cached
+ * manager is iterated so a fork branch's side store isn't lost. Shared by
+ * `runNode` and `runExportedFunction`; callers run their own span/trace
+ * teardown around this.
+ *
+ * This does not wait for remote statelog POSTs. A node returns as soon as
+ * its work is done, and the log requests finish in the background. The
+ * process waits for them once, before it exits (`flushPendingStatelogPosts`).
  */
 async function finalizeExecCtx(execCtx: RuntimeContext<GraphState>): Promise<void> {
   for (const manager of execCtx.getAllCachedMemoryManagers()) {
@@ -220,17 +224,7 @@ async function finalizeExecCtx(execCtx: RuntimeContext<GraphState>): Promise<voi
       console.warn(`[memory] save failed: ${(err as Error).message}`);
     }
   }
-  // Remote statelog POSTs are fire-and-forget; drain any still in flight so
-  // telemetry is delivered before the context is released. cleanup() runs in a
-  // finally so a rejected flush never leaks the execution context — every
-  // invocation whose context was created releases it. A flush rejection still
-  // propagates (finishServedInvocation makes it the outcome when execution
-  // otherwise succeeded).
-  try {
-    await execCtx.statelogClient.flush();
-  } finally {
-    execCtx.cleanup();
-  }
+  execCtx.cleanup();
 }
 
 /**

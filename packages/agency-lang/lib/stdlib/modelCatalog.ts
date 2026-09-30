@@ -755,9 +755,11 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
   // Not served: `agency local download` puts one in client.controlnetsDir,
   // and an SDXL image server loads it when a request names it with a
   // control image. Sizes are the config and the one weights file kept.
+  // The backend is diffusers because the download is recorded that way;
+  // `agency local list` only ticks a row whose backend matches its files.
   "controlnet-scribble-sdxl": {
-    backend: "mlx",
-    uri: "mlx:xinsir/controlnet-scribble-sdxl-1.0",
+    backend: "diffusers",
+    uri: "diffusers:xinsir/controlnet-scribble-sdxl-1.0",
     params: "1.3B",
     sizeBytes: 2502140339,
     kind: "controlnet",
@@ -768,8 +770,8 @@ export const CURATED_LOCAL_MODELS: Record<string, ModelInfo> = {
       "Constrains an SDXL image to a rough line drawing: a stick figure becomes the pose. Give it a scribble as controlImage.",
   },
   "controlnet-openpose-sdxl": {
-    backend: "mlx",
-    uri: "mlx:xinsir/controlnet-openpose-sdxl-1.0",
+    backend: "diffusers",
+    uri: "diffusers:xinsir/controlnet-openpose-sdxl-1.0",
     params: "1.3B",
     sizeBytes: 2502140339,
     kind: "controlnet",

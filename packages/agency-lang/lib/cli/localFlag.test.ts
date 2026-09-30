@@ -111,6 +111,12 @@ describe("resolveLocalRunFlag for mlx", () => {
 });
 
 describe("resolveLocalRunFlag for diffusers", () => {
+  it("refuses a ControlNet and says where it goes", async () => {
+    await expect(resolveLocalRunFlag("controlnet-scribble-sdxl")).rejects.toThrow(
+      "controlnet-scribble-sdxl is a ControlNet, which an SDXL image server loads for a request. Pass it to generateImageLocal as the controlnet argument.",
+    );
+  });
+
   it("refuses an image model and says how to serve it", async () => {
     await expect(resolveLocalRunFlag("diffusers:Tongyi-MAI/Z-Image-Turbo")).rejects.toThrow(
       "diffusers:Tongyi-MAI/Z-Image-Turbo is an image model. Serve it with agency local serve --image diffusers:Tongyi-MAI/Z-Image-Turbo and call generateImageLocal.",

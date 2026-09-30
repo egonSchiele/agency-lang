@@ -389,6 +389,43 @@ describe("runRemove", () => {
     expect(output.some((l) => /(^|\s)-f\b/.test(l))).toBe(false);
   });
 
+  it("says to delete a ControlNet by hand, since it is outside the models directory", () => {
+    const folder = path.join(dir, "controlnets");
+    const controlnet = path.join(folder, "controlnet-scribble-sdxl");
+    fs.mkdirSync(controlnet, { recursive: true });
+    fs.writeFileSync(path.join(controlnet, "config.json"), "{}");
+    fs.writeFileSync(
+      path.join(controlnet, ".agency-model.json"),
+      JSON.stringify({
+        repo: "xinsir/controlnet-scribble-sdxl-1.0",
+        revision: "a",
+        files: {},
+        kind: "controlnet",
+      }),
+    );
+    fs.writeFileSync(aliasFile, JSON.stringify({ client: { controlnetsDir: folder } }));
+
+    runRemove("controlnet-scribble-sdxl", { force: false });
+    expect(output[1]).toBe(
+      `The model files are still at ${controlnet} (0.00 GB). They are outside the models directory, so delete them yourself if you want them gone.`,
+    );
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exit called");
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(() => runRemove("controlnet-scribble-sdxl", { force: true })).toThrow("exit called");
+      expect(err.mock.calls[0][0]).toBe(
+        "That model is not in the models directory; remove it yourself.",
+      );
+      expect(fs.existsSync(controlnet)).toBe(true);
+    } finally {
+      exitSpy.mockRestore();
+      err.mockRestore();
+    }
+  });
+
   it("never deletes a model in a Hugging Face cache", () => {
     const folder = path.join(models, "models--org--repo");
     const snapshot = path.join(folder, "snapshots", "abc");

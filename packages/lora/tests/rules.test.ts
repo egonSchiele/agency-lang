@@ -102,8 +102,9 @@ import json, os, tempfile
 from diffusersImageRules import FAMILIES, family_of
 sdxl = FAMILIES["StableDiffusionXLPipeline"]
 good = {"_class_name": "StableDiffusionXLPipeline", **sdxl["settings"]}
-good.update({k: v for k, v in sdxl["components"].items()})
-chroma = {"_class_name": "ChromaPipeline", **FAMILIES["ChromaPipeline"]["components"]}
+# Each component lists the [library, class] pairs it allows; the first will do.
+good.update({k: v[0] for k, v in sdxl["components"].items()})
+chroma = {"_class_name": "ChromaPipeline", **{k: v[0] for k, v in FAMILIES["ChromaPipeline"]["components"].items()}}
 evil = {**good, "unet": ["os", "system"]}
 def attempt(index):
     d = tempfile.mkdtemp()

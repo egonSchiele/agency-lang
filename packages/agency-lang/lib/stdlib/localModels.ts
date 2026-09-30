@@ -6,6 +6,7 @@ import {
   remove,
   readText,
   writeText,
+  isContained,
   type Root,
 } from "./contained.js";
 import * as os from "node:os";
@@ -774,12 +775,6 @@ export function _removeServedModel(
   return true;
 }
 
-/** Whether `child` is `parent` or somewhere below it. */
-function isInside(parent: string, child: string): boolean {
-  const rel = path.relative(parent, child);
-  return !path.isAbsolute(rel) && rel.split(path.sep)[0] !== "..";
-}
-
 /** Where a resolved model's files are on disk, or null when nothing is
  *  there. A GGUF model is found through the download manifest; an MLX model
  *  through its record under the cache, or the directory it points at.
@@ -803,7 +798,7 @@ export function _modelFilesOnDisk(
       : {
           path: f.path,
           sizeBytes: f.sizeBytes,
-          insideCache: isInside(dir, f.path),
+          insideCache: isContained(f.path, dir),
           layout: f.layout,
         };
   };

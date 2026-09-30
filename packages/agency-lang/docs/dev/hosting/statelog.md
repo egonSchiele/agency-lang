@@ -97,9 +97,11 @@ to the list and `flushPendingStatelogPosts()` waits for everything on it.
 ### A refused key
 
 The sender reads only the status of each reply. A 401 or 403 means the server
-refused this key for this project. The sender records the host and project,
-sends nothing more to that pair until the process exits, and prints one
-warning. The record belongs to the process because a served program makes a
+refused this key for this project. The sender records the host, the project, and a
+hash of the key. It sends nothing more with that key to that host and project
+until the process exits, and prints one warning. The key is part of the
+record because a hosted server runs invocations with different keys in one
+process. The record belongs to the process because a served program makes a
 new client for every request, and a record on the client would reset each
 time. Any other failure prints only in debug mode.
 

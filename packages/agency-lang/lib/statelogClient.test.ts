@@ -328,6 +328,27 @@ describe("StatelogClient", () => {
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
 
+    it("a refused key does not stop another key for the same project", async () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response("", { status: 401 }))
+        .mockResolvedValue(new Response("", { status: 200 }));
+      const config = {
+        host: "https://refused.example.invalid",
+        projectId: "two-keys",
+        traceId: "t",
+        debugMode: false,
+        observability: true,
+      };
+      await new StatelogClient({ ...config, apiKey: "revoked" }).debug("a", {});
+      await flushPendingStatelogPosts();
+      await new StatelogClient({ ...config, apiKey: "valid" }).debug("b", {});
+      await new StatelogClient({ ...config, apiKey: "revoked" }).debug("c", {});
+      await flushPendingStatelogPosts();
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
     it("keeps sending after a server error that is not a refusal", async () => {
       const fetchSpy = vi
         .spyOn(globalThis, "fetch")

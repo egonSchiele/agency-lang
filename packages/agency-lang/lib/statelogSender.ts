@@ -11,6 +11,8 @@
  * forgotten by the next request. It is recorded here, for the process.
  */
 
+import { createHash } from "node:crypto";
+
 export type StatelogPost = {
   host: string;
   projectId: string;
@@ -22,17 +24,22 @@ export type StatelogPost = {
 
 const pendingPosts: Promise<void>[] = [];
 
-// One entry per host and project whose key the server refused.
+// One entry per host, project, and key that the server refused. The key is
+// part of the entry because a hosted server runs many invocations in one
+// process, each with its own key: a revoked key must not stop a valid one
+// for the same project. The entry holds a hash, so the key is not kept in a
+// second place.
 const refusedTargets: string[] = [];
 
 function targetOf(post: StatelogPost): string {
-  return JSON.stringify([post.host, post.projectId]);
+  const keyHash = createHash("sha256").update(post.apiKey).digest("hex");
+  return JSON.stringify([post.host, post.projectId, keyHash]);
 }
 
 /**
  * A 401 or 403 means the server refused this key for this project, and every
- * later request would be refused the same way. Stop sending to that host and
- * project for the rest of the process, and say so once. Requests already on
+ * later request would be refused the same way. Stop sending with that key to
+ * that host and project for the rest of the process, and say so once. Requests already on
  * their way come back refused too, so only the first one prints.
  */
 function recordRefusal(post: StatelogPost, status: number): void {

@@ -104,7 +104,7 @@ agency run --approve std::read,std::ls --reject std::write agent.agency
 Notes:
 
 - The built-in names are `recommended`, `minimal`, `with-writes`, and `approve-all`.
-- `--approve` and `--reject` take comma-separated [effect](/guide/effects) names. Reject takes precedence, so if you have an effect in both approve and reject, it gets rejected.
+- `--approve` and `--reject` take comma-separated [effect](/guide/effects) names. You can also give either flag more than once. Reject takes precedence, so if you have an effect in both approve and reject, it gets rejected.
 - The [rules of handlers](/guide/handlers.md#the-rules-of-handlers) still apply. Think of this as just another handler.
 
 ### The `--interactive` flag

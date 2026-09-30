@@ -11,6 +11,15 @@ export function splitEffects(list: string | undefined): string[] {
   return list.split(/[\s,]+/).filter((s) => s.length > 0);
 }
 
+/** Joins the values of a flag given more than once, so
+ *  `--approve std::read --approve std::write` means the same as
+ *  `--approve std::read,std::write`. Commander calls this with each value
+ *  and what the earlier ones joined to. Without it, commander keeps only
+ *  the last value, and the effects named before it are dropped silently. */
+export function joinEffectFlags(value: string, previous: string | undefined): string {
+  return previous === undefined || previous === "" ? value : `${previous},${value}`;
+}
+
 /** Expand any built-in capability-set names in a flag's effect list to
  *  their member effects. A name with `::` is always a plain effect. A
  *  bare name that matches no set passes through as an effect name — bare

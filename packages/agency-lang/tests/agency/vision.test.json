@@ -19,6 +19,18 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
+      "nodeName": "embedPayload",
+      "input": "",
+      "expectedOutput": "\"std::vision|vision-probe.png|embeddings|dinov2-base\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "regionsPayload",
+      "input": "",
+      "expectedOutput": "\"regions|owlv2-base\"",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
       "nodeName": "rejectedIsFailure",
       "input": "",
       "expectedOutput": "\"rejected\"",

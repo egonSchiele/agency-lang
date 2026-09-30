@@ -66,6 +66,16 @@ describe("describeRequest", () => {
     expect(logged).not.toContain(image.slice(0, 100));
   });
 
+  it("shows a vision request's image as a note of its size", () => {
+    const image = Buffer.alloc(2_000_000).toString("base64");
+    const logged = describeRequest({ model: "org/a", image, labels: ["cat"] });
+    expect(JSON.parse(logged!)).toEqual({
+      model: "org/a",
+      image: "<1 image, 2.0 MB>",
+      labels: ["cat"],
+    });
+  });
+
   it("counts a list of images together", () => {
     const image = Buffer.alloc(1_400_000).toString("base64");
     const logged = describeRequest({ model: "org/a", control_image: [image, image, image] });
@@ -113,6 +123,34 @@ describe("describeReply", () => {
         { path: "/v1/vision/captions" },
       ).vision,
     ).toBe("1 caption");
+  });
+
+  it("counts regions, and logs embeddings by their count with no numbers", () => {
+    const reply = (body: unknown) => ({
+      status: 200,
+      body: JSON.stringify(body),
+      contentType: "application/json",
+      truncated: false,
+      totalBytes: 1,
+    });
+    const regions = describeReply(reply({ regions: [{ score: 0.9 }, { score: 0.5 }] }), {
+      path: "/v1/vision/regions",
+    });
+    expect(regions.vision).toBe("2 regions");
+    const embeddings = describeReply(
+      reply({
+        embeddings: [
+          [0.125, 0.5],
+          [0.25, 0.75],
+        ],
+      }),
+      {
+        path: "/v1/vision/embeddings",
+      },
+    );
+    expect(embeddings.vision).toBe("2 embeddings");
+    expect(embeddings.body).toBe("<2 embeddings>");
+    expect(embeddings.body).not.toContain("0.125");
   });
 
   it("indents a JSON reply and reads its usage", () => {

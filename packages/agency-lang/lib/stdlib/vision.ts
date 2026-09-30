@@ -3,7 +3,6 @@ import { _resolveModel, _mlxServedName, _localModelKindOf } from "./localModels.
 import { mlxBaseUrl, isNoServerError } from "./mlxServerModels.js";
 import { approvedFileBytes } from "./approvedPath.js";
 import { _realTarget } from "./contained.js";
-import { base64Length, REQUEST_SETTINGS_BYTES } from "./localImageInputs.js";
 import * as path from "node:path";
 
 /** The TypeScript half of `std::vision`: one HTTP call behind three thin
@@ -17,12 +16,18 @@ import * as path from "node:path";
  *  lib/cli/localServerCommon.py is the same, and a test compares them. */
 export const MAX_IMAGE_BYTES = 50_000_000;
 
+/** Room in a vision request for everything but its image.
+ *  `MAX_SETTINGS_BYTES` in lib/cli/visionRules.py is the same. */
+const VISION_SETTINGS_BYTES = 64 * 1024;
+
 /** The largest request body the vision server takes: the base64 of the
- *  largest image, and room for the settings. `MAX_BODY_BYTES` in
- *  lib/cli/visionRules.py is computed the same way, and a test compares
- *  them. The serve front door holds vision requests to it. */
+ *  largest image, four characters for every three bytes, and room for the
+ *  settings. `MAX_BODY_BYTES` in lib/cli/visionRules.py is computed the
+ *  same way, and a test compares them. The serve front door holds vision
+ *  requests to it. This module cannot import `base64Length` from
+ *  localImageInputs.ts, which imports `MAX_IMAGE_BYTES` from here. */
 export function visionBodyBytes(): number {
-  return base64Length(MAX_IMAGE_BYTES) + REQUEST_SETTINGS_BYTES;
+  return 4 * Math.ceil(MAX_IMAGE_BYTES / 3) + VISION_SETTINGS_BYTES;
 }
 
 /** What the client knows about one vision task.
@@ -66,6 +71,21 @@ export const VISION_TASKS: Record<string, VisionTaskRow> = {
     logNoun: "caption",
     logBody: true,
   },
+  // A hundred vectors of 768 numbers each is no use in a terminal.
+  embeddings: {
+    route: "/vision/embeddings",
+    replyField: "embeddings",
+    numbered: false,
+    logNoun: "embedding",
+    logBody: false,
+  },
+  regions: {
+    route: "/vision/regions",
+    replyField: "regions",
+    numbered: true,
+    logNoun: "region",
+    logBody: true,
+  },
 };
 
 type VisionTask = keyof typeof VISION_TASKS;
@@ -85,8 +105,9 @@ function checkVisionModel(model: string): { servedName: string } | { error: stri
     if (kind !== null && kind !== "vision") {
       return {
         error:
-          `"${model}" is ${kind === "image" ? "an" : "a"} ${kind} model, not a vision model. ` +
-          "Local vision models are detectors and taggers such as wd14-tagger and florence-2.",
+          `"${model}" is ${/^[aeiou]/.test(kind) ? "an" : "a"} ${kind} model, not a vision model. ` +
+          "Local vision models are detectors, taggers, and embedding models such as " +
+          "florence-2, owlv2-base, wd14-tagger, and dinov2-base.",
       };
     }
     return { servedName: _mlxServedName(resolved) };
@@ -199,12 +220,13 @@ export function _visionFiles(spelling: string, question: string): VisionFiles {
   };
 }
 
-/** Backs `std::vision.detectObjects`. */
+/** Backs `std::vision.detectObjects`. A null threshold is sent as JSON
+ *  null, which the server reads as the model's own default. */
 export async function _detectObjects(
   spelling: string,
   labels: string[],
   model: string,
-  threshold: number,
+  threshold: number | null,
 ): Promise<ResultValue> {
   return visionCall("detectObjects", "detections", spelling, model, { labels, threshold });
 }
@@ -226,4 +248,23 @@ export async function _captionImage(
   detail: string,
 ): Promise<ResultValue> {
   return visionCall("captionImage", "captions", spelling, model, { detail });
+}
+
+/** Backs `std::vision.embedImage`. Null boxes are sent as JSON null, which
+ *  the server reads as the whole image; an empty list embeds nothing. */
+export async function _embedImage(
+  spelling: string,
+  model: string,
+  boxes: unknown[] | null,
+): Promise<ResultValue> {
+  return visionCall("embedImage", "embeddings", spelling, model, { boxes });
+}
+
+/** Backs `std::vision.findRegions`. */
+export async function _findRegions(
+  spelling: string,
+  model: string,
+  limit: number,
+): Promise<ResultValue> {
+  return visionCall("findRegions", "regions", spelling, model, { limit });
 }

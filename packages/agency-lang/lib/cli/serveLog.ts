@@ -93,6 +93,11 @@ export type LogEntry = {
 
 export type LogOptions = { verbose: boolean; color: ColorFunction };
 
+/** The request fields that carry an image as base64: the image server's
+ *  input images, and the one image a vision request sends. The log shows
+ *  each as a note of its size. */
+const IMAGE_REQUEST_FIELDS = [...Object.keys(LOCAL_IMAGE_FIELDS), "image"];
+
 /** The request body for the log: the JSON that was forwarded, indented so a
  *  long messages array is readable. An input image is shown as a note of
  *  its count and size, never as its base64. */
@@ -101,7 +106,7 @@ export function describeRequest(body: Record<string, unknown>): string | null {
     return null;
   }
   const shown = { ...body };
-  for (const field of Object.keys(LOCAL_IMAGE_FIELDS)) {
+  for (const field of IMAGE_REQUEST_FIELDS) {
     if (field in shown) {
       shown[field] = imageNote(shown[field]);
     }

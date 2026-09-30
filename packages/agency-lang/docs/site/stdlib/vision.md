@@ -1,13 +1,14 @@
 ---
 name: "vision"
-description: "Find objects, tags, or a caption in an image with a vision model on this machine."
+description: "Find objects, tags, a caption, or embeddings in an image with a vision model on this machine."
 ---
 
 # vision
 
 Ask a local vision model about an image: which objects are where, which
-booru tags describe it, or a caption. The model must be running: start
-it with `agency local serve <model>`. The image never leaves the machine.
+booru tags describe it, a caption, or embeddings that say how parts of
+it look. The model must be running: start it with
+`agency local serve <model>`. The image never leaves the machine.
 
   ```ts
   import { detectObjects, tagImage } from "std::vision"
@@ -33,6 +34,75 @@ lines of your own code over them, and partial application narrows each:
 `detectObjects.partial(labels: ["person"], model: "florence-2")` is a
 person-finder.
 
+## Finding your own things
+
+A detector finds things by the name of their kind. It finds every mug,
+and cannot tell yours from the one next to it. To find your own mug, or
+the cats you draw, compare instead:
+
+1. `findRegions` boxes every thing in a picture, with no names. Where a
+   detector knows the kind, `detectObjects` gives the boxes instead.
+2. `embedImage` turns each box into an embedding: a list of numbers
+   that says how it looks. Things that look alike get embeddings that
+   are close together.
+3. Compare each box with embeddings of crops of your own things, and of
+   other things, and keep the boxes nearest yours.
+
+```ts
+import { findRegions, embedImage } from "std::vision"
+import { cosineSimilarity } from "std::embedding"
+
+// How alike `vector` is to the closest of `references`, where 1 is identical.
+def closest(vector: number[], references: number[][]): number {
+  let best = 0
+  for (reference in references) {
+    const similarity = cosineSimilarity(vector, reference)
+    if (isSuccess(similarity) && similarity.value > best) {
+      best = similarity.value
+    }
+  }
+  return best
+}
+
+// One vector per crop file.
+def embedCrops(paths: string[]): number[][] {
+  let vectors: number[][] = []
+  for (path in paths) {
+    const embedded = embedImage(path, "dinov2-base")
+    if (isSuccess(embedded)) {
+      vectors.push(embedded.value[0])
+    }
+  }
+  return vectors
+}
+
+node main(page: string, catCrops: string[], otherCrops: string[]) {
+  const cats = embedCrops(catCrops)
+  const others = embedCrops(otherCrops)
+  const regions = findRegions(page, "owlv2-base")
+  if (isFailure(regions)) {
+    return regions.error
+  }
+  const boxes = map(regions.value) as region {
+    return region.box
+  }
+  const vectors = embedImage(page, "dinov2-base", boxes: boxes)
+  if (isFailure(vectors)) {
+    return vectors.error
+  }
+  for (vector, i in vectors.value) {
+    if (closest(vector, cats) > closest(vector, others)) {
+      print("Cat in region ${i}")
+    }
+  }
+}
+```
+
+The crops are tight crops made with `cropImage`, one file each. A crop
+file embedded whole is cut the same way as a box embedded from a page,
+so the two compare fairly. A whole photo of a mug on a desk and a tight
+crop of a mug do not: the first vector mostly describes the desk.
+
 ## Types
 
 ### BoundingBox
@@ -53,7 +123,7 @@ export type BoundingBox = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L44))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L112))
 
 ### Detection
 
@@ -71,7 +141,26 @@ export type Detection = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L53))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L121))
+
+### Region
+
+One box around a thing in a picture, found with no name. `id` is its
+index in the reply, so crops can be named after it. The score says how
+much it looks like a thing at all, 0..1.
+
+```ts
+/** One box around a thing in a picture, found with no name. `id` is its
+index in the reply, so crops can be named after it. The score says how
+much it looks like a thing at all, 0..1. */
+export type Region = {
+  id: number;
+  score: number;
+  box: BoundingBox
+}
+```
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L131))
 
 ### Tag
 
@@ -85,7 +174,7 @@ export type Tag = {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L61))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L138))
 
 ## Effects
 
@@ -101,7 +190,7 @@ effect std::vision {
 }
 ```
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L39))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L107))
 
 ## Functions
 
@@ -112,7 +201,7 @@ detectObjects(
   path: string,
   labels: string[],
   model: string,
-  threshold: number = 0.3,
+  threshold: number | null = null,
 ): Result<Detection[]> raises <std::vision>
 ```
 
@@ -122,9 +211,9 @@ Find the named things in an image with a local detector and return
   on this machine; nothing is uploaded.
 
   @param path - Path to a PNG, JPEG, WebP, or GIF image
-  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required. Florence-2 looks for each label in its own pass, so each label adds to the time
-  @param model - A local vision model that detects, such as "florence-2"
-  @param threshold - Drop detections scoring below this, 0 to 1. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
+  @param labels - What to look for, in words: ["person", "desk", "chair"]. A detector with no labels finds whatever it likes, so at least one is required. OWLv2 looks for every label in one pass; Florence-2 looks for each in its own pass, so each label adds to the time
+  @param model - A local vision model that detects, such as "owlv2-base" or "florence-2"
+  @param threshold - Drop detections scoring below this, 0 to 1. Null uses the model's default: 0.1 for OWLv2, whose real objects often score 0.2 to 0.4. Florence-2 gives no scores: every box it finds scores 1, so the threshold drops nothing
 
 **Parameters:**
 
@@ -133,13 +222,13 @@ Find the named things in an image with a local detector and return
 | path | `string` |  |
 | labels | `string[]` |  |
 | model | `string` |  |
-| threshold | `number` | 0.3 |
+| threshold | `number \| null` | null |
 
 **Returns:** `Result<Detection[]>`
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L66))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L143))
 
 ### tagImage
 
@@ -176,7 +265,7 @@ Describe an image as booru tags with a local tagger: "1girl, glasses,
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L96))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L170))
 
 ### captionImage
 
@@ -207,4 +296,71 @@ Write a sentence about an image with a local model. Runs on this
 
 **Throws:** `std::vision`
 
-([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L127))
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L198))
+
+### embedImage
+
+```ts
+embedImage(
+  path: string,
+  model: string,
+  boxes: BoundingBox[] | null = null,
+): Result<number[][]> raises <std::vision>
+```
+
+Turn an image into an embedding, a list of numbers that says how it
+  looks, so things that look alike come out close together. Pass boxes to
+  embed each box instead of the whole image, one embedding per box.
+  Compare two embeddings only when both were cut the same way, such as a
+  tight crop and a box around the same thing.
+
+  @param path - Path to a PNG, JPEG, WebP, or GIF image
+  @param model - A local vision model that embeds, such as "dinov2-base"
+  @param boxes - Boxes to embed, as detectObjects and findRegions return them, at most 100. Null embeds the whole image
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| path | `string` |  |
+| model | `string` |  |
+| boxes | `BoundingBox[] \| null` | null |
+
+**Returns:** `Result<number[][]>`
+
+**Throws:** `std::vision`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L221))
+
+### findRegions
+
+```ts
+findRegions(
+  path: string,
+  model: string,
+  limit: number = 50,
+): Result<Region[]> raises <std::vision>
+```
+
+Box every thing in an image with a local model, with no names: for
+  finding things a detector has no word for, such as the characters in a
+  drawing. Each region comes with a score for how much it looks like a
+  thing at all, best first. Runs on this machine; nothing is uploaded.
+
+  @param path - Path to a PNG, JPEG, WebP, or GIF image
+  @param model - A local vision model that finds regions, such as "owlv2-base" or "florence-2"
+  @param limit - At most this many regions, 1 to 100
+
+**Parameters:**
+
+| Name | Type | Default |
+|---|---|---|
+| path | `string` |  |
+| model | `string` |  |
+| limit | `number` | 50 |
+
+**Returns:** `Result<Region[]>`
+
+**Throws:** `std::vision`
+
+([source](https://github.com/egonSchiele/agency-lang/tree/main/packages/agency-lang/stdlib/vision.agency#L247))

@@ -128,13 +128,12 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
     });
   });
 
-  it("serves every route the stdlib calls", () => {
+  it("serves exactly the routes the stdlib calls", () => {
     const served = JSON.parse(
-      rules("import json; print(json.dumps([row['path'] for row in ROUTE_TABLE.values()]))"),
+      rules("import json; print(json.dumps(sorted(row['path'] for row in ROUTE_TABLE.values())))"),
     );
-    for (const row of Object.values(VISION_TASKS)) {
-      expect(served).toContain(`/v1${row.route}`);
-    }
+    const called = Object.values(VISION_TASKS).map((row) => `/v1${row.route}`);
+    expect(served).toEqual([...called].sort());
   });
 
   it("has a checker for every field a route takes", () => {

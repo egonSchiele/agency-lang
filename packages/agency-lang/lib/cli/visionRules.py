@@ -11,6 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from imageToolsRules import crop_box  # noqa: E402
 from localServerCommon import MAX_IMAGE_BYTES, ImageDataError, base64_length, image_bytes_of  # noqa: E402
 
 # The releases these rules and the server were written against. The server
@@ -19,10 +20,39 @@ from localServerCommon import MAX_IMAGE_BYTES, ImageDataError, base64_length, im
 TRANSFORMERS_VERSION = "5.17.0"
 ONNXRUNTIME_VERSION = "1.30.0"
 
-# A request body is one image as base64 and a few settings. Anything
-# bigger is not a request this server makes sense of.
+# The most boxes a reply holds, and the most an embeddings request takes,
+# so every box of one reply can be embedded in one request.
+MAX_REPLY_BOXES = 100
+
+# How many example pictures a matches request may send, and how large each
+# may be. An example is a tight crop of one object, so 10 MB is plenty.
+# `MAX_EXAMPLES` and `MAX_EXAMPLE_BYTES` in lib/stdlib/vision.ts are the
+# same, and a test compares them.
+MAX_EXAMPLES = 4
+MAX_EXAMPLE_BYTES = 10_000_000
+
+# A request body is one image, up to MAX_EXAMPLES examples, and a few
+# settings. Anything bigger is not a request this server makes sense of.
 MAX_SETTINGS_BYTES = 64 * 1024
-MAX_BODY_BYTES = base64_length(MAX_IMAGE_BYTES) + MAX_SETTINGS_BYTES
+MAX_BODY_BYTES = (
+    base64_length(MAX_IMAGE_BYTES) + MAX_EXAMPLES * base64_length(MAX_EXAMPLE_BYTES) + MAX_SETTINGS_BYTES
+)
+
+# Two boxes that overlap by more than this much (intersection over union)
+# are one object, and the lower-scoring one is dropped. 0.3 is the value
+# transformers uses for the same job. KEEP_OVERLAPS is more than any two
+# boxes can overlap, so nothing is dropped.
+MERGE_IOU = 0.3
+KEEP_OVERLAPS = 1.0
+
+# How many of the best-scoring boxes kept_boxes considers. OWLv2 predicts
+# 3,600 boxes for every image; the merge compares each kept box with each
+# candidate, so it gets a bounded amount of work.
+MAX_MERGE_CANDIDATES = 500
+
+# A box over the whole image, in the normalized shape. An embeddings
+# request with no boxes embeds this one.
+WHOLE_IMAGE = {"x": 0, "y": 0, "width": 1, "height": 1}
 
 # An open-vocabulary detector takes the labels as text. Fifty is a long
 # list already; a longer one is a sign the caller wants "everything", and
@@ -64,6 +94,22 @@ ROUTE_TABLE = {
         "path": "/v1/vision/captions",
         "fields": ["detail"],
     },
+    "embeddings": {
+        "path": "/v1/vision/embeddings",
+        "fields": ["boxes"],
+    },
+    "matches": {
+        "path": "/v1/vision/matches",
+        "fields": ["examples", "threshold"],
+        # A guess, to be measured on real photos and drawings.
+        "default_threshold": 0.6,
+    },
+    "regions": {
+        "path": "/v1/vision/regions",
+        "fields": ["limit"],
+        "limit_max": MAX_REPLY_BOXES,
+        "limit_default": 50,
+    },
 }
 
 # What each family is and does. One row per family, flat: one key per
@@ -94,7 +140,7 @@ FAMILIES = {
         "engine": "transformers",
         "runner": "Florence2Runner",
         "identify_architecture": "Florence2ForConditionalGeneration",
-        "routes": ["detections", "tags", "captions"],
+        "routes": ["detections", "tags", "captions", "regions"],
         # The value Florence-2's own examples use. Florence-2 gives no
         # scores, so it drops nothing.
         "default_threshold_detections": 0.3,
@@ -102,6 +148,24 @@ FAMILIES = {
         "task_tags": "<DENSE_REGION_CAPTION>",
         "task_caption_short": "<CAPTION>",
         "task_caption_long": "<MORE_DETAILED_CAPTION>",
+        "task_regions": "<REGION_PROPOSAL>",
+    },
+    "Dinov2Model": {
+        "label": "DINOv2",
+        "engine": "transformers",
+        "runner": "Dinov2Runner",
+        "identify_architecture": "Dinov2Model",
+        "routes": ["embeddings"],
+    },
+    "Owlv2ForObjectDetection": {
+        "label": "OWLv2",
+        "engine": "transformers",
+        "runner": "Owlv2Runner",
+        "identify_architecture": "Owlv2ForObjectDetection",
+        "routes": ["detections", "matches", "regions"],
+        # The OWLv2 model card's threshold. A real object often scores 0.2
+        # to 0.4, so Florence-2's 0.3 would drop many.
+        "default_threshold_detections": 0.1,
     },
 }
 
@@ -139,9 +203,16 @@ def family_of(names, config):
         if _identifies(rules, names, config):
             return rules
     labels = join_names([rules["label"] for rules in FAMILIES.values()])
+    marks = [
+        f"{rules['identify_file']} beside {rules['identify_beside']}"
+        for rules in FAMILIES.values()
+        if "identify_file" in rules
+    ]
+    architectures = [rules["identify_architecture"] for rules in FAMILIES.values() if "identify_architecture" in rules]
+    marks.append(f"a config.json naming {join_names(architectures, 'or')}")
     raise ValueError(
-        f"visionServer.py serves {labels} models. This directory has neither model.onnx "
-        f"beside selected_tags.csv nor a config.json naming Florence2ForConditionalGeneration."
+        f"visionServer.py serves {labels} models. This directory has none of "
+        f"{join_names(marks, 'or')}."
     )
 
 
@@ -230,6 +301,50 @@ def _detail_of(rules, route, body):
     return detail
 
 
+def _box_problem(box):
+    """Why `box` is not a normalized box, or None."""
+    if not isinstance(box, dict) or sorted(box) != ["height", "width", "x", "y"]:
+        return "must be {x, y, width, height}"
+    if not all(_is_number(box[key]) and 0 <= box[key] <= 1 for key in box):
+        return "must hold numbers from 0 to 1"
+    if box["width"] <= 0 or box["height"] <= 0:
+        return "must have a width and a height above 0"
+    return None
+
+
+def _boxes_of(rules, route, body):
+    """The boxes to embed. None or a missing field is the whole image, so
+    the runner has one path; an empty list is no boxes at all."""
+    boxes = body.get("boxes")
+    if boxes is None:
+        return [WHOLE_IMAGE]
+    if not isinstance(boxes, list):
+        raise RequestError("boxes must be a list of {x, y, width, height} boxes in 0..1, or null for the whole image.")
+    if len(boxes) > MAX_REPLY_BOXES:
+        raise RequestError(f"boxes may hold at most {MAX_REPLY_BOXES}. Got {len(boxes)}.")
+    for index, box in enumerate(boxes):
+        problem = _box_problem(box)
+        if problem is not None:
+            raise RequestError(f"boxes[{index}] {problem}.")
+    return [{key: float(box[key]) for key in ("x", "y", "width", "height")} for box in boxes]
+
+
+def _examples_of(rules, route, body):
+    """The bytes of each example picture."""
+    examples = body.get("examples")
+    if not isinstance(examples, list) or not examples or len(examples) > MAX_EXAMPLES:
+        raise RequestError(
+            f"examples must be a list of 1 to {MAX_EXAMPLES} pictures of the thing to find, each as base64."
+        )
+    found = []
+    for index, example in enumerate(examples):
+        try:
+            found.append(image_bytes_of(example, MAX_EXAMPLE_BYTES))
+        except ImageDataError as err:
+            raise RequestError(f"examples[{index}]: {err}")
+    return found
+
+
 # The one function that checks each field a route may take. Each takes
 # (rules, route, body) and returns the field's checked value, or raises
 # RequestError saying what the field takes.
@@ -238,6 +353,8 @@ FIELD_CHECKS = {
     "threshold": _threshold_of,
     "limit": _limit_of,
     "detail": _detail_of,
+    "boxes": _boxes_of,
+    "examples": _examples_of,
 }
 
 
@@ -298,3 +415,96 @@ def normalized_box(box, width, height):
         "width": max(right - left, 0.0) / width,
         "height": max(bottom - top, 0.0) / height,
     }
+
+
+def box_pixels(box, width, height, index):
+    """The pixel rectangle (left, top, right, bottom) of normalized box
+    number `index` on a `width` by `height` image. Raises RequestError
+    for a box that covers less than a pixel once it is rounded."""
+    try:
+        left, top, right, bottom = crop_box(box["x"], box["y"], box["width"], box["height"], 0, width, height)
+    except ValueError:
+        right = left = 0
+        top = bottom = 0
+    if right <= left or bottom <= top:
+        raise RequestError(f"boxes[{index}] covers less than a pixel of the {width}x{height} image.")
+    return left, top, right, bottom
+
+
+def square_padding(width, height):
+    """The side of the square a `width` by `height` crop is padded to, and
+    the (left, top) offset that centers the crop in it."""
+    side = max(width, height)
+    return side, ((side - width) // 2, (side - height) // 2)
+
+
+def average_directions(vectors):
+    """The element-wise mean of `vectors`, each first scaled to length 1.
+    Without the scaling, a long vector would count for more than a short
+    one."""
+    scaled = []
+    for vector in vectors:
+        length = sum(value * value for value in vector) ** 0.5
+        scaled.append([value / length for value in vector] if length > 0 else list(vector))
+    return [sum(values) / len(scaled) for values in zip(*scaled)]
+
+
+def square_box_to_image(box, width, height):
+    """A box [x1, y1, x2, y2] in 0..1 of the square OWLv2 padded a `width`
+    by `height` image to, as a normalized box on the image itself, or None
+    when it lay wholly in the padding. OWLv2 pads on the bottom and the
+    right, so scaling by the longer side gives pixels."""
+    side = max(width, height)
+    found = normalized_box([value * side for value in box], width, height)
+    if found["width"] <= 0 or found["height"] <= 0:
+        return None
+    return found
+
+
+def _overlap(a, b):
+    """Intersection over union of two normalized boxes."""
+    left = max(a["x"], b["x"])
+    top = max(a["y"], b["y"])
+    right = min(a["x"] + a["width"], b["x"] + b["width"])
+    bottom = min(a["y"] + a["height"], b["y"] + b["height"])
+    inter = max(right - left, 0.0) * max(bottom - top, 0.0)
+    union = a["width"] * a["height"] + b["width"] * b["height"] - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _best_candidates(scores, threshold):
+    """The indexes scoring at or above `threshold`, best first, with the
+    index breaking ties, cut to MAX_MERGE_CANDIDATES."""
+    passing = [index for index, score in enumerate(scores) if score >= threshold]
+    passing.sort(key=lambda index: (-scores[index], index))
+    return passing[:MAX_MERGE_CANDIDATES]
+
+
+def merge_overlapping(candidates, iou, limit):
+    """`candidates` in order, each kept unless it overlaps an already kept
+    one by more than `iou`, stopping once `limit` are kept."""
+    kept = []
+    for candidate in candidates:
+        if len(kept) == limit:
+            break
+        if all(_overlap(candidate["box"], other["box"]) <= iou for other in kept):
+            kept.append(candidate)
+    return kept
+
+
+def kept_boxes(scores, boxes, width, height, threshold, iou, limit):
+    """The boxes of a reply, best first.
+
+    scores[i] is the score of boxes[i]. Each box is [x1, y1, x2, y2] in
+    0..1 of the square OWLv2 padded the image to. Returns dicts
+    {"index", "score", "box"}, where index is the box's position in the
+    input and box is normalized to the image itself. Boxes below
+    `threshold` and boxes wholly in the padding are left out, a box that
+    overlaps a better one by more than `iou` is dropped, and at most
+    `limit` are kept."""
+    candidates = []
+    for index in _best_candidates(scores, threshold):
+        box = square_box_to_image(boxes[index], width, height)
+        if box is not None:
+            candidates.append({"index": index, "score": float(scores[index]), "box": box})
+    return merge_overlapping(candidates, iou, limit)

@@ -42,9 +42,10 @@ except ValueError as e:
 }
 
 /** Runs check_request for a family and route and prints the result, or
- *  the error. The checked image is bytes, printed back as base64. */
+ *  the error. The checked image and examples are bytes, printed back as
+ *  base64. */
 function check(
-  family: "wd14" | "Florence2ForConditionalGeneration",
+  family: "wd14" | "Florence2ForConditionalGeneration" | "Dinov2Model" | "Owlv2ForObjectDetection",
   route: string,
   body: unknown,
 ): string {
@@ -54,6 +55,8 @@ body = json.loads(${JSON.stringify(JSON.stringify(body))})
 try:
     checked = check_request(FAMILIES["${family}"], "${route}", body)
     checked["image"] = base64.b64encode(checked["image"]).decode("ascii")
+    if "examples" in checked:
+        checked["examples"] = [base64.b64encode(e).decode("ascii") for e in checked["examples"]]
     print(json.dumps(checked, sort_keys=True))
 except RequestError as e:
     print("ERROR", e.status, e)
@@ -74,16 +77,18 @@ describe.skipIf(!hasPython3)("visionRules.py", () => {
     expect(text).not.toMatch(/^\s*(import|from)\s+(torch|transformers|onnxruntime|PIL)/m);
   });
 
-  it("knows the tagger by its two files and Florence-2 by its config", () => {
+  it("knows the tagger by its two files and the others by their config", () => {
     expect(familyOf(["model.onnx", "selected_tags.csv", "config.json"], {})).toBe("WD14 tagger");
     expect(
       familyOf(["config.json"], { architectures: ["Florence2ForConditionalGeneration"] }),
     ).toBe("Florence-2");
+    expect(familyOf(["config.json"], { architectures: ["Dinov2Model"] })).toBe("DINOv2");
+    expect(familyOf(["config.json"], { architectures: ["Owlv2ForObjectDetection"] })).toBe("OWLv2");
   });
 
   it("refuses a directory that is neither", () => {
     expect(familyOf(["model.onnx"], null)).toBe(
-      "REFUSED visionServer.py serves WD14 tagger and Florence-2 models. This directory has neither model.onnx beside selected_tags.csv nor a config.json naming Florence2ForConditionalGeneration.",
+      "REFUSED visionServer.py serves WD14 tagger, Florence-2, DINOv2, and OWLv2 models. This directory has none of model.onnx beside selected_tags.csv or a config.json naming Florence2ForConditionalGeneration, Dinov2Model, or Owlv2ForObjectDetection.",
     );
     expect(familyOf(["config.json"], { architectures: ["LlamaForCausalLM"] })).toContain("REFUSED");
   });
@@ -170,9 +175,12 @@ except ImageDataError as e:
     expect(out).toBe("image is over 50,000,000 bytes; this server reads images up to that size.");
   });
 
-  it("takes a body big enough for the largest image, and the same limit as the stdlib", () => {
+  it("takes a body big enough for the largest image and every example, and the same limit as the stdlib", () => {
     expect(rules("print(MAX_IMAGE_BYTES)")).toBe(String(MAX_IMAGE_BYTES));
-    expect(Number(rules("print(MAX_BODY_BYTES - base64_length(MAX_IMAGE_BYTES))"))).toBe(64 * 1024);
+    const settings = rules(
+      "print(MAX_BODY_BYTES - base64_length(MAX_IMAGE_BYTES) - MAX_EXAMPLES * base64_length(MAX_EXAMPLE_BYTES))",
+    );
+    expect(Number(settings)).toBe(64 * 1024);
   });
 
   it("refuses the labels a detector cannot use", () => {
@@ -206,6 +214,139 @@ except ImageDataError as e:
     expect(check("wd14", "tags", { image, labels: ["x"] })).toBe(
       "ERROR 400 labels is not a setting of /v1/vision/tags. It takes image, threshold, and limit.",
     );
+  });
+
+  it("fills in each family's defaults for the new routes", () => {
+    const owl = "Owlv2ForObjectDetection";
+    expect(JSON.parse(check(owl, "detections", { image, labels: ["cat"] })).threshold).toBe(0.1);
+    expect(JSON.parse(check(owl, "matches", { image, examples: [image] })).threshold).toBe(0.6);
+    expect(JSON.parse(check(owl, "regions", { image }))).toEqual({ image, limit: 50 });
+    expect(JSON.parse(check("Florence2ForConditionalGeneration", "regions", { image })).limit).toBe(
+      50,
+    );
+  });
+
+  it("takes boxes to embed, with no boxes meaning the whole image and an empty list meaning none", () => {
+    const whole = [{ x: 0, y: 0, width: 1, height: 1 }];
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image })).boxes).toEqual(whole);
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image, boxes: null })).boxes).toEqual(
+      whole,
+    );
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image, boxes: [] })).boxes).toEqual([]);
+    const box = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
+    expect(JSON.parse(check("Dinov2Model", "embeddings", { image, boxes: [box] })).boxes).toEqual([
+      box,
+    ]);
+  });
+
+  it("refuses boxes that are not normalized boxes, naming the bad one", () => {
+    const d = "Dinov2Model";
+    const ok = { x: 0, y: 0, width: 0.5, height: 0.5 };
+    expect(check(d, "embeddings", { image, boxes: "all" })).toBe(
+      "ERROR 400 boxes must be a list of {x, y, width, height} boxes in 0..1, or null for the whole image.",
+    );
+    expect(check(d, "embeddings", { image, boxes: Array(101).fill(ok) })).toBe(
+      "ERROR 400 boxes may hold at most 100. Got 101.",
+    );
+    expect(check(d, "embeddings", { image, boxes: [ok, { x: 0, y: 0, width: 1 }] })).toBe(
+      "ERROR 400 boxes[1] must be {x, y, width, height}.",
+    );
+    expect(check(d, "embeddings", { image, boxes: [{ ...ok, x: 1.5 }] })).toBe(
+      "ERROR 400 boxes[0] must hold numbers from 0 to 1.",
+    );
+    expect(check(d, "embeddings", { image, boxes: [{ ...ok, width: 0 }] })).toBe(
+      "ERROR 400 boxes[0] must have a width and a height above 0.",
+    );
+  });
+
+  it("refuses examples that are missing, too many, or too large, naming the bad one", () => {
+    const owl = "Owlv2ForObjectDetection";
+    const message =
+      "ERROR 400 examples must be a list of 1 to 4 pictures of the thing to find, each as base64.";
+    expect(check(owl, "matches", { image })).toBe(message);
+    expect(check(owl, "matches", { image, examples: [] })).toBe(message);
+    expect(check(owl, "matches", { image, examples: Array(5).fill(image) })).toBe(message);
+    expect(check(owl, "matches", { image, examples: [image, "/Users/me/cat.png"] })).toBe(
+      "ERROR 400 examples[1]: image is not valid base64.",
+    );
+    const out = rules(`
+try:
+    check_request(FAMILIES["${owl}"], "matches", {"image": "${image}", "examples": ["A" * (base64_length(MAX_EXAMPLE_BYTES) + 4)]})
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe(
+      "examples[0]: image is over 10,000,000 bytes; this server reads images up to that size.",
+    );
+  });
+
+  it("refuses a regions limit out of range", () => {
+    expect(check("Owlv2ForObjectDetection", "regions", { image, limit: 101 })).toBe(
+      "ERROR 400 limit must be a whole number from 1 to 100. The default is 50.",
+    );
+  });
+
+  it("refuses embeddings on OWLv2, naming the routes it answers", () => {
+    expect(check("Owlv2ForObjectDetection", "embeddings", { image })).toBe(
+      "ERROR 404 OWLv2 does not answer /v1/vision/embeddings. It answers /v1/vision/detections, /v1/vision/matches, and /v1/vision/regions.",
+    );
+  });
+
+  it("keeps a model's boxes in score order, clamped to the image, above the threshold", () => {
+    // A 200x100 image is padded to a 200x200 square, so its bottom half is
+    // padding. Boxes are [x1, y1, x2, y2] in 0..1 of that square.
+    const out = rules(`
+import json
+scores = [0.2, 0.9, 0.05, 0.5, 0.7]
+boxes = [
+    [0.0, 0.0, 0.5, 0.25],   # top-left, inside the image
+    [0.5, 0.0, 1.0, 0.25],   # top-right, inside the image
+    [0.0, 0.0, 1.0, 0.5],    # below the threshold
+    [0.0, 0.25, 0.5, 0.75],  # crosses into the padding
+    [0.0, 0.6, 0.5, 0.9],    # wholly in the padding
+]
+print(json.dumps(kept_boxes(scores, boxes, 200, 100, 0.1, KEEP_OVERLAPS, 10)))
+`);
+    expect(JSON.parse(out)).toEqual([
+      { index: 1, score: 0.9, box: { x: 0.5, y: 0, width: 0.5, height: 0.5 } },
+      { index: 3, score: 0.5, box: { x: 0, y: 0.5, width: 0.5, height: 0.5 } },
+      { index: 0, score: 0.2, box: { x: 0, y: 0, width: 0.5, height: 0.5 } },
+    ]);
+  });
+
+  it("merges overlapping boxes only when asked, and stops at the limit", () => {
+    const out = rules(`
+import json
+scores = [0.9, 0.8, 0.7]
+boxes = [[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.45], [0.6, 0.6, 0.9, 0.9]]
+def indexes(iou, limit):
+    return [found["index"] for found in kept_boxes(scores, boxes, 100, 100, 0.0, iou, limit)]
+print(json.dumps([indexes(MERGE_IOU, 10), indexes(KEEP_OVERLAPS, 10), indexes(KEEP_OVERLAPS, 2)]))
+`);
+    expect(JSON.parse(out)).toEqual([
+      [0, 2],
+      [0, 1, 2],
+      [0, 1],
+    ]);
+  });
+
+  it("pads a crop to a centered square, and averages directions, not lengths", () => {
+    expect(rules("print(square_padding(300, 100))")).toBe("(300, (0, 100))");
+    expect(rules("print(square_padding(100, 300))")).toBe("(300, (100, 0))");
+    expect(rules("print(average_directions([[2, 0], [0, 1]]))")).toBe("[0.5, 0.5]");
+  });
+
+  it("turns a normalized box into pixels, refusing one under a pixel", () => {
+    expect(
+      rules("print(box_pixels({'x': 0.1, 'y': 0.2, 'width': 0.5, 'height': 0.5}, 100, 50, 0))"),
+    ).toBe("(10, 10, 60, 35)");
+    const out = rules(`
+try:
+    box_pixels({"x": 0.1, "y": 0.1, "width": 0.001, "height": 0.5}, 100, 100, 3)
+except RequestError as e:
+    print(e)
+`);
+    expect(out).toBe("boxes[3] covers less than a pixel of the 100x100 image.");
   });
 
   it("normalizes a pixel box to the top-left 0..1 shape, clamped", () => {
@@ -243,6 +384,8 @@ for family in FAMILIES.values():
     expect(out.split("\n")).toEqual([
       `tags {"image": "${image}", "limit": 30, "threshold": 0.35}`,
       `detections {"image": "${image}", "labels": ["square"], "threshold": 0.3}`,
+      `embeddings {"boxes": [{"height": 1, "width": 1, "x": 0, "y": 0}], "image": "${image}"}`,
+      `detections {"image": "${image}", "labels": ["square"], "threshold": 0.1}`,
     ]);
   });
 });

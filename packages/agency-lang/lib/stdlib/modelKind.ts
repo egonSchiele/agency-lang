@@ -29,7 +29,11 @@ export function isModelKind(value: unknown): value is ModelKind {
  *  transformers, copied from `FAMILIES` in `lib/cli/visionRules.py`; a
  *  test checks the two agree. The ONNX tagger family has no config and is
  *  known by its files instead. */
-export const VISION_ARCHITECTURES = ["Florence2ForConditionalGeneration"];
+export const VISION_ARCHITECTURES = [
+  "Florence2ForConditionalGeneration",
+  "Dinov2Model",
+  "Owlv2ForObjectDetection",
+];
 
 /** The two files that mark the WD14 tagger family. */
 export const VISION_ONNX_FILES = ["model.onnx", "selected_tags.csv"];
@@ -73,7 +77,8 @@ const KIND_RULES: KindRule[] = [
     matches: (facts) => facts.config?._class_name === CONTROLNET_CLASS,
   },
   {
-    // Before the chat rule: Florence-2's class ends in ForConditionalGeneration too.
+    // Before the chat rule: Florence-2's class ends in ForConditionalGeneration
+    // too. Before the embedding rule: DINOv2's class ends in Model.
     kind: "vision",
     matches: (facts) =>
       VISION_ARCHITECTURES.includes(architecture(facts.config)) ||

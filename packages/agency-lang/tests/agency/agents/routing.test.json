@@ -1,7 +1,36 @@
 {
-  "sourceFile": "routing.agency",
   "tests": [
-    { "nodeName": "complexRoutesToPlanner", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] },
-    { "nodeName": "simpleRoutesToDirect", "input": "", "expectedOutput": "true", "evaluationCriteria": [{ "type": "exact" }] }
+    {
+      "nodeName": "agencyTaskUsesWorker",
+      "input": "",
+      "expectedOutput": "\"Worker finished\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "Worker finished"
+        }
+      ]
+    },
+    {
+      "nodeName": "otherTaskUsesWorker",
+      "input": "",
+      "expectedOutput": "\"Worker finished\"",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ],
+      "useTestLLMProvider": true,
+      "llmMocks": [
+        {
+          "return": "Worker finished"
+        }
+      ]
+    }
   ]
 }

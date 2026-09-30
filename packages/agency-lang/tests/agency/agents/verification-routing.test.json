@@ -1,0 +1,10 @@
+{
+  "tests": [{
+    "nodeName": "performsAgencyTask",
+    "input": "",
+    "expectedOutput": "\"Worker finished\"",
+    "evaluationCriteria": [{"type":"exact"}],
+    "useTestLLMProvider": true,
+    "llmMocks": [{"return":"Worker finished"}]
+  }]
+}

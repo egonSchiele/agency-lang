@@ -1,0 +1,6 @@
+{
+  "description": "Regression from trace idCkNs33UwMumDgWbdCBm: a request to build and test an already-edited Agency project was routed to a source writer, which returned programs instead of executing commands. Checks real compiler/test artifacts, saved output, reporting, and source preservation. This isolates the verification turn; it does not exercise GitHub posting or the whole interactive conversation.",
+  "tags": ["coding", "regression"],
+  "files": "./files",
+  "input": "I already edited src/coordinator.agency to add githubTools() to its import and to the mainAgentTools array. Please verify the change in this Agency project. From the current directory, run `agency compile src/coordinator.agency`, saving stdout and stderr to build.log. If the build succeeds, run only `agency test tool-wiring.test.json --agency-only --json`, saving stdout to test-report.json and stderr to test.log. Do not run any other tests or change the source or test files. Write verification.json with numeric buildExitCode and testExitCode fields (use null for testExitCode if the test was not run). Report whether the build and test passed and where you saved their output. Quote any errors."
+}

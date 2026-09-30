@@ -21,6 +21,11 @@ The wrapper mounts the run directory at the same absolute path inside the
 container, so that path is valid on both sides and grading reads the
 agent's output as usual. Skip that and every judge sees no output.
 
+The image installs Agency under `/work/node_modules`. The wrapper also
+mounts the workdir at `/work/project` and runs the agent there, so compiled
+Agency files can resolve the runtime package. A global CLI installation
+alone does not make that package available to Node's ESM resolver.
+
 ## Why the checks are pytest files
 
 Terminal-bench verifies a task by running `tests/test_outputs.py` with
@@ -43,6 +48,17 @@ both the solved and the untouched copies: the solution must
 pass every check, the untouched tree must fail every must-pass check. It
 needs `python3 -m pytest` on the host; the unit-test workflow installs
 pytest so the test runs in CI rather than skipping.
+
+The `verify-agency-project` regression uses TypeScript graders for saved
+compiler output, the CLI's JSON test report, and unchanged input files.
+Its adjacent `graders.test.ts` runs the reference shell commands under
+`.agency-tmp/`, where the compiled program can resolve Agency. It also
+checks that a proposed script, unsupported success claim, failed test,
+or changed source cannot satisfy the corresponding grader. No model calls
+are needed for these checks.
+
+`evals/agency-agent/baselines.md` inventories earlier local suite runs and
+documents how to compare a baseline and candidate with matching settings.
 
 ## Files
 

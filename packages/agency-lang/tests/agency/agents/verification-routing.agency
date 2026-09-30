@@ -1,0 +1,6 @@
+import { codeAgent, setCodeOneShot } from "../../../lib/agents/agency-agent/brains/coordinator/subagents/code.agency"
+
+node performsAgencyTask(): string {
+  setCodeOneShot(true)
+  return codeAgent("Build the existing Agency project, then test it. Report the results without editing the source.", agencyTask: true) with approve
+}

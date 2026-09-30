@@ -1,0 +1,10 @@
+import { githubTools, readOnlyFileTools } from "./toolkits.agency"
+
+export static const mainAgentTools = [
+  ...readOnlyFileTools(),
+  ...githubTools(),
+]
+
+export def toolNames(): string {
+  return mainAgentTools.join(",")
+}

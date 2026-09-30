@@ -1,0 +1,7 @@
+export def readOnlyFileTools(): string[] {
+  return ["read", "ls"]
+}
+
+export def githubTools(): string[] {
+  return ["ghPrGet", "ghPrReviewComment"]
+}

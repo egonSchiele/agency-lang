@@ -1,0 +1,5 @@
+import { toolNames } from "./src/coordinator.agency"
+
+export node registeredTools(): string {
+  return toolNames()
+}

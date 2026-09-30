@@ -28,6 +28,10 @@ benchmark: the container is disposable. The wrapper mounts the run directory at 
 container so the framework's statelog handoff keeps working; see the
 comment at the top of `run-in-docker.sh`.
 
+The workdir is also mounted at `/work/project`, below the image's local
+Agency installation. Compiled Agency tests can therefore resolve
+`agency-lang/runtime` without downloading or linking dependencies.
+
 To compare brains, run twice with different `--brain` values and
 `--trials 3`, and compare `mean` and the must-pass rate per test.
 
@@ -47,7 +51,19 @@ in the repo, readable) and the research spent reaching it (LLM calls,
 wall time, cost). A fourth, `ask-before-tool`, asks for a tool that emails
 a note to the user and says nothing about the address or the provider. It
 passes when the reply asks for them and `writeToolFor` was never called.
-An unfiltered run covers all eleven; to run only the
+
+`verify-agency-project` reproduces the verification turn from trace
+`idCkNs33UwMumDgWbdCBm`: build an already-edited Agency module, run its one
+test, save the output, and report the results without changing source.
+Its deterministic graders reject a returned script or unsupported success
+claim; a goal judge checks the final reply. It also scores calls, time,
+and cost. It does not exercise GitHub posting or the full conversation.
+Run just this case with `--test verify-agency-project`.
+
+See [baselines.md](baselines.md) for previous local results and commands
+for comparing a fresh baseline with a candidate change.
+
+An unfiltered run covers all twelve; to run only the
 terminal-bench-shaped tests, pass `--test` for each of the four below.
 
 | test                | pattern from the benchmark                                                                    | must pass                                    |
@@ -77,3 +93,9 @@ Every test keeps a reference solution under `graderFiles/solution/`
 solution and each untouched starting tree, so a check that
 passes an empty workdir cannot land. That test needs `python3 -m pytest` on
 the host and skips, saying so, when it is missing.
+
+`verify-agency-project/graders.test.ts` checks its graders with real
+compiler and test runs, plus missing evidence, a failed test, and an
+unsolicited source change. It uses the built CLI and needs no pytest or
+model calls. Run it with `pnpm test:run
+evals/agency-agent/verify-agency-project/graders.test.ts`.

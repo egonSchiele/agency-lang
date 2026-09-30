@@ -6,7 +6,7 @@ import { apply } from "typestache";
 export const template = `import * as mod from {{{compiledModulePath:string}}};
 import { discoverExports } from {{{discoveryPath:string}}};
 import { createMcpHandler, mcpToolSummaryLines } from {{{mcpAdapterPath:string}}};
-import { startMcpHttpServer } from {{{mcpHttpTransportPath:string}}};
+import { startMcpHttpServer, exitOnShutdownSignal } from {{{mcpHttpTransportPath:string}}};
 import { PolicyStore } from {{{policyStorePath:string}}};
 import { createLogger } from {{{loggerPath:string}}};
 
@@ -52,7 +52,7 @@ const mcpPath = process.env.MCP_PATH ?? {{{defaultPath:string}}};
 const apiKey = process.env[{{{apiKeyEnv:string}}}];
 
 try {
-  startMcpHttpServer({
+  const server = startMcpHttpServer({
     handler,
     port,
     host,
@@ -61,6 +61,7 @@ try {
     logger: createLogger("info"),
     toolSummary: mcpToolSummaryLines(mcpConfig),
   });
+  exitOnShutdownSignal(server);
 } catch (err) {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);

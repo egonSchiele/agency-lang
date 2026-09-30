@@ -5,7 +5,7 @@ import { apply } from "typestache";
 
 export const template = `import * as mod from {{{compiledModulePath:string}}};
 import { discoverExports } from {{{discoveryPath:string}}};
-import { createMcpHandler, startStdioServer, mcpToolSummaryLines } from {{{mcpAdapterPath:string}}};
+import { createMcpHandler, startStdioServer, mcpToolSummaryLines, exitOnShutdownSignal } from {{{mcpAdapterPath:string}}};
 import { PolicyStore } from {{{policyStorePath:string}}};
 
 const exportedNodeNames = {{{exportedNodeNamesJson:string}}};
@@ -40,6 +40,7 @@ const mcpConfig = {
 const handler = createMcpHandler(mcpConfig);
 
 startStdioServer(handler, mcpToolSummaryLines(mcpConfig));
+exitOnShutdownSignal();
 `;
 
 export type TemplateType = {

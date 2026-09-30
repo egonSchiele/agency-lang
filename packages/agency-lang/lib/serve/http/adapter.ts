@@ -414,3 +414,7 @@ export function startHttpServer(config: HttpConfig): http.Server {
 
   return server;
 }
+
+// Re-exported so a standalone server script can import it from the adapter it
+// already loads.
+export { exitOnShutdownSignal } from "../shutdown.js";

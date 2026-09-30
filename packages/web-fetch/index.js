@@ -4,7 +4,6 @@ import { fileURLToPath } from "url";
 import __process from "process";
 import { readFileSync } from "fs";
 import { z } from "agency-lang/zod";
-import { nanoid } from "agency-lang";
 import path from "path";
 import {
   RuntimeContext,
@@ -55,7 +54,7 @@ const __dirname = path.dirname(__filename);
 const __cwd = __process.cwd();
 const __globalCtx = new RuntimeContext({
   statelogConfig: {
-    host: "https://statelog.adit.io",
+    host: "",
     apiKey: __process.env["STATELOG_API_KEY"] || "",
     projectId: "",
     debugMode: false,
@@ -77,12 +76,6 @@ const __globalCtx = new RuntimeContext({
     },
     model: "gpt-5-mini",
     logLevel: "warn",
-    statelog: {
-      host: "https://statelog.adit.io",
-      projectId: "smoltalk",
-      apiKey: __process.env["STATELOG_SMOLTALK_API_KEY"] || "",
-      traceId: nanoid()
-    },
     provider: "openai-responses"
   },
   dirname: __dirname,
@@ -104,7 +97,7 @@ function propagate() {
 function pass() {
   return { type: "pass" };
 }
-const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal });
+const respondToInterrupts = (interrupts, responses, opts) => _respondToInterrupts({ ctx: __globalCtx, interrupts, responses, overrides: opts?.overrides, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 const resumeFromCheckpoint = (paused, opts) => _resumeFromCheckpoint({ ctx: __globalCtx, paused, metadata: opts?.metadata, abortSignal: opts?.abortSignal, pauseSignal: opts?.pauseSignal, invocation: opts?.invocation });
 const rewindFrom = (checkpoint2, overrides, opts) => _rewindFrom({ ctx: __globalCtx, checkpoint: checkpoint2, overrides, metadata: opts?.metadata });
 const __resumeFromCheckpoint = (checkpoint2, overrides) => _resumeCliFromCheckpoint({ ctx: __globalCtx, checkpoint: checkpoint2, overrides });
@@ -150,7 +143,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "3526adda8364b572c625ba4fa678b8aa05324d2cd01051b01349012482bbf4c8", import.meta.url);
+__registerModuleFingerprint("index.agency", "4f1bdb86addc7dfb78e5a1f0fa32ca33281fd584c38a567e5846587a32e6390c", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);

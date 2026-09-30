@@ -6,19 +6,7 @@
     },
     {
       "role": "assistant",
-      "content": "{\"response\":[2,3,5,7,11]}",
-      "usage": {
-        "inputTokens": 1,
-        "outputTokens": 1,
-        "cachedInputTokens": 0,
-        "totalTokens": 2
-      },
-      "cost": {
-        "inputCost": 0.000001,
-        "outputCost": 0.000001,
-        "totalCost": 0.000002,
-        "currency": "USD"
-      }
+      "content": "{\"response\":[2,3,5,7,11]}"
     },
     {
       "role": "user",
@@ -26,19 +14,7 @@
     },
     {
       "role": "assistant",
-      "content": "{\"response\":[13,17]}",
-      "usage": {
-        "inputTokens": 1,
-        "outputTokens": 1,
-        "cachedInputTokens": 0,
-        "totalTokens": 2
-      },
-      "cost": {
-        "inputCost": 0.000001,
-        "outputCost": 0.000001,
-        "totalCost": 0.000002,
-        "currency": "USD"
-      }
+      "content": "{\"response\":[13,17]}"
     }
   ]
 }

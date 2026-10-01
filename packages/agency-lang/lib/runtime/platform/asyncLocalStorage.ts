@@ -19,16 +19,33 @@
  *
  * See docs/dev/runtime/browser-async-context-seam.md.
  */
-export { AsyncLocalStorage } from "node:async_hooks";
+import { AsyncLocalStorage as NodeAsyncLocalStorage } from "node:async_hooks";
+import process from "node:process";
+import { PromiseContextStorage } from "./promiseContextStorage.js";
 
 /**
  * The subset of `AsyncLocalStorage` the runtime actually depends on. Any
  * platform implementation of this seam must satisfy this shape. Node's
- * `AsyncLocalStorage` is a structural superset, so re-exporting it above
- * satisfies this for free.
+ * `AsyncLocalStorage` is a structural superset, so it satisfies this for
+ * free.
  */
 export type ContextStorage<T> = {
   getStore(): T | undefined;
   run<R>(store: T, fn: () => R): R;
   exit<R>(fn: () => R): R;
 };
+
+/**
+ * SPIKE switch. With `AGENCY_PORTABLE_CONTEXT=1` every store is the
+ * promise-tracking one from `promiseContextStorage.ts`, so the whole test
+ * suite can run under Node without `async_hooks` carrying the context. It
+ * only gives right answers on a build whose `async` functions were rewritten
+ * (see `scripts/lower-async.mjs`).
+ */
+export const PORTABLE_CONTEXT: boolean = process.env["AGENCY_PORTABLE_CONTEXT"] === "1";
+
+type ContextStorageClass = new <T>() => ContextStorage<T>;
+
+export const AsyncLocalStorage: ContextStorageClass = PORTABLE_CONTEXT
+  ? PromiseContextStorage
+  : NodeAsyncLocalStorage;

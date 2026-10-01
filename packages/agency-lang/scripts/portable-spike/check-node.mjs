@@ -1,0 +1,10 @@
+import { handled, rejected, paused, hasInterrupts, approve, respondToInterrupts } from "./agent.js";
+const out = {};
+out.handled = (await handled()).data;
+out.rejected = (await rejected()).data;
+const a = await paused("a", 30);
+const b = await paused("b", 5);
+out.pausedBoth = hasInterrupts(a.data) && hasInterrupts(b.data);
+const [fa, fb] = await Promise.all([respondToInterrupts(a.data, [approve()]), respondToInterrupts(b.data, [approve()])]);
+out.resumedA = fa.data; out.resumedB = fb.data;
+console.log(JSON.stringify(out, null, 2));

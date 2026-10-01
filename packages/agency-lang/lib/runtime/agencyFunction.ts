@@ -3,6 +3,8 @@ import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
 import { agencyStore, withPushedHandler } from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
+import { PORTABLE_CONTEXT } from "./platform/asyncLocalStorage.js";
+import { assertAsyncRewritten } from "./platform/promiseContextStorage.js";
 import { checkFailureArgs } from "./failurePropagation.js";
 import { normalizeForeignResult } from "./result.js";
 import { formatRequiredUnboundRuntimeError } from "./toolBlockDiagnostics.js";
@@ -544,6 +546,12 @@ export class AgencyFunction {
     opts: AgencyFunctionOpts,
     registry: Record<string, AgencyFunction>,
   ): AgencyFunction {
+    // On the promise-tracking store, a generated function that still uses a
+    // real `await` loses its context at the first pause. Refuse it as the
+    // module loads.
+    if (PORTABLE_CONTEXT) {
+      assertAsyncRewritten(opts.fn, `${opts.module}:${opts.name}`);
+    }
     const fn = new AgencyFunction(opts);
     // Composite `${module}:${name}` key so two helpers with the same
     // name in different modules can coexist in the shared global

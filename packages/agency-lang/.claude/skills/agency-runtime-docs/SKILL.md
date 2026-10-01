@@ -23,6 +23,8 @@ Paths are relative to `packages/agency-lang/`. Read the one that matches the tas
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/async-behavior-checklist.md` — The case-by-case behavioral checklist the async implementation was built against.
 - `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
+- `docs/dev/runtime/browser-async-context-seam.md` — The one file every runtime context store imports, so a browser build can swap `AsyncLocalStorage` for another implementation.
+- `docs/dev/runtime/portable-context-spike.md` — A spike: keeping runtime context with no `AsyncLocalStorage` by rewriting `async` functions and wrapping `.then`, the test results on Node and in a `WKWebView`, the load-time check for code that was not rewritten, what a portable build still needs, and the recommended next steps.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle, and the per-statement `onCheckpoint` hook a host uses to resume a crashed run.
 - `docs/dev/runtime/saveDraft.md` — How a scope's best-so-far value survives a guard trip instead of being lost.
 - `docs/dev/runtime/lock.md` — A per-run mutex for serializing access to shared resources such as the terminal prompt.

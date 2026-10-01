@@ -1,0 +1,42 @@
+effect spike::write { name: string }
+
+let lastSaved = "nothing"
+
+def save(name: string): string {
+  interrupt spike::write("Save this?", { name: name })
+  lastSaved = name
+  return "saved ${name}"
+}
+
+// A handler answers in code.
+node handled() {
+  let result = ""
+  handle {
+    result = save("pasta")
+  } with (intr) {
+    return approve()
+  }
+  return result
+}
+
+// The inner handler approves and the outer one rejects. The rejection must win.
+node rejected() {
+  let result: any = "not run"
+  handle {
+    handle {
+      result = save("secret")
+    } with (intr) {
+      return approve()
+    }
+  } with (intr) {
+    return reject()
+  }
+  return { result: result, lastSaved: lastSaved }
+}
+
+// No handler: the run pauses and the page answers.
+node paused(name: string, waitMs: number) {
+  const first = save(name)
+  sleep(waitMs)
+  return { first: first, lastSaved: lastSaved }
+}

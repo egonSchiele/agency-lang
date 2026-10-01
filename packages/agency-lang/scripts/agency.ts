@@ -1983,6 +1983,12 @@ export function createProgram(deps: CliDependencies = {}): Command {
       collectRepeats,
       [],
     )
+    .option(
+      "--vlm <model>",
+      "Also serve this chat model with mlx-vlm, so it can read images (repeatable)",
+      collectRepeats,
+      [],
+    )
     .option("--port <n>", "Port to listen on", parsePositiveInt, 8080)
     .option("--max-tokens <n>", "Longest reply the server allows", parsePositiveInt, 16384)
     .option(
@@ -2020,7 +2026,7 @@ export function createProgram(deps: CliDependencies = {}): Command {
     )
     .option(
       "--python <path>",
-      "Python with mlx-lm installed (and mlx-audio for --speech, torch and diffusers for --image)",
+      "Python with mlx-lm installed (and mlx-vlm for --vlm, mlx-audio for --speech, torch and diffusers for --image)",
     )
     .option("--log-prompts", "Log each request's full body and reply, not just a summary line")
     .action(

@@ -129,5 +129,13 @@ export function kindOfModelDir(dir: string): ModelKind | null {
  *  config.json, or undefined for a directory with no such config, such as
  *  the ONNX tagger. */
 export function visionFamilyOf(dir: string): VisionFamily | undefined {
-  return VISION_FAMILIES[architecture(readModelJson(dir, "config.json"))];
+  return VISION_FAMILIES[architectureOfModelDir(dir)];
+}
+
+/** Architectures validated for chat with images through serve --vlm. */
+export const VLM_ARCHITECTURES = ["Qwen3_5ForConditionalGeneration"];
+
+/** The first architecture in config.json, or an empty string when absent. */
+export function architectureOfModelDir(dir: string): string {
+  return architecture(readModelJson(dir, "config.json"));
 }

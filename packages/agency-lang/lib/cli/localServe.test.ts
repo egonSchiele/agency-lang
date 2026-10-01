@@ -806,6 +806,118 @@ describe("runServe", () => {
     safeDeleteDirectoryWithin(os.tmpdir(), dir);
   });
 
+  function visionChatModel(): string {
+    const model = recordedModel("org/vlm", true);
+    fs.writeFileSync(
+      path.join(model, "config.json"),
+      JSON.stringify({ architectures: ["Qwen3_5ForConditionalGeneration"] }),
+    );
+    return model;
+  }
+
+  it("selects vision chat only with the flag and preserves model identity", async () => {
+    const model = visionChatModel();
+    const text = await runServe([model], { port: 0 }, deps);
+    await text.close();
+    expect(spawned[0][1]).toMatch(/mlxChatServer.py$/);
+    const vision = await runServe([], { port: 0, vlm: [model] }, deps);
+    try {
+      expect(vision.models).toEqual([model]);
+      expect(spawned[1].slice(1, 5)).toEqual(["-m", "mlx_vlm.server", "--model", model]);
+      expect(spawned[1]).not.toContain("--prefill-step-size");
+      expect(log.join("\n")).toContain("(chat with images)");
+    } finally {
+      await vision.close();
+    }
+  });
+
+  it("serves text and vision chat together and checks both dependencies", async () => {
+    visionChatModel();
+    recordedModel("org/text", true);
+    const calls: string[] = [];
+    deps.exec = (_python, args) => {
+      calls.push(args.join(" "));
+      return { status: 0 };
+    };
+    const handle = await runServe(
+      ["mlx:org/text"],
+      { port: 0, vlm: ["mlx:org/vlm"], hedgeLimit: 2 },
+      deps,
+    );
+    try {
+      expect(handle.models).toEqual(["org/text", "org/vlm"]);
+      expect(calls.join("\n")).toContain("import mlx_vlm");
+      expect(calls.join("\n")).toContain("import mlx_lm");
+      expect(calls.join("\n")).toContain("import llguidance");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("refuses unsupported architectures before spawning", async () => {
+    const model = recordedModel("org/vlm", true);
+    await expect(runServe([], { vlm: [model] }, deps)).rejects.toThrow("has been tested with");
+    expect(spawned).toEqual([]);
+  });
+
+  it("refuses unused flags and drafts on vision chat", async () => {
+    const model = visionChatModel();
+    await expect(runServe([], { vlm: [model], hedgeLimit: 2 }, deps)).rejects.toThrow(
+      "--hedge-limit is not taken",
+    );
+    await expect(
+      runServe([], { vlm: [model], options: { [model]: { draft: model } } }, deps),
+    ).rejects.toThrow("--draft is not supported");
+    expect(spawned).toEqual([]);
+  });
+
+  it("names the vision runtime when startup fails and kills its child", async () => {
+    visionChatModel();
+    deps.spawn = () => {
+      const child = fakeChild();
+      setTimeout(() => child.exit(1), 5);
+      return child;
+    };
+    deps.fetch = (async () => {
+      throw new Error("ECONNREFUSED");
+    }) as typeof fetch;
+    await expect(runServe([], { vlm: ["mlx:org/vlm"], port: 0 }, deps)).rejects.toThrow(
+      "mlx_vlm.server for org/vlm exited with 1 before it was ready.",
+    );
+    expect(killed).toBe(1);
+  });
+
+  it("refuses a non-chat model for the vision runtime", async () => {
+    const model = recordedModel("org/embed", true, "embedding");
+    await expect(runServe([], { vlm: [model] }, deps)).rejects.toThrow("embedding");
+    await expect(runServe([], { vlm: ["z-image-turbo"] }, deps)).rejects.toThrow("image");
+    expect(spawned).toEqual([]);
+  });
+
+  it("reports missing or incompatible vision dependencies before spawning", async () => {
+    const model = visionChatModel();
+    deps.exec = () => ({ status: 1 });
+    await expect(runServe([], { vlm: [model] }, deps)).rejects.toThrow(
+      "mlx-vlm==0.7.0 mlx-audio==0.5.4",
+    );
+    deps.exec = (_python, args) => ({ status: args[1].startsWith("import ") ? 0 : 1 });
+    await expect(runServe([], { vlm: [model] }, deps)).rejects.toThrow("other than 0.7.0");
+    expect(spawned).toEqual([]);
+  });
+
+  it("checks the pinned vision runtime version", () => {
+    expect(
+      checkPython(
+        "/python",
+        (_python, args) => ({ status: args[1].startsWith("import mlx_vlm") ? 0 : 1 }),
+        ["mlx_vlm"],
+      ),
+    ).toEqual({ kind: "wrong-version", module: "mlx_vlm" });
+    expect(
+      pythonMissingMessage("/python", "/home/me", { kind: "wrong-version", module: "mlx_vlm" }),
+    ).toContain("mlx-vlm==0.7.0 mlx-audio==0.5.4");
+  });
+
   it("drafts for the model an option was written after, and counts that draft's memory once", async () => {
     recordedModel("org/a", true);
     recordedModel("org/b", true);
@@ -1562,4 +1674,23 @@ describe("pickModelsToServe", () => {
       /Pass a model: agency local serve <name>[\s\S]*mlx:org\/a/,
     );
   });
+});
+
+it("groups --vlm as a model and keeps its draft attached", () => {
+  expect(
+    groupServeArgv(["--vlm", "vision", "--draft", "small"], {
+      "--vlm": "required",
+      "--draft": "required",
+    }),
+  ).toEqual([{ model: "vision", draft: "small" }]);
+});
+
+it("shows text and image chat examples together", () => {
+  const banner = servingBanner(8080, [
+    { name: "text", kind: "chat", runtime: "mlx-lm" },
+    { name: "vision", kind: "chat", runtime: "mlx-vlm" },
+  ]).join("\n");
+  expect(banner).toContain("agency run --local mlx:text");
+  expect(banner).toContain("vision  (chat with images)");
+  expect(banner).toContain('image("photo.png")');
 });

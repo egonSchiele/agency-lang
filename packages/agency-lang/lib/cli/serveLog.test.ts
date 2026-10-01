@@ -426,3 +426,44 @@ describe("oneLine", () => {
     expect(line.includes("\n")).toBe(false);
   });
 });
+
+describe("chat image redaction", () => {
+  it.each([1, 2])("redacts %s images without changing the request", (count) => {
+    const part = { type: "image_url", image_url: { url: "data:image/png;base64,c2VjcmV0" } };
+    const body = {
+      messages: [
+        { content: Array.from({ length: count }, () => part) },
+        { content: [part] },
+        { content: "hello" },
+      ],
+    };
+    const text = describeRequest(body)!;
+    expect(text).not.toContain("c2VjcmV0");
+    expect(text).toContain("<image, 0.0 MB>");
+    expect(part.image_url.url).toContain("c2VjcmV0");
+  });
+});
+
+it("accepts streaming frames with null usage", () => {
+  const reply = describeReply({
+    status: 200,
+    body: 'data: {"usage":null}\n\ndata: {"usage":{"completion_tokens":3,"prompt_tokens":4}}\n\n',
+    contentType: "text/event-stream",
+    truncated: false,
+    totalBytes: 100,
+  });
+  expect(reply.completionTokens).toBe(3);
+  expect(reply.promptTokens).toBe(4);
+});
+
+it("redacts image data embedded in an upstream error", () => {
+  const reply = describeReply({
+    status: 500,
+    body: '{"detail":"Failed to load data:image/png;base64,c2VjcmV0"}',
+    contentType: "application/json",
+    truncated: false,
+    totalBytes: 80,
+  });
+  expect(reply.body).not.toContain("c2VjcmV0");
+  expect(reply.body).toContain("<image data omitted>");
+});

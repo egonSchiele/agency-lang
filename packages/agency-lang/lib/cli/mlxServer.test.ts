@@ -1,3 +1,4 @@
+import { MLX_VLM_RULES } from "./vlmChat.js";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import { defaultRoute, startFrontDoor, type FrontDoor } from "./mlxServer.js";
@@ -322,11 +323,11 @@ describe("front door", () => {
       });
     });
 
-    it("refuses a 20 MB request to any other route with a 413", async () => {
+    it("forwards a 20 MB chat request", async () => {
       const before = a.hits.length;
       const res = await bigPost("/v1/chat/completions", 20_000_000);
-      expect(res.status).toBe(413);
-      expect(a.hits.length).toBe(before);
+      expect(res.status).toBe(200);
+      expect(a.hits.length).toBe(before + 1);
     });
 
     it("forwards a 20 MB vision request whole, which the default limit refused", async () => {
@@ -460,5 +461,118 @@ describe("front door logging", () => {
     // must not throw.
     const res = await post("org/a");
     expect(res.status).toBe(200);
+  });
+});
+
+describe("front door request rules", () => {
+  let upstream: Fake;
+  let guarded: FrontDoor;
+  const lines: string[] = [];
+  beforeAll(async () => {
+    upstream = await fakeServer("vision");
+    guarded = await startFrontDoor(
+      0,
+      [
+        {
+          model: "vision",
+          upstreamModel: "/models/vision",
+          port: upstream.port,
+          label: "mlx_vlm.server",
+          rules: MLX_VLM_RULES,
+        },
+      ],
+      { verbose: false, color: plainColor, log: (line) => lines.push(line) },
+      20,
+    );
+  });
+  afterAll(async () => {
+    await guarded.close();
+    upstream.server.close();
+  });
+  const send = (
+    body: Record<string, unknown>,
+    route = "/v1/chat/completions",
+    headers: Record<string, string> = {},
+  ) =>
+    fetch(`http://127.0.0.1:${guarded.port}${route}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({ model: "vision", ...body }),
+    });
+
+  it("translates thinking, caps tokens, and rewrites the model", async () => {
+    const response = await send({
+      messages: [{ content: "hi" }],
+      chat_template_kwargs: { enable_thinking: false },
+      max_tokens: 100,
+    });
+    expect(response.status).toBe(200);
+    expect(upstream.hits.at(-1)?.body).toEqual({
+      model: "/models/vision",
+      messages: [{ content: "hi" }],
+      enable_thinking: false,
+      max_tokens: 20,
+    });
+  });
+  it.each(["/some/local/adapter", null])(
+    "refuses adapter_path %j without contacting upstream",
+    async (adapter_path) => {
+      const before = upstream.hits.length;
+      const response = await send({ messages: [{ content: "hi" }], adapter_path });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { message: "The field adapter_path is not supported by the server for this model." },
+      });
+      expect(upstream.hits.length).toBe(before);
+    },
+  );
+  it.each([
+    [10, 10],
+    [100, 20],
+  ])("normalizes max_completion_tokens %s and caps it at %s", async (requested, expected) => {
+    const response = await send({
+      messages: [{ content: "hi" }],
+      max_completion_tokens: requested,
+    });
+    expect(response.status).toBe(200);
+    expect(upstream.hits.at(-1)?.body).toEqual({
+      model: "/models/vision",
+      messages: [{ content: "hi" }],
+      max_tokens: expected,
+    });
+  });
+  it("refuses conflicting token limits before capping or forwarding", async () => {
+    const before = upstream.hits.length;
+    const response = await send({ max_completion_tokens: 100, max_tokens: 200 });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: "Conflicting fields max_completion_tokens and max_tokens." },
+    });
+    expect(upstream.hits.length).toBe(before);
+  });
+  it("logs refusals without contacting the upstream", async () => {
+    const before = upstream.hits.length;
+    const response = await send({}, "/unload");
+    expect(response.status).toBe(404);
+    expect(upstream.hits.length).toBe(before);
+    expect(lines.at(-1)).toContain("404");
+  });
+  it("forwards a stream through rules", async () => {
+    const response = await send({ messages: [] }, undefined, { "x-stream": "1" });
+    expect(await response.text()).toBe("data: one\n\ndata: two\n\n");
+  });
+  it("closes upstream when the stream client disconnects", async () => {
+    const response = await send({ messages: [] }, undefined, { "x-slow": "1" });
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(upstream.hits.at(-1)?.clientGone).toBe(true);
+  });
+  it("refuses an oversized chat body", async () => {
+    const before = upstream.hits.length;
+    const response = await send({ messages: [], padding: "a".repeat(localBodyBytes()) });
+    expect(response.status).toBe(413);
+    expect(upstream.hits.length).toBe(before);
   });
 });

@@ -279,3 +279,17 @@ catalog you host through `modelCatalogUrl` uses the same two fields.
 - [Using local models guide](../guide/using-local-models) — the walkthrough, from install to `llm()` calls in code.
 - [`agency agent --local`](./agent) — the easy button that composes the local-model primitives.
 - [Custom providers guide](../guide/custom-providers) — for using any other provider.
+
+
+### Chat with images
+
+`agency local serve --vlm qwen3.5-9b-mlx` starts the model with
+`mlx-vlm==0.7.0`. The flag is repeatable and required for image-input
+chat. Without it, the model uses the text runtime. See
+[chat with pictures](../guide/using-local-models.md#chat-with-pictures-on-a-mac)
+for installation and an Agency example.
+
+A shared serve option such as `--hedge-limit` is refused when no model in
+the command supports it. It is allowed when a text model in the same
+command uses it. `--draft` applies to the preceding model and is refused
+for a model named with `--vlm`.

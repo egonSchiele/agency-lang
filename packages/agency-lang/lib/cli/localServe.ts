@@ -1,3 +1,6 @@
+import { MLX_VLM_VERSION, MLX_VLM_RULES, vlmServeArgs, imageChatExample } from "./vlmChat.js";
+import type { RequestRules } from "./requestRules.js";
+import { VLM_ARCHITECTURES, architectureOfModelDir } from "../stdlib/modelKind.js";
 import * as path from "node:path";
 import * as net from "node:net";
 import * as os from "node:os";
@@ -105,7 +108,18 @@ const MODEL_OPTION_FLAGS = ["--draft", "--draft-tokens"];
 
 /** The flags that name a model rather than set an option, so the model
  *  after them is a target too. */
-const MODEL_NAMING_FLAGS = ["--embedding", "--speech", "--image"];
+type NamingFlag = {
+  flag: string;
+  key: "embedding" | "speech" | "image" | "vlm";
+  kind: ServeKind;
+  runtime: ChatRuntime | null;
+};
+const NAMING_FLAGS: NamingFlag[] = [
+  { flag: "--embedding", key: "embedding", kind: "embedding", runtime: null },
+  { flag: "--speech", key: "speech", kind: "speech", runtime: null },
+  { flag: "--image", key: "image", kind: "image", runtime: null },
+  { flag: "--vlm", key: "vlm", kind: "chat", runtime: "mlx-vlm" },
+];
 
 /** The flags on a command line that take a value, by spelling: "required"
  *  when the next token is always the value, "optional" when it is the value
@@ -216,7 +230,7 @@ export function groupServeArgv(argv: string[], valueFlags: ValueFlags): ServeTar
     }
     const { flag, value, width } = readFlag(argv, index, valueFlags);
     index += width;
-    if (MODEL_NAMING_FLAGS.includes(flag)) {
+    if (NAMING_FLAGS.some((row) => row.flag === flag)) {
       if (value !== undefined) {
         targets.push({ model: value });
       }
@@ -421,11 +435,16 @@ function argsFor(
   if (model.kind === "vision") {
     return visionServeArgs(visionServerScript(), model.dir, internalPort);
   }
-  return serveArgs(chatServerScript(), model.dir, internalPort, settings);
+  return chatSpecOf(model)!.args({ modelDir: model.dir, port: internalPort, settings });
 }
 
 /** How a process is named in messages: which program, for which model. */
-function processLabel(kind: ServeKind, name: string): string {
+function labelOf(model: ServedModel): string {
+  const { kind, name } = model;
+  const chat = chatSpecOf(model);
+  if (chat !== null) {
+    return `${chat.program} for ${name}`;
+  }
   if (kind === "embedding") {
     return `the embedding server for ${name}`;
   }
@@ -520,7 +539,7 @@ export const ONNXRUNTIME_VERSION = "1.30.0";
  *  depend on its family, so its entry is empty here and `modulesFor` reads
  *  the directory. */
 const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
-  chat: ["mlx_lm", "llguidance"],
+  chat: [],
   embedding: ["mlx_lm"],
   speech: ["mlx_audio"],
   // accelerate is optional to diffusers, but without it a model loads
@@ -535,6 +554,10 @@ const MODULES_FOR_KIND: Record<ServeKind, string[]> = {
  *  model needs torch and transformers. Which it is shows in its files, the
  *  same way its kind did. */
 function modulesFor(model: Planned): string[] {
+  const chat = chatSpecOf(model);
+  if (chat !== null) {
+    return chat.modules;
+  }
   if (model.kind !== "vision") {
     return MODULES_FOR_KIND[model.kind];
   }
@@ -546,6 +569,7 @@ function modulesFor(model: Planned): string[] {
 /** The pip requirement that provides each module. */
 const PIP_FOR_MODULE: Record<string, string> = {
   mlx_lm: `mlx-lm==${MLX_LM_VERSION}`,
+  mlx_vlm: `mlx-vlm==${MLX_VLM_VERSION} mlx-audio==${MLX_AUDIO_VERSION}`,
   llguidance: `llguidance==${LLGUIDANCE_VERSION}`,
   mlx_audio: `mlx-audio==${MLX_AUDIO_VERSION}`,
   torch: IMAGE_REQUIREMENTS,
@@ -608,7 +632,8 @@ export function notServedMessage(served: string[], requested: string, requestPat
 
 /** Why a Python cannot serve: it is not there, or it cannot import a module
  *  one of the planned kinds needs. */
-export type PythonProblem = { kind: "missing" } | { kind: "cannot-import"; module: string };
+export type PythonProblem =
+  { kind: "missing" } | { kind: "cannot-import" | "wrong-version"; module: string };
 
 /** What to print when the chosen Python is not there, or cannot import a
  *  module the planned kinds need. The venv commands create the default
@@ -622,6 +647,15 @@ export function pythonMissingMessage(
 ): string {
   const venv = defaultMlxEnv(home);
   const pip = path.join(venv, "bin", "pip");
+  if (problem.kind === "wrong-version") {
+    const pin = VERSION_CHECKED[problem.module];
+    return [
+      `${python} has a version of ${pin.distribution} other than ${pin.version}.`,
+      `Agency's request rules were written against ${pin.version}. Install it:`,
+      "",
+      `  ${python} -m pip install ${PIP_FOR_MODULE[problem.module]}`,
+    ].join("\n");
+  }
   // A Python that has mlx_lm but not another module is an environment the
   // user made and only needs one more package. Any other problem gets the
   // commands that create the default environment from nothing.
@@ -660,6 +694,7 @@ export type ReadinessOptions = {
    *  with an embeddings request instead, and a speech process with GET
    *  /health. Default chat. */
   kind?: ServeKind;
+  label?: string;
 };
 
 type Probe = { method: "GET" | "POST"; path: string; body?: string };
@@ -728,7 +763,7 @@ export async function waitUntilLoaded(
     }
     const text = (await res.text()).slice(0, 500);
     throw new Error(
-      `${processLabel(kind, upstreamModel)} answered ${res.status} to the readiness request: ${text}`,
+      `${options.label ?? labelOf({ kind, name: upstreamModel })} answered ${res.status} to the readiness request: ${text}`,
     );
   };
   for (;;) {
@@ -748,6 +783,11 @@ function execSync(cmd: string, args: string[]): ExecResult {
   return { status: run.status, error: run.error as { code?: string } | undefined };
 }
 
+type PinnedPackage = { distribution: string; version: string };
+const VERSION_CHECKED: Record<string, PinnedPackage> = {
+  mlx_vlm: { distribution: "mlx-vlm", version: MLX_VLM_VERSION },
+};
+
 /** Whether `python` exists and can import each module. The first missing
  *  module names the problem. */
 export function checkPython(
@@ -762,6 +802,16 @@ export function checkPython(
     }
     if (run.status !== 0) {
       return { kind: "cannot-import", module };
+    }
+  }
+  for (const module of modules) {
+    const pin = VERSION_CHECKED[module];
+    if (pin === undefined) {
+      continue;
+    }
+    const code = `from importlib.metadata import version; import sys; sys.exit(0 if version('${pin.distribution}') == '${pin.version}' else 1)`;
+    if (exec(python, ["-c", code]).status !== 0) {
+      return { kind: "wrong-version", module };
     }
   }
   return "ok";
@@ -924,12 +974,13 @@ export type ServeFlags = ReplyLimits & {
   speech?: string[];
   /** Models to serve with the image server on /v1/images/generations. */
   image?: string[];
+  vlm?: string[];
 };
 
 function realSpawn(python: string, args: string[]): Child {
   return spawn(python, args, {
     stdio: "inherit",
-    env: { ...process.env, HF_HUB_OFFLINE: "1" },
+    env: { ...process.env, HF_HUB_OFFLINE: "1", HF_HUB_DISABLE_TELEMETRY: "1" },
   });
 }
 
@@ -956,6 +1007,7 @@ type Planned = {
   dir: string;
   sizeBytes: number;
   kind: ServeKind;
+  runtime: ChatRuntime | null;
   /** The chat model that drafts for this one, planned the same way. */
   draft?: { name: string; dir: string; sizeBytes: number; tokens: number };
 };
@@ -1064,7 +1116,32 @@ function planModel(value: string, cacheDir: string, flagged?: ServeKind): Planne
   if (kind === null) {
     throw new Error(unknownKindMessage(value));
   }
-  return { name, dir, sizeBytes, kind };
+  return { name, dir, sizeBytes, kind, runtime: kind === "chat" ? "mlx-lm" : null };
+}
+
+/** A required kind cannot override what the installed files say. */
+function planRequired(value: string, cacheDir: string, kind: ServeKind): Planned {
+  const model = planModel(value, cacheDir, kind);
+  const found = _modelKind(value, model.dir);
+  if (found !== null) {
+    assertKind(value, found, kind);
+  }
+  return model;
+}
+
+function planFlag(value: string, cacheDir: string, flag: NamingFlag): Planned {
+  if (flag.runtime === null) {
+    return planModel(value, cacheDir, flag.kind);
+  }
+  const model = planRequired(value, cacheDir, flag.kind);
+  const architecture = architectureOfModelDir(model.dir);
+  if (!VLM_ARCHITECTURES.includes(architecture)) {
+    throw new Error(
+      `${model.dir} has the architecture ${architecture || "(missing)"}.\n` +
+        `agency local serve ${flag.flag} has been tested with: ${VLM_ARCHITECTURES.join(", ")}.`,
+    );
+  }
+  return { ...model, runtime: flag.runtime };
 }
 
 /** The planned model with its draft attached, when its options name one.
@@ -1080,7 +1157,10 @@ function withDraft(
   if (options?.draft === undefined) {
     return model;
   }
-  if (model.kind !== "chat") {
+  if (!chatSpecOf(model)?.flags.includes("draft")) {
+    if (model.kind === "chat") {
+      throw new Error(`--draft is not supported by ${labelOf(model)}.`);
+    }
     throw new Error(
       `--draft goes after a chat model, and ${value} is ${anArticle(model.kind)} model. ` +
         `Write it after the chat model it drafts for: agency local serve <model> --draft ${options.draft}`,
@@ -1089,11 +1169,7 @@ function withDraft(
   // Nobody named the draft's kind, so "chat" is a requirement here, not a
   // flag: a draft the record or files say is something else is refused,
   // and one whose kind nothing says is taken as chat.
-  const draft = planModel(options.draft, cacheDir, "chat");
-  const found = _modelKind(options.draft, draft.dir);
-  if (found !== null) {
-    assertKind(options.draft, found, "chat");
-  }
+  const draft = planRequired(options.draft, cacheDir, "chat");
   return {
     ...model,
     draft: {
@@ -1128,18 +1204,23 @@ function unknownKindMessage(value: string): string {
 }
 
 /** Resolves with a description once the child exits. */
-function exitOf(child: Child, name: string, kind: ServeKind): Promise<string> {
+function exitOf(child: Child, label: string): Promise<string> {
   return new Promise((resolve) => {
     child.on("exit", (code, signal) => {
       const how = signal !== null ? `was killed by ${signal}` : `exited with ${code}`;
-      resolve(`${processLabel(kind, name)} ${how}`);
+      resolve(`${label} ${how}`);
     });
   });
 }
 
 /** A model in the banner. `dir` is where it was found, when there is one,
  *  so the banner can read which vision family it is. */
-export type ServedModel = { name: string; kind: ServeKind; dir?: string };
+export type ServedModel = {
+  name: string;
+  kind: ServeKind;
+  dir?: string;
+  runtime?: ChatRuntime | null;
+};
 
 /** The line of Agency code the banner suggests for each vision function,
  *  given the served model's name. */
@@ -1165,17 +1246,14 @@ export function servingBanner(port: number, models: ServedModel[]): string[] {
   const count = models.length;
   const lines = [`Serving ${count} model${count === 1 ? "" : "s"} on http://127.0.0.1:${port}/v1:`];
   for (const model of models) {
-    lines.push(`  ${model.name}${BANNER_SUFFIX[model.kind]}`);
+    lines.push(`  ${model.name}${chatSpecOf(model)?.bannerNote ?? BANNER_SUFFIX[model.kind]}`);
   }
   const first = (kind: ServeKind) => models.find((model) => model.kind === kind)?.name;
-  const chat = first("chat");
-  if (chat !== undefined) {
-    const spelled = path.isAbsolute(chat) ? chat : `mlx:${chat}`;
-    lines.push(
-      "",
-      `  agency run --local ${spelled} your.agency`,
-      `  agency agent --local ${spelled}`,
-    );
+  for (const [runtime, spec] of Object.entries(CHAT_RUNTIMES)) {
+    const model = models.find((m) => m.kind === "chat" && (m.runtime ?? "mlx-lm") === runtime);
+    if (model !== undefined) {
+      lines.push(...spec.example(model.name));
+    }
   }
   const embedding = first("embedding");
   if (embedding !== undefined) {
@@ -1228,22 +1306,23 @@ export async function runServe(
   // A model named on its own is served as whatever it is. One named with a
   // flag is served as that kind, unless the catalog says otherwise. Either
   // way it gets the options written after it.
-  const planWith = (value: string, flagged?: ServeKind): Planned =>
-    withDraft(
-      value,
-      planModel(value, deps.cacheDir, flagged),
-      flags.options?.[value],
-      deps.cacheDir,
-    );
-  const planNamed = (value: string): Planned => planWith(value);
-  const planFlagged = (flagged: ServeKind, named: string[] | undefined) =>
-    (named ?? []).map((value) => planWith(value, flagged));
+  const attachDraft = (value: string, model: Planned) =>
+    withDraft(value, model, flags.options?.[value], deps.cacheDir);
   const planned = [
-    ...values.map(planNamed),
-    ...planFlagged("embedding", flags.embedding),
-    ...planFlagged("speech", flags.speech),
-    ...planFlagged("image", flags.image),
+    ...values.map((value) => attachDraft(value, planModel(value, deps.cacheDir))),
+    ...NAMING_FLAGS.flatMap((flag) =>
+      (flags[flag.key] ?? []).map((value) =>
+        attachDraft(value, planFlag(value, deps.cacheDir, flag)),
+      ),
+    ),
   ];
+  const unused = flagsNobodyTakes(flags, planned);
+  if (unused.length > 0) {
+    const flag = unused[0].replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+    throw new Error(
+      `--${flag} is not taken by any model in this command. It is for a chat model served by mlx_lm.server.`,
+    );
+  }
   if (planned.length === 0) {
     throw new Error("Name at least one model to serve.");
   }
@@ -1317,7 +1396,8 @@ export async function runServe(
     );
     const child = deps.spawn(python, args);
     children.push(child);
-    exits.push(exitOf(child, model.name, model.kind));
+    const label = labelOf(model);
+    exits.push(exitOf(child, label));
     deps.log(`Loading ${model.name} (${formatGB(model.sizeBytes)})…`);
     const started = Date.now();
     try {
@@ -1326,6 +1406,7 @@ export async function runServe(
         fetch: deps.fetch,
         gone: Promise.race(exits),
         kind: model.kind,
+        label,
       });
     } catch (err) {
       killAll();
@@ -1336,7 +1417,8 @@ export async function runServe(
       model: model.name,
       upstreamModel: model.dir,
       port: internalPort,
-      label: processLabel(model.kind, model.name),
+      label,
+      rules: chatSpecOf(model)?.rules ?? null,
     });
   }
 
@@ -1391,10 +1473,7 @@ export async function localServe(
   try {
     flags.options = optionsByModel(groupServeArgv(argvAfterServe(argv, valueFlags), valueFlags));
     const wantsPicker =
-      values.length === 0 &&
-      (flags.embedding ?? []).length === 0 &&
-      (flags.speech ?? []).length === 0 &&
-      (flags.image ?? []).length === 0;
+      values.length === 0 && NAMING_FLAGS.every((flag) => (flags[flag.key] ?? []).length === 0);
     const models = wantsPicker ? await pickModelsToServe(realPickDeps(defaultCacheDir())) : values;
     if (wantsPicker && models.length === 0) {
       // Cancelled, or nothing ticked: nothing to serve, and nothing wrong.
@@ -1414,4 +1493,64 @@ export async function localServe(
   console.error(why);
   await handle.close();
   process.exit(1);
+}
+
+export type ChatRuntime = "mlx-lm" | "mlx-vlm";
+export type ChatFlag =
+  "reasoningBudget" | "hedgeLimit" | "repeatLimit" | "limitAnswers" | "prefillStep" | "draft";
+export type ChatLaunch = { modelDir: string; port: number; settings: ChatServerSettings };
+export type ChatRuntimeSpec = {
+  program: string;
+  modules: string[];
+  args: (launch: ChatLaunch) => string[];
+  flags: ChatFlag[];
+  bannerNote: string;
+  example: (name: string) => string[];
+  rules: RequestRules | null;
+};
+
+function runLocalExample(name: string): string[] {
+  const spelled = path.isAbsolute(name) ? name : `mlx:${name}`;
+  return ["", `  agency run --local ${spelled} your.agency`, `  agency agent --local ${spelled}`];
+}
+
+export const CHAT_RUNTIMES: Record<ChatRuntime, ChatRuntimeSpec> = {
+  "mlx-lm": {
+    program: "mlx_lm.server",
+    modules: ["mlx_lm", "llguidance"],
+    args: (launch) => serveArgs(chatServerScript(), launch.modelDir, launch.port, launch.settings),
+    flags: ["reasoningBudget", "hedgeLimit", "repeatLimit", "limitAnswers", "prefillStep", "draft"],
+    bannerNote: "",
+    example: runLocalExample,
+    rules: null,
+  },
+  "mlx-vlm": {
+    program: "mlx_vlm.server",
+    modules: ["mlx_vlm"],
+    args: (launch) => vlmServeArgs(launch.modelDir, launch.port, launch.settings.maxTokens),
+    flags: [],
+    bannerNote: "  (chat with images)",
+    example: imageChatExample,
+    rules: MLX_VLM_RULES,
+  },
+};
+
+function chatSpecOf(model: ServedModel): ChatRuntimeSpec | null {
+  return model.kind === "chat" ? CHAT_RUNTIMES[model.runtime ?? "mlx-lm"] : null;
+}
+
+/** Explicit shared flags must have at least one consumer. Drafts are per model. */
+function flagsNobodyTakes(flags: ServeFlags, models: Planned[]): ChatFlag[] {
+  const explicit: ChatFlag[] = [
+    "reasoningBudget",
+    "hedgeLimit",
+    "repeatLimit",
+    "limitAnswers",
+    "prefillStep",
+  ];
+  return explicit.filter(
+    (flag) =>
+      flags[flag as keyof ServeFlags] !== undefined &&
+      !models.some((model) => chatSpecOf(model)?.flags.includes(flag)),
+  );
 }

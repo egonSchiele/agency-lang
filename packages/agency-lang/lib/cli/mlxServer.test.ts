@@ -514,6 +514,42 @@ describe("front door request rules", () => {
       max_tokens: 20,
     });
   });
+  it.each(["/some/local/adapter", null])(
+    "refuses adapter_path %j without contacting upstream",
+    async (adapter_path) => {
+      const before = upstream.hits.length;
+      const response = await send({ messages: [{ content: "hi" }], adapter_path });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { message: "The field adapter_path is not supported by the server for this model." },
+      });
+      expect(upstream.hits.length).toBe(before);
+    },
+  );
+  it.each([
+    [10, 10],
+    [100, 20],
+  ])("normalizes max_completion_tokens %s and caps it at %s", async (requested, expected) => {
+    const response = await send({
+      messages: [{ content: "hi" }],
+      max_completion_tokens: requested,
+    });
+    expect(response.status).toBe(200);
+    expect(upstream.hits.at(-1)?.body).toEqual({
+      model: "/models/vision",
+      messages: [{ content: "hi" }],
+      max_tokens: expected,
+    });
+  });
+  it("refuses conflicting token limits before capping or forwarding", async () => {
+    const before = upstream.hits.length;
+    const response = await send({ max_completion_tokens: 100, max_tokens: 200 });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: "Conflicting fields max_completion_tokens and max_tokens." },
+    });
+    expect(upstream.hits.length).toBe(before);
+  });
   it("logs refusals without contacting the upstream", async () => {
     const before = upstream.hits.length;
     const response = await send({}, "/unload");

@@ -500,11 +500,18 @@ or open a file. Other parts, including alternate image and audio inputs,
 are refused. Image bytes remain the client's responsibility; the front
 door neither decodes nor opens them.
 
-The three field moves translate Agency's existing mlx client:
+The thinking field moves translate Agency's existing mlx client:
 `chat_template_kwargs.enable_thinking` becomes `enable_thinking`,
 `chat_template_kwargs.reasoning_effort` becomes `reasoning_effort`,
 and `reasoning_budget` becomes `thinking_budget`. Conflicting source and
 destination values are refused. An emptied template object is removed.
+
+The token-limit alias `max_completion_tokens` becomes `max_tokens` before
+applying the server's token cap. Conflicting values are refused.
+
+Client-supplied `adapter_path` is refused, including explicit null. The
+upstream runtime can load local adapter files and replace its cached model
+based on this field; requests cannot select or reset an adapter.
 
 Remaining `chat_template_kwargs`, `hedge_limit`, `repeat_limit`, and
 `limit_answers` fields are refused because this release would ignore them.

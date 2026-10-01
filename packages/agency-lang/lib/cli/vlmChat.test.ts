@@ -52,6 +52,22 @@ describe("vision chat", () => {
   ])("refuses %s %s", (method, path) => {
     expect(prepare({}, path, method)).toMatchObject({ refusal: { status: 404 } });
   });
+  it.each(["/some/local/adapter", null])("refuses adapter_path %j", (adapter_path) => {
+    expect(prepare({ adapter_path })).toMatchObject({ refusal: { status: 400 } });
+  });
+  it("normalizes the completion-token alias", () => {
+    expect(prepare({ max_completion_tokens: 20 })).toEqual({ body: { max_tokens: 20 } });
+  });
+  it("accepts matching token limits and removes the alias", () => {
+    expect(prepare({ max_completion_tokens: 20, max_tokens: 20 })).toEqual({
+      body: { max_tokens: 20 },
+    });
+  });
+  it("refuses conflicting token limits", () => {
+    expect(prepare({ max_completion_tokens: 20, max_tokens: 40 })).toMatchObject({
+      refusal: { status: 400, message: "Conflicting fields max_completion_tokens and max_tokens." },
+    });
+  });
   it("forwards schemas and tools", () => {
     const body = { response_format: { type: "json_schema" }, tools: [{ type: "function" }] };
     expect(prepare(body)).toEqual({ body });

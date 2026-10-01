@@ -38,9 +38,10 @@ export const MLX_VLM_RULES: RequestRules = {
   routes: [{ method: "POST", path: "/v1/chat/completions" }],
   parts: { text: anyPart, image_url: dataImagePart },
   moved: [
+    { from: "max_completion_tokens", to: "max_tokens" },
     { from: "chat_template_kwargs.enable_thinking", to: "enable_thinking" },
     { from: "chat_template_kwargs.reasoning_effort", to: "reasoning_effort" },
     { from: "reasoning_budget", to: "thinking_budget" },
   ],
-  refused: ["chat_template_kwargs", "hedge_limit", "repeat_limit", "limit_answers"],
+  refused: ["adapter_path", "chat_template_kwargs", "hedge_limit", "repeat_limit", "limit_answers"],
 };

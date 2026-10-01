@@ -1,3 +1,4 @@
+import { applyRequestRules, type RequestRules, type Prepared } from "./requestRules.js";
 import * as http from "node:http";
 import { parseJsonBody } from "../serve/util.js";
 import { notServedMessage } from "./localServe.js";
@@ -19,7 +20,13 @@ import {
  *  was started with (the request's `model` is rewritten to this, because
  *  mlx_lm.server loads whatever model a request names), its port, and how
  *  it is named in a message. */
-export type Route = { model: string; upstreamModel: string; port: number; label: string };
+export type Route = {
+  model: string;
+  upstreamModel: string;
+  port: number;
+  label: string;
+  rules?: RequestRules | null;
+};
 
 /** mlx_lm's own name for whatever a server was started with. A client
  *  that cannot spell a repo id (Harbor allows a self-hosted model name one
@@ -144,10 +151,9 @@ function forward(
     error(res, 502, message);
     finish(ownReply(502, JSON.stringify({ error: { message } })));
   });
-  // The client went away mid-reply: close our side of the upstream socket.
-  // The chat server looks at its socket while it generates and drops the
-  // reply at its next token, instead of running it to max_tokens for
-  // nobody. A prompt still being read is read to the end first.
+  // Close the upstream socket when the client leaves. Whether generation
+  // stops depends on the runtime: mlx-vlm cancels streamed requests but
+  // can finish a non-streaming request after the socket closes.
   res.on("close", () => {
     if (!res.writableFinished) {
       upstream.destroy();
@@ -156,9 +162,6 @@ function forward(
   upstream.end(body);
 }
 
-type ReadResult =
-  { body: Record<string, unknown> } | { refusal: { status: number; message: string } };
-
 /** The largest body the door reads for a request to each path whose
  *  server takes more than parseJsonBody's default: an image request may
  *  carry input images, and a vision request carries its image. Each limit
@@ -166,6 +169,7 @@ type ReadResult =
 function bodyLimits(): Record<string, number> {
   return {
     [IMAGES_PATH]: localBodyBytes(),
+    "/v1/chat/completions": localBodyBytes(),
     ...Object.fromEntries(VISION_PATHS.map((visionPath) => [visionPath, visionBodyBytes()])),
   };
 }
@@ -186,7 +190,7 @@ function bodyLimit(url: string | undefined): number | undefined {
 async function readRequest(
   req: http.IncomingMessage,
   maxBytes: number | undefined,
-): Promise<ReadResult> {
+): Promise<Prepared> {
   try {
     const parsed = await parseJsonBody(req, maxBytes, localBodyBytes());
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -287,12 +291,24 @@ export function startFrontDoor(
       refuse(404, notServedMessage(served, model, req.url ?? ""));
       return;
     }
+    const prepared =
+      route.rules == null
+        ? { body: parsed }
+        : applyRequestRules(route.rules, {
+            method: req.method ?? "",
+            path: req.url ?? "",
+            body: parsed,
+          });
+    if ("refusal" in prepared) {
+      refuse(prepared.refusal.status, prepared.refusal.message);
+      return;
+    }
     forward(
       req,
       res,
       route,
       Buffer.from(
-        JSON.stringify({ ...capMaxTokens(parsed, maxTokens), model: route.upstreamModel }),
+        JSON.stringify({ ...capMaxTokens(prepared.body, maxTokens), model: route.upstreamModel }),
       ),
       record.finish,
     );

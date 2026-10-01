@@ -112,7 +112,23 @@ export function describeRequest(body: Record<string, unknown>): string | null {
       shown[field] = imageNote(shown[field]);
     }
   }
-  return JSON.stringify(shown, null, 2);
+  return JSON.stringify(
+    shown,
+    (key, value) => {
+      if (
+        key === "image_url" &&
+        value !== null &&
+        typeof value === "object" &&
+        typeof value.url === "string" &&
+        value.url.startsWith("data:")
+      ) {
+        const encoded = value.url.slice(value.url.indexOf(",") + 1);
+        return { ...value, url: `<image, ${megabytes(decodedBytes(encoded))}>` };
+      }
+      return value;
+    },
+    2,
+  );
 }
 
 /** What the log shows in place of an image field's base64: how many images
@@ -137,7 +153,7 @@ type Usage = { prompt_tokens?: unknown; completion_tokens?: unknown };
 
 function usageOf(parsed: { usage?: unknown }): Partial<ReplySummary> {
   const usage = parsed.usage as Usage | undefined;
-  if (usage === undefined) {
+  if (usage === undefined || usage === null) {
     return {};
   }
   const out: Partial<ReplySummary> = {};
@@ -216,7 +232,11 @@ export type RequestFacts = { path: string; outputFormat?: string };
  *  count alone, never parsed, so a capture cut short makes no difference.
  *  An image server returns one image per request. */
 export function describeReply(reply: Reply, request?: RequestFacts): ReplySummary {
-  const { body, contentType, truncated } = reply;
+  const { contentType, truncated } = reply;
+  const body = reply.body.replace(
+    /data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+/g,
+    "<image data omitted>",
+  );
   if (isAudio(contentType)) {
     return { body: "", streamed: false, truncated: false, audioBytes: reply.totalBytes };
   }

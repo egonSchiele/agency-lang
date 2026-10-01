@@ -54,3 +54,5 @@ import { userMessage, image } from "std::thread"
 
 userMessage(["Here's the screenshot I mentioned", image("./screenshot.png")])
 ```
+
+For local image-input chat, see [chat with pictures on a Mac](using-local-models.md#chat-with-pictures-on-a-mac).

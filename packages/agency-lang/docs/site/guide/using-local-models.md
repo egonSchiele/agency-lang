@@ -484,6 +484,84 @@ Run it with `--approve std::vision`. Make the crops with `findRegions` and `crop
 
 How well this works has been measured on one photo so far. Two cats scored 0.55 against each other and at most 0.26 against a TV remote, so telling kinds of thing apart works. Telling your own mug from a lookalike in another photo has not been measured yet, and neither have drawings.
 
+## Chat with pictures on a Mac
+
+```bash
+~/.agency-agent/mlx-env/bin/python -m pip install mlx-vlm==0.7.0 mlx-audio==0.5.4
+agency local serve --vlm qwen3.5-9b-mlx
+```
+
+Use `--vlm` to ask a chat model questions about pictures. The initial
+supported architecture is `Qwen3_5ForConditionalGeneration`, tested with
+`mlx-community/Qwen3.5-9B-4bit`. Download the model first with
+`agency local download qwen3.5-9b-mlx`.
+
+```agency
+import { image } from "std::thread"
+
+node main() {
+  const answer = llm(["What is in this picture?", image("photo.png")], {
+    provider: "mlx",
+    model: "mlx-community/Qwen3.5-9B-4bit"
+  })
+  return answer
+}
+```
+
+The image goes through the ordinary image-read approval. Set
+`MLX_BASE_URL` to the server's `/v1` URL if it uses a port other than
+8080. The model stays loaded between calls.
+
+A typed call can ask for a specific value:
+
+```agency
+import { image } from "std::thread"
+
+node main() {
+  const sides: number = llm(["How many sides does this shape have?", image("square.png")], {
+    provider: "mlx",
+    model: "mlx-community/Qwen3.5-9B-4bit"
+  })
+  return sides
+}
+```
+
+This is a chat model you ask questions in words. `std::vision` runs
+fixed tasks such as tagging, captioning, and detection.
+
+The flag is required because these same weights also work as text models.
+Without it, Agency keeps using its existing text server. A model served
+with `--vlm` has no hedge or repeat limits, `limitAnswers`, or `--draft`.
+Thinking is off unless the call turns it on. Temperature and `maxTokens`
+still apply. Requests for unsupported reply limits fail with an error.
+
+Both runtimes can share one serve command. Pinning `mlx-audio` in the
+install command preserves the version Agency's speech server requires.
+Use `--python /path/to/env/bin/python` if you keep a separate environment.
+
+An alias keeps its resolved model identity: an `mlx:` URI uses the repo
+ID, and a directory uses its absolute path. `GET /v1/models` lists these
+names once the server is ready. Serving uses installed files with Hub
+networking and telemetry disabled. Missing files fail instead of downloading.
+
+Chat bodies are limited to about 107 MB, including previous images resent
+in the conversation. Each image sent by the client is capped at 20 MiB.
+The local server accepts image bytes in data URIs and refuses remote URLs,
+file paths, audio parts, and alternate image part formats.
+
+
+### A reply you gave up on keeps running
+
+With mlx-vlm 0.7.0, closing a streamed reply cancelled generation in the
+real-model check. Closing a non-streaming reply did not. The abandoned
+request finished before the next request generated its answer. A client
+timeout therefore does not guarantee that GPU work stops.
+
+Agency starts mlx-vlm with its upstream log level set to `CRITICAL`.
+Upstream error messages can contain an invalid image's entire data URI.
+Agency's front door still logs request status and timings, and redacts
+image data from verbose request and response logs.
+
 ## What is different about a local model
 
 A hosted provider makes a dozen small choices for you, and you never see them. A local model makes you see every one. This section lists the choices that catch people, what each looks like when it goes wrong, and what to do about it. Most apply to both backends. Where one applies to the MLX server alone, or to llama.cpp alone, the text says so.

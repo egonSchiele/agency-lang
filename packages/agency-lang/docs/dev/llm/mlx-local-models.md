@@ -240,20 +240,22 @@ This server is serving X and Y. It is not serving Z. Start it with: agency local
 `GET /v1/models` answers with the served list. `mlxServerModels` and
 `mlxServerRunning` in `std::agency/local` read it. Replies are piped
 through, so streaming works. A client that disconnects mid-reply destroys
-the upstream request, so the server stops generating.
+the upstream request. Cancellation of generation depends on the runtime;
+see the non-streaming limitation under "Chat with pictures".
 
 **The body limit.** The door reads each body with `parseJsonBody` from
 `lib/serve/util.ts`. For most routes the limit is its default, 10 MiB
 (`MAX_BODY_BYTES` in `lib/serve/constants.ts`). A request for
-`/v1/images/generations` gets a larger limit, `localBodyBytes()` from
+`/v1/images/generations` or `/v1/chat/completions` gets a larger limit, `localBodyBytes()` from
 `lib/stdlib/localImageInputs.ts`: 64 KB for the settings plus the base64
 of 4 reference images of 20 MB each, about 107 MB. That is the image
 server's own body limit, and a test keeps the two equal. The door knows
 the path before it reads the body, so it picks the limit per request.
 See `local-images.md` for where the image limits come from.
 
-Only the image route gets the larger limit. A chat request to the door
-keeps 10 MiB. `agency serve` also reads bodies with `parseJsonBody` and
+Chat completions also get `localBodyBytes()`, so image attachments fit.
+The limit includes images in earlier messages. It applies to both chat runtimes
+because the door reads the body before selecting a model. `agency serve` also reads bodies with `parseJsonBody` and
 keeps 10 MiB, since its routes take a served agent's JSON arguments and
 have no use for a 100 MB body.
 
@@ -452,3 +454,78 @@ model is good for: `coding`, `reasoning`, `writing`, `science`,
 `category` field, which a remote catalog or an alias from before the
 split may still carry; `kindOfCategory` and `tagsOfCategory` read it as
 both.
+
+
+## Chat with pictures
+
+`agency local serve --vlm qwen3.5-9b-mlx` launches `mlx_vlm.server`
+directly. The model remains kind `chat` and backend `mlx`. The flag
+selects its chat runtime. Without the flag, Qwen3.5 keeps using
+`mlxChatServer.py`, including its reply limits and drafting support.
+The flag must remain required until the two runtimes have text-feature parity.
+
+| Table | Consumer |
+|---|---|
+| `CHAT_RUNTIMES` in `localServe.ts` | Launch arguments, modules, labels, banner examples, supported flags, and route rules |
+| `NAMING_FLAGS` in `localServe.ts` | Argument grouping, model planning, and picker selection |
+| `MLX_VLM_RULES` in `vlmChat.ts` | `applyRequestRules` in `requestRules.ts` |
+
+The validated architecture list is `VLM_ARCHITECTURES` in `modelKind.ts`.
+A flagged model must be chat and match that list. Its alias or URI resolves
+through the existing code, and the public name does not change.
+
+### Python and readiness
+
+The runtime imports `mlx_vlm`. Install it with
+`python -m pip install mlx-vlm==0.7.0 mlx-audio==0.5.4` in the configured
+environment. The audio pin keeps the existing speech runtime compatible.
+After checking imports, `checkPython` checks installed distribution
+metadata against `MLX_VLM_VERSION`. A different version is refused because
+the request rules depend on that release.
+
+Every child receives `HF_HUB_OFFLINE=1` and
+`HF_HUB_DISABLE_TELEMETRY=1`. The vision runtime loads the model in its
+startup hook before listening. The existing one-token chat probe checks
+readiness. Child ownership and cleanup use the existing serve lifecycle.
+
+### Request rules
+
+The upstream server has administrative and file-access endpoints that Agency
+does not expose. Its route accepts only `POST /v1/chat/completions`.
+The front door still answers `GET /v1/models` itself.
+
+Message parts are limited to `text` and `image_url`. An image URL must
+start with `data:image/`; otherwise the upstream library could fetch a URL
+or open a file. Other parts, including alternate image and audio inputs,
+are refused. Image bytes remain the client's responsibility; the front
+door neither decodes nor opens them.
+
+The three field moves translate Agency's existing mlx client:
+`chat_template_kwargs.enable_thinking` becomes `enable_thinking`,
+`chat_template_kwargs.reasoning_effort` becomes `reasoning_effort`,
+and `reasoning_budget` becomes `thinking_budget`. Conflicting source and
+destination values are refused. An emptied template object is removed.
+
+Remaining `chat_template_kwargs`, `hedge_limit`, `repeat_limit`, and
+`limit_answers` fields are refused because this release would ignore them.
+Schemas and tools are forwarded to its existing implementations.
+Verbose logs replace nested image data URIs with size notes.
+
+To add a chat runtime, add its row and request rules, then exercise its
+launch and transport tests. Before moving the version pin, check the new
+release's routes, content-part parsing, and option handling, and repeat the
+real-model checks. Keep deterministic tests tied to the fields emitted by
+`mlxThinkingAttributes` and `mlxReplyLimitAttributes`.
+
+
+### A reply you gave up on keeps running
+
+With mlx-vlm 0.7.0, closing a streamed reply cancelled generation in the
+real-model check. Closing a non-streaming reply did not. The abandoned
+request finished before the next request generated its answer. A client
+timeout therefore does not guarantee that GPU work stops.
+
+Agency starts mlx-vlm with its upstream log level set to `CRITICAL`.
+Upstream error messages can contain an invalid image's entire data URI.
+Agency's front door still logs request status and timings, and redacts
+image data from verbose request and response logs.

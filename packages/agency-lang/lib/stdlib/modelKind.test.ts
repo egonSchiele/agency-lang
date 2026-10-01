@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { safeDeleteDirectoryWithin } from "../utils.js";
-import { kindOfModelDir, isModelKind, MODEL_KINDS } from "./modelKind.js";
+import { architectureOfModelDir, kindOfModelDir, isModelKind, MODEL_KINDS } from "./modelKind.js";
 
 describe("kindOfModelDir", () => {
   let dir: string;
@@ -26,6 +26,18 @@ describe("kindOfModelDir", () => {
     }
     return model;
   }
+
+  it("reads the architecture or an empty string when absent", () => {
+    expect(
+      architectureOfModelDir(
+        modelDir("qwen", {
+          "config.json": { architectures: ["Qwen3_5ForConditionalGeneration"] },
+        }),
+      ),
+    ).toBe("Qwen3_5ForConditionalGeneration");
+    expect(architectureOfModelDir(modelDir("empty", {}))).toBe("");
+    expect(architectureOfModelDir(modelDir("no-architecture", { "config.json": {} }))).toBe("");
+  });
 
   it("says image for any diffusers directory, whatever its pipeline", () => {
     // The image server decides which pipelines it runs, so a family it does

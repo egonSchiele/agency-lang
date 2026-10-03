@@ -1235,7 +1235,10 @@ def read_as(text, type_name):
             word = text.strip().lower()
             return word == "true" if word in ("true", "false") else NOT_THAT_TYPE
         if type_name in ("object", "array"):
-            value = json.loads(text)
+            # Not strict, as in mlx_lm's own parser: a model writes a
+            # parameter as raw text, so a string inside it can hold a real
+            # line break.
+            value = json.loads(text, strict=False)
             wanted = dict if type_name == "object" else list
             return value if isinstance(value, wanted) else NOT_THAT_TYPE
     except (ValueError, OverflowError):

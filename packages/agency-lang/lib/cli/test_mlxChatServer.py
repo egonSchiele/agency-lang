@@ -383,6 +383,12 @@ class UnionToolParameters(unittest.TestCase):
         self.assertEqual(self.convert('{"a": 1}', "details", self.config), {"a": 1})
         self.assertEqual(self.convert("[1]", "details", self.config), "[1]")
 
+    def test_an_object_with_a_line_break_inside_a_string_is_read(self):
+        text = '{"text": "line1\nline2"}'
+        self.assertEqual(
+            self.convert(text, "details", self.config), {"text": "line1\nline2"}
+        )
+
     def test_a_union_that_allows_a_string_keeps_the_text(self):
         self.assertEqual(self.convert("3", "note", self.config), "3")
         self.assertIsNone(self.convert("null", "note", self.config))

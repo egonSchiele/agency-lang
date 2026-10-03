@@ -82,6 +82,12 @@ rejected, including what it told the grammar.
 A request that carries tools keeps its `response_format` but the schema is
 not enforced, because a tool call is not JSON and the constraint would break
 it. That matches what the llama.cpp backend does. The limits still apply.
+The exception is a request that also sends `tool_choice: "none"`: the caller
+has ruled a tool call out, so the schema is enforced. smoltalk asks for a
+typed reply this way once a model with tools has finished calling them. It
+leaves the tools in the request because the chat template writes them at
+the start of the prompt, and a prompt that starts the same as the last one
+is read from the cache.
 
 This script reaches into `mlx_lm.server`: it subclasses its request handler
 and response generator, and replaces two module-level names, `run` and
@@ -115,6 +121,13 @@ import mlx.core as mx
 from mlx_lm import server
 from mlx_lm.generate import GenerationBatch
 from mlx_lm.models.cache import can_trim_prompt_cache
+
+
+def schema_can_be_enforced(tools, tool_choice):
+    """Whether a reply can be held to its `response_format`. It cannot while
+    the model may call a tool, since a tool call is not JSON. A request with
+    no tools, or one whose `tool_choice` is "none", rules a tool call out."""
+    return not tools or tool_choice == "none"
 
 
 def grammar_for(response_format):
@@ -1186,6 +1199,82 @@ def lenient_param_value(convert):
     return converted
 
 
+# Returned by `read_as` when the text is not a value of the type asked for.
+NOT_THAT_TYPE = object()
+
+STRING_TYPES = ("string", "str", "text")
+
+
+def union_member_types(param):
+    """The type names a parameter's schema allows when it is a union, such
+    as ["number", "null"] for `number | null`, or an empty list when the
+    schema names one type or none. zod writes a union as `anyOf`; JSON
+    Schema also allows `oneOf` and a list under `type`."""
+    if not isinstance(param, dict):
+        return []
+    declared = param.get("type")
+    if isinstance(declared, list):
+        return [str(name).lower() for name in declared]
+    members = param.get("anyOf") or param.get("oneOf") or []
+    names = [member.get("type") for member in members if isinstance(member, dict)]
+    return [str(name).lower() for name in names if isinstance(name, str)]
+
+
+def whole_or_float(number):
+    if number == int(number):
+        return int(number)
+    return number
+
+
+def read_as(text, type_name):
+    """The text as a value of one JSON Schema type, or NOT_THAT_TYPE."""
+    try:
+        if type_name == "null":
+            return None if text.strip().lower() == "null" else NOT_THAT_TYPE
+        if type_name == "integer":
+            return int(text)
+        if type_name == "number":
+            return whole_or_float(float(text))
+        if type_name == "boolean":
+            word = text.strip().lower()
+            return word == "true" if word in ("true", "false") else NOT_THAT_TYPE
+        if type_name in ("object", "array"):
+            value = json.loads(text)
+            wanted = dict if type_name == "object" else list
+            return value if isinstance(value, wanted) else NOT_THAT_TYPE
+    except (ValueError, OverflowError):
+        return NOT_THAT_TYPE
+    return NOT_THAT_TYPE
+
+
+def union_param_value(convert):
+    """A tool-call parameter whose type is a union is read as the first
+    member the text fits. mlx_lm 0.31.3's Qwen parser looks for one `type`
+    on the parameter's schema and, finding none on a union, hands the text
+    over unread. So a model calling a tool whose parameter is
+    `number | null` could not send a number at all: "3" arrived as the text
+    "3". The parser reads the word "null" as nothing on its own, before the
+    type is looked at.
+
+    A union that allows a string keeps the text, since any text is a valid
+    string. Text that fits no member also stays text, so the tool can say
+    what was wrong with it. That includes the word "None" for
+    `number | null`: it is not a number and not "null", and guessing that
+    the model meant nothing would hide its mistake from it."""
+
+    def converted(param_value, param_name, param_config):
+        members = union_member_types(param_config.get(param_name))
+        if not members or any(name in STRING_TYPES for name in members):
+            return convert(param_value, param_name, param_config)
+        for name in members:
+            value = read_as(param_value, name)
+            if value is not NOT_THAT_TYPE:
+                return value
+        return param_value
+
+    return converted
+
+
 def make_tool_parsers_lenient():
     """Wrap the parser that has been seen to fail. Other parsers are left
     alone until one is seen to."""
@@ -1193,7 +1282,9 @@ def make_tool_parsers_lenient():
         from mlx_lm.tool_parsers import qwen3_coder
     except ImportError:
         return
-    qwen3_coder._convert_param_value = lenient_param_value(qwen3_coder._convert_param_value)
+    qwen3_coder._convert_param_value = lenient_param_value(
+        union_param_value(qwen3_coder._convert_param_value)
+    )
 
 
 def keep_logits(tokens, logits):
@@ -1279,11 +1370,10 @@ class Handler(server.APIHandler):
         request.connection = self.connection
         try:
             request.limits = limits_for(self.body, self.max_tokens, SERVER_LIMITS)
-            if request.tools:
-                if self.body.get("response_format") is not None:
-                    logging.warning("response_format is not enforced on a request with tools.")
-            else:
+            if schema_can_be_enforced(request.tools, self.body.get("tool_choice")):
                 request.grammar = grammar_for(self.body.get("response_format"))
+            elif self.body.get("response_format") is not None:
+                logging.warning("response_format is not enforced on a request with tools.")
         except ValueError as problem:
             self._set_completion_headers(400)
             self.end_headers()

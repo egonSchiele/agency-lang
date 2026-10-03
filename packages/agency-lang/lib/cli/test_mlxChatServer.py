@@ -322,6 +322,99 @@ class WatcherTests(unittest.TestCase):
         self.assertIn(WIDTH - 1, allowed(out))
 
 
+class SchemaWithTools(unittest.TestCase):
+    """A reply is held to its schema only when no tool call can come."""
+
+    def test_a_request_without_tools_is_held_to_its_schema(self):
+        self.assertTrue(m.schema_can_be_enforced(None, None))
+        self.assertTrue(m.schema_can_be_enforced([], None))
+
+    def test_a_request_with_tools_is_not(self):
+        tools = [{"function": {"name": "run"}}]
+        self.assertFalse(m.schema_can_be_enforced(tools, None))
+        self.assertFalse(m.schema_can_be_enforced(tools, "auto"))
+
+    def test_a_request_that_rules_tool_calls_out_is(self):
+        tools = [{"function": {"name": "run"}}]
+        self.assertTrue(m.schema_can_be_enforced(tools, "none"))
+
+
+class UnionToolParameters(unittest.TestCase):
+    """A parameter whose type is a union is read as the member it fits."""
+
+    def setUp(self):
+        def plain(value, name, config):
+            # Stands in for the parser's own conversion, which hands a
+            # parameter with no single `type` over as text.
+            return value
+
+        self.convert = m.union_param_value(plain)
+        self.config = {
+            "value": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+            "done": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+            "details": {"anyOf": [{"type": "object"}, {"type": "null"}]},
+            "count": {"type": ["integer", "null"]},
+            "note": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "name": {"type": "string"},
+        }
+
+    def test_a_number_reaches_a_number_or_null_parameter_as_a_number(self):
+        self.assertEqual(self.convert("3", "value", self.config), 3)
+        self.assertEqual(self.convert("2.5", "value", self.config), 2.5)
+        self.assertEqual(self.convert("7", "count", self.config), 7)
+
+    def test_the_word_null_is_nothing(self):
+        self.assertIsNone(self.convert("null", "value", self.config))
+
+    def test_text_that_fits_no_member_stays_text(self):
+        # "None" is not a number and not "null". The tool gets the text and
+        # can tell the model what was wrong with it.
+        self.assertEqual(self.convert("None", "value", self.config), "None")
+        self.assertEqual(self.convert("seven", "value", self.config), "seven")
+        self.assertEqual(self.convert("1e400", "count", self.config), "1e400")
+
+    def test_a_boolean_is_read_only_from_true_or_false(self):
+        self.assertIs(self.convert("true", "done", self.config), True)
+        self.assertIs(self.convert("False", "done", self.config), False)
+        self.assertEqual(self.convert("None", "done", self.config), "None")
+
+    def test_an_object_is_read_from_json(self):
+        self.assertEqual(self.convert('{"a": 1}', "details", self.config), {"a": 1})
+        self.assertEqual(self.convert("[1]", "details", self.config), "[1]")
+
+    def test_a_union_that_allows_a_string_keeps_the_text(self):
+        self.assertEqual(self.convert("3", "note", self.config), "3")
+
+    def test_a_parameter_with_one_type_goes_to_the_parser(self):
+        self.assertEqual(self.convert("3", "name", self.config), "3")
+        self.assertEqual(self.convert("3", "unknown", self.config), "3")
+
+    def test_the_qwen_parser_reads_a_number_for_a_union_parameter(self):
+        from mlx_lm.tool_parsers import qwen3_coder
+
+        tools = [
+            {
+                "function": {
+                    "name": "logEntry",
+                    "parameters": {"properties": {"value": self.config["value"]}},
+                }
+            }
+        ]
+
+        def parse(text):
+            call = f"<function=logEntry><parameter=value>\n{text}\n</parameter></function>"
+            return qwen3_coder.parse_tool_call(call, tools)["arguments"]["value"]
+
+        original = qwen3_coder._convert_param_value
+        m.make_tool_parsers_lenient()
+        try:
+            self.assertEqual(parse("3"), 3)
+            self.assertIsNone(parse("null"))
+            self.assertEqual(parse("None"), "None")
+        finally:
+            qwen3_coder._convert_param_value = original
+
+
 class LenientToolParameters(unittest.TestCase):
     """A parameter the parser cannot convert comes through as text."""
 

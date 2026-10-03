@@ -2290,7 +2290,18 @@ export class TypeScriptBuilder {
         const vrId = ts.id(vrName);
         validationGuards.push(
           ts.constDecl(vrName, this.validateExpr(param.typeHint, stackArg)),
-          ts.if(ts.not(ts.prop(vrId, "success")), ts.return(vrId)),
+          ts.if(
+            ts.not(ts.prop(vrId, "success")),
+            ts.return(
+              ts.invalidArgument({
+                functionName,
+                paramName: param.name,
+                typeText: formatTypeHint(param.typeHint),
+                value: stackArg,
+                failure: vrId,
+              }),
+            ),
+          ),
           ts.assign(stackArg, ts.prop(vrId, "value")),
         );
       }

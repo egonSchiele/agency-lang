@@ -406,6 +406,7 @@ since `.meta()`'s semantics only matter at runtime.
 | `lib/backends/typescriptGenerator/tagArgToTs.ts`                                      | prints a tag argument as a TS source string                            |
 | `lib/backends/typescriptBuilder.ts`                                                    | emits `(Alias as any).__agency_descriptor = ...` and `!`-site validation calls |
 | `lib/runtime/validateChain.ts`                                                        | `__validateChain` / `__validateChainRecursive` / the predicate-contract check |
+| `lib/runtime/invalidArgument.ts`                                                      | `__invalidArgument`: rewords a failed `!` parameter so a model calling the function as a tool can correct it |
 | `stdlib/validation.agency`                                                            | the pre-baked validators and the annotated aliases (`Email`, `NumberInRange`, …) |
 
 ---

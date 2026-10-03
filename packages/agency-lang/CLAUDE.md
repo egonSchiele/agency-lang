@@ -244,6 +244,8 @@ Other process docs:
 
 - `docs/dev/runtime/async-behavior-checklist.md` — The case-by-case behavioral checklist the async implementation was built against.
 - `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
+- `docs/dev/runtime/browser-async-context-seam.md` — The one file every runtime context store imports, so a browser build can swap `AsyncLocalStorage` for another implementation.
+- `docs/dev/runtime/portable-context-spike.md` — A spike: keeping runtime context with no `AsyncLocalStorage` by rewriting `async` functions and wrapping `.then`, the test results on Node and in a `WKWebView`, the load-time check for code that was not rewritten, what a portable build still needs, and the recommended next steps.
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle, and the per-statement `onCheckpoint` hook a host uses to resume a crashed run.
 - `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.

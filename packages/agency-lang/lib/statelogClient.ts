@@ -1,7 +1,7 @@
 import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
 import * as path from "path";
-import { AsyncLocalStorage } from "node:async_hooks";
+import { AsyncLocalStorage } from "./runtime/platform/asyncLocalStorage.js";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";

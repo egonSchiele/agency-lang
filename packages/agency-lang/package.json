@@ -3,6 +3,9 @@
   "version": "0.27.0",
   "description": "The Agency language",
   "main": "./dist/lib/index.js",
+  "browser": {
+    "./dist/lib/runtime/platform/asyncLocalStorage.js": "./dist/lib/runtime/platform/asyncLocalStorage.browser.js"
+  },
   "scripts": {
     "benchmark:decisions": "tsc -p benchmarks/decision-models/tsconfig.json && node .agency-build/decision-models/run.js",
     "test": "vitest --test-timeout=1000",

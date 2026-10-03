@@ -1,5 +1,5 @@
 import * as smoltalk from "smoltalk";
-import { AsyncLocalStorage } from "node:async_hooks";
+import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";

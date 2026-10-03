@@ -1,0 +1,39 @@
+// A validated parameter that does not fit says so in words a model can act
+// on: which argument, what type it takes, and what arrived.
+
+def isPositive(value: number): Result<number> {
+  if (value > 0) {
+    return success(value)
+  }
+  return failure("expected ${value} to be > 0")
+}
+
+@validate(isPositive)
+type Count = number
+
+def logEntry(trackerId: string!, value: number | null!): Result<string> {
+  return success("logged ${value}")
+}
+
+def setCount(count: Count!): Result<string> {
+  return success("set ${count}")
+}
+
+def messageOf(result: any): string {
+  if (isFailure(result)) {
+    return result.error
+  }
+  return "ran: ${result.value}"
+}
+
+node main() {
+  const wordForNothing: any = "None"
+  const text: any = "seven"
+  return [
+    messageOf(logEntry("t1", wordForNothing)),
+    messageOf(logEntry("t1", text)),
+    messageOf(logEntry("t1", null)),
+    messageOf(logEntry("t1", 3)),
+    messageOf(setCount(-5)),
+  ]
+}

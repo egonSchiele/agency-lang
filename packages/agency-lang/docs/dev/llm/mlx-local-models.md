@@ -221,8 +221,24 @@ honoured: a request naming a JSON schema gets an `llguidance` logits
 processor that masks every token which would break the schema. A thinking
 model is left free inside its `<think>` block and held to the schema after
 it. A request with tools keeps its schema but is not constrained, because a
-tool call is not the JSON the schema describes; `smoltalk-llama-cpp` makes
-the same choice. The script's docstring explains the phases and the seams
+tool call is not the JSON the schema describes. The exception is a request
+that also sends `tool_choice: "none"`. The caller has ruled a tool call out,
+so the schema is enforced. `schema_can_be_enforced` makes the decision.
+
+smoltalk's `mlx` client, from version 0.16.0, sends that as the second of
+two requests for a typed `llm()` call with tools. It does not split a
+streamed call, so a streamed call with tools is still not constrained.
+
+**Tool-call parameters.** Qwen writes a tool call as text, and
+`mlx_lm`'s `qwen3_coder` parser turns each parameter into a value by looking
+up one `type` on its schema. A union has no single `type`: zod writes
+`number | null` as `anyOf`. `union_param_value` wraps the parser and reads
+the text as the first member of the union it fits. It hands each member to
+the parser as if the parameter had that one type, so a union member is read
+by the same rules as a plain parameter of that type. Text that fits no
+member stays text, including the word "None", so the tool can report the
+mistake to the model. `lenient_param_value` wraps the same function for the values the
+parser raises on. The script's docstring explains the phases and the seams
 it patches in `mlx_lm.server`. Those seams are why `MLX_LM_VERSION` in
 `localServe.ts` pins mlx-lm, the way `MLX_AUDIO_VERSION` pins mlx-audio,
 and why `checkPython` asks for `llguidance` before serving a chat model.

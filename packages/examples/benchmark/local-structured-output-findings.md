@@ -308,7 +308,9 @@ at most four whitespace characters, after which the JSON has to start.
   for local thinking models is a separate decision.
 - Tools plus a schema. Both backends leave the schema unenforced when the
   call carries tools. Google's smoltalk client makes two requests in that
-  situation; the same could be done here.
+  situation, and from smoltalk 0.16.0 its `mlx` client does the same.
+  Agency's MLX server enforces the schema on the second request, which
+  sends `tool_choice: "none"`.
 
 ## A bug in the benchmark script (fixed)
 

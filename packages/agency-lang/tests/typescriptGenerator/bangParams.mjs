@@ -34,7 +34,7 @@ import {
   registerModuleFingerprint as __registerModuleFingerprint,
   head, tail, empty,
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
-  Schema, __validateType, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
+  Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
   __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
   functionRefReviver as __functionRefReviver,
@@ -242,7 +242,13 @@ if (
   try {
     const __vr_data = __validateType(__stack.args["data"], z.number());
     if (!__vr_data.success) {
-      return __vr_data;
+      return __invalidArgument({
+        functionName: "process",
+        paramName: "data",
+        typeText: "number",
+        value: __stack.args["data"],
+        failure: __vr_data
+      });
     }
     __stack.args["data"] = __vr_data.value;
     await agencyStore.run({

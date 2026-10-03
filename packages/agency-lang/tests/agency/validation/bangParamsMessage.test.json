@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "nodeName": "main",
+      "input": "",
+      "expectedOutput": "[\"Argument \\\"value\\\" of logEntry must be number | null, but received the text \\\"None\\\". To leave it empty, send null, not text.\",\"Argument \\\"value\\\" of logEntry must be number | null, but received the text \\\"seven\\\".\",\"ran: logged null\",\"ran: logged 3\",\"Argument \\\"count\\\" of setCount was refused: expected -5 to be > 0\"]",
+      "evaluationCriteria": [
+        {
+          "type": "exact"
+        }
+      ]
+    }
+  ]
+}

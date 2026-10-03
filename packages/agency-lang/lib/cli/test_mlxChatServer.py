@@ -322,6 +322,149 @@ class WatcherTests(unittest.TestCase):
         self.assertIn(WIDTH - 1, allowed(out))
 
 
+class SchemaWithTools(unittest.TestCase):
+    """A reply is held to its schema only when no tool call can come."""
+
+    def test_a_request_without_tools_is_held_to_its_schema(self):
+        self.assertTrue(m.schema_can_be_enforced(None, None))
+        self.assertTrue(m.schema_can_be_enforced([], None))
+
+    def test_a_request_with_tools_is_not(self):
+        tools = [{"function": {"name": "run"}}]
+        self.assertFalse(m.schema_can_be_enforced(tools, None))
+        self.assertFalse(m.schema_can_be_enforced(tools, "auto"))
+
+    def test_a_request_that_rules_tool_calls_out_is(self):
+        tools = [{"function": {"name": "run"}}]
+        self.assertTrue(m.schema_can_be_enforced(tools, "none"))
+
+
+class UnionToolParameters(unittest.TestCase):
+    """A parameter whose type is a union is read as the member it fits.
+    These run against mlx_lm's own converter, because the union reading
+    hands each member to it."""
+
+    def setUp(self):
+        from mlx_lm.tool_parsers import qwen3_coder
+
+        self.parser = qwen3_coder._convert_param_value
+        self.convert = m.union_param_value(self.parser)
+        self.config = {
+            "value": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+            "done": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+            "details": {"anyOf": [{"type": "object"}, {"type": "null"}]},
+            "items": {"anyOf": [{"type": "array"}, {"type": "null"}]},
+            "count": {"type": ["integer", "null"]},
+            "either": {"oneOf": [{"type": "boolean"}, {"type": "number"}]},
+            "note": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "label": {"type": ["string", "null"]},
+            "untyped": {"anyOf": [{"const": 1}, {"const": 2}]},
+            "name": {"type": "string"},
+            "shape": {"type": "object", "anyOf": [{"type": "number"}]},
+        }
+
+    def single(self, text, type_name):
+        """What the parser makes of the text for a parameter of one type."""
+        return self.parser(text, "p", {"p": {"type": type_name}})
+
+    def test_a_number_reaches_a_number_or_null_parameter_as_a_number(self):
+        self.assertEqual(self.convert("3", "value", self.config), 3)
+        self.assertEqual(self.convert("2.5", "value", self.config), 2.5)
+        self.assertEqual(self.convert("-4", "value", self.config), -4)
+        self.assertEqual(self.convert("7", "count", self.config), 7)
+
+    def test_the_word_null_is_nothing_as_it_is_for_any_parameter(self):
+        self.assertIsNone(self.convert("null", "value", self.config))
+        self.assertIsNone(self.convert("NULL", "details", self.config))
+        self.assertIsNone(self.convert("null", "note", self.config))
+        self.assertIsNone(self.convert("null", "label", self.config))
+        # The parser does this for a parameter that does not allow null
+        # too, and a union is no different.
+        self.assertIsNone(self.single("null", "number"))
+        self.assertIsNone(self.convert("null", "either", self.config))
+
+    def test_text_that_fits_no_member_stays_text(self):
+        # "None" is not a number and not "null". The tool gets the text and
+        # can tell the model what was wrong with it.
+        for name in ("value", "done", "details", "items", "count", "either"):
+            self.assertEqual(self.convert("None", name, self.config), "None")
+        self.assertEqual(self.convert("seven", "value", self.config), "seven")
+        self.assertEqual(self.convert("", "value", self.config), "")
+        self.assertEqual(self.convert("2.5", "count", self.config), "2.5")
+        self.assertEqual(self.convert("1e400", "value", self.config), "1e400")
+        self.assertEqual(self.convert("nan", "value", self.config), "nan")
+
+    def test_a_boolean_is_read_only_from_true_or_false(self):
+        self.assertIs(self.convert("true", "done", self.config), True)
+        self.assertIs(self.convert("False", "done", self.config), False)
+        self.assertEqual(self.convert("yes", "done", self.config), "yes")
+        # Padded text is not a boolean: the parser would read it as false.
+        self.assertEqual(self.convert(" true ", "done", self.config), " true ")
+
+    def test_the_first_member_that_fits_wins(self):
+        self.assertIs(self.convert("true", "either", self.config), True)
+        self.assertEqual(self.convert("3", "either", self.config), 3)
+
+    def test_an_object_or_array_member_is_read_as_the_parser_reads_one(self):
+        for text in ('{"a": 1}', "{'a': 1}", '{"a": {"b": [1, 2]}}'):
+            self.assertEqual(
+                self.convert(text, "details", self.config), self.single(text, "object")
+            )
+        for text in ("[1, 2]", "(1, 2)", "[]"):
+            self.assertEqual(
+                self.convert(text, "items", self.config), self.single(text, "array")
+            )
+
+    def test_a_value_of_the_wrong_shape_stays_text(self):
+        self.assertEqual(self.convert("[1]", "details", self.config), "[1]")
+        self.assertEqual(self.convert('{"a": 1}', "items", self.config), '{"a": 1}')
+        self.assertEqual(self.convert("3", "details", self.config), "3")
+        self.assertEqual(self.convert('{"a": 1} done', "details", self.config), '{"a": 1} done')
+
+    def test_a_union_that_allows_a_string_keeps_the_text(self):
+        for name in ("note", "label"):
+            self.assertEqual(self.convert("3", name, self.config), "3")
+            self.assertEqual(self.convert("[1]", name, self.config), "[1]")
+            self.assertEqual(self.convert("None", name, self.config), "None")
+
+    def test_a_union_whose_members_name_no_type_goes_to_the_parser(self):
+        self.assertEqual(
+            self.convert("1", "untyped", self.config),
+            self.parser("1", "untyped", self.config),
+        )
+
+    def test_a_parameter_with_one_type_goes_to_the_parser(self):
+        self.assertEqual(self.convert("3", "name", self.config), "3")
+        # A single `type` decides, whatever else the schema carries.
+        self.assertEqual(self.convert('{"a": 1}', "shape", self.config), {"a": 1})
+        self.assertEqual(self.convert("3", "unknown", self.config), "3")
+
+    def test_the_qwen_parser_reads_a_number_for_a_union_parameter(self):
+        from mlx_lm.tool_parsers import qwen3_coder
+
+        tools = [
+            {
+                "function": {
+                    "name": "logEntry",
+                    "parameters": {"properties": {"value": self.config["value"]}},
+                }
+            }
+        ]
+
+        def parse(text):
+            call = f"<function=logEntry><parameter=value>\n{text}\n</parameter></function>"
+            return qwen3_coder.parse_tool_call(call, tools)["arguments"]["value"]
+
+        original = qwen3_coder._convert_param_value
+        m.make_tool_parsers_lenient()
+        try:
+            self.assertEqual(parse("3"), 3)
+            self.assertIsNone(parse("null"))
+            self.assertEqual(parse("None"), "None")
+        finally:
+            qwen3_coder._convert_param_value = original
+
+
 class LenientToolParameters(unittest.TestCase):
     """A parameter the parser cannot convert comes through as text."""
 

@@ -1,3 +1,23 @@
+## Oct 3 2026 — v0.27.0
+
+### Language
+
+- **Clearer errors for bad tool arguments.** When a model calls a function with a `!` parameter and passes the wrong type, the failure names the argument, the type it takes, and what arrived, so the model can fix its next call.
+
+### Standard Library
+
+- **`findRegions` and `embedImage` in `std::vision`.** `findRegions` uses `owlv2-base` to do object detection locally, and `embedImage` generates embeddings for an image, with `dinov2-base`.
+
+### Local models
+
+- **Chat with images on a Mac.** `agency local serve --vlm <model>` now serves vision-language models with `mlx-vlm`.
+- **New vision models.** The catalog adds `owlv2-base`, which does object detection, and `dinov2-base`, which makes image embeddings.
+- Bug fix: the MLX server reads a tool-call parameter with a union type, such as `number | null`, correctly instead of passing it through as text.
+
+### Docs
+
+- Add docs for the `@agency-lang/lora` package.
+
 ## Sep 30 2026 — v0.26.1
 
 ### Local models

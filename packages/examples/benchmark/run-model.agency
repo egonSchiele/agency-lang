@@ -678,6 +678,8 @@ const REASONING_CASES = ["reasoning"]
 // model shows its steps there whether or not it thinks first.
 let thinkingMode = "auto"
 let thinkingBudget = 4096
+// The reasoning effort sent with thinking, or "" for the model's own default.
+let thinkingEffort = ""
 
 // Tokens kept for the answer above the thinking budget. A provider that
 // budgets thinking (Anthropic's older models, for one) refuses a call whose
@@ -709,7 +711,11 @@ def thinkingFor(caseName: string): void {
   }
   const on = thinkingMode == "on" || (thinkingMode == "auto" && REASONING_CASES.includes(caseName))
   if (on) {
-    setLlmOptions({ thinking: { enabled: true, budgetTokens: thinkingBudget } })
+    if (thinkingEffort == "") {
+      setLlmOptions({ thinking: { enabled: true, budgetTokens: thinkingBudget } })
+    } else {
+      setLlmOptions({ thinking: { enabled: true, budgetTokens: thinkingBudget }, reasoningEffort: thinkingEffort })
+    }
   } else {
     setLlmOptions({ thinking: { enabled: false } })
   }
@@ -879,6 +885,7 @@ node main() {
       timeout: { type: "number", default: 0, description: "Seconds to wait for one call before giving up on it. 0 leaves the runtime's default in place (ten minutes)" },
       thinking: { type: "string", default: "auto", description: "How models think: auto (off, except on the reasoning cases), on, off, or default (each model's own default)" },
       "thinking-budget": { type: "number", default: 4096, description: "Tokens a model may think for on a case where thinking is on" },
+      effort: { type: "string", default: "", description: "Reasoning effort on a case where thinking is on: low, medium, or high. Empty leaves the model's own default, which on Qwen 3.8 is its highest" },
       "machine-label": { type: "string", default: "", description: "A short name for this machine, such as m1-studio, put in the results file and its name" },
       backend: { type: "string", default: "", description: "What runs the model: hosted, mlx, or llama-cpp. Recorded in the results; guessed from the model name when empty" },
       "draft-model": { type: "string", default: "", description: "The draft model in use for speculative decoding, recorded in the results. For a GGUF model pass it to agency run --draft as well; for an MLX model start the server with it" },
@@ -909,6 +916,11 @@ node main() {
   }
   thinkingMode = args.flags.thinking
   thinkingBudget = args.flags["thinking-budget"]
+  if (!["", "low", "medium", "high"].includes(args.flags.effort)) {
+    print("--effort must be low, medium, or high, not ${args.flags.effort}")
+    return null
+  }
+  thinkingEffort = args.flags.effort
 
   // A local thinking model can spend the provider's whole default budget
   // thinking and never answer, and the runtime waits ten minutes for it.

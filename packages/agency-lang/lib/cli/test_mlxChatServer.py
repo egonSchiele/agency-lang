@@ -355,6 +355,7 @@ class UnionToolParameters(unittest.TestCase):
             "details": {"anyOf": [{"type": "object"}, {"type": "null"}]},
             "count": {"type": ["integer", "null"]},
             "note": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "label": {"type": ["string", "null"]},
             "name": {"type": "string"},
         }
 
@@ -384,6 +385,17 @@ class UnionToolParameters(unittest.TestCase):
 
     def test_a_union_that_allows_a_string_keeps_the_text(self):
         self.assertEqual(self.convert("3", "note", self.config), "3")
+        self.assertIsNone(self.convert("null", "note", self.config))
+
+    def test_a_string_union_written_as_a_type_list_keeps_the_text(self):
+        # The real parser is used here: handed this schema, it evaluates
+        # the text as a Python literal, so "3" would arrive as a number.
+        from mlx_lm.tool_parsers import qwen3_coder
+
+        convert = m.union_param_value(qwen3_coder._convert_param_value)
+        self.assertEqual(convert("3", "label", self.config), "3")
+        self.assertEqual(convert("[1]", "label", self.config), "[1]")
+        self.assertIsNone(convert("null", "label", self.config))
 
     def test_a_parameter_with_one_type_goes_to_the_parser(self):
         self.assertEqual(self.convert("3", "name", self.config), "3")

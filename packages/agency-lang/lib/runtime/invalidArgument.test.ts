@@ -89,6 +89,18 @@ describe("__invalidArgument", () => {
     expect(result.error).toBe('Argument "tags" of setTags was refused: ["a"] has too few tags');
   });
 
+  it("returns a failure that was passed in as the argument unchanged", () => {
+    const earlier = failure("disk full");
+    const result = __invalidArgument({
+      functionName: "save",
+      paramName: "count",
+      typeText: "number",
+      value: earlier,
+      failure: refused(earlier, z.number()),
+    });
+    expect(result).toBe(earlier);
+  });
+
   it("shortens a long text value", () => {
     const long = "x".repeat(200);
     expect(describeValue(long)).toBe(`the text "${"x".repeat(60)}"...`);

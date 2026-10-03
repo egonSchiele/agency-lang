@@ -1,4 +1,4 @@
-import { failure } from "./result.js";
+import { failure, isFailure } from "./result.js";
 import type { ResultFailure } from "./result.js";
 
 /**
@@ -10,9 +10,8 @@ import type { ResultFailure } from "./result.js";
  *   Argument "value" of logEntry must be number | null, but received the
  *   text "None". To leave it empty, send null, not text.
  *
- * The schema library's own message for the same mistake is a JSON list of
- * issues that never names the argument, and a model shown it repeated the
- * same bad call.
+ * The schema library's own message is a JSON list of issues that never
+ * names the argument.
  */
 
 // The longest piece of a received text value quoted back in the message.
@@ -110,6 +109,11 @@ function emptyHint(arg: InvalidArgument): string {
 }
 
 export function __invalidArgument(arg: InvalidArgument): ResultFailure {
+  if (isFailure(arg.value)) {
+    // The caller passed in a failure from an earlier step. Validation hands
+    // it back untouched, and so does this: the argument was not refused.
+    return arg.failure;
+  }
   const named = `Argument "${arg.paramName}" of ${arg.functionName}`;
   const issues = schemaIssues(arg.failure.error);
   if (issues === null) {

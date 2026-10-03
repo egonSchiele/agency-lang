@@ -310,8 +310,7 @@ at most four whitespace characters, after which the JSON has to start.
   call carries tools. Google's smoltalk client makes two requests in that
   situation, and from smoltalk 0.16.0 the two local clients do the same.
   Agency's MLX server enforces the schema on the second request, which
-  sends `tool_choice: "none"`. Agency still has to move to that smoltalk
-  version for a typed call with tools to work on a local model.
+  sends `tool_choice: "none"`.
 
 ## A bug in the benchmark script (fixed)
 

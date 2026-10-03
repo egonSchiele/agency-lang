@@ -83,11 +83,7 @@ A request that carries tools keeps its `response_format` but the schema is
 not enforced, because a tool call is not JSON and the constraint would break
 it. That matches what the llama.cpp backend does. The limits still apply.
 The exception is a request that also sends `tool_choice: "none"`: the caller
-has ruled a tool call out, so the schema is enforced. smoltalk asks for a
-typed reply this way once a model with tools has finished calling them. It
-leaves the tools in the request because the chat template writes them at
-the start of the prompt, and a prompt that starts the same as the last one
-is read from the cache.
+has ruled a tool call out, so the schema is enforced.
 
 This script reaches into `mlx_lm.server`: it subclasses its request handler
 and response generator, and replaces two module-level names, `run` and
@@ -1248,24 +1244,23 @@ def read_as(text, type_name):
 
 
 def union_param_value(convert):
-    """A tool-call parameter whose type is a union is read as the first
+    """Reads a tool-call parameter whose type is a union as the first
     member the text fits. mlx_lm 0.31.3's Qwen parser looks for one `type`
-    on the parameter's schema and, finding none on a union, hands the text
-    over unread. So a model calling a tool whose parameter is
-    `number | null` could not send a number at all: "3" arrived as the text
-    "3". The parser reads the word "null" as nothing on its own, before the
-    type is looked at.
+    on the parameter's schema. A union has none, so the parser hands a
+    number sent to a `number | null` parameter over as text.
 
     A union that allows a string keeps the text, since any text is a valid
-    string. Text that fits no member also stays text, so the tool can say
-    what was wrong with it. That includes the word "None" for
-    `number | null`: it is not a number and not "null", and guessing that
-    the model meant nothing would hide its mistake from it."""
+    string. Text that fits no member also stays text, so the tool can tell
+    the model what was wrong with it."""
 
     def converted(param_value, param_name, param_config):
         members = union_member_types(param_config.get(param_name))
-        if not members or any(name in STRING_TYPES for name in members):
+        if not members:
             return convert(param_value, param_name, param_config)
+        if "null" in members and read_as(param_value, "null") is None:
+            return None
+        if any(name in STRING_TYPES for name in members):
+            return param_value
         for name in members:
             value = read_as(param_value, name)
             if value is not NOT_THAT_TYPE:

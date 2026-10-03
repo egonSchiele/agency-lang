@@ -1189,16 +1189,28 @@ def lenient_param_value(convert):
     def converted(param_value, param_name, param_config):
         try:
             return convert(param_value, param_name, param_config)
-        except (ValueError, SyntaxError, TypeError, OverflowError):
+        except PARSER_ERRORS:
             return param_value
 
     return converted
 
 
-# Returned by `read_as` when the text is not a value of the type asked for.
+# Returned by `read_as_member` when the text is not a value of that type.
 NOT_THAT_TYPE = object()
 
 STRING_TYPES = ("string", "str", "text")
+
+# What the parser returns for each JSON Schema type a union can name. It
+# reads an array written as a Python tuple, so a tuple counts as one.
+MEMBER_VALUES = {
+    "integer": int,
+    "number": (int, float),
+    "boolean": bool,
+    "object": dict,
+    "array": (list, tuple),
+}
+
+PARSER_ERRORS = (ValueError, SyntaxError, TypeError, OverflowError)
 
 
 def union_member_types(param):
@@ -1211,39 +1223,29 @@ def union_member_types(param):
     declared = param.get("type")
     if isinstance(declared, list):
         return [str(name).lower() for name in declared]
+    if declared is not None:
+        return []
     members = param.get("anyOf") or param.get("oneOf") or []
     names = [member.get("type") for member in members if isinstance(member, dict)]
     return [str(name).lower() for name in names if isinstance(name, str)]
 
 
-def whole_or_float(number):
-    if number == int(number):
-        return int(number)
-    return number
-
-
-def read_as(text, type_name):
-    """The text as a value of one JSON Schema type, or NOT_THAT_TYPE."""
-    try:
-        if type_name == "null":
-            return None if text.strip().lower() == "null" else NOT_THAT_TYPE
-        if type_name == "integer":
-            return int(text)
-        if type_name == "number":
-            return whole_or_float(float(text))
-        if type_name == "boolean":
-            word = text.strip().lower()
-            return word == "true" if word in ("true", "false") else NOT_THAT_TYPE
-        if type_name in ("object", "array"):
-            # Not strict, as in mlx_lm's own parser: a model writes a
-            # parameter as raw text, so a string inside it can hold a real
-            # line break.
-            value = json.loads(text, strict=False)
-            wanted = dict if type_name == "object" else list
-            return value if isinstance(value, wanted) else NOT_THAT_TYPE
-    except (ValueError, OverflowError):
+def read_as_member(convert, text, type_name):
+    """The text as a value of one member type, or NOT_THAT_TYPE. The parser
+    does the reading, as if the parameter had that one type, so a union
+    member is read exactly as a parameter of that type is."""
+    wanted = MEMBER_VALUES.get(type_name)
+    if wanted is None:
         return NOT_THAT_TYPE
-    return NOT_THAT_TYPE
+    # The parser reads every text but "true" as false, so it cannot say
+    # whether the text is a boolean at all.
+    if type_name == "boolean" and text.lower() not in ("true", "false"):
+        return NOT_THAT_TYPE
+    try:
+        value = convert(text, "member", {"member": {"type": type_name}})
+    except PARSER_ERRORS:
+        return NOT_THAT_TYPE
+    return value if isinstance(value, wanted) else NOT_THAT_TYPE
 
 
 def union_param_value(convert):
@@ -1252,20 +1254,23 @@ def union_param_value(convert):
     on the parameter's schema. A union has none, so the parser hands a
     number sent to a `number | null` parameter over as text.
 
-    A union that allows a string keeps the text, since any text is a valid
-    string. Text that fits no member also stays text, so the tool can tell
-    the model what was wrong with it."""
+    The word "null" is nothing, as it is for every parameter the parser
+    reads. A union that allows a string keeps any other text, since any
+    text is a valid string. Text that fits no member also stays text, so
+    the tool can tell the model what was wrong with it."""
 
     def converted(param_value, param_name, param_config):
         members = union_member_types(param_config.get(param_name))
         if not members:
             return convert(param_value, param_name, param_config)
-        if "null" in members and read_as(param_value, "null") is None:
+        # With no schema to go on, the parser applies only its rule for
+        # the word "null".
+        if convert(param_value, param_name, {}) is None:
             return None
         if any(name in STRING_TYPES for name in members):
             return param_value
         for name in members:
-            value = read_as(param_value, name)
+            value = read_as_member(convert, param_value, name)
             if value is not NOT_THAT_TYPE:
                 return value
         return param_value

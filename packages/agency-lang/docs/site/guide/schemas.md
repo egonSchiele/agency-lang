@@ -55,19 +55,21 @@ function greet(name: string!, age: number!) {
 
 If any of these parameters fails to validate, the function returns immediately with a `failure`. The body does not run, so nothing after it happens either: no interrupt is raised and no work is done.
 
-The failure says which argument was wrong, what type it takes, and what arrived:
+This matters most when a model calls the function as a tool. In your own code the type checker catches a wrong argument before the program runs. A model's tool call is not type checked, and models do get arguments wrong. Take this function:
 
 ```ts
 def logEntry(trackerId: string!, value: number | null!): Result<string> {
   // ...
 }
-
-logEntry("t1", "None")
-// failure: Argument "value" of logEntry must be number | null, but received
-// the text "None". To leave it empty, send null, not text.
 ```
 
-This matters most when a model calls the function as a tool. Models get arguments wrong, and a local model gets them wrong more often. The model reads this message as the tool's error and can correct its next call. Without the `!`, Agency does not check an argument's type, and the wrong value goes into the function body.
+Suppose a model calls it with the text `"None"` for `value`. The failure says which argument was wrong, what type it takes, and what arrived:
+
+```
+Argument "value" of logEntry must be number | null, but received the text "None". To leave it empty, send null, not text.
+```
+
+The model reads this message as the tool's error and can correct its next call. Without the `!`, Agency does not check the argument, and the wrong value goes into the function body.
 
 You can use the bang syntax to validate the return value from a function as well.
 

@@ -1,4 +1,4 @@
-import { failure, isFailure } from "./result.js";
+import { isFailure } from "./result.js";
 import type { ResultFailure } from "./result.js";
 
 /**
@@ -125,5 +125,5 @@ export function __invalidArgument(arg: InvalidArgument): ResultFailure {
     `${named} must be ${arg.typeText}, but received ${describeValue(arg.value)}.` +
     nestedProblems(issues) +
     emptyHint(arg);
-  return failure(message, arg.failure.data);
+  return { ...arg.failure, error: message };
 }

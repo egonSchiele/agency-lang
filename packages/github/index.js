@@ -52,7 +52,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  withRun as __withRun,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -152,7 +152,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "d58fc13c85bda424cc3abfe64602781a54ee4a060cfa689fc1a356dfd74aa783", import.meta.url);
+__registerModuleFingerprint("index.agency", "2850116409a8a56ea0eb474763dbee78e63879beac294c3bc89ac2de054cfe26", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -243,12 +243,11 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -413,12 +412,11 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -574,12 +572,11 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -745,12 +742,11 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -949,12 +945,11 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -1165,12 +1160,11 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -1349,12 +1343,11 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -1524,12 +1517,11 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -1704,12 +1696,11 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -1888,12 +1879,11 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -2063,12 +2053,11 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -2243,12 +2232,11 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -2417,12 +2405,11 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",

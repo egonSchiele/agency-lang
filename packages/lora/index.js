@@ -51,7 +51,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  withRun as __withRun,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -151,7 +151,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "cf95b9e2a343477f2a6da3bd40114b09723ade9104af255afec9ee4817198e3d", import.meta.url);
+__registerModuleFingerprint("index.agency", "8a6c26c7db1cdb6a3950968aba843b529bc8c6df93a916e255738d5c7f7aa915", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -304,12 +304,11 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -636,12 +635,11 @@ async function __loraInfo_impl(__run, path2) {
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",

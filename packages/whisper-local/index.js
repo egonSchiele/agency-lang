@@ -40,7 +40,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  withRun as __withRun,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "b23b18f426ab1396f4ecb1aac351dc7ae980ee9951d0858f87dcce198d50b229", import.meta.url);
+__registerModuleFingerprint("index.agency", "c66f0a43bf77f8fb0ae7fd4308aa757b296545e4595934879a3bd6900a9f3fc2", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -221,12 +221,11 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",

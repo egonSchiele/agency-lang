@@ -40,7 +40,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  withRun as __withRun,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "003454ef3a7a0df40f5ad542fb133cd3e303ef574bdf203254f7fd94dcd1004d", import.meta.url);
+__registerModuleFingerprint("index.agency", "d475f1ec9160e9c60cc6d240d6995baf18fa1ff24dee457da0012299093971fb", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -221,12 +221,11 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",

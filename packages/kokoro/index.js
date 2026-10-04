@@ -47,7 +47,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  withRun as __withRun,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -147,7 +147,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "297980d675c09eb4e59d6b7ad5cd2d88cbb01350e3fa0c95f964854814ba3b15", import.meta.url);
+__registerModuleFingerprint("index.agency", "45fb22182f5348002fcea78282f439cccecf9b87a668e69db4a1242b1165f7f7", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -219,12 +219,11 @@ async function __realOutput_impl(__run, outputFile) {
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -424,12 +423,11 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -736,12 +734,11 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",
@@ -927,12 +924,11 @@ async function __voices_impl(__run) {
     __ctx._pendingArgOverrides = void 0;
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",

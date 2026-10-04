@@ -41,7 +41,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  withRun as __withRun,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -141,7 +141,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "5e482788548cf1688b242a4982465d263d36d65701d5a35d53f3e9af763fbd85", import.meta.url);
+__registerModuleFingerprint("index.agency", "8493fe7473d5e66b1ef5bb98d93e0da5624c0c036304f4160cdc30ea06c9e8a7", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -272,12 +272,11 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",

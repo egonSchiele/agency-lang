@@ -40,7 +40,7 @@ import {
   AgencyFunction as __AgencyFunction,
   UNSET as __UNSET,
   __call,
-  withRun as __withRun,
+  withChildRun as __withChildRun,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "6c3ccfb5ebdbcbbd652bca6f905230bbb9d4dbc85829b61ee824439d3f1edc3b", import.meta.url);
+__registerModuleFingerprint("index.agency", "926bb56ebf399b3c65c3e48420e04a856262a5a08f79f1c828d8149a111d43db", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -216,12 +216,11 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
     }
   }
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run2) => {
+    }, "its body", async (__run2) => {
       await runner.hook(0, __run2, async (__run3) => {
         await callHook(__run3, {
           name: "onFunctionStart",

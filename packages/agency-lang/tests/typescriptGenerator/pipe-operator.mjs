@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
+  __call, __callMethod, withRun as __withRun, withChildRun as __withChildRun, detachedRun as __detachedRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -241,12 +241,11 @@ if (
 }
 
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run) => {
+    }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
           name: "onFunctionStart",
@@ -396,12 +395,11 @@ if (
 }
 
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run) => {
+    }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
           name: "onFunctionStart",
@@ -559,12 +557,11 @@ if (
 }
 
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async (__run) => {
+    }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
           name: "onFunctionStart",
@@ -702,12 +699,11 @@ let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "pipe-operator.agency");
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "pipe-operator.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await __withRun({
-      ...__run,
+    await __withChildRun(__run, {
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async (__run) => {
+    }, "its body", async (__run) => {
       await runner.hook(0, __run, async (__run) => {
 await callHook(__run, {
           name: "onNodeStart",

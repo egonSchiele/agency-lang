@@ -2,7 +2,8 @@ import { BaseReviver } from "./baseReviver.js";
 import { AgencyFunction } from "../agencyFunction.js";
 import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
 import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
-import { agencyStore, type Run } from "../asyncContext.js";
+import { agencyStore, currentRun, type Run } from "../asyncContext.js";
+import type { StatelogClient } from "../../statelogClient.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -146,7 +147,11 @@ export class FunctionRefReviver implements BaseReviver<AgencyFunction> {
     // and only fail — or silently not fail — much later). Emit at revive
     // time; the invoke-time emit inside the stub still fires on top of
     // this if something actually calls it.
+    // revive() runs inside JSON.parse, which has no caller to take a logger
+    // from. This read stays on the current frame until the reviver is handed
+    // one some other way.
     emitFunctionRefMissError(
+      agencyStore.getStore()?.log,
       name,
       `FunctionRefReviver: function "${name}" from module "${module}" not ` +
         `found in registry; revived to a stub that will throw if invoked. ` +
@@ -251,7 +256,7 @@ function makeLazyCallbackRef(
           `Callback "${name}" from module "${module}" crossed a process ` +
           `boundary and was fired before its module was loaded (or the ` +
           `callback was removed since this state was serialized).`;
-        emitFunctionRefMissError(name, msg);
+        emitFunctionRefMissError(run.log, name, msg);
         throw new Error(msg);
       }
       return real.invoke(run, { type: "positional", args });
@@ -286,12 +291,15 @@ function makeUnresolvedFunctionStub(
     module,
     registeredName: typeof value.registeredName === "string" ? value.registeredName : name,
     fn: () => {
+      // A function that does not take the run is called through `callPlain`,
+      // so the run is readable here on the first line.
+      const log = currentRun().log;
       const msg =
         `Function "${name}" from module "${module}" crossed a serialization ` +
         `boundary into a process that never loaded its module, and was ` +
         `invoked there (or the function was removed since this state was ` +
         `serialized).`;
-      emitFunctionRefMissError(name, msg);
+      emitFunctionRefMissError(log, name, msg);
       throw new Error(msg);
     },
     params: Array.isArray(value.params) ? (value.params as FuncParam[]) : [],
@@ -306,11 +314,14 @@ function makeUnresolvedFunctionStub(
 /** Surface an unresolvable fire in the trace, not only the terminal.
  *  fireWithGuard catches the throw and console.errors it, which is
  *  invisible after the fact; the Statelog error event makes the dropped
- *  callback findable. Best-effort: `agencyStore.getStore()` is undefined
- *  outside any runtime frame (e.g. a bare unit test), and no client means
- *  nothing to emit to — the caller throws the real error either way. */
-function emitFunctionRefMissError(name: string, msg: string): void {
-  agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+ *  callback findable. Best-effort: with no logger there is nothing to emit
+ *  to, and the caller throws the real error either way. */
+function emitFunctionRefMissError(
+  log: StatelogClient | undefined,
+  name: string,
+  msg: string,
+): void {
+  log?.error?.({
     errorType: "runtimeError",
     message: msg,
     functionName: name,

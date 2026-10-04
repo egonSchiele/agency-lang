@@ -35,6 +35,7 @@ function makeRunner(overrides: Partial<any> = {}) {
   const opts = {
     self,
     ctx,
+    log: ctx.statelogClient,
     stateStack,
     parentFrame,
     checkpointInfo: undefined,
@@ -188,6 +189,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self,
       ctx,
+      log: ctx.statelogClient,
       stateStack: new StateStack(),
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
       snapshotMessages: () => {
@@ -222,6 +224,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self: {},
       ctx,
+      log: ctx.statelogClient,
       stateStack: new StateStack(),
       checkpointInfo: undefined,
       snapshotMessages: () => [],
@@ -248,6 +251,7 @@ describe("PromptRunner.step interrupt handling", () => {
     const runner = new PromptRunner({
       self: {},
       ctx,
+      log: ctx.statelogClient,
       stateStack: new StateStack(),
       checkpointInfo: { moduleId: "m", scopeName: "s", stepPath: "p" },
       snapshotMessages: () => [],
@@ -397,6 +401,7 @@ describe("PromptRunner.parallel", () => {
     const runner = new PromptRunner({
       self,
       ctx,
+      log: ctx.statelogClient,
       stateStack,
       parentFrame,
       checkpointInfo: undefined,

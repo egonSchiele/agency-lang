@@ -34,7 +34,12 @@ function stubCtx(): { ctx: RuntimeContext<GraphState>; closes: number } {
 
 function abortedNodeResult(): { data: AbortedResult } {
   return {
-    data: AbortedResult.fromError(new AgencyCancelledError("trip", tripCause()), new State(), "n"),
+    data: AbortedResult.fromError(
+      undefined,
+      new AgencyCancelledError("trip", tripCause()),
+      new State(),
+      "n",
+    ),
   };
 }
 
@@ -69,6 +74,7 @@ describe("throwIfNodeResultAborted", () => {
     // would otherwise reach the caller as a JSON-ish object.
     const { ctx } = stubCtx();
     const value = AbortedResult.fromError(
+      undefined,
       new AgencyCancelledError("trip", tripCause()),
       new State(),
       "fn",

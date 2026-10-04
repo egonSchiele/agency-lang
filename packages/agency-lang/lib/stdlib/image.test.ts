@@ -55,6 +55,7 @@ async function withClient(
       statelogClient: { imageGeneration },
       invocationUsage: meter,
     },
+    log: { imageGeneration },
     stack,
     threads: {},
     globals: {},

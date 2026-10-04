@@ -411,7 +411,7 @@ function startInvoke<T>(
       // machinery speaks settled promises, and this .then is the adapter
       // between them. It also makes caching an aborted value impossible.
       if (isAborted(value)) {
-        throw value.atForkBoundary().toError();
+        throw value.atForkBoundary(opts.run.log).toError();
       }
       return value;
     })
@@ -474,11 +474,18 @@ function runInBranchAlsFrame<T>(
     : branch.globalsJSON
       ? GlobalStore.fromJSON(branch.globalsJSON)
       : parent.globals.clone();
+  // The branch's own logger: its tag store and its span stack.
+  const log = branchLog(parent, branchGlobals, spans);
+  // Each branch's thread store logs through the branch's logger. A branch
+  // that shares the parent's threads gets the same store under that logger.
+  // The subthread a new view starts with is made here, before the branch's
+  // run exists: the branch's spans are current but the parent's tag store
+  // still is, so that one event is logged with exactly that pair.
   const branchThreads: ThreadStore = shareThreads
-    ? parent.threads
+    ? parent.threads.sharedView(log)
     : branch.activeStack
-      ? parent.threads.restoreBranchView(branch.activeStack)
-      : parent.threads.forkBranchView();
+      ? parent.threads.restoreBranchView(branch.activeStack, log)
+      : parent.threads.forkBranchView(log, branchLog(parent, parent.globals, spans));
 
   return withRun(
     {
@@ -491,8 +498,7 @@ function runInBranchAlsFrame<T>(
       // that installs none (a tool-dispatch batch) inherits the outer
       // frame's scope, so its tools keep registering under this arm.
       decisions: decisions ?? parent.decisions,
-      // The branch's own logger: its tag store and its span stack.
-      log: branchLog(parent, branchGlobals, spans),
+      log,
       state: freshState(),
       ...lineageOf(parent),
     },
@@ -975,7 +981,7 @@ async function runRaceResume<T>(
     hooks?.onBranchEnd?.(child.key, winnerIndex, "failure", performance.now() - startedAt);
     pauseBranchTimeGuards(branch.stack);
     chargeAndResumeParentTimeGuards(parentStack, [branch.stack], "max");
-    throw value.atForkBoundary().toError();
+    throw value.atForkBoundary(opts.run.log).toError();
   }
 
   if (hasInterrupts(value)) {

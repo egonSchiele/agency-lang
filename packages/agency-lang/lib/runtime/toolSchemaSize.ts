@@ -76,15 +76,18 @@ export function oversizedToolMessage(tool: OversizedTool, threshold: number): st
 type SchemaWarnHost = {
   maxToolSchemaChars?: number;
   warnedToolSchemas?: Record<string, true>;
-  statelogClient: {
-    warn: (payload: {
-      warnType: "toolSchemaSize";
-      message: string;
-      functionName: string;
-      schemaChars: number;
-      threshold: number;
-    }) => Promise<unknown>;
-  };
+};
+
+/** The one logging method this module calls, on the logger of the run the
+ *  tools were offered in. */
+type SchemaWarnLog = {
+  warn: (payload: {
+    warnType: "toolSchemaSize";
+    message: string;
+    functionName: string;
+    schemaChars: number;
+    threshold: number;
+  }) => Promise<unknown>;
 };
 
 /** Report any tool whose JSON schema is over the configured threshold. The
@@ -99,6 +102,7 @@ type SchemaWarnHost = {
  *  take down the call it is describing. */
 export function warnOnOversizedToolSchemas(
   ctx: SchemaWarnHost,
+  log: SchemaWarnLog,
   tools: { name: string; schema?: unknown }[],
 ): void {
   const threshold = ctx.maxToolSchemaChars ?? DEFAULT_MAX_TOOL_SCHEMA_CHARS;
@@ -107,7 +111,7 @@ export function warnOnOversizedToolSchemas(
   for (const tool of findOversizedTools(tools, threshold)) {
     if (alreadyWarned[tool.name]) continue;
     alreadyWarned[tool.name] = true;
-    void ctx.statelogClient
+    void log
       .warn({
         warnType: "toolSchemaSize",
         message: oversizedToolMessage(tool, threshold),

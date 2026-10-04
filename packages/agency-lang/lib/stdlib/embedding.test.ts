@@ -48,12 +48,14 @@ function fakeClient(
 }
 
 function frame(stack: StateStack, client: unknown, events: unknown[] = []) {
+  const log = { embedCompletion: (e: unknown) => events.push(e) };
   return {
     ctx: {
       llmClient: client,
-      statelogClient: { embedCompletion: (e: unknown) => events.push(e) },
+      statelogClient: log,
       invocationUsage: new InvocationUsageMeter(),
     },
+    log,
     stack,
     threads: {},
     globals: {},

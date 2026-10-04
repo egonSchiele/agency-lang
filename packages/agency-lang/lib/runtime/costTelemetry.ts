@@ -17,6 +17,7 @@
  */
 
 import { isIpcMode, ipcChildDebug } from "./subprocessRunInfo.js";
+import type { StatelogClient } from "../statelogClient.js";
 import type { NormalizedDelta } from "./invocationUsage.js";
 
 /** The UNTRUSTED wire shape a parent receives on `invocationUsage`. Every field
@@ -46,7 +47,7 @@ function canSend(): boolean {
   return isIpcMode() && typeof process.send === "function";
 }
 
-function trySend(msg: IpcUsageMessage): void {
+function trySend(msg: IpcUsageMessage, log: StatelogClient | undefined): void {
   try {
     (process.send as (m: unknown) => boolean)(msg);
   } catch (err) {
@@ -54,7 +55,7 @@ function trySend(msg: IpcUsageMessage): void {
     // Swallowed (fire-and-forget invariant), but traceable via the shared
     // child-debug logger (ipcLog is unreachable from this leaf module).
     const detail = err instanceof Error ? err.message : String(err);
-    ipcChildDebug(`send telemetry_send_failed ${detail}`);
+    ipcChildDebug(`send telemetry_send_failed ${detail}`, log);
   }
 }
 
@@ -104,14 +105,17 @@ function isNoOpDelta(delta: NormalizedDelta): boolean {
 /** Relay a full normalized usage delta to the parent, once. Sends the complete
  *  nested breakdown (`cost`, `tokens`, `entry`, `unpricedCallCount`,
  *  `attributionLost`). Skips an all-zero delta. */
-export function sendInvocationUsageToParent(delta: NormalizedDelta): void {
+export function sendInvocationUsageToParent(
+  delta: NormalizedDelta,
+  log: StatelogClient | undefined,
+): void {
   if (!canSend()) return;
   if (isNoOpDelta(delta)) return;
-  trySend({ type: "invocationUsage", ...delta });
+  trySend({ type: "invocationUsage", ...delta }, log);
 }
 
 /** Relay the incompleteness marker to the parent, once. */
-export function sendInvocationUsageIncompleteToParent(): void {
+export function sendInvocationUsageIncompleteToParent(log: StatelogClient | undefined): void {
   if (!canSend()) return;
-  trySend({ type: "invocationUsageIncomplete" });
+  trySend({ type: "invocationUsageIncomplete" }, log);
 }

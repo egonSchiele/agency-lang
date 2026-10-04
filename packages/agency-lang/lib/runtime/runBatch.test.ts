@@ -925,7 +925,7 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
           // Mirror runner.ts's forkBranchEnd: serialize the branch value on the
           // parent side, where redaction must still fire.
           onBranchEnd: (_key, branchIndex, _outcome, _time, value) => {
-            captured[branchIndex] = safeStatelogValue(value);
+            captured[branchIndex] = safeStatelogValue(value, run.globals);
           },
         },
       });

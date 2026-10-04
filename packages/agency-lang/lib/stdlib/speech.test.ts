@@ -74,6 +74,7 @@ async function withClient(
       invocationUsage: meter,
       getAbortSignal: () => controller.signal,
     },
+    log: { transcription, speechSynthesis },
     stack,
     threads: {},
     globals: {},

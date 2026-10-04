@@ -28,7 +28,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + {{{functionName}}} + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: {{{functionName}}},

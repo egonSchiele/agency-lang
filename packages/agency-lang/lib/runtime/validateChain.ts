@@ -2,7 +2,7 @@ import { z } from "zod";
 import { success, failure, isFailure, isSuccess } from "./result.js";
 import type { ResultValue } from "./result.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { ambientRun } from "./asyncContext.js";
+import { callPlain, type Run } from "./asyncContext.js";
 
 /**
  * Async validator used by `@validate(...)` chains. May be:
@@ -13,28 +13,28 @@ import { ambientRun } from "./asyncContext.js";
  *    invoked via `.invoke({ type: "positional", args: [value] })` so we
  *    go through the same call infrastructure as `__call(...)`.
  *
- * Validators that need access to the execution context read it from the
- * active `agencyStore` ALS frame via `getRuntimeContext()`. There is no
- * `ctx` arg to thread through.
+ * An `AgencyFunction` validator is handed the run the validation happens
+ * in. A plain function is called through `callPlain`, so it can read that
+ * run with `currentRun()` on its first line.
  */
 export type AgencyValidator =
   ((value: unknown) => Promise<ResultValue> | ResultValue) | AgencyFunction;
 
-async function callValidator(v: AgencyValidator, value: unknown): Promise<ResultValue> {
+async function callValidator(run: Run, v: AgencyValidator, value: unknown): Promise<ResultValue> {
   if (AgencyFunction.isAgencyFunction(v)) {
-    return (await (v as AgencyFunction).invoke(ambientRun("A validator"), {
+    return (await (v as AgencyFunction).invoke(run, {
       type: "positional",
       args: [value],
     })) as ResultValue;
   }
-  return (v as (x: unknown) => Promise<ResultValue> | ResultValue)(value);
+  return callPlain(run, v as (x: unknown) => Promise<ResultValue> | ResultValue, [value]);
 }
 
 /** Call a validator AND enforce the predicate contract: a success must carry
  *  THIS call's input — the parsed value, or the previous link's identical
  *  hand-through. */
-async function runValidator(v: AgencyValidator, value: unknown): Promise<ResultValue> {
-  const outcome = await callValidator(v, value);
+async function runValidator(run: Run, v: AgencyValidator, value: unknown): Promise<ResultValue> {
+  const outcome = await callValidator(run, v, value);
   assertNotModified(v, value, outcome);
   return outcome;
 }
@@ -73,6 +73,7 @@ function validatorName(v: AgencyValidator): string {
  * call other Agency functions, hit the network, etc.
  */
 export async function __validateChain(
+  run: Run,
   value: unknown,
   schema: z.ZodType,
   validators: AgencyValidator[],
@@ -94,7 +95,7 @@ export async function __validateChain(
   let current: ResultValue = success(raw);
   for (const v of validators) {
     if (!isSuccess(current)) return current;
-    current = await runValidator(v, (current as { value: unknown }).value);
+    current = await runValidator(run, v, (current as { value: unknown }).value);
   }
   return current;
 }
@@ -206,12 +207,13 @@ export type RecursiveValidationOpts = {
  * exceeds `opts.maxDepth ?? 64`.
  */
 export async function __validateChainRecursive(
+  run: Run,
   value: unknown,
   descriptor: TypeValidationDescriptor,
   opts?: RecursiveValidationOpts,
 ): Promise<ResultValue> {
   const maxDepth = opts?.maxDepth ?? 64;
-  return walk(value, descriptor, 0, maxDepth);
+  return walk(run, value, descriptor, 0, maxDepth);
 }
 
 /**
@@ -225,6 +227,7 @@ export async function __validateChainRecursive(
 const MAX_CONSECUTIVE_REF_HOPS = 8;
 
 async function walk(
+  run: Run,
   value: unknown,
   descriptor: TypeValidationDescriptor,
   depth: number,
@@ -252,11 +255,11 @@ async function walk(
         valuePreview: previewValue(value),
       });
     }
-    return walk(value, descriptor.get(), depth, maxDepth, refHops + 1);
+    return walk(run, value, descriptor.get(), depth, maxDepth, refHops + 1);
   }
 
   // Step 1: parse + own validators at this node.
-  const own = await __validateChain(value, descriptor.schema, descriptor.validators);
+  const own = await __validateChain(run, value, descriptor.schema, descriptor.validators);
   if (!isSuccess(own)) return own;
   const parsed = (own as { value: unknown }).value;
 
@@ -269,7 +272,7 @@ async function walk(
       if (parsed === null || parsed === undefined) {
         return success(parsed);
       }
-      const inner = await walk(parsed, descriptor.inner, depth + 1, maxDepth);
+      const inner = await walk(run, parsed, descriptor.inner, depth + 1, maxDepth);
       return inner;
     }
 
@@ -277,7 +280,7 @@ async function walk(
       if (!Array.isArray(parsed)) return success(parsed);
       const out: unknown[] = [];
       for (const el of parsed) {
-        const r = await walk(el, descriptor.element, depth + 1, maxDepth);
+        const r = await walk(run, el, descriptor.element, depth + 1, maxDepth);
         if (!isSuccess(r)) return r;
         out.push((r as { value: unknown }).value);
       }
@@ -291,6 +294,7 @@ async function walk(
       const out: Record<string, unknown> = { ...(parsed as Record<string, unknown>) };
       for (const [key, childDesc] of Object.entries(descriptor.properties)) {
         const r = await walk(
+          run,
           (parsed as Record<string, unknown>)[key],
           childDesc,
           depth + 1,
@@ -309,7 +313,7 @@ async function walk(
       const entries = parsed as Record<string, unknown>;
       const out: Record<string, unknown> = {};
       for (const key of Object.keys(entries)) {
-        const r = await walk(entries[key], descriptor.value, depth + 1, maxDepth);
+        const r = await walk(run, entries[key], descriptor.value, depth + 1, maxDepth);
         if (!isSuccess(r)) return r;
         // defineProperty, not assignment: record keys are user data, and
         // assigning a key like "__proto__" would rewrite the prototype
@@ -329,7 +333,7 @@ async function walk(
     case "union": {
       const branch = descriptor.branches.find((b) => b.test(parsed));
       if (!branch) return success(parsed);
-      return walk(parsed, branch.descriptor, depth + 1, maxDepth);
+      return walk(run, parsed, branch.descriptor, depth + 1, maxDepth);
     }
   }
 }

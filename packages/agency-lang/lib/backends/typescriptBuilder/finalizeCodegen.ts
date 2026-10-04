@@ -121,7 +121,7 @@ export class FinalizeCodegen {
     const scope = JSON.stringify(this.scopes.currentName());
     return [
       ts.raw(
-        `runner.halt(await ${abortedVar}.carryThrough(${this.frameVar()}, ${scope}).withFinalize(${FINALIZE_WITH_RUN}, ${scope}))`,
+        `runner.halt(await ${abortedVar}.carryThrough(__run.log, ${this.frameVar()}, ${scope}).withFinalize(__run.log, ${FINALIZE_WITH_RUN}, ${scope}))`,
       ),
       ts.return(),
     ];
@@ -180,9 +180,9 @@ export class FinalizeCodegen {
 
   private abortReturn(scopeName: string, errorVar: string, hasFinalize: boolean): string {
     const scope = JSON.stringify(scopeName);
-    const fromError = `AbortedResult.fromError(${errorVar}, ${this.frameVar()}, ${scope})`;
+    const fromError = `AbortedResult.fromError(__run.log, ${errorVar}, ${this.frameVar()}, ${scope})`;
     return hasFinalize
-      ? `return await ${fromError}.withFinalize(${FINALIZE_WITH_RUN}, ${scope});`
+      ? `return await ${fromError}.withFinalize(__run.log, ${FINALIZE_WITH_RUN}, ${scope});`
       : `return ${fromError};`;
   }
 

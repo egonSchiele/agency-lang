@@ -13,14 +13,7 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
-import {
-  ambientRun,
-  detachedRun,
-  getRuntimeContext,
-  sameRun,
-  withRun,
-  type Run,
-} from "./asyncContext.js";
+import { detachedRun, currentRun, sameRun, withRun, type Run } from "./asyncContext.js";
 import type { SpanContext } from "../statelogClient.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
@@ -480,17 +473,17 @@ export type RunSession = {
   limits: RunLimits;
   ctx: any;
   stateStack: any;
-  /** The parent's full ALS store frame captured at run() time. Forwarded
-   * callbacks (handleCallbackMessage) fire from the event-loop message handler,
-   * OUTSIDE any agencyStore frame; re-establishing this frame lets an
-   * AgencyFunction callback body resolve __globals()/__threads() against the
-   * parent's real globals, exactly as an in-process callback would. */
-  parentStore?: any;
+  /** The run of the code that called run(). Forwarded callbacks
+   * (handleCallbackMessage) fire from the event-loop message handler; they
+   * run under a child of this run, so an AgencyFunction callback body sees
+   * the parent's real globals and threads, exactly as an in-process callback
+   * would. */
+  parentStore: Run;
   /** The run of the branch the subprocess was started in. The listener for
    *  the child's interrupts runs the parent's handler chain under it, so
    *  the chain sees the handlers that were executing, the globals, and the
    *  logger of the code that started the subprocess. */
-  branchRun?: Run;
+  branchRun: Run;
   resolvePromise: (v: SessionOutcome) => void;
   rejectPromise: (v: any) => void;
   settled: boolean;
@@ -887,6 +880,14 @@ function attachStdoutForwarder(
   });
 }
 
+/** The run one child interrupt's handler chain runs under: the stored
+ *  branch run with its own state, its own span stack, and the same threads
+ *  seen through the logger for that stack. */
+function chainRun(stored: Run, spans: SpanContext[]): Run {
+  const log = stored.log.forBranch(stored.globals, spans);
+  return detachedRun(stored, { log, threads: stored.threads.sharedView(log) });
+}
+
 async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
   const { effect, message, data, origin, expectsValue } = msg.interrupt;
   try {
@@ -908,15 +909,13 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     // This listener runs in the frame that was current when the subprocess
     // was started, which is the stored branch run. `sameRun` checks that
     // while `AsyncLocalStorage` is still in place.
-    const stored = s.branchRun
-      ? sameRun(s.branchRun, "handleInterruptMessage()")
-      : ambientRun("handleInterruptMessage()");
+    const stored = sameRun(s.branchRun, "handleInterruptMessage()");
     const { outcome } = await s.ctx.statelogClient.runInBranchContext(
       s.ctx.statelogClient.snapshotStack(),
       (spans: SpanContext[]) =>
         // A copy with its own state: several interrupts from one child can be
         // answered at once, and none of them is counted against the stored run.
-        withRun(detachedRun(stored, { log: stored.log.forBranch(stored.globals, spans) }), (run) =>
+        withRun(chainRun(stored, spans), (run) =>
           gatherChainOutcome(
             run,
             { effect, message, data, origin, expectsValue },
@@ -1165,11 +1164,7 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
         detail: err instanceof Error ? err.message : String(err),
       });
     });
-  if (s.parentStore) {
-    withRun(detachedRun(s.parentStore, {}), fire);
-  } else {
-    fire(ambientRun("handleCallbackMessage()"));
-  }
+  withRun(detachedRun(s.parentStore, {}), fire);
 }
 
 /** Message types whose delivery is observational — an oversize or
@@ -1302,8 +1297,8 @@ export function attachSessionHandlers(
 async function runSubprocessSession(opts: {
   ctx: any;
   stateStack: any;
-  parentStore?: any;
-  branchRun?: Run;
+  parentStore: Run;
+  branchRun: Run;
   instruction: RunInstruction | ResumeInstruction;
   limits: RunLimits;
   cwd?: string;
@@ -1393,8 +1388,8 @@ function resolveInstruction(args: {
 async function invokeSubprocess(args: {
   ctx: any;
   stateStack: any;
-  parentStore?: any;
-  branchRun?: Run;
+  parentStore: Run;
+  branchRun: Run;
   parentFrame: State;
   compiled: { moduleId: string; code: string; modules?: Record<string, string> };
   node: string;
@@ -1419,7 +1414,7 @@ async function invokeSubprocess(args: {
     // ahead of any child events — it is what introduces the subprocessRun
     // span to the log viewer, and the child's span parentage resolves
     // against it.
-    await args.ctx.statelogClient.subprocessStarted({
+    await args.branchRun.log.subprocessStarted({
       moduleId: args.compiled.moduleId,
       node: args.node,
       subprocessSessionId,
@@ -1453,7 +1448,7 @@ async function invokeSubprocess(args: {
       abortSignal: args.abortSignal,
     });
     const endEvent = (outcomeLabel: "success" | "interrupted" | "failure") =>
-      args.ctx.statelogClient.subprocessEnd({
+      args.branchRun.log.subprocessEnd({
         moduleId: args.compiled.moduleId,
         node: args.node,
         subprocessSessionId,
@@ -1479,7 +1474,7 @@ async function invokeSubprocess(args: {
     clearSubprocessPayload(args.parentFrame);
     return outcome.value;
   } catch (err) {
-    await args.ctx.statelogClient.subprocessEnd({
+    await args.branchRun.log.subprocessEnd({
       moduleId: args.compiled.moduleId,
       node: args.node,
       subprocessSessionId,
@@ -1514,7 +1509,7 @@ export async function _run(
   // Post-ALS: read `ctx` and the per-scope `stateStack` from the active
   // `agencyStore` frame. The trailing `__state` positional that AgencyFunction
   // .invoke() still passes is now harmlessly ignored.
-  const store = getRuntimeContext();
+  const store = currentRun();
   const { ctx, stack: stateStack } = store;
 
   // Nested subprocesses are allowed: every run() is gated by a std::run
@@ -1546,7 +1541,7 @@ export async function _run(
   // The parent-side umbrella span for this subprocess segment. Its id is
   // handed to the child (spanContext), whose statelog client adopts it as
   // an external root — child spans nest under this one in the shared trace.
-  const spanId = ctx.statelogClient.startSpan("subprocessRun");
+  const spanId = store.log.startSpan("subprocessRun");
   try {
     const batchResult = await runBatch<any>({
       run: store,
@@ -1589,7 +1584,7 @@ export async function _run(
     if (batchResult.kind === "interrupts") return batchResult.interrupts;
     return batchResult.values[0];
   } finally {
-    ctx.statelogClient.endSpan(spanId);
+    store.log.endSpan(spanId);
   }
 }
 

@@ -73,4 +73,10 @@ export class BootstrapThreadStore extends ThreadStore {
   override getOrCreateActive(): never {
     return this.throwBootstrap("getOrCreateActive");
   }
+  // A branch that shares these threads must keep getting the same loud
+  // errors, so it is handed this store and not a plain view of it. No
+  // thread event is ever logged from here, so the logger does not matter.
+  override sharedView(): ThreadStore {
+    return this;
+  }
 }

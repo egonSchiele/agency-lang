@@ -553,7 +553,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   // Hand-written claim (generated code claims in its preambles; runPrompt
   // is TypeScript). runPrompt's frame was the victim in the motivating
   // desync: a replayed helper stole it and runPrompt restarted blank.
-  claimFrameForScope(stack, "runPrompt", "");
+  claimFrameForScope(stack, "runPrompt", "", run.log);
   const self = stack.locals;
 
   // Frame-backed locals (survive checkpoint/restore)
@@ -627,7 +627,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   // where they surface as an opaque 400 with no request payload in the
   // statelog. See assertUniqueToolNames.
   assertUniqueToolNames(tools);
-  warnOnOversizedToolSchemas(ctx, tools);
+  warnOnOversizedToolSchemas(ctx, run.log, tools);
   let toolFunctions = exposedFunctions;
 
   // Remove agency-only / runtime-only keys from clientConfig before passing
@@ -749,7 +749,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   // seed stays readable after the call.
   let messages: MessageThread;
   if (self.messagesJSON) {
-    messages = restoreThreadForResume(self.messagesJSON, args.messages);
+    messages = restoreThreadForResume(self.messagesJSON, args.messages, run.log);
   } else {
     messages = args.messages ?? new MessageThread();
     for (const seeded of MessageThread.fromJSON(seedMessages ?? []).getMessages()) {
@@ -780,6 +780,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   const pr = new PromptRunner({
     self,
     ctx,
+    log: run.log,
     stateStack,
     checkpointInfo,
     snapshotMessages: snapshotThread,
@@ -967,7 +968,8 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     type InvokedCall = {
       handler: AgencyFunction;
       toolCall: smoltalk.ToolCallJSON;
-      namedArgs: Record<string, any>;
+      /** The logger of the tool call's branch. */
+      log: Run["log"];
       callKey: string;
       branchKey: string;
       marks: TurnMarks;
@@ -984,7 +986,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
       call: InvokedCall,
       reason: string,
     ): { toolResult: any; invokeOutcome: "rejected" } => {
-      const { handler, toolCall, namedArgs, callKey, branchKey, marks, toolResult } = call;
+      const { handler, toolCall, log, callKey, branchKey, marks, toolResult } = call;
       const capped = String(capToolResultForLlm(reason, toolResultCap));
       if (!rejectedCalls.includes(callKey)) {
         rejectedCalls.push(callKey);
@@ -998,7 +1000,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         content: `Tool call rejected: ${capped}. ${removed ? REJECTION_REMOVAL_SUFFIX : REJECTION_SUFFIX}`,
         toolCall,
         handler,
-        namedArgs,
+        log,
         marks,
         rejected: true,
       });
@@ -1012,12 +1014,12 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
       call: InvokedCall,
       failed: { error: string; neverStarted?: boolean; destructiveRan?: boolean },
     ): { toolResult: any; invokeOutcome: "failed" } => {
-      const { handler, toolCall, namedArgs, branchKey, marks, toolResult } = call;
+      const { handler, toolCall, log, branchKey, marks, toolResult } = call;
       const errorMessage = failed.error;
       // Cap only what the LLM sees; statelog keeps the full message.
       const cappedError = String(capToolResultForLlm(errorMessage, toolResultCap));
       toolErrorCounts[handler.name] = (toolErrorCounts[handler.name] || 0) + 1;
-      ctx.statelogClient.error({
+      log.error({
         errorType: "toolError",
         message: errorMessage,
         functionName: handler.name,
@@ -1030,7 +1032,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           content: `Error: ${cappedError}. ${suffix}`,
           toolCall,
           handler,
-          namedArgs,
+          log,
           marks,
           stoppedReason: cappedError,
         });
@@ -1170,7 +1172,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
       const call: InvokedCall = {
         handler,
         toolCall,
-        namedArgs,
+        log: args.run.log,
         callKey,
         branchKey,
         marks,
@@ -1231,7 +1233,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           content: `Error: ${reason}.`,
           toolCall,
           handler,
-          namedArgs,
+          log: args.run.log,
           marks,
           stoppedReason: reason,
         });
@@ -1243,7 +1245,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         toolCall,
         handler,
         branchStack,
-        namedArgs,
+        log: args.run.log,
         marks,
         round,
         invocationIndex: args.invocationIndex,
@@ -1267,9 +1269,9 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
 
     // Every endTurn()/handBack() warning goes to the statelog under one
     // type, so a tool that marks the turn and never gets it shows in traces.
-    const warnEndTurn = (message: string): void => {
-      void ctx.statelogClient.warn({ warnType: "endTurn", message });
-    };
+    // `log` is the logger of the branch the warning comes from.
+    const warnEndTurn = (log: Run["log"], message: string): void =>
+      void log.warn({ warnType: "endTurn", message });
 
     // Answer the model for one invoked call. An ordinary tool gets a
     // tool message paired with its tool_use. A handoff has no tool_use
@@ -1286,15 +1288,15 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
       content: any;
       toolCall: smoltalk.ToolCallJSON;
       handler: AgencyFunction;
-      namedArgs: Record<string, any>;
+      log: Run["log"];
       marks: TurnMarks;
       stoppedReason?: string;
       rejected?: boolean;
     }): DeferredHandBack | null => {
-      const { content, toolCall, handler, marks, stoppedReason, rejected } = args;
+      const { content, toolCall, handler, log, marks, stoppedReason, rejected } = args;
       const finished = stoppedReason === undefined && !rejected;
       if (!finished && marks.endTurn) {
-        warnEndTurn(`${handler.name}: endTurn ignored; the tool did not finish`);
+        warnEndTurn(log, `${handler.name}: endTurn ignored; the tool did not finish`);
       }
       if (handler.markers?.handoff) {
         return closeHandoff({
@@ -1303,7 +1305,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           toolName: handler.name,
           outcome: handoffOutcomeFor(stringifyToolResult(content), stoppedReason, rejected),
           marks,
-          warn: warnEndTurn,
+          warn: (message) => warnEndTurn(log, message),
         });
       }
       pushToolMessage(content, toolCall);
@@ -1330,12 +1332,12 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
       toolCall: smoltalk.ToolCallJSON;
       handler: AgencyFunction;
       branchStack: StateStack;
-      namedArgs: Record<string, any>;
+      log: Run["log"];
       marks: TurnMarks;
       round: number;
       invocationIndex: number;
     }): void => {
-      const { toolResult, toolCall, handler, branchStack, namedArgs, marks } = args;
+      const { toolResult, toolCall, handler, branchStack, log, marks } = args;
       const replyMarker = harvestReplyAttachments({
         queued: branchStack.drainPendingReplyAttachments(),
         runnerState: self.runnerState,
@@ -1347,7 +1349,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         replyMarker,
         stringifyToolResult,
       );
-      const deferredHandBack = pushToolReply({ content, toolCall, handler, namedArgs, marks });
+      const deferredHandBack = pushToolReply({ content, toolCall, handler, log, marks });
       recordTurnMark({
         runnerState: self.runnerState,
         round: args.round,
@@ -1807,7 +1809,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
             responseFormat,
             thread: messages,
             enclosingStack: run.toolInvocationStack ?? null,
-            warn: warnEndTurn,
+            warn: (message) => warnEndTurn(run.log, message),
           });
           self.messagesJSON = snapshotThread();
         });

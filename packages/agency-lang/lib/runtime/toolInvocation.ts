@@ -79,7 +79,7 @@ export async function invokeOnFreshThreadStore<T>(
 ): Promise<T> {
   sameRun(run, "invokeOnFreshThreadStore()");
   const freshThreads = new ThreadStore();
-  freshThreads.setStatelogClient(run.ctx.statelogClient);
+  freshThreads.setStatelogClient(run.log);
   return withChildRun(run, { threads: freshThreads }, "a tool call", invoke);
 }
 
@@ -101,7 +101,7 @@ export async function invokeOnThread<T>(
   thread.enterHandoffScope(scopeKey);
   try {
     sameRun(run, "invokeOnThread()");
-    const view = run.threads.viewWithActive(thread);
+    const view = run.threads.viewWithActive(thread, run.log);
     return await withChildRun(run, { threads: view }, "a handoff", invoke);
   } finally {
     thread.exitHandoffScope();

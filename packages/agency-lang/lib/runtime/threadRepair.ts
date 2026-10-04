@@ -1,5 +1,5 @@
 import * as smoltalk from "smoltalk";
-import { agencyStore } from "./asyncContext.js";
+import type { StatelogClient } from "../statelogClient.js";
 import type { AbortCause } from "./errors.js";
 import { MessageThread } from "./state/messageThread.js";
 import type { MessageThreadJSON } from "./state/messageThread.js";
@@ -186,6 +186,7 @@ export function repairReopenedThread(
 export function restoreThreadForResume(
   snapshot: MessageThreadJSON | smoltalk.MessageJSON[],
   live: MessageThread | undefined,
+  log: StatelogClient | undefined,
 ): MessageThread {
   const restored = MessageThread.fromJSON(snapshot);
   if (!live) return restored;
@@ -204,7 +205,7 @@ export function restoreThreadForResume(
     // by the time a model or user sees them — the refusal must stay
     // findable in the trace regardless. Same rationale and shape as
     // claimFrameForScope in state/stateStack.ts.
-    agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+    log?.error?.({
       errorType: "runtimeError",
       message: msg,
       functionName: "restoreThreadForResume",

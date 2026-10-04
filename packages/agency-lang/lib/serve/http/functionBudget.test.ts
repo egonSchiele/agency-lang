@@ -142,7 +142,12 @@ describe("a served function surfaces a budget trip that arrives as a value", () 
     // Exactly what a compiled def hands back when an abort stops it.
     const fn = {
       invoke: async () =>
-        AbortedResult.fromError(new AgencyCancelledError("trip", cause), new State(), "chargeFn"),
+        AbortedResult.fromError(
+          undefined,
+          new AgencyCancelledError("trip", cause),
+          new State(),
+          "chargeFn",
+        ),
     } as unknown as AgencyFunction;
     return {
       kind: "function",

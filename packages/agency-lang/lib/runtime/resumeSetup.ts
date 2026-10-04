@@ -112,7 +112,7 @@ export function applyRestoreSignal(
     );
   }
   const cp = signal.checkpoint;
-  execCtx.statelogClient.checkpointRestored({
+  execCtx.rootLog.checkpointRestored({
     checkpointId: cp.id,
     restoreCount: execCtx._restoreCount,
     maxRestores: execCtx.maxRestores,
@@ -146,7 +146,7 @@ export async function restoreForResume(
   await ensureConfiguredLocalProvider(execCtx);
 
   execCtx._restoreCount++;
-  execCtx.statelogClient.checkpointRestored({
+  execCtx.rootLog.checkpointRestored({
     checkpointId: checkpoint.id,
     restoreCount: execCtx._restoreCount,
   });
@@ -154,7 +154,7 @@ export async function restoreForResume(
 
   await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredCallbacks(run));
   execCtx.restoreState(checkpoint);
-  reinstallRootBudget(execCtx.stateStack, execCtx.budget);
+  reinstallRootBudget(execCtx.stateStack, execCtx.clock, execCtx.budget);
   applyRestoreOverrides(execCtx, checkpoint, {
     args: request.overrides?.args,
     globals: request.overrides?.globals,

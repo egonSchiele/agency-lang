@@ -31,7 +31,7 @@ function prepareEvalEvent(value: unknown): PreparedEvalEvent | null {
   const safeValue = serializeEvalValue(value);
   const threadId = frame.threads.activeId() ?? null;
   return {
-    client: frame.ctx.statelogClient,
+    client: frame.log,
     payload: { value: safeValue, threadId },
   };
 }
@@ -57,7 +57,7 @@ export async function _setAgentName(name: string): Promise<void> {
   if (!frame) {
     return;
   }
-  await frame.ctx.statelogClient.agentName({ name: String(name) });
+  await frame.log.agentName({ name: String(name) });
 }
 
 export async function _evalValue(value: unknown): Promise<void> {

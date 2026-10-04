@@ -1,6 +1,7 @@
 import { withThreadEndHooksEvents } from "./threadEndHooksEvents.js";
 import { nanoid } from "nanoid";
-import { __globals, assertUsable, sameRun, withChildRun, type Run } from "./asyncContext.js";
+import type { GlobalStore } from "./state/globalStore.js";
+import { assertUsable, sameRun, withChildRun, type Run } from "./asyncContext.js";
 import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
@@ -69,13 +70,12 @@ const FORK_VALUE_CHAR_CAP = 4000;
  *  value would otherwise leak its first FORK_VALUE_CHAR_CAP chars into the
  *  event. The redact check composes with the shared nativeTypeReplacer
  *  (like deepClone) so untagged natives and non-redact tags still round-trip
- *  intact for the small path. Reads the caller's store leniently: both call
- *  sites run at the fork join inside the parent's ALS frame; with no frame
- *  this degrades to tag-preserving cloning, which post() still redacts on
- *  the un-truncated path. */
-export function safeStatelogValue(value: unknown): unknown {
+ *  intact for the small path. `globals` is the tag store of the run that
+ *  logs the value: both call sites run at the fork join and pass the
+ *  parent's. With none this degrades to tag-preserving cloning, which
+ *  post() still redacts on the un-truncated path. */
+export function safeStatelogValue(value: unknown, globals: GlobalStore | undefined): unknown {
   if (value === undefined) return undefined;
-  const globals = __globals();
   // Fast path: only consult the redaction table when something is tagged.
   const hasTags = globals !== undefined && globals.hasAnyTags();
   const replacer = function (this: unknown, key: string, val: unknown): unknown {
@@ -390,6 +390,7 @@ export class Runner {
     }
     await pauseAtStep({
       ctx: this.ctx,
+      log: run.log,
       stack,
       location: {
         moduleId: this.moduleId,
@@ -1392,7 +1393,7 @@ export class Runner {
             branchIndex,
             outcome,
             timeTaken,
-            value: safeStatelogValue(value),
+            value: safeStatelogValue(value, run.globals),
           });
         },
         onBranchSettled: (key) => collector.armSettled(key),
@@ -1473,7 +1474,7 @@ export class Runner {
             branchIndex,
             outcome,
             timeTaken,
-            value: safeStatelogValue(value),
+            value: safeStatelogValue(value, run.globals),
           });
         },
         onCheckpoint: (cpId) => {

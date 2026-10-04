@@ -35,12 +35,14 @@ describe("DeterministicClient.image", () => {
 
 function imageFrame(stack: StateStack) {
   const client = new DeterministicClient([]);
+  const log = { imageGeneration: () => {} };
   return {
     ctx: {
       llmClient: client,
-      statelogClient: { imageGeneration: () => {} },
+      statelogClient: log,
       invocationUsage: new InvocationUsageMeter(),
     },
+    log,
     stack,
     threads: {},
     globals: {},

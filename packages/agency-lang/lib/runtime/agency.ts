@@ -29,10 +29,9 @@ import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
 import {
   agencyStore,
-  ambientRun,
   callPlain,
+  currentRun,
   detachedRun,
-  getRuntimeContext,
   runInTestContext,
   withRun,
   withCallsite as _withCallsite,
@@ -81,7 +80,7 @@ import {
 /** Read the active `RuntimeContext`. Throws when called outside any
  *  `agencyStore.run(...)` frame (i.e. from non-Agency code). Tests
  *  that need a frame can use `agency.withTestContext({ctx,stack,threads}, fn)`. */
-const ctx = (): RuntimeContext<any> => getRuntimeContext().ctx;
+const ctx = (): RuntimeContext<any> => currentRun().ctx;
 
 /** Lax variant of `agency.ctx()`. Returns `undefined` outside any frame. */
 const ctxMaybe = (): RuntimeContext<any> | undefined => agencyStore.getStore()?.ctx;
@@ -103,12 +102,12 @@ const callsite = (): CallsiteLocation | undefined => agencyStore.getStore()?.cal
  *  pointer-shares `ctx.globals`, so behavior is identical to the
  *  pre-isolation reads. */
 const global_ = <T = unknown>(name: string, moduleId = ""): T =>
-  getRuntimeContext().globals.get(moduleId, name) as T;
+  currentRun().globals.get(moduleId, name) as T;
 
 // ---- Thread subnamespace ----------------------------------------------
 
 /** Active `MessageThread`, creating one if none is active yet. */
-const threadCurrent = (): MessageThread => getRuntimeContext().threads.getOrCreateActive();
+const threadCurrent = (): MessageThread => currentRun().threads.getOrCreateActive();
 
 /** Push a user-role message onto the active thread. */
 const threadUser = (content: string): void => {
@@ -126,7 +125,7 @@ const threadAssistant = (content: string): void => {
 };
 
 /** Return the full `ThreadStore`. Throws when called outside any frame. */
-const threadStore = (): ThreadStore => getRuntimeContext().threads;
+const threadStore = (): ThreadStore => currentRun().threads;
 
 /** Lax variant of `agency.thread.store()`. Returns `undefined` outside any frame. */
 const threadStoreMaybe = (): ThreadStore | undefined => agencyStore.getStore()?.threads;
@@ -278,7 +277,7 @@ const restore = (idOrCp: number | Checkpoint, opts: RestoreOptions = {}): void =
  *  from the surrounding step is the right answer. Throws if no
  *  Agency frame is installed. */
 const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T =>
-  _withCallsite(ambientRun("agency.withCallsite()"), loc, () => fn());
+  _withCallsite(currentRun(), loc, () => fn());
 
 // ---- Handlers / guards ------------------------------------------------
 
@@ -292,12 +291,12 @@ const withHandler = <T>(handler: HandlerFn, fn: () => Promise<T>): Promise<T> =>
 /** Install a `CostGuard(maxCost)` on the active branch's `StateStack.guards`
  *  for the duration of `fn`; pop in finally.
  *
- *  Pushes onto `getRuntimeContext().stack` — the ALS-resolved
+ *  Pushes onto `currentRun().stack` — the ALS-resolved
  *  per-branch stack — NOT `ctx().stateStack` (which is the top-level
  *  stack). Inside a fork/race branch the two stacks differ; pushing
  *  on the wrong one would leak the guard into sibling branches. */
 const withCostGuard = async <T>(maxCost: number, fn: () => Promise<T>): Promise<T> => {
-  const stack = getRuntimeContext().stack;
+  const stack = currentRun().stack;
   stack.pushGuard(new CostGuard(maxCost));
   try {
     return await fn();
@@ -310,8 +309,9 @@ const withCostGuard = async <T>(maxCost: number, fn: () => Promise<T>): Promise<
  *  duration of `fn`; pop in finally. Same ALS-stack semantics as
  *  `withCostGuard`. */
 const withTimeGuard = async <T>(maxMs: number, fn: () => Promise<T>): Promise<T> => {
-  const stack = getRuntimeContext().stack;
-  stack.pushGuard(new TimeGuard(maxMs));
+  const run = currentRun();
+  const stack = run.stack;
+  stack.pushGuard(new TimeGuard(maxMs, undefined, run.ctx.clock));
   try {
     return await fn();
   } finally {
@@ -328,7 +328,7 @@ const withLock = async <T>(
   fn: () => T | Promise<T>,
   opts: WithLockOptions = {},
 ): Promise<T> => {
-  const store = getRuntimeContext();
+  const store = currentRun();
   const ownerId = opts.ownerId ?? lockOwnerIdForActiveStack();
   const lockOpts = { ...opts, ownerId };
   // `fn` starts after an await (the wait for the lock). Calling it under
@@ -347,7 +347,7 @@ const withLock = async <T>(
 };
 
 function lockOwnerIdForActiveStack(): string {
-  const stack = getRuntimeContext().stack;
+  const stack = currentRun().stack;
   if (!stack.lockOwnerId) {
     stack.lockOwnerId = `lock-owner:${nanoid()}`;
   }
@@ -443,7 +443,7 @@ export type RunHandle = {
 };
 
 const current = (): RunHandle => {
-  const run = getRuntimeContext();
+  const run = currentRun();
   return {
     // Each call gets its own copy of the run, so two calls made at once
     // through one handle are not counted against each other.

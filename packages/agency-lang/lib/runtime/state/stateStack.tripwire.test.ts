@@ -5,16 +5,16 @@ describe("frame scope-name tripwire", () => {
   it("stamps an unstamped frame and accepts a matching re-claim", () => {
     const stack = new StateStack();
     const frame = stack.getNewState();
-    claimFrameForScope(frame, "myFunc", "mod.agency");
+    claimFrameForScope(frame, "myFunc", "mod.agency", undefined);
     expect(frame.scopeName).toBe("myFunc");
-    expect(() => claimFrameForScope(frame, "myFunc", "mod.agency")).not.toThrow();
+    expect(() => claimFrameForScope(frame, "myFunc", "mod.agency", undefined)).not.toThrow();
   });
 
   it("throws a named error when a frame is claimed by a different scope", () => {
     const stack = new StateStack();
     const frame = stack.getNewState();
-    claimFrameForScope(frame, "runPrompt", "mod.agency");
-    expect(() => claimFrameForScope(frame, "searchTools", "mod.agency")).toThrow(
+    claimFrameForScope(frame, "runPrompt", "mod.agency", undefined);
+    expect(() => claimFrameForScope(frame, "searchTools", "mod.agency", undefined)).toThrow(
       /Resume desync.*searchTools.*runPrompt/s,
     );
   });
@@ -25,14 +25,14 @@ describe("frame scope-name tripwire", () => {
     // runner.ts — an empty stamp would collide with the real owner).
     const stack = new StateStack();
     const frame = stack.getNewState();
-    claimFrameForScope(frame, "", "mod.agency");
+    claimFrameForScope(frame, "", "mod.agency", undefined);
     expect(frame.scopeName).toBeNull();
   });
 
   it("scopeName is always serialized and survives a round trip", () => {
     const stack = new StateStack();
     const claimed = stack.getNewState();
-    claimFrameForScope(claimed, "myFunc", "mod.agency");
+    claimFrameForScope(claimed, "myFunc", "mod.agency", undefined);
     stack.getNewState(); // second frame, never claimed
     const json = JSON.parse(JSON.stringify(stack.toJSON()));
     expect(json.stack[0].scopeName).toBe("myFunc");
@@ -48,7 +48,7 @@ describe("frame scope-name tripwire", () => {
     // design invariant this pins: only claim sites stamp.
     const stack = new StateStack();
     const frame = stack.getNewState();
-    claimFrameForScope(frame, "foo", "mod.agency");
+    claimFrameForScope(frame, "foo", "mod.agency", undefined);
     expect(frame.scopeName).toBe("foo");
   });
 });

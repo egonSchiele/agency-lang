@@ -84,7 +84,7 @@ export async function __call(
   // own result, minus the partial (see droppedAtArgPosition).
   const abortedArg = findAbortedArg(descriptor);
   if (abortedArg !== undefined) {
-    return abortedArg.droppedAtArgPosition();
+    return abortedArg.droppedAtArgPosition(run.log);
   }
   const interruptArg = findInterruptArg(descriptor);
   if (interruptArg !== undefined) {
@@ -117,6 +117,7 @@ export async function __call(
     );
   }
   checkTsFunctionArgs(
+    run,
     target as (...args: unknown[]) => unknown,
     target.name || "(anonymous)",
     descriptor.args,
@@ -147,7 +148,7 @@ export async function __callMethod(
   }
   const abortedArg = findAbortedArg(descriptor);
   if (abortedArg !== undefined) {
-    return abortedArg.droppedAtArgPosition();
+    return abortedArg.droppedAtArgPosition(run.log);
   }
 
   // AgencyFunction methods: .partial() and .describe() are handled directly
@@ -199,7 +200,7 @@ export async function __callMethod(
   // and `arr.push(someFailure)` / `arr.includes(f)` must keep working
   // (collecting Results into arrays is the pattern the shallow check
   // protects). The TS-function argument scan lives in __call only.
-  checkResultMethodCall(obj, prop);
+  checkResultMethodCall(run, obj, prop);
 
   const target = (obj as any)[prop];
   if (AgencyFunction.isAgencyFunction(target)) {

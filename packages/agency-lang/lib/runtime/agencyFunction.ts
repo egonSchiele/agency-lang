@@ -2,9 +2,9 @@ import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
 import {
-  agencyStore,
   assertUsable,
   callPlain,
+  currentRun,
   withPushedHandler,
   type Run,
 } from "./asyncContext.js";
@@ -219,7 +219,7 @@ export class AgencyFunction {
       // short-circuiting is safe: the call never begins, so no partial run
       // can raise an effect past an unregistered handler.
       if (this._checksFailures) {
-        const propagated = checkFailureArgs(this.name, this.params, args);
+        const propagated = checkFailureArgs(run, this.name, this.params, args);
         if (propagated !== null) {
           return propagated;
         }
@@ -318,8 +318,9 @@ export class AgencyFunction {
       ? (run: Run, ...args: any[]) =>
           withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), [])
       : (...args: any[]) => {
-          const ctx = agencyStore.getStore()?.ctx;
-          if (!ctx) return original(...args);
+          // A function that does not take the run is called through
+          // `callPlain`, so the run is readable here on its first line.
+          const ctx = currentRun().ctx;
           return withPushedHandler(ctx, autoApprove, () => Promise.resolve(original(...args)), []);
         };
     return new AgencyFunction({

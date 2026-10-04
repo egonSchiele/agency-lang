@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it as baseIt, vi } from "vitest";
 import { z } from "zod";
 import {
   __validateChain,
@@ -8,6 +8,10 @@ import {
   type TypeValidationDescriptor,
 } from "./validateChain.js";
 import { success, failure, isFailure, isSuccess, type ResultFailure } from "./result.js";
+import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
+
+// The validation functions take the run they are called under.
+const it = withTestFrame(baseIt);
 
 const ctx = {};
 
@@ -22,18 +26,18 @@ const halveIt: AgencyValidator = async (v) =>
 
 describe("__validateChain", () => {
   it("Zod parse passes then validators run in order", async () => {
-    const r = await __validateChain(4, z.number(), [isPos, isEven]);
+    const r = await __validateChain(testRun(), 4, z.number(), [isPos, isEven]);
     expect(isSuccess(r)).toBe(true);
   });
 
   it("returns Zod failure on structural mismatch", async () => {
-    const r = await __validateChain("nope", z.number(), []);
+    const r = await __validateChain(testRun(), "nope", z.number(), []);
     expect(isFailure(r)).toBe(true);
   });
 
   it("short-circuits on first validator failure", async () => {
     const later = vi.fn(async (v: unknown) => success(v)) as unknown as AgencyValidator;
-    const r = await __validateChain(-1, z.number(), [isPos, later]);
+    const r = await __validateChain(testRun(), -1, z.number(), [isPos, later]);
     expect(isFailure(r)).toBe(true);
     expect(later).not.toHaveBeenCalled();
   });
@@ -42,19 +46,19 @@ describe("__validateChain", () => {
     // 2 -> double -> 4 -> halve -> 2. An end-of-chain identity check would
     // see the input come back and pass; the per-validator check must throw
     // at the first link.
-    await expect(__validateChain(2, z.number(), [doubleIt, halveIt])).rejects.toThrow(
+    await expect(__validateChain(testRun(), 2, z.number(), [doubleIt, halveIt])).rejects.toThrow(
       /validator 'doubleIt' modified the value/,
     );
   });
 
   it("forwards an incoming failure unchanged", async () => {
     const f = failure("upstream");
-    const r = await __validateChain(f, z.number(), [isPos]);
+    const r = await __validateChain(testRun(), f, z.number(), [isPos]);
     expect(r).toBe(f);
   });
 
   it("empty validator list still runs Zod parse", async () => {
-    const r = await __validateChain(3, z.number(), []);
+    const r = await __validateChain(testRun(), 3, z.number(), []);
     expect(isSuccess(r)).toBe(true);
     expect((r as { value: number }).value).toBe(3);
   });
@@ -68,9 +72,9 @@ describe("__validateChainRecursive", () => {
       validators: [],
       element: { kind: "leaf", schema: z.number(), validators: [isPos] },
     };
-    const ok = await __validateChainRecursive([1, 2, 3], desc);
+    const ok = await __validateChainRecursive(testRun(), [1, 2, 3], desc);
     expect(isSuccess(ok)).toBe(true);
-    const bad = await __validateChainRecursive([1, -2, 3], desc);
+    const bad = await __validateChainRecursive(testRun(), [1, -2, 3], desc);
     expect(isFailure(bad)).toBe(true);
   });
 
@@ -83,8 +87,8 @@ describe("__validateChainRecursive", () => {
         x: { kind: "leaf", schema: z.number(), validators: [isEven] },
       },
     };
-    expect(isSuccess(await __validateChainRecursive({ x: 4 }, desc))).toBe(true);
-    expect(isFailure(await __validateChainRecursive({ x: 5 }, desc))).toBe(true);
+    expect(isSuccess(await __validateChainRecursive(testRun(), { x: 4 }, desc))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(testRun(), { x: 5 }, desc))).toBe(true);
   });
 
   it("dispatches union to matching branch only", async () => {
@@ -113,7 +117,7 @@ describe("__validateChainRecursive", () => {
         },
       ],
     };
-    await __validateChainRecursive(7, desc);
+    await __validateChainRecursive(testRun(), 7, desc);
     expect(numCalled).toHaveBeenCalledTimes(1);
     expect(strCalled).not.toHaveBeenCalled();
   });
@@ -130,7 +134,7 @@ describe("__validateChainRecursive", () => {
         validators: [inner as unknown as AgencyValidator],
       },
     };
-    expect(isSuccess(await __validateChainRecursive(null, desc))).toBe(true);
+    expect(isSuccess(await __validateChainRecursive(testRun(), null, desc))).toBe(true);
     expect(inner).not.toHaveBeenCalled();
   });
 
@@ -149,7 +153,7 @@ describe("__validateChainRecursive", () => {
     let v: unknown = 1;
     for (let i = 0; i < 5; i++) v = [v];
 
-    const r = await __validateChainRecursive(v, desc, { maxDepth: 3 });
+    const r = await __validateChainRecursive(testRun(), v, desc, { maxDepth: 3 });
     expect(isFailure(r)).toBe(true);
     const failed = r as ResultFailure;
     expect(failed.error).toMatch(/recursion depth/);
@@ -187,11 +191,13 @@ describe("ref descriptors (deferred reads for recursive/forward aliases)", () =>
       },
     };
     const ok = await __validateChainRecursive(
+      testRun(),
       { value: 1, children: [{ value: 2, children: [] }] },
       tree,
     );
     expect(isSuccess(ok)).toBe(true);
     const bad = await __validateChainRecursive(
+      testRun(),
       { value: 1, children: [{ value: -5, children: [] }] },
       tree,
     );
@@ -211,7 +217,7 @@ describe("ref descriptors (deferred reads for recursive/forward aliases)", () =>
       kind: "ref",
       get: () => ({ ...leaf, validators: [rejectAll] }),
     };
-    expect(isFailure(await __validateChainRecursive(1, ref))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(testRun(), 1, ref))).toBe(true);
   });
 
   it("a pure ref -> ref cycle fails on the consecutive-hop cap instead of hanging", async () => {
@@ -219,7 +225,7 @@ describe("ref descriptors (deferred reads for recursive/forward aliases)", () =>
     // termination must not depend on that guard staying airtight.
     const a: TypeValidationDescriptor = { kind: "ref", get: () => b };
     const b: TypeValidationDescriptor = { kind: "ref", get: () => a };
-    const r = await __validateChainRecursive(1, a);
+    const r = await __validateChainRecursive(testRun(), 1, a);
     expect(isFailure(r)).toBe(true);
   });
 
@@ -241,7 +247,7 @@ describe("ref descriptors (deferred reads for recursive/forward aliases)", () =>
       cursor.next = {};
       cursor = cursor.next as { next?: unknown };
     }
-    const r = await __validateChainRecursive(deep, wrapper, { maxDepth: 16 });
+    const r = await __validateChainRecursive(testRun(), deep, wrapper, { maxDepth: 16 });
     expect(isFailure(r)).toBe(true);
   });
 });
@@ -260,9 +266,9 @@ describe("record descriptor kind (#630)", () => {
   };
 
   it("runs the value descriptor validators per entry", async () => {
-    const ok = await __validateChainRecursive({ a: 1, b: 2 }, recordDesc);
+    const ok = await __validateChainRecursive(testRun(), { a: 1, b: 2 }, recordDesc);
     expect(isSuccess(ok)).toBe(true);
-    const bad = await __validateChainRecursive({ a: 1, b: -5 }, recordDesc);
+    const bad = await __validateChainRecursive(testRun(), { a: 1, b: -5 }, recordDesc);
     expect(isFailure(bad)).toBe(true);
   });
 
@@ -277,7 +283,7 @@ describe("record descriptor kind (#630)", () => {
       validators: [],
       value: { kind: "leaf", schema: z.number(), validators: [doubleIt] },
     };
-    await expect(__validateChainRecursive({ a: 1, b: 2 }, doublingDesc)).rejects.toThrow(
+    await expect(__validateChainRecursive(testRun(), { a: 1, b: 2 }, doublingDesc)).rejects.toThrow(
       /validator 'doubleIt' modified the value/,
     );
   });
@@ -289,8 +295,12 @@ describe("record descriptor kind (#630)", () => {
       validators: [],
       value: recordDesc,
     };
-    expect(isSuccess(await __validateChainRecursive({ x: { a: 1 } }, nested))).toBe(true);
-    expect(isFailure(await __validateChainRecursive({ x: { a: -1 } }, nested))).toBe(true);
+    expect(isSuccess(await __validateChainRecursive(testRun(), { x: { a: 1 } }, nested))).toBe(
+      true,
+    );
+    expect(isFailure(await __validateChainRecursive(testRun(), { x: { a: -1 } }, nested))).toBe(
+      true,
+    );
   });
 
   it("record own validators run before per-entry walks", async () => {
@@ -302,8 +312,8 @@ describe("record descriptor kind (#630)", () => {
       validators: [nonEmpty],
       value: ageDesc,
     };
-    expect(isFailure(await __validateChainRecursive({}, withOwn))).toBe(true);
-    expect(isSuccess(await __validateChainRecursive({ a: 1 }, withOwn))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(testRun(), {}, withOwn))).toBe(true);
+    expect(isSuccess(await __validateChainRecursive(testRun(), { a: 1 }, withOwn))).toBe(true);
   });
 
   it("record inside a ref resolves and validates", async () => {
@@ -311,7 +321,7 @@ describe("record descriptor kind (#630)", () => {
       kind: "ref",
       get: () => recordDesc,
     };
-    expect(isFailure(await __validateChainRecursive({ a: -1 }, viaRef))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(testRun(), { a: -1 }, viaRef))).toBe(true);
   });
 });
 
@@ -327,7 +337,7 @@ describe("record walker prototype safety", () => {
       value: { kind: "leaf", schema: z.number(), validators: [] },
     };
     const hostile = JSON.parse('{"__proto__": 7, "a": 1}');
-    const r = await __validateChainRecursive(hostile, permissiveRecord);
+    const r = await __validateChainRecursive(testRun(), hostile, permissiveRecord);
     expect(isSuccess(r)).toBe(true);
     const out = (r as { value: Record<string, unknown> }).value;
     expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
@@ -340,39 +350,39 @@ describe("the predicate contract (validators may not modify the value)", () => {
   it("a pass-through validator is unchanged, same-reference object included", async () => {
     const passRef: AgencyValidator = async (v) => success(v);
     const obj = { a: 1 };
-    const r = await __validateChain(obj, z.any(), [passRef]);
+    const r = await __validateChain(testRun(), obj, z.any(), [passRef]);
     expect(isSuccess(r)).toBe(true);
   });
 
   it("a modifying validator throws, naming it", async () => {
-    await expect(__validateChain(2, z.number(), [doubleIt])).rejects.toThrow(
+    await expect(__validateChain(testRun(), 2, z.number(), [doubleIt])).rejects.toThrow(
       /validator 'doubleIt' modified the value/,
     );
   });
 
   it("a rebuilt-equal object counts as modification (identity, not equality)", async () => {
     const rebuild: AgencyValidator = async (v) => success({ ...(v as object) });
-    await expect(__validateChain({ a: 1 }, z.any(), [rebuild])).rejects.toThrow(
+    await expect(__validateChain(testRun(), { a: 1 }, z.any(), [rebuild])).rejects.toThrow(
       /modified the value/,
     );
   });
 
   it("success() with no value counts as modification", async () => {
     const emptyHanded: AgencyValidator = async () => success(undefined);
-    await expect(__validateChain(1, z.number(), [emptyHanded])).rejects.toThrow(
+    await expect(__validateChain(testRun(), 1, z.number(), [emptyHanded])).rejects.toThrow(
       /modified the value/,
     );
   });
 
   it("a NaN pass-through does NOT throw (Object.is, not !==)", async () => {
     const passNaN: AgencyValidator = async (v) => success(v);
-    const r = await __validateChain(NaN, z.any(), [passNaN]);
+    const r = await __validateChain(testRun(), NaN, z.any(), [passNaN]);
     expect(isSuccess(r)).toBe(true);
   });
 
   it("an anonymous validator reports (anonymous)", async () => {
     await expect(
-      __validateChain(1, z.number(), [async (v) => success((v as number) + 1)]),
+      __validateChain(testRun(), 1, z.number(), [async (v) => success((v as number) + 1)]),
     ).rejects.toThrow(/validator '\(anonymous\)' modified the value/);
   });
 });
@@ -385,9 +395,9 @@ describe("__withUseSiteValidators", () => {
       validators: [isPos],
     };
     const merged = __withUseSiteValidators(leaf, [isEven]);
-    expect(isSuccess(await __validateChainRecursive(4, merged))).toBe(true);
-    expect(isFailure(await __validateChainRecursive(3, merged))).toBe(true);
-    expect(isFailure(await __validateChainRecursive(-2, merged))).toBe(true);
+    expect(isSuccess(await __validateChainRecursive(testRun(), 4, merged))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(testRun(), 3, merged))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(testRun(), -2, merged))).toBe(true);
   });
 
   it("merges onto the descriptor a ref resolves to, so the walker runs them", async () => {
@@ -398,8 +408,8 @@ describe("__withUseSiteValidators", () => {
     };
     const ref: TypeValidationDescriptor = { kind: "ref", get: () => leaf };
     const merged = __withUseSiteValidators(ref, [isEven]);
-    expect(isSuccess(await __validateChainRecursive(4, merged))).toBe(true);
-    expect(isFailure(await __validateChainRecursive(3, merged))).toBe(true);
+    expect(isSuccess(await __validateChainRecursive(testRun(), 4, merged))).toBe(true);
+    expect(isFailure(await __validateChainRecursive(testRun(), 3, merged))).toBe(true);
   });
 
   it("merges a ref once, however many times the walker resolves it", () => {

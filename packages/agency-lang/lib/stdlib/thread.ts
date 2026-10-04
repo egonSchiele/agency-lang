@@ -8,7 +8,8 @@ import type {
 } from "smoltalk";
 import { nanoid } from "nanoid";
 import * as path from "node:path";
-import { agencyStore, currentRun, getRuntimeContext } from "../runtime/asyncContext.js";
+import { agencyStore, currentRun } from "../runtime/asyncContext.js";
+import type { Clock } from "../runtime/clock.js";
 import { wholePath, stat as statUnder } from "./contained.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
 import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
@@ -57,7 +58,7 @@ export async function __internal_systemMessage(
  *  observability-only debug tag shown in statelog; "" means unlabeled and
  *  is normalized to null. Never sent to the provider. */
 export async function _systemMessage(msg: string, label: string = ""): Promise<void> {
-  const { threads } = getRuntimeContext();
+  const { threads } = currentRun();
   threads.getOrCreateActive().push(smoltalk.systemMessage(msg), label || null);
 }
 
@@ -77,7 +78,7 @@ export async function _userMessage(
   msg: smoltalk.UserContentInput,
   label: string = "",
 ): Promise<void> {
-  const { threads } = getRuntimeContext();
+  const { threads } = currentRun();
   threads.getOrCreateActive().push(smoltalk.userMessage(msg), label || null);
 }
 
@@ -117,7 +118,7 @@ export async function _toolMessage(
   }
 
   const id = nanoid();
-  const { threads } = getRuntimeContext();
+  const { threads } = currentRun();
   const thread = threads.getOrCreateActive();
 
   thread.push(
@@ -141,7 +142,7 @@ export async function __internal_assistantMessage(
 /** ALS-reading replacement for `__internal_assistantMessage`. `label` is
  *  an observability-only debug tag (see `_systemMessage`). */
 export async function _assistantMessage(msg: string, label: string = ""): Promise<void> {
-  const { threads } = getRuntimeContext();
+  const { threads } = currentRun();
   threads.getOrCreateActive().push(smoltalk.assistantMessage(msg), label || null);
 }
 
@@ -261,7 +262,7 @@ export function _attachToReply(attachment: unknown): void {
     return;
   }
   if (!_insideToolCall()) {
-    frame.ctx?.statelogClient?.error({
+    frame.log?.error({
       errorType: "toolError",
       message: "attachToReply called outside a tool invocation; attachment dropped",
       functionName: "attachToReply",
@@ -298,7 +299,7 @@ function toolInvocationStack(functionName: string, dropped: string): StateStack 
     return null;
   }
   if (frame.toolInvocationStack === undefined) {
-    frame.ctx?.statelogClient?.error({
+    frame.log?.error({
       errorType: "toolError",
       message: `${functionName} called outside a tool invocation; ${dropped}`,
       functionName,
@@ -351,7 +352,7 @@ export async function __internal_getCost(
 
 /** ALS-reading replacement for `__internal_getCost`. */
 export async function _getCost(): Promise<number> {
-  const { stack } = getRuntimeContext();
+  const { stack } = currentRun();
   return stack.localCost;
 }
 
@@ -365,7 +366,7 @@ export async function __internal_getTokens(
 
 /** ALS-reading replacement for `__internal_getTokens`. */
 export async function _getTokens(): Promise<number> {
-  const { stack } = getRuntimeContext();
+  const { stack } = currentRun();
   return stack.localTokens;
 }
 
@@ -374,7 +375,7 @@ export async function _getTokens(): Promise<number> {
  * thread has no messages, while a resumed session already carries its
  * prompt. */
 export async function _threadIsNew(): Promise<boolean> {
-  const { threads } = getRuntimeContext();
+  const { threads } = currentRun();
   const activeId = threads.activeId();
   if (activeId === undefined) {
     return true;
@@ -385,7 +386,7 @@ export async function _threadIsNew(): Promise<boolean> {
 /** True when the active thread already holds a system message with
  *  exactly this content. Reads the messages in place; nothing is copied. */
 export async function _threadHasSystemMessage(content: string): Promise<boolean> {
-  const { threads } = getRuntimeContext();
+  const { threads } = currentRun();
   const active = threads.active();
   if (active === undefined) {
     return false;
@@ -452,7 +453,7 @@ function decisionAnswers(rawData: unknown): Record<string, DecisionAnswer> | nul
  *  when no assistant has replied on it yet. Reads the messages in place, so
  *  after a resume it sees what the checkpoint restored. */
 export async function _lastReply(): Promise<ReplyRecord | null> {
-  const { threads } = getRuntimeContext();
+  const { threads } = currentRun();
   const messages = threads.active()?.messages ?? [];
   const replies = messages.filter(
     (message): message is smoltalk.AssistantMessage => message.role === "assistant",
@@ -497,7 +498,7 @@ function toModelCost(entry: UsageEntry): ModelCost {
  * descending, model name as the tiebreak.
  */
 export async function _getModelCosts(): Promise<ModelCost[]> {
-  const { ctx } = getRuntimeContext();
+  const { ctx } = currentRun();
   const entries: UsageEntry[] = ctx?.invocationUsage?.snapshot().entries ?? [];
   return entries
     .map(toModelCost)
@@ -521,6 +522,7 @@ export async function _getModelCosts(): Promise<ModelCost[]> {
  */
 function pushGuardImpl(
   stack: StateStack,
+  clock: Clock,
   costLimit: number | null,
   timeLimit: number | null,
   label?: string | null,
@@ -546,7 +548,7 @@ function pushGuardImpl(
   // meaning "no paid spend" (local-models-only), since check() trips on
   // spent > limit (strict).
   if (timeLimit != null && timeLimit > 0) {
-    const g = new TimeGuard(timeLimit, label ?? undefined);
+    const g = new TimeGuard(timeLimit, label ?? undefined, clock);
     stack.pushGuard(g);
     ids.push(g.guardId);
   }
@@ -562,13 +564,13 @@ function pushGuardImpl(
 }
 
 export async function __internal_pushGuard(
-  _ctx: RuntimeContext<any>,
+  ctx: RuntimeContext<any>,
   stack: StateStack,
   _threads: ThreadStore,
   costLimit: number | null,
   timeLimit: number | null,
 ): Promise<string[]> {
-  return pushGuardImpl(stack, costLimit, timeLimit);
+  return pushGuardImpl(stack, ctx.clock, costLimit, timeLimit);
 }
 
 /** ALS-reading replacement for `__internal_pushGuard`. */
@@ -577,8 +579,8 @@ export async function _pushGuard(
   timeLimit: number | null,
   label: string | null = null,
 ): Promise<string[]> {
-  const { stack } = getRuntimeContext();
-  return pushGuardImpl(stack, costLimit, timeLimit, label);
+  const { ctx, stack } = currentRun();
+  return pushGuardImpl(stack, ctx.clock, costLimit, timeLimit, label);
 }
 
 /**
@@ -603,7 +605,7 @@ export async function __internal_popGuard(
 
 /** ALS-reading replacement for `__internal_popGuard`. */
 export async function _popGuard(ids: string[]): Promise<void> {
-  const { stack } = getRuntimeContext();
+  const { stack } = currentRun();
   popGuardImpl(stack, ids);
 }
 
@@ -611,7 +613,7 @@ export async function _popGuard(ids: string[]): Promise<void> {
  *  which frame owns the draft, cloning, the global-scope rejection —
  *  lives in `StateStack.setSavedDraft`. */
 export async function _saveDraft(value: unknown): Promise<void> {
-  const { stack } = getRuntimeContext();
+  const { stack } = currentRun();
   stack.setSavedDraft(value);
 }
 
@@ -648,7 +650,7 @@ export async function _runGuarded(ids: string[], block: unknown): Promise<Result
     // guardTrip cause instead of a generic error. `stack.lastFrame()` is
     // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
     // matches what the codegen `try block()` captured via `__stack.args`.
-    return await __tryCall(() => __call(run, block, { type: "positional", args: [] }), {
+    return await __tryCall(run.log, () => __call(run, block, { type: "positional", args: [] }), {
       ownedGuardIds: ids,
       checkpoint: ctx.getResultCheckpoint(),
       functionName: "guard",

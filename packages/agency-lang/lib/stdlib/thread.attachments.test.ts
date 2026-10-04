@@ -95,7 +95,7 @@ describe("_attachToReply", () => {
       isInsideToolCall: () => toolDepth > 0,
       statelogClient: { error: vi.fn() },
     };
-    return { ctx, stack } as any;
+    return { ctx, stack, log: ctx.statelogClient } as any;
   }
 
   it("queues onto the frame's stack.other when inside a tool call", () => {

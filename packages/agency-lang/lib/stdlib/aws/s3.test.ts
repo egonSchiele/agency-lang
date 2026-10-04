@@ -283,7 +283,7 @@ describe("S3 presigned URLs", () => {
         "Good morning! Today's image: [presigned S3 URL redacted] — enjoy.",
       );
 
-      const safe = safeStatelogValue(email);
+      const safe = safeStatelogValue(email, globals);
       expect(safe).toBe("Good morning! Today's image: [presigned S3 URL redacted] — enjoy.");
     }));
 

@@ -99,21 +99,21 @@ describe("Runner.shouldSkip — guard-trip delivery de-dup", () => {
 
 describe("safeStatelogValue", () => {
   it("deep-clones small JSON values", () => {
-    expect(safeStatelogValue(42)).toBe(42);
-    expect(safeStatelogValue([0, 1, 1, 2, 3])).toEqual([0, 1, 1, 2, 3]);
+    expect(safeStatelogValue(42, undefined)).toBe(42);
+    expect(safeStatelogValue([0, 1, 1, 2, 3], undefined)).toEqual([0, 1, 1, 2, 3]);
     const obj = { a: [1, 2] };
-    const out = safeStatelogValue(obj);
+    const out = safeStatelogValue(obj, undefined);
     expect(out).toEqual(obj);
     expect(out).not.toBe(obj); // cloned, not the same reference
   });
 
   it("returns undefined for undefined and values JSON can't represent", () => {
-    expect(safeStatelogValue(undefined)).toBeUndefined();
-    expect(safeStatelogValue(() => 1)).toBeUndefined();
+    expect(safeStatelogValue(undefined, undefined)).toBeUndefined();
+    expect(safeStatelogValue(() => 1, undefined)).toBeUndefined();
   });
 
   it("truncates an oversized value to a marked string", () => {
-    const out = safeStatelogValue("x".repeat(5000));
+    const out = safeStatelogValue("x".repeat(5000), undefined);
     expect(typeof out).toBe("string");
     expect((out as string).length).toBeLessThan(5000);
     expect(out as string).toMatch(/…\[truncated\]$/);
@@ -122,7 +122,7 @@ describe("safeStatelogValue", () => {
   it("returns a placeholder for an unserializable (circular) value", () => {
     const a: any = {};
     a.self = a;
-    expect(safeStatelogValue(a)).toBe("[unserializable]");
+    expect(safeStatelogValue(a, undefined)).toBe("[unserializable]");
   });
 
   it("preserves a durable redact tag on the clone (redaction runs on this copy)", () => {
@@ -131,7 +131,7 @@ describe("safeStatelogValue", () => {
     const gs = new GlobalStore();
     const secret = { apiKey: "sk-secret" };
     gs.setTag(secret, "redact", true);
-    const out = safeStatelogValue({ wrapped: secret }) as {
+    const out = safeStatelogValue({ wrapped: secret }, undefined) as {
       wrapped: object;
     };
     expect(out.wrapped).toEqual({ apiKey: "sk-secret" });
@@ -139,9 +139,12 @@ describe("safeStatelogValue", () => {
   });
 
   it("preserves native types (Date) through the clone", () => {
-    const out = safeStatelogValue({
-      when: new Date("2026-01-01T00:00:00.000Z"),
-    }) as { when: Date };
+    const out = safeStatelogValue(
+      {
+        when: new Date("2026-01-01T00:00:00.000Z"),
+      },
+      undefined,
+    ) as { when: Date };
     expect(out.when).toBeInstanceOf(Date);
   });
 
@@ -153,24 +156,18 @@ describe("safeStatelogValue", () => {
     const gs = new GlobalStore();
     const secret = { apiKey: "sk-oversized-secret" };
     gs.setTag(secret, "redact", true);
-    const ctx: any = { globals: gs };
-    const out = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-      safeStatelogValue({ secret, filler: "x".repeat(5000) }),
-    );
+    const out = safeStatelogValue({ secret, filler: "x".repeat(5000) }, gs);
     expect(typeof out).toBe("string");
     expect(out).toMatch(/…\[truncated\]$/);
     expect(out).toContain("[REDACTED]");
     expect(out).not.toContain("sk-oversized-secret");
   });
 
-  it("redacts the small-path clone in place when a frame is present", () => {
+  it("redacts the small-path clone in place when it is handed the tag store", () => {
     const gs = new GlobalStore();
     const secret = { apiKey: "sk-small-secret" };
     gs.setTag(secret, "redact", true);
-    const ctx: any = { globals: gs };
-    const out = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-      safeStatelogValue({ secret, other: 1 }),
-    ) as Record<string, unknown>;
+    const out = safeStatelogValue({ secret, other: 1 }, gs) as Record<string, unknown>;
     expect(out.secret).toBe("[REDACTED]");
     expect(out.other).toBe(1);
   });
@@ -1323,24 +1320,16 @@ describe("custom redaction markers across both statelog paths", () => {
     expect(JSON.parse(ordinaryOutput)).toEqual({ secret: replacement });
     expect(ordinaryOutput).not.toContain(SECRET_PREFIX);
 
-    const safeSmallOutput = runInTestContext(
-      runtimeContext,
-      runtimeContext.stateStack,
-      new ThreadStore(),
-      () => safeStatelogValue({ secret }),
-    );
+    const safeSmallOutput = safeStatelogValue({ secret }, runtimeContext.globals);
     expect(safeSmallOutput).toEqual({ secret: replacement });
     expect(JSON.stringify(safeSmallOutput)).not.toContain(SECRET_PREFIX);
 
-    const safeOversizedOutput = runInTestContext(
-      runtimeContext,
-      runtimeContext.stateStack,
-      new ThreadStore(),
-      () =>
-        safeStatelogValue({
-          secret,
-          filler: "x".repeat(4_101),
-        }),
+    const safeOversizedOutput = safeStatelogValue(
+      {
+        secret,
+        filler: "x".repeat(4_101),
+      },
+      runtimeContext.globals,
     );
     expect(typeof safeOversizedOutput).toBe("string");
     expect(safeOversizedOutput).toContain(replacement);

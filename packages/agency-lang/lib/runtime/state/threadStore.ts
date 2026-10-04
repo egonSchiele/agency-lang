@@ -33,7 +33,6 @@ type ThreadRegistry = {
    *  like `"__proto__"` or `"constructor"` cannot mutate the
    *  Object prototype (prototype pollution). */
   sessions: Record<string, MessageThreadID>;
-  statelogClient?: StatelogClient;
 };
 
 export class ThreadStore {
@@ -52,6 +51,11 @@ export class ThreadStore {
    *  `popActive` / `llm()` calls write to a branch-local subthread
    *  instead of the parent's currently-active thread. */
   activeStack: MessageThreadID[] = [];
+
+  /** The logger thread events go to: the logger of the run this store or
+   *  view belongs to. It is per instance and not part of the shared
+   *  registry, because each branch has its own logger. */
+  private statelogClient: StatelogClient | undefined = undefined;
 
   constructor() {
     this.registry = {
@@ -91,15 +95,12 @@ export class ThreadStore {
     this.registry.counter = value;
   }
 
-  private get statelogClient(): StatelogClient | undefined {
-    return this.registry.statelogClient;
-  }
-
   // Set after construction. Most callers should pass the client to
   // `withDefaultActive(client)` instead so the initial default thread
   // is logged consistently with subsequent thread/subthread blocks.
+  // The runtime passes the logger of the run the store belongs to.
   setStatelogClient(client: StatelogClient): void {
-    this.registry.statelogClient = client;
+    this.statelogClient = client;
   }
 
   /**
@@ -124,9 +125,19 @@ export class ThreadStore {
    * for fresh `new ThreadStore()` outside a run), the view starts
    * with an empty `activeStack` and any unguarded thread access in
    * the branch will throw the usual "no active thread" error.
+   *
+   * `log` is the branch's logger, which the view logs through from then
+   * on. `creationLog` logs the one subthread made here. The two differ in
+   * `runBatch`: the view is built before the branch's run exists, where
+   * the branch's own logger is not yet the current one. Both default to
+   * this store's logger.
    */
-  forkBranchView(): ThreadStore {
+  forkBranchView(
+    log: StatelogClient | undefined = this.statelogClient,
+    creationLog: StatelogClient | undefined = log,
+  ): ThreadStore {
     const view = new ThreadStore();
+    view.statelogClient = log;
     // Alias the shared registry. Casting through `unknown` avoids
     // declaring `registry` as readonly-public; the field stays
     // private to the class while letting us share by reference.
@@ -139,7 +150,7 @@ export class ThreadStore {
       // helper as `createSubthread()` — the only difference is we
       // push the new id onto the *view's* activeStack rather than
       // `this.activeStack`.
-      const id = this.createSubthreadOf(parentActiveId);
+      const id = this.createSubthreadOf(parentActiveId, undefined, creationLog);
       view.activeStack.push(id);
     }
 
@@ -159,12 +170,31 @@ export class ThreadStore {
    *
    * Does NOT create a new subthread — the subthread that was originally
    * created at first-fork-time still lives in the shared registry and
-   * its id is in `activeStack`. Statelog is not re-emitted.
+   * its id is in `activeStack`. Statelog is not re-emitted. `log` is the
+   * logger the view logs through; it defaults to this store's.
    */
-  restoreBranchView(activeStack: MessageThreadID[]): ThreadStore {
+  restoreBranchView(
+    activeStack: MessageThreadID[],
+    log: StatelogClient | undefined = this.statelogClient,
+  ): ThreadStore {
     const view = new ThreadStore();
     (view as unknown as { registry: ThreadRegistry }).registry = this.registry;
+    view.statelogClient = log;
     view.activeStack = [...activeStack];
+    return view;
+  }
+
+  /**
+   * This same store as another branch sees it: the same registry and the
+   * same active stack, by reference, with that branch's logger. For a
+   * branch that shares its parent's threads (`runBatch` with
+   * `shareThreads`) but logs under its own spans.
+   */
+  sharedView(log: StatelogClient | undefined): ThreadStore {
+    const view = new ThreadStore();
+    (view as unknown as { registry: ThreadRegistry }).registry = this.registry;
+    view.statelogClient = log;
+    view.activeStack = this.activeStack;
     return view;
   }
 
@@ -223,6 +253,7 @@ export class ThreadStore {
   createSubthreadOf(
     parentRegistryId: MessageThreadID,
     meta?: { label?: string | null; hidden?: boolean },
+    log: StatelogClient | undefined = this.statelogClient,
   ): MessageThreadID {
     const id = (this.registry.counter++).toString();
     const parentThread = this.registry.threads[parentRegistryId];
@@ -230,7 +261,7 @@ export class ThreadStore {
     if (meta?.label !== undefined && meta.label !== null) subthread.label = meta.label;
     if (meta?.hidden === true) subthread.hidden = true;
     this.registry.threads[id] = subthread;
-    this.registry.statelogClient?.threadCreated({
+    log?.threadCreated({
       threadId: id,
       threadType: "subthread",
       parentThreadId: parentRegistryId,
@@ -277,9 +308,12 @@ export class ThreadStore {
    *  `thread`. A thread this store does not know (one built from explicit
    *  `messages`) is registered first. The view has its own active stack,
    *  so concurrent callers never push and pop on each other. */
-  viewWithActive(thread: MessageThread): ThreadStore {
+  viewWithActive(
+    thread: MessageThread,
+    log: StatelogClient | undefined = this.statelogClient,
+  ): ThreadStore {
     const id = this.idOf(thread) ?? this.register(thread);
-    return this.restoreBranchView([id]);
+    return this.restoreBranchView([id], log);
   }
 
   private idOf(thread: MessageThread): MessageThreadID | undefined {

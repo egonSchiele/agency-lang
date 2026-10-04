@@ -1011,7 +1011,7 @@ export class TypeScriptBuilder {
    * Build the validation expression for a `!` site. If the resolved type
    * carries no `@validate(...)` tag anywhere, return the existing
    * `__validateType(value, schema)` call (zero behavior change). Otherwise
-   * return `await __validateChainRecursive(value, <descriptor>)`,
+   * return `await __validateChainRecursive(__run, value, <descriptor>)`,
    * which runs Zod parse + the validator chain at each level.
    */
   private validateExpr(t: VariableType, value: TsNode): TsNode {
@@ -1399,7 +1399,7 @@ export class TypeScriptBuilder {
       throw new Error("Cannot use 'try' with 'throw' — throw always raises an error.");
     }
     const callNode = this.processNode(node.call as AgencyNode);
-    const args: TsNode[] = [ts.arrowFn([], callNode, { async: true })];
+    const args: TsNode[] = [ts.raw("__run.log"), ts.arrowFn([], callNode, { async: true })];
     const scope = this.scopes.current();
     if (scope.type === "function") {
       const opts: Record<string, TsNode> = {
@@ -2227,7 +2227,7 @@ export class TypeScriptBuilder {
       // setupFunction. A mismatched claim on resume replay is a frame
       // desync and throws (see claimFrameForScope).
       ts.raw(
-        `claimFrameForScope(__stack, ${JSON.stringify(functionName)}, ${JSON.stringify(this.moduleId)});`,
+        `claimFrameForScope(__stack, ${JSON.stringify(functionName)}, ${JSON.stringify(this.moduleId)}, __run.log);`,
       ),
 
       // Ensure this module's globals are initialized on the
@@ -3065,7 +3065,7 @@ export class TypeScriptBuilder {
       // Claim site: this node just pulled its frame via setupNode. A
       // mismatched claim on resume replay is a frame desync and throws.
       ts.raw(
-        `claimFrameForScope(__stack, ${JSON.stringify(nodeName)}, ${JSON.stringify(this.moduleId)});`,
+        `claimFrameForScope(__stack, ${JSON.stringify(nodeName)}, ${JSON.stringify(this.moduleId)}, __run.log);`,
       ),
 
       ts.raw(
@@ -3177,7 +3177,7 @@ export class TypeScriptBuilder {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(\`Node ${nodeName} crashed: \${__errMsg}\`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: ${JSON.stringify(nodeName)},
@@ -3461,7 +3461,7 @@ export class TypeScriptBuilder {
       return ts.if(
         ts.raw(`isAborted(${expr})`),
         ts.statements([
-          ts.raw(`runner.halt(${expr}.carryThrough(${frameVar}, ${scopeName}))`),
+          ts.raw(`runner.halt(${expr}.carryThrough(__run.log, ${frameVar}, ${scopeName}))`),
           ts.return(),
         ]),
       );

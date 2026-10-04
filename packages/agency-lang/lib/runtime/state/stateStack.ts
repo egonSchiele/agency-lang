@@ -5,7 +5,8 @@ import { guardFromJSON, TimeGuard } from "../guard.js";
 import { Checkpoint } from "../index.js";
 import { MemoryFrame } from "../memory/frame.js";
 import { deepClone } from "../utils.js";
-import { agencyStore } from "../asyncContext.js";
+import { type Clock, realClock } from "../clock.js";
+import type { StatelogClient } from "../../statelogClient.js";
 import type { GlobalStoreJSON } from "./globalStore.js";
 import { ThreadStoreJSON } from "./threadStore.js";
 
@@ -279,7 +280,7 @@ export class State {
     return json;
   }
 
-  static fromJSON(json: StateJSON): State {
+  static fromJSON(json: StateJSON, clock: Clock = realClock): State {
     const state = new State({
       args: json.args,
       locals: json.locals,
@@ -301,7 +302,7 @@ export class State {
       state.branches = {};
       for (const [key, branch] of Object.entries(json.branches)) {
         const branchState: BranchState = {
-          stack: StateStack.fromJSON(branch.stack),
+          stack: StateStack.fromJSON(branch.stack, clock),
         };
         if (branch.interruptId) branchState.interruptId = branch.interruptId;
         if (branch.interruptData) branchState.interruptData = branch.interruptData;
@@ -342,9 +343,15 @@ export type StateJSON = {
  *  site forgot its name (Runner defaults scopeName to "").
  *  The statelog emit is not redundant with the throw: throws convert
  *  to Failures at def boundaries and can be laundered downstream; the
- *  event is the signal that survives. Best-effort via the ALS pattern
- *  (no store in bare unit tests means no emit; the throw still fires). */
-export function claimFrameForScope(frame: State, scopeName: string, moduleId: string): void {
+ *  event is the signal that survives. It goes to `log`, the logger of the
+ *  run making the claim (with no logger there is no emit; the throw still
+ *  fires). */
+export function claimFrameForScope(
+  frame: State,
+  scopeName: string,
+  moduleId: string,
+  log: StatelogClient | undefined,
+): void {
   if (!scopeName) return;
   if (frame.scopeName === null || frame.scopeName === undefined) {
     frame.scopeName = scopeName;
@@ -363,7 +370,7 @@ export function claimFrameForScope(frame: State, scopeName: string, moduleId: st
         `Resume desync: "${scopeName}" in module "${moduleId}" tried to claim ` +
         `the saved state of "${scopeName}" in module "${frame.moduleId}". This ` +
         `is a compiler/runtime bug — please report it with the program that produced it.`;
-      agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+      log?.error?.({
         errorType: "runtimeError",
         message: msg,
         functionName: scopeName,
@@ -377,7 +384,7 @@ export function claimFrameForScope(frame: State, scopeName: string, moduleId: st
       `Resume desync: function "${scopeName}" tried to claim the saved ` +
       `state of "${frame.scopeName}". This is a compiler/runtime bug — ` +
       `please report it with the program that produced it.`;
-    agencyStore.getStore()?.ctx?.statelogClient?.error?.({
+    log?.error?.({
       errorType: "runtimeError",
       message: msg,
       functionName: scopeName,
@@ -1243,9 +1250,11 @@ export class StateStack {
     return json;
   }
 
-  static fromJSON(json: StateStackJSON): StateStack {
+  /** `clock` is the restoring run's clock. Every time guard in the stack,
+   *  and in the branch stacks under it, keeps it. */
+  static fromJSON(json: StateStackJSON, clock: Clock = realClock): StateStack {
     const stateStack = new StateStack([], "serialize");
-    stateStack.stack = (json.stack || []).map((frame) => State.fromJSON(frame));
+    stateStack.stack = (json.stack || []).map((frame) => State.fromJSON(frame, clock));
     stateStack.nodesTraversed = json.nodesTraversed || [];
     stateStack.other = json.other || {};
     stateStack.mode = json.mode || "serialize";
@@ -1267,11 +1276,13 @@ export class StateStack {
     // in runBatch.ts). This intermediate state is safe because nothing
     // reads child stack guards between deserialize and the runBatch
     // re-entry that reactivates the branch.
-    stateStack.guards = (json.guards ?? []).map(guardFromJSON);
+    stateStack.guards = (json.guards ?? []).map((guard) => guardFromJSON(guard, clock));
     stateStack.inheritedGuardCount = json.inheritedGuardCount ?? 0;
     // Park deserialized inherited time clones for rehydrate to adopt.
     // Live-only: consumed (and cleared) by rehydrateInheritedGuardsFrom.
-    stateStack.parkedInheritedTimeGuards = (json.inheritedTimeGuards ?? []).map(guardFromJSON);
+    stateStack.parkedInheritedTimeGuards = (json.inheritedTimeGuards ?? []).map((guard) =>
+      guardFromJSON(guard, clock),
+    );
     return stateStack;
   }
 }

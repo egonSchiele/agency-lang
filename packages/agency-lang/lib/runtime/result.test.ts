@@ -40,6 +40,7 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
     });
     // The boundary OWNS guard g1, so it converts its own trip.
     const result = await __tryCall(
+      undefined,
       () => {
         throw new AgencyCancelledError("sleep cancelled", cause);
       },
@@ -64,6 +65,7 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
       guardId: "g2",
     });
     const result = await __tryCall(
+      undefined,
       () => {
         throw new AgencyCancelledError("cancelled", cause);
       },
@@ -85,6 +87,7 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
       guardId: "g1",
     });
     await __tryCall(
+      undefined,
       () => {
         throw new AgencyCancelledError("sleep cancelled", cause);
       },
@@ -96,7 +99,7 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
   it("still RE-THROWS a non-guard abort (userInterrupt) — cancellation must propagate", async () => {
     const cause = makeAbortCause({ kind: "userInterrupt" });
     await expect(
-      __tryCall(() => {
+      __tryCall(undefined, () => {
         throw new AgencyCancelledError("cancelled by user", cause);
       }),
     ).rejects.toBeInstanceOf(AgencyCancelledError);
@@ -104,7 +107,7 @@ describe("__tryCall — guardTrip cause conversion (the CI-crash fix)", () => {
 
   it("still re-throws a bare abort with no cause", async () => {
     await expect(
-      __tryCall(() => {
+      __tryCall(undefined, () => {
         throw new AgencyCancelledError("cancelled");
       }),
     ).rejects.toBeInstanceOf(AgencyCancelledError);
@@ -120,7 +123,7 @@ describe("__tryCall — propagate-never-swallow lock-in (C2: ownedGuardIds)", ()
   // single rung is inverted, removed, or moved below the conversion path.
   const reThrows = async (cause: AbortCause) => {
     await expect(
-      __tryCall(() => {
+      __tryCall(undefined, () => {
         throw new AgencyAbort("abort", cause);
       }),
     ).rejects.toBeInstanceOf(AgencyAbort);
@@ -143,7 +146,7 @@ describe("__tryCall — propagate-never-swallow lock-in (C2: ownedGuardIds)", ()
     ));
 
   it("negative control: a non-AgencyAbort Error converts to a Failure", async () => {
-    const result = await __tryCall(() => {
+    const result = await __tryCall(undefined, () => {
       throw new Error("plain boom");
     });
     expect(isFailure(result)).toBe(true);
@@ -156,6 +159,7 @@ describe("__tryCall — ownedGuardIds routing (C2)", () => {
 
   it("converts a trip it OWNS (guardId in ownedGuardIds)", async () => {
     const result = await __tryCall(
+      undefined,
       () => {
         throw new AgencyAbort("trip", guardTrip("g1"));
       },
@@ -168,6 +172,7 @@ describe("__tryCall — ownedGuardIds routing (C2)", () => {
   it("re-throws an OUTER guard's trip (guardId not owned by this inner boundary)", async () => {
     await expect(
       __tryCall(
+        undefined,
         () => {
           throw new AgencyAbort("trip", guardTrip("gOUTER"));
         },
@@ -178,7 +183,7 @@ describe("__tryCall — ownedGuardIds routing (C2)", () => {
 
   it("re-throws when ownedGuardIds is absent (plain try inside a guarded block)", async () => {
     await expect(
-      __tryCall(() => {
+      __tryCall(undefined, () => {
         throw new AgencyAbort("trip", guardTrip("g1"));
       }),
     ).rejects.toBeInstanceOf(AgencyAbort);
@@ -429,6 +434,7 @@ describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () =>
       frame.savedDraft = { value: draft };
     }
     return AbortedResult.fromError(
+      undefined,
       new AgencyCancelledError("sleep cancelled", tripCause(guardId)),
       frame,
       "block",
@@ -437,7 +443,7 @@ describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () =>
 
   it("salvages the partial as a success when the block saved a draft", async () => {
     const aborted = abortedWithDraft("g1", "partial-report");
-    const result = await __tryCall(async () => aborted, {
+    const result = await __tryCall(undefined, async () => aborted, {
       ownedGuardIds: ["g1"],
     });
     expect(isSuccess(result)).toBe(true);
@@ -446,7 +452,7 @@ describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () =>
 
   it("returns the failure when no draft was saved (additive)", async () => {
     const aborted = abortedWithDraft("g1");
-    const result = await __tryCall(async () => aborted, {
+    const result = await __tryCall(undefined, async () => aborted, {
       ownedGuardIds: ["g1"],
     });
     expect(isFailure(result)).toBe(true);
@@ -454,7 +460,7 @@ describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () =>
 
   it("a saved null is a real draft, distinct from no draft", async () => {
     const aborted = abortedWithDraft("g1", null);
-    const result = await __tryCall(async () => aborted, {
+    const result = await __tryCall(undefined, async () => aborted, {
       ownedGuardIds: ["g1"],
     });
     expect(isSuccess(result)).toBe(true);
@@ -463,7 +469,7 @@ describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () =>
 
   it("an UNOWNED trip keeps travelling as a value, partial intact", async () => {
     const aborted = abortedWithDraft("outer", "keep-me");
-    const result = await __tryCall(async () => aborted, {
+    const result = await __tryCall(undefined, async () => aborted, {
       ownedGuardIds: ["inner"],
     });
     expect(result).toBe(aborted);
@@ -473,6 +479,7 @@ describe("__tryCall converts an OWNED trip's AbortedResult into a Result", () =>
   it("a trip still in exception form converts to the failure (backstop, no salvage)", async () => {
     const abort = new AgencyCancelledError("sleep cancelled", tripCause("g1"));
     const result = await __tryCall(
+      undefined,
       () => {
         throw abort;
       },
@@ -547,19 +554,19 @@ describe("guard trip messages", () => {
 describe("a Result built by hand in imported TypeScript", () => {
   it("has its object error and missing data normalized by try", async () => {
     const foreign = { __type: "resultType", success: false, error: { code: 404 } };
-    const result = (await __tryCall(() => foreign)) as ResultFailure;
+    const result = (await __tryCall(undefined, () => foreign)) as ResultFailure;
     expect(result.error).toBe('{"code":404}');
     expect(result.data).toEqual({});
   });
 
   it("passes a well-formed failure through unchanged", async () => {
     const wellFormed = failure("boom", { status: 404 });
-    expect(await __tryCall(() => wellFormed)).toBe(wellFormed);
+    expect(await __tryCall(undefined, () => wellFormed)).toBe(wellFormed);
   });
 
   it("leaves a success alone", async () => {
     const ok = { __type: "resultType", success: true, value: 42 };
-    expect(await __tryCall(() => ok)).toBe(ok);
+    expect(await __tryCall(undefined, () => ok)).toBe(ok);
   });
 });
 
@@ -567,7 +574,7 @@ describe("__tryCall — run-control signals", () => {
   it("re-throws a RestoreSignal instead of turning it into a failure", async () => {
     const cp = makeCheckpoint();
     await expect(
-      __tryCall(async () => {
+      __tryCall(undefined, async () => {
         throw new RestoreSignal(cp);
       }),
     ).rejects.toBeInstanceOf(RestoreSignal);
@@ -576,7 +583,7 @@ describe("__tryCall — run-control signals", () => {
   it("re-throws a PauseSignal instead of turning it into a failure", async () => {
     const cp = makeCheckpoint();
     await expect(
-      __tryCall(async () => {
+      __tryCall(undefined, async () => {
         throw new PauseSignal(cp);
       }),
     ).rejects.toBeInstanceOf(PauseSignal);

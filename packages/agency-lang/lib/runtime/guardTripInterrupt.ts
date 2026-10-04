@@ -347,7 +347,7 @@ export async function raiseGuardTripsAtStep(args: {
     intr.checkpointId = checkpointId;
     intr.checkpoint = checkpoint;
   });
-  ctx.statelogClient.checkpointCreated({
+  args.run.log.checkpointCreated({
     checkpointId,
     reason: "interrupt",
     sourceLocation: args.location,

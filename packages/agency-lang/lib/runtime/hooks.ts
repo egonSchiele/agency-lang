@@ -298,7 +298,7 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(
   // (fire-and-forget; strips functions; no-op outside IPC). Purely additive: the
   // child still fires its own callbacks below. When THIS process is itself a
   // subprocess, this re-forwards relayed events upward -> automatic nested relay.
-  sendCallbackToParent(name, data);
+  sendCallbackToParent(name, data, run.log);
 
   const ctx = run.ctx;
   const walkStack = stateStack ?? ctx.stateStack;

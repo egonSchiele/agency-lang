@@ -42,11 +42,13 @@ export async function dispatchLLMRequest({
   // branch returns a completion shaped like a text model's, so everything
   // after this point runs unchanged. There is nothing to stream.
   if (decisionPlan !== undefined) {
-    const completion = await dispatchDecision(ctx, promptConfig, decisionPlan);
+    const completion = await dispatchDecision(run, promptConfig, decisionPlan);
     return { completion, toolCalls: [] };
   }
+  // The client is told which module is calling. See `PromptConfig.moduleId`.
+  const withModule = { ...promptConfig, moduleId: run.callsite?.moduleId };
   if (stream) {
-    const streamGen = ctx.llmClient.textStream(promptConfig);
+    const streamGen = ctx.llmClient.textStream(withModule);
     const response = await handleStreamingResponse({
       run,
       ctx,
@@ -65,7 +67,7 @@ export async function dispatchLLMRequest({
       toolCalls: response.value.toolCalls,
     };
   }
-  const response = await ctx.llmClient.text(promptConfig);
+  const response = await ctx.llmClient.text(withModule);
   if (!response.success) {
     throw new Error(`Error getting completion: ${response.error}`);
   }

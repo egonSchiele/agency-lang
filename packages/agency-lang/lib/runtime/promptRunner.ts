@@ -1,4 +1,5 @@
 import type { Run } from "./asyncContext.js";
+import type { StatelogClient } from "../statelogClient.js";
 import type { MessageJSON } from "smoltalk";
 import type { MessageThreadJSON } from "./state/messageThread.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
@@ -42,6 +43,9 @@ export type PromptRunnerOpts = {
   /** Frame-local `self` object (== the function's locals bag). */
   self: any;
   ctx: RuntimeContext<any>;
+  /** The logger of the run `runPrompt` was called under. `step()` runs in
+   *  that run's own flow, never inside a tool branch. */
+  log: StatelogClient;
   stateStack: StateStack;
   /** The runPrompt frame (== `stateStack.lastFrame()`). Used by
    * `parallel()` as `runBatch`'s `parentFrame` for per-tool branch
@@ -118,7 +122,7 @@ export class PromptRunner {
         intr.checkpoint = cp;
         intr.checkpointId = cpId;
       }
-      this.opts.ctx.statelogClient.checkpointCreated({
+      this.opts.log.checkpointCreated({
         checkpointId: cpId,
         reason: "interrupt",
         sourceLocation: {

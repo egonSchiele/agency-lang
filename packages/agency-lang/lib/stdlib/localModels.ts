@@ -29,7 +29,7 @@ import {
   loadLocalProviderDetailed,
   resolveSmoltalkLlamaCppEntry,
 } from "../runtime/localProvider.js";
-import { __ctx } from "../runtime/asyncContext.js";
+import { agencyStore } from "../runtime/asyncContext.js";
 import { recordDownload, readDownloadManifest } from "./localModelManifest.js";
 import { fileSha256, verifyModelFile } from "./modelVerify.js";
 import {
@@ -1271,12 +1271,12 @@ function requireSupport(): void {
 /** Register the llama-cpp provider into agency's own smoltalk. Inside a run
  *  (the agent's --local path), emit the `localModelLoaded` statelog event
  *  saying where the provider package came from. The plain CLI has no runtime
- *  frame, so `__ctx()` is undefined there and nothing is emitted. */
+ *  frame, so there is no run logger there and nothing is emitted. */
 export async function _registerLocalProvider(): Promise<void> {
-  const ctx = __ctx(); // read before the first await
+  const log = agencyStore.getStore()?.log; // read before the first await
   requireSupport();
   const { entryPath, source } = (await loadLocalProviderDetailed()).choice;
-  void ctx?.statelogClient.localModelLoaded({ entryPath, entrySource: source });
+  void log?.localModelLoaded({ entryPath, entrySource: source });
 }
 
 /** The pinned SHA-256 for a model name/alias, or undefined when none is known

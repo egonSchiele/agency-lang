@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
 import {
-  agencyStore,
+  outerRunOrNone,
   freshState,
   lineageOf,
   logOf,
@@ -66,16 +66,16 @@ export function setupNode(args: { state: GraphState }): {
   let threads: ThreadStore;
   if (stack.threads) {
     threads = ThreadStore.fromJSON(stack.threads);
-    threads.setStatelogClient(ctx.statelogClient);
+    threads.setStatelogClient(run.log);
   } else if (state.messages instanceof ThreadStore) {
     threads = state.messages;
-    threads.setStatelogClient(ctx.statelogClient);
+    threads.setStatelogClient(run.log);
   } else {
     // Fallback: create a new ThreadStore with a default active thread.
     // This can happen on debugger/rewind resume paths where messages is not passed
     // and the checkpoint frame doesn't have serialized threads.
     // Pass the client so the default thread is logged.
-    threads = ThreadStore.withDefaultActive(ctx.statelogClient);
+    threads = ThreadStore.withDefaultActive(run.log);
   }
   stack.threads = threads;
 
@@ -150,7 +150,7 @@ async function initFreshExecCtx(
 
   // Installed before any user code runs — see the function comment (#966).
   installRunPolicyHandler(execCtx, opts.policy);
-  installRootBudget(execCtx.stateStack, execCtx.budget);
+  installRootBudget(execCtx.stateStack, execCtx.clock, execCtx.budget);
 
   // initializeGlobals + callback registration both invoke Agency
   // code that goes through `__call` — and `__call` reads `ctx` /
@@ -299,7 +299,7 @@ async function runExportedFunctionCore({
   let outcome: RawOutcome<unknown>;
   try {
     await initFreshExecCtx(execCtx, { initializeGlobals, policy: resolved.policy });
-    const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+    const threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
     const value = await withRun(
       {
         ctx: execCtx,
@@ -308,9 +308,12 @@ async function runExportedFunctionCore({
         globals: execCtx.globals,
         log: logOf(execCtx, execCtx.globals),
         state: freshState(),
-        ...lineageOf(agencyStore.getStore()),
+        ...lineageOf(outerRunOrNone()),
       },
       async (run) => {
+        // The store was made before the run existed. From here its thread
+        // events belong to the run.
+        threadStore.setStatelogClient(run.log);
         const result = await fn.invoke(run, { type: "named", positionalArgs: [], namedArgs });
         // Drain any async work the function spawned (async calls, pending
         // promises) before returning, mirroring runNode's awaitAll.
@@ -440,11 +443,11 @@ async function runNodeCore({
         }),
       );
 
-      agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-      execCtx.statelogClient.agentStart({ entryNode: nodeName, args: data, input });
+      agentRunSpanId = execCtx.rootLog.startSpan("agentRun");
+      execCtx.rootLog.agentStart({ entryNode: nodeName, args: data, input });
 
       let isResume = false;
-      let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+      let threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
       while (true) {
         try {
           // Install an initial AsyncLocalStorage frame so stdlib helpers
@@ -463,7 +466,7 @@ async function runNodeCore({
               globals: execCtx.globals,
               log: logOf(execCtx, execCtx.globals),
               state: freshState(),
-              ...lineageOf(agencyStore.getStore()),
+              ...lineageOf(outerRunOrNone()),
             },
             (run) =>
               execCtx.graph.run(
@@ -477,7 +480,7 @@ async function runNodeCore({
                 },
                 {
                   onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-                  statelogClient: execCtx.statelogClient,
+                  statelogClient: execCtx.rootLog,
                 },
               ),
           );
@@ -501,7 +504,7 @@ async function runNodeCore({
             await execCtx.pauseTraceWriter();
           } else {
             // Final result: emit footer and close
-            execCtx.statelogClient.agentEnd({
+            execCtx.rootLog.agentEnd({
               entryNode: nodeName,
               result: returnObject.data,
               timeTaken: performance.now() - agentStartTime,
@@ -519,7 +522,7 @@ async function runNodeCore({
                 globals: execCtx.globals,
                 log: logOf(execCtx, execCtx.globals),
                 state: freshState(),
-                ...lineageOf(agencyStore.getStore()),
+                ...lineageOf(outerRunOrNone()),
               },
               (run) =>
                 callHook(run, {
@@ -546,7 +549,7 @@ async function runNodeCore({
             data = {};
             isResume = true;
             // Reset ThreadStore for the restored execution
-            threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
+            threadStore = ThreadStore.withDefaultActive(execCtx.rootLog);
             continue;
           }
           throw e;
@@ -555,13 +558,13 @@ async function runNodeCore({
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    execCtx.statelogClient.error({
+    execCtx.rootLog.error({
       errorType: "runtimeError",
       message: errorMessage,
     });
     // Whatever was spent before the crash, so cost dashboards still attribute
     // partial spend to failed runs.
-    execCtx.statelogClient.agentEnd({
+    execCtx.rootLog.agentEnd({
       entryNode: nodeName,
       timeTaken: performance.now() - agentStartTime,
       tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
@@ -570,7 +573,7 @@ async function runNodeCore({
   } finally {
     // Guarded: a setup failure before the span was opened leaves it undefined.
     if (agentRunSpanId !== undefined) {
-      execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
+      execCtx.rootLog.endSpan(agentRunSpanId); // end agentRun span
     }
   }
   return finishServedInvocation(execCtx, outcome, () => finalizeExecCtx(execCtx));

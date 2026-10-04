@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isAbortError, readCause, RunControlSignal } from "./errors.js";
 import { truncate } from "./truncate.js";
-import { isAborted } from "./abortedResult.js";
+import { isAborted, type AbortLog } from "./abortedResult.js";
 import { hasInterrupts } from "./interrupts.js";
 import { agencyStore } from "./asyncContext.js";
 
@@ -274,8 +274,14 @@ export function isFailure(result: unknown): result is ResultFailure {
 }
 
 /** Wrap a function call in try-catch, returning a Result.
- * If the function already returns a Result, pass it through (no double-wrapping). */
-export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<ResultValue> {
+ * If the function already returns a Result, pass it through (no double-wrapping).
+ * `log` is the logger of the run the `try` is in: a guard trip delivered
+ * here posts its closing event through it. */
+export async function __tryCall(
+  log: AbortLog,
+  fn: () => any,
+  opts?: FailureOpts,
+): Promise<ResultValue> {
   try {
     const value = await fn();
     // Interrupts are control flow, not values: a callee that paused on an
@@ -297,7 +303,7 @@ export async function __tryCall(fn: () => any, opts?: FailureOpts): Promise<Resu
         // the runner's shouldSkip must not re-throw an already-delivered
         // trip. Same contract as the exception path below.
         cause.delivered = true;
-        const salvaged = value.deliver();
+        const salvaged = value.deliver(log);
         if (salvaged !== undefined) {
           return success(salvaged.value);
         }

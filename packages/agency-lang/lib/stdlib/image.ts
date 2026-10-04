@@ -137,7 +137,7 @@ async function generateOne(
     tokens: gen.tokenUsage,
   });
   if (first) {
-    ctx.statelogClient.imageGeneration({
+    run.log.imageGeneration({
       promptPreview: prompt.slice(0, PROMPT_PREVIEW_MAX),
       model: gen.model,
       timeTaken,

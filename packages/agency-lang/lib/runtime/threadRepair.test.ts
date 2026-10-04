@@ -264,7 +264,7 @@ describe("restoreThreadForResume", () => {
     original.push(smoltalk.userMessage("before interrupt"));
     const snapshot = JSON.parse(JSON.stringify(original.toJSON()));
     const replayed = parent.newSubthreadChild("0");
-    const restored = restoreThreadForResume(snapshot, replayed);
+    const restored = restoreThreadForResume(snapshot, replayed, undefined);
     expect(restored).toBe(replayed);
     expect(restored.id).toBe(original.id);
     expect(restored.id).not.toBe(parent.id);
@@ -274,27 +274,29 @@ describe("restoreThreadForResume", () => {
   it("keeps the live identity when a legacy snapshot has none", () => {
     const live = new MessageThread();
     const identity = live.id;
-    expect(restoreThreadForResume({ messages: [] }, live).id).toBe(identity);
-    expect(restoreThreadForResume([], live).id).toBe(identity);
+    expect(restoreThreadForResume({ messages: [] }, live, undefined).id).toBe(identity);
+    expect(restoreThreadForResume([], live, undefined).id).toBe(identity);
   });
 
   it("adopts into the live thread and preserves the alias", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
-    const out = restoreThreadForResume(live.toJSON(), live);
+    const out = restoreThreadForResume(live.toJSON(), live, undefined);
     expect(out).toBe(live); // same object — the caller's alias survives
     expect(roles(out)).toEqual(["user"]);
   });
 
   it("no live thread: revives the snapshot", () => {
     const snap = new MessageThread([smoltalk.userMessage("hi")]).toJSON();
-    expect(roles(restoreThreadForResume(snap, undefined))).toEqual(["user"]);
+    expect(roles(restoreThreadForResume(snap, undefined, undefined))).toEqual(["user"]);
   });
 
   it("refuses a snapshot taken before a repair", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     const snap = live.toJSON(); // generation 0
     live.markRepaired();
-    expect(() => restoreThreadForResume(snap, live)).toThrow(/repaired after this checkpoint/);
+    expect(() => restoreThreadForResume(snap, live, undefined)).toThrow(
+      /repaired after this checkpoint/,
+    );
     expect(live.repairs).toBe(1); // refusal must not have adopted anything
   });
 
@@ -302,13 +304,15 @@ describe("restoreThreadForResume", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     live.markRepaired();
     const legacy = [smoltalk.userMessage("hi").toJSON()];
-    expect(() => restoreThreadForResume(legacy, live)).toThrow(/repaired after this checkpoint/);
+    expect(() => restoreThreadForResume(legacy, live, undefined)).toThrow(
+      /repaired after this checkpoint/,
+    );
   });
 
   it("a snapshot taken AFTER the repair restores fine", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     live.markRepaired();
-    expect(restoreThreadForResume(live.toJSON(), live)).toBe(live);
+    expect(restoreThreadForResume(live.toJSON(), live, undefined)).toBe(live);
   });
 
   it("emits a statelog runtimeError alongside the refusal throw", () => {
@@ -324,9 +328,9 @@ describe("restoreThreadForResume", () => {
     const live = new MessageThread([smoltalk.userMessage("hi")]);
     const snap = live.toJSON();
     live.markRepaired();
-    runInTestContext(ctx, new StateStack(), new ThreadStore(), () => {
-      expect(() => restoreThreadForResume(snap, live)).toThrow(/repaired after this checkpoint/);
-    });
+    expect(() => restoreThreadForResume(snap, live, ctx.statelogClient)).toThrow(
+      /repaired after this checkpoint/,
+    );
     expect(errors).toHaveLength(1);
     expect(errors[0].errorType).toBe("runtimeError");
     expect(errors[0].functionName).toBe("restoreThreadForResume");

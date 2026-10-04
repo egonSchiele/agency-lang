@@ -332,7 +332,7 @@ export async function _transcribe(
   timestampGranularity: string,
   apiKey: string,
 ): Promise<string> {
-  const { ctx, stack } = currentRun();
+  const { ctx, stack, log } = currentRun();
   validateTranscribeGranularity(timestampGranularity);
 
   const client = ctx.llmClient;
@@ -398,7 +398,7 @@ export async function _transcribe(
     cost: tr.cost,
     tokens: tr.usage,
   });
-  ctx.statelogClient.transcription({
+  log.transcription({
     textPreview: tr.text.slice(0, PROMPT_PREVIEW_MAX),
     model,
     durationSeconds: tr.durationSeconds,
@@ -559,7 +559,7 @@ async function synthesizeToFile(run: Run, s: Synthesis): Promise<string> {
     cost: produced.cost,
     tokens: undefined, // TTS is per-character; no token usage
   });
-  ctx.statelogClient.speechSynthesis({
+  run.log.speechSynthesis({
     textPreview: s.text.slice(0, PROMPT_PREVIEW_MAX),
     model: s.model,
     voice: s.voice,

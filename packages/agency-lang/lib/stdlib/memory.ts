@@ -34,7 +34,7 @@ export async function __internal_setMemoryId(
 ): Promise<void> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  manager.setMemoryId({ ctx, stack }, id);
+  manager.setMemoryId({ ctx, stack, log: ctx.statelogClient }, id);
 }
 
 export function __internal_shouldRunMemory(
@@ -53,7 +53,7 @@ export async function __internal_buildExtractionPrompt(
 ): Promise<string> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return "";
-  return manager.buildExtractionPromptFor({ ctx, stack }, content);
+  return manager.buildExtractionPromptFor({ ctx, stack, log: ctx.statelogClient }, content);
 }
 
 export async function __internal_applyExtractionResult(
@@ -64,7 +64,7 @@ export async function __internal_applyExtractionResult(
 ): Promise<void> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.applyExtractionFromLLM({ ctx, stack }, result);
+  await manager.applyExtractionFromLLM({ ctx, stack, log: ctx.statelogClient }, result);
 }
 
 export async function __internal_buildForgetPrompt(
@@ -75,7 +75,7 @@ export async function __internal_buildForgetPrompt(
 ): Promise<string> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return "";
-  return manager.buildForgetPromptFor({ ctx, stack }, query);
+  return manager.buildForgetPromptFor({ ctx, stack, log: ctx.statelogClient }, query);
 }
 
 export async function __internal_applyForgetResult(
@@ -86,7 +86,7 @@ export async function __internal_applyForgetResult(
 ): Promise<void> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.applyForgetFromLLM({ ctx, stack }, result);
+  await manager.applyForgetFromLLM({ ctx, stack, log: ctx.statelogClient }, result);
 }
 
 export async function __internal_remember(
@@ -97,7 +97,7 @@ export async function __internal_remember(
 ): Promise<void> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.remember({ ctx, stack }, content);
+  await manager.remember({ ctx, stack, log: ctx.statelogClient }, content);
 }
 
 export async function __internal_recall(
@@ -108,7 +108,7 @@ export async function __internal_recall(
 ): Promise<string> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return "";
-  return manager.recall({ ctx, stack }, query);
+  return manager.recall({ ctx, stack, log: ctx.statelogClient }, query);
 }
 
 export async function __internal_forget(
@@ -119,7 +119,7 @@ export async function __internal_forget(
 ): Promise<void> {
   const manager = ctx?.getActiveMemoryManager?.(stack ?? undefined);
   if (!manager) return;
-  await manager.forget({ ctx, stack }, query);
+  await manager.forget({ ctx, stack, log: ctx.statelogClient }, query);
 }
 
 // ── Replacements for the `__internal_*` exports above ──

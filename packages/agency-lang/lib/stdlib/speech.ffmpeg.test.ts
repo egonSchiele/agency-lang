@@ -116,6 +116,7 @@ describe.skipIf(!hasFfmpeg && !required)("with ffmpeg", () => {
           invocationUsage: new InvocationUsageMeter(),
           getAbortSignal: () => signal,
         },
+        log: { speechSynthesis: async () => undefined },
         stack: {
           localCost: 0,
           localTokens: 0,

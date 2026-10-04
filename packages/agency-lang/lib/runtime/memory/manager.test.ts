@@ -7,7 +7,7 @@ import { agency } from "../agency.js";
 import { RuntimeContext } from "../state/context.js";
 import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
-import { runInTestContext } from "../asyncContext.js";
+import { runInTestContext, type Run } from "../asyncContext.js";
 import { testRun } from "../__tests__/testHelpers.js";
 import { CostGuard, isGuardExceededError } from "../guard.js";
 import { safeDeleteDirectoryWithin } from "../../utils.js";
@@ -478,6 +478,12 @@ describe("MemoryManager", () => {
      * `span_id` / `parent_span_id`. To assert that the umbrella spans
      * exist we spy on the call directly.
      */
+    /** The test's run with `log` as its logger. Memory logs through the
+     *  logger of the run each call is given. */
+    function runLoggingTo(log: StatelogClient): Run {
+      return { ...testRun(), log };
+    }
+
     function spyOnSpans(statelogClient: StatelogClient): string[] {
       const opened: string[] = [];
       const realStart = statelogClient.startSpan.bind(statelogClient);
@@ -506,10 +512,9 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
 
-      await manager.remember(testRun(), "Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
 
       // The umbrella + inner spans were all opened in the right
       // shape — memoryRemember wraps an llmCall (extraction) and an
@@ -542,18 +547,17 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
-      await manager.remember(testRun(), "Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
 
       // Tier-3 LLM returns the seeded entity id.
-      const mom = manager.getGraph(testRun()).findEntityByName("Mom")!;
+      const mom = manager.getGraph(runLoggingTo(statelogClient)).findEntityByName("Mom")!;
       client.text.mockResolvedValueOnce(wrapTextResult(JSON.stringify({ ids: [mom.id] })));
 
       // Spy on spans + reset the events file so we only see recall.
       const openedSpans = spyOnSpans(statelogClient);
       fs.writeFileSync(eventsFile, "");
-      await manager.recall(testRun(), "mom");
+      await manager.recall(runLoggingTo(statelogClient), "mom");
 
       expect(openedSpans).toContain("memoryRecall");
       // Tier 2 fires an embedding span; tier 3 fires an llmCall.
@@ -591,9 +595,8 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
-      await manager.remember(testRun(), "Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
       client.text.mockResolvedValueOnce(
         wrapTextResult(
           JSON.stringify({
@@ -604,7 +607,7 @@ describe("MemoryManager", () => {
       );
       const openedSpans = spyOnSpans(statelogClient);
       fs.writeFileSync(eventsFile, "");
-      await manager.forget(testRun(), "forget mom pottery");
+      await manager.forget(runLoggingTo(statelogClient), "forget mom pottery");
       expect(openedSpans).toContain("memoryForget");
     });
 
@@ -633,9 +636,8 @@ describe("MemoryManager", () => {
         store: new FileMemoryStore(tmpDir),
         config: { dir: tmpDir, embeddings: { model: "text-embedding-3-small" } },
         llmClient: client,
-        statelogClient,
       });
-      await manager.remember(testRun(), "Mom likes pottery");
+      await manager.remember(runLoggingTo(statelogClient), "Mom likes pottery");
       const events = readEvents(eventsFile);
       expect(events.length).toBeGreaterThan(0);
       for (const evt of events) {

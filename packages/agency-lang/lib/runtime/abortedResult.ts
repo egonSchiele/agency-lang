@@ -1,6 +1,5 @@
 import { AgencyAbort, describeAbortCause, type AbortCause } from "./errors.js";
 import type { State } from "./state/stateStack.js";
-import { agencyStore } from "./asyncContext.js";
 import { hasInterrupts } from "./interrupts.js";
 import type { StatelogClient } from "../statelogClient.js";
 
@@ -68,7 +67,12 @@ export class AbortedResult {
   /** A frame caught an abort exception. The frame stops here and returns
    *  its saved draft as its partial — or nothing, if it never saved one.
    *  This is the only place an abort exception becomes a value. */
-  static fromError(error: AgencyAbort, frame: State, scopeName: string): AbortedResult {
+  static fromError(
+    log: AbortLog,
+    error: AgencyAbort,
+    frame: State,
+    scopeName: string,
+  ): AbortedResult {
     // Converting the exception into a value IS the trip's delivery: from
     // here the abort travels the value pipeline. Marking the cause
     // delivered (shared by identity with the abort signal's reason)
@@ -81,7 +85,7 @@ export class AbortedResult {
       error.agencyCause.delivered = true;
     }
     const result = new AbortedResult(error.agencyCause, frame.savedDraft, undefined);
-    return result.logged("carried", frame, scopeName);
+    return result.logged(log, "carried", frame, scopeName);
   }
 
   /** A callee handed this frame an aborted result outside return
@@ -89,33 +93,33 @@ export class AbortedResult {
    *  The callee's partial is dropped here: salvage is opt-in per level.
    *  (In return position no code runs at all — `return f()` simply
    *  returns f's AbortedResult, which is what passes a partial through.) */
-  carryThrough(frame: State, scopeName: string): AbortedResult {
+  carryThrough(log: AbortLog, frame: State, scopeName: string): AbortedResult {
     const next = new AbortedResult(this.cause, frame.savedDraft, this.unwindSpanId);
-    return next.logged("carried", frame, scopeName, this.partial);
+    return next.logged(log, "carried", frame, scopeName, this.partial);
   }
 
   /** An aborted value tried to enter a call as an ARGUMENT (`f(g())`
    *  where g aborted). The call never runs; the abort continues without
    *  the partial, because an argument-position partial has no type-sound
    *  place to land — g's partial is g-typed, not f-return-typed. */
-  droppedAtArgPosition(): AbortedResult {
+  droppedAtArgPosition(log: AbortLog): AbortedResult {
     // Not terminal: the abort keeps travelling as this call's result.
-    return this.dropped("droppedAtArgPosition", { terminal: false });
+    return this.dropped(log, "droppedAtArgPosition", { terminal: false });
   }
 
   /** A branch's abort is crossing the fork boundary. The partial stays
    *  in the branch: which branch fails first is a race, and one branch's
    *  value has the wrong shape for the fork. */
-  atForkBoundary(): AbortedResult {
-    return this.dropped("clearedAtFork", { terminal: true });
+  atForkBoundary(log: AbortLog): AbortedResult {
+    return this.dropped(log, "clearedAtFork", { terminal: true });
   }
 
   /** The run is ending at the node boundary, where the abort turns back
    *  into an exception. Nothing above compiled code can consume a partial,
    *  so it is dropped here with a record of where it went, exactly as the
    *  fork boundary does. */
-  atNodeBoundary(): AbortedResult {
-    return this.dropped("droppedAtNodeBoundary", { terminal: true });
+  atNodeBoundary(log: AbortLog): AbortedResult {
+    return this.dropped(log, "droppedAtNodeBoundary", { terminal: true });
   }
 
   /** The partial's value, or null when there is no partial. The ONLY way
@@ -136,6 +140,7 @@ export class AbortedResult {
    *  signal is still firing, so a callee inside the finalize can be
    *  stopped). */
   async withFinalize(
+    log: AbortLog,
     finalize: (draft: unknown) => Promise<unknown>,
     scopeName: string,
   ): Promise<AbortedResult> {
@@ -148,11 +153,11 @@ export class AbortedResult {
       // fallback because the catch returns `this`.
       value = await finalize(this.partialValueOrNull());
     } catch (finalizeError) {
-      this.logFinalizeFailure(scopeName, finalizeError);
+      this.logFinalizeFailure(log, scopeName, finalizeError);
       return this;
     }
     if (hasInterrupts(value) || isAborted(value)) {
-      this.logFinalizeFailure(scopeName, value);
+      this.logFinalizeFailure(log, scopeName, value);
       return this;
     }
     // A cleanup-only finalize has no value to replace the draft with.
@@ -160,6 +165,7 @@ export class AbortedResult {
       return this;
     }
     return new AbortedResult(this.cause, { value }, this.unwindSpanId).logged(
+      log,
       "carried",
       undefined,
       scopeName,
@@ -168,8 +174,7 @@ export class AbortedResult {
 
   /** A failed finalize is a footnote to the trip, never its replacement:
    *  log it and keep the abort's existing story. */
-  private logFinalizeFailure(scopeName: string, failure: unknown): void {
-    const client = statelogClient();
+  private logFinalizeFailure(client: AbortLog, scopeName: string, failure: unknown): void {
     client?.error?.({
       errorType: "finalizeError",
       message: failure instanceof Error ? failure.message : previewForLog(failure),
@@ -180,8 +185,7 @@ export class AbortedResult {
   /** The guard that owns this trip is converting it into a Result.
    *  Emits the closing statelog event and ends the unwind span. Returns
    *  the partial to salvage, or undefined for no salvage. */
-  deliver(): { value: unknown } | undefined {
-    const client = statelogClient();
+  deliver(client: AbortLog): { value: unknown } | undefined {
     if (this.unwindSpanId !== undefined) {
       client?.abortSalvage({
         action: "delivered",
@@ -204,6 +208,7 @@ export class AbortedResult {
   /** Drop the partial, emit the reason, close the span (the partial's
    *  story ends where it is dropped). */
   private dropped(
+    client: AbortLog,
     action: "droppedAtArgPosition" | "clearedAtFork" | "droppedAtNodeBoundary",
     { terminal }: { terminal: boolean },
   ): AbortedResult {
@@ -215,7 +220,6 @@ export class AbortedResult {
     if (this.partial === undefined && !(terminal && this.unwindSpanId !== undefined)) {
       return this;
     }
-    const client = statelogClient();
     client?.abortSalvage({
       action,
       spanId: this.unwindSpanId,
@@ -230,6 +234,7 @@ export class AbortedResult {
    *  through undrafted code logs nothing. Returns the instance to log
    *  (with the span id filled in), keeping construction declarative. */
   private logged(
+    client: AbortLog,
     action: "carried",
     frame: State | undefined,
     scopeName: string,
@@ -239,7 +244,6 @@ export class AbortedResult {
     if (gained === undefined && droppedPartial === undefined) {
       return this;
     }
-    const client = statelogClient();
     if (!client) {
       return this;
     }
@@ -265,9 +269,7 @@ export function isAborted(value: unknown): value is AbortedResult {
   return value instanceof AbortedResult;
 }
 
-/** Statelog access without requiring an ALS frame: aborts can surface
- *  outside any Agency execution frame (e.g. at process teardown), and
- *  telemetry must never crash the unwind. */
-function statelogClient(): StatelogClient | undefined {
-  return agencyStore.getStore()?.ctx?.statelogClient;
-}
+/** The logger each hop of an abort is handed by its caller: the logger of
+ *  the run the hop happens in. `undefined` means there is nowhere to log,
+ *  and the hop is silent. Telemetry must never crash the unwind. */
+export type AbortLog = StatelogClient | undefined;

@@ -40,7 +40,7 @@ export async function handleStreamingResponse(args: {
     console.log(
       "No onStream callback provided for streaming response, returning response synchronously",
     );
-    ctx.statelogClient.debug(
+    args.run.log.debug(
       "Got streaming response but no onStream callback provided, returning response synchronously",
       {
         prompt: redactAttachments(prompt),

@@ -20,7 +20,7 @@ function ctxWithFakeClock(clock: FakeClock): RuntimeContext<any> {
   });
 }
 
-describe("TimeGuard reads the context clock", () => {
+describe("TimeGuard meters against the clock it is given", () => {
   it("trips on a fake-clock advance, and reports fake-clock spent (not a real-time delta)", () => {
     const clock = new FakeClock();
     const ctx = ctxWithFakeClock(clock);
@@ -28,7 +28,7 @@ describe("TimeGuard reads the context clock", () => {
 
     runInTestContext(ctx, ctx.stateStack, threads, () => {
       const stack = ctx.stateStack;
-      const guard = new TimeGuard(100);
+      const guard = new TimeGuard(100, undefined, clock);
       stack.pushGuard(guard);
       expect(guard.check(stack)).toBeNull(); // not yet over budget
 
@@ -53,7 +53,7 @@ describe("TimeGuard reads the context clock", () => {
 
     runInTestContext(ctx, ctx.stateStack, threads, () => {
       const stack = ctx.stateStack;
-      const guard = new TimeGuard(100);
+      const guard = new TimeGuard(100, undefined, clock);
       stack.pushGuard(guard);
       clock.advance(50);
       expect(guard.check(stack)).toBeNull();
@@ -73,9 +73,9 @@ describe("TimeGuard reads the context clock", () => {
 
     runInTestContext(ctx, ctx.stateStack, threads, () => {
       const stack = ctx.stateStack;
-      const outer = new TimeGuard(100);
+      const outer = new TimeGuard(100, undefined, clock);
       stack.pushGuard(outer);
-      const inner = new TimeGuard(50);
+      const inner = new TimeGuard(50, undefined, clock);
       stack.pushGuard(inner);
 
       clock.advance(200); // past BOTH limits in one call

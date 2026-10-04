@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import * as smoltalk from "smoltalk";
 import { isDecisionCall, dispatchDecision, stateMessages, questionCapFor } from "./dispatch.js";
-import { agencyStore } from "../asyncContext.js";
 import { DecisionCollector, DEFAULT_QUESTION_CAP } from "./collector.js";
 import type { PromptConfig } from "../llmClient.js";
 
@@ -37,6 +36,11 @@ function okDecide() {
 
 function ctxWith(decide: unknown) {
   return { llmClient: { decide } } as any;
+}
+
+/** A run that carries just the context, for a call outside any block. */
+function runWith(decide: unknown) {
+  return { ctx: ctxWith(decide) } as any;
 }
 
 describe("isDecisionCall", () => {
@@ -114,7 +118,7 @@ describe("dispatchDecision", () => {
     const decide = okDecide();
     const signal = new AbortController().signal;
     await dispatchDecision(
-      ctxWith(decide),
+      runWith(decide),
       base({
         model: "jev-1.13",
         abortSignal: signal,
@@ -149,7 +153,7 @@ describe("dispatchDecision", () => {
   it("preserves OpenRouter routing and merges its per-call key over the configured keys", async () => {
     const decide = okDecide();
     await dispatchDecision(
-      ctxWith(decide),
+      runWith(decide),
       base({
         model: "jev-1.13",
         provider: "openrouter",
@@ -170,7 +174,7 @@ describe("dispatchDecision", () => {
   });
 
   it("returns a completion with the enveloped JSON value, the usage, the cost, and the raw answers", async () => {
-    const completion = await dispatchDecision(ctxWith(okDecide()), base({ model: "jev-1.13" }));
+    const completion = await dispatchDecision(runWith(okDecide()), base({ model: "jev-1.13" }));
     expect(JSON.parse(completion.output!)).toEqual({ response: "billing" });
     expect(completion.toolCalls).toEqual([]);
     expect(completion.usage).toEqual({ inputTokens: 40, outputTokens: 0 });
@@ -185,7 +189,7 @@ describe("dispatchDecision", () => {
   it("throws before calling the client when there is no schema", async () => {
     const decide = vi.fn();
     await expect(
-      dispatchDecision(ctxWith(decide), base({ model: "jev-1.13", responseFormat: undefined })),
+      dispatchDecision(runWith(decide), base({ model: "jev-1.13", responseFormat: undefined })),
     ).rejects.toThrow(/type annotation/);
     expect(decide).not.toHaveBeenCalled();
   });
@@ -194,7 +198,7 @@ describe("dispatchDecision", () => {
     const decide = vi.fn();
     await expect(
       dispatchDecision(
-        ctxWith(decide),
+        runWith(decide),
         base({ model: "jev-1.13", tools: [{ name: "t", schema: z.object({}) }] }),
       ),
     ).rejects.toThrow(/cannot call tools/);
@@ -203,7 +207,7 @@ describe("dispatchDecision", () => {
 
   it("throws when the client has no decide method", async () => {
     await expect(
-      dispatchDecision({ llmClient: {} } as any, base({ model: "jev-1.13" })),
+      dispatchDecision({ ctx: { llmClient: {} } } as any, base({ model: "jev-1.13" })),
     ).rejects.toThrow(/does not support decision models/);
   });
 
@@ -212,7 +216,7 @@ describe("dispatchDecision", () => {
       success: false as const,
       error: "No TypeSafe API key provided.",
     }));
-    await expect(dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" }))).rejects.toThrow(
+    await expect(dispatchDecision(runWith(decide), base({ model: "jev-1.13" }))).rejects.toThrow(
       /No TypeSafe API key/,
     );
   });
@@ -224,7 +228,7 @@ describe("dispatchDecision", () => {
       status: 429,
     }));
     await expect(
-      dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })),
+      dispatchDecision(runWith(decide), base({ model: "jev-1.13" })),
     ).rejects.toMatchObject({ status: 429 });
   });
 
@@ -233,7 +237,7 @@ describe("dispatchDecision", () => {
       success: false as const,
       error: "Decision request failed: socket hang up",
     }));
-    const err = await dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" })).catch(
+    const err = await dispatchDecision(runWith(decide), base({ model: "jev-1.13" })).catch(
       (e) => e,
     );
     expect(err).toBeInstanceOf(Error);
@@ -249,14 +253,14 @@ describe("dispatchDecision", () => {
         model: "m",
       },
     }));
-    await expect(dispatchDecision(ctxWith(decide), base({ model: "jev-1.13" }))).rejects.toThrow(
+    await expect(dispatchDecision(runWith(decide), base({ model: "jev-1.13" }))).rejects.toThrow(
       /answered "answer" as a noul, but a choice was asked/,
     );
   });
 });
 
 describe("dispatchDecision inside a block", () => {
-  it("submits to the frame's collector instead of the client", async () => {
+  it("submits to the run's collector instead of the client", async () => {
     const decide = vi.fn(); // must never be called directly
     const sent: Array<{ state: unknown; questions: Record<string, unknown> }> = [];
     const collector = new DecisionCollector(
@@ -289,20 +293,18 @@ describe("dispatchDecision inside a block", () => {
       globals: {} as any,
       decisions: { collector, armKey: "arm" },
     };
-    const completion = await agencyStore.run(frame as any, () =>
-      dispatchDecision(ctx, base({ model: "jev-1.13" })),
-    );
+    const completion = await dispatchDecision(frame as any, base({ model: "jev-1.13" }));
     expect(decide).not.toHaveBeenCalled();
     expect(sent).toHaveLength(1);
     expect(Object.keys(sent[0].questions)).toEqual(["c1_answer"]);
     expect(JSON.parse(completion.output!)).toEqual({ response: "billing" });
   });
 
-  it("sends directly when the frame has no collector", async () => {
+  it("sends directly when the run has no collector", async () => {
     const decide = okDecide(); // the file's existing helper
     const ctx = ctxWith(decide);
     const frame = { ctx, stack: {} as any, threads: {} as any, globals: {} as any };
-    await agencyStore.run(frame as any, () => dispatchDecision(ctx, base({ model: "jev-1.13" })));
+    await dispatchDecision(frame as any, base({ model: "jev-1.13" }));
     expect(decide).toHaveBeenCalledTimes(1);
   });
 });

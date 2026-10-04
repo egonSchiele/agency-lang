@@ -286,6 +286,17 @@ export function lineageOf(outer: Run | undefined): Lineage {
 export const agencyStore = new AsyncLocalStorage<Run>();
 
 /**
+ * The run that is current where a new root frame is about to be built, or
+ * `undefined` when there is none. A run started from inside another run (a
+ * nested `runNode`, or a test context inside a test context) takes its
+ * lineage from this one, so the recursion limits keep counting across the
+ * nesting. This is the only place that reads the outer run for that purpose.
+ */
+export function outerRunOrNone(): Run | undefined {
+  return agencyStore.getStore();
+}
+
+/**
  * Thrown when a function was handed a run that is not the one
  * `AsyncLocalStorage` holds at that moment.
  */
@@ -574,7 +585,7 @@ export function runInTestContext<T>(
       globals: ctx.globals,
       log: logOf(ctx, ctx.globals),
       state: freshState(),
-      ...lineageOf(agencyStore.getStore()),
+      ...lineageOf(outerRunOrNone()),
     },
     fn,
   );
@@ -620,7 +631,7 @@ export async function runInBootstrapFrame<T>(
       globals: ctx.globals,
       log: logOf(ctx, ctx.globals),
       state: freshState(),
-      ...lineageOf(agencyStore.getStore()),
+      ...lineageOf(outerRunOrNone()),
     },
     fn,
   );

@@ -751,7 +751,7 @@ async function runResumeLoop(
           { data: {}, ctx: execCtx, isResume: true, run },
           {
             onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
-            statelogClient: execCtx.statelogClient,
+            statelogClient: execCtx.rootLog,
           },
         ),
       );
@@ -761,7 +761,7 @@ async function runResumeLoop(
       if (hasInterrupts(returnObject.data)) {
         await execCtx.pauseTraceWriter();
       } else {
-        execCtx.statelogClient.agentEnd({
+        execCtx.rootLog.agentEnd({
           entryNode: nodeName,
           result: returnObject.data,
           timeTaken: performance.now() - agentStartTime,
@@ -807,14 +807,14 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
       checkpoint: args.checkpoint,
       overrides: args.overrides,
     });
-    agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-    execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
+    agentRunSpanId = execCtx.rootLog.startSpan("agentRun");
+    execCtx.rootLog.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     const value = await runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime);
     outcome = { status: "returned", value };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    execCtx.statelogClient.error({ errorType: "runtimeError", message: errorMessage });
-    execCtx.statelogClient.agentEnd({
+    execCtx.rootLog.error({ errorType: "runtimeError", message: errorMessage });
+    execCtx.rootLog.agentEnd({
       entryNode: args.checkpoint.nodeId,
       timeTaken: performance.now() - agentStartTime,
       tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
@@ -822,7 +822,7 @@ export async function resumeCliFromCheckpoint(args: ResumeCliFromCheckpointArgs)
     outcome = { status: "threw", error };
   } finally {
     if (agentRunSpanId !== undefined) {
-      execCtx.statelogClient.endSpan(agentRunSpanId);
+      execCtx.rootLog.endSpan(agentRunSpanId);
     }
   }
   const failed = outcome.status === "threw";
@@ -894,7 +894,7 @@ async function respondToInterruptsCore(
       }
       for (let i = 0; i < interrupts.length; i++) {
         const resolvedOutcome = responses[i].type === "approve" ? "approved" : "rejected";
-        execCtx.statelogClient.interruptResolved({
+        execCtx.rootLog.interruptResolved({
           interruptId: interrupts[i].interruptId,
           outcome: resolvedOutcome,
           resolvedBy: "user",
@@ -941,16 +941,16 @@ async function runResumeInvocation(
     });
     args.afterRestore?.(execCtx);
 
-    agentRunSpanId = execCtx.statelogClient.startSpan("agentRun");
-    execCtx.statelogClient.agentStart({ entryNode: checkpoint.nodeId, args: {} });
+    agentRunSpanId = execCtx.rootLog.startSpan("agentRun");
+    execCtx.rootLog.agentStart({ entryNode: checkpoint.nodeId, args: {} });
     const value = await withExternalSignals(execCtx, signals, () =>
       runResumeLoop(execCtx, checkpoint.nodeId, agentStartTime),
     );
     outcome = { status: "returned", value };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    execCtx.statelogClient.error({ errorType: "runtimeError", message: errorMessage });
-    execCtx.statelogClient.agentEnd({
+    execCtx.rootLog.error({ errorType: "runtimeError", message: errorMessage });
+    execCtx.rootLog.agentEnd({
       entryNode: checkpoint.nodeId,
       timeTaken: performance.now() - agentStartTime,
     });
@@ -958,7 +958,7 @@ async function runResumeInvocation(
   } finally {
     // Guarded: a setup failure before the span was opened leaves it undefined.
     if (agentRunSpanId !== undefined) {
-      execCtx.statelogClient.endSpan(agentRunSpanId); // end agentRun span
+      execCtx.rootLog.endSpan(agentRunSpanId); // end agentRun span
     }
   }
   // Resume tears down with cleanup() (no memory-save/statelog-flush — that is

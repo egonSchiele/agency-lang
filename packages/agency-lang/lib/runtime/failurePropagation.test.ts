@@ -1,6 +1,6 @@
 import { describe, it as baseIt, expect } from "vitest";
 import { failure, propagateFailure, isFailure, isSuccess, success } from "./result.js";
-import { agencyStore } from "./asyncContext.js";
+import { withRun, type Run } from "./asyncContext.js";
 import {
   acceptsFailures,
   isFailureTolerant,
@@ -14,6 +14,12 @@ import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
+
+/** A run that carries just what the checks read: the context's mode and
+ *  the logger the warning goes to. */
+function runOf(ctx: any): Run {
+  return { ctx, log: ctx.statelogClient } as any;
+}
 
 function param(name: string, opts: Partial<FuncParam> = {}): FuncParam {
   return { name, hasDefault: false, defaultValue: undefined, variadic: false, ...opts };
@@ -54,8 +60,8 @@ describe("propagateFailure", () => {
 });
 
 describe("mode resolution", () => {
-  it("defaults to 'on' outside an execution frame", () => {
-    expect(getFailurePropagationMode()).toBe("on");
+  it("defaults to 'on' when the run's context sets no mode", () => {
+    expect(getFailurePropagationMode(runOf({}))).toBe("on");
   });
 });
 
@@ -84,22 +90,27 @@ describe("checkFailureArgs", () => {
   const f = failure("boom", null, { functionName: "origin" });
 
   it("propagates when a rejecting param receives a failure", () => {
-    const out = checkFailureArgs("target", [param("x", { acceptsResult: false })], [f]);
+    const out = checkFailureArgs(testRun(), "target", [param("x", { acceptsResult: false })], [f]);
     expect(out).not.toBeNull();
     expect(out!.error).toBe("boom");
     expect(out!.skippedFunctions).toEqual([{ name: "target", param: "x" }]);
   });
 
   it("returns null for accepting params, legacy params, and non-failure args", () => {
-    expect(checkFailureArgs("t", [param("x", { acceptsResult: true })], [f])).toBeNull();
-    expect(checkFailureArgs("t", [param("x")], [f])).toBeNull(); // legacy fails open
-    expect(checkFailureArgs("t", [param("x", { acceptsResult: false })], ["str"])).toBeNull();
-    expect(checkFailureArgs("t", [param("x", { acceptsResult: false })], [success(1)])).toBeNull();
+    expect(checkFailureArgs(testRun(), "t", [param("x", { acceptsResult: true })], [f])).toBeNull();
+    expect(checkFailureArgs(testRun(), "t", [param("x")], [f])).toBeNull(); // legacy fails open
+    expect(
+      checkFailureArgs(testRun(), "t", [param("x", { acceptsResult: false })], ["str"]),
+    ).toBeNull();
+    expect(
+      checkFailureArgs(testRun(), "t", [param("x", { acceptsResult: false })], [success(1)]),
+    ).toBeNull();
   });
 
   it("leftmost failure wins", () => {
     const g = failure("second");
     const out = checkFailureArgs(
+      testRun(),
       "t",
       [param("a", { acceptsResult: false }), param("b", { acceptsResult: false })],
       [f, g],
@@ -111,6 +122,7 @@ describe("checkFailureArgs", () => {
   it("leftmost means leftmost REJECTING param: a failure on an accepting param is ignored", () => {
     const g = failure("second");
     const out = checkFailureArgs(
+      testRun(),
       "mix",
       [param("a", { acceptsResult: true }), param("b", { acceptsResult: false })],
       [f, g],
@@ -121,6 +133,7 @@ describe("checkFailureArgs", () => {
 
   it("checks elements of a variadic param", () => {
     const out = checkFailureArgs(
+      testRun(),
       "t",
       [param("items", { variadic: true, acceptsResult: false })],
       [["ok", f]],
@@ -130,7 +143,9 @@ describe("checkFailureArgs", () => {
   });
 
   it("a failure nested in an array arg of a non-variadic param passes (shallow check)", () => {
-    expect(checkFailureArgs("t", [param("x", { acceptsResult: false })], [[f]])).toBeNull();
+    expect(
+      checkFailureArgs(testRun(), "t", [param("x", { acceptsResult: false })], [[f]]),
+    ).toBeNull();
   });
 
   it("emits a statelog warn event on skip", () => {
@@ -143,8 +158,8 @@ describe("checkFailureArgs", () => {
         },
       },
     };
-    agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
-      const out = checkFailureArgs("t", [param("x", { acceptsResult: false })], [f]);
+    withRun(runOf(ctx), (run) => {
+      const out = checkFailureArgs(run, "t", [param("x", { acceptsResult: false })], [f]);
       expect(out).not.toBeNull();
     });
     expect(events).toHaveLength(1);
@@ -163,8 +178,8 @@ describe("checkFailureArgs", () => {
         },
       },
     };
-    agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
-      const out = checkFailureArgs("t", [param("x", { acceptsResult: false })], [f]);
+    withRun(runOf(ctx), (run) => {
+      const out = checkFailureArgs(run, "t", [param("x", { acceptsResult: false })], [f]);
       expect(out).toBeNull();
     });
     expect(events).toHaveLength(1);
@@ -180,8 +195,9 @@ describe("checkFailureArgs", () => {
         },
       },
     };
-    agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
+    withRun(runOf(ctx), (run) => {
       checkFailureArgs(
+        run,
         "t",
         [param("a", { acceptsResult: false }), param("b", { acceptsResult: false })],
         [f, failure("second")],
@@ -200,8 +216,8 @@ describe("checkFailureArgs", () => {
         },
       },
     };
-    agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
-      const out = checkFailureArgs("t", [param("x", { acceptsResult: false })], [f]);
+    withRun(runOf(ctx), (run) => {
+      const out = checkFailureArgs(run, "t", [param("x", { acceptsResult: false })], [f]);
       expect(out).toBeNull();
     });
     expect(events).toHaveLength(0);
@@ -213,21 +229,21 @@ describe("checkTsFunctionArgs", () => {
 
   it("throws a plain Error naming the producer for untagged functions", () => {
     const target = function formatDate() {};
-    expect(() => checkTsFunctionArgs(target, "formatDate", [f])).toThrowError(
+    expect(() => checkTsFunctionArgs(testRun(), target, "formatDate", [f])).toThrowError(
       /formatDate.*origin/s,
     );
   });
 
   it("does not throw for tagged functions or non-failure args", () => {
     const tolerant = acceptsFailures(function logIt() {});
-    expect(() => checkTsFunctionArgs(tolerant, "logIt", [f])).not.toThrow();
+    expect(() => checkTsFunctionArgs(testRun(), tolerant, "logIt", [f])).not.toThrow();
     const target = function formatDate() {};
-    expect(() => checkTsFunctionArgs(target, "formatDate", ["x", 1])).not.toThrow();
+    expect(() => checkTsFunctionArgs(testRun(), target, "formatDate", ["x", 1])).not.toThrow();
   });
 
   it("a success arg does not throw (the check is failure-only)", () => {
     const target = function formatDate() {};
-    expect(() => checkTsFunctionArgs(target, "formatDate", [success(1)])).not.toThrow();
+    expect(() => checkTsFunctionArgs(testRun(), target, "formatDate", [success(1)])).not.toThrow();
   });
 
   it("warn mode logs without throwing; off mode does neither", () => {
@@ -245,8 +261,8 @@ describe("checkTsFunctionArgs", () => {
           },
         },
       };
-      agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
-        expect(() => checkTsFunctionArgs(target, "formatDate", [f])).not.toThrow();
+      withRun(runOf(ctx), (run) => {
+        expect(() => checkTsFunctionArgs(run, target, "formatDate", [f])).not.toThrow();
       });
       expect(events).toHaveLength(expectedLogs);
     }
@@ -256,32 +272,33 @@ describe("checkTsFunctionArgs", () => {
 describe("checkResultMethodCall", () => {
   it("throws for a method call on a failure, naming the producer", () => {
     const f = failure("nope", null, { functionName: "getF" });
-    expect(() => checkResultMethodCall(f, "split")).toThrowError(/split.*getF/s);
+    expect(() => checkResultMethodCall(testRun(), f, "split")).toThrowError(/split.*getF/s);
   });
 
   it("throws for a method call on a success, with the .value hint", () => {
-    expect(() => checkResultMethodCall(success(5), "toFixed")).toThrowError(/\.value\./);
+    expect(() => checkResultMethodCall(testRun(), success(5), "toFixed")).toThrowError(/\.value\./);
   });
 
   it("allows own-field callables (r.value holding a function or AgencyFunction)", () => {
     expect(() =>
       checkResultMethodCall(
+        testRun(),
         success(() => 1),
         "value",
       ),
     ).not.toThrow();
     const agencyLike = { __agencyFunction: true };
-    expect(() => checkResultMethodCall(success(agencyLike), "value")).not.toThrow();
+    expect(() => checkResultMethodCall(testRun(), success(agencyLike), "value")).not.toThrow();
   });
 
   it("an own field that is NOT callable still throws (f.error() where error is a string)", () => {
     const f = failure("nope", null, { functionName: "getF" });
-    expect(() => checkResultMethodCall(f, "error")).toThrowError(/error.*getF/s);
+    expect(() => checkResultMethodCall(testRun(), f, "error")).toThrowError(/error.*getF/s);
   });
 
   it("ignores non-Result objects", () => {
-    expect(() => checkResultMethodCall({ split: undefined }, "split")).not.toThrow();
-    expect(() => checkResultMethodCall("plain string", "split")).not.toThrow();
+    expect(() => checkResultMethodCall(testRun(), { split: undefined }, "split")).not.toThrow();
+    expect(() => checkResultMethodCall(testRun(), "plain string", "split")).not.toThrow();
   });
 
   it("warn mode logs without throwing; off mode does neither", () => {
@@ -299,8 +316,8 @@ describe("checkResultMethodCall", () => {
           },
         },
       };
-      agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
-        expect(() => checkResultMethodCall(f, "split")).not.toThrow();
+      withRun(runOf(ctx), (run) => {
+        expect(() => checkResultMethodCall(run, f, "split")).not.toThrow();
       });
       expect(events).toHaveLength(expectedLogs);
     }
@@ -490,8 +507,9 @@ describe("warn-mode console echo", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const ctx: any = { failurePropagation: "warn", statelogClient: { warn: () => {} } };
-      agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
+      withRun(runOf(ctx), (run) => {
         checkFailureArgs(
+          run,
           "target",
           [param("x", { acceptsResult: false })],
           [failure("SECRET-PAYLOAD", null, { functionName: "origin" })],
@@ -519,8 +537,9 @@ describe("warn-mode console echo", () => {
     };
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      agencyStore.run({ ctx, stack: null, threads: null } as any, () => {
+      withRun(runOf(ctx), (run) => {
         checkFailureArgs(
+          run,
           "target",
           [param("x", { acceptsResult: false })],
           [failure("SECRET-PAYLOAD")],

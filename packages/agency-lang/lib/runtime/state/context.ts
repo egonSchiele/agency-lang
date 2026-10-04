@@ -149,6 +149,17 @@ export class RuntimeContext<T> {
   // we need a single statelog client instance that can be used across the entire execution of the graph,
   // so that all the logs share the same traceId, so they all show up in the same trace in the Statelog dashboard.
   statelogClient: StatelogClient;
+
+  /**
+   * The logger for posts made outside any run: the run's start and end
+   * events, the span around the whole run, and errors reported after the
+   * run's frame has ended. It is the client itself, so it nests under the
+   * root span stack and redacts with the top-level globals. Code inside a
+   * run logs through `run.log`.
+   */
+  get rootLog(): StatelogClient {
+    return this.statelogClient;
+  }
   smoltalkDefaults: Partial<SmolConfig>;
   /** Max characters of a single tool result fed back to the LLM (the
    *  full result is still returned to Agency code). `undefined` falls
@@ -581,9 +592,6 @@ export class RuntimeContext<T> {
       llmClient: this._llmClient,
       smoltalkDefaults: this.smoltalkDefaults,
       source: this.traceConfig?.program ?? "agent",
-      // Reuse the per-execCtx StatelogClient so memory's own LLM/embed
-      // spans nest under the same trace as the agent's calls.
-      statelogClient: this.statelogClient,
       // Threshold for memory's internal logger; promoting this to
       // "debug" in agency.json surfaces every tier/extract/compact
       // step on stderr.
@@ -783,7 +791,7 @@ export class RuntimeContext<T> {
     const stack = reviveNative(checkpoint.stack);
     const globals = reviveNative(checkpoint.globals);
 
-    this.stateStack = StateStack.fromJSON(stack);
+    this.stateStack = StateStack.fromJSON(stack, this.clock);
     this.stateStack.deserializeMode();
 
     this.globals = GlobalStore.fromJSON(globals);

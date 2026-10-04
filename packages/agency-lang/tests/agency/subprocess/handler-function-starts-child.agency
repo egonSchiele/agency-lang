@@ -1,0 +1,56 @@
+import { compile, run } from "std::agency"
+
+// The guide's words: the block after `handle` is the handler body, and the
+// block after `with` is the handler function.
+//
+// Here the inner handler FUNCTION starts a subprocess, and the subprocess
+// raises an interrupt. Which of the parent's handlers are asked about it?
+//
+// The inner handler is not asked. A handler function never hears an interrupt
+// raised inside itself, and the subprocess it started counts as inside it.
+// The outer handler is asked, and approves.
+//
+// The inner handler function rejects everything except the interrupt that
+// makes it start the subprocess. If it were asked about the child's interrupt
+// it would reject it, and the child would not finish.
+//
+// The other case, a subprocess started in the handler BODY, is covered by
+// handler-approve and handler-reject: that handler is asked.
+let child = "not run"
+
+def trigger(): string {
+  interrupt("start the child")
+  return "ok"
+}
+
+node main() {
+  const source = """
+node main() {
+  interrupt("child asks")
+  return "child-ran"
+}
+"""
+  const compiled = compile(source)
+  if (isFailure(compiled)) {
+    return "compile failed"
+  }
+  handle {
+    handle {
+      trigger()
+    } with (e) {
+      if (e.message != "start the child") {
+        return reject()
+      }
+      const result = run(compiled: compiled.value, node: "main")
+      if (isSuccess(result)) {
+        child = result.value.data
+      } else {
+        child = "child did not finish"
+      }
+      return approve()
+    }
+  } with (e) {
+    return approve()
+  }
+  return child
+}

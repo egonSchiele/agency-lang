@@ -4,8 +4,8 @@
 review in `2026-10-04-explicit-run-passing-REVIEW.md`. All seven of the
 review's findings were checked against the code and accepted, and one was
 later found to rest on a wrong premise: see
-[Code that runs with no frame today](#code-that-runs-with-no-frame-today). Phase 1 is built. Decision 7 is
-open again and needs the owner's answer before Phase 3.
+[Code that runs with no frame today](#code-that-runs-with-no-frame-today). Phase 1 is built. Decision 7 awaits
+the owner's confirmation before Phase 3.
 
 **Branch:** `explicit-run`, based on main. This work replaces PR
 [#1167](https://github.com/egonSchiele/agency-lang/pull/1167). It is not
@@ -59,7 +59,7 @@ named test that must pass at the end of every phase.
 | `maxCallDepth` | The call depth | Required fields (Task 2). `tests/agency/call-depth-bounded`, and a unit test that a step keeps the depth |
 | A callback does not call itself again | The active-callback list | Required fields (Task 2). `tests/agency/callback-recursion` |
 | A pause waits until a callback has finished | The active-callback list | `isInsideCallback` asks whether the list is empty (Task 2). The "external pause" tests in `lib/runtime/runner.test.ts` |
-| A parent's handlers answer a subprocess's interrupts | The frame from when the subprocess was started | `tests/agency/subprocess`, and `handler-body-starts-child` for the handler whose body started it (Decision 7). Phase 3 gives the listener a stored run |
+| A parent's handlers answer a subprocess's interrupts | The frame from when the subprocess was started | `tests/agency/subprocess`, and `handler-function-starts-child` for a subprocess started in a handler function (Decision 7). Phase 3 gives the listener a stored run |
 | Each fork branch has its own globals | The frame's `globals` | `sameRun` in Phase 2. `tests/agency/fork` |
 | A cost or time guard applies to its branch | The frame's `stack` | `sameRun` in Phase 2. `tests/agency/guards` |
 | Memory spending counts against a cost guard | The frame's `stack`, after an `await` | The two memory functions take a run and never accept a missing one (Task 8). Test in Task 17 |
@@ -178,7 +178,7 @@ want and copy nothing else. That is harmless while the five small values
 live in their own variables. Once they are fields of the frame, a frame
 built from scratch drops them, and nothing fails where the value is lost:
 
-- A handler body that calls a function would lose the executing-handler
+- A handler function that calls another function would lose the executing-handler
   list at that function's first step. An interrupt raised below would go
   back to the handler that is running.
 - The handler chain depth would restart at 0, so the limit of 10 would not
@@ -582,39 +582,42 @@ The same applies to the bodies given to `withCostGuard`,
 `withResumableScope`, `thread.with`, and `withHandler`. Nothing is skipped
 without an error, so no safety feature is lost.
 
-**7. A handler whose body starts a subprocess.** Today that handler is
-asked about the subprocess's interrupts. If the parent's chain ran with the
-stored frame's executing-handler list, it would be skipped, which is what
-happens when a handler body raises an interrupt in the same process.
-**Open again.** The plan and the review both said this handler is asked
-today. A test on main shows the opposite: it is skipped, and the outer
-handler is asked.
+**7. A subprocess started inside a handler function.** This entry uses
+the guide's words: the block after `handle` is the handler body, and the
+block after `with` is the handler function. Earlier versions of this plan, and the
+review, said "a handler whose body starts a subprocess" when they meant the
+handler function. That wording was wrong and made the question unclear.
+
+There are two cases, and main treats them differently.
+
+- **The subprocess is started in the handler body.** That handler is asked
+  about the subprocess's interrupts. This is the ordinary case, and
+  `tests/agency/subprocess/handler-approve` and `handler-reject` cover it.
+  Nothing in this work changes it.
+- **The subprocess is started in the handler function.** That handler is
+  not asked about the subprocess's interrupts. Every handler outside it is.
+  This matches the guide's rule that a handler function never triggers for
+  an interrupt raised in itself.
 
 ```
-ASKED H: unknown: start the child          H's body starts the subprocess
-ASKED O: std::run: Running agent-generated code in subprocess
-ASKED O: unknown: child asks               the child's interrupt: only O is asked
+inner handler asked about: start the child
+outer handler asked about: Running agent-generated code in subprocess
+outer handler asked about: child asks
+outer handler asked about: start the child
 ```
 
-The listener for the child's messages runs in the frame from when the
-subprocess was started, and that frame's executing-handler list has H in
-it. So H does not hear the child's interrupt, as it would not hear an
-interrupt its own body raised in this process.
+In the third line the subprocess, which the inner handler function started,
+raises "child asks". Only the outer handler is asked.
 
-The owner said it is critical to keep this functionality, on the wrong
-information that H is asked today. The two choices:
+The review said the second case is asked today, and the first version of
+this entry repeated that. A test on main showed otherwise. Phase 1 keeps
+what main does, and `tests/agency/subprocess/handler-function-starts-child`
+pins it. In Phase 3 the listener's stored run keeps the executing-handler
+list from when the subprocess was started, so both cases behave as they do
+today.
 
-- **Keep what main does.** H is skipped and every other handler is asked.
-  Phase 1 does this, and `tests/agency/subprocess/handler-body-starts-child`
-  pins it. In Phase 3 the listener's stored run keeps the executing list
-  from when the subprocess was started.
-- **Ask H too.** This changes behaviour. The listener's run resets
-  `executingHandlers` and `handlerChainDepth`. H can then be asked about an
-  interrupt that its own approval caused, so the depth limit is what stops
-  a loop.
-
-Either way a parent's other handlers answer a subprocess's interrupts, and
-one reject still wins.
+*Recommendation: keep both cases as they are.* **Awaiting the owner's
+confirmation,** since the earlier answer was given on wrong information.
 
 **8. Handlers written in TypeScript.** `agency.withHandler(handler, fn)` is
 public and its handler takes only the interrupt. **Decided: keep that shape.** The
@@ -660,10 +663,11 @@ frame and makes their reads strict.
       `withTestFrame` in `lib/runtime/__tests__/testHelpers.ts`.
 - [x] **Task 4. Tests.** Three unit tests check that a step keeps each
       lineage value, and each fails when `Runner.runInScope` drops it.
-      `tests/agency/subprocess/handler-body-starts-child` pins who is asked
-      when a handler body starts a subprocess (Decision 7). Three tests the
-      plan asked for already exist: `handlers/handler-raises-outer-approves`
-      (a handler body calls a function that raises), `call-depth-bounded`,
+      `tests/agency/subprocess/handler-function-starts-child` pins who is
+      asked when a handler function starts a subprocess (Decision 7). Three
+      tests the plan asked for already exist:
+      `handlers/handler-raises-outer-approves` (a handler function calls a
+      function that raises), `call-depth-bounded`,
       and `callback-recursion`.
 - [x] **Verify.** `pnpm run typecheck`, `pnpm run lint:structure`,
       `pnpm test:run`. Locally: the Agency-js suite, the callback tests,
@@ -765,7 +769,7 @@ twice.
       1. A hand-written `.js` helper awaits a timer, then raises an
          interrupt through the handle. A `handle` block approves it.
       2. The same helper under `agency serve`.
-      3. A handler body calls a TypeScript helper. The helper awaits a
+      3. A handler function calls a TypeScript helper. The helper awaits a
          timer and then raises the handler's own effect through the
          handle. The handler is skipped, as it is today.
       4. A helper makes two `run.call`s at once.

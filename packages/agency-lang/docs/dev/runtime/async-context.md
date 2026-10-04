@@ -72,7 +72,7 @@ Three rules follow from that.
 
 **The functions that keep them throw when there is no frame.** `withCallDepth`, `runHandlerChain`, `runAsHandler`, `executingHandlers`, `fireWithGuard`, and `isInsideCallback` all call `requireFrame`. They used to read "no frame" as an empty value. That is how a lost frame would have turned a limit off without an error. A unit test that calls one of them directly needs a frame: `inTestFrame` and `withTestFrame` in `lib/runtime/__tests__/testHelpers.ts` provide one.
 
-A message from a subprocess arrives in the frame that was current when the subprocess was started, because `AsyncLocalStorage` carries a frame into the listeners of a child process. So when a handler function starts a subprocess, the handler chain that answers the subprocess's interrupt sees that handler as executing and skips it. `tests/agency/subprocess/handler-body-starts-child` pins this.
+A message from a subprocess arrives in the frame that was current when the subprocess was started, because `AsyncLocalStorage` carries a frame into the listeners of a child process. So the handler chain that answers a subprocess's interrupt sees the same executing handlers as the code that started it. The guide calls the block after `handle` the handler body, and the block after `with` the handler function. A subprocess started in the handler body has that handler asked about its interrupts. A subprocess started in the handler function does not: a handler function never hears an interrupt raised inside itself. `tests/agency/subprocess/handler-function-starts-child` pins the second case, and `handler-approve` covers the first.
 
 ## Where frames are installed
 

@@ -127,8 +127,8 @@ export type AgencyStore = {
   handlerChainDepth: number;
   /**
    * The handler entries whose functions are running on this path, outermost
-   * first. The handler chain skips these, so a handler never hears an
-   * interrupt its own body raised.
+   * first. The handler chain skips these, so a handler function never hears
+   * an interrupt raised inside itself.
    */
   executingHandlers: HandlerEntry[];
   /**

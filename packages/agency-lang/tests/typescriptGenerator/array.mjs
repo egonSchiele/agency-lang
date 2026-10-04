@@ -6,7 +6,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -185,15 +185,16 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("array.agency")) {
     return;
   }
   __ctx.globals.markInitialized("array.agency")
 }
 __registerGlobalsInit("array.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("array.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
@@ -201,34 +202,35 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "array.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "array.agency", scopeName: "main", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "array.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.numbers = await runPrompt({
+__stack.locals.numbers = await runPrompt(__run, {
           prompt: `the first 5 prime numbers`,
-          messages: __threads().getOrCreateActive(),
+          messages: __run.threads.getOrCreateActive(),
           responseFormat: z.object({
             response: z.array(z.number())
           }),
@@ -240,21 +242,21 @@ __stack.locals.numbers = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.numbers)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
-            messages: __threads(),
+            messages: __run.threads,
             data: __stack.locals.numbers
           })
           return;
         }
       });
-      await runner.step(2, async (runner) => {
-const __funcResult = await __call(print, {
+      await runner.step(2, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
           type: "positional",
           args: [__stack.locals.numbers]
         });
 if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -265,11 +267,11 @@ if (isAborted(__funcResult)) {
           throw __funcResult.toError()
         }
       });
-      await runner.step(3, async (runner) => {
+      await runner.step(3, __run, async (runner, __run) => {
 __self.__removedTools = __self.__removedTools || [];
-__stack.locals.greetings = await runPrompt({
+__stack.locals.greetings = await runPrompt(__run, {
           prompt: `a list of 3 common greetings in different languages`,
-          messages: __threads().getOrCreateActive(),
+          messages: __run.threads.getOrCreateActive(),
           responseFormat: z.object({
             response: z.array(z.string())
           }),
@@ -281,21 +283,21 @@ __stack.locals.greetings = await runPrompt({
         });
 // halt if this is an interrupt
 if (hasInterrupts(__stack.locals.greetings)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
-            messages: __threads(),
+            messages: __run.threads,
             data: __stack.locals.greetings
           })
           return;
         }
       });
-      await runner.step(4, async (runner) => {
-const __funcResult = await __call(print, {
+      await runner.step(4, __run, async (runner, __run) => {
+const __funcResult = await __call(__run, print, {
           type: "positional",
           args: [__stack.locals.greetings]
         });
 if (hasInterrupts(__funcResult)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __funcResult
@@ -308,8 +310,8 @@ if (isAborted(__funcResult)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(5, async () => {
-await callHook({
+    await runner.hook(5, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -318,7 +320,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -341,7 +343,7 @@ await callHook({
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

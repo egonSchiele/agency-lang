@@ -6,7 +6,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -185,34 +185,35 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("functionRef.agency")) {
     return;
   }
   __ctx.globals.markInitialized("functionRef.agency")
 }
 __registerGlobalsInit("functionRef.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("functionRef.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __greet_impl(name: string) {
-  const __setupData = setupFunction();
+async function __greet_impl(__run: __Run, name: string) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "greet", "functionRef.agency");
-  if (!__globals()!.isInitialized("functionRef.agency")) {
-    await __initializeGlobals(__ctx)
+  if (!__run.globals.isInitialized("functionRef.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["name"] = name;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "greet", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -240,14 +241,14 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "greet",
@@ -258,7 +259,7 @@ await callHook({
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(`hi ${__stack.args.name}`)
 return;
@@ -308,16 +309,16 @@ if (__error instanceof AgencyAbort) {
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "greet",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "greet",
@@ -344,24 +345,25 @@ export const greet = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"name": z.string(), })
   },
-  exported: false
+  exported: false,
+  takesRun: true
 }, __toolRegistry);
-async function __double_impl(x: number) {
-  const __setupData = setupFunction();
+async function __double_impl(__run: __Run, x: number) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "double", "functionRef.agency");
-  if (!__globals()!.isInitialized("functionRef.agency")) {
-    await __initializeGlobals(__ctx)
+  if (!__run.globals.isInitialized("functionRef.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["x"] = x;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "double", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "double", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -389,14 +391,14 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "double",
@@ -407,7 +409,7 @@ await callHook({
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(__stack.args.x * 2)
 return;
@@ -457,16 +459,16 @@ if (__error instanceof AgencyAbort) {
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "double",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "double",
@@ -493,25 +495,26 @@ export const double = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"x": z.number(), })
   },
-  exported: false
+  exported: false,
+  takesRun: true
 }, __toolRegistry);
-async function __applyToAll_impl(items: number[], transform: (number) => number) {
-  const __setupData = setupFunction();
+async function __applyToAll_impl(__run: __Run, items: number[], transform: (number) => number) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "applyToAll", "functionRef.agency");
-  if (!__globals()!.isInitialized("functionRef.agency")) {
-    await __initializeGlobals(__ctx)
+  if (!__run.globals.isInitialized("functionRef.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["items"] = items;
   __stack.args["transform"] = transform;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "applyToAll", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "functionRef.agency", scopeName: "applyToAll", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -543,14 +546,14 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "applyToAll",
@@ -562,21 +565,21 @@ await callHook({
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.result = [];
       });
-      await runner.loop(2, async () => (__stack.args.items), async (item, _, runner) => {
-await runner.step(0, async (runner) => {
-await __callMethod(__stack.locals.result, "push", {
+      await runner.loop(2, __run, async (__run) => (__stack.args.items), async (item, _, runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+await __callMethod(__run, __stack.locals.result, "push", {
             type: "positional",
-            args: [await __call(__stack.args.transform, {
+            args: [await __call(__run, __stack.args.transform, {
               type: "positional",
               args: [item]
             })]
           })
         });
       });
-      await runner.step(3, async (runner) => {
+      await runner.step(3, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.result)
 return;
@@ -626,16 +629,16 @@ if (__error instanceof AgencyAbort) {
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "applyToAll",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "applyToAll",
@@ -669,45 +672,47 @@ export const applyToAll = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"items": z.array(z.number()), })
   },
-  exported: false
+  exported: false,
+  takesRun: true
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "functionRef.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "functionRef.agency", scopeName: "main", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "functionRef.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.fn = greet;
       });
-      await runner.step(2, async (runner) => {
-__stack.locals.result = await __call(__stack.locals.fn, {
+      await runner.step(2, __run, async (runner, __run) => {
+__stack.locals.result = await __call(__run, __stack.locals.fn, {
           type: "positional",
           args: [`Bob`]
         });
 if (hasInterrupts(__stack.locals.result)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.result
@@ -718,13 +723,13 @@ if (isAborted(__stack.locals.result)) {
           throw __stack.locals.result.toError()
         }
       });
-      await runner.step(3, async (runner) => {
-__stack.locals.doubled = await __call(applyToAll, {
+      await runner.step(3, __run, async (runner, __run) => {
+__stack.locals.doubled = await __call(__run, applyToAll, {
           type: "positional",
           args: [[1, 2, 3], double]
         });
 if (hasInterrupts(__stack.locals.doubled)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.doubled
@@ -737,8 +742,8 @@ if (isAborted(__stack.locals.doubled)) {
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(4, async () => {
-await callHook({
+    await runner.hook(4, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -747,7 +752,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -770,7 +775,7 @@ await callHook({
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

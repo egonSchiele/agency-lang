@@ -6,7 +6,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -185,15 +185,16 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("slice.agency")) {
     return;
   }
   __ctx.globals.markInitialized("slice.agency")
 }
 __registerGlobalsInit("slice.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("slice.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
@@ -201,60 +202,61 @@ graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "slice.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "slice.agency", scopeName: "main", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "slice.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.arr = [1, 2, 3, 4, 5];
       });
-      await runner.step(2, async (runner) => {
+      await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.bothBounds = __stack.locals.arr.slice(1, 3);
       });
-      await runner.step(3, async (runner) => {
+      await runner.step(3, __run, async (runner, __run) => {
 __stack.locals.startOnly = __stack.locals.arr.slice(2);
       });
-      await runner.step(4, async (runner) => {
+      await runner.step(4, __run, async (runner, __run) => {
 __stack.locals.endOnly = __stack.locals.arr.slice(0, 3);
       });
-      await runner.step(5, async (runner) => {
+      await runner.step(5, __run, async (runner, __run) => {
 __stack.locals.noBounds = __stack.locals.arr.slice();
       });
-      await runner.step(6, async (runner) => {
+      await runner.step(6, __run, async (runner, __run) => {
 __stack.locals.negativeStart = __stack.locals.arr.slice(-2);
       });
-      await runner.step(7, async (runner) => {
+      await runner.step(7, __run, async (runner, __run) => {
 __stack.locals.optionalSlice = __stack.locals.arr?.slice(1, 3);
       });
-      await runner.step(8, async (runner) => {
+      await runner.step(8, __run, async (runner, __run) => {
 __stack.locals.str = `hello`;
       });
-      await runner.step(9, async (runner) => {
+      await runner.step(9, __run, async (runner, __run) => {
 __stack.locals.stringSlice = __stack.locals.str.slice(1, 3);
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(10, async () => {
-await callHook({
+    await runner.hook(10, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -263,7 +265,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -286,7 +288,7 @@ await callHook({
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

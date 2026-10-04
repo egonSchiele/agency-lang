@@ -6,7 +6,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -185,15 +185,16 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("splat.agency")) {
     return;
   }
   __ctx.globals.markInitialized("splat.agency")
   __ctx.globals.set("splat.agency", "arr1", [1, 2])
   __ctx.globals.set("splat.agency", "arr2", [3, 4])
-  __ctx.globals.set("splat.agency", "combined", [...__globals()!.get("splat.agency", "arr1"), ...__globals()!.get("splat.agency", "arr2")])
-  __ctx.globals.set("splat.agency", "withExtra", [...__globals()!.get("splat.agency", "arr1"), 5, 6])
+  __ctx.globals.set("splat.agency", "combined", [...__run.globals.get("splat.agency", "arr1"), ...__run.globals.get("splat.agency", "arr2")])
+  __ctx.globals.set("splat.agency", "withExtra", [...__run.globals.get("splat.agency", "arr1"), 5, 6])
   __ctx.globals.set("splat.agency", "obj1", {
     "a": 1
   })
@@ -201,17 +202,17 @@ async function __initializeGlobals(__ctx) {
     "b": 2
   })
   __ctx.globals.set("splat.agency", "merged", {
-    ...__globals()!.get("splat.agency", "obj1"),
-    ...__globals()!.get("splat.agency", "obj2")
+    ...__run.globals.get("splat.agency", "obj1"),
+    ...__run.globals.get("splat.agency", "obj2")
   })
   __ctx.globals.set("splat.agency", "withKey", {
-    ...__globals()!.get("splat.agency", "obj1"),
+    ...__run.globals.get("splat.agency", "obj1"),
     "c": 3
   })
 }
 __registerGlobalsInit("splat.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("splat.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;

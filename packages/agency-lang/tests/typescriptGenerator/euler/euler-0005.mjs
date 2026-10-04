@@ -6,7 +6,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -185,37 +185,38 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("euler-0005.agency")) {
     return;
   }
   __ctx.globals.markInitialized("euler-0005.agency")
 }
 __registerGlobalsInit("euler-0005.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("euler-0005.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
 //  Project Euler Problem 5: Smallest Multiple
 //  Find the smallest positive number evenly divisible by all numbers from 1 to 20.
-async function __gcd_impl(a: number, b: number) {
-  const __setupData = setupFunction();
+async function __gcd_impl(__run: __Run, a: number, b: number) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "gcd", "euler-0005.agency");
-  if (!__globals()!.isInitialized("euler-0005.agency")) {
-    await __initializeGlobals(__ctx)
+  if (!__run.globals.isInitialized("euler-0005.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "gcd", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "gcd", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -247,14 +248,14 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "gcd",
@@ -266,24 +267,24 @@ await callHook({
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.x = __stack.args.a;
       });
-      await runner.step(2, async (runner) => {
+      await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.y = __stack.args.b;
       });
-      await runner.whileLoop(3, async () => !__eq(__stack.locals.y, 0), async (runner) => {
-await runner.step(0, async (runner) => {
+      await runner.whileLoop(3, __run, async (__run) => !__eq(__stack.locals.y, 0), async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
 __stack.locals.temp = __stack.locals.y;
         });
-await runner.step(1, async (runner) => {
+await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.y = __stack.locals.x % __stack.locals.y;
         });
-await runner.step(2, async (runner) => {
+await runner.step(2, __run, async (runner, __run) => {
 __stack.locals.x = __stack.locals.temp;
         });
       });
-      await runner.step(4, async (runner) => {
+      await runner.step(4, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(__stack.locals.x)
 return;
@@ -333,16 +334,16 @@ if (__error instanceof AgencyAbort) {
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "gcd",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "gcd",
@@ -376,25 +377,26 @@ export const gcd = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  exported: false
+  exported: false,
+  takesRun: true
 }, __toolRegistry);
-async function __lcm_impl(a: number, b: number) {
-  const __setupData = setupFunction();
+async function __lcm_impl(__run: __Run, a: number, b: number) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "lcm", "euler-0005.agency");
-  if (!__globals()!.isInitialized("euler-0005.agency")) {
-    await __initializeGlobals(__ctx)
+  if (!__run.globals.isInitialized("euler-0005.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["a"] = a;
   __stack.args["b"] = b;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "lcm", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "euler-0005.agency", scopeName: "lcm", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -426,14 +428,14 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "lcm",
@@ -445,13 +447,13 @@ await callHook({
           }
         })
       });
-      await runner.step(1, async (runner) => {
-__stack.locals.__hoist_0 = await __call(gcd, {
+      await runner.step(1, __run, async (runner, __run) => {
+__stack.locals.__hoist_0 = await __call(__run, gcd, {
           type: "positional",
           args: [__stack.args.a, __stack.args.b]
         });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt(__stack.locals.__hoist_0)
           return;
         }
@@ -460,7 +462,7 @@ if (isAborted(__stack.locals.__hoist_0)) {
           return;
         }
       });
-      await runner.step(2, async (runner) => {
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(__stack.args.a / __stack.locals.__hoist_0 * __stack.args.b)
 return;
@@ -510,16 +512,16 @@ if (__error instanceof AgencyAbort) {
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "lcm",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "lcm",
@@ -553,45 +555,47 @@ export const lcm = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"a": z.number(), "b": z.number(), })
   },
-  exported: false
+  exported: false,
+  takesRun: true
 }, __toolRegistry);
 graph.node("main", async (__state: GraphState) => {
   const __setupData = setupNode({
     state: __state
   });
+  const __run = __setupData.run;
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "main", "euler-0005.agency");
-  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0005.agency", scopeName: "main", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0005.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __ctx.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onNodeStart",
           data: {
             nodeName: "main"
           }
         })
       });
-      await runner.step(1, async (runner) => {
+      await runner.step(1, __run, async (runner, __run) => {
 __stack.locals.result = 1;
       });
-      await runner.step(2, async (runner) => {
-__stack.locals.__hoist_0 = await __call(range, {
+      await runner.step(2, __run, async (runner, __run) => {
+__stack.locals.__hoist_0 = await __call(__run, range, {
           type: "positional",
           args: [2, 21]
         });
 if (hasInterrupts(__stack.locals.__hoist_0)) {
-          await getRuntimeContext().ctx.pendingPromises.awaitAll()
+          await __run.ctx.pendingPromises.awaitAll()
           runner.halt({
             ...__state,
             data: __stack.locals.__hoist_0
@@ -602,14 +606,14 @@ if (isAborted(__stack.locals.__hoist_0)) {
           throw __stack.locals.__hoist_0.toError()
         }
       });
-      await runner.loop(3, async () => (__stack.locals.__hoist_0), async (i, _, runner) => {
-await runner.step(0, async (runner) => {
-__stack.locals.result = await __call(lcm, {
+      await runner.loop(3, __run, async (__run) => (__stack.locals.__hoist_0), async (i, _, runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
+__stack.locals.result = await __call(__run, lcm, {
             type: "positional",
             args: [__stack.locals.result, i]
           });
 if (hasInterrupts(__stack.locals.result)) {
-            await getRuntimeContext().ctx.pendingPromises.awaitAll()
+            await __run.ctx.pendingPromises.awaitAll()
             runner.halt({
               ...__state,
               data: __stack.locals.result
@@ -621,17 +625,17 @@ if (isAborted(__stack.locals.result)) {
           }
         });
       });
-      await runner.step(4, async (runner) => {
+      await runner.step(4, __run, async (runner, __run) => {
 runner.halt({
-          messages: __threads(),
+          messages: __run.threads,
           data: __stack.locals.result
         })
 return;
       });
     })
     if (runner.halted) return runner.haltResult;
-    await runner.hook(5, async () => {
-await callHook({
+    await runner.hook(5, __run, async (__run) => {
+await callHook(__run, {
         name: "onNodeEnd",
         data: {
           nodeName: "main",
@@ -640,7 +644,7 @@ await callHook({
       })
     });
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: undefined
     };
   } catch (__error) {
@@ -663,7 +667,7 @@ await callHook({
               });
             }
     return {
-      messages: __threads(),
+      messages: __run.threads,
       data: runtimeFailure(__error, { functionName: "main" })
     };
   }

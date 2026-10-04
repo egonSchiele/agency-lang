@@ -6,7 +6,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -185,34 +185,35 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("result-basic.agency")) {
     return;
   }
   __ctx.globals.markInitialized("result-basic.agency")
 }
 __registerGlobalsInit("result-basic.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("result-basic.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;
-async function __checkAge_impl(age: number) {
-  const __setupData = setupFunction();
+async function __checkAge_impl(__run: __Run, age: number) {
+  const __setupData = setupFunction(__run);
   const __stack = __setupData.stack;
 const __step = __setupData.step;
 const __self = __setupData.self;
-const __ctx = getRuntimeContext().ctx;
+const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
   claimFrameForScope(__stack, "checkAge", "result-basic.agency");
-  if (!__globals()!.isInitialized("result-basic.agency")) {
-    await __initializeGlobals(__ctx)
+  if (!__run.globals.isInitialized("result-basic.agency")) {
+    await __initializeGlobals(__run)
   }
   let __funcStartTime: number = performance.now();
   __stack.args["age"] = age;
   __self.__destructiveRan = __self.__destructiveRan ?? false;
-  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-basic.agency", scopeName: "checkAge", threads: __setupData.threads });
+  const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: "result-basic.agency", scopeName: "checkAge", stack: __run.stack, threads: __setupData.threads });
   // `__resultCheckpointId` is referenced by interruptAssignment /
 // interruptReturn templates when an interrupt rejects and `runner.halt`
 // builds a Failure carrying the entry checkpoint for `result.retry(...)`.
@@ -240,14 +241,14 @@ if (
 }
 
   try {
-    await agencyStore.run({
-      ...getRuntimeContext(),
+    await __withRun({
+      ...__run,
       ctx: __ctx,
       stack: __setupData.stateStack,
       threads: __setupData.threads
-    }, async () => {
-      await runner.hook(0, async () => {
-await callHook({
+    }, async (__run) => {
+      await runner.hook(0, __run, async (__run) => {
+await callHook(__run, {
           name: "onFunctionStart",
           data: {
             functionName: "checkAge",
@@ -258,12 +259,12 @@ await callHook({
           }
         })
       });
-      await runner.ifElse(1, [
+      await runner.ifElse(1, __run, [
 
   {
-    condition: async () => __stack.args.age >= 18,
-    body: async (runner) => {
-await runner.step(0, async (runner) => {
+    condition: async (__run) => __stack.args.age >= 18,
+    body: async (runner, __run) => {
+await runner.step(0, __run, async (runner, __run) => {
 __functionCompleted = true;
 runner.halt(await success(__stack.args.age))
 return;
@@ -272,9 +273,9 @@ return;
   },
 
 ]);
-      await runner.step(2, async (runner) => {
+      await runner.step(2, __run, async (runner, __run) => {
 __functionCompleted = true;
-runner.halt(failure(`too young`, null, { checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: "checkAge", args: __stack.args }))
+runner.halt(failure(`too young`, null, { checkpoint: __run.ctx.getResultCheckpoint(), functionName: "checkAge", args: __stack.args }))
 return;
       });
     })
@@ -322,16 +323,16 @@ if (__error instanceof AgencyAbort) {
   });
 }
 return runtimeFailure(__error, {
-  checkpoint: getRuntimeContext().ctx.getResultCheckpoint(),
+  checkpoint: __run.ctx.getResultCheckpoint(),
   destructiveRan: __self.__destructiveRan,
   functionName: "checkAge",
   args: __stack.args,
 });
 
   } finally {
-    __stateStack()?.pop()
+    __run.stack.pop()
     if (__functionCompleted) {
-      await callHook({
+      await callHook(__run, {
         name: "onFunctionEnd",
         data: {
           functionName: "checkAge",
@@ -358,7 +359,8 @@ export const checkAge = __AgencyFunction.create({
     description: "No description provided.",
     schema: z.object({"age": z.number(), })
   },
-  exported: false
+  exported: false,
+  takesRun: true
 }, __toolRegistry);
 export default graph
 export const __sourceMap = {"result-basic.agency:checkAge":{"1":{"line":1,"col":2},"2":{"line":4,"col":2},"1.0":{"line":2,"col":4}}};

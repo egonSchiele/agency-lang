@@ -6,7 +6,7 @@ import { goToNode, color, nanoid } from "agency-lang";
 import { smoltalk } from "agency-lang";
 import path from "path";
 import os from "os";
-import type { GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
+import type { Run as __Run, GraphState, Interrupt, InterruptResponse, Checkpoint, PausedCheckpoint, LLMClient, InvocationOptions, ResumeOverrides } from "agency-lang/runtime";
 import {
   RuntimeContext, MessageThread, ThreadStore, Runner, McpManager,
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
@@ -36,7 +36,7 @@ import {
   success, failure, runtimeFailure, isSuccess, isFailure, stampFailureBoundary, markDestructiveWork, __pipeBind, __tryCall, __catchResult, __eq, __nn, __requireLength,
   Schema, __validateType, __invalidArgument, __validateChain, __validateChainRecursive, __withUseSiteValidators, __coarseTypeTest,
   AgencyFunction as __AgencyFunction, UNSET as __UNSET,
-  __call, __callMethod, __threads, __stateStack, __globals, getRuntimeContext, agencyStore,
+  __call, __callMethod, withRun as __withRun, runInBootstrapFrame as __runInBootstrapFrame,
   functionRefReviver as __functionRefReviver,
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
@@ -185,50 +185,51 @@ function registerTools(tools: any[]) {
   }
 }
 
-async function __initializeGlobals(__ctx) {
+async function __initializeGlobals(__run) {
+  const __ctx = __run.ctx;
   if (__ctx.globals.isInitialized("arrayAndObject.agency")) {
     return;
   }
   __ctx.globals.markInitialized("arrayAndObject.agency")
   __ctx.globals.set("arrayAndObject.agency", "nums", [1, 2, 3, 4, 5])
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "nums")]
+    args: [__run.globals.get("arrayAndObject.agency", "nums")]
   })
   __ctx.globals.set("arrayAndObject.agency", "names", [`Alice`, `Bob`, `Charlie`])
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "names")]
+    args: [__run.globals.get("arrayAndObject.agency", "names")]
   })
   __ctx.globals.set("arrayAndObject.agency", "matrix", [[1, 2], [3, 4], [5, 6]])
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "matrix")]
+    args: [__run.globals.get("arrayAndObject.agency", "matrix")]
   })
   __ctx.globals.set("arrayAndObject.agency", "person", {
     "name": `Alice`,
     "age": 30
   })
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "person")]
+    args: [__run.globals.get("arrayAndObject.agency", "person")]
   })
   __ctx.globals.set("arrayAndObject.agency", "address", {
     "street": `123 Main St`,
     "city": `NYC`,
     "zip": `10001`
   })
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "address")]
+    args: [__run.globals.get("arrayAndObject.agency", "address")]
   })
   __ctx.globals.set("arrayAndObject.agency", "user", {
     "name": `Bob`,
     "tags": [`admin`, `developer`]
   })
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "user")]
+    args: [__run.globals.get("arrayAndObject.agency", "user")]
   })
   __ctx.globals.set("arrayAndObject.agency", "users", [{
     "name": `Alice`,
@@ -237,9 +238,9 @@ async function __initializeGlobals(__ctx) {
     "name": `Bob`,
     "age": 25
   }])
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "users")]
+    args: [__run.globals.get("arrayAndObject.agency", "users")]
   })
   __ctx.globals.set("arrayAndObject.agency", "config", {
     "server": {
@@ -248,24 +249,24 @@ async function __initializeGlobals(__ctx) {
     },
     "debug": true
   })
-  await __call(print, {
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "config")]
+    args: [__run.globals.get("arrayAndObject.agency", "config")]
   })
-  __ctx.globals.set("arrayAndObject.agency", "firstNum", __nn(__globals()!.get("arrayAndObject.agency", "nums")[0]))
-  await __call(print, {
+  __ctx.globals.set("arrayAndObject.agency", "firstNum", __nn(__run.globals.get("arrayAndObject.agency", "nums")[0]))
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "firstNum")]
+    args: [__run.globals.get("arrayAndObject.agency", "firstNum")]
   })
-  __ctx.globals.set("arrayAndObject.agency", "personName", __globals()!.get("arrayAndObject.agency", "person").name)
-  await __call(print, {
+  __ctx.globals.set("arrayAndObject.agency", "personName", __run.globals.get("arrayAndObject.agency", "person").name)
+  await __call(__run, print, {
     type: "positional",
-    args: [__globals()!.get("arrayAndObject.agency", "personName")]
+    args: [__run.globals.get("arrayAndObject.agency", "personName")]
   })
 }
 __registerGlobalsInit("arrayAndObject.agency", __initializeGlobals);
-async function __registerTopLevelCallbacks(__ctx) {
-
+async function __registerTopLevelCallbacks(__run) {
+  const __ctx = __run.ctx;
 }
 __registerCallbacksInit("arrayAndObject.agency", __registerTopLevelCallbacks);
 __functionRefReviver.registry = __toolRegistry;

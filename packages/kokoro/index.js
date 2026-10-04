@@ -147,7 +147,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "45fb22182f5348002fcea78282f439cccecf9b87a668e69db4a1242b1165f7f7", import.meta.url);
+__registerModuleFingerprint("index.agency", "ff3b701b82cf5fef895d1979598bc9ade09ac2cd1b65c474fa189c800d4b52de", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -201,7 +201,7 @@ async function __realOutput_impl(__run, outputFile) {
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "realOutput", "index.agency");
+  claimFrameForScope(__stack, "realOutput", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -249,7 +249,7 @@ async function __realOutput_impl(__run, outputFile) {
         }
       ]);
       await runner.step(2, __run2, async (runner2, __run3) => {
-        __stack.locals.real = await __tryCall(async () => await __call(__run3, _realTarget, {
+        __stack.locals.real = await __tryCall(__run3.log, async () => await __call(__run3, _realTarget, {
           type: "positional",
           args: [__stack.args.outputFile]
         }), {
@@ -263,7 +263,7 @@ async function __realOutput_impl(__run, outputFile) {
           return;
         }
         if (isAborted(__stack.locals.real)) {
-          runner2.halt(__stack.locals.real.carryThrough(__stack, "realOutput"));
+          runner2.halt(__stack.locals.real.carryThrough(__run3.log, __stack, "realOutput"));
           return;
         }
       });
@@ -275,7 +275,7 @@ async function __realOutput_impl(__run, outputFile) {
           return;
         }
         if (isAborted(__stack.locals.__hoist_0)) {
-          runner2.halt(__stack.locals.__hoist_0.carryThrough(__stack, "realOutput"));
+          runner2.halt(__stack.locals.__hoist_0.carryThrough(__run3.log, __stack, "realOutput"));
           return;
         }
       });
@@ -309,7 +309,7 @@ async function __realOutput_impl(__run, outputFile) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "realOutput");
+      return AbortedResult.fromError(__run.log, __error, __stack, "realOutput");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -317,7 +317,7 @@ async function __realOutput_impl(__run, outputFile) {
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function realOutput threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "realOutput"
@@ -370,7 +370,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "speak", "index.agency");
+  claimFrameForScope(__stack, "speak", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -458,7 +458,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
           return;
         }
         if (isAborted(__stack.locals.audioFormat)) {
-          runner2.halt(__stack.locals.audioFormat.carryThrough(__stack, "speak"));
+          runner2.halt(__stack.locals.audioFormat.carryThrough(__run3.log, __stack, "speak"));
           return;
         }
       });
@@ -473,7 +473,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
           return;
         }
         if (isAborted(__stack.locals.status)) {
-          runner2.halt(__stack.locals.status.carryThrough(__stack, "speak"));
+          runner2.halt(__stack.locals.status.carryThrough(__run3.log, __stack, "speak"));
           return;
         }
       });
@@ -521,7 +521,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
                 return;
               }
               if (isAborted(__funcResult)) {
-                runner3.halt(__funcResult.carryThrough(__stack, "speak"));
+                runner3.halt(__funcResult.carryThrough(__run4.log, __stack, "speak"));
                 return;
               }
             });
@@ -539,7 +539,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
           return;
         }
         if (isAborted(__stack.locals.out)) {
-          runner2.halt(__stack.locals.out.carryThrough(__stack, "speak"));
+          runner2.halt(__stack.locals.out.carryThrough(__run3.log, __stack, "speak"));
           return;
         }
       });
@@ -592,7 +592,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "speak");
+      return AbortedResult.fromError(__run.log, __error, __stack, "speak");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -600,7 +600,7 @@ async function __speak_impl(__run, text, outputFile = __UNSET, voice = __UNSET, 
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function speak threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "speak"
@@ -711,7 +711,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "download", "index.agency");
+  claimFrameForScope(__stack, "download", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -763,7 +763,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
           return;
         }
         if (isAborted(__stack.locals.status)) {
-          runner2.halt(__stack.locals.status.carryThrough(__stack, "download"));
+          runner2.halt(__stack.locals.status.carryThrough(__run3.log, __stack, "download"));
           return;
         }
       });
@@ -819,7 +819,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
           return;
         }
         if (isAborted(__funcResult)) {
-          runner2.halt(__funcResult.carryThrough(__stack, "download"));
+          runner2.halt(__funcResult.carryThrough(__run3.log, __stack, "download"));
           return;
         }
       });
@@ -840,7 +840,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "download");
+      return AbortedResult.fromError(__run.log, __error, __stack, "download");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -848,7 +848,7 @@ async function __download_impl(__run, model = __UNSET, modelsDir = __UNSET) {
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function download threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "download"
@@ -911,7 +911,7 @@ async function __voices_impl(__run) {
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "voices", "index.agency");
+  claimFrameForScope(__stack, "voices", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -959,7 +959,7 @@ async function __voices_impl(__run) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "voices");
+      return AbortedResult.fromError(__run.log, __error, __stack, "voices");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -967,7 +967,7 @@ async function __voices_impl(__run) {
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function voices threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "voices"

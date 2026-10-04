@@ -151,7 +151,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "8a6c26c7db1cdb6a3950968aba843b529bc8c6df93a916e255738d5c7f7aa915", import.meta.url);
+__registerModuleFingerprint("index.agency", "42b81877ed0b3656383ebc34e3d295ca91ab406e13ef91b9aa4cef147cd31a6d", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -231,7 +231,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "trainLora", "index.agency");
+  claimFrameForScope(__stack, "trainLora", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -333,7 +333,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
         });
       });
       await runner.step(1, __run2, async (runner2, __run3) => {
-        __stack.locals.plan = await __tryCall(async () => await __call(__run3, _planTraining, {
+        __stack.locals.plan = await __tryCall(__run3.log, async () => await __call(__run3, _planTraining, {
           type: "positional",
           args: [__stack.args.imagesDir, __stack.args.trigger, __stack.args.base, __stack.args.outPath, __stack.args.steps, __stack.args.rank, __stack.args.learningRate, __stack.args.resolution, __stack.args.flip, __stack.args.seed, __stack.args.samplePrompts, __stack.args.sampleEvery]
         }), {
@@ -347,7 +347,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
           return;
         }
         if (isAborted(__stack.locals.plan)) {
-          runner2.halt(__stack.locals.plan.carryThrough(__stack, "trainLora"));
+          runner2.halt(__stack.locals.plan.carryThrough(__run3.log, __stack, "trainLora"));
           return;
         }
       });
@@ -359,7 +359,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
           return;
         }
         if (isAborted(__stack.locals.__hoist_0)) {
-          runner2.halt(__stack.locals.__hoist_0.carryThrough(__stack, "trainLora"));
+          runner2.halt(__stack.locals.__hoist_0.carryThrough(__run3.log, __stack, "trainLora"));
           return;
         }
       });
@@ -386,7 +386,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
           return;
         }
         if (isAborted(__stack.locals.__hoist_1)) {
-          runner2.halt(__stack.locals.__hoist_1.carryThrough(__stack, "trainLora"));
+          runner2.halt(__stack.locals.__hoist_1.carryThrough(__run3.log, __stack, "trainLora"));
           return;
         }
       });
@@ -401,7 +401,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
           return;
         }
         if (isAborted(__stack.locals.__hoist_2)) {
-          runner2.halt(__stack.locals.__hoist_2.carryThrough(__stack, "trainLora"));
+          runner2.halt(__stack.locals.__hoist_2.carryThrough(__run3.log, __stack, "trainLora"));
           return;
         }
       });
@@ -438,7 +438,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
       });
       await runner.step(7, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __tryCall(async () => await __call(__run3, _train, {
+        runner2.halt(await __tryCall(__run3.log, async () => await __call(__run3, _train, {
           type: "positional",
           args: [__stack.locals.plan.value]
         }), {
@@ -460,7 +460,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "trainLora");
+      return AbortedResult.fromError(__run.log, __error, __stack, "trainLora");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -468,7 +468,7 @@ async function __trainLora_impl(__run, imagesDir, trigger, base, outPath, steps 
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function trainLora threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "trainLora"
@@ -617,7 +617,7 @@ async function __loraInfo_impl(__run, path2) {
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "loraInfo", "index.agency");
+  claimFrameForScope(__stack, "loraInfo", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -653,7 +653,7 @@ async function __loraInfo_impl(__run, path2) {
         });
       });
       await runner.step(1, __run2, async (runner2, __run3) => {
-        __stack.locals.real = await __tryCall(async () => await __call(__run3, _realTarget, {
+        __stack.locals.real = await __tryCall(__run3.log, async () => await __call(__run3, _realTarget, {
           type: "positional",
           args: [__stack.args.path]
         }), {
@@ -667,7 +667,7 @@ async function __loraInfo_impl(__run, path2) {
           return;
         }
         if (isAborted(__stack.locals.real)) {
-          runner2.halt(__stack.locals.real.carryThrough(__stack, "loraInfo"));
+          runner2.halt(__stack.locals.real.carryThrough(__run3.log, __stack, "loraInfo"));
           return;
         }
       });
@@ -679,7 +679,7 @@ async function __loraInfo_impl(__run, path2) {
           return;
         }
         if (isAborted(__stack.locals.__hoist_0)) {
-          runner2.halt(__stack.locals.__hoist_0.carryThrough(__stack, "loraInfo"));
+          runner2.halt(__stack.locals.__hoist_0.carryThrough(__run3.log, __stack, "loraInfo"));
           return;
         }
       });
@@ -706,7 +706,7 @@ async function __loraInfo_impl(__run, path2) {
           return;
         }
         if (isAborted(__stack.locals.__hoist_1)) {
-          runner2.halt(__stack.locals.__hoist_1.carryThrough(__stack, "loraInfo"));
+          runner2.halt(__stack.locals.__hoist_1.carryThrough(__run3.log, __stack, "loraInfo"));
           return;
         }
       });
@@ -721,7 +721,7 @@ async function __loraInfo_impl(__run, path2) {
           return;
         }
         if (isAborted(__stack.locals.__hoist_2)) {
-          runner2.halt(__stack.locals.__hoist_2.carryThrough(__stack, "loraInfo"));
+          runner2.halt(__stack.locals.__hoist_2.carryThrough(__run3.log, __stack, "loraInfo"));
           return;
         }
       });
@@ -754,7 +754,7 @@ async function __loraInfo_impl(__run, path2) {
       });
       await runner.step(7, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __tryCall(async () => await __call(__run3, _loraInfo, {
+        runner2.halt(await __tryCall(__run3.log, async () => await __call(__run3, _loraInfo, {
           type: "positional",
           args: [__stack.locals.real.value]
         }), {
@@ -776,7 +776,7 @@ async function __loraInfo_impl(__run, path2) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "loraInfo");
+      return AbortedResult.fromError(__run.log, __error, __stack, "loraInfo");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -784,7 +784,7 @@ async function __loraInfo_impl(__run, path2) {
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function loraInfo threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "loraInfo"

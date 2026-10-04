@@ -141,7 +141,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "8493fe7473d5e66b1ef5bb98d93e0da5624c0c036304f4160cdc30ea06c9e8a7", import.meta.url);
+__registerModuleFingerprint("index.agency", "742783b70804c7cc0a19bba3a1652bec0c9695fcf5602a5f76f319745b3470a4", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -194,7 +194,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "sendEmail", "index.agency");
+  claimFrameForScope(__stack, "sendEmail", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -303,7 +303,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
       });
       await runner.step(1, __run2, async (runner2, __run3) => {
         __functionCompleted = true;
-        runner2.halt(await __tryCall(async () => await __call(__run3, sendEmailImpl, {
+        runner2.halt(await __tryCall(__run3.log, async () => await __call(__run3, sendEmailImpl, {
           type: "positional",
           args: [{
             "from": __stack.args.from,
@@ -339,7 +339,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "sendEmail");
+      return AbortedResult.fromError(__run.log, __error, __stack, "sendEmail");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -347,7 +347,7 @@ async function __sendEmail_impl(__run, from, to, subject, html = __UNSET, text =
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function sendEmail threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "sendEmail"

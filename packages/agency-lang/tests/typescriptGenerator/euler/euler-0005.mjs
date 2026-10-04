@@ -208,7 +208,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "gcd", "euler-0005.agency");
+  claimFrameForScope(__stack, "gcd", "euler-0005.agency", __run.log);
   if (!__run.globals.isInitialized("euler-0005.agency")) {
     await __initializeGlobals(__run)
   }
@@ -312,7 +312,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "gcd");
+  return AbortedResult.fromError(__run.log, __error, __stack, "gcd");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -326,7 +326,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "gcd" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "gcd",
@@ -387,7 +387,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "lcm", "euler-0005.agency");
+  claimFrameForScope(__stack, "lcm", "euler-0005.agency", __run.log);
   if (!__run.globals.isInitialized("euler-0005.agency")) {
     await __initializeGlobals(__run)
   }
@@ -456,7 +456,7 @@ if (hasInterrupts(__stack.locals.__hoist_0)) {
           return;
         }
 if (isAborted(__stack.locals.__hoist_0)) {
-          runner.halt(__stack.locals.__hoist_0.carryThrough(__stack, "lcm"))
+          runner.halt(__stack.locals.__hoist_0.carryThrough(__run.log, __stack, "lcm"))
           return;
         }
       });
@@ -489,7 +489,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "lcm");
+  return AbortedResult.fromError(__run.log, __error, __stack, "lcm");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -503,7 +503,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "lcm" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "lcm",
@@ -567,7 +567,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "euler-0005.agency");
+  claimFrameForScope(__stack, "main", "euler-0005.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "euler-0005.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -657,7 +657,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",

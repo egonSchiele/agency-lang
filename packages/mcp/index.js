@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "926bb56ebf399b3c65c3e48420e04a856262a5a08f79f1c828d8149a111d43db", import.meta.url);
+__registerModuleFingerprint("index.agency", "fd421a329744a8169686ff7bea0722d65d92715a2486f556b86350b90869cd83", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -193,7 +193,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "mcp", "index.agency");
+  claimFrameForScope(__stack, "mcp", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -254,7 +254,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "mcp");
+      return AbortedResult.fromError(__run.log, __error, __stack, "mcp");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -262,7 +262,7 @@ async function __mcp_impl(__run, serverName, onOAuthRequired = __UNSET) {
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function mcp threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "mcp"

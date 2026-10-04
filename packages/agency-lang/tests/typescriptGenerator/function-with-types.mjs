@@ -206,7 +206,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "add", "function-with-types.agency");
+  claimFrameForScope(__stack, "add", "function-with-types.agency", __run.log);
   if (!__run.globals.isInitialized("function-with-types.agency")) {
     await __initializeGlobals(__run)
   }
@@ -314,7 +314,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "add");
+  return AbortedResult.fromError(__run.log, __error, __stack, "add");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -328,7 +328,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "add" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "add",
@@ -389,7 +389,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet", "function-with-types.agency");
+  claimFrameForScope(__stack, "greet", "function-with-types.agency", __run.log);
   if (!__run.globals.isInitialized("function-with-types.agency")) {
     await __initializeGlobals(__run)
   }
@@ -488,7 +488,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "greet");
+  return AbortedResult.fromError(__run.log, __error, __stack, "greet");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -502,7 +502,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "greet" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "greet",
@@ -556,7 +556,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "mixed", "function-with-types.agency");
+  claimFrameForScope(__stack, "mixed", "function-with-types.agency", __run.log);
   if (!__run.globals.isInitialized("function-with-types.agency")) {
     await __initializeGlobals(__run)
   }
@@ -661,7 +661,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "mixed");
+  return AbortedResult.fromError(__run.log, __error, __stack, "mixed");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -675,7 +675,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "mixed" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "mixed",
@@ -736,7 +736,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "processArray", "function-with-types.agency");
+  claimFrameForScope(__stack, "processArray", "function-with-types.agency", __run.log);
   if (!__run.globals.isInitialized("function-with-types.agency")) {
     await __initializeGlobals(__run)
   }
@@ -835,7 +835,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "processArray");
+  return AbortedResult.fromError(__run.log, __error, __stack, "processArray");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -849,7 +849,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "processArray" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "processArray",
@@ -903,7 +903,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "flexible", "function-with-types.agency");
+  claimFrameForScope(__stack, "flexible", "function-with-types.agency", __run.log);
   if (!__run.globals.isInitialized("function-with-types.agency")) {
     await __initializeGlobals(__run)
   }
@@ -1002,7 +1002,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "flexible");
+  return AbortedResult.fromError(__run.log, __error, __stack, "flexible");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -1016,7 +1016,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "flexible" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "flexible",
@@ -1073,7 +1073,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "foo", "function-with-types.agency");
+  claimFrameForScope(__stack, "foo", "function-with-types.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "foo", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -1141,7 +1141,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node foo crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "foo",
@@ -1164,7 +1164,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "function-with-types.agency");
+  claimFrameForScope(__stack, "main", "function-with-types.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "function-with-types.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -1296,7 +1296,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",

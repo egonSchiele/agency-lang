@@ -206,7 +206,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "isPositive", "castCheckedTagged.agency");
+  claimFrameForScope(__stack, "isPositive", "castCheckedTagged.agency", __run.log);
   if (!__run.globals.isInitialized("castCheckedTagged.agency")) {
     await __initializeGlobals(__run)
   }
@@ -301,7 +301,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "isPositive");
+  return AbortedResult.fromError(__run.log, __error, __stack, "isPositive");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -315,7 +315,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "isPositive" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "isPositive",
@@ -376,7 +376,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "neighbor", "castCheckedTagged.agency");
+  claimFrameForScope(__stack, "neighbor", "castCheckedTagged.agency", __run.log);
   if (!__run.globals.isInitialized("castCheckedTagged.agency")) {
     await __initializeGlobals(__run)
   }
@@ -450,7 +450,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "neighbor");
+  return AbortedResult.fromError(__run.log, __error, __stack, "neighbor");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -464,7 +464,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "neighbor" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "neighbor",
@@ -511,7 +511,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "both", "castCheckedTagged.agency");
+  claimFrameForScope(__stack, "both", "castCheckedTagged.agency", __run.log);
   if (!__run.globals.isInitialized("castCheckedTagged.agency")) {
     await __initializeGlobals(__run)
   }
@@ -598,7 +598,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "both");
+  return AbortedResult.fromError(__run.log, __error, __stack, "both");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -612,7 +612,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "both" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "both",
@@ -676,7 +676,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "castCheckedTagged.agency");
+  claimFrameForScope(__stack, "main", "castCheckedTagged.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "castCheckedTagged.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -696,7 +696,7 @@ await callHook(__run, {
 __stack.locals.raw = 5;
       });
       await runner.step(2, __run, async (runner, __run) => {
-__stack.locals.__hoist_0 = await __validateChainRecursive(__stack.locals.raw, {
+__stack.locals.__hoist_0 = await __validateChainRecursive(__run, __stack.locals.raw, {
           "kind": "ref",
           "get": () => {
             return (Positive as any).__agency_descriptor;
@@ -758,7 +758,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",

@@ -209,7 +209,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet", "multipleNodes.agency");
+  claimFrameForScope(__stack, "greet", "multipleNodes.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "greet", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -287,7 +287,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node greet crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "greet",
@@ -310,7 +310,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "processGreeting", "multipleNodes.agency");
+  claimFrameForScope(__stack, "processGreeting", "multipleNodes.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "processGreeting", stack: __run.stack, threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["msg"] = __state.data.msg;
@@ -395,7 +395,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node processGreeting crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "processGreeting",
@@ -418,7 +418,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "multipleNodes.agency");
+  claimFrameForScope(__stack, "main", "multipleNodes.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "multipleNodes.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -473,7 +473,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",

@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "c66f0a43bf77f8fb0ae7fd4308aa757b296545e4595934879a3bd6900a9f3fc2", import.meta.url);
+__registerModuleFingerprint("index.agency", "eb4c0745270540c92676746d7a6f39d0d3e90f79c5ddfa3a88a55f61679d4be4", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -193,7 +193,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "transcribe", "index.agency");
+  claimFrameForScope(__stack, "transcribe", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -260,7 +260,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "transcribe");
+      return AbortedResult.fromError(__run.log, __error, __stack, "transcribe");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -268,7 +268,7 @@ async function __transcribe_impl(__run, filepath, language = __UNSET, model = __
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function transcribe threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "transcribe"

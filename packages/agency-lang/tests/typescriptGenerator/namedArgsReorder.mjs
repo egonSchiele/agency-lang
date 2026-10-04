@@ -206,7 +206,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet", "namedArgsReorder.agency");
+  claimFrameForScope(__stack, "greet", "namedArgsReorder.agency", __run.log);
   if (!__run.globals.isInitialized("namedArgsReorder.agency")) {
     await __initializeGlobals(__run)
   }
@@ -299,7 +299,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "greet");
+  return AbortedResult.fromError(__run.log, __error, __stack, "greet");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -313,7 +313,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "greet" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "greet",
@@ -384,7 +384,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "namedArgsReorder.agency");
+  claimFrameForScope(__stack, "main", "namedArgsReorder.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "namedArgsReorder.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -502,7 +502,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",

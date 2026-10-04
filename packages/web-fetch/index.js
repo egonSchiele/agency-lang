@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "d475f1ec9160e9c60cc6d240d6995baf18fa1ff24dee457da0012299093971fb", import.meta.url);
+__registerModuleFingerprint("index.agency", "d7684f5efc8a2411476483b0cd0694d73848d022d213e633fa8c84a94f29b9cf", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -193,7 +193,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "fetchPage", "index.agency");
+  claimFrameForScope(__stack, "fetchPage", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -263,7 +263,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "fetchPage");
+      return AbortedResult.fromError(__run.log, __error, __stack, "fetchPage");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -271,7 +271,7 @@ async function __fetchPage_impl(__run, url, maxChars = __UNSET, timeout = __UNSE
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function fetchPage threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "fetchPage"

@@ -209,7 +209,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "comprehension.agency");
+  claimFrameForScope(__stack, "main", "comprehension.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "comprehension.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -240,7 +240,7 @@ const __self = __bstack.locals;
 const __bframe___block_0 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_0", "comprehension.agency");
+claimFrameForScope(__bstack, "__block_0", "comprehension.agency", __run.log);
 
 __bstack.args["n"] = n;
 
@@ -257,7 +257,7 @@ return runner.halted ? runner.haltResult : undefined;
 // saved draft. This is how a saveDraft placed directly inside a guard
 // block reaches the guard. Other errors keep throwing as before.
 if (__blockError instanceof AgencyAbort) {
-  return AbortedResult.fromError(__blockError, __bstack, "__block_0");
+  return AbortedResult.fromError(__run.log, __blockError, __bstack, "__block_0");
 }
 throw __blockError;
 } finally {
@@ -298,7 +298,7 @@ const __self = __bstack.locals;
 const __bframe___block_1 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_1", "comprehension.agency");
+claimFrameForScope(__bstack, "__block_1", "comprehension.agency", __run.log);
 
 __bstack.args["n"] = n;
 
@@ -315,7 +315,7 @@ return runner.halted ? runner.haltResult : undefined;
 // saved draft. This is how a saveDraft placed directly inside a guard
 // block reaches the guard. Other errors keep throwing as before.
 if (__blockError instanceof AgencyAbort) {
-  return AbortedResult.fromError(__blockError, __bstack, "__block_1");
+  return AbortedResult.fromError(__run.log, __blockError, __bstack, "__block_1");
 }
 throw __blockError;
 } finally {
@@ -356,7 +356,7 @@ const __self = __bstack.locals;
 const __bframe___block_2 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_2", "comprehension.agency");
+claimFrameForScope(__bstack, "__block_2", "comprehension.agency", __run.log);
 
 __bstack.args["n"] = n;
 
@@ -373,7 +373,7 @@ return runner.halted ? runner.haltResult : undefined;
 // saved draft. This is how a saveDraft placed directly inside a guard
 // block reaches the guard. Other errors keep throwing as before.
 if (__blockError instanceof AgencyAbort) {
-  return AbortedResult.fromError(__blockError, __bstack, "__block_2");
+  return AbortedResult.fromError(__run.log, __blockError, __bstack, "__block_2");
 }
 throw __blockError;
 } finally {
@@ -464,7 +464,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",

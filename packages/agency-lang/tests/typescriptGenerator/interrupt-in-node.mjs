@@ -206,7 +206,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "greet", "interrupt-in-node.agency");
+  claimFrameForScope(__stack, "greet", "interrupt-in-node.agency", __run.log);
   if (!__run.globals.isInitialized("interrupt-in-node.agency")) {
     await __initializeGlobals(__run)
   }
@@ -334,7 +334,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "greet");
+  return AbortedResult.fromError(__run.log, __error, __stack, "greet");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -348,7 +348,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "greet" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "greet",
@@ -412,7 +412,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "foo2", "interrupt-in-node.agency");
+  claimFrameForScope(__stack, "foo2", "interrupt-in-node.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "foo2", stack: __run.stack, threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
@@ -511,7 +511,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node foo2 crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "foo2",
@@ -534,7 +534,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "sayHi", "interrupt-in-node.agency");
+  claimFrameForScope(__stack, "sayHi", "interrupt-in-node.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "interrupt-in-node.agency", scopeName: "sayHi", stack: __run.stack, threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["name"] = __state.data.name;
@@ -615,7 +615,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node sayHi crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "sayHi",

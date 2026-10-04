@@ -140,7 +140,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "2e99f80b1a3909dcd068852b1b157f3933e83e8ad00da75ddaf8dd3e32e534b6", import.meta.url);
+__registerModuleFingerprint("index.agency", "679cf9deace2f5e81525c61de99a678a32c4cc48b55218ceb0b1b22c4d7afb90", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -193,7 +193,7 @@ async function __readText_impl(__run, filepath, language = __UNSET) {
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "readText", "index.agency");
+  claimFrameForScope(__stack, "readText", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -254,7 +254,7 @@ async function __readText_impl(__run, filepath, language = __UNSET) {
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "readText");
+      return AbortedResult.fromError(__run.log, __error, __stack, "readText");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -262,7 +262,7 @@ async function __readText_impl(__run, filepath, language = __UNSET) {
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function readText threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "readText"

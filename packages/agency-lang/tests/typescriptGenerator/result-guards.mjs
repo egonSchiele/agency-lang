@@ -206,7 +206,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "checkValue", "result-guards.agency");
+  claimFrameForScope(__stack, "checkValue", "result-guards.agency", __run.log);
   if (!__run.globals.isInitialized("result-guards.agency")) {
     await __initializeGlobals(__run)
   }
@@ -266,7 +266,7 @@ if (hasInterrupts(__stack.locals.__hoist_0)) {
           return;
         }
 if (isAborted(__stack.locals.__hoist_0)) {
-          runner.halt(__stack.locals.__hoist_0.carryThrough(__stack, "checkValue"))
+          runner.halt(__stack.locals.__hoist_0.carryThrough(__run.log, __stack, "checkValue"))
           return;
         }
       });
@@ -313,7 +313,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "checkValue");
+  return AbortedResult.fromError(__run.log, __error, __stack, "checkValue");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -327,7 +327,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "checkValue" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "checkValue",

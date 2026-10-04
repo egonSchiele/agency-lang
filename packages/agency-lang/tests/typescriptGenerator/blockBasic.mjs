@@ -206,7 +206,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "twice", "blockBasic.agency");
+  claimFrameForScope(__stack, "twice", "blockBasic.agency", __run.log);
   if (!__run.globals.isInitialized("blockBasic.agency")) {
     await __initializeGlobals(__run)
   }
@@ -269,7 +269,7 @@ if (hasInterrupts(__stack.locals.a)) {
           return;
         }
 if (isAborted(__stack.locals.a)) {
-          runner.halt(__stack.locals.a.carryThrough(__stack, "twice"))
+          runner.halt(__stack.locals.a.carryThrough(__run.log, __stack, "twice"))
           return;
         }
       });
@@ -284,7 +284,7 @@ if (hasInterrupts(__stack.locals.b)) {
           return;
         }
 if (isAborted(__stack.locals.b)) {
-          runner.halt(__stack.locals.b.carryThrough(__stack, "twice"))
+          runner.halt(__stack.locals.b.carryThrough(__run.log, __stack, "twice"))
           return;
         }
       });
@@ -317,7 +317,7 @@ if (__error instanceof AgencyAbort) {
   // if it saved one. The caller's post-call check spots the marker and
   // stops too, so the abort travels up the stack as a plain value, the
   // same way interrupts do. See lib/runtime/abortedResult.ts.
-  return AbortedResult.fromError(__error, __stack, "twice");
+  return AbortedResult.fromError(__run.log, __error, __stack, "twice");
 }
 // Surface the underlying exception via logger + statelog before
 // converting to a Failure. Without this, a caller that doesn't
@@ -331,7 +331,7 @@ if (__error instanceof AgencyAbort) {
   const __log = __createLogger(__ctx.logLevel);
   __log.error("Function " + "twice" + " threw an exception (converted to Failure): " + __errMsg);
   if (__errStack) __log.error(__errStack);
-  __ctx.statelogClient?.error?.({
+  __run.log?.error?.({
     errorType: "runtimeError",
     message: __errMsg,
     functionName: "twice",
@@ -388,7 +388,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "main", "blockBasic.agency");
+  claimFrameForScope(__stack, "main", "blockBasic.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "blockBasic.agency", scopeName: "main", stack: __run.stack, threads: __setupData.threads });
   try {
     await __withChildRun(__run, {
@@ -416,7 +416,7 @@ const __self = __bstack.locals;
 const __bframe___block_0 = __bstack;
 // Claim site: this block just pulled its frame via setupFunction. A
 // mismatched claim on resume replay is a frame desync and throws.
-claimFrameForScope(__bstack, "__block_0", "blockBasic.agency");
+claimFrameForScope(__bstack, "__block_0", "blockBasic.agency", __run.log);
 
 const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: "blockBasic.agency", scopeName: "__block_0", stack: __run.stack, threads: __run.threads });
 try {
@@ -431,7 +431,7 @@ return runner.halted ? runner.haltResult : undefined;
 // saved draft. This is how a saveDraft placed directly inside a guard
 // block reaches the guard. Other errors keep throwing as before.
 if (__blockError instanceof AgencyAbort) {
-  return AbortedResult.fromError(__blockError, __bstack, "__block_0");
+  return AbortedResult.fromError(__run.log, __blockError, __bstack, "__block_0");
 }
 throw __blockError;
 } finally {
@@ -505,7 +505,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node main crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "main",

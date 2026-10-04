@@ -152,7 +152,7 @@ function registerTools(tools) {
     }
   }
 }
-__registerModuleFingerprint("index.agency", "2850116409a8a56ea0eb474763dbee78e63879beac294c3bc89ac2de054cfe26", import.meta.url);
+__registerModuleFingerprint("index.agency", "0ab8c4074ff22870632a27f67f0f04d26f8be6a40fc1f21a7c96019639198146", import.meta.url);
 __registerTool(print);
 __registerTool(printJSON);
 __registerTool(input);
@@ -205,7 +205,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "createBranch", "index.agency");
+  claimFrameForScope(__stack, "createBranch", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -290,7 +290,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "createBranch");
+      return AbortedResult.fromError(__run.log, __error, __stack, "createBranch");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -298,7 +298,7 @@ async function __createBranch_impl(__run, name, from = __UNSET, owner = __UNSET,
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function createBranch threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "createBranch"
@@ -379,7 +379,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "deleteBranch", "index.agency");
+  claimFrameForScope(__stack, "deleteBranch", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -457,7 +457,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "deleteBranch");
+      return AbortedResult.fromError(__run.log, __error, __stack, "deleteBranch");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -465,7 +465,7 @@ async function __deleteBranch_impl(__run, name, owner = __UNSET, repo = __UNSET,
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function deleteBranch threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "deleteBranch"
@@ -539,7 +539,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "branchExists", "index.agency");
+  claimFrameForScope(__stack, "branchExists", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -617,7 +617,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "branchExists");
+      return AbortedResult.fromError(__run.log, __error, __stack, "branchExists");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -625,7 +625,7 @@ async function __branchExists_impl(__run, name, owner = __UNSET, repo = __UNSET,
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function branchExists threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "branchExists"
@@ -699,7 +699,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "commitFiles", "index.agency");
+  claimFrameForScope(__stack, "commitFiles", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -791,7 +791,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "commitFiles");
+      return AbortedResult.fromError(__run.log, __error, __stack, "commitFiles");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -799,7 +799,7 @@ async function __commitFiles_impl(__run, message, files = __UNSET, authorName = 
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function commitFiles threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "commitFiles"
@@ -887,7 +887,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "openPullRequest", "index.agency");
+  claimFrameForScope(__stack, "openPullRequest", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -1000,7 +1000,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "openPullRequest");
+      return AbortedResult.fromError(__run.log, __error, __stack, "openPullRequest");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -1008,7 +1008,7 @@ async function __openPullRequest_impl(__run, title, body, head2, base = __UNSET,
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function openPullRequest threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "openPullRequest"
@@ -1117,7 +1117,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "listPullRequests", "index.agency");
+  claimFrameForScope(__stack, "listPullRequests", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -1209,7 +1209,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "listPullRequests");
+      return AbortedResult.fromError(__run.log, __error, __stack, "listPullRequests");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -1217,7 +1217,7 @@ async function __listPullRequests_impl(__run, state = __UNSET, base = __UNSET, h
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function listPullRequests threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "listPullRequests"
@@ -1305,7 +1305,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "commentOnPullRequest", "index.agency");
+  claimFrameForScope(__stack, "commentOnPullRequest", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -1390,7 +1390,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "commentOnPullRequest");
+      return AbortedResult.fromError(__run.log, __error, __stack, "commentOnPullRequest");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -1398,7 +1398,7 @@ async function __commentOnPullRequest_impl(__run, number, body, owner = __UNSET,
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function commentOnPullRequest threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "commentOnPullRequest"
@@ -1479,7 +1479,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "addLabel", "index.agency");
+  claimFrameForScope(__stack, "addLabel", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -1564,7 +1564,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "addLabel");
+      return AbortedResult.fromError(__run.log, __error, __stack, "addLabel");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -1572,7 +1572,7 @@ async function __addLabel_impl(__run, number, labels, owner = __UNSET, repo = __
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function addLabel threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "addLabel"
@@ -1653,7 +1653,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "requestReview", "index.agency");
+  claimFrameForScope(__stack, "requestReview", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -1745,7 +1745,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "requestReview");
+      return AbortedResult.fromError(__run.log, __error, __stack, "requestReview");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -1753,7 +1753,7 @@ async function __requestReview_impl(__run, number, reviewers = __UNSET, teamRevi
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function requestReview threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "requestReview"
@@ -1841,7 +1841,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "listIssues", "index.agency");
+  claimFrameForScope(__stack, "listIssues", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -1926,7 +1926,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "listIssues");
+      return AbortedResult.fromError(__run.log, __error, __stack, "listIssues");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -1934,7 +1934,7 @@ async function __listIssues_impl(__run, state = __UNSET, labels = __UNSET, owner
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function listIssues threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "listIssues"
@@ -2015,7 +2015,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "commentOnIssue", "index.agency");
+  claimFrameForScope(__stack, "commentOnIssue", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -2100,7 +2100,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "commentOnIssue");
+      return AbortedResult.fromError(__run.log, __error, __stack, "commentOnIssue");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -2108,7 +2108,7 @@ async function __commentOnIssue_impl(__run, number, body, owner = __UNSET, repo 
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function commentOnIssue threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "commentOnIssue"
@@ -2189,7 +2189,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "createIssue", "index.agency");
+  claimFrameForScope(__stack, "createIssue", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -2281,7 +2281,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "createIssue");
+      return AbortedResult.fromError(__run.log, __error, __stack, "createIssue");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -2289,7 +2289,7 @@ async function __createIssue_impl(__run, title, body, labels = __UNSET, owner = 
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function createIssue threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "createIssue"
@@ -2377,7 +2377,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
   const __ctx = __run.ctx;
   let __forked;
   let __functionCompleted = false;
-  claimFrameForScope(__stack, "defaultBranch", "index.agency");
+  claimFrameForScope(__stack, "defaultBranch", "index.agency", __run.log);
   if (!__run.globals.isInitialized("index.agency")) {
     await __initializeGlobals(__run);
   }
@@ -2448,7 +2448,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
       throw __error;
     }
     if (__error instanceof AgencyAbort) {
-      return AbortedResult.fromError(__error, __stack, "defaultBranch");
+      return AbortedResult.fromError(__run.log, __error, __stack, "defaultBranch");
     }
     {
       const __errMsg = __error instanceof Error ? __error.message : String(__error);
@@ -2456,7 +2456,7 @@ async function __defaultBranch_impl(__run, owner = __UNSET, repo = __UNSET, toke
       const __log = __createLogger(__ctx.logLevel);
       __log.error("Function defaultBranch threw an exception (converted to Failure): " + __errMsg);
       if (__errStack) __log.error(__errStack);
-      __ctx.statelogClient?.error?.({
+      __run.log?.error?.({
         errorType: "runtimeError",
         message: __errMsg,
         functionName: "defaultBranch"

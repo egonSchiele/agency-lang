@@ -209,7 +209,7 @@ const __self = __setupData.self;
 const __ctx = __run.ctx;
 let __forked;
 let __functionCompleted = false;
-  claimFrameForScope(__stack, "analyzeData", "skill.agency");
+  claimFrameForScope(__stack, "analyzeData", "skill.agency", __run.log);
   const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: "skill.agency", scopeName: "analyzeData", stack: __run.stack, threads: __setupData.threads });
   if (!__state.isResume) {
     __stack.args["input"] = __state.data.input;
@@ -277,7 +277,7 @@ await callHook(__run, {
               const __log = __createLogger(__ctx.logLevel);
               __log.error(`Node analyzeData crashed: ${__errMsg}`);
               if (__errStack) __log.error(__errStack);
-              __ctx.statelogClient?.error?.({
+              __run.log?.error?.({
                 errorType: "runtimeError",
                 message: __errMsg,
                 functionName: "analyzeData",

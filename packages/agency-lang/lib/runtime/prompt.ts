@@ -191,7 +191,7 @@ function emitPromptStart({
   /** This call's `llm(label:)` debug tag, or null. Observability only. */
   callLabel?: string | null;
 }): void {
-  run.ctx.statelogClient.promptStart({
+  run.log.promptStart({
     model: JSON.stringify(clientConfig.model),
     threadId: run.threads.activeId() ?? null,
     messageCount: messages.getMessages().length,
@@ -221,7 +221,7 @@ function throwRetryForResumableTrip(
     (g) => g.guardId === cause.guardId,
   );
   if (!trippedGuard || trippedGuard.isRootBudget) return;
-  run.ctx.statelogClient.promptCancelled({
+  run.log.promptCancelled({
     threadId: run.threads.activeId() ?? null,
   });
   throw new GuardTripRetry(trippedGuard.guardId);
@@ -271,13 +271,13 @@ async function dispatchFailureToThrow(
     // timeout abort) is a NORMAL outcome, not a request failure — no
     // llmError — but leaving the start unpaired would make every healthy
     // race() render "never completed" warnings.
-    ctx.statelogClient.promptCancelled({
+    run.log.promptCancelled({
       threadId: run.threads.activeId() ?? null,
     });
     return new AgencyCancelledError(undefined, cause);
   }
   try {
-    await ctx.statelogClient.error({
+    await run.log.error({
       errorType: "llmError",
       message: err instanceof Error ? err.message : String(err),
       tools,
@@ -436,7 +436,7 @@ async function _runPrompt({
 
   const projectedUsage = projectProviderTokenUsage(completion.usage, usageKind).usage;
 
-  ctx.statelogClient.promptCompletion({
+  run.log.promptCompletion({
     messages: withMessageLabels(messages),
     // Sanitize the nested usage too — the top-level `usage` alone isn't enough,
     // the echoed completion carries its own raw `usage` (see projectProviderTokenUsage).
@@ -796,7 +796,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   let currentLlmSpanId: string | undefined;
   const closeLlmSpan = () => {
     if (currentLlmSpanId) {
-      ctx.statelogClient.endSpan(currentLlmSpanId);
+      run.log.endSpan(currentLlmSpanId);
       currentLlmSpanId = undefined;
     }
   };
@@ -815,7 +815,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   // (not inside the idempotent `initialLlmCall` step) so a resumed run —
   // which skips completed steps — still re-opens the span that the tool
   // loop expects to be active.
-  currentLlmSpanId = ctx.statelogClient.startSpan("llmCall");
+  currentLlmSpanId = run.log.startSpan("llmCall");
   // Guard-trip gate: settle every pending cost trip in an idempotent
   // step of its own, before/after the request steps. The gate loops
   // until the stack is clear (approving an inner guard can leave an
@@ -1402,7 +1402,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
               toolCall,
               stateStack,
               draftSchema: args.draftSchema,
-              statelogClient: ctx.statelogClient,
+              statelogClient: run.log,
               ctx,
               model: clientConfig.model,
               messages,
@@ -1602,7 +1602,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
           });
           if (b.interrupts) return;
 
-          const toolSpanId = ctx.statelogClient.startSpan("toolExecution");
+          const toolSpanId = branchRun.log.startSpan("toolExecution");
           let toolResult: any;
           let invokeOutcome: "success" | "failed" | "rejected" | "interrupted" | "crashed" =
             "success";
@@ -1627,7 +1627,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
             // tool that began even when the run is killed before it
             // completes (the matching toolCall event won't fire).
             await b.step(`round.${round}.tool.${callSlug}.logStart`, async () => {
-              ctx.statelogClient.toolCallStart({
+              branchRun.log.toolCallStart({
                 toolName: handler.name,
                 args: namedArgs,
                 model: JSON.stringify(clientConfig.model),
@@ -1699,7 +1699,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
             // (e.g. after a later `nextLlmCall` step bails). Without this
             // guard, every re-entry would emit a duplicate toolCall event.
             await b.step(`round.${round}.tool.${callSlug}.log`, async () => {
-              ctx.statelogClient.toolCall({
+              branchRun.log.toolCall({
                 toolName: handler.name,
                 args: namedArgs,
                 output: toolResult,
@@ -1709,7 +1709,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
               });
             });
           } finally {
-            ctx.statelogClient.endSpan(toolSpanId);
+            branchRun.log.endSpan(toolSpanId);
           }
         };
 
@@ -1903,7 +1903,7 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
         // Loud in the statelog too, so a rotting integration is visible
         // even when the caller swallows the failure. Fires with the
         // llmCall span still open; pairing consumers ignore error events.
-        ctx.statelogClient.error({
+        run.log.error({
           errorType: "structuredOutput",
           message: decision.message,
         });

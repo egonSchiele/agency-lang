@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { getRuntimeContext } from "agency-lang/runtime";
+import { currentRun } from "agency-lang/runtime";
 import { _realTarget, fixedPath, resolveUnder, stat } from "agency-lang/stdlib-lib/contained.js";
 import { configuredPython, serverRulesDir } from "agency-lang/stdlib-lib/localPython.js";
 import {
@@ -180,7 +180,7 @@ export async function trainPlan(
 }
 
 export async function _train(plan: TrainPlan): Promise<Trained & { steps: number }> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   return trainPlan(plan, ctx.getAbortSignal(stack));
 }
 

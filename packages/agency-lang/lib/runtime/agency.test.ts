@@ -108,6 +108,7 @@ describe("agency.global", () => {
         stack: env.stack,
         threads: env.threads,
         globals: branchClone,
+        log: env.ctx.statelogClient.logFor(branchClone),
         ...lineageOf(undefined),
       },
       () => {

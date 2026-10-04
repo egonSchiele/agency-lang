@@ -13,7 +13,8 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
-import { ambientRun, getRuntimeContext, withRun, type Run } from "./asyncContext.js";
+import { ambientRun, getRuntimeContext, sameRun, withRun, type Run } from "./asyncContext.js";
+import type { SpanContext } from "../statelogClient.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
@@ -478,6 +479,11 @@ export type RunSession = {
    * AgencyFunction callback body resolve __globals()/__threads() against the
    * parent's real globals, exactly as an in-process callback would. */
   parentStore?: any;
+  /** The run of the branch the subprocess was started in. The listener for
+   *  the child's interrupts runs the parent's handler chain under it, so
+   *  the chain sees the handlers that were executing, the globals, and the
+   *  logger of the code that started the subprocess. */
+  branchRun?: Run;
   resolvePromise: (v: SessionOutcome) => void;
   rejectPromise: (v: any) => void;
   settled: boolean;
@@ -892,16 +898,22 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     // handler chain here; without a branch-local span stack their
     // handlerChain span pushes/pops would interleave on the shared stack
     // (same discipline runBatch applies to its children).
+    // This listener runs in the frame that was current when the subprocess
+    // was started, which is the stored branch run. `sameRun` checks that
+    // while `AsyncLocalStorage` is still in place.
+    const stored = s.branchRun
+      ? sameRun(s.branchRun, "handleInterruptMessage()")
+      : ambientRun("handleInterruptMessage()");
     const { outcome } = await s.ctx.statelogClient.runInBranchContext(
       s.ctx.statelogClient.snapshotStack(),
-      () =>
-        gatherChainOutcome(
-          // This listener runs in the frame that was current when the
-          // subprocess was started. Phase 3 passes the stored run here.
-          ambientRun("handleInterruptMessage()"),
-          { effect, message, data, origin, expectsValue },
-          s.stateStack,
-          msg.interruptId,
+      (spans: SpanContext[]) =>
+        withRun({ ...stored, log: stored.log.forBranch(stored.globals, spans) }, (run) =>
+          gatherChainOutcome(
+            run,
+            { effect, message, data, origin, expectsValue },
+            s.stateStack,
+            msg.interruptId,
+          ),
         ),
     );
     trySendDecision(s, {
@@ -1282,6 +1294,7 @@ async function runSubprocessSession(opts: {
   ctx: any;
   stateStack: any;
   parentStore?: any;
+  branchRun?: Run;
   instruction: RunInstruction | ResumeInstruction;
   limits: RunLimits;
   cwd?: string;
@@ -1304,6 +1317,7 @@ async function runSubprocessSession(opts: {
       ctx: opts.ctx,
       stateStack: opts.stateStack,
       parentStore: opts.parentStore,
+      branchRun: opts.branchRun,
       resolvePromise,
       rejectPromise,
       settled: false,
@@ -1371,6 +1385,7 @@ async function invokeSubprocess(args: {
   ctx: any;
   stateStack: any;
   parentStore?: any;
+  branchRun?: Run;
   parentFrame: State;
   compiled: { moduleId: string; code: string; modules?: Record<string, string> };
   node: string;
@@ -1422,6 +1437,7 @@ async function invokeSubprocess(args: {
       ctx: args.ctx,
       stateStack: args.stateStack,
       parentStore: args.parentStore,
+      branchRun: args.branchRun,
       instruction,
       limits: args.limits,
       cwd: args.cwd,
@@ -1540,11 +1556,12 @@ export async function _run(
       children: [
         {
           key: "subprocess_0",
-          invoke: (_branchRun: Run, _childStack: StateStack, abortSignal: AbortSignal) =>
+          invoke: (branchRun: Run, _childStack: StateStack, abortSignal: AbortSignal) =>
             invokeSubprocess({
               ctx,
               stateStack,
               parentStore: store,
+              branchRun,
               parentFrame,
               compiled,
               node,

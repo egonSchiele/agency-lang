@@ -4,6 +4,7 @@ import { MessageJSON } from "smoltalk";
 import {
   agencyStore,
   lineageOf,
+  logOf,
   runInBootstrapFrame,
   sameRun,
   withRun,
@@ -304,6 +305,7 @@ async function runExportedFunctionCore({
         stack: execCtx.stateStack,
         threads: threadStore,
         globals: execCtx.globals,
+        log: logOf(execCtx, execCtx.globals),
         ...lineageOf(agencyStore.getStore()),
       },
       async (run) => {
@@ -457,6 +459,7 @@ async function runNodeCore({
               stack: execCtx.stateStack,
               threads: threadStore,
               globals: execCtx.globals,
+              log: logOf(execCtx, execCtx.globals),
               ...lineageOf(agencyStore.getStore()),
             },
             (run) =>
@@ -511,6 +514,7 @@ async function runNodeCore({
                 stack: execCtx.stateStack,
                 threads: threadStore,
                 globals: execCtx.globals,
+                log: logOf(execCtx, execCtx.globals),
                 ...lineageOf(agencyStore.getStore()),
               },
               (run) =>

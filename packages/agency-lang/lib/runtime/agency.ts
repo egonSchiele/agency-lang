@@ -36,6 +36,7 @@ import {
   withCallsite as _withCallsite,
   withPushedHandler,
   type CallsiteLocation,
+  type Run,
 } from "./asyncContext.js";
 import { addCost, addCostTo, addTokens, addTokensTo } from "./cost.js";
 import { __call } from "./call.js";
@@ -406,7 +407,9 @@ const memoryForget = (query: string): Promise<void> => _forget(query);
  */
 const withTestContext = <T>(
   args: { ctx: RuntimeContext<any>; stack: StateStack; threads: ThreadStore },
-  fn: () => T,
+  // `fn` is handed the run of the frame, for a test that calls a function
+  // which takes one, such as `AgencyFunction.invoke(run, ...)`.
+  fn: (run: Run) => T,
 ): T => runInTestContext(args.ctx, args.stack, args.threads, fn);
 
 // ---- The handle --------------------------------------------------------

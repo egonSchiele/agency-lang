@@ -243,7 +243,7 @@ export class PromptRunner {
         },
         onCheckpoint: (cpId) => {
           const cp = this.opts.ctx.checkpoints.get(cpId)!;
-          this.opts.ctx.statelogClient.checkpointCreated({
+          run.log.checkpointCreated({
             checkpointId: cpId,
             reason: "interrupt",
             sourceLocation: {

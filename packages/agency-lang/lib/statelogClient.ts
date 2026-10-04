@@ -175,6 +175,11 @@ export class StatelogClient {
   // because checkpoint restore reassigns execCtx.globals. Branch posts are
   // unaffected: they run inside an ALS frame, where __globals() wins.
   private fallbackGlobals: (() => GlobalStore | undefined) | null = null;
+  // Set only on a logger made by `logFor` or `forBranch`: the span stack and
+  // the tag store of the branch that logger belongs to. The client itself
+  // has neither, and logs with the root stack and the fallback globals.
+  private boundStack: SpanContext[] | null = null;
+  private boundGlobals: GlobalStore | null = null;
 
   constructor(config: StatelogConfig) {
     const { host, apiKey, projectId, traceId, debugMode } = config;
@@ -243,7 +248,51 @@ export class StatelogClient {
   // emitted inside a branch are attributed to that branch's current
   // span (which inherits the parent fork span at branch entry).
   private currentStack(): SpanContext[] {
-    return this.spanStorage.getStore() ?? this.rootStack;
+    const ambient = this.spanStorage.getStore() ?? this.rootStack;
+    if (this.boundStack === null) return ambient;
+    // While `spanStorage` is still in place, a bound logger checks that its
+    // own stack is the one `AsyncLocalStorage` would have given. A mismatch
+    // means a branch was handed another branch's logger.
+    if (this.enabled && ambient !== this.boundStack) {
+      throw new Error(
+        "A run's logger was used outside the branch it belongs to: " +
+          "its span stack is not the current one.",
+      );
+    }
+    return this.boundStack;
+  }
+
+  /**
+   * The logger for a run: this client, bound to one branch's tag store and
+   * span stack. Every run in a branch shares one, as `run.log`. Posts made
+   * through it redact with that branch's tags and nest under that branch's
+   * spans, whatever frame the call happens in.
+   *
+   * `logFor` binds the span stack that is current now. Use it where a run
+   * is made at the root of a branch that already exists.
+   */
+  logFor(globals: GlobalStore): StatelogClient {
+    return this.forBranch(globals, this.currentStack());
+  }
+
+  /**
+   * A logger bound to a span stack only. It redacts with whatever tag store
+   * is current when it posts. For the one caller whose posts are made from
+   * inside a different branch each time: a round of batched decision calls
+   * is sent by whichever arm of the block triggered it.
+   */
+  forSpans(spans: SpanContext[]): StatelogClient {
+    const logger = Object.create(this) as StatelogClient;
+    logger.boundStack = spans;
+    return logger;
+  }
+
+  /** The logger for a new branch, with the branch's own span stack. */
+  forBranch(globals: GlobalStore, spans: SpanContext[]): StatelogClient {
+    const logger = Object.create(this) as StatelogClient;
+    logger.boundStack = spans;
+    logger.boundGlobals = globals;
+    return logger;
   }
 
   // Returns a shallow snapshot of the active span stack — used by the
@@ -271,9 +320,16 @@ export class StatelogClient {
   // — we just invoke `fn()` directly. The runner can therefore always
   // wrap branches in this call without paying ALS overhead in no-op
   // mode.
-  runInBranchContext<T>(parentStack: SpanContext[], fn: () => Promise<T>): Promise<T> {
-    if (!this.enabled) return fn();
-    return this.spanStorage.run([...parentStack], fn);
+  //
+  // `fn` is handed the branch's stack, so the caller can give the same array
+  // to the branch's logger (`forBranch`).
+  runInBranchContext<T>(
+    parentStack: SpanContext[],
+    fn: (spans: SpanContext[]) => Promise<T>,
+  ): Promise<T> {
+    if (!this.enabled) return fn(parentStack);
+    const spans = [...parentStack];
+    return this.spanStorage.run(spans, () => fn(spans));
   }
 
   startSpan(type: SpanType): string | undefined {
@@ -1579,7 +1635,14 @@ export class StatelogClient {
     // must still redact. See docs/dev/runtime/globalstore.md on per-branch isolation:
     // __globals() returns the branch-local clone, so each branch redacts using
     // its own tags.
-    const globals = __globals() ?? this.fallbackGlobals?.();
+    const ambientGlobals = __globals();
+    if (this.boundGlobals !== null && ambientGlobals && ambientGlobals !== this.boundGlobals) {
+      throw new Error(
+        "A run's logger was used outside the branch it belongs to: " +
+          "its globals are not the current ones.",
+      );
+    }
+    const globals = this.boundGlobals ?? ambientGlobals ?? this.fallbackGlobals?.();
     const rawData = { ...body, timestamp: new Date().toISOString() };
     const data =
       globals && globals.hasAnyTags()

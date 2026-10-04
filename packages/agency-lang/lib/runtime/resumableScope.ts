@@ -192,6 +192,7 @@ export async function withResumableScope<T>(
         // Keep the enclosing arm's decision scope so a resumable scope
         // nested inside a fork branch still batches with the block.
         decisions: outer.decisions,
+        log: outer.log,
         callsite: { moduleId, scopeName: opts.name, stepPath: "" },
         ...lineageOf(outer),
       },

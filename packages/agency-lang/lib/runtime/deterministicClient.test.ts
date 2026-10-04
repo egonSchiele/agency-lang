@@ -23,6 +23,7 @@ function inModule<T>(moduleId: string, fn: () => T): T {
       stack: {} as any,
       threads: {} as any,
       globals: {} as any,
+      log: {} as any,
       callsite: { moduleId, scopeName: "main", stepPath: "" },
       ...lineageOf(undefined),
     },

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   agencyStore,
   callPlain,
+  logOf,
   getRuntimeContext,
   withRun,
   runInBootstrapFrame,
@@ -24,7 +25,14 @@ function makeStore() {
   });
   const stack = new StateStack();
   const threads = new ThreadStore();
-  return { ctx, stack, threads, globals: ctx.globals, ...lineageOf(undefined) };
+  return {
+    ctx,
+    stack,
+    threads,
+    globals: ctx.globals,
+    log: logOf(ctx, ctx.globals),
+    ...lineageOf(undefined),
+  };
 }
 
 describe("agencyStore", () => {

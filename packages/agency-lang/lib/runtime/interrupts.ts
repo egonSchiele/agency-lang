@@ -275,7 +275,7 @@ async function runHandlerChain(
     const approvals: any[] = [];
     let hasPropagation = false;
     const executing = executingHandlers(run);
-    const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
+    const chainSpanId = run.log.startSpan("handlerChain");
     try {
       for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
         if (ctx.isCancelled(stack)) throw new AgencyCancelledError();
@@ -373,7 +373,7 @@ async function runHandlerChain(
           data: interruptObj.data,
         };
         if (result.type === "pass") {
-          ctx.statelogClient.handlerDecision({
+          run.log.handlerDecision({
             interruptId,
             handlerIndex: i,
             decision: "pass",
@@ -389,7 +389,7 @@ async function runHandlerChain(
           // terminal events into the shared trace. An interrupt can carry
           // more than one interruptResolved (chain outcome, then a user
           // decision); the LAST is authoritative.
-          ctx.statelogClient.handlerDecision({
+          run.log.handlerDecision({
             interruptId,
             handlerIndex: i,
             decision: "reject",
@@ -399,7 +399,7 @@ async function runHandlerChain(
           return { kind: "rejected", value: result.value };
         }
         if (result.type === "propagate") {
-          ctx.statelogClient.handlerDecision({
+          run.log.handlerDecision({
             interruptId,
             handlerIndex: i,
             decision: "propagate",
@@ -409,7 +409,7 @@ async function runHandlerChain(
           continue;
         }
         if (result.type === "approve") {
-          ctx.statelogClient.handlerDecision({
+          run.log.handlerDecision({
             interruptId,
             handlerIndex: i,
             decision: "approve",
@@ -424,7 +424,7 @@ async function runHandlerChain(
         );
       }
     } finally {
-      ctx.statelogClient.endSpan(chainSpanId); // end handlerChain span
+      run.log.endSpan(chainSpanId); // end handlerChain span
     }
     if (hasPropagation) return { kind: "propagated" };
     if (approvals.length > 0) {
@@ -527,7 +527,7 @@ function renderVerdict(
   const { effect, message, data, origin } = interruptObj;
   const interruptSummary = { effect, message, data };
   if (merged.kind === "rejected") {
-    ctx.statelogClient.interruptResolved({
+    run.log.interruptResolved({
       interruptId,
       outcome: "rejected",
       resolvedBy,
@@ -536,7 +536,7 @@ function renderVerdict(
     return { type: "reject", value: merged.value };
   }
   if (merged.kind === "approved") {
-    ctx.statelogClient.interruptResolved({
+    run.log.interruptResolved({
       interruptId,
       outcome: "approved",
       resolvedBy,
@@ -561,7 +561,7 @@ function renderVerdict(
   // approvals are consulted), so under a propagating outer handler an
   // in-handler `with approve` does not prevent this refusal.
   if (insideHandlerFunction(run)) {
-    ctx.statelogClient.interruptResolved({
+    run.log.interruptResolved({
       interruptId,
       outcome: "rejected",
       resolvedBy,
@@ -591,7 +591,7 @@ function renderVerdict(
     interruptId,
     expectsValue: interruptObj.expectsValue,
   });
-  ctx.statelogClient.interruptThrown({
+  run.log.interruptThrown({
     interruptId: intr.interruptId,
     interruptData: data,
   });
@@ -605,7 +605,7 @@ function renderVerdict(
   // even when the chain was empty. If the user later decides, a second
   // interruptResolved (resolvedBy "user") follows — consumers take the LAST
   // event for an interruptId as authoritative.
-  ctx.statelogClient.interruptResolved({
+  run.log.interruptResolved({
     interruptId: intr.interruptId,
     outcome: merged.kind === "propagated" ? "propagated" : "passed",
     resolvedBy: null,

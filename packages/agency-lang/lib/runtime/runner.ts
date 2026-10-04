@@ -764,7 +764,7 @@ export class Runner {
         // so no code is left executing that could take a subthread off it
         // — and a later run must reopen the parent (through this branch)
         // before it can be active again.
-        repairReopenedThread(threads.get(tid), this.ctx.statelogClient, tid);
+        repairReopenedThread(threads.get(tid), run.log, tid);
       }
       this.frame.locals[threadKey] = tid;
       this.frame.locals[resumptionKey] = isResumption;
@@ -818,7 +818,7 @@ export class Runner {
       // close. We fire from `finally` so exceptions thrown inside
       // the body still record a close event.
       await withThreadEndHooksEvents(
-        this.ctx.statelogClient,
+        run.log,
         {
           threadId: slug,
           eagerSummarize: opts.summarize === true,
@@ -848,7 +848,7 @@ export class Runner {
             // shows up in traces (replaces the prior bare console.error).
             // Optional chaining: older test contexts may construct a
             // statelogClient without the threadEndHookError method.
-            this.ctx.statelogClient?.threadEndHookError?.({
+            run.log?.threadEndHookError?.({
               threadId: slug,
               error: e instanceof Error ? e.message : String(e),
             });
@@ -1233,8 +1233,8 @@ export class Runner {
 
     const forkId = nanoid(12);
     const forkStartTime = performance.now();
-    const forkSpanId = this.ctx.statelogClient.startSpan(mode === "all" ? "forkAll" : "race");
-    this.ctx.statelogClient.forkStart({
+    const forkSpanId = run.log.startSpan(mode === "all" ? "forkAll" : "race");
+    run.log.forkStart({
       forkId,
       mode,
       branchCount: items.length,
@@ -1278,13 +1278,13 @@ export class Runner {
       // forkEnd and pop the fork span here even while loser race branches
       // are still draining in the background — their stacks live in
       // independent ALS contexts and cannot touch the parent's stack.
-      this.ctx.statelogClient.forkEnd({
+      run.log.forkEnd({
         forkId,
         mode,
         timeTaken: performance.now() - forkStartTime,
         winnerIndex,
       });
-      this.ctx.statelogClient.endSpan(forkSpanId); // end forkAll/race span
+      run.log.endSpan(forkSpanId); // end forkAll/race span
     }
 
     if (this.halted) return undefined;
@@ -1315,7 +1315,7 @@ export class Runner {
     // One collector per block. A decision call inside any arm submits to it
     // through the arm's frame. See docs/dev/llm/decision-models.md.
     const armKeys = items.map((_item, index) => this.forkBranchKey(id, index));
-    const blockSpanStack = this.ctx.statelogClient.snapshotStack();
+    const blockSpanStack = run.log.snapshotStack();
     const collector = new DecisionCollector(
       armKeys,
       (state, questions, config, signal) => {
@@ -1331,23 +1331,27 @@ export class Runner {
         // here, so it does not depend on which arm happened to trigger the
         // round and cannot be cut short when that arm ends its own span.
         runRound: (report, work) =>
-          this.ctx.statelogClient.runInBranchContext(blockSpanStack, async () => {
-            const spanId = this.ctx.statelogClient.startSpan("decisionBatch");
+          this.ctx.statelogClient.runInBranchContext(blockSpanStack, async (spans) => {
+            // The round logs under the block's spans, on its own stack. It
+            // is sent from inside whichever arm triggered it, so it redacts
+            // with that arm's tags, as it does on main.
+            const log = this.ctx.statelogClient.forSpans(spans);
+            const spanId = log.startSpan("decisionBatch");
             const startedAt = performance.now();
             try {
               await work();
             } finally {
-              this.ctx.statelogClient.decisionBatch({
+              log.decisionBatch({
                 forkId,
                 reason: report.reason,
                 groups: report.groups,
                 timeTaken: performance.now() - startedAt,
               });
-              this.ctx.statelogClient.endSpan(spanId);
+              log.endSpan(spanId);
             }
           }),
         capReached: (model, cap) => {
-          this.ctx.statelogClient.warn({
+          run.log.warn({
             warnType: "decisionBatchCap",
             message: `A batch of decision calls to ${model} reached the model's cap of ${cap} questions and was sent early. Later calls in the block go in another request.`,
           });
@@ -1381,7 +1385,7 @@ export class Runner {
         propagateBranchCost: (branches, parentStack) =>
           this.propagateBranchCost(branches, parentStack),
         onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
-          this.ctx.statelogClient.forkBranchEnd({
+          run.log.forkBranchEnd({
             forkId,
             branchIndex,
             outcome,
@@ -1392,7 +1396,7 @@ export class Runner {
         onBranchSettled: (key) => collector.armSettled(key),
         onCheckpoint: (cpId) => {
           const cp = this.ctx.checkpoints.get(cpId)!;
-          this.ctx.statelogClient.checkpointCreated({
+          run.log.checkpointCreated({
             checkpointId: cpId,
             reason: "fork",
             sourceLocation: {
@@ -1462,7 +1466,7 @@ export class Runner {
         propagateWinnerCost: (winner, parentStack) =>
           this.propagateBranchCost([winner], parentStack),
         onBranchEnd: (_key, branchIndex, outcome, timeTaken, value) => {
-          this.ctx.statelogClient.forkBranchEnd({
+          run.log.forkBranchEnd({
             forkId,
             branchIndex,
             outcome,
@@ -1472,7 +1476,7 @@ export class Runner {
         },
         onCheckpoint: (cpId) => {
           const cp = this.ctx.checkpoints.get(cpId)!;
-          this.ctx.statelogClient.checkpointCreated({
+          run.log.checkpointCreated({
             checkpointId: cpId,
             reason: "race",
             sourceLocation: {

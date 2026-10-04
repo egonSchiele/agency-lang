@@ -56,6 +56,7 @@ import type { Runner } from "./runner.js";
 import type { HandlerEntry, HandlerFn } from "./types.js";
 import type { CallFrame } from "./callDepth.js";
 import type { DecisionScope } from "./decision/collector.js";
+import type { StatelogClient } from "../statelogClient.js";
 
 export type CallsiteLocation = {
   moduleId: string;
@@ -137,7 +138,22 @@ export type Run = {
    * the list is not empty.
    */
   activeCallbacks: object[];
+  /**
+   * The logger for this run's branch: the logging client bound to the
+   * branch's tag store and span stack. Every run in a branch shares one.
+   */
+  log: StatelogClient;
 };
+
+/**
+ * The logger for a run made at the root of a branch that already exists:
+ * the context's client bound to `globals` and to the span stack that is
+ * current now. A test's stub client has no `logFor`, and is used as it is.
+ */
+export function logOf(ctx: RuntimeContext<any>, globals: GlobalStore): StatelogClient {
+  const client = ctx.statelogClient;
+  return typeof client?.logFor === "function" ? client.logFor(globals) : client;
+}
 
 /**
  * The four values that follow a path of calls. They are required on every
@@ -450,7 +466,14 @@ export function runInTestContext<T>(
   fn: (run: Run) => T,
 ): T {
   return withRun(
-    { ctx, stack, threads, globals: ctx.globals, ...lineageOf(agencyStore.getStore()) },
+    {
+      ctx,
+      stack,
+      threads,
+      globals: ctx.globals,
+      log: logOf(ctx, ctx.globals),
+      ...lineageOf(agencyStore.getStore()),
+    },
     fn,
   );
 }
@@ -493,6 +516,7 @@ export async function runInBootstrapFrame<T>(
       // sharing is exactly right: writes done by `__initializeGlobals`
       // land on the RuntimeContext's store and persist across the run.
       globals: ctx.globals,
+      log: logOf(ctx, ctx.globals),
       ...lineageOf(agencyStore.getStore()),
     },
     fn,

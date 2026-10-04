@@ -61,6 +61,7 @@
  *    undefined)` would overwrite the meaningful value with undefined.
  */
 import { lineageOf, sameRun, withRun, type Run } from "./asyncContext.js";
+import type { SpanContext, StatelogClient } from "../statelogClient.js";
 import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
@@ -384,9 +385,15 @@ function startInvoke<T>(
       ? undefined
       : { collector: opts.decisionCollector, armKey: t.child.key };
   return ctx.statelogClient
-    .runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(opts.run, t.branch, shareGlobals, shareThreads, decisions, (branchRun) =>
-        t.child.invoke(branchRun, t.branch.stack, signal),
+    .runInBranchContext(parentSpanStack, (spans) =>
+      runInBranchAlsFrame(
+        opts.run,
+        t.branch,
+        shareGlobals,
+        shareThreads,
+        decisions,
+        spans,
+        (branchRun) => t.child.invoke(branchRun, t.branch.stack, signal),
       ),
     )
     .then((value) => {
@@ -431,12 +438,21 @@ function startInvoke<T>(
  *  fallback path is dead code for the migration's existing call sites
  *  and exists purely to keep `runBatch` usable from future contexts
  *  that haven't installed a top-level frame yet. */
+/** The logger for a branch: the parent's client, bound to the branch's tag
+ *  store and span stack. A test's stub client has no `forBranch`, and is
+ *  used as it is. */
+function branchLog(parent: Run, globals: GlobalStore, spans: SpanContext[]): StatelogClient {
+  const client = parent.ctx.statelogClient;
+  return typeof client?.forBranch === "function" ? client.forBranch(globals, spans) : client;
+}
+
 function runInBranchAlsFrame<T>(
   parent: Run,
   branch: BranchState,
   shareGlobals: boolean,
   shareThreads: boolean,
   decisions: DecisionScope | undefined,
+  spans: SpanContext[],
   fn: (run: Run) => Promise<T>,
 ): Promise<T> {
   sameRun(parent, "runBatch()");
@@ -475,6 +491,8 @@ function runInBranchAlsFrame<T>(
       // that installs none (a tool-dispatch batch) inherits the outer
       // frame's scope, so its tools keep registering under this arm.
       decisions: decisions ?? parent.decisions,
+      // The branch's own logger: its tag store and its span stack.
+      log: branchLog(parent, branchGlobals, spans),
       ...lineageOf(parent),
     },
     async (branchRun) => {
@@ -915,9 +933,15 @@ async function runRaceResume<T>(
   try {
     const shareGlobals = opts.shareGlobals ?? false;
     const shareThreads = opts.shareThreads ?? false;
-    value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(opts.run, branch, shareGlobals, shareThreads, undefined, (branchRun) =>
-        child.invoke(branchRun, branch.stack, signal),
+    value = await ctx.statelogClient.runInBranchContext(parentSpanStack, (spans) =>
+      runInBranchAlsFrame(
+        opts.run,
+        branch,
+        shareGlobals,
+        shareThreads,
+        undefined,
+        spans,
+        (branchRun) => child.invoke(branchRun, branch.stack, signal),
       ),
     );
   } catch (err) {

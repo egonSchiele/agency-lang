@@ -39,6 +39,8 @@ against the rule in this repo:
 | --- | --- |
 | Phase 1 worktree | `/Users/adit/agency-lang/packages/agency-lang/.worktrees/explicit-run` |
 | Phase 1 branch and PR | `explicit-run`, PR [#1169](https://github.com/egonSchiele/agency-lang/pull/1169), based on main at `ad1d7ec9b` |
+| Phase 2 worktree | `/Users/adit/agency-lang/packages/agency-lang/.worktrees/explicit-run-phase-2` |
+| Phase 2 branch and PR | `explicit-run-phase-2`, draft PR [#1170](https://github.com/egonSchiele/agency-lang/pull/1170), stacked on `explicit-run` |
 | The other design, for comparison | PR [#1167](https://github.com/egonSchiele/agency-lang/pull/1167), branch `spike/portable-context`, worktree `.worktrees/portable-context`. Leave it open. |
 | The prototype | `.worktrees/explicit-context/packages/agency-lang/scripts/explicit-context-spike/`, branch `spike/explicit-context`, committed at `34350cf36`. The branch is local and not pushed. |
 | The audit script | `scripts/audit-run-reads.mjs`, committed in Phase 1 |
@@ -237,6 +239,52 @@ Write each as a prediction and run it before changing the code it covers.
   interpolation, condition, `return`, match scrutinee, comprehension. The
   method argument position is known to drop the interrupt today, so leave
   it out or mark it skipped with that reason.
+
+## Phase 2: where it stands
+
+The first slice is built and pushed as PR #1170. Read "Built so far" under
+Phase 2 in the plan: it says what was done, the three places it differs
+from the design, and the numbers.
+
+What is left, in the order to do it:
+
+1. **Remove the 12 `ambientRun()` uses.** `grep -rn "ambientRun(" lib`
+   lists them. Six are standard library helpers that call an Agency
+   function (`ui.ts`, `cli.ts`, `markdown.ts`, `concurrency.ts`,
+   `thread.ts`, `agentSessions.ts`): take the run on the helper's first
+   line and pass it down. Two are subprocess listeners in `ipc.ts`: use the
+   stored run, `s.parentStore` (Task 9). The rest are `validateChain.ts`,
+   `resumableScope.ts`, `agency.withCallsite`, and the serve raw invoker.
+2. **Thread the remaining reads in the runtime** (rest of Task 8). About 70
+   call sites in `lib/runtime` and `lib/serve` still call
+   `getRuntimeContext()`, `agencyStore.getStore()`, `__threads()`,
+   `__globals()`, or `__stateStack()`. Heaviest: `agency.ts` (13),
+   `memory/manager.ts` (5), `state/context.ts` (3), `checkpoint.ts` (3).
+3. **Tasks 5, 6, 9, 10, 12, 13, 14** as the plan lists them.
+
+How the first slice was done, which is the method for the rest: change a
+function's signature, run `npx tsc --noEmit`, and fix each caller it
+reports. Then `npx tsc -p tsconfig.tests.json` for the tests. A test gets
+the run of its frame from `testRun()` in
+`lib/runtime/__tests__/testHelpers.ts`. A test that builds its own `ctx`
+makes the frame from it with `inFrameOf(ctx, stack, fn)` or
+`runInTestContext`, so that `run.ctx` is the ctx it asserts against.
+
+Things learned in the first slice:
+
+- `lib/runtime/prompt.ts` sits just under the linter's 1,250-line limit.
+  Adding a `run,` line to an argument list can push it over. Replace a
+  `ctx` parameter with `run` in place, and read `run.ctx`.
+- After a generator change run `pnpm run templates`, then `make`, then
+  `make fixtures`, then recompile every package's entry file:
+  `node ../agency-lang/dist/scripts/agency.js compile index.agency` in each
+  of the eight package folders. Commit fixtures and packages separately.
+- The finalize closure is built once per function and called from inside
+  steps, so it takes the run as a parameter and each stop site binds the
+  run it runs under.
+- A subagent fixed the unit tests from a written brief in about ten
+  minutes. That is a good split: the main session keeps the design, and
+  the mechanical test edits go out.
 
 ## How to do Phase 2
 

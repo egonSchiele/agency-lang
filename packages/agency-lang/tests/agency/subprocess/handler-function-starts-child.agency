@@ -19,14 +19,14 @@ import { compile, run } from "std::agency"
 let child = "not run"
 
 def trigger(): string {
-  interrupt("start the child")
+  raise interrupt("start the child")
   return "ok"
 }
 
 node main() {
   const source = """
 node main() {
-  interrupt("child asks")
+  raise interrupt("child asks")
   return "child-ran"
 }
 """

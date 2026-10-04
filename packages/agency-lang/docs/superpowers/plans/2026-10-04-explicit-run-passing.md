@@ -11,6 +11,12 @@ the owner's confirmation before Phase 3.
 [#1167](https://github.com/egonSchiele/agency-lang/pull/1167). It is not
 stacked on it.
 
+**This work is exploratory.** The point of building it is to see how large
+the change is, and nothing here is meant to merge yet. So the three PRs
+stack: Phase 2 is based on the Phase 1 branch, and Phase 3 on the Phase 2
+branch. Each PR says so in its first line. Phase 1 is PR
+[#1169](https://github.com/egonSchiele/agency-lang/pull/1169).
+
 **Read first:** the interrupts section of `CLAUDE.md`, then
 `docs/dev/runtime/async-context.md`,
 `docs/dev/compiler/codegen-als-accessors.md`,
@@ -386,6 +392,37 @@ positional arguments. `run.callWith(fn, descriptor)` takes the descriptor
 The handle works the same way in every file and under every command,
 because nothing depends on who built the file.
 
+### `agency.*` functions that take a callback
+
+Several functions in the `agency` namespace run a function the helper
+passes in: `withHandler(handler, fn)`, `withCostGuard(max, fn)`,
+`withTimeGuard(max, fn)`, `withLock(name, fn)`, `withCallsite(loc, fn)`,
+`withResumableScope(opts, body)`, `thread.with(id, fn)`, and
+`withTestContext(deps, fn)`. The guide's examples await inside these
+callbacks and then call `agency.*` again:
+
+```ts
+await agency.withCostGuard(0.05, async () => {
+  await agency.llm("Be brief: " + question);
+  await agency.llm("Now elaborate slightly: " + question); // after an await
+});
+```
+
+Each of these installs a frame today, so each is an installer, and its
+callback needs the run it installed. The callback is handed a handle for
+that run as its argument:
+
+```ts
+await run.withCostGuard(0.05, async (run) => {
+  await run.llm("Be brief: " + question);
+  await run.llm("Now elaborate slightly: " + question);
+});
+```
+
+`withResumableScope` already hands its body a scope object, `s`. The handle
+is reachable from it as `s.run`. `withTestContext` stays the way a test gets
+a frame, and hands its callback a handle the same way.
+
 ### Reads that accept a missing run
 
 About 30 reads treat "no frame" as a normal answer today. Examples:
@@ -545,8 +582,9 @@ the second step remove `AsyncLocalStorage`.
 
 ## Decisions
 
-**1. One PR or three?** **Decided: three PRs,** each based on main and
-merged before the next begins. Phase 2 may split in two if its diff is too
+**1. One PR or three?** **Decided: three PRs, stacked.** Phase 2 is based
+on Phase 1 and Phase 3 on Phase 2, because the work is being built to
+measure it and not yet to merge it. Phase 2 may split in two if its diff is too
 large: `getRuntimeContext()` keeps working while `AsyncLocalStorage` is in
 place, so Tasks 13 and 14 can merge after Tasks 8 to 12.
 
@@ -717,7 +755,9 @@ twice.
       callbacks", with the comparison each row names. Bring the
       `always-scope-over-ipc` test from PR #1167. Console capture follows
       Decision 9.
-- [ ] **Task 10. `callPlain` and the handle.** Add `callPlain` and use it
+- [ ] **Task 10. `callPlain` and the handle.** This includes the
+      callback-taking `agency.*` functions, each of which hands its
+      callback a handle. Add `callPlain` and use it
       in the five places. Add `currentRun()` and the `getRuntimeContext`
       alias (Decision 5). Add `agency.current()` with `call` and
       `callWith`. Test `callPlain` with a helper that throws: the variable
@@ -827,6 +867,11 @@ twice.
 - **Speed.** A `Run` is made on every call and every step, with 15 fields
   and a logger. The timings in Task 1 and the Phase 2 verify step measure
   it. If the logger shows up, make it lazily.
+- **Code outside this repo that calls an Agency function with no frame.**
+  Phase 1 made that throw. Two unit tests in `packages/mcp` did it and
+  failed in CI; they now build a frame with `agency.withTestContext`. No
+  production path was found: only nodes can be imported into TypeScript,
+  and `agency serve` installs a frame before it calls an exported function.
 - **The audit's counts were not rechecked.** The review confirmed the file
   and function names in this plan against the code. It did not rerun the
   script, so 595, 339, 208, 114, and 33 rest on one run of it.

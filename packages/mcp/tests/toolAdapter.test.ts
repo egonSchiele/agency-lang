@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mcpToolToAgencyFunction, isMcpTool } from "../src/toolAdapter.js";
+import { inTestFrame } from "./testFrame.js";
 import type { McpTool } from "../src/types.js";
 
 describe("isMcpTool", () => {
@@ -57,9 +58,11 @@ describe("mcpToolToAgencyFunction", () => {
     expect(fn.params.map(p => p.name)).toEqual(["a", "b"]);
 
     // Invoke with named args (as runPrompt does for tool calls)
-    const result = await fn.invoke(
-      { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } },
-      { ctx: null, threads: null, isToolCall: true },
+    const result = await inTestFrame(() =>
+      fn.invoke(
+        { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } },
+        { ctx: null, threads: null, isToolCall: true },
+      ),
     );
     expect(result).toBe("7");
 

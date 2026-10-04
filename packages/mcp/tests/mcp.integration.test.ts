@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { McpManager } from "../src/mcpManager.js";
 import { mcpToolToAgencyFunction } from "../src/toolAdapter.js";
+import { inTestFrame } from "./testFrame.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -40,9 +41,8 @@ describe("MCP integration", () => {
     const fn = mcpToolToAgencyFunction(deserialized[0], (serverName, toolName, args) =>
       manager.callTool(serverName, toolName, args),
     );
-    const toolResult = await fn.invoke(
-      { type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } },
-      { ctx: null },
+    const toolResult = await inTestFrame(() =>
+      fn.invoke({ type: "named", positionalArgs: [], namedArgs: { a: 3, b: 4 } }, { ctx: null }),
     );
     expect(toolResult).toContain("7");
   });

@@ -38,6 +38,10 @@ export type AgencyStore = {
   globals: GlobalStore;
   callsite?: CallsiteLocation;
   runner?: Runner;
+  callDepth: CallFrame | null;
+  handlerChainDepth: number;
+  executingHandlers: HandlerEntry[];
+  activeCallbacks: object[];
 };
 ```
 
@@ -46,6 +50,29 @@ export type AgencyStore = {
 `callsite` is `{moduleId, scopeName, stepPath}` for the step currently executing. `Runner.runInScope` seeds it, and `checkpoint()` reads it instead of taking the location as a trailing argument from generated code. Frames that are not inside a step, such as the top-level `runNode` frame and any bootstrap frame, omit it.
 
 `runner` is the `Runner` driving the current step. TS helpers like `agency.interrupt` read it to call `runner.halt(...)` without being handed the runner.
+
+### The four lineage values
+
+A frame also holds four values that follow a path of calls:
+
+| Field | What it holds | Who adds to it |
+| --- | --- | --- |
+| `callDepth` | The chain of calls that led here | `withCallDepth` in `lib/runtime/callDepth.ts` |
+| `handlerChainDepth` | How many handler chains are running one inside another | `runHandlerChain` in `lib/runtime/interrupts.ts` |
+| `executingHandlers` | The handler entries whose functions are running | `runAsHandler` in `lib/runtime/executingHandlers.ts` |
+| `activeCallbacks` | The callbacks that are running | `fireWithGuard` in `lib/runtime/hooks.ts` |
+
+Each of these used to live in an `AsyncLocalStorage` of its own. They are fields of the frame now, as the first step of passing the run explicitly (`docs/superpowers/plans/2026-10-04-explicit-run-passing.md`).
+
+Three rules follow from that.
+
+**The fields are required.** A frame built without them does not compile. This matters because several places build a frame from scratch and name only the fields they want, such as `Runner.runInScope`, which runs for every step. A step that dropped these values would turn off `maxCallDepth` and the handler recursion limit, and would send an interrupt back to the handler that raised it. None of those would fail at the place where the value was lost.
+
+**A new frame takes them from the frame around it.** `lineageOf(outer)` returns the outer frame's four values, or empty ones when there is no outer frame. Every place that builds a frame from scratch spreads it in. A place that spreads an existing frame (`{ ...parent, stack }`) keeps them without doing anything.
+
+**The functions that keep them throw when there is no frame.** `withCallDepth`, `runHandlerChain`, `runAsHandler`, `executingHandlers`, `fireWithGuard`, and `isInsideCallback` all call `requireFrame`. They used to read "no frame" as an empty value. That is how a lost frame would have turned a limit off without an error. A unit test that calls one of them directly needs a frame: `inTestFrame` and `withTestFrame` in `lib/runtime/__tests__/testHelpers.ts` provide one.
+
+A message from a subprocess arrives in the frame that was current when the subprocess was started, because `AsyncLocalStorage` carries a frame into the listeners of a child process. So when a handler function starts a subprocess, the handler chain that answers the subprocess's interrupt sees that handler as executing and skips it. `tests/agency/subprocess/handler-body-starts-child` pins this.
 
 ## Where frames are installed
 

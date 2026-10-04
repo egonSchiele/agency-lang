@@ -1,6 +1,6 @@
 import { withThreadEndHooksEvents } from "./threadEndHooksEvents.js";
 import { nanoid } from "nanoid";
-import { __globals, agencyStore } from "./asyncContext.js";
+import { __globals, agencyStore, lineageOf } from "./asyncContext.js";
 import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
@@ -202,6 +202,9 @@ export class Runner {
           // A Runner inside a fork arm keeps the arm's decision scope, so a
           // decision call in a nested function still batches with the block.
           decisions: outer?.decisions,
+          // The step keeps the call depth, the handler depth, the executing
+          // handlers and the active callbacks of the code that reached it.
+          ...lineageOf(outer),
           callsite: {
             moduleId: this.moduleId,
             scopeName: this.scopeName,

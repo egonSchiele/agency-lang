@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it as baseIt, expect, vi, afterEach } from "vitest";
 import {
   interrupt,
   hasInterrupts,
@@ -15,6 +15,10 @@ import {
 import type { InterruptResponse } from "./interrupts.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 describe("interruptWithHandlers resolvedBy attribution (IPC mode)", () => {
   const originalSend = process.send;

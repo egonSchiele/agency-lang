@@ -1,9 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it as baseIt, expect } from "vitest";
 import { TimeGuard, GuardExceededError } from "./guard.js";
 import { raiseGuardTripsUntilClear } from "./guardTripInterrupt.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import type { HandlerEntry } from "./types.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 const makeCtx = (): RuntimeContext<any> => {
   const ctx = new RuntimeContext({

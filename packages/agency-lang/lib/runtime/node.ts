@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
-import { agencyStore, getRuntimeContext, runInBootstrapFrame } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext, lineageOf, runInBootstrapFrame } from "./asyncContext.js";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -298,6 +298,7 @@ async function runExportedFunctionCore({
         stack: execCtx.stateStack,
         threads: threadStore,
         globals: execCtx.globals,
+        ...lineageOf(agencyStore.getStore()),
       },
       async () => {
         const result = await fn.invoke({ type: "named", positionalArgs: [], namedArgs });
@@ -451,6 +452,7 @@ async function runNodeCore({
               stack: execCtx.stateStack,
               threads: threadStore,
               globals: execCtx.globals,
+              ...lineageOf(agencyStore.getStore()),
             },
             () =>
               execCtx.graph.run(
@@ -503,6 +505,7 @@ async function runNodeCore({
                 stack: execCtx.stateStack,
                 threads: threadStore,
                 globals: execCtx.globals,
+                ...lineageOf(agencyStore.getStore()),
               },
               () =>
                 callHook({

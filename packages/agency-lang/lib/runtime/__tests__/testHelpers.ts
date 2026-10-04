@@ -3,6 +3,32 @@ import { GlobalStore } from "../state/globalStore.js";
 import { CheckpointStore } from "../state/checkpointStore.js";
 import { PendingPromiseStore } from "../state/pendingPromiseStore.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
+import { runInTestContext } from "../asyncContext.js";
+
+type TestFn = (name: string, fn: () => unknown, timeout?: number) => unknown;
+
+/**
+ * Run `fn` inside an execution frame built from a mock context.
+ *
+ * The call depth, the handler depth, the executing-handler list and the
+ * active-callback list live on the frame, and the functions that keep them
+ * throw when there is none. A test that calls such a function directly
+ * needs a frame around it.
+ */
+export function inTestFrame<T>(fn: () => T): T {
+  const ctx = makeMockCtx();
+  return runInTestContext(ctx, ctx.stateStack, ctx.threads, fn);
+}
+
+/**
+ * Wrap vitest's `it` so that every test body runs inside a frame:
+ *
+ *   import { it as baseIt } from "vitest";
+ *   const it = withTestFrame(baseIt);
+ */
+export function withTestFrame(base: TestFn): TestFn {
+  return (name, fn, timeout) => base(name, () => inTestFrame(fn), timeout);
+}
 
 /**
  * Creates a mock RuntimeContext for unit tests.

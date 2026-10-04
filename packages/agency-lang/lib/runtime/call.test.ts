@@ -1,6 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it as baseIt, expect } from "vitest";
 import { __call, __callMethod } from "./call.js";
 import { AgencyFunction } from "./agencyFunction.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function makeAgencyFn(fn: (...args: any[]) => any, name = "testFn") {
   return new AgencyFunction({

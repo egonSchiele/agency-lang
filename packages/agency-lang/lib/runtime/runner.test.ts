@@ -1,17 +1,24 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it as baseIt, expect, vi } from "vitest";
 import { Runner, stripSlug, safeStatelogValue } from "./runner.js";
 import { makeRedactReplacer } from "./redactForStatelog.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
-import { getRuntimeContext, runInTestContext } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext, runInTestContext } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { TimeGuard } from "./guard.js";
 import { AgencyCancelledError, PauseSignal, readCause } from "./errors.js";
-import { callHook } from "./hooks.js";
+import { callHook, isInsideCallback } from "./hooks.js";
+import { executingHandlers, runAsHandler } from "./executingHandlers.js";
+import { withCallDepth } from "./callDepth.js";
+import type { HandlerEntry } from "./types.js";
 import * as smoltalk from "smoltalk";
 import { ABANDONED_TURN_TEXT } from "./threadRepair.js";
 import type { MessageThread } from "./state/messageThread.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function makeFrame(): State {
   return new State({ args: {}, locals: {}, step: 0 });
@@ -896,6 +903,59 @@ describe("Runner", () => {
       // the ifElse branch (path = ["0", "0", "0", "0"]).
       expect(paths[0]).toBe("0");
       expect(paths[paths.length - 1]).toContain("0.0");
+    });
+  });
+
+  // A step installs a frame of its own. These four values follow the path
+  // of calls, so the step's frame must carry them from the frame around it.
+  // If a step dropped them, the limits below would never trip and a handler
+  // would hear its own raises, with no error anywhere.
+  describe("runInScope keeps the lineage of the code that reached the step", () => {
+    function makeRunner(): Runner {
+      return new Runner(makeMockCtx(), makeFrame(), {
+        moduleId: "modX",
+        scopeName: "fooScope",
+        stack: new StateStack(),
+        threads: new ThreadStore(),
+      });
+    }
+
+    it("keeps the executing-handler list", async () => {
+      const entry: HandlerEntry = { fn: async () => undefined, liveGuardIds: [] };
+      let seen: HandlerEntry[] = [];
+      await runAsHandler(entry, () =>
+        makeRunner().step(0, async () => {
+          seen = executingHandlers();
+        }),
+      );
+      expect(seen).toEqual([entry]);
+    });
+
+    it("keeps the call depth", async () => {
+      let depth = 0;
+      await withCallDepth("outer", () =>
+        makeRunner().step(0, async () => {
+          await withCallDepth("inner", async () => {
+            depth = getRuntimeContext().callDepth!.depth;
+          });
+        }),
+      );
+      expect(depth).toBe(2);
+    });
+
+    it("keeps the handler chain depth and the active callbacks", async () => {
+      const callback = {};
+      const outer = getRuntimeContext();
+      let seenDepth = -1;
+      let inside = false;
+      await agencyStore.run({ ...outer, handlerChainDepth: 3, activeCallbacks: [callback] }, () =>
+        makeRunner().step(0, async () => {
+          seenDepth = getRuntimeContext().handlerChainDepth;
+          inside = isInsideCallback();
+        }),
+      );
+      expect(seenDepth).toBe(3);
+      expect(inside).toBe(true);
     });
   });
 });

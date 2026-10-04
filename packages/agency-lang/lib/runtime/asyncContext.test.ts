@@ -6,6 +6,7 @@ import {
   runInTestContext,
   withCallsite,
   withPushedHandler,
+  lineageOf,
 } from "./asyncContext.js";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -20,7 +21,7 @@ function makeStore() {
   });
   const stack = new StateStack();
   const threads = new ThreadStore();
-  return { ctx, stack, threads, globals: ctx.globals };
+  return { ctx, stack, threads, globals: ctx.globals, ...lineageOf(undefined) };
 }
 
 describe("agencyStore", () => {
@@ -87,14 +88,11 @@ describe("agencyStore", () => {
     const innerThreads = new ThreadStore();
     await agencyStore.run(outer, async () => {
       expect(getRuntimeContext().stack).toBe(outer.stack);
-      await agencyStore.run(
-        { ctx: outer.ctx, stack: innerStack, threads: innerThreads, globals: outer.globals },
-        async () => {
-          expect(getRuntimeContext().stack).toBe(innerStack);
-          expect(getRuntimeContext().threads).toBe(innerThreads);
-          expect(getRuntimeContext().ctx).toBe(outer.ctx);
-        },
-      );
+      await agencyStore.run({ ...outer, stack: innerStack, threads: innerThreads }, async () => {
+        expect(getRuntimeContext().stack).toBe(innerStack);
+        expect(getRuntimeContext().threads).toBe(innerThreads);
+        expect(getRuntimeContext().ctx).toBe(outer.ctx);
+      });
       expect(getRuntimeContext().stack).toBe(outer.stack);
     });
   });

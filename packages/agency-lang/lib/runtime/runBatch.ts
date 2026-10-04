@@ -60,7 +60,7 @@
  *    returning — letting runBatch then call `setResultOnBranch(key,
  *    undefined)` would overwrite the meaningful value with undefined.
  */
-import { agencyStore } from "./asyncContext.js";
+import { agencyStore, lineageOf } from "./asyncContext.js";
 import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
@@ -479,6 +479,7 @@ function runInBranchAlsFrame<T>(
       // that installs none (a tool-dispatch batch) inherits the outer
       // frame's scope, so its tools keep registering under this arm.
       decisions: decisions ?? parent.decisions,
+      ...lineageOf(parent),
     },
     async () => {
       try {

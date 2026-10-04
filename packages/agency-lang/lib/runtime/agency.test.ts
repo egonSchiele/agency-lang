@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { agency } from "./agency.js";
-import { agencyStore } from "./asyncContext.js";
+import { agencyStore, lineageOf } from "./asyncContext.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -108,6 +108,7 @@ describe("agency.global", () => {
         stack: env.stack,
         threads: env.threads,
         globals: branchClone,
+        ...lineageOf(undefined),
       },
       () => {
         expect(agency.global("k")).toBe("branch-value");

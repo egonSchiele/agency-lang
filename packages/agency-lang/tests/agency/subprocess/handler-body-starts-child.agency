@@ -1,0 +1,54 @@
+import { compile, run } from "std::agency"
+
+// A handler function starts a subprocess, and the subprocess raises an
+// interrupt. Which of the parent's handlers are asked about it?
+//
+// The inner handler is NOT asked. Its own body started the subprocess, so the
+// child's interrupt counts as one of its own raises, the same as an interrupt
+// its body raised in this process. The outer handler is asked, and approves.
+//
+// The inner handler rejects everything except the interrupt that makes it
+// start the subprocess. If it were asked about the child's interrupt it would
+// reject it, and the child would not finish.
+//
+// This pins what main does today. Whether a handler should hear interrupts
+// from a subprocess its own body started is a question for the owner, raised
+// in docs/superpowers/plans/2026-10-04-explicit-run-passing.md.
+let child = "not run"
+
+def trigger(): string {
+  interrupt("start the child")
+  return "ok"
+}
+
+node main() {
+  const source = """
+node main() {
+  interrupt("child asks")
+  return "child-ran"
+}
+"""
+  const compiled = compile(source)
+  if (isFailure(compiled)) {
+    return "compile failed"
+  }
+  handle {
+    handle {
+      trigger()
+    } with (e) {
+      if (e.message != "start the child") {
+        return reject()
+      }
+      const result = run(compiled: compiled.value, node: "main")
+      if (isSuccess(result)) {
+        child = result.value.data
+      } else {
+        child = "child did not finish"
+      }
+      return approve()
+    }
+  } with (e) {
+    return approve()
+  }
+  return child
+}

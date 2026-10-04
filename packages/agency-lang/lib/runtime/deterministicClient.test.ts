@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { agencyStore } from "./asyncContext.js";
+import { agencyStore, lineageOf } from "./asyncContext.js";
 import { DeterministicClient } from "./deterministicClient.js";
 import type { PromptConfig } from "./llmClient.js";
 import {
@@ -24,6 +24,7 @@ function inModule<T>(moduleId: string, fn: () => T): T {
       threads: {} as any,
       globals: {} as any,
       callsite: { moduleId, scopeName: "main", stepPath: "" },
+      ...lineageOf(undefined),
     },
     fn,
   );

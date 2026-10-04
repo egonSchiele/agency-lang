@@ -75,9 +75,21 @@ describe("call-depth guard", () => {
     await expect(withLimit(3, run)).resolves.toHaveLength(10);
   });
 
-  test("falls back to the default limit when no context is installed", async () => {
-    // No runInTestContext wrapper → no agencyStore ctx. A shallow call must
-    // still work (guarded by DEFAULT_MAX_CALL_DEPTH), not throw.
-    await expect(withCallDepth("solo", async () => "ok")).resolves.toBe("ok");
+  test("throws when there is no frame to keep the depth on", () => {
+    // The depth lives on the frame. With no frame every call would count as
+    // the first, and the limit would never trip.
+    expect(() => withCallDepth("solo", async () => "ok")).toThrow(
+      /outside an Agency execution frame/,
+    );
+  });
+
+  test("a frame that carries no call depth starts at the root", async () => {
+    const ctx = makeMockCtx();
+    ctx.maxCallDepth = 1;
+    await expect(
+      runInTestContext(ctx, ctx.stateStack, ctx.threads, () =>
+        withCallDepth("first", async () => "ok"),
+      ),
+    ).resolves.toBe("ok");
   });
 });

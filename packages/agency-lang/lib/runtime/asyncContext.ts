@@ -53,7 +53,8 @@ import type { GlobalStore } from "./state/globalStore.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
 import type { Runner } from "./runner.js";
-import type { HandlerFn } from "./types.js";
+import type { HandlerEntry, HandlerFn } from "./types.js";
+import type { CallFrame } from "./callDepth.js";
 import type { DecisionScope } from "./decision/collector.js";
 
 export type CallsiteLocation = {
@@ -114,9 +115,75 @@ export type AgencyStore = {
    * See lib/runtime/decision/collector.ts.
    */
   decisions?: DecisionScope;
+  /**
+   * The call chain that led here, innermost first. `withCallDepth` adds a
+   * link for each call and stops runaway recursion. `null` at the root.
+   */
+  callDepth: CallFrame | null;
+  /**
+   * How many handler chains are running one inside another on this path.
+   * `runHandlerChain` adds one and refuses to go past its limit.
+   */
+  handlerChainDepth: number;
+  /**
+   * The handler entries whose functions are running on this path, outermost
+   * first. The handler chain skips these, so a handler never hears an
+   * interrupt its own body raised.
+   */
+  executingHandlers: HandlerEntry[];
+  /**
+   * The callbacks that are running on this path. A callback already in the
+   * list is not fired again, and the runner puts off an external pause while
+   * the list is not empty.
+   */
+  activeCallbacks: object[];
 };
 
+/**
+ * The four values that follow a path of calls. They are required on every
+ * frame, so a frame built without them does not compile. A frame that
+ * dropped them would turn off the recursion limits and the rule that a
+ * handler does not hear its own raises, with no error anywhere.
+ */
+export type Lineage = Pick<
+  AgencyStore,
+  "callDepth" | "handlerChainDepth" | "executingHandlers" | "activeCallbacks"
+>;
+
+/**
+ * The lineage a new frame starts with: the outer frame's when there is one,
+ * and empty values at the root of a run.
+ */
+export function lineageOf(outer: AgencyStore | undefined): Lineage {
+  if (outer) {
+    return {
+      callDepth: outer.callDepth,
+      handlerChainDepth: outer.handlerChainDepth,
+      executingHandlers: outer.executingHandlers,
+      activeCallbacks: outer.activeCallbacks,
+    };
+  }
+  return { callDepth: null, handlerChainDepth: 0, executingHandlers: [], activeCallbacks: [] };
+}
+
 export const agencyStore = new AsyncLocalStorage<AgencyStore>();
+
+/**
+ * The current frame, for code that tracks a lineage value. It throws when
+ * there is no frame. Reading "no frame" as an empty lineage would let lost
+ * context turn a limit off without anyone noticing.
+ */
+export function requireFrame(caller: string): AgencyStore {
+  const frame = agencyStore.getStore();
+  if (!frame) {
+    throw new Error(
+      `${caller} ran outside an Agency execution frame. ` +
+        "It keeps a value on the frame, so it needs one. " +
+        "In a test, wrap the call in runInTestContext().",
+    );
+  }
+  return frame;
+}
 
 /**
  * Push a new ALS frame copying the current ctx/stack/threads but
@@ -267,7 +334,10 @@ export function runInTestContext<T>(
   threads: ThreadStore,
   fn: () => T,
 ): T {
-  return agencyStore.run({ ctx, stack, threads, globals: ctx.globals }, fn);
+  return agencyStore.run(
+    { ctx, stack, threads, globals: ctx.globals, ...lineageOf(agencyStore.getStore()) },
+    fn,
+  );
 }
 
 /**
@@ -308,6 +378,7 @@ export async function runInBootstrapFrame<T>(
       // sharing is exactly right: writes done by `__initializeGlobals`
       // land on the RuntimeContext's store and persist across the run.
       globals: ctx.globals,
+      ...lineageOf(agencyStore.getStore()),
     },
     fn,
   );

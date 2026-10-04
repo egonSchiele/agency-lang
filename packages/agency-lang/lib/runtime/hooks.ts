@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   CostEstimate,
   MessageJSON,
@@ -11,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { agencyStore, getRuntimeContext } from "./asyncContext.js";
+import { agencyStore, getRuntimeContext, requireFrame } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -116,46 +115,34 @@ export type AgencyCallbacks = {
 // which re-fire the same hook from recursing into itself
 // (tests/agency/callback-recursion).
 //
-// Each `fireWithGuard` call wraps the callback in
-// `_activeCallbacksALS.run(active, ...)` with a freshly-allocated
-// `new Set<object>(inherited)` that adds the current callback's key.
-// The Set is inherited through `await` boundaries and nested sync
-// calls inside that scope, so a synchronous re-fire of the same
-// callback (via a helper-function call on the same async chain) sees
-// its own key in the set and is skipped.
+// The callbacks running on this path are listed on the frame, in
+// `activeCallbacks`. Each `fireWithGuard` call runs the callback in a new
+// frame whose list is the inherited one plus the callback's own key. That
+// frame follows the callback through `await`s and nested calls, so a
+// re-fire of the same callback further down sees its key and is skipped.
 //
 // Concurrent sibling branches (e.g. `Promise.allSettled([fireA(),
-// fireB()])`) each enter their OWN `_activeCallbacksALS.run(...)`
-// scope, so A's added key is visible only inside A's continuation
-// chain, not inside B's. That's why parallel fork/tool branches can
-// each fire the same callback without dropping sibling invocations.
-// (Note: `statelogClient.runInBranchContext` scopes a different ALS
-// — `spanStorage` for Statelog spans — and does NOT touch this
-// callback guard. Sibling isolation here comes purely from each fire
-// allocating its own Set and entering its own ALS scope.)
+// fireB()])`) each run in their OWN frame, so A's key is visible only
+// inside A's continuation chain, not inside B's. That's why parallel
+// fork/tool branches can each fire the same callback without dropping
+// sibling invocations.
 //
-// Why ALS rather than a per-stack or module-level WeakSet:
-//   - Module-level WeakSet (pre-Task 5 behaviour) dropped legitimate
-//     parallel-branch invocations because every branch shared the
-//     same set.
-//   - Per-stack WeakSet didn't catch recursion: each runBatch call
-//     creates a NEW branch stack, so the recursive fire (which
-//     happens on the new stack) never sees the outer fire's entry.
-//   - ALS naturally inherits the set through both sync calls and
-//     awaited continuations, and each fire's `.run(...)` scope
-//     isolates siblings from one another.
+// Why the frame rather than a per-stack or module-level set:
+//   - A module-level set dropped legitimate parallel-branch invocations,
+//     because every branch shared it.
+//   - A per-stack set didn't catch recursion: each runBatch call creates a
+//     NEW branch stack, so the recursive fire (which happens on the new
+//     stack) never sees the outer fire's entry.
 //
-// Set entries are live-only — never serialized. Cleanup is automatic:
-// the entry is only visible inside the `_activeCallbacksALS.run(...)`
-// scope of its fire, which exits when the callback resolves, so a
-// checkpoint can never capture a "stuck" entry.
-const _activeCallbacksALS = new AsyncLocalStorage<Set<object>>();
+// The list is never serialized. An entry is visible only inside the frame
+// of its fire, which ends when the callback resolves, so a checkpoint can
+// never capture a "stuck" entry.
 
 /** True while a callback body is executing on this async path. The runner
  *  defers an external pause here, because a checkpoint taken inside a
  *  callback dispatch is not a place a resume can re-enter. */
 export function isInsideCallback(): boolean {
-  return _activeCallbacksALS.getStore() !== undefined;
+  return requireFrame("isInsideCallback()").activeCallbacks.length > 0;
 }
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
@@ -206,18 +193,17 @@ async function fireWithGuard(
   stateStack?: StateStack,
 ): Promise<void> {
   const key = fn as object;
-  // Recursion guard scoped to the current ALS context. See
-  // `_activeCallbacksALS` docstring for why ALS (not module-level
-  // WeakSet, not per-stack WeakSet).
-  const inherited = _activeCallbacksALS.getStore();
-  if (inherited?.has(key)) return;
-  // Always allocate a fresh set per fire — we need our own copy so a
-  // deeper fire can safely re-enter without corrupting the outer set.
-  // The new set carries over the inherited entries plus our own key.
-  const active = new Set<object>(inherited);
-  active.add(key);
+  // Recursion guard scoped to the current frame. See the comment above
+  // `isInsideCallback` for why the list lives on the frame.
+  const frame = requireFrame("fireWithGuard()");
+  if (frame.activeCallbacks.includes(key)) return;
+  // A new list per fire, holding the inherited entries plus our own key, so
+  // a deeper fire can re-enter without changing the outer list.
+  const active = [...frame.activeCallbacks, key];
   try {
-    await _activeCallbacksALS.run(active, () => invokeCallback(fn, data, ctx, stateStack));
+    await agencyStore.run({ ...frame, activeCallbacks: active }, () =>
+      invokeCallback(fn, data, ctx, stateStack),
+    );
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
     // AgencyAbort covers BOTH a cancellation and a guard trip — a guard trip

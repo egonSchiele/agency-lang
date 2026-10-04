@@ -327,7 +327,7 @@ For grep-friendliness when adding a new field to `AgencyStore`:
 | `withCallsite` | [lib/runtime/asyncContext.ts](../../../lib/runtime/asyncContext.ts) | inherited | Copies the current frame, overrides `callsite` only. Throws with no base frame. |
 | `runInTestContext` | [lib/runtime/asyncContext.ts](../../../lib/runtime/asyncContext.ts) | test | Convenience wrapper for unit tests. |
 
-When you add a new field to `AgencyStore`, every entry in this table needs to seed that field. Forgetting one site is the most common source of "the accessor returns undefined" bugs.
+When you add a new field to `AgencyStore`, every entry in this table needs to seed that field. Forgetting one site is the most common source of "the accessor returns undefined" bugs. Make the field required when a missing value would be wrong and not just absent. The compiler then reports each site that leaves it out. The four lineage values in `docs/dev/runtime/async-context.md` work this way.
 
 ## Reference: every emission site that touches a setup-block local
 

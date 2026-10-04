@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
+import { describe, expect, it as baseIt, beforeEach, afterEach, vi } from "vitest";
 import { z } from "zod";
 import { createMcpHandler, mcpToolSummaryLines } from "./adapter.js";
 import { AgencyFunction } from "../../runtime/agencyFunction.js";
@@ -9,6 +9,10 @@ import { StatelogClient } from "../../statelogClient.js";
 import { mkdtempSync, rmSync } from "fs";
 import path from "path";
 import os from "os";
+import { withTestFrame } from "../../runtime/__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 function makeTestExports(): ServedExportedItem[] {
   const registry: Record<string, AgencyFunction> = {};

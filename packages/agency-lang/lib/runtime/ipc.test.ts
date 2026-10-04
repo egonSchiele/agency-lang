@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it as baseIt, expect, afterEach, vi } from "vitest";
 import path from "path";
 import { materializeCompiledScript } from "./ipc.js";
 import * as fs from "fs";
@@ -23,6 +23,10 @@ import { State, StateStack } from "./state/stateStack.js";
 import { InvocationUsageMeter } from "./invocationUsage.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
 import { CostGuard, isGuardExceededError } from "./guard.js";
+import { withTestFrame } from "./__tests__/testHelpers.js";
+
+// These tests call runtime functions that keep a value on the frame.
+const it = withTestFrame(baseIt);
 
 describe("withParentStatelog", () => {
   it("forwards the parent logFile (absolutized) when the parent logs and the caller set none", () => {

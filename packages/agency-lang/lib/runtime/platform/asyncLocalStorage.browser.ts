@@ -4,24 +4,22 @@
  * `"browser"` field in `package.json`; Node builds, tsc, and the tests use the
  * Node re-export instead.
  *
- * It adapts the runtime's `AsyncLocalStorage` surface onto the TC39
- * **AsyncContext** API (`AsyncContext.Variable`), the standard replacement for
- * `node:async_hooks` on the web platform.
+ * It picks one of two stores when the module loads:
  *
- * ## Important limitation
+ *   - If the engine has native TC39 `AsyncContext`, the store is a thin
+ *     adapter over `AsyncContext.Variable`. The engine carries the context
+ *     across a real `await`, so the build needs no rewrite.
+ *   - Otherwise the store is the promise-tracking one from
+ *     `promiseContextStorage.ts`. That store only gives right answers on a
+ *     build whose `async` functions were rewritten into promise code, so
+ *     `PORTABLE_CONTEXT` is true and `AgencyFunction.create` refuses any
+ *     function that was not rewritten.
  *
- * A userland polyfill CANNOT fully replace `AsyncLocalStorage` in the browser,
- * because context propagation across `async`/`await` is a language-level
- * behaviour — `await` is syntax, not a call a library can wrap. Monkey-patching
- * `setTimeout`/promise callbacks covers event-loop hops but never `await`, and
- * the runtime is full of `await`s that must see the frame. So this adapter
- * relies on **native** `AsyncContext` (Stage 2; WebIDL integration for web APIs
- * was in progress as of Feb 2026). Until a target engine ships it, a browser
- * build needs either native `AsyncContext` or an `await`-transpiling toolchain —
- * at which point the compiler-threaded-context route (which needs neither)
- * becomes the comparison. This file makes the seam ready for native
- * `AsyncContext` and fails loudly when it is absent.
+ * No engine ships `AsyncContext` today, so every browser gets the second
+ * store. See docs/dev/runtime/portable-context-spike.md.
  */
+import type { ContextStorage, ContextStorageClass } from "./asyncLocalStorage.js";
+import { PromiseContextStorage } from "./promiseContextStorage.js";
 
 // Minimal shape of the parts of TC39 AsyncContext we use. Declared locally so
 // this file typechecks under the Node build without DOM/experimental lib types.
@@ -30,45 +28,56 @@ type AsyncContextVariable<T> = {
   run<R>(value: T, fn: () => R): R;
 };
 
-type AsyncContextNamespace = {
+export type AsyncContextNamespace = {
   Variable: new <T>(options?: { name?: string; defaultValue?: T }) => AsyncContextVariable<T>;
 };
 
-function getNativeAsyncContext(): AsyncContextNamespace | undefined {
-  return (globalThis as { AsyncContext?: AsyncContextNamespace }).AsyncContext;
-}
+/** Build a store class on top of the engine's `AsyncContext.Variable`. */
+function nativeContextStorage(asyncContext: AsyncContextNamespace): ContextStorageClass {
+  return class NativeContextStorage<T> implements ContextStorage<T> {
+    private readonly variable = new asyncContext.Variable<T | undefined>();
 
-export class AsyncLocalStorage<T> {
-  private readonly variable: AsyncContextVariable<T | undefined>;
-
-  constructor() {
-    const asyncContext = getNativeAsyncContext();
-    if (asyncContext === undefined) {
-      throw new Error(
-        "The browser async-context seam requires native AsyncContext " +
-          "(globalThis.AsyncContext), which this engine does not provide. " +
-          "Userland cannot propagate context across await. See " +
-          "docs/dev/runtime/browser-async-context-seam.md.",
-      );
+    getStore(): T | undefined {
+      return this.variable.get();
     }
-    this.variable = new asyncContext.Variable<T | undefined>();
-  }
 
-  getStore(): T | undefined {
-    return this.variable.get();
-  }
+    run<R>(store: T, fn: () => R): R {
+      return this.variable.run(store, fn);
+    }
 
-  run<R>(store: T, fn: () => R): R {
-    return this.variable.run(store, fn);
-  }
-
-  /**
-   * `AsyncLocalStorage.exit(fn)` runs `fn` with no active store. AsyncContext
-   * has no dedicated `exit`, so we run the variable with `undefined`, which
-   * makes `getStore()` return `undefined` inside `fn` — the same observable
-   * behaviour.
-   */
-  exit<R>(fn: () => R): R {
-    return this.variable.run(undefined, fn);
-  }
+    /**
+     * `AsyncLocalStorage.exit(fn)` runs `fn` with no active store.
+     * AsyncContext has no `exit`, so we run the variable with `undefined`,
+     * which makes `getStore()` return `undefined` inside `fn`.
+     */
+    exit<R>(fn: () => R): R {
+      return this.variable.run(undefined, fn);
+    }
+  };
 }
+
+export type BrowserContextStorage = {
+  AsyncLocalStorage: ContextStorageClass;
+  /** True when the store needs a build with rewritten `async` functions. */
+  PORTABLE_CONTEXT: boolean;
+};
+
+/**
+ * Pick the store for an engine. `asyncContext` is the engine's `AsyncContext`
+ * global, or `undefined` when it has none.
+ */
+export function pickContextStorage(
+  asyncContext: AsyncContextNamespace | undefined,
+): BrowserContextStorage {
+  if (asyncContext === undefined) {
+    return { AsyncLocalStorage: PromiseContextStorage, PORTABLE_CONTEXT: true };
+  }
+  return { AsyncLocalStorage: nativeContextStorage(asyncContext), PORTABLE_CONTEXT: false };
+}
+
+const picked = pickContextStorage(
+  (globalThis as { AsyncContext?: AsyncContextNamespace }).AsyncContext,
+);
+
+export const AsyncLocalStorage: ContextStorageClass = picked.AsyncLocalStorage;
+export const PORTABLE_CONTEXT: boolean = picked.PORTABLE_CONTEXT;

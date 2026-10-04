@@ -1,12 +1,12 @@
 # Browser async-context seam
 
-**Status:** prototype. Node behaviour is unchanged; this adds the swap point that
-a browser / embedded build needs.
+**Status:** prototype. Node behaviour is unchanged. This adds the one place where
+a browser build swaps in a different context store.
 
 ## The problem
 
 The runtime reads its per-run frame from an `AsyncLocalStorage` (the `agencyStore`
-in `asyncContext.ts` plus four satellite stores in `interrupts.ts`,
+in `asyncContext.ts` plus five smaller stores in `interrupts.ts`,
 `callDepth.ts`, `executingHandlers.ts`, `hooks.ts`, and `statelogClient.ts`).
 That class comes from `node:async_hooks`, which does not exist off Node. It is the
 single biggest blocker for a browser / embedded build.
@@ -41,10 +41,8 @@ contract.
 
 ## The browser implementation
 
-`lib/runtime/platform/asyncLocalStorage.browser.ts` adapts the same surface onto
-TC39 **AsyncContext** (`AsyncContext.Variable`), the standard web replacement for
-`async_hooks`. A browser build selects it via the `"browser"` field in
-`package.json`:
+A browser build selects `lib/runtime/platform/asyncLocalStorage.browser.ts` via
+the `"browser"` field in `package.json`:
 
 ```json
 "browser": {
@@ -52,41 +50,54 @@ TC39 **AsyncContext** (`AsyncContext.Variable`), the standard web replacement fo
 }
 ```
 
-Bundlers (esbuild, vite, webpack) honour that mapping; Node, tsc, and the tests
-ignore it and use the real class, so this is a pure no-op on the Node build.
+Bundlers such as esbuild, vite, and webpack follow that mapping. Node, tsc, and
+the tests ignore it and use the real class.
 
-## The catch: userland cannot cross `await`
+The browser file picks one of two stores when it loads:
 
-This is the finding that decides the trade-off. Context propagation across
-`async`/`await` is a language behaviour — `await` is syntax, not a call a library
-can wrap. A userland polyfill can monkey-patch `setTimeout` and promise callbacks,
-but it can **never** carry context across an `await`, and the runtime is full of
-`await`s that must see the frame.
-
-So this adapter relies on **native** `AsyncContext` (Stage 2; WebIDL integration
-for web APIs was in progress as of Feb 2026). It throws a clear error when
-`globalThis.AsyncContext` is absent rather than silently losing context. Until a
-target engine ships it, a browser build needs either native `AsyncContext` or an
-`await`-transpiling toolchain.
-
-## What this means vs. compiler-threaded context
-
-| | Seam + native AsyncContext | Compiler-threaded context |
+| The engine has | Store | Does the build need the `async` rewrite? |
 | --- | --- | --- |
-| Blast radius | 6 files, 0 call sites | ~205 read sites + codegen + templates |
-| Works in browser today | only once native `AsyncContext` ships (or with await-transpile) | yes, no engine/polyfill dependency |
-| Reverts prior work | no | yes (the ALS migration, #198–#201) |
-| Node behaviour | unchanged | unchanged, but large churn |
+| native TC39 `AsyncContext` | a thin adapter over `AsyncContext.Variable` | No |
+| no `AsyncContext` | `PromiseContextStorage` | Yes |
 
-The seam is the cheap, low-risk step and the right abstraction regardless: it lets
-a browser build drop in native `AsyncContext` the moment it is available, and it
-leaves the door open to plugging a threaded implementation behind the same seam
-later if we ever want zero ambient context. The one thing it does **not** do is
-make the browser work *today* on engines without native `AsyncContext` — that is
-the specific gap compiler-threaded context closes.
+No engine ships `AsyncContext` today, so every browser gets the second store.
+The first row is there so a build picks up the native API on the day an engine
+has it, with no change here.
+
+The file also exports `PORTABLE_CONTEXT`. It is true when the second store is in
+use. `AgencyFunction.create` reads it and refuses a function that is still a
+real `async` function.
+
+## Why the second store needs a rewrite
+
+`await` is syntax. A library cannot attach to it, so a library alone cannot
+carry a value across it. `.then` is a function, and a library can replace it.
+
+`PromiseContextStorage` therefore depends on a build step that rewrites every
+`async` function into promise code, so each `await` becomes a `.then` call. The
+store wraps `.then` and puts the context back when the callback runs.
+`portable-context-spike.md` explains the mechanism, shows the test results, and
+lists what a full browser build still needs.
+
+## Why not pass the context as a parameter
+
+| | This seam | Context passed as a parameter |
+| --- | --- | --- |
+| Files changed | 6 store files, 0 read sites | about 205 read sites, plus code generation and templates |
+| Needs a build step | the `async` rewrite, until engines ship `AsyncContext` | no |
+| Changes the `agency.*` helper API | no | yes |
+| Node behaviour | unchanged | unchanged, but a large change to review |
+
+Passing the context as a parameter stays the fallback if the rewrite fails in a
+way the tests did not find.
 
 ## Tests
 
-`lib/runtime/platform/asyncLocalStorage.test.ts` covers the Node re-export
-(context across awaits, `exit`) and the browser adapter's mapping onto an injected
-`AsyncContext.Variable` plus its loud failure when the API is missing.
+`lib/runtime/platform/asyncLocalStorage.test.ts` covers:
+
+- the Node re-export: context across an `await`, and `exit`;
+- the adapter over an injected `AsyncContext.Variable`;
+- that the browser file picks `PromiseContextStorage` when the engine has no
+  `AsyncContext`.
+
+`lib/runtime/platform/promiseContextStorage.test.ts` covers the second store.

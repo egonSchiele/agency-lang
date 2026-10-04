@@ -100,7 +100,10 @@ const nodeStubs = {
 const agencyResolve = {
   name: "agency-resolve",
   setup(b) {
-    b.onResolve({ filter: /platform\/asyncLocalStorage\.js$/ }, () => ({ path: join(here, "seam.js") }));
+    // What the "browser" field in package.json does for a bundler that reads it.
+    b.onResolve({ filter: /platform\/asyncLocalStorage\.js$/ }, () => ({
+      path: join(root, "dist/lib/runtime/platform/asyncLocalStorage.browser.js"),
+    }));
     b.onResolve({ filter: /^agency-lang$/ }, () => ({ path: join(here, "agency-lang-shim.js") }));
     b.onResolve({ filter: /^agency-lang\/runtime$/ }, () => ({ path: join(root, "dist/lib/runtime/index.js") }));
     b.onResolve({ filter: /^agency-lang\/zod$/ }, () => ({ path: join(root, "dist/lib/zod.js") }));

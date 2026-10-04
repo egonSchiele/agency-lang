@@ -147,8 +147,8 @@ export function assertAsyncRewritten(fn: unknown, label: string): void {
   if (Object.prototype.toString.call(fn) === "[object AsyncFunction]") {
     throw new Error(
       `${label} is a real async function, but this build keeps context by ` +
-        "rewriting async functions into promise code. Compile it with the " +
-        "portable target.",
+        "rewriting async functions into promise code. Build it with that " +
+        "rewrite switched on.",
     );
   }
 }

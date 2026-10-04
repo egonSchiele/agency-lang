@@ -3,10 +3,16 @@
 **Status:** spike. Node behaviour is unchanged unless `AGENCY_PORTABLE_CONTEXT=1`
 is set. Nothing here is a supported build yet.
 
+**Scope.** This change removes the runtime's hard dependency on
+`AsyncLocalStorage`, and nothing more. Node keeps the real class. Removing the
+rest of Node from the runtime is separate work, described under
+[Recommended next steps](#recommended-next-steps).
+
 ## Why
 
-The goal is an Agency runtime that runs inside a web view, with no Node. The
-first user is an iPad app whose agent is written in Agency.
+The goal is an Agency runtime that runs wherever JavaScript runs, with no Node:
+a web view, a desktop browser. The first user is an iPad app whose agent is
+written in Agency.
 
 `AsyncLocalStorage` was the one Node feature with no replacement. It comes from
 `node:async_hooks`, browsers do not have it, and the standard that would
@@ -163,7 +169,7 @@ Inside code that is left alone:
 function.
 
 A TypeScript helper that needs context after a pause can be put through the
-same rewrite. A web view build is bundled anyway, so that is one bundler
+same rewrite. A browser build is bundled anyway, so that is one bundler
 setting for that file.
 
 ## The load-time check
@@ -187,8 +193,8 @@ function when the new store is on:
 
 ```
 __runtime:checkpoint is a real async function, but this build keeps context
-by rewriting async functions into promise code. Compile it with the portable
-target.
+by rewriting async functions into promise code. Build it with that rewrite
+switched on.
 ```
 
 Generated code calls `AgencyFunction.create` for every function as its module
@@ -229,7 +235,8 @@ generated code as it compiles fixes the second group.
 
 | File | What it is |
 | --- | --- |
-| `lib/runtime/platform/asyncLocalStorage.ts` | The one file every store imports. `AGENCY_PORTABLE_CONTEXT=1` selects the new store. |
+| `lib/runtime/platform/asyncLocalStorage.ts` | The one file every store imports. On Node it hands back the real class. `AGENCY_PORTABLE_CONTEXT=1` selects the new store, for tests. |
+| `lib/runtime/platform/asyncLocalStorage.browser.ts` | What a browser bundle gets in place of the file above. It uses native `AsyncContext` when the engine has it, and the new store when it does not. |
 | `lib/runtime/platform/promiseContextStorage.ts` | The new store, and `assertAsyncRewritten`. |
 | `lib/runtime/platform/promiseContextStorage.test.ts` | Tests that pass with and without the rewrite. |
 | `lib/runtime/agencyFunction.ts` | The load-time check in `AgencyFunction.create`. |
@@ -237,11 +244,13 @@ generated code as it compiles fixes the second group.
 | `vitest.portable.config.ts` | The unit tests on the new store. |
 | `scripts/portable-spike/` | The web view demo. |
 
-The first file, and `asyncLocalStorage.browser.ts` beside it, come from
-[#1153](https://github.com/egonSchiele/agency-lang/pull/1153). See
-`browser-async-context-seam.md`. That doc says a library cannot carry context
-across `await`. That is true of a real `await`, and it is the reason for the
-rewrite.
+The first two files started in
+[#1153](https://github.com/egonSchiele/agency-lang/pull/1153), which this
+change replaces. `browser-async-context-seam.md` describes them.
+
+The `"browser"` field in `package.json` maps the first file to the second, so
+a bundler that reads the field needs no setting of its own. The demo's
+`build.mjs` resolves imports by hand, so it applies the same mapping itself.
 
 ## How to run it
 
@@ -350,17 +359,25 @@ Google, OpenAI, and Anthropic SDKs at 1.7 MB together, and `zod` at 0.6 MB.
   listeners. A runtime callback registered through one of those runs with an
   empty context.
 - **Callbacks given to code that is left alone.** If the runtime hands
-  smoltalk a callback and smoltalk calls it after a real `await`, the callback
-  runs with an empty context. The `streaming` and `tools` tests pass, so no
-  current path does this. [#1152](https://github.com/egonSchiele/agency-lang/pull/1152)
-  lists the places to audit under "escaping async boundaries".
+  smoltalk a function and smoltalk calls it after a real `await`, the function
+  runs with an empty context. Streaming does not do this. The runtime pulls
+  each chunk itself, with `for await` loops in `lib/runtime/llmClient.ts` and
+  `lib/runtime/streaming.ts`. Those loops are rewritten, so the runtime's own
+  `.then` saves the context for every chunk. If a path that hands over a
+  function does turn up, wrap that one function so it remembers its context.
+  `bindToCurrentFrame` in the store does this and would need exporting.
+  [#1152](https://github.com/egonSchiele/agency-lang/pull/1152) lists the
+  places to audit under "escaping async boundaries".
+- **Provider SDKs in a browser.** Hosted models stay supported, so smoltalk
+  and the provider SDKs stay in the bundle. Whether each SDK's streaming works
+  in a browser has not been tested. This is a question about the SDKs, not
+  about context.
 - **Speed.** Rewritten `async` functions are slower than real ones. A run
   spends its time waiting on a model, so this is unlikely to matter. It has
   not been measured.
-- **The `"browser"` field.** `package.json` maps the store import to
-  `asyncLocalStorage.browser.ts`, which needs native `AsyncContext` and throws
-  without it. It should map to the new store, and prefer native `AsyncContext`
-  when the engine has it.
+- **Native `AsyncContext` is untested on a real engine.** The browser file
+  uses it when the engine has it, but no engine does. The adapter is tested
+  against a stand-in only.
 
 ## Alternatives that were set aside
 
@@ -375,55 +392,102 @@ Google, OpenAI, and Anthropic SDKs at 1.7 MB together, and `zod` at 0.6 MB.
   newest release is Node 18 from a community fork.
 - **Compile Agency to Swift.** It needs a second code generator and a second
   runtime.
+- **Use the rewritten build on Node too.** This would leave one build to
+  maintain. It would also replace `Promise.prototype.then` inside every
+  TypeScript app that imports an Agency program, and `agency.ctx()` would stop
+  working after an `await` in a TypeScript helper, which works today.
 
 ## Recommended next steps
 
-In order. Steps 1 to 4 make a real portable build. Step 5 is the milestone
-that says it works.
+None of this is in the change. It is separate work.
 
-1. **Add a portable compile target.** A flag on `agency compile` that:
-   - leaves out the command-line block, which removes the only top-level
-     `await` in generated code;
-   - leaves out the `fs`, `path`, `os`, `url`, and `process` imports at the
-     top of each generated file, and takes settings such as API keys as an
-     argument;
-   - imports the four names it needs from a small entry point, not the
-     package root;
-   - passes `supported: { "async-await": false, "async-generator": false,
-     "for-await": false }` to the three `transformSync` calls in
-     `lib/compiler/compile.ts`, `lib/compiler/buildSession.ts`, and
-     `lib/importStrategy.ts`.
+The only reason anything differs between targets is that a browser has no
+Node modules. `AsyncLocalStorage` is one of those modules, and the `async`
+rewrite exists only to replace it. The command-line block in generated files
+is a third case of the same thing, because it reads Node's `process`.
 
-   esbuild can do the rewrite once the top-level `await` is gone. It already
-   rewrites all 164 built runtime files and all 118 built stdlib helper files
-   without error. `scripts/portable-loader.mjs` uses the TypeScript compiler
-   only because it has to cope with that block.
-2. **Split the prelude from the compiler.** Move `_callback` out of
+The risk is a permanent fork: two shapes of generated code, two runtimes, and
+`if (isBrowser)` checks spread through the code. Other languages with several
+targets avoid this the same way. All platform access goes through one layer,
+the build picks a whole file per platform, and the rest of the code may not
+touch the platform. TypeScript's compiler is the closest example: its core
+never calls `fs`, it calls a `System` object, and Node and the browser
+playground each supply their own. Kotlin's `expect` and `actual`, Go's
+`file_js.go`, and Dart's conditional imports are the same idea.
+
+For Agency that means four things differ between targets, and nothing else:
+
+| What differs | Where it lives |
+| --- | --- |
+| Platform calls | One pair of files, `host.node.ts` and `host.browser.ts` |
+| The `async` rewrite | One esbuild option |
+| Which runtime modules are included | One portable entry point |
+| Which stdlib modules exist | One mark at the top of each Node-only module |
+
+The steps, in order:
+
+1. **Run the rest of `tests/agency` on the new store.** Only 16 folders have
+   been run. Do this before building more on the store.
+2. **Make one real streaming call from the demo,** through smoltalk to a
+   hosted model. This shows whether the SDKs work in a web view.
+3. **Add the host file pair.** `host.node.ts` and `host.browser.ts` export the
+   same functions: read a file, read an environment variable, get the working
+   directory, hash, and create a context store. `package.json` picks one, as
+   it does for the context store today. That store's file becomes part of the
+   host file.
+   - Move the runtime's `process.env`, `process.cwd()`, and `fs` calls behind
+     it, starting with the statelog log file and the module fingerprint.
+   - Keep Node's `crypto` on Node. `createHash` and `createHmac` back the
+     checkpoint integrity check. Only the browser host uses a JavaScript
+     implementation. Web Crypto is async, and these call sites are not.
+4. **Add a lint rule.** Only `host.node.ts`, the command line, and the
+   compiler may import a `node:` module. Without this rule, new runtime code
+   breaks the browser build and nothing reports it.
+5. **Give generated code one shape, for every target.** No compile flag
+   changes the output.
+   - Generated files import only from the runtime, never `fs`, `path`, `os`,
+     `url`, or `process`.
+   - The command-line block becomes one runtime call. The Node host runs the
+     program and the browser host does nothing. This removes the only
+     top-level `await` in generated code. Check first whether anything depends
+     on the current block.
+   - Generated files import the four names they need from a small entry
+     point, not the package root. This applies on Node too.
+6. **Split the prelude from the compiler.** Move `_callback` out of
    `lib/stdlib/agency.ts`, or move the compile functions out of it, so
    `stdlib/index.js` no longer imports the compiler. This removes 155 modules
    and esbuild from every bundle.
-3. **Add a portable runtime entry point.** A second index beside
+7. **Make the rewrite a build setting.** Put the three `transformSync` calls
+   in `lib/compiler/compile.ts`, `lib/compiler/buildSession.ts`, and
+   `lib/importStrategy.ts` behind one helper. For a browser target the helper
+   passes `supported: { "async-await": false, "async-generator": false,
+   "for-await": false }`. esbuild can do the rewrite once the top-level
+   `await` is gone. It already rewrites all 164 built runtime files and all
+   118 built stdlib helper files without error. `scripts/portable-loader.mjs`
+   uses the TypeScript compiler only because it has to cope with that block.
+8. **Publish the runtime a second time, rewritten.** One script runs `dist`
+   through the same option. No source file knows about it. Add a build check
+   that no `async` or `await` remains in the output.
+9. **Add a portable runtime entry point.** A second index beside
    `lib/runtime/index.ts` that leaves out subprocess IPC, the command-line
-   entry, trace file sinks, terminal prompts, and local model serving. In the
-   modules that remain:
-   - read `process.env` and `process.cwd()` through one host object;
-   - put the `fs` calls behind the same host object, starting with the
-     statelog log file and the module fingerprint;
-   - replace `createHash` and `createHmac` with a JavaScript implementation.
-     Web Crypto is async, and these call sites are not.
-4. **Build the runtime twice.** Publish a second copy of `dist` with the
-   rewrite applied, and point the `"browser"` field at it and at the new
-   store. Keep the `AsyncFunction` check on in that build.
-5. **Bundle a real agent.** Compile a real multi-file agent with the portable
-   target, bundle it with no stand-ins, and run one chat turn in a `WKWebView`
-   with a fake model client and one interrupt that pauses and resumes.
-   `DeterministicClient` already exists for the fake model.
-6. **Run the Agency suite on the portable build in CI.** A second job that
-   runs `tests/agency` and `tests/agency-js` with the portable build. Fix the
-   two test-rig problems under [Unit test failures](#unit-test-failures)
-   first, or leave the unit tests out of that job.
-7. **Wrap the remaining schedulers** the web view build uses, and decide
-   whether the agent runs in the page or in a worker.
-8. **Write a model client that calls the host app.** `LLMClient` in
-   `docs/dev/llm/llm-clients.md` is the interface. In a web view, the client
-   posts a message to the app and awaits the reply.
+   entry, trace file sinks, terminal prompts, and local model serving. These
+   features are left out, not branched on.
+10. **Mark the stdlib modules that need Node.** A browser build that imports
+    one gets a compile error.
+11. **Make the call-depth read strict.** `withCallDepth` in
+    `lib/runtime/callDepth.ts` treats an empty context as the first call, and
+    it never requires the main store. On the new store it should throw when
+    the whole frame is empty and a run is expected.
+12. **Run the Agency suite on the browser build in CI.** A second job that
+    runs `tests/agency` and `tests/agency-js`. Fix the two test-rig problems
+    under [Unit test failures](#unit-test-failures) first, or leave the unit
+    tests out of that job.
+13. **Bundle a real agent.** Compile a real multi-file agent, bundle it with
+    no stand-ins, and run one chat turn in a `WKWebView` with one interrupt
+    that pauses and resumes.
+14. **Decide where the agent runs in a page.** Replacing
+    `Promise.prototype.then` affects every script in the page. A web worker
+    has its own `Promise`, so running the agent there touches nothing else,
+    and it still has `fetch` and timers. Interrupts and checkpoints are plain
+    data and can cross to the page by `postMessage`. Wrap any remaining
+    schedulers the chosen place uses.

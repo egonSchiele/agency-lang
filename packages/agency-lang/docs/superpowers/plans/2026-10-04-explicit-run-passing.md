@@ -731,66 +731,111 @@ twice.
 
 `AsyncLocalStorage` stays, and every read is checked against it.
 
-#### Built so far: the seam between generated code and the runtime
+#### Phase 2 is built
 
-Branch `explicit-run-phase-2`, stacked on `explicit-run`. This is the core
-of Tasks 7, 8, and 11, and a first piece of Task 10.
+Branch `explicit-run-phase-2`, PR #1170. The PR is based on main only so
+that CI runs: the workflows do not run for a PR into another branch.
 
-- **Generated code holds the run.** Every function, block, handler
-  function, init function, and finalize closure takes `__run` first, and
-  every body the runtime calls back declares `__run`. Generated code no
-  longer calls `getRuntimeContext()`, `__threads()`, `__stateStack()`, or
-  `__globals()`. It reads `__run.ctx`, `__run.threads`, `__run.stack`, and
-  `__run.globals`.
-- **The Runner checks every step.** Each Runner method takes the run it is
-  called under, checks it with `sameRun`, makes one child, and hands the
-  child to both `AsyncLocalStorage` and the body.
-- **The call path takes the run.** `__call`, `__callMethod`,
-  `AgencyFunction.invoke`, `withCallDepth`, `runAsHandler`, the handler
-  chain, `interruptWithHandlers`, `callHook`, `invokeCallbacks`, `runBatch`,
-  `runPrompt` and its tool loop, the three tool-invocation frames, guard
-  trips, and the debugger step.
-- **A node gets its run from its state.** The graph engine calls a node
-  with its state only, so `GraphState` has a `run` field, set where
-  `graph.run` is called and carried along by `goto`.
-- **`agency.current()`** returns a handle with `call` and `callWith`.
+What the phase did, in the order it was built:
 
-Three things differ from the design above:
+1. **The seam.** Every generated function, block, handler function, init
+   function, and finalize closure takes `__run` first, and every body the
+   runtime calls back declares `__run`. Each Runner method takes the run it
+   is called under, checks it with `sameRun`, makes one child, and hands it
+   to both `AsyncLocalStorage` and the body. The call path, the handler
+   chain, `runBatch`, the `llm()` tool loop, and guard trips take the run.
+   A node gets its run from `GraphState.run`.
+2. **`callPlain` and `currentRun()`** (Tasks 10 and 13). A helper reads the
+   run before its first `await`. Every standard library helper that read it
+   later now takes it on its first line.
+3. **`run.log`** (Task 6). Each run has a logger bound to its branch's tag
+   store and span stack. A bound logger throws when it is used in a branch
+   other than the one `AsyncLocalStorage` says is current.
+4. **The stored run for subprocess listeners** (Task 9).
+5. **The wrong-run check** (Task 12): `withChildRun`, `assertUsable`,
+   `RunInUseError`.
+6. **The tail** (Tasks 5 and 8): the small readers and the remaining frame
+   reads in the runtime.
+
+Where the build differs from the design above:
 
 1. `new Runner(ctx, frame, opts)` keeps its shape. Generated code passes
-   `stack` and `threads` in `opts`, and the constructor no longer reads
-   `AsyncLocalStorage`. Taking a `Run` there would have meant rebuilding 61
-   test constructions for no gain.
-2. `ambientRun(caller)` marks a function that still reads the current frame
-   because its own caller has no run to give it yet. There are 12. Each is
-   a place still to change, and Phase 3 cannot start while any remain.
-3. The stage of a pipe is wrapped in a body that declares `__run`, so one
-   lambda builder serves both `runner.pipe` and a bare `|>` expression.
+   `stack` and `threads` in `opts`.
+2. The run stored for a subprocess listener is the subprocess call's
+   **branch run**, not `s.parentStore`. The branch run carries the cloned
+   globals and the span stack the handler chain uses on main. `sameRun`
+   confirmed it is the frame the listener had.
+3. `run.log` is the logging client itself, as a view made with
+   `Object.create`, not a separate logger type. The posting methods are
+   still on the client's public type. `ctx.rootLog` names the posts made
+   outside any run.
+4. The logging client's own `AsyncLocalStorage`, `spanStorage`, is still
+   there. It is what the bound logger is checked against. Phase 3 removes
+   it with the other one.
+5. The wrong-run check needed one exemption the design did not list: a
+   helper that raises several interrupts at once with `agency.interrupt`.
+   Each raise gets a detached copy of the run.
+6. A thread store shared across branches cannot hold one logger, so the
+   logger lives on each view and the registry stays shared.
 
-Numbers at this point, from `scripts/audit-run-reads.mjs` and `grep`:
+What still reads `AsyncLocalStorage`, for Phase 3 to decide:
 
-| | On main | Now |
-| --- | --- | --- |
-| Functions that install a frame through `agencyStore.run` | 18 | 2 (`withRun` and one in `statelogClient`) |
-| Functions that read a context variable directly | 49 | 37 |
-| Call sites that read the frame, in `lib/runtime` and `lib/serve` | | about 70 |
-| ...in `lib/stdlib` | | about 95 |
-| `ambientRun()` uses | | 12 |
+| Read | Why it has no run to take |
+| --- | --- |
+| `warnDroppedData` in `result.ts` | Reached only through the public `failure()`, which user code calls with no run in hand |
+| The function-ref reviver's miss at revive time | Runs inside `JSON.parse` |
+| `agency.ctxMaybe`, `agency.callsite`, `agency.thread.storeMaybe` | Must work with no run |
+| `std::ui` console capture | Runs inside a `console.log` override. Decision 9 |
+| A few standard library helpers that must work with no run | `_registerLocalProvider`, the `statelog.ts` helpers, `resolveLlmRoute`, `date.ts`, `_attachToReply`, `_insideToolCall` |
+| `outerRunOrNone()` | The one read a root frame makes of the frame outside it, for a run started inside another run |
+| The logging client's unbound fallback and `spanStorage` | Kept as what the bound logger is checked against |
 
-Verified locally: the full unit suite (15,244 tests), the Agency-js suite
-(190 tests), and the `handlers`, `handler-lineage`, `fork`, `subprocess`,
-`guards`, `threads`, `substeps`, `ts-helpers`, `blocks`, `agents`, and
-callback tests of the Agency suite. No test found a place where the
-runtime handed a function the wrong run.
+Two behaviour changes, both in logging only:
 
-What broke, as Decision 6 expected: a helper that calls `__call(fn, ...)`
-itself. `tests/agency-js/agent-session-resume/loop.js` did, and now uses
-`agency.current()`. Every package's compiled `index.js` had to be rebuilt,
-because code from the old compiler calls the runtime with the old
-argument order.
+- An abort that reaches a node boundary now logs its event. It read the
+  frame after the frame had ended, so it almost never did.
+- A batched round of decision calls picks its mock queue by the first
+  call's module. It used the arm that triggered the round. Only scoped
+  test mocks can tell.
 
-Still to do in this phase: the rest of Task 8 (the remaining reads in the
-runtime), and Tasks 5, 6, 9, 10, 12, 13, and 14.
+What broke, as Decision 6 expected:
+
+- A helper that calls `__call` itself, or uses `agency.*` after an `await`.
+  Two test helpers did and now take `agency.current()` first.
+- Every package's compiled `index.js`. They are rebuilt here. Published
+  copies need a new release and a raised peer range, which is not done:
+  it needs the release number.
+- `std::ui` loops called from TypeScript with no run now throw.
+
+Three silent failures the strict rule turned into real ones, now fixed:
+`runHttp` dropped a guard-trip cause it read after an `await`, and the
+line REPL's Esc-to-cancel and its footer token counts both swallowed the
+throw.
+
+Size, in changed lines (added plus removed), against the Phase 1 branch:
+
+| | Lines |
+| --- | --- |
+| Generated: fixtures, package `index.js`, template output | about 10,360 |
+| Runtime source | about 2,670 |
+| Standard library helpers | about 870 |
+| Code generator | about 330 |
+| Hand-written tests | about 3,280 |
+| **Total** | **about 17,600** |
+
+Verified: `typecheck`, `lint:structure`, `fmt:ts`, the unit suite (15,252
+tests), the Agency-js suite (190), and the `handlers`, `handler-lineage`,
+`fork`, `subprocess`, `guards`, `threads`, `substeps`, `ts-helpers`,
+`blocks`, `memory`, and `agents` folders of the Agency suite. CI ran the
+full Agency suite on the push before the tail and it passed. No test found
+a place where the runtime handed a function the wrong run.
+
+Not done in this phase: the peer ranges of the published packages, and
+handing a handle to the callbacks of `agency.withHandler`,
+`withCostGuard`, `withTimeGuard`, `withLock`, and `thread.with`. Those
+callbacks can still call `agency.*` on their first line.
+
+The task list below is kept as it was written.
 
 - [ ] **Task 5. Give the 10 small readers their value directly.** These
       read the frame only for a log line, a config flag, or the clock:

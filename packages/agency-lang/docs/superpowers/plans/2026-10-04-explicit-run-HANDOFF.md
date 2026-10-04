@@ -240,51 +240,37 @@ Write each as a prediction and run it before changing the code it covers.
   method argument position is known to drop the interrupt today, so leave
   it out or mark it skipped with that reason.
 
-## Phase 2: where it stands
+## Phase 2: built
 
-The first slice is built and pushed as PR #1170. Read "Built so far" under
-Phase 2 in the plan: it says what was done, the three places it differs
-from the design, and the numbers.
+Read "Phase 2 is built" in the plan. It lists what was done, the six
+places the build differs from the design, what still reads
+`AsyncLocalStorage` and why, the two behaviour changes, and the size.
 
-What is left, in the order to do it:
-
-1. **Remove the 12 `ambientRun()` uses.** `grep -rn "ambientRun(" lib`
-   lists them. Six are standard library helpers that call an Agency
-   function (`ui.ts`, `cli.ts`, `markdown.ts`, `concurrency.ts`,
-   `thread.ts`, `agentSessions.ts`): take the run on the helper's first
-   line and pass it down. Two are subprocess listeners in `ipc.ts`: use the
-   stored run, `s.parentStore` (Task 9). The rest are `validateChain.ts`,
-   `resumableScope.ts`, `agency.withCallsite`, and the serve raw invoker.
-2. **Thread the remaining reads in the runtime** (rest of Task 8). About 70
-   call sites in `lib/runtime` and `lib/serve` still call
-   `getRuntimeContext()`, `agencyStore.getStore()`, `__threads()`,
-   `__globals()`, or `__stateStack()`. Heaviest: `agency.ts` (13),
-   `memory/manager.ts` (5), `state/context.ts` (3), `checkpoint.ts` (3).
-3. **Tasks 5, 6, 9, 10, 12, 13, 14** as the plan lists them.
-
-How the first slice was done, which is the method for the rest: change a
+How the work was done, which is the method for Phase 3 too: change a
 function's signature, run `npx tsc --noEmit`, and fix each caller it
 reports. Then `npx tsc -p tsconfig.tests.json` for the tests. A test gets
 the run of its frame from `testRun()` in
-`lib/runtime/__tests__/testHelpers.ts`. A test that builds its own `ctx`
-makes the frame from it with `inFrameOf(ctx, stack, fn)` or
-`runInTestContext`, so that `run.ctx` is the ctx it asserts against.
+`lib/runtime/__tests__/testHelpers.ts`, calls a helper the way the runtime
+does with `callHelper(fn, ...args)`, and builds a frame from its own `ctx`
+with `inFrameOf(ctx, stack, fn)` or `runInTestContext`.
 
-Things learned in the first slice:
+Things learned:
 
-- `lib/runtime/prompt.ts` sits just under the linter's 1,250-line limit.
-  Adding a `run,` line to an argument list can push it over. Replace a
-  `ctx` parameter with `run` in place, and read `run.ctx`.
+- `lib/runtime/prompt.ts` sits at the linter's 1,250-line limit. Replace a
+  `ctx` parameter with `run` in place and read `run.ctx`.
 - After a generator change run `pnpm run templates`, then `make`, then
   `make fixtures`, then recompile every package's entry file:
   `node ../agency-lang/dist/scripts/agency.js compile index.agency` in each
-  of the eight package folders. Commit fixtures and packages separately.
-- The finalize closure is built once per function and called from inside
-  steps, so it takes the run as a parameter and each stop site binds the
-  run it runs under.
-- A subagent fixed the unit tests from a written brief in about ten
-  minutes. That is a good split: the main session keeps the design, and
-  the mechanical test edits go out.
+  of the eight package folders. Commit generated files separately.
+- CI only runs for a PR into main. Base a stacked PR on main and say so
+  in its first line.
+- Subagents did the mechanical parts from written briefs: the unit tests,
+  the standard library helpers, and the tail. The main session kept the
+  design and checked each result by rerunning the suites.
+- The checks that compare against `AsyncLocalStorage` found real things:
+  the subprocess listener's run, a thread store shared across branches,
+  and the decision batch's logger. Trust a failure of `sameRun` or of the
+  bound logger: it means the wrong run was chosen.
 
 ## How to do Phase 2
 

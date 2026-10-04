@@ -1,5 +1,6 @@
 import { AgencyFunction } from "./agencyFunction.js";
 import type { CallType } from "./agencyFunction.js";
+import type { Run } from "./asyncContext.js";
 import {
   checkTsFunctionArgs,
   checkResultMethodCall,
@@ -64,14 +65,12 @@ function findAbortedArg(descriptor: CallType): AbortedResult | undefined {
  * and this helper figures out whether `target` is an `AgencyFunction`
  * (named-arg aware, preapprove handler wiring) or a plain TS callable.
  *
- * All execution context (`ctx`, `stack`, `threads`, per-call-site
- * `callsite`) is read from the active `agencyStore` ALS frame seeded
- * by `Runner.runInScope`. No state extras pass through this layer —
- * call sites that need to override the active branch stack (e.g. the
- * async-fork operator) install their own ALS frame around the
- * `__call(...)` invocation in codegen.
+ * `run` is the run the call site runs under. An Agency function is handed
+ * it, and makes its own child run from it. A plain TypeScript function is
+ * called with its arguments only.
  */
 export async function __call(
+  run: Run,
   target: unknown,
   descriptor: CallType,
   optional?: boolean,
@@ -91,7 +90,7 @@ export async function __call(
     return interruptArg;
   }
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor);
+    return target.invoke(run, descriptor);
   }
   if (typeof target !== "function") {
     if (isFailure(target)) {
@@ -125,6 +124,7 @@ export async function __call(
 }
 
 export async function __callMethod(
+  run: Run,
   obj: unknown,
   prop: string | number,
   descriptor: CallType,
@@ -199,7 +199,7 @@ export async function __callMethod(
 
   const target = (obj as any)[prop];
   if (AgencyFunction.isAgencyFunction(target)) {
-    return target.invoke(descriptor);
+    return target.invoke(run, descriptor);
   }
   if (typeof target !== "function") {
     throw new Error(

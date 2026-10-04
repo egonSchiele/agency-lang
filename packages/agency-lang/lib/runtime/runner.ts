@@ -1,6 +1,6 @@
 import { withThreadEndHooksEvents } from "./threadEndHooksEvents.js";
 import { nanoid } from "nanoid";
-import { __globals, agencyStore, lineageOf } from "./asyncContext.js";
+import { __globals, sameRun, withRun, type Run } from "./asyncContext.js";
 import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
@@ -22,7 +22,7 @@ import {
   propagateBranchCost as propagateBranchCostImpl,
 } from "./state/stateStack.js";
 import type { ThreadStore } from "./state/threadStore.js";
-import type { HandlerFn } from "./types.js";
+import type { RunHandlerFn } from "./types.js";
 import { matchValName } from "../matchVal.js";
 import { classifyIterable } from "../utils/iteration.js";
 
@@ -165,46 +165,31 @@ export class Runner {
     this.state = opts?.state ?? {};
     this.moduleId = opts?.moduleId ?? "";
     this.scopeName = opts?.scopeName ?? "";
-    // Post-ALS migration the codegen no longer emits `stack` / `threads`
-    // as part of the Runner opts — both values live in the active
-    // `agencyStore` frame and are recovered here. Direct test usages of
-    // `new Runner(ctx, frame)` outside an ALS frame fall back to
-    // `undefined`, which matches the pre-migration behaviour (no
-    // guard/abort-signal observation, no per-step ALS re-wrap).
-    const als = agencyStore.getStore();
-    this.stack = opts?.stack ?? als?.stack;
-    this.threads = opts?.threads ?? als?.threads;
+    // Generated code passes the stack and the thread store of the run the
+    // scope runs under. A test that builds a Runner with neither gets no
+    // guard or abort-signal observation, and its step bodies run under
+    // the run they were called with.
+    this.stack = opts?.stack;
+    this.threads = opts?.threads;
   }
 
-  /** Run `fn` inside an `agencyStore.run` frame seeded with this
-   *  Runner's `ctx` / `stack` / `threads`. Stdlib helpers invoked from
-   *  inside `fn` will see those values via `getRuntimeContext()` —
-   *  matching what the deprecated `__ctx, __stateStack, __threads`
-   *  positional args would have carried. If `stack` or `threads` is
-   *  missing (older test harnesses that build a Runner without them),
-   *  fall through to whatever frame is already on the ALS stack to
-   *  avoid clobbering an outer frame with `undefined`. */
-  private runInScope<T>(fn: () => Promise<T>): Promise<T> {
+  /** Run `fn` under a child of `run` that carries this Runner's `ctx`,
+   *  `stack`, and `threads`, the callsite of the current step, and this
+   *  Runner. `run` is the run the step was called under, and it must be the
+   *  current one. The child keeps everything else `run` had: its globals,
+   *  its tool invocation stack, its decision scope, and its lineage.
+   *
+   *  A Runner built without a stack or a thread store (some unit tests)
+   *  makes no child, and `fn` runs under `run` itself. */
+  private runInScope<T>(run: Run, fn: (run: Run) => Promise<T>): Promise<T> {
     if (this.stack && this.threads) {
-      const outer = agencyStore.getStore();
-      return agencyStore.run(
+      sameRun(run, "A Runner step");
+      return withRun(
         {
+          ...run,
           ctx: this.ctx,
           stack: this.stack,
           threads: this.threads,
-          // Propagate the outer frame's `globals` so a Runner spun up
-          // inside a fork branch sees the branch-local clone instead of
-          // the canonical store. Fall back to `ctx.globals` for harness
-          // entries that build a Runner outside any ALS frame (older
-          // tests, direct invocation paths).
-          globals: outer?.globals ?? this.ctx.globals,
-          toolInvocationStack: outer?.toolInvocationStack,
-          // A Runner inside a fork arm keeps the arm's decision scope, so a
-          // decision call in a nested function still batches with the block.
-          decisions: outer?.decisions,
-          // The step keeps the call depth, the handler depth, the executing
-          // handlers and the active callbacks of the code that reached it.
-          ...lineageOf(outer),
           callsite: {
             moduleId: this.moduleId,
             scopeName: this.scopeName,
@@ -215,7 +200,7 @@ export class Runner {
         fn,
       );
     }
-    return fn();
+    return fn(run);
   }
 
   /** Whether this runner is driving a graph-node body (vs. a function or
@@ -361,11 +346,11 @@ export class Runner {
    *  inside a tool, and on approve the tool continues where it paused
    *  and its result reaches the thread normally — there is never a
    *  dangling tool_use, because the tool call completes on resume. */
-  private async maybeRaiseGuardTrip(id: number): Promise<boolean> {
+  private async maybeRaiseGuardTrip(id: number, run: Run): Promise<boolean> {
     if (!this.stack) return false;
     if (this.stack.firstRaisableTrip() === null) return false;
-    const rt = agencyStore.getStore();
     return raiseGuardTripsAtStep({
+      run,
       ctx: this.ctx,
       stack: this.stack,
       location: {
@@ -374,7 +359,7 @@ export class Runner {
         stepPath: this.stepPath(id),
       },
       isNodeContext: this.isNodeContext,
-      threads: rt?.threads,
+      threads: run.threads,
       halt: (payload: unknown) => this.halt(payload),
     });
   }
@@ -389,7 +374,7 @@ export class Runner {
    *    branches join, after the join saves branch threads and globals. A
    *    thrown pause skips that join, so its checkpoint could not resume.
    *  See pauseAtStep for what a pause does. */
-  private async pauseIfRequested(id: number): Promise<void> {
+  private async pauseIfRequested(id: number, run: Run): Promise<void> {
     if (!this.ctx.pauseRequested) {
       return;
     }
@@ -398,7 +383,7 @@ export class Runner {
     if (!stack || stack !== this.ctx.stateStack || this.ctx.isInsideToolCall()) {
       return;
     }
-    if (stack.hasExecutingHandlers() || isInsideCallback()) {
+    if (stack.hasExecutingHandlers() || isInsideCallback(run)) {
       return;
     }
     await pauseAtStep({
@@ -429,6 +414,7 @@ export class Runner {
    */
   private async maybeDebugHook(
     id: number,
+    run: Run,
     label: string | null = null,
     isUserAdded: boolean = false,
   ): Promise<boolean> {
@@ -449,7 +435,7 @@ export class Runner {
     this.frame.locals[this.debugFlagKey(id)] = true;
 
     const dbg = await debugStep(
-      this.ctx,
+      run,
       {
         moduleId: this.moduleId,
         scopeName: this.scopeName,
@@ -543,7 +529,11 @@ export class Runner {
 
   // ── Core step method ──
 
-  async step(id: number, callback: (runner: Runner) => Promise<void>): Promise<void> {
+  async step(
+    id: number,
+    run: Run,
+    callback: (runner: Runner, run: Run) => Promise<void>,
+  ): Promise<void> {
     this.beforeStep();
     // Guard-trip raise BEFORE shouldSkip: shouldSkip's guard walk both
     // CONSUMES a time trip's one-shot check latch and THROWS it — the
@@ -553,18 +543,18 @@ export class Runner {
     // unanswered trip halts with a checkpoint at THIS step — which is
     // replay-safe by construction, because on resume the same boundary
     // re-raises and applies the recorded answer before the body runs.
-    if (await this.maybeRaiseGuardTrip(id)) return;
+    if (await this.maybeRaiseGuardTrip(id, run)) return;
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id) return;
 
-    if (await this.maybeDebugHook(id)) return;
+    if (await this.maybeDebugHook(id, run)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     this.path.push(id);
     try {
-      await this.runInScope(() => callback(this));
+      await this.runInScope(run, (stepRun) => callback(this, stepRun));
     } catch (e) {
       // `agency.interrupt()` (and any future TS-helper that mirrors the
       // codegen "halt + return" pattern) signals a halt by throwing
@@ -598,21 +588,21 @@ export class Runner {
    * resolves so resume re-entries (after a deeper interrupt or debug
    * pause) skip the hook instead of re-firing it.
    */
-  async hook(id: number, bodyFn: () => Promise<void>): Promise<void> {
+  async hook(id: number, run: Run, bodyFn: (run: Run) => Promise<void>): Promise<void> {
     this.beforeStep();
     // Same raise point as step() — hook is the step-equivalent that
     // loop-body statements and function-start hooks execute through, so
     // a time trip during a tight loop is detected here.
-    if (await this.maybeRaiseGuardTrip(id)) return;
+    if (await this.maybeRaiseGuardTrip(id, run)) return;
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     this.path.push(id);
     try {
-      await this.runInScope(() => bodyFn());
+      await this.runInScope(run, (stepRun) => bodyFn(stepRun));
     } finally {
       this.path.pop();
     }
@@ -621,12 +611,12 @@ export class Runner {
     this.setCounter(id + 1);
   }
 
-  async debugger(id: number, label: string): Promise<void> {
+  async debugger(id: number, run: Run, label: string): Promise<void> {
     this.beforeStep();
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id) return;
-    if (await this.maybeDebugHook(id, label, true)) return;
+    if (await this.maybeDebugHook(id, run, label, true)) return;
 
     if (this.halted) return;
     this.clearDebugFlag(id);
@@ -635,18 +625,20 @@ export class Runner {
 
   // ── Specialized: pipe ──
 
-  async pipe(id: number, input: any, fn: (value: any) => any): Promise<any> {
+  async pipe(id: number, run: Run, input: any, fn: (value: any, run: Run) => any): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return input;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id)
       return this.frame.locals[`__pipe_result_${this.stepPath(id)}`] ?? input;
 
-    if (await this.maybeDebugHook(id)) return input;
+    if (await this.maybeDebugHook(id, run)) return input;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
-    const result = await this.runInScope(() => __pipeBind(input, fn));
+    const result = await this.runInScope(run, (stepRun) =>
+      __pipeBind(input, (value: any) => fn(value, stepRun)),
+    );
     this.frame.locals[`__pipe_result_${this.stepPath(id)}`] = result;
 
     if (hasInterrupts(result)) {
@@ -668,6 +660,7 @@ export class Runner {
 
   async thread(
     id: number,
+    run: Run,
     method: "create" | "createSubthread",
     // Codegen emits opts as a thunk (`async () => (<opts>)`) so its value
     // expressions are evaluated ONLY after the halt/skip guards below. If a
@@ -676,8 +669,8 @@ export class Runner {
     // would dereference an unset local and throw. Evaluating lazily lets the
     // early return win. A bare object is still accepted for direct runtime
     // callers (tests); only a function means "thunk".
-    optsArg: ThreadStepOpts | (() => ThreadStepOpts | Promise<ThreadStepOpts>),
-    callback: (runner: Runner) => Promise<void>,
+    optsArg: ThreadStepOpts | ((run: Run) => ThreadStepOpts | Promise<ThreadStepOpts>),
+    callback: (runner: Runner, run: Run) => Promise<void>,
   ): Promise<void> {
     // Single canonical signature; `prettyPrint.ts` always emits an
     // opts object (possibly empty) so there is no dual-form path to
@@ -685,12 +678,12 @@ export class Runner {
     // need named-args behaviour.
     this.beforeStep();
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id) return;
 
-    if (await this.maybeDebugHook(id)) return;
+    if (await this.maybeDebugHook(id, run)) return;
 
-    const opts = typeof optsArg === "function" ? await optsArg() : optsArg;
+    const opts = typeof optsArg === "function" ? await optsArg(run) : optsArg;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
@@ -794,8 +787,7 @@ export class Runner {
     const startedThread = threads.get(tid);
     const parentRaw = startedThread?.parentId ?? undefined;
     const startedLabel = startedThread?.label ?? opts.label;
-    await invokeCallbacks({
-      ctx: this.ctx,
+    await invokeCallbacks(run, {
       name: "onThreadStart",
       data: {
         threadId: slug,
@@ -808,7 +800,7 @@ export class Runner {
 
     this.path.push(id);
     try {
-      await this.runInScope(() => callback(this));
+      await this.runInScope(run, (stepRun) => callback(this, stepRun));
     } finally {
       this.path.pop();
       // Snapshot messages BEFORE popping the active stack so the
@@ -834,8 +826,7 @@ export class Runner {
         },
         async () => {
           try {
-            await invokeCallbacks({
-              ctx: this.ctx,
+            await invokeCallbacks(run, {
               name: "onThreadEnd",
               data: {
                 threadId: slug,
@@ -875,11 +866,12 @@ export class Runner {
 
   async handle(
     id: number,
-    handlerFn: HandlerFn,
-    callback: (runner: Runner) => Promise<void>,
+    run: Run,
+    handlerFn: RunHandlerFn,
+    callback: (runner: Runner, run: Run) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     // A COMPLETED handle block returns here, before pushHandler — its
     // scope is over and its handler stays gone on replay. This line is
     // also why the guard-set memo below cannot be keyed by counting
@@ -888,7 +880,7 @@ export class Runner {
     // POSITION (stepPath, here) or content — never an event count.
     if (this.getCounter() > id) return;
 
-    if (await this.maybeDebugHook(id)) return;
+    if (await this.maybeDebugHook(id, run)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
@@ -910,10 +902,10 @@ export class Runner {
       this.frame.locals[memoKey] = liveGuardIds;
     }
 
-    this.ctx.pushHandler(handlerFn, liveGuardIds);
+    this.ctx.pushRunHandler(handlerFn, liveGuardIds);
     this.path.push(id);
     try {
-      await this.runInScope(() => callback(this));
+      await this.runInScope(run, (stepRun) => callback(this, stepRun));
     } finally {
       this.path.pop();
       this.ctx.popHandler();
@@ -929,11 +921,12 @@ export class Runner {
 
   async ifElse(
     id: number,
+    run: Run,
     branches: {
-      condition: () => boolean | Promise<boolean>;
-      body: (runner: Runner) => Promise<void>;
+      condition: (run: Run) => boolean | Promise<boolean>;
+      body: (runner: Runner, run: Run) => Promise<void>;
     }[],
-    elseBranch?: (runner: Runner) => Promise<void>,
+    elseBranch?: (runner: Runner, run: Run) => Promise<void>,
     // When this ifElse is the lowered form of a match expression, `matchId`
     // is the id it OWNS: a pending `_matchExit === matchId` unwind is consumed
     // (cleared) here in the finally so post-match code resumes. An ifElse that
@@ -943,11 +936,11 @@ export class Runner {
     // The top skip stays OUTSIDE the try: when we skip here an OUTER construct
     // owns the pending flag, so we must not clear it.
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     try {
       if (this.getCounter() > id) return;
 
-      if (await this.maybeDebugHook(id)) return;
+      if (await this.maybeDebugHook(id, run)) return;
 
       this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
@@ -960,9 +953,9 @@ export class Runner {
       // the scope frame.
       if (this.frame.locals[condKey] === undefined) {
         let branchIndex = -1;
-        await this.runInScope(async () => {
+        await this.runInScope(run, async (stepRun) => {
           for (let i = 0; i < branches.length; i++) {
-            if (await branches[i].condition()) {
+            if (await branches[i].condition(stepRun)) {
               branchIndex = i;
               break;
             }
@@ -975,11 +968,11 @@ export class Runner {
 
       this.path.push(id);
       try {
-        await this.runInScope(async () => {
+        await this.runInScope(run, async (stepRun) => {
           if (branchIndex >= 0 && branchIndex < branches.length) {
-            await branches[branchIndex].body(this);
+            await branches[branchIndex].body(this, stepRun);
           } else if (elseBranch) {
-            await elseBranch(this);
+            await elseBranch(this, stepRun);
           }
         });
       } finally {
@@ -1002,6 +995,7 @@ export class Runner {
 
   async loop(
     id: number,
+    run: Run,
     // The iterable is a thunk (codegen emits `async () => <expr>`) so its
     // expression is evaluated ONLY after the halt/skip guards below. If a
     // preceding `return` halted the runner, the steps that would assign the
@@ -1013,19 +1007,19 @@ export class Runner {
     items:
       | any[]
       | Record<string, any>
-      | (() => any[] | Record<string, any> | Promise<any[] | Record<string, any>>),
+      | ((run: Run) => any[] | Record<string, any> | Promise<any[] | Record<string, any>>),
     // Second arg is the numeric index for arrays, or the value for records.
-    callback: (item: any, second: any, runner: Runner) => Promise<void>,
+    callback: (item: any, second: any, runner: Runner, run: Run) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id) return;
 
-    if (await this.maybeDebugHook(id)) return;
+    if (await this.maybeDebugHook(id, run)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
-    const items_ = typeof items === "function" ? await items() : items;
+    const items_ = typeof items === "function" ? await items(run) : items;
 
     const iterKey =
       this.path.length === 0 ? `__iteration_${id}` : `__iteration_${this.key()}.${id}`;
@@ -1067,7 +1061,7 @@ export class Runner {
         // first callback arg is the element (array) or the key (record).
         const item = iterable[i];
         const second = isRecord ? (items_ as Record<string, any>)[item] : i;
-        await this.runInScope(() => callback(item, second, this));
+        await this.runInScope(run, (stepRun) => callback(item, second, this, stepRun));
       } finally {
         this.path.pop();
       }
@@ -1100,17 +1094,18 @@ export class Runner {
 
   async whileLoop(
     id: number,
+    run: Run,
     // The condition may be sync (`x < 3`) or async (`isSuccess(r)` — the TS
     // builder always emits `await` around function calls, so any condition
     // containing one becomes a Promise<boolean>).
-    condition: () => boolean | Promise<boolean>,
-    callback: (runner: Runner) => Promise<void>,
+    condition: (run: Run) => boolean | Promise<boolean>,
+    callback: (runner: Runner, run: Run) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id) return;
 
-    if (await this.maybeDebugHook(id)) return;
+    if (await this.maybeDebugHook(id, run)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
@@ -1120,7 +1115,7 @@ export class Runner {
     this.frame.locals[iterKey] = this.frame.locals[iterKey] ?? 0;
     let currentIter = 0;
 
-    while (await this.runInScope(async () => condition())) {
+    while (await this.runInScope(run, async (stepRun) => condition(stepRun))) {
       if (this.halted) return;
 
       if (currentIter < this.frame.locals[iterKey]) {
@@ -1132,7 +1127,7 @@ export class Runner {
       this._continue = false;
       this.path.push(id);
       try {
-        await this.runInScope(() => callback(this));
+        await this.runInScope(run, (stepRun) => callback(this, stepRun));
       } finally {
         this.path.pop();
       }
@@ -1165,23 +1160,24 @@ export class Runner {
 
   async branchStep(
     id: number,
+    run: Run,
     branchKey: string,
-    callback: (runner: Runner) => Promise<void>,
+    callback: (runner: Runner, run: Run) => Promise<void>,
   ): Promise<void> {
     if (this.shouldSkip()) return;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
 
     // Enter if: counter hasn't passed this OR branch data exists (resuming async)
     const hasExistingBranch = this.frame.getBranch(branchKey) !== undefined;
     if (this.getCounter() > id && !hasExistingBranch) return;
 
-    if (await this.maybeDebugHook(id)) return;
+    if (await this.maybeDebugHook(id, run)) return;
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
     this.path.push(id);
     try {
-      await this.runInScope(() => callback(this));
+      await this.runInScope(run, (stepRun) => callback(this, stepRun));
     } finally {
       this.path.pop();
     }
@@ -1210,8 +1206,9 @@ export class Runner {
    */
   async fork(
     id: number,
+    run: Run,
     items: any[],
-    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
+    blockFn: (run: Run, item: any, index: number, branchStack: StateStack) => Promise<any>,
     mode: "all" | "race",
     stateStack: StateStack,
     // When `true`, branches pointer-share the parent's `GlobalStore`
@@ -1227,12 +1224,12 @@ export class Runner {
   ): Promise<any> {
     this.beforeStep();
     if (this.shouldSkip()) return undefined;
-    await this.pauseIfRequested(id);
+    await this.pauseIfRequested(id, run);
     if (this.getCounter() > id) {
       return this.frame.locals[this.forkResultKey(id)];
     }
 
-    if (await this.maybeDebugHook(id)) return undefined;
+    if (await this.maybeDebugHook(id, run)) return undefined;
 
     const forkId = nanoid(12);
     const forkStartTime = performance.now();
@@ -1259,10 +1256,10 @@ export class Runner {
       // the winner" via the persisted __race_winner_<id> key, so the
       // caller does NOT need to dispatch between them.
       if (mode === "all") {
-        result = await this.runForkAll(id, items, blockFn, stateStack, forkId, shared);
+        result = await this.runForkAll(id, run, items, blockFn, stateStack, forkId, shared);
         if (hasInterrupts(result)) return result;
       } else {
-        result = await this.runRace(id, items, blockFn, stateStack, forkId, shared);
+        result = await this.runRace(id, run, items, blockFn, stateStack, forkId, shared);
         if (hasInterrupts(result)) {
           winnerIndex = readWinner();
           return result;
@@ -1308,8 +1305,9 @@ export class Runner {
    * cost propagation. */
   private async runForkAll(
     id: number,
+    run: Run,
     items: any[],
-    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
+    blockFn: (run: Run, item: any, index: number, branchStack: StateStack) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
     shared: boolean,
@@ -1357,6 +1355,7 @@ export class Runner {
       },
     );
     const result = await runBatch<any>({
+      run,
       ctx: this.ctx,
       parentStack: stateStack,
       parentFrame: this.frame,
@@ -1375,7 +1374,7 @@ export class Runner {
       shareGlobals: shared,
       children: items.map((item, i) => ({
         key: this.forkBranchKey(id, i),
-        invoke: (branchStack) => blockFn(item, i, branchStack),
+        invoke: (branchRun, branchStack) => blockFn(branchRun, item, i, branchStack),
       })),
       hooks: {
         seedBranchCost: (childStack, parentStack) => this.seedBranchCost(childStack, parentStack),
@@ -1421,13 +1420,15 @@ export class Runner {
    * finally completes (no-interrupt resume). */
   private async runRace(
     id: number,
+    run: Run,
     items: any[],
-    blockFn: (item: any, index: number, branchStack: StateStack) => Promise<any>,
+    blockFn: (run: Run, item: any, index: number, branchStack: StateStack) => Promise<any>,
     stateStack: StateStack,
     forkId: string,
     shared: boolean,
   ): Promise<any> {
     const result = await runBatch<any>({
+      run,
       ctx: this.ctx,
       parentStack: stateStack,
       parentFrame: this.frame,
@@ -1449,7 +1450,7 @@ export class Runner {
       raceWinnerLocalKey: this.raceWinnerKey(id),
       children: items.map((item, i) => ({
         key: this.forkBranchKey(id, i),
-        invoke: (branchStack) => blockFn(item, i, branchStack),
+        invoke: (branchRun, branchStack) => blockFn(branchRun, item, i, branchStack),
       })),
       hooks: {
         seedBranchCost: (childStack, parentStack) => this.seedBranchCost(childStack, parentStack),

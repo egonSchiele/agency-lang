@@ -3,16 +3,16 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `await runner.ifElse({{{id}}}, [
+export const template = `await runner.ifElse({{{id}}}, __run, [
 {{#branches}}
   {
-    condition: async () => {{{this.condition}}},
-    body: async (runner) => {
+    condition: async (__run) => {{{this.condition}}},
+    body: async (runner, __run) => {
 {{{this.body}}}
     },
   },
 {{/branches}}
-]{{#hasElse}}, async (runner) => {
+]{{#hasElse}}, async (runner, __run) => {
 {{{elseBranch}}}
 }{{/hasElse}}{{{matchOpts}}});`;
 

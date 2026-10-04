@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const __dbg = await debugStep(__ctx, {
+export const template = `const __dbg = await debugStep(__run, {
   moduleId: {{{moduleId:string}}},
   scopeName: {{{scopeName:string}}},
   stepPath: {{{stepPath:string}}},
@@ -13,7 +13,7 @@ export const template = `const __dbg = await debugStep(__ctx, {
 });
 if (__dbg) {
   {{#nodeContext}}
-  return { messages: __threads(), data: __dbg };
+  return { messages: __run.threads, data: __dbg };
   {{/nodeContext}}
   {{^nodeContext}}
   return __dbg;

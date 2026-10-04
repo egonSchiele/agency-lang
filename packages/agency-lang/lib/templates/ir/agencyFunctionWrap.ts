@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `__AgencyFunction.create({ name: {{{name:string}}}, module: {{{module:string}}}, fn: {{{fn:string}}}, params: [{{{paramsStr:string}}}], toolDefinition: null }, __toolRegistry)`;
+export const template = `__AgencyFunction.create({ name: {{{name:string}}}, module: {{{module:string}}}, fn: {{{fn:string}}}, params: [{{{paramsStr:string}}}], toolDefinition: null, takesRun: true }, __toolRegistry)`;
 
 export type TemplateType = {
   name: string;

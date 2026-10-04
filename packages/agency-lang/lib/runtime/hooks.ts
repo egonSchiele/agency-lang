@@ -10,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { agencyStore, getRuntimeContext, requireFrame } from "./asyncContext.js";
+import { sameRun, withRun, type Run } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -141,8 +141,8 @@ export type AgencyCallbacks = {
 /** True while a callback body is executing on this async path. The runner
  *  defers an external pause here, because a checkpoint taken inside a
  *  callback dispatch is not a place a resume can re-enter. */
-export function isInsideCallback(): boolean {
-  return requireFrame("isInsideCallback()").activeCallbacks.length > 0;
+export function isInsideCallback(run: Run): boolean {
+  return sameRun(run, "isInsideCallback()").activeCallbacks.length > 0;
 }
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
@@ -160,9 +160,9 @@ export function registerGlobalHook<K extends keyof CallbackMap>(
 }
 
 async function invokeCallback(
+  run: Run,
   fn: any,
   data: unknown,
-  ctx: RuntimeContext<any>,
   stateStack?: StateStack,
 ): Promise<void> {
   if (AgencyFunction.isAgencyFunction(fn)) {
@@ -173,11 +173,10 @@ async function invokeCallback(
     // branch's frame chain must be discovered via the branch's stack.
     const af = fn as AgencyFunction;
     const desc = { type: "positional" as const, args: [data] };
-    const parent = agencyStore.getStore();
-    if (stateStack && parent) {
-      await agencyStore.run({ ...parent, stack: stateStack }, () => af.invoke(desc));
+    if (stateStack) {
+      await withRun({ ...run, stack: stateStack }, (branchRun) => af.invoke(branchRun, desc));
     } else {
-      await af.invoke(desc);
+      await af.invoke(run, desc);
     }
     return;
   }
@@ -186,23 +185,23 @@ async function invokeCallback(
 }
 
 async function fireWithGuard(
+  run: Run,
   fn: any,
   data: unknown,
-  ctx: RuntimeContext<any>,
   errorLabel: string,
   stateStack?: StateStack,
 ): Promise<void> {
   const key = fn as object;
   // Recursion guard scoped to the current frame. See the comment above
   // `isInsideCallback` for why the list lives on the frame.
-  const frame = requireFrame("fireWithGuard()");
+  const frame = sameRun(run, "fireWithGuard()");
   if (frame.activeCallbacks.includes(key)) return;
   // A new list per fire, holding the inherited entries plus our own key, so
   // a deeper fire can re-enter without changing the outer list.
   const active = [...frame.activeCallbacks, key];
   try {
-    await agencyStore.run({ ...frame, activeCallbacks: active }, () =>
-      invokeCallback(fn, data, ctx, stateStack),
+    await withRun({ ...frame, activeCallbacks: active }, (callbackRun) =>
+      invokeCallback(callbackRun, fn, data, stateStack),
     );
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
@@ -282,12 +281,14 @@ export function hasCallbackConsumer<K extends keyof CallbackMap>(
  *  and could be tightened in a follow-up by dropping the param and
  *  making it required-via-ALS again. The slot stays optional so
  *  external callers that have a ctx but no ALS frame still work. */
-export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
-  ctx?: RuntimeContext<any>;
-  name: K;
-  data: CallbackMap[K];
-  stateStack?: StateStack;
-}): Promise<void> {
+export async function invokeCallbacks<K extends keyof CallbackMap>(
+  run: Run,
+  args: {
+    name: K;
+    data: CallbackMap[K];
+    stateStack?: StateStack;
+  },
+): Promise<void> {
   const { name, data, stateStack } = args;
 
   // Forward every event to the parent when running inside a std::agency run()
@@ -297,26 +298,28 @@ export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   // subprocess, this re-forwards relayed events upward -> automatic nested relay.
   sendCallbackToParent(name, data);
 
-  const ctx = args.ctx ?? getRuntimeContext().ctx;
+  const ctx = run.ctx;
   const walkStack = stateStack ?? ctx.stateStack;
 
   // Fire global hooks (from external packages) first. Order matches the
   // pre-refactor behaviour of callHook.
   for (const fn of _globalHooks[name] ?? []) {
-    await fireWithGuard(fn, data, ctx, `global ${name}`, stateStack);
+    await fireWithGuard(run, fn, data, `global ${name}`, stateStack);
   }
 
   for (const fn of gatherCallbacks(ctx, name, walkStack)) {
-    await fireWithGuard(fn, data, ctx, name, stateStack);
+    await fireWithGuard(run, fn, data, name, stateStack);
   }
 }
 
 /** Today's call sites that fire on the top-level stack. Thin wrapper over
  *  `invokeCallbacks` with no `stateStack` override. */
-export async function callHook<K extends keyof CallbackMap>(args: {
-  ctx?: RuntimeContext<any>;
-  name: K;
-  data: CallbackMap[K];
-}): Promise<void> {
-  await invokeCallbacks(args);
+export async function callHook<K extends keyof CallbackMap>(
+  run: Run,
+  args: {
+    name: K;
+    data: CallbackMap[K];
+  },
+): Promise<void> {
+  await invokeCallbacks(run, args);
 }

@@ -386,7 +386,7 @@ describe("prettyPrint", () => {
 
   it("TsScopedVar global with moduleId", () => {
     expect(printTs(ts.scopedVar("x", "global", "test.agency"))).toBe(
-      '__globals()!.get("test.agency", "x")',
+      '__run.globals.get("test.agency", "x")',
     );
   });
 
@@ -519,7 +519,7 @@ describe("prettyPrint", () => {
       );
       expect(out.endsWith("}, { matchId: 5 });")).toBe(true);
       // The else arm must still be present (no `undefined` placeholder).
-      expect(out).toContain("async (runner) => {");
+      expect(out).toContain("async (runner, __run) => {");
       expect(out).not.toContain(", undefined, { matchId");
     });
   });

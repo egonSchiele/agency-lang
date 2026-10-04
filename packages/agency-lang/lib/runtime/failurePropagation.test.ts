@@ -10,7 +10,7 @@ import {
   getFailurePropagationMode,
 } from "./failurePropagation.js";
 import type { FuncParam } from "./agencyFunction.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -332,7 +332,7 @@ describe("invoke() failure propagation", () => {
     const fn = makeFn([{ name: "text", acceptsResult: false }], () => {
       ran = true;
     });
-    const out: any = await fn.invoke({ type: "positional", args: [f] });
+    const out: any = await fn.invoke(testRun(), { type: "positional", args: [f] });
     expect(ran).toBe(false);
     expect(isFailure(out)).toBe(true);
     expect(out.error).toBe("boom");
@@ -341,9 +341,11 @@ describe("invoke() failure propagation", () => {
 
   it("runs the body for accepting and legacy params", async () => {
     const accepting = makeFn([{ name: "r", acceptsResult: true }], (r: unknown) => r);
-    expect(isFailure(await accepting.invoke({ type: "positional", args: [f] }))).toBe(true);
+    expect(isFailure(await accepting.invoke(testRun(), { type: "positional", args: [f] }))).toBe(
+      true,
+    );
     const legacy = makeFn([{ name: "r" }], (r: unknown) => "ran");
-    expect(await legacy.invoke({ type: "positional", args: [f] })).toBe("ran");
+    expect(await legacy.invoke(testRun(), { type: "positional", args: [f] })).toBe("ran");
   });
 
   it("checks values bound via .partial()", async () => {
@@ -358,14 +360,14 @@ describe("invoke() failure propagation", () => {
       },
     );
     const bound = fn.partial({ a: f });
-    const out: any = await bound.invoke({ type: "positional", args: ["ok"] });
+    const out: any = await bound.invoke(testRun(), { type: "positional", args: ["ok"] });
     expect(ran).toBe(false);
     expect(out.skippedFunctions).toEqual([{ name: "target", param: "a" }]);
   });
 
   it("checks named arguments", async () => {
     const fn = makeFn([{ name: "x", acceptsResult: false }], () => "ran");
-    const out: any = await fn.invoke({
+    const out: any = await fn.invoke(testRun(), {
       type: "named",
       positionalArgs: [],
       namedArgs: { x: f },
@@ -381,7 +383,7 @@ describe("invoke() failure propagation", () => {
       ],
       () => "ran",
     );
-    const out: any = await fn.invoke({
+    const out: any = await fn.invoke(testRun(), {
       type: "named",
       positionalArgs: [],
       namedArgs: { b: f },
@@ -397,7 +399,7 @@ describe("dispatcher failure checks", () => {
 
   it("__call: failure arg into an untagged plain TS function throws", async () => {
     const target = function formatDate() {};
-    await expect(__call(target, { type: "positional", args: [f] })).rejects.toThrowError(
+    await expect(__call(testRun(), target, { type: "positional", args: [f] })).rejects.toThrowError(
       /formatDate.*origin/s,
     );
   });
@@ -407,31 +409,31 @@ describe("dispatcher failure checks", () => {
     const target = acceptsFailures((...args: unknown[]) => {
       seen.push(...args);
     });
-    await __call(target, { type: "positional", args: [f] });
+    await __call(testRun(), target, { type: "positional", args: [f] });
     expect(isFailure(seen[0])).toBe(true);
   });
 
   it("__call: calling a failure value gives the rich message", async () => {
-    await expect(__call(f, { type: "positional", args: [] })).rejects.toThrowError(
+    await expect(__call(testRun(), f, { type: "positional", args: [] })).rejects.toThrowError(
       /failure value produced by 'origin'/,
     );
   });
 
   it("__callMethod: method call on a failure throws the rich message", async () => {
     await expect(
-      __callMethod(f, "split", { type: "positional", args: [" "] }),
+      __callMethod(testRun(), f, "split", { type: "positional", args: [" "] }),
     ).rejects.toThrowError(/split.*origin/s);
   });
 
   it("__callMethod: method call on a success throws with the .value hint", async () => {
     await expect(
-      __callMethod(success(5), "toFixed", { type: "positional", args: [1] }),
+      __callMethod(testRun(), success(5), "toFixed", { type: "positional", args: [1] }),
     ).rejects.toThrowError(/\.value\./);
   });
 
   it("__callMethod: r.value() works when the success wraps a function", async () => {
     const s = success((n: number) => n + 1);
-    const out = await __callMethod(s, "value", { type: "positional", args: [41] });
+    const out = await __callMethod(testRun(), s, "value", { type: "positional", args: [41] });
     expect(out).toBe(42);
   });
 
@@ -441,15 +443,15 @@ describe("dispatcher failure checks", () => {
     // the pattern the shallow check exists to protect. The TS-function
     // argument scan therefore lives in __call ONLY.
     const arr: unknown[] = [];
-    await __callMethod(arr, "push", { type: "positional", args: [f] });
+    await __callMethod(testRun(), arr, "push", { type: "positional", args: [f] });
     expect(arr).toHaveLength(1);
-    const out = await __callMethod(arr, "includes", { type: "positional", args: [f] });
+    const out = await __callMethod(testRun(), arr, "includes", { type: "positional", args: [f] });
     expect(out).toBe(true);
   });
 
   it("__call: an ALIASED JSON.stringify accepts a failure by identity", async () => {
     const stringify = JSON.stringify;
-    const out = await __call(stringify, { type: "positional", args: [f] });
+    const out = await __call(testRun(), stringify, { type: "positional", args: [f] });
     expect(typeof out).toBe("string");
   });
 });

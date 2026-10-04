@@ -60,7 +60,7 @@
  *    returning — letting runBatch then call `setResultOnBranch(key,
  *    undefined)` would overwrite the meaningful value with undefined.
  */
-import { agencyStore, lineageOf } from "./asyncContext.js";
+import { lineageOf, sameRun, withRun, type Run } from "./asyncContext.js";
 import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
 import { isAborted } from "./abortedResult.js";
@@ -79,7 +79,9 @@ export type BatchChild<T> = {
    * signal composed with parent) and that stack's abort signal. Must
    * return either a value `T` (success) or an `Interrupt[]` (halted with
    * interrupts). MUST NOT throw `Interrupt[]`. May throw other errors. */
-  invoke: (childStack: StateStack, abortSignal: AbortSignal) => Promise<T | Interrupt[]>;
+  /** `run` is the branch's own run: its stack, its thread view, and its
+   *  copy of the globals. */
+  invoke: (run: Run, childStack: StateStack, abortSignal: AbortSignal) => Promise<T | Interrupt[]>;
 };
 
 export type BatchHooks = {
@@ -128,6 +130,8 @@ export type BatchHooks = {
 };
 
 export type RunBatchOpts<T> = {
+  /** The run the batch was started under. Each branch gets a child of it. */
+  run: Run;
   ctx: RuntimeContext<any>;
   /** The parent's local state stack — used as the capture stack for the
    * shared batch-level checkpoint. MUST be the local slice (e.g. the
@@ -381,8 +385,8 @@ function startInvoke<T>(
       : { collector: opts.decisionCollector, armKey: t.child.key };
   return ctx.statelogClient
     .runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, decisions, () =>
-        t.child.invoke(t.branch.stack, signal),
+      runInBranchAlsFrame(opts.run, t.branch, shareGlobals, shareThreads, decisions, (branchRun) =>
+        t.child.invoke(branchRun, t.branch.stack, signal),
       ),
     )
     .then((value) => {
@@ -428,22 +432,14 @@ function startInvoke<T>(
  *  and exists purely to keep `runBatch` usable from future contexts
  *  that haven't installed a top-level frame yet. */
 function runInBranchAlsFrame<T>(
-  ctx: RuntimeContext<any>,
+  parent: Run,
   branch: BranchState,
   shareGlobals: boolean,
   shareThreads: boolean,
   decisions: DecisionScope | undefined,
-  fn: () => Promise<T>,
+  fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  const parent = agencyStore.getStore();
-  if (!parent) {
-    // No outer frame — invoke without seeding (the generated
-    // function/node body inside the branch will install its own
-    // scoped frame via the Runner's per-step wrap). No snapshot
-    // capture either: there's no parent state to clone from and no
-    // resume-time restore to feed.
-    return fn();
-  }
+  sameRun(parent, "runBatch()");
 
   // Build the per-branch globals + threads. Two independent dials:
   //   - `shareGlobals=false` (default): clone parent's GlobalStore,
@@ -468,7 +464,7 @@ function runInBranchAlsFrame<T>(
       ? parent.threads.restoreBranchView(branch.activeStack)
       : parent.threads.forkBranchView();
 
-  return agencyStore.run(
+  return withRun(
     {
       ctx: parent.ctx,
       stack: branch.stack,
@@ -481,7 +477,7 @@ function runInBranchAlsFrame<T>(
       decisions: decisions ?? parent.decisions,
       ...lineageOf(parent),
     },
-    async () => {
+    async (branchRun) => {
       try {
         // Capture-on-INTERRUPT discipline: snapshot the per-branch
         // globals + active-thread pointer only when the body settles
@@ -492,7 +488,7 @@ function runInBranchAlsFrame<T>(
         //
         // Only meaningful for the corresponding isolated dial.
         // Pointer-shared dials have nothing to snapshot.
-        const value = await fn();
+        const value = await fn(branchRun);
         if (hasInterrupts(value)) {
           if (!shareGlobals) branch.globalsJSON = branchGlobals.toJSON();
           if (!shareThreads) branch.activeStack = [...branchThreads.activeStack];
@@ -920,8 +916,8 @@ async function runRaceResume<T>(
     const shareGlobals = opts.shareGlobals ?? false;
     const shareThreads = opts.shareThreads ?? false;
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, branch, shareGlobals, shareThreads, undefined, () =>
-        child.invoke(branch.stack, signal),
+      runInBranchAlsFrame(opts.run, branch, shareGlobals, shareThreads, undefined, (branchRun) =>
+        child.invoke(branchRun, branch.stack, signal),
       ),
     );
   } catch (err) {

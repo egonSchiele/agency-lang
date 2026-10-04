@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import type { Result, PromptResult, SmolConfig, StreamChunk } from "smoltalk";
 import { agency } from "./agency.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
 import { DeterministicClient } from "./deterministicClient.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { RuntimeContext } from "./state/context.js";
@@ -28,9 +29,9 @@ function makeCtx(
 function inFrame<T>(
   ctx: RuntimeContext<any>,
   threads: ThreadStore,
-  fn: () => Promise<T>,
+  fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  return agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, fn);
+  return runInTestContext(ctx, ctx.stateStack, threads, fn);
 }
 
 /** Custom LLM client that records every PromptConfig it sees. Used to
@@ -278,13 +279,13 @@ describe("model and provider precedence", () => {
   /** The pair the client was actually asked for. */
   async function effectivePair(
     baked: Partial<SmolConfig>,
-    call: (threads: ThreadStore) => Promise<unknown>,
+    call: (threads: ThreadStore, run: Run) => Promise<unknown>,
   ): Promise<{ model?: string; provider?: string }> {
     const ctx = makeCtx(baked);
     const client = new RecordingClient(["ok"]);
     ctx.setLLMClient(client);
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
-    await inFrame(ctx, threads, () => call(threads));
+    await inFrame(ctx, threads, (run) => call(threads, run));
     const config = client.configs[0];
     if (config === undefined) {
       throw new Error("the prompt never reached the recording client");
@@ -333,15 +334,17 @@ describe("model and provider precedence", () => {
     // not provider. Generated Agency code passes its options object through
     // verbatim, so this calls the runPrompt seam directly to exercise the
     // per-call spread the way compiled code does.
-    const pair = await effectivePair({ model: "baked-model", provider: "openrouter" }, (threads) =>
-      runPrompt({
-        prompt: "hi",
-        messages: threads.getOrCreateActive(),
-        clientConfig: {
-          model: "call-model",
-          provider: "anthropic",
-        },
-      }),
+    const pair = await effectivePair(
+      { model: "baked-model", provider: "openrouter" },
+      (threads, run) =>
+        runPrompt(run, {
+          prompt: "hi",
+          messages: threads.getOrCreateActive(),
+          clientConfig: {
+            model: "call-model",
+            provider: "anthropic",
+          },
+        }),
     );
     expect(pair).toEqual({ model: "call-model", provider: "anthropic" });
   });

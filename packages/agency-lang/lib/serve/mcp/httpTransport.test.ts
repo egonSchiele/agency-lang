@@ -7,7 +7,7 @@ import { AgencyFunction } from "../../runtime/agencyFunction.js";
 import type { ServedExportedItem } from "../types.js";
 import { returnedOutcome, unusedPublicInvoke } from "../testOutcome.js";
 import { createLogger } from "../../logger.js";
-import { withTestFrame } from "../../runtime/__tests__/testHelpers.js";
+import { testRun, withTestFrame } from "../../runtime/__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -38,7 +38,9 @@ function makeHandler() {
       agencyFunction: addFn,
       interruptEffects: [],
       invokeServed: async (namedArgs) =>
-        returnedOutcome(await addFn.invoke({ type: "named", positionalArgs: [], namedArgs })),
+        returnedOutcome(
+          await addFn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs }),
+        ),
     },
   ];
   return createMcpHandler({

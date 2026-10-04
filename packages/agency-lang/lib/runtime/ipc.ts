@@ -13,7 +13,7 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
-import { getRuntimeContext, agencyStore } from "./asyncContext.js";
+import { ambientRun, getRuntimeContext, withRun, type Run } from "./asyncContext.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
 import { AgencyAbort, AgencyCancelledError } from "./errors.js";
@@ -896,8 +896,10 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
       s.ctx.statelogClient.snapshotStack(),
       () =>
         gatherChainOutcome(
+          // This listener runs in the frame that was current when the
+          // subprocess was started. Phase 3 passes the stored run here.
+          ambientRun("handleInterruptMessage()"),
           { effect, message, data, origin, expectsValue },
-          s.ctx,
           s.stateStack,
           msg.interruptId,
         ),
@@ -1129,8 +1131,8 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
   // AgencyAbort to the session exactly as handleTelemetryMessage routes a
   // guard trip (kill the child, settle the run); log anything else. Attaching
   // the handler is synchronous, so FIFO arrival-order processing still holds.
-  const fire = () =>
-    invokeCallbacks({ ctx: s.ctx, name: msg.name, data }).catch((err) => {
+  const fire = (run: Run) =>
+    invokeCallbacks(run, { name: msg.name, data }).catch((err) => {
       if (err instanceof AgencyAbort) {
         killChildSafely(s);
         settle(s, s.rejectPromise, err);
@@ -1143,9 +1145,9 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
       });
     });
   if (s.parentStore) {
-    agencyStore.run(s.parentStore, fire);
+    withRun(s.parentStore, fire);
   } else {
-    fire();
+    fire(ambientRun("handleCallbackMessage()"));
   }
 }
 
@@ -1522,6 +1524,7 @@ export async function _run(
   const spanId = ctx.statelogClient.startSpan("subprocessRun");
   try {
     const batchResult = await runBatch<any>({
+      run: store,
       ctx,
       parentStack: stateStack, // the local slice from ALS — slice rule
       parentFrame,
@@ -1537,7 +1540,7 @@ export async function _run(
       children: [
         {
           key: "subprocess_0",
-          invoke: (_childStack: StateStack, abortSignal: AbortSignal) =>
+          invoke: (_branchRun: Run, _childStack: StateStack, abortSignal: AbortSignal) =>
             invokeSubprocess({
               ctx,
               stateStack,

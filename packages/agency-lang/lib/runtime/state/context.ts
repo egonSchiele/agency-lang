@@ -25,7 +25,7 @@ import { GlobalStore } from "../state/globalStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { TraceWriter } from "../trace/traceWriter.js";
 import type { TraceConfig } from "../trace/types.js";
-import type { HandlerEntry, HandlerFn } from "../types.js";
+import type { HandlerEntry, HandlerFn, RunHandlerFn } from "../types.js";
 import {
   applyRuntimeConfigOverridesToContextArgs,
   getRuntimeConfigOverrides,
@@ -659,6 +659,11 @@ export class RuntimeContext<T> {
    *  time in withPushedHandler. See HandlerEntry. */
   pushHandler(fn: HandlerFn, liveGuardIds: string[]): void {
     this.handlers.push({ fn, liveGuardIds });
+  }
+  /** Register a handler function the compiler wrote. It is called with the
+   *  run it runs under, then the interrupt. */
+  pushRunHandler(fn: RunHandlerFn, liveGuardIds: string[]): void {
+    this.handlers.push({ fn, liveGuardIds, takesRun: true });
   }
   popHandler(): void {
     this.handlers.pop();

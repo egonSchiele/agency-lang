@@ -25,11 +25,15 @@ export {
   agencyStore,
   getRuntimeContext,
   runInTestContext,
+  runInBootstrapFrame,
+  withRun,
+  sameRun,
+  WrongRunError,
   __threads,
   __stateStack,
   __ctx,
   __globals,
-  type AgencyStore,
+  type Run,
 } from "./asyncContext.js";
 export { StateStack, State, claimFrameForScope } from "./state/stateStack.js";
 export { __codeLiteral } from "./template/codeLiteral.js";

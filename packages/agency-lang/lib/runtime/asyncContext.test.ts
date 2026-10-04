@@ -7,6 +7,7 @@ import {
   withCallsite,
   withPushedHandler,
   lineageOf,
+  WrongRunError,
 } from "./asyncContext.js";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import { RuntimeContext } from "./state/context.js";
@@ -146,9 +147,9 @@ describe("runInBootstrapFrame", () => {
 describe("withCallsite", () => {
   it("installs callsite on the active frame", () => {
     const seed = makeStore();
-    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
+    runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => {
       expect(agencyStore.getStore()?.callsite).toBeUndefined();
-      withCallsite({ moduleId: "m", scopeName: "s", stepPath: "1.2" }, () => {
+      withCallsite(run, { moduleId: "m", scopeName: "s", stepPath: "1.2" }, () => {
         expect(getRuntimeContext().callsite).toEqual({
           moduleId: "m",
           scopeName: "s",
@@ -161,9 +162,9 @@ describe("withCallsite", () => {
 
   it("nests; inner overrides, outer restored on return", () => {
     const seed = makeStore();
-    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
-      withCallsite({ moduleId: "m", scopeName: "outer", stepPath: "" }, () => {
-        withCallsite({ moduleId: "m", scopeName: "inner", stepPath: "1" }, () => {
+    runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => {
+      withCallsite(run, { moduleId: "m", scopeName: "outer", stepPath: "" }, (outer) => {
+        withCallsite(outer, { moduleId: "m", scopeName: "inner", stepPath: "1" }, () => {
           expect(getRuntimeContext().callsite?.scopeName).toBe("inner");
         });
         expect(getRuntimeContext().callsite?.scopeName).toBe("outer");
@@ -172,15 +173,18 @@ describe("withCallsite", () => {
   });
 
   it("throws outside an agency frame", () => {
-    expect(() => withCallsite({ moduleId: "", scopeName: "", stepPath: "" }, () => 1)).toThrow(
-      /outside an Agency execution frame/,
-    );
+    // A run from a frame that has already ended is refused: no run is current.
+    const seed = makeStore();
+    const stale = runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => run);
+    expect(() =>
+      withCallsite(stale, { moduleId: "", scopeName: "", stepPath: "" }, () => 1),
+    ).toThrow(WrongRunError);
   });
 
   it("preserves ctx/stack/threads from the parent frame", () => {
     const seed = makeStore();
-    runInTestContext(seed.ctx, seed.stack, seed.threads, () => {
-      withCallsite({ moduleId: "m", scopeName: "s", stepPath: "1" }, () => {
+    runInTestContext(seed.ctx, seed.stack, seed.threads, (run) => {
+      withCallsite(run, { moduleId: "m", scopeName: "s", stepPath: "1" }, () => {
         const s = getRuntimeContext();
         expect(s.ctx).toBe(seed.ctx);
         expect(s.stack).toBe(seed.stack);

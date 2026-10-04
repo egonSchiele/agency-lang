@@ -1,3 +1,4 @@
+import { ambientRun } from "../runtime/asyncContext.js";
 import { Block, markdownParser } from "tarsec/parsers/markdown";
 import { __call } from "../runtime/call.js";
 import { color } from "@/utils/termcolors.js";
@@ -43,7 +44,7 @@ export function _parseMarkdown(input: string): MarkdownParseResult {
 type Node = Record<string, unknown>;
 
 async function callFn(fn: unknown, node: Node): Promise<Node> {
-  return (await __call(fn, {
+  return (await __call(ambientRun("std::markdown callFn"), fn, {
     type: "positional",
     args: [node],
   })) as Node;

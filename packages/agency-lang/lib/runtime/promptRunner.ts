@@ -1,3 +1,4 @@
+import type { Run } from "./asyncContext.js";
 import type { MessageJSON } from "smoltalk";
 import type { MessageThreadJSON } from "./state/messageThread.js";
 import { hasInterrupts, type Interrupt } from "./interrupts.js";
@@ -161,10 +162,11 @@ export class PromptRunner {
    * `branchFn` propagates out of `runBatch` and aborts the whole batch.
    */
   async parallel<T>(
+    run: Run,
     keyPrefix: string,
     items: T[],
     keyFor: (item: T, index: number) => string,
-    branchFn: (item: T, b: BranchRunner, index: number) => Promise<void>,
+    branchFn: (item: T, b: BranchRunner, index: number, branchRun: Run) => Promise<void>,
   ): Promise<RunBatchResult<void>> {
     const branches = items.map(() => new BranchRunner(this.opts.self));
     const parentFrame = this.opts.parentFrame ?? this.opts.stateStack.lastFrame();
@@ -172,6 +174,7 @@ export class PromptRunner {
     const stepPath = basePath ? `${basePath}/${keyPrefix}` : keyPrefix;
 
     const result = await runBatch<void>({
+      run,
       ctx: this.opts.ctx,
       parentStack: this.opts.stateStack,
       parentFrame,
@@ -200,8 +203,8 @@ export class PromptRunner {
       shareThreads: true,
       children: items.map((item, i) => ({
         key: keyFor(item, i),
-        invoke: async () => {
-          await branchFn(item, branches[i], i);
+        invoke: async (branchRun) => {
+          await branchFn(item, branches[i], i, branchRun);
           // Surface the branch's collected interrupts (if any) as the
           // invoke's return value. runBatch will batch them with sibling
           // interrupts and stamp the shared checkpoint.

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
 import * as smoltalk from "smoltalk";
-import { agency } from "./agency.js";
+import { runInTestContext } from "./asyncContext.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { runPrompt } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
@@ -56,8 +56,8 @@ async function runWith(client: LLMClient): Promise<MessageThread> {
   const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
   const thread = new MessageThread();
   vi.spyOn(ctx.statelogClient, "promptCompletion").mockResolvedValue();
-  await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () =>
-    runPrompt({ prompt: "say hi", messages: thread, clientConfig: {} as any }),
+  await runInTestContext(ctx, ctx.stateStack, threads, (run) =>
+    runPrompt(run, { prompt: "say hi", messages: thread, clientConfig: {} as any }),
   );
   return thread;
 }

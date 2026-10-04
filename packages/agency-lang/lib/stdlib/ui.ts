@@ -1,3 +1,4 @@
+import { ambientRun } from "../runtime/asyncContext.js";
 import process from "process";
 import {
   Screen,
@@ -228,7 +229,7 @@ export function _triggerRender(): void {
  *  path (preserving handlers, ALS context, retry semantics) rather
  *  than being invoked as raw JS. */
 async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
-  return (await __call(fn, { type: "positional", args })) as T;
+  return (await __call(ambientRun("std::ui bridge"), fn, { type: "positional", args })) as T;
 }
 
 /** Shape of the `state` arg `_beginSubmit` mutates while the async

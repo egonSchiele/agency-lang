@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { PromptRunner, PromptBailout } from "./promptRunner.js";
+import { PromptRunner, PromptBailout, type BranchRunner } from "./promptRunner.js";
 import { State, StateStack } from "./state/stateStack.js";
+import { ThreadStore } from "./state/threadStore.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
 
 /** Stub statelog client. Includes the minimum surface PromptRunner touches:
  *  checkpointCreated for `step()`, snapshotStack / runInBranchContext for
@@ -39,7 +41,25 @@ function makeRunner(overrides: Partial<any> = {}) {
     snapshotMessages: () => [],
     ...overrides,
   };
-  return { runner: new PromptRunner(opts), self, ctx, parentFrame };
+  const runner = new PromptRunner(opts);
+  /** `runner.parallel` under a frame built from this runner's ctx and stack. */
+  const parallel = <T>(
+    keyPrefix: string,
+    items: T[],
+    keyFor: (item: T, index: number) => string,
+    branchFn: (item: T, b: BranchRunner, index: number, branchRun: Run) => Promise<void>,
+  ) =>
+    runInTestContext(opts.ctx, opts.stateStack, new ThreadStore(), (run) =>
+      runner.parallel(run, keyPrefix, items, keyFor, branchFn),
+    );
+  return {
+    runner,
+    parallel,
+    self,
+    ctx: opts.ctx,
+    stateStack: opts.stateStack,
+    parentFrame,
+  };
 }
 
 /** Build an Interrupt-shaped object (matches `isInterrupt`'s `type === "interrupt"`). */
@@ -253,9 +273,9 @@ describe("PromptRunner.parallel", () => {
   const keyFor = (item: any, i: number) => `k_${item}_${i}`;
 
   it("runs every branch concurrently", async () => {
-    const { runner } = makeRunner();
+    const { parallel } = makeRunner();
     const order: string[] = [];
-    const result = await runner.parallel("group", ["a", "b", "c"], keyFor, async (item, b) => {
+    const result = await parallel("group", ["a", "b", "c"], keyFor, async (item, b) => {
       await b.step(`${item}.s1`, async () => {
         order.push(`start-${item}`);
       });
@@ -281,8 +301,8 @@ describe("PromptRunner.parallel", () => {
       },
       statelogClient: stubStatelogClient(),
     };
-    const { runner } = makeRunner({ ctx });
-    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+    const { parallel } = makeRunner({ ctx });
+    const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
       await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
     });
     expect(result.kind).toBe("interrupts");
@@ -294,9 +314,9 @@ describe("PromptRunner.parallel", () => {
 
   it("skips a branch step whose key was already completed on a prior pass", async () => {
     const self: any = { runnerState: { completedSteps: ["a.s1"] } };
-    const { runner } = makeRunner({ self });
+    const { parallel } = makeRunner({ self });
     let ran = 0;
-    const result = await runner.parallel("group", ["a"], keyFor, async (item, b) => {
+    const result = await parallel("group", ["a"], keyFor, async (item, b) => {
       await b.step(`${item}.s1`, async () => {
         ran++;
       });
@@ -306,9 +326,9 @@ describe("PromptRunner.parallel", () => {
   });
 
   it("once a branch step has collected interrupts, later steps on that branch are no-ops", async () => {
-    const { runner } = makeRunner();
+    const { parallel } = makeRunner();
     let later = 0;
-    const result = await runner.parallel("group", ["a"], keyFor, async (item, b) => {
+    const result = await parallel("group", ["a"], keyFor, async (item, b) => {
       await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
       await b.step(`${item}.s2`, async () => {
         later++;
@@ -330,8 +350,8 @@ describe("PromptRunner.parallel", () => {
       },
       statelogClient: stubStatelogClient(),
     };
-    const { runner } = makeRunner({ ctx });
-    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+    const { parallel } = makeRunner({ ctx });
+    const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
       await b.step(`${item}.s1`, async () => {});
     });
     expect(result.kind).toBe("values");
@@ -343,8 +363,8 @@ describe("PromptRunner.parallel", () => {
     // others finish. The merged result must surface only the bailing
     // branch's interrupts, and the completed branch's step must be marked
     // so resume doesn't re-run it.
-    const { runner, self } = makeRunner();
-    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+    const { parallel, self } = makeRunner();
+    const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
       if (item === "a") {
         await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
       } else {
@@ -367,15 +387,16 @@ describe("PromptRunner.parallel", () => {
     const stateStack = new StateStack();
     const parentFrame = new State();
     stateStack.stack.push(parentFrame);
+    const ctx: any = {
+      checkpoints: {
+        create: () => 99,
+        get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
+      },
+      statelogClient: stubStatelogClient(),
+    };
     const runner = new PromptRunner({
       self,
-      ctx: {
-        checkpoints: {
-          create: () => 99,
-          get: () => ({ moduleId: "", scopeName: "", stepPath: "" }),
-        },
-        statelogClient: stubStatelogClient(),
-      } as any,
+      ctx,
       stateStack,
       parentFrame,
       checkpointInfo: undefined,
@@ -384,9 +405,11 @@ describe("PromptRunner.parallel", () => {
         return [{ role: "user", content: "x" }] as any;
       },
     });
-    const result = await runner.parallel("group", ["a"], keyFor, async (item, b) => {
-      await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
-    });
+    const result = await runInTestContext(ctx, stateStack, new ThreadStore(), (run) =>
+      runner.parallel(run, "group", ["a"], keyFor, async (item, b) => {
+        await b.step(`${item}.s1`, async () => [fakeInterrupt(item)] as any);
+      }),
+    );
     expect(result.kind).toBe("interrupts");
     expect(snapshots.length).toBe(1);
     expect(self.messagesJSON).toEqual([{ role: "user", content: "x" }]);
@@ -407,8 +430,8 @@ describe("PromptRunner.parallel", () => {
       },
       statelogClient: stubStatelogClient(),
     };
-    const { runner } = makeRunner({ ctx });
-    const result = await runner.parallel("group", [], keyFor, async () => {});
+    const { parallel } = makeRunner({ ctx });
+    const result = await parallel("group", [], keyFor, async () => {});
     expect(result.kind).toBe("values");
     expect(cpCount).toBe(0);
   });
@@ -421,10 +444,10 @@ describe("PromptRunner.parallel", () => {
     const self: any = {
       runnerState: { completedSteps: ["b.s1"] },
     };
-    const { runner } = makeRunner({ self });
+    const { parallel } = makeRunner({ self });
     let aRan = 0;
     let bRan = 0;
-    const result = await runner.parallel("group", ["a", "b"], keyFor, async (item, b) => {
+    const result = await parallel("group", ["a", "b"], keyFor, async (item, b) => {
       await b.step(`${item}.s1`, async () => {
         if (item === "a") aRan++;
         else bRan++;

@@ -29,6 +29,7 @@ import * as smoltalk from "smoltalk";
 import { nanoid } from "nanoid";
 import {
   agencyStore,
+  ambientRun,
   getRuntimeContext,
   runInTestContext,
   withCallsite as _withCallsite,
@@ -36,6 +37,8 @@ import {
   type CallsiteLocation,
 } from "./asyncContext.js";
 import { addCost, addTokens } from "./cost.js";
+import { __call } from "./call.js";
+import type { CallType } from "./agencyFunction.js";
 import { interrupt, type InterruptOpts } from "./agencyInterrupt.js";
 import { llm as _llm } from "./agencyLlm.js";
 import {
@@ -270,7 +273,8 @@ const restore = (idOrCp: number | Checkpoint, opts: RestoreOptions = {}): void =
  *  Most TS helpers will never need this — the auto-seeded callsite
  *  from the surrounding step is the right answer. Throws if no
  *  Agency frame is installed. */
-const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T => _withCallsite(loc, fn);
+const withCallsite = <T>(loc: CallsiteLocation, fn: () => T): T =>
+  _withCallsite(ambientRun("agency.withCallsite()"), loc, () => fn());
 
 // ---- Handlers / guards ------------------------------------------------
 
@@ -400,6 +404,35 @@ const withTestContext = <T>(
   fn: () => T,
 ): T => runInTestContext(args.ctx, args.stack, args.threads, fn);
 
+// ---- The handle --------------------------------------------------------
+
+/**
+ * A handle on the run a helper was called under. A helper takes it on its
+ * first line, before any `await`, and uses it for the rest of its work:
+ *
+ *   export async function fakeRepl(onSubmit) {
+ *     const run = agency.current();
+ *     for (const line of lines) {
+ *       await run.call(onSubmit, line);
+ *     }
+ *   }
+ *
+ * `call` takes positional arguments. `callWith` takes the descriptor the
+ * compiler emits, for named arguments and a trailing block.
+ */
+export type RunHandle = {
+  call: (fn: unknown, ...args: unknown[]) => Promise<unknown>;
+  callWith: (fn: unknown, descriptor: CallType) => Promise<unknown>;
+};
+
+const current = (): RunHandle => {
+  const run = getRuntimeContext();
+  return {
+    call: (fn, ...args) => __call(run, fn, { type: "positional", args }),
+    callWith: (fn, descriptor) => __call(run, fn, descriptor),
+  };
+};
+
 // ---- Namespace ---------------------------------------------------------
 
 /**
@@ -409,6 +442,7 @@ const withTestContext = <T>(
  * exports.
  */
 export const agency = {
+  current,
   ctx,
   ctxMaybe,
   callsite,

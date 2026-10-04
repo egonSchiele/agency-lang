@@ -53,7 +53,7 @@ describe("agency.llm — checkpointInfo forwarding", () => {
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toMatchObject({
+    expect(spy.mock.calls[0][1]).toMatchObject({
       checkpointInfo: { moduleId: "M", scopeName: "S", stepPath: "1.2" },
     });
   });
@@ -71,6 +71,6 @@ describe("agency.llm — checkpointInfo forwarding", () => {
     await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, () => agency.llm("hi"));
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0].checkpointInfo).toBeUndefined();
+    expect(spy.mock.calls[0][1].checkpointInfo).toBeUndefined();
   });
 });

@@ -87,7 +87,8 @@ export function llm<S extends z.ZodSchema>(
 ): Promise<z.infer<S>>;
 export function llm(prompt: string | UserContentInput, opts?: LlmOpts): Promise<string>;
 export async function llm(prompt: string | UserContentInput, opts: LlmOpts = {}): Promise<any> {
-  const thread = opts.thread ?? getRuntimeContext().threads.getOrCreateActive();
+  const run = getRuntimeContext();
+  const thread = opts.thread ?? run.threads.getOrCreateActive();
   // Build clientConfig with `model` only when explicitly overridden.
   // Passing `{ model: undefined }` would still let `runPrompt`'s merge
   // with smoltalkDefaults pick up the default, but being explicit keeps
@@ -108,12 +109,12 @@ export async function llm(prompt: string | UserContentInput, opts: LlmOpts = {})
     backoff: opts.backoff,
   };
 
-  return runPrompt({
+  return runPrompt(run, {
     prompt,
     messages: thread,
     responseFormat: opts.schema,
     clientConfig,
     retryConfig,
-    checkpointInfo: agencyStore.getStore()?.callsite,
+    checkpointInfo: run.callsite,
   });
 }

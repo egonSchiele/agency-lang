@@ -163,15 +163,10 @@ export async function interrupt<T = unknown>(opts: InterruptOpts<T>): Promise<In
   const effect = opts.effect ?? "unknown";
   const data = opts.data;
   const origin = callsite.moduleId;
-  const handlerResult = await interruptWithHandlers(
-    effect,
-    opts.message,
-    data,
-    origin,
-    ctx,
+  const handlerResult = await interruptWithHandlers(rt, effect, opts.message, data, origin, {
+    expectsValue: opts.expectsValue,
     stack,
-    { expectsValue: opts.expectsValue },
-  );
+  });
 
   if (isRejected(handlerResult)) return handlerResult;
   if (isApproved(handlerResult)) return handlerResult;

@@ -807,7 +807,7 @@ export class TypescriptPreprocessor {
         // actionable.
         const awaitPendingCode: RawCode = {
           type: "rawCode",
-          value: `await getRuntimeContext().ctx.pendingPromises.awaitPending([${keyArray}]);`,
+          value: `await __run.ctx.pendingPromises.awaitPending([${keyArray}]);`,
         };
         newBody.push(awaitPendingCode);
       }

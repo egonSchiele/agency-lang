@@ -63,7 +63,7 @@ export type CallsiteLocation = {
   stepPath: string;
 };
 
-export type AgencyStore = {
+export type Run = {
   ctx: RuntimeContext<any>;
   stack: StateStack;
   threads: ThreadStore;
@@ -146,7 +146,7 @@ export type AgencyStore = {
  * handler does not hear its own raises, with no error anywhere.
  */
 export type Lineage = Pick<
-  AgencyStore,
+  Run,
   "callDepth" | "handlerChainDepth" | "executingHandlers" | "activeCallbacks"
 >;
 
@@ -154,7 +154,7 @@ export type Lineage = Pick<
  * The lineage a new frame starts with: the outer frame's when there is one,
  * and empty values at the root of a run.
  */
-export function lineageOf(outer: AgencyStore | undefined): Lineage {
+export function lineageOf(outer: Run | undefined): Lineage {
   if (outer) {
     return {
       callDepth: outer.callDepth,
@@ -166,14 +166,71 @@ export function lineageOf(outer: AgencyStore | undefined): Lineage {
   return { callDepth: null, handlerChainDepth: 0, executingHandlers: [], activeCallbacks: [] };
 }
 
-export const agencyStore = new AsyncLocalStorage<AgencyStore>();
+export const agencyStore = new AsyncLocalStorage<Run>();
+
+/**
+ * Thrown when a function was handed a run that is not the one
+ * `AsyncLocalStorage` holds at that moment.
+ */
+export class WrongRunError extends Error {
+  constructor(caller: string, found: Run | undefined) {
+    super(
+      `${caller} was handed a run that is not the current one. ` +
+        (found
+          ? "The run it was handed belongs to a different step, branch, or call."
+          : "No run is current here at all."),
+    );
+    this.name = "WrongRunError";
+  }
+}
+
+/**
+ * Check that `run` is the frame `AsyncLocalStorage` holds right now, and
+ * return it.
+ *
+ * This is the check that makes passing the run explicitly safe to do. While
+ * `AsyncLocalStorage` is still in place, every function that takes a run
+ * compares it with the frame main would have read. The existing test suites
+ * then test, at each such place, that the code was handed the right run.
+ * Phase 3 of the explicit-run plan deletes this function along with
+ * `agencyStore`.
+ */
+export function sameRun(run: Run, caller: string): Run {
+  const current = agencyStore.getStore();
+  if (current !== run) {
+    throw new WrongRunError(caller, current);
+  }
+  return run;
+}
+
+/**
+ * The current run, read from `AsyncLocalStorage`, for a function that has
+ * not been given a run parameter yet.
+ *
+ * Every call to this is a place still to be changed: the function should
+ * take the run from its caller. The explicit-run work removes these one by
+ * one, and Phase 3 cannot start while any remain. `caller` names the
+ * function, for the error and for counting what is left.
+ */
+export function ambientRun(caller: string): Run {
+  return requireFrame(caller);
+}
+
+/**
+ * Run `fn` under `run`: install it as the current frame and hand it to `fn`.
+ * Every place that makes a child run goes through here, so the run a body
+ * is handed and the frame `AsyncLocalStorage` holds are the same object.
+ */
+export function withRun<T>(run: Run, fn: (run: Run) => T): T {
+  return agencyStore.run(run, () => fn(run));
+}
 
 /**
  * The current frame, for code that tracks a lineage value. It throws when
  * there is no frame. Reading "no frame" as an empty lineage would let lost
  * context turn a limit off without anyone noticing.
  */
-export function requireFrame(caller: string): AgencyStore {
+export function requireFrame(caller: string): Run {
   const frame = agencyStore.getStore();
   if (!frame) {
     throw new Error(
@@ -192,12 +249,9 @@ export function requireFrame(caller: string): AgencyStore {
  * calls. Throws if called outside any agency frame (no inheritable
  * base).
  */
-export function withCallsite<T>(loc: CallsiteLocation, fn: () => T): T {
-  const store = agencyStore.getStore();
-  if (!store) {
-    throw new Error("withCallsite() called outside an Agency execution frame.");
-  }
-  return agencyStore.run({ ...store, callsite: loc }, fn);
+export function withCallsite<T>(run: Run, loc: CallsiteLocation, fn: (run: Run) => T): T {
+  sameRun(run, "withCallsite()");
+  return withRun({ ...run, callsite: loc }, fn);
 }
 
 /**
@@ -237,7 +291,7 @@ export async function withPushedHandler<T>(
  * stdlib functions directly should wrap their bodies in
  * `runInTestContext(ctx, stack, threads, fn)`.
  */
-export function getRuntimeContext(): AgencyStore {
+export function getRuntimeContext(): Run {
   const s = agencyStore.getStore();
   if (!s) {
     throw new Error(
@@ -332,9 +386,9 @@ export function runInTestContext<T>(
   ctx: RuntimeContext<any>,
   stack: StateStack,
   threads: ThreadStore,
-  fn: () => T,
+  fn: (run: Run) => T,
 ): T {
-  return agencyStore.run(
+  return withRun(
     { ctx, stack, threads, globals: ctx.globals, ...lineageOf(agencyStore.getStore()) },
     fn,
   );
@@ -365,9 +419,9 @@ export function runInTestContext<T>(
  */
 export async function runInBootstrapFrame<T>(
   ctx: RuntimeContext<any>,
-  fn: () => T | Promise<T>,
+  fn: (run: Run) => T | Promise<T>,
 ): Promise<T> {
-  return agencyStore.run(
+  return withRun(
     {
       ctx,
       stack: ctx.stateStack,

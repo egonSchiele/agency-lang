@@ -731,6 +731,67 @@ twice.
 
 `AsyncLocalStorage` stays, and every read is checked against it.
 
+#### Built so far: the seam between generated code and the runtime
+
+Branch `explicit-run-phase-2`, stacked on `explicit-run`. This is the core
+of Tasks 7, 8, and 11, and a first piece of Task 10.
+
+- **Generated code holds the run.** Every function, block, handler
+  function, init function, and finalize closure takes `__run` first, and
+  every body the runtime calls back declares `__run`. Generated code no
+  longer calls `getRuntimeContext()`, `__threads()`, `__stateStack()`, or
+  `__globals()`. It reads `__run.ctx`, `__run.threads`, `__run.stack`, and
+  `__run.globals`.
+- **The Runner checks every step.** Each Runner method takes the run it is
+  called under, checks it with `sameRun`, makes one child, and hands the
+  child to both `AsyncLocalStorage` and the body.
+- **The call path takes the run.** `__call`, `__callMethod`,
+  `AgencyFunction.invoke`, `withCallDepth`, `runAsHandler`, the handler
+  chain, `interruptWithHandlers`, `callHook`, `invokeCallbacks`, `runBatch`,
+  `runPrompt` and its tool loop, the three tool-invocation frames, guard
+  trips, and the debugger step.
+- **A node gets its run from its state.** The graph engine calls a node
+  with its state only, so `GraphState` has a `run` field, set where
+  `graph.run` is called and carried along by `goto`.
+- **`agency.current()`** returns a handle with `call` and `callWith`.
+
+Three things differ from the design above:
+
+1. `new Runner(ctx, frame, opts)` keeps its shape. Generated code passes
+   `stack` and `threads` in `opts`, and the constructor no longer reads
+   `AsyncLocalStorage`. Taking a `Run` there would have meant rebuilding 61
+   test constructions for no gain.
+2. `ambientRun(caller)` marks a function that still reads the current frame
+   because its own caller has no run to give it yet. There are 12. Each is
+   a place still to change, and Phase 3 cannot start while any remain.
+3. The stage of a pipe is wrapped in a body that declares `__run`, so one
+   lambda builder serves both `runner.pipe` and a bare `|>` expression.
+
+Numbers at this point, from `scripts/audit-run-reads.mjs` and `grep`:
+
+| | On main | Now |
+| --- | --- | --- |
+| Functions that install a frame through `agencyStore.run` | 18 | 2 (`withRun` and one in `statelogClient`) |
+| Functions that read a context variable directly | 49 | 37 |
+| Call sites that read the frame, in `lib/runtime` and `lib/serve` | | about 70 |
+| ...in `lib/stdlib` | | about 95 |
+| `ambientRun()` uses | | 12 |
+
+Verified locally: the full unit suite (15,244 tests), the Agency-js suite
+(190 tests), and the `handlers`, `handler-lineage`, `fork`, `subprocess`,
+`guards`, `threads`, `substeps`, `ts-helpers`, `blocks`, `agents`, and
+callback tests of the Agency suite. No test found a place where the
+runtime handed a function the wrong run.
+
+What broke, as Decision 6 expected: a helper that calls `__call(fn, ...)`
+itself. `tests/agency-js/agent-session-resume/loop.js` did, and now uses
+`agency.current()`. Every package's compiled `index.js` had to be rebuilt,
+because code from the old compiler calls the runtime with the old
+argument order.
+
+Still to do in this phase: the rest of Task 8 (the remaining reads in the
+runtime), and Tasks 5, 6, 9, 10, 12, 13, and 14.
+
 - [ ] **Task 5. Give the 10 small readers their value directly.** These
       read the frame only for a log line, a config flag, or the clock:
       `ipcChildDebug`, `abortedResult.statelogClient`, `warnDroppedData`,

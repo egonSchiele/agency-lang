@@ -5,7 +5,7 @@
  * to call them.
  */
 import type { FuncParam } from "./agencyFunction.js";
-import { agencyStore } from "./asyncContext.js";
+import { sameRun, withRun, type Run } from "./asyncContext.js";
 import { isSuccess } from "./result.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { MessageThread } from "./state/messageThread.js";
@@ -52,14 +52,12 @@ export type FailureTier = "destructive" | "neverStarted" | "idempotent" | "neutr
  * branches, whose frames copy the slot.
  */
 export function runAsToolInvocation<T>(
+  run: Run,
   branchStack: StateStack,
-  invoke: () => Promise<T>,
+  invoke: (run: Run) => Promise<T>,
 ): Promise<T> {
-  const parentFrame = agencyStore.getStore();
-  if (!parentFrame) {
-    return invoke();
-  }
-  return agencyStore.run({ ...parentFrame, toolInvocationStack: branchStack }, invoke);
+  sameRun(run, "runAsToolInvocation()");
+  return withRun({ ...run, toolInvocationStack: branchStack }, invoke);
 }
 
 /**
@@ -76,16 +74,13 @@ export function runAsToolInvocation<T>(
  * calls llm() does not log a phantom default thread.
  */
 export async function invokeOnFreshThreadStore<T>(
-  ctx: RuntimeContext<GraphState>,
-  invoke: () => Promise<T>,
+  run: Run,
+  invoke: (run: Run) => Promise<T>,
 ): Promise<T> {
-  const parentFrame = agencyStore.getStore();
-  if (!parentFrame) {
-    return invoke();
-  }
+  sameRun(run, "invokeOnFreshThreadStore()");
   const freshThreads = new ThreadStore();
-  freshThreads.setStatelogClient(ctx.statelogClient);
-  return agencyStore.run({ ...parentFrame, threads: freshThreads }, invoke);
+  freshThreads.setStatelogClient(run.ctx.statelogClient);
+  return withRun({ ...run, threads: freshThreads }, invoke);
 }
 
 /**
@@ -95,21 +90,19 @@ export async function invokeOnFreshThreadStore<T>(
  * say) cannot interleave pushes and pops on a shared one.
  */
 export async function invokeOnThread<T>(
+  run: Run,
   thread: MessageThread,
   scopeKey: string,
-  invoke: () => Promise<T>,
+  invoke: (run: Run) => Promise<T>,
 ): Promise<T> {
   // The body's system messages are tagged with the dispatch's scope key
   // while it runs, so the hand-back can remove them without a marker on
   // the thread. Re-entered when a resume re-runs the dispatch.
   thread.enterHandoffScope(scopeKey);
   try {
-    const parentFrame = agencyStore.getStore();
-    if (!parentFrame) {
-      return await invoke();
-    }
-    const view = parentFrame.threads.viewWithActive(thread);
-    return await agencyStore.run({ ...parentFrame, threads: view }, invoke);
+    sameRun(run, "invokeOnThread()");
+    const view = run.threads.viewWithActive(thread);
+    return await withRun({ ...run, threads: view }, invoke);
   } finally {
     thread.exitHandoffScope();
   }

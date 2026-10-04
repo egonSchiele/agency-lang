@@ -78,7 +78,7 @@ describe("_eagerSummarizeIfNeeded", () => {
     // MessageThread, not the closing thread or the default active
     // thread. Both would cause the summarizer prompt to pollute the
     // user's conversation history.
-    const passedThread = spy.mock.calls[0][0].messages as MessageThread;
+    const passedThread = spy.mock.calls[0][1].messages as MessageThread;
     expect(passedThread).toBeInstanceOf(MessageThread);
     expect(passedThread).not.toBe(threads.get(id));
     expect(passedThread).not.toBe(threads.active());
@@ -228,7 +228,7 @@ describe("_eagerSummarizeIfNeeded", () => {
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
-    const prompt = spy.mock.calls[0][0].prompt as string;
+    const prompt = spy.mock.calls[0][1].prompt as string;
     expect(prompt).not.toContain("GIANT SYSTEM PROMPT");
     expect(prompt).not.toContain("DEV INSTRUCTIONS");
     expect(prompt).toContain("[user] say hello");
@@ -274,7 +274,7 @@ describe("_eagerSummarizeIfNeeded", () => {
     );
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0].clientConfig.maxTokens).toBe(256);
+    expect(spy.mock.calls[0][1].clientConfig.maxTokens).toBe(256);
   });
 
   it("tolerates non-canonical (non-slug) thread ids by passing them through", async () => {

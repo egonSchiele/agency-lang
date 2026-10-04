@@ -2,6 +2,7 @@ import { CostEstimate, TokenUsage } from "smoltalk";
 import { RuntimeContext, ThreadStore } from "./index.js";
 import { ThreadStoreJSON } from "./state/threadStore.js";
 import type { RunUsage } from "./invocationUsage.js";
+import type { Run } from "./asyncContext.js";
 
 export type GraphState = {
   messages?: ThreadStore;
@@ -14,6 +15,10 @@ export type GraphState = {
 
   // if true, restore the state from the state stack in ctx.
   isResume?: boolean;
+
+  /** The run the graph was started under. Each node body takes it from
+   *  here, because the graph engine calls a node with its state only. */
+  run: Run;
 };
 
 /** A run's result before its entry point attaches `usage` and `traceId`. */
@@ -62,9 +67,16 @@ export type HandlerFn = (interrupt: {
  *  array indices and registration counts do not (see the resumable-
  *  guards plan, decision 14). */
 export type HandlerEntry = {
-  fn: HandlerFn;
+  fn: HandlerFn | RunHandlerFn;
   liveGuardIds: string[];
+  /** True for a handler function the compiler wrote, which takes the run it
+   *  is called under as its first argument. A handler registered from
+   *  TypeScript takes only the interrupt. */
+  takesRun?: boolean;
 };
+
+/** A handler function the compiler wrote: the run, then the interrupt. */
+export type RunHandlerFn = (run: Run, interrupt: Parameters<HandlerFn>[0]) => ReturnType<HandlerFn>;
 
 /* tokenstats
 {

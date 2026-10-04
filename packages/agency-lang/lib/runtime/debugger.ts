@@ -6,9 +6,10 @@ import { Checkpoint } from "./state/checkpointStore.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { SourceLocation } from "./state/sourceLocation.js";
 import type { StateStack } from "./state/stateStack.js";
+import type { Run } from "./asyncContext.js";
 
 export async function debugStep(
-  ctx: RuntimeContext<any>,
+  run: Run,
   info: Omit<SourceLocation, "nodeId"> & {
     label: string | null;
     nodeContext: boolean;
@@ -16,6 +17,7 @@ export async function debugStep(
   },
   stack?: StateStack,
 ): Promise<Interrupt[] | undefined> {
+  const ctx: RuntimeContext<any> = run.ctx;
   // Global initialization runs outside any graph node, so there's no node
   // context to create checkpoints against. Skip debugging entirely.
   if (!ctx.stateStack.currentNodeId()) {
@@ -39,8 +41,7 @@ export async function debugStep(
       stack === ctx.stateStack &&
       hasCallbackConsumer(ctx, "onCheckpoint", stack)
     ) {
-      await callHook({
-        ctx,
+      await callHook(run, {
         name: "onCheckpoint",
         data: {
           runId: ctx.getRunId(),

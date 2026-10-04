@@ -46,13 +46,14 @@ export async function rewindFrom(args: {
         // `Runner.runInScope` with the per-scope ThreadStore
         // reconstituted by `setupNode` — nothing user-facing should
         // reach for `threads` in the slice covered by this wrap.
-        const result = await runInBootstrapFrame(execCtx, () =>
+        const result = await runInBootstrapFrame(execCtx, (run) =>
           execCtx.graph.run(
             nodeName,
             {
               data: {},
               ctx: execCtx,
               isResume: true,
+              run,
             },
             {
               onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),

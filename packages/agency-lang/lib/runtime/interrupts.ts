@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
-import { agencyStore, requireFrame, runInBootstrapFrame } from "./asyncContext.js";
+import { agencyStore, runInBootstrapFrame, sameRun, withRun, type Run } from "./asyncContext.js";
 import { exitProcess } from "./exitProcess.js";
 import {
   resolveInvocation,
@@ -32,7 +32,7 @@ import { RuntimeContext } from "./state/context.js";
 import { GlobalStore, GlobalStoreJSON } from "./state/globalStore.js";
 import { StateStack, StateStackJSON } from "./state/stateStack.js";
 import { Approved, GraphState, Rejected, RunNodeCoreResult, RunNodeResult } from "./types.js";
-import type { HandlerEntry } from "./types.js";
+import type { HandlerEntry, HandlerFn, RunHandlerFn } from "./types.js";
 import { tokenStatsOf, unwrapWithUsage, type ServedInvocationOutcome } from "./invocationUsage.js";
 import { finishServedInvocation, type RawOutcome } from "./servedInvocationLifecycle.js";
 import { createReturnObject, deepClone } from "./utils.js";
@@ -232,7 +232,7 @@ const MAX_HANDLER_CHAIN_DEPTH = 10;
  * Emits handlerDecision/interruptResolved events along the way and returns
  * a summary outcome the caller uses to decide whether to propagate. */
 async function runHandlerChain(
-  ctx: RuntimeContext<any>,
+  outerRun: Run,
   stack: StateStack | undefined,
   interruptId: string,
   interruptObj: InterruptInfo,
@@ -243,6 +243,8 @@ async function runHandlerChain(
   // inherited parent depth, so fan-out breadth never accumulates; only a
   // handler whose body re-enters the chain nests inside the `run(...)` scope
   // below and climbs the depth.
+  const frame = sameRun(outerRun, "runHandlerChain()");
+  const ctx = frame.ctx;
   if ((ctx.handlers ?? []).length > 0 && !stack) {
     throw new Error(
       "Cannot run interrupt handlers: no StateStack was passed in. " +
@@ -254,19 +256,18 @@ async function runHandlerChain(
         "interruptWithHandlers or gatherChainOutcome.",
     );
   }
-  const frame = requireFrame("runHandlerChain()");
   const depth = frame.handlerChainDepth + 1;
   if (depth > MAX_HANDLER_CHAIN_DEPTH) {
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
-  return agencyStore.run({ ...frame, handlerChainDepth: depth }, async () => {
+  return withRun({ ...frame, handlerChainDepth: depth }, async (run) => {
     // Approvals collect in chain-walk order (innermost handler first) and
     // are merged once at the end via the effect's merge (effectMerge.ts).
     // For effects with no specific merge the default reproduces the
     // historical behavior exactly: the outermost approval overwrites.
     const approvals: any[] = [];
     let hasPropagation = false;
-    const executing = executingHandlers();
+    const executing = executingHandlers(run);
     const chainSpanId = ctx.statelogClient.startSpan("handlerChain");
     try {
       for (let i = (ctx.handlers ?? []).length - 1; i >= 0; i--) {
@@ -306,7 +307,14 @@ async function runHandlerChain(
         ctx.enterToolCall();
         let result: any;
         try {
-          result = await runAsHandler(entry, () => entry.fn(interruptObj));
+          // A handler function the compiler wrote takes the run it is
+          // called under. One registered from TypeScript takes only the
+          // interrupt.
+          result = await runAsHandler(run, entry, (handlerRun) =>
+            entry.takesRun
+              ? (entry.fn as RunHandlerFn)(handlerRun, interruptObj)
+              : (entry.fn as HandlerFn)(interruptObj),
+          );
         } finally {
           try {
             // Handler exit is an await boundary for the promises the
@@ -472,13 +480,13 @@ export function mergeChainOutcomes(
  * evaluating a child's interrupt) contribute only handlerDecision events
  * to the shared trace. */
 export async function gatherChainOutcome(
+  run: Run,
   interruptObj: InterruptInfo,
-  ctx: RuntimeContext<any>,
   stack: StateStack | undefined,
   interruptId: string,
   eligible?: (entry: HandlerEntry) => boolean,
 ): Promise<{ outcome: HandlerChainOutcome; parentDecided: boolean }> {
-  const local = await runHandlerChain(ctx, stack, interruptId, interruptObj, eligible);
+  const local = await runHandlerChain(run, stack, interruptId, interruptObj, eligible);
   if (local.kind === "rejected") {
     // Local reject is final — fail-fast, the parent is never consulted.
     return { outcome: local, parentDecided: false };
@@ -502,12 +510,13 @@ export async function gatherChainOutcome(
  * Shared by the IPC and non-IPC decision paths so verdict rendering and
  * statelog dispatch live in exactly one place. */
 function renderVerdict(
+  run: Run,
   merged: HandlerChainOutcome,
-  ctx: RuntimeContext<any>,
   interruptId: string,
   interruptObj: InterruptInfo,
   resolvedBy: "ipc" | "handler",
 ): Interrupt[] | Approved | Rejected {
+  const ctx = run.ctx;
   const { effect, message, data, origin } = interruptObj;
   const interruptSummary = { effect, message, data };
   if (merged.kind === "rejected") {
@@ -544,7 +553,7 @@ function renderVerdict(
   // beats collected approvals in the merge (hasPropagation returns before
   // approvals are consulted), so under a propagating outer handler an
   // in-handler `with approve` does not prevent this refusal.
-  if (insideHandlerFunction()) {
+  if (insideHandlerFunction(run)) {
     ctx.statelogClient.interruptResolved({
       interruptId,
       outcome: "rejected",
@@ -599,22 +608,27 @@ function renderVerdict(
 }
 
 export async function interruptWithHandlers<T = any>(
+  run: Run,
   effect: string,
   message: string,
   data: T,
   origin: string,
-  ctx: RuntimeContext<any>,
-  stack?: StateStack,
   // `expectsValue: true` marks an assignment-position raise (`const x = raise
   // …`): handlers and the surfaced Interrupt see that an approval value is
   // expected. `eligible` filters WHICH handlers may see this interrupt —
   // guard trips use it for the registration-site rule (a handler
   // registered inside the tripped guard cannot adjudicate it); skipped
   // handlers emit no statelog decision, exactly as if they were not
-  // registered. Optional trailing object so already-compiled 6-arg calls
-  // keep working.
-  opts?: { expectsValue?: boolean; eligible?: (entry: HandlerEntry) => boolean },
+  // registered. `stack` is the stack the handlers are recorded on while
+  // they run, and defaults to the run's own.
+  opts?: {
+    expectsValue?: boolean;
+    eligible?: (entry: HandlerEntry) => boolean;
+    stack?: StateStack;
+  },
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
+  sameRun(run, "interruptWithHandlers()");
+  const stack = opts?.stack ?? run.stack;
   const interruptObj: InterruptInfo = { effect, message, data, origin };
   if (opts?.expectsValue) interruptObj.expectsValue = true;
   const interruptId = nanoid();
@@ -627,13 +641,13 @@ export async function interruptWithHandlers<T = any>(
   // propagate machinery and the bootstrap converts it into an `interrupted`
   // terminal message).
   const { outcome, parentDecided } = await gatherChainOutcome(
+    run,
     interruptObj,
-    ctx,
     stack,
     interruptId,
     opts?.eligible,
   );
-  return renderVerdict(outcome, ctx, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
+  return renderVerdict(run, outcome, interruptId, interruptObj, parentDecided ? "ipc" : "handler");
 }
 
 // A resume batch, validated before it can reach interrupt-resume execution.
@@ -722,10 +736,10 @@ async function runResumeLoop(
       // graph dispatch / setupNode tries to reach for it, the throw
       // surfaces the bug instead of letting a write silently land in
       // a discarded placeholder.
-      const result = await runInBootstrapFrame(execCtx, () =>
+      const result = await runInBootstrapFrame(execCtx, (run) =>
         execCtx.graph.run(
           nodeName,
-          { data: {}, ctx: execCtx, isResume: true },
+          { data: {}, ctx: execCtx, isResume: true, run },
           {
             onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
             statelogClient: execCtx.statelogClient,

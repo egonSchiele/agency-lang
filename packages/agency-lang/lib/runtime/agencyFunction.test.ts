@@ -1,11 +1,11 @@
 import { describe, it as baseIt, expect } from "vitest";
 import { z } from "zod";
 import { AgencyFunction, UNSET } from "./agencyFunction.js";
-import { runInTestContext } from "./asyncContext.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { CallDepthExceededError } from "./errors.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import { testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -14,11 +14,13 @@ function makeNamedFunction(
   name: string,
   fn: (...args: any[]) => any,
   params: { name: string }[] = [],
+  takesRun = false,
 ) {
   return new AgencyFunction({
     name,
     module: "test.agency",
     fn,
+    takesRun,
     params: params.map((p) => ({
       name: p.name,
       hasDefault: false,
@@ -57,7 +59,7 @@ describe("pre-execution tagging (the neverStarted producer)", () => {
   it("tags a binding failure (unknown named arg) with preExecution:true", async () => {
     const fn = makeFunction([{ name: "x" }]);
     await expect(
-      fn.invoke({ type: "named", positionalArgs: [], namedArgs: { nope: 1 } }),
+      fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { nope: 1 } }),
     ).rejects.toMatchObject({ preExecution: true });
   });
 
@@ -71,7 +73,7 @@ describe("pre-execution tagging (the neverStarted producer)", () => {
     );
     let caught: unknown;
     try {
-      await fn.invoke({ type: "named", positionalArgs: [], namedArgs: { x: 1 } });
+      await fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { x: 1 } });
     } catch (e) {
       caught = e;
     }
@@ -84,19 +86,19 @@ describe("AgencyFunction", () => {
   describe("positional calls", () => {
     it("passes exact args through", async () => {
       const fn = makeFunction([{ name: "a" }, { name: "b" }]);
-      const result = await fn.invoke({ type: "positional", args: [1, 2] });
+      const result = await fn.invoke(testRun(), { type: "positional", args: [1, 2] });
       expect(result).toEqual([1, 2]);
     });
 
     it("pads missing args with UNSET when defaults exist", async () => {
       const fn = makeFunction([{ name: "a" }, { name: "b", hasDefault: true, defaultValue: 10 }]);
-      const result = await fn.invoke({ type: "positional", args: [1] });
+      const result = await fn.invoke(testRun(), { type: "positional", args: [1] });
       expect(result).toEqual([1, UNSET]);
     });
 
     it("wraps trailing args into array for variadic param", async () => {
       const fn = makeFunction([{ name: "prefix" }, { name: "items", variadic: true }]);
-      const result = await fn.invoke({ type: "positional", args: [1, 2, 3, 4] });
+      const result = await fn.invoke(testRun(), { type: "positional", args: [1, 2, 3, 4] });
       expect(result).toEqual([1, [2, 3, 4]]);
     });
 
@@ -106,7 +108,7 @@ describe("AgencyFunction", () => {
         seen.push(args);
         return "ok";
       });
-      await fn.invoke({ type: "positional", args: [42] });
+      await fn.invoke(testRun(), { type: "positional", args: [42] });
       // Pre-drop, _fn was called as `_fn(42, undefined)` (length 2).
       // Post-drop, only the resolved args make it through.
       expect(seen[0]).toEqual([42]);
@@ -115,12 +117,12 @@ describe("AgencyFunction", () => {
     it("rejects unknown second positional via the type system", async () => {
       const fn = makeFunction([{ name: "a" }]);
       // @ts-expect-error — invoke no longer accepts a second positional.
-      await fn.invoke({ type: "positional", args: [1] }, { somethingCustom: true });
+      await fn.invoke(testRun(), { type: "positional", args: [1] }, { somethingCustom: true });
     });
 
     it("handles zero params", async () => {
       const fn = makeFunction([]);
-      const result = await fn.invoke({ type: "positional", args: [] });
+      const result = await fn.invoke(testRun(), { type: "positional", args: [] });
       expect(result).toEqual([]);
     });
   });
@@ -133,10 +135,10 @@ describe("AgencyFunction", () => {
       ctx.maxCallDepth = 5;
       // foo's body references bar before bar is declared; the arrow only runs
       // at call time (after both exist), so const forward-reference is fine.
-      const foo = makeNamedFunction("foo", () => bar.invoke(noArgs));
-      const bar = makeNamedFunction("bar", () => foo.invoke(noArgs));
-      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
-        await expect(foo.invoke(noArgs)).rejects.toBeInstanceOf(CallDepthExceededError);
+      const foo = makeNamedFunction("foo", (run: Run) => bar.invoke(run, noArgs), [], true);
+      const bar = makeNamedFunction("bar", (run: Run) => foo.invoke(run, noArgs), [], true);
+      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async (run) => {
+        await expect(foo.invoke(run, noArgs)).rejects.toBeInstanceOf(CallDepthExceededError);
       });
     });
 
@@ -145,11 +147,15 @@ describe("AgencyFunction", () => {
       ctx.maxCallDepth = 100;
       const countdown: AgencyFunction = makeNamedFunction(
         "countdown",
-        (n: number) => (n <= 0 ? "done" : countdown.invoke({ type: "positional", args: [n - 1] })),
+        (run: Run, n: number) =>
+          n <= 0 ? "done" : countdown.invoke(run, { type: "positional", args: [n - 1] }),
         [{ name: "n" }],
+        true,
       );
-      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
-        await expect(countdown.invoke({ type: "positional", args: [10] })).resolves.toBe("done");
+      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async (run) => {
+        await expect(countdown.invoke(run, { type: "positional", args: [10] })).resolves.toBe(
+          "done",
+        );
       });
     });
 
@@ -158,12 +164,17 @@ describe("AgencyFunction", () => {
       ctx.maxCallDepth = 20;
       // Each call awaits before recursing, flattening V8's stack — only the
       // logical depth counter can catch this.
-      const self: AgencyFunction = makeNamedFunction("selfAsync", async () => {
-        await Promise.resolve();
-        return self.invoke(noArgs);
-      });
-      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async () => {
-        await expect(self.invoke(noArgs)).rejects.toBeInstanceOf(CallDepthExceededError);
+      const self: AgencyFunction = makeNamedFunction(
+        "selfAsync",
+        async (run: Run) => {
+          await Promise.resolve();
+          return self.invoke(run, noArgs);
+        },
+        [],
+        true,
+      );
+      await runInTestContext(ctx, ctx.stateStack, ctx.threads, async (run) => {
+        await expect(self.invoke(run, noArgs)).rejects.toBeInstanceOf(CallDepthExceededError);
       });
     });
   });
@@ -171,7 +182,7 @@ describe("AgencyFunction", () => {
   describe("named calls", () => {
     it("reorders named args to positional order", async () => {
       const fn = makeFunction([{ name: "a" }, { name: "b" }, { name: "c" }]);
-      const result = await fn.invoke({
+      const result = await fn.invoke(testRun(), {
         type: "named",
         positionalArgs: [],
         namedArgs: { c: 3, a: 1, b: 2 },
@@ -181,7 +192,7 @@ describe("AgencyFunction", () => {
 
     it("mixes positional and named args", async () => {
       const fn = makeFunction([{ name: "a" }, { name: "b" }, { name: "c" }]);
-      const result = await fn.invoke({
+      const result = await fn.invoke(testRun(), {
         type: "named",
         positionalArgs: [1],
         namedArgs: { c: 3, b: 2 },
@@ -195,7 +206,7 @@ describe("AgencyFunction", () => {
         { name: "b", hasDefault: true, defaultValue: 10 },
         { name: "c" },
       ]);
-      const result = await fn.invoke({
+      const result = await fn.invoke(testRun(), {
         type: "named",
         positionalArgs: [],
         namedArgs: { a: 1, c: 3 },
@@ -209,7 +220,7 @@ describe("AgencyFunction", () => {
         { name: "b", hasDefault: true, defaultValue: 10 },
         { name: "c", hasDefault: true, defaultValue: 20 },
       ]);
-      const result = await fn.invoke({
+      const result = await fn.invoke(testRun(), {
         type: "named",
         positionalArgs: [],
         namedArgs: { a: 1 },
@@ -220,21 +231,21 @@ describe("AgencyFunction", () => {
     it("throws on unknown named arg", async () => {
       const fn = makeFunction([{ name: "a" }]);
       await expect(
-        fn.invoke({ type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
+        fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { z: 1 } }),
       ).rejects.toThrow("Unknown named argument 'z'");
     });
 
     it("throws on duplicate named arg targeting positional slot", async () => {
       const fn = makeFunction([{ name: "a" }, { name: "b" }]);
       await expect(
-        fn.invoke({ type: "named", positionalArgs: [1], namedArgs: { a: 2 } }),
+        fn.invoke(testRun(), { type: "named", positionalArgs: [1], namedArgs: { a: 2 } }),
       ).rejects.toThrow("conflicts with positional argument");
     });
 
     it("throws on missing required arg", async () => {
       const fn = makeFunction([{ name: "a" }, { name: "b" }]);
       await expect(
-        fn.invoke({ type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
+        fn.invoke(testRun(), { type: "named", positionalArgs: [], namedArgs: { a: 1 } }),
       ).rejects.toThrow("Missing required argument 'b'");
     });
   });
@@ -358,7 +369,7 @@ describe("partial()", () => {
       {},
     );
     await expect(
-      fn.invoke({
+      fn.invoke(testRun(), {
         type: "named",
         positionalArgs: [1, 2],
         namedArgs: { rest: [3] },
@@ -381,7 +392,7 @@ describe("partial()", () => {
       },
       {},
     );
-    const out = await fn.invoke({
+    const out = await fn.invoke(testRun(), {
       type: "named",
       positionalArgs: [],
       namedArgs: { a: 10, rest: [1, 2, 3] },
@@ -406,7 +417,7 @@ describe("partial()", () => {
       {},
     );
     const bound = fn.partial({ a: 10 });
-    const result = await bound.invoke({ type: "positional", args: [20, 30] });
+    const result = await bound.invoke(testRun(), { type: "positional", args: [20, 30] });
     expect(result).toBe(60);
   });
 
@@ -428,7 +439,7 @@ describe("partial()", () => {
     );
     const bound1 = fn.partial({ a: 1 });
     const bound2 = bound1.partial({ c: 3 });
-    const result = await bound2.invoke({ type: "positional", args: [2] });
+    const result = await bound2.invoke(testRun(), { type: "positional", args: [2] });
     expect(result).toBe(123);
   });
 
@@ -449,7 +460,7 @@ describe("partial()", () => {
       {},
     );
     const bound = fn.partial({ b: 5 });
-    const result = await bound.invoke({ type: "positional", args: [1, 3] });
+    const result = await bound.invoke(testRun(), { type: "positional", args: [1, 3] });
     expect(result).toBe(153);
   });
 
@@ -470,7 +481,7 @@ describe("partial()", () => {
       {},
     );
     const bound = fn.partial({ a: 10 });
-    const result = await bound.invoke({
+    const result = await bound.invoke(testRun(), {
       type: "named",
       positionalArgs: [],
       namedArgs: { c: 30, b: 20 },
@@ -696,8 +707,8 @@ describe("preapprove handler wiring", () => {
     ).preapprove();
 
     const before = ctx.handlers.length;
-    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
-      fn.invoke({ type: "positional", args: [] }),
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+      fn.invoke(run, { type: "positional", args: [] }),
     );
     expect(lenDuring).toBe(before + 1);
     expect(ctx.handlers.length).toBe(before);
@@ -720,8 +731,8 @@ describe("preapprove handler wiring", () => {
 
     const before = ctx.handlers.length;
     await expect(
-      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
-        fn.invoke({ type: "positional", args: [] }),
+      runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+        fn.invoke(run, { type: "positional", args: [] }),
       ),
     ).rejects.toThrow("boom");
     expect(ctx.handlers.length).toBe(before);
@@ -744,8 +755,8 @@ describe("preapprove handler wiring", () => {
     );
 
     const before = ctx.handlers.length;
-    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
-      fn.invoke({ type: "positional", args: [] }),
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+      fn.invoke(run, { type: "positional", args: [] }),
     );
     expect(lenDuring).toBe(before);
   });
@@ -798,7 +809,7 @@ describe("rename()", () => {
     expect(tool.toolDefinition?.name).toBe("skills_tmp");
     expect(tool.toolDefinition?.description).toBe("docs");
     // The bound `dir` is still applied when invoked.
-    const result = await tool.invoke({ type: "positional", args: ["a.txt"] });
+    const result = await tool.invoke(testRun(), { type: "positional", args: ["a.txt"] });
     expect(result).toEqual(["/tmp", "a.txt"]);
   });
 });
@@ -821,8 +832,8 @@ describe("preapprove verdict shape", () => {
       {},
     ).preapprove();
 
-    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
-      fn.invoke({ type: "positional", args: [] }),
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+      fn.invoke(run, { type: "positional", args: [] }),
     );
     // Ordinary interrupt: auto-approved.
     expect((await handler({ effect: "std::bash" })).type).toBe("approve");
@@ -849,8 +860,8 @@ describe("preapprove verdict shape", () => {
       {},
     ).preapprove();
 
-    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
-      fn.invoke({ type: "positional", args: [] }),
+    await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+      fn.invoke(run, { type: "positional", args: [] }),
     );
     expect(entry.liveGuardIds).toEqual([]);
   });

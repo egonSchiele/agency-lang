@@ -3,7 +3,7 @@
 // Any manual changes will be lost.
 import { apply } from "typestache";
 
-export const template = `const __bsetup = setupFunction();
+export const template = `const __bsetup = setupFunction(__run);
 const __bstack = __bsetup.stack;
 const __self = __bstack.locals;
 const {{{frameVar}}} = __bstack;
@@ -13,7 +13,7 @@ claimFrameForScope(__bstack, {{{scopeName}}}, {{{moduleId}}});
 {{#params}}
 __bstack.args[{{{this.paramNameQuoted}}}] = {{{this.paramName}}};
 {{/params}}
-const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}} });
+const runner = new Runner(__ctx, __bstack, { state: __bstack, moduleId: {{{moduleId}}}, scopeName: {{{scopeName}}}, stack: __run.stack, threads: __run.threads });
 {{{finalizeDecl}}}try {
 {{{body}}}
 return runner.halted ? runner.haltResult : undefined;

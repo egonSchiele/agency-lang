@@ -452,7 +452,7 @@ export class TypeScriptBuilder {
             // Immediate deref inside a step body — use the strict
             // accessor so a missing ALS frame throws the dedicated
             // error instead of `Cannot read 'forkStack' of undefined`.
-            ts.call(ts.prop(ts.raw("getRuntimeContext().ctx"), "forkStack")),
+            ts.call(ts.prop(ts.runtime.ctx, "forkStack")),
           ),
         },
       ),
@@ -1231,7 +1231,7 @@ export class TypeScriptBuilder {
           const callArgs: TsNode[] = [result, ts.str(fnCall.functionName), descriptor];
           if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(
-            ts.call(ts.id("__callMethod"), callArgs),
+            ts.call(ts.id("__callMethod"), [ts.runtime.run, ...callArgs]),
             element === node.chain[node.chain.length - 1],
           );
           break;
@@ -1241,7 +1241,7 @@ export class TypeScriptBuilder {
           const callArgs: TsNode[] = [result, descriptor];
           if (element.optional) callArgs.push(ts.bool(true));
           result = this.awaitChainCall(
-            ts.call(ts.id("__call"), callArgs),
+            ts.call(ts.id("__call"), [ts.runtime.run, ...callArgs]),
             element === node.chain[node.chain.length - 1],
           );
           break;
@@ -1406,7 +1406,7 @@ export class TypeScriptBuilder {
         // Inside the function body's withAlsFrame wrap — strict
         // accessor so a missing frame throws cleanly instead of a
         // generic "Cannot read 'getResultCheckpoint' of undefined".
-        checkpoint: ts.raw("getRuntimeContext().ctx.getResultCheckpoint()"),
+        checkpoint: ts.raw("__run.ctx.getResultCheckpoint()"),
         functionName: ts.str((scope as FunctionScope).functionName),
         args: ts.raw("__stack.args"),
       };
@@ -1906,9 +1906,12 @@ export class TypeScriptBuilder {
       abortReturn: compiledFinalize.abortReturn,
     });
 
-    const blockFn = ts.arrowFn(blockParams, ts.statements([ts.raw(blockSetupCode)]), {
-      async: true,
-    });
+    // A block takes the run it is called under first, like a function.
+    const blockFn = ts.arrowFn(
+      [{ name: "__run", typeAnnotation: "__Run" }, ...blockParams],
+      ts.statements([ts.raw(blockSetupCode)]),
+      { async: true },
+    );
     return ts.agencyFunctionWrap(
       blockFn,
       blockName,
@@ -1958,9 +1961,12 @@ export class TypeScriptBuilder {
       abortReturn: compiledFinalize.abortReturn,
     });
 
-    const blockFn = ts.arrowFn(blockParams, ts.statements([ts.raw(blockSetupCode)]), {
-      async: true,
-    });
+    // A block takes the run it is called under first, like a function.
+    const blockFn = ts.arrowFn(
+      [{ name: "__run", typeAnnotation: "__Run" }, ...blockParams],
+      ts.statements([ts.raw(blockSetupCode)]),
+      { async: true },
+    );
     return ts.agencyFunctionWrap(
       blockFn,
       blockName,
@@ -2208,13 +2214,13 @@ export class TypeScriptBuilder {
     // inside the issuing `runner.step` frame, so a frame is always
     // active here.
     const setupStmts: TsNode[] = [
-      ts.constDecl("__setupData", $(ts.id("setupFunction")).call([]).done()),
+      ts.constDecl("__setupData", $(ts.id("setupFunction")).call([ts.runtime.run]).done()),
 
       ts.setupEnv({
         stack: $(ts.id("__setupData")).prop("stack").done(),
         step: $(ts.id("__setupData")).prop("step").done(),
         self: $(ts.id("__setupData")).prop("self").done(),
-        ctx: ts.raw("getRuntimeContext().ctx"),
+        ctx: ts.runtime.ctx,
       }),
 
       // Claim site: this function just pulled its frame via
@@ -2235,8 +2241,8 @@ export class TypeScriptBuilder {
       // already-initialized modules skip init without touching the
       // canonical store.
       ts.if(
-        ts.raw(`!__globals()!.isInitialized(${JSON.stringify(this.moduleId)})`),
-        ts.await(ts.call(ts.id("__initializeGlobals"), [ts.id("__ctx")])),
+        ts.raw(`!__run.globals.isInitialized(${JSON.stringify(this.moduleId)})`),
+        ts.await(ts.call(ts.id("__initializeGlobals"), [ts.runtime.run])),
       ),
 
       ...(skipHooks ? [] : [ts.time("__funcStartTime")]),
@@ -2273,7 +2279,7 @@ export class TypeScriptBuilder {
     // ALS frame instead of an `__state` positional.
     setupStmts.push(
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, threads: __setupData.threads });`,
+        `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, stack: __run.stack, threads: __setupData.threads });`,
       ),
     );
 
@@ -2384,7 +2390,7 @@ export class TypeScriptBuilder {
         // runs outside any ALS frame (e.g. a function invoked as a tool
         // without an outer agencyStore.run wrap).
         ts.statements([
-          ts.raw("__stateStack()?.pop()"),
+          ts.raw("__run.stack.pop()"),
           ...(skipHooks
             ? []
             : [
@@ -2445,6 +2451,9 @@ export class TypeScriptBuilder {
       return { name: p.name, typeAnnotation: baseType };
     });
 
+    // Every generated function takes the run it is called under first.
+    fnParams.unshift({ name: "__run", typeAnnotation: "__Run" });
+
     const implName = `__${functionName}_impl`;
     const setupStmts = this.buildFunctionBody({
       functionName,
@@ -2487,6 +2496,7 @@ export class TypeScriptBuilder {
       params: ts.arr(paramNodes),
       toolDefinition: toolDef,
       exported: ts.bool(!!node.exported),
+      takesRun: ts.bool(true),
     };
     // Carry the markers so the tool loop and MCP adapter can read them off
     // the registered AgencyFunction. Emitted only when at least one is set.
@@ -2606,11 +2616,11 @@ export class TypeScriptBuilder {
             // Strict accessor inside a step body (under the
             // withAlsFrame wrap) — keeps missing-frame failures
             // actionable instead of "Cannot read 'add' of undefined".
-            ts.raw(`getRuntimeContext().ctx.pendingPromises.add(${this.str(callWithStack)})`),
+            ts.raw(`__run.ctx.pendingPromises.add(${this.str(callWithStack)})`),
           );
           return statements;
         }
-        return ts.raw(`getRuntimeContext().ctx.pendingPromises.add(${this.str(callNode)})`);
+        return ts.raw(`__run.ctx.pendingPromises.add(${this.str(callNode)})`);
       }
 
       // Sync calls: bind the result to a temp and emit the shared interrupt
@@ -2656,7 +2666,7 @@ export class TypeScriptBuilder {
           // Strict accessor — emitted inside the function body's
           // withAlsFrame wrap. See processTryExpression above for the
           // sibling shape.
-          `{ checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`,
+          `{ checkpoint: __run.ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`,
         ),
       ]);
     }
@@ -2746,7 +2756,7 @@ export class TypeScriptBuilder {
       ? ts.scopedVar(functionName, node.scope, this.moduleId, calleeBlockFrameVar)
       : ts.id(functionName);
 
-    const callExpr = ts.call(ts.id("__call"), [callee, descriptor]);
+    const callExpr = ts.call(ts.id("__call"), [ts.runtime.run, callee, descriptor]);
 
     // Async-fork sites need the branch's isolated stack visible to the
     // callee (so its checkpoints/handlers/etc. push/pop on the branch
@@ -2754,13 +2764,12 @@ export class TypeScriptBuilder {
     // inline at the call site that overrides `stack`; the callee picks
     // it up via `getRuntimeContext()`.
     if (options?.stateStack) {
-      const frame = ts.obj([
-        ts.setSpread(ts.call(ts.id("getRuntimeContext"))),
-        ts.set("stack", options.stateStack),
-      ]);
-      const wrapped = ts.call(ts.prop(ts.id("agencyStore"), "run"), [
+      const frame = ts.obj([ts.setSpread(ts.runtime.run), ts.set("stack", options.stateStack)]);
+      // The call is built inside an arrow that declares `__run`, so it is
+      // handed the run with the branch's stack.
+      const wrapped = ts.call(ts.id("__withRun"), [
         frame,
-        ts.arrowFn([], callExpr),
+        ts.arrowFn([{ name: "__run" }], callExpr),
       ]);
       return shouldAwait ? ts.await(wrapped) : wrapped;
     }
@@ -2914,7 +2923,12 @@ export class TypeScriptBuilder {
     });
 
     const blockFn = ts.arrowFn(
-      [{ name: "__forkItem" }, { name: "__forkIndex" }, { name: "__forkBranchStack" }],
+      [
+        { name: "__run" },
+        { name: "__forkItem" },
+        { name: "__forkIndex" },
+        { name: "__forkBranchStack" },
+      ],
       ts.statements([ts.raw(blockSetupCode)]),
       { async: true },
     );
@@ -2923,14 +2937,12 @@ export class TypeScriptBuilder {
       .prop("fork")
       .call([
         ts.num(id),
+        ts.runtime.run,
         itemsNode,
         blockFn,
         ts.str(mode),
-        // `runner.fork` requires the current StateStack to push branch
-        // frames onto. Use the strict accessor so a missing ALS frame
-        // throws the actionable error instead of producing a generic
-        // TypeError deep inside the fork machinery.
-        ts.raw("getRuntimeContext().stack"),
+        // `runner.fork` pushes branch frames onto the current StateStack.
+        ts.runtime.stateStack,
         // Trailing `shared` boolean — defaults to false (isolated).
         // Forwarded as `RunBatchOpts.shareGlobals = shared`. Threads
         // stay branch-local regardless (concurrent push/pop on a
@@ -2975,12 +2987,14 @@ export class TypeScriptBuilder {
       messages: ts.runtime.threads,
       ctx: ts.runtime.ctx,
       data: dataNode,
+      // The next node runs under the run the graph was started under.
+      run: ts.raw("__state.run"),
     });
 
     return ts.statements([
       // Pop the current node's frame before transitioning — it won't be re-entered on resume.
       // Optional chain defends against the rare goto reached outside any ALS frame.
-      ts.raw("__stateStack()?.pop()"),
+      ts.raw("__run.stack.pop()"),
       ts.functionReturn(ts.goToNode(functionName, goToArgs)),
     ]);
   }
@@ -3024,6 +3038,9 @@ export class TypeScriptBuilder {
           .call([ts.obj({ state: ts.runtime.state })])
           .done(),
       ),
+      // The run the graph was started under. The graph engine calls a node
+      // with its state only, so the run rides on the state.
+      ts.constDecl("__run", $(ts.id("__setupData")).prop("run").done()),
 
       ts.setupEnv({
         stack: $(ts.id("__setupData")).prop("stack").done(),
@@ -3031,9 +3048,8 @@ export class TypeScriptBuilder {
         self: $(ts.id("__setupData")).prop("self").done(),
         // `runNode` (and the resume / rewind variants) install the
         // top-level `agencyStore` frame before `graph.run` invokes
-        // this node body. Read `ctx` from ALS so the local matches
-        // the same per-run context that `setupNode` just used.
-        ctx: ts.raw("getRuntimeContext().ctx"),
+        // this node body.
+        ctx: ts.runtime.ctx,
       }),
 
       // Pass `threads` explicitly so the Runner's ALS frame is seeded
@@ -3048,7 +3064,7 @@ export class TypeScriptBuilder {
       ),
 
       ts.raw(
-        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, threads: __setupData.threads });`,
+        `const runner = new Runner(__ctx, __stack, { nodeContext: true, state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(nodeName)}, stack: __run.stack, threads: __setupData.threads });`,
       ),
       ...hoistedAliases,
     ];
@@ -3394,7 +3410,7 @@ export class TypeScriptBuilder {
         ts.statements([
           ts.awaitMethodCall(
             // Strict accessor — immediate deref inside step body.
-            ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
+            ts.prop(ts.runtime.ctx, "pendingPromises"),
             "awaitAll",
           ),
           ts.methodCall(ts.id("runner"), "halt", [haltValue]),
@@ -3528,7 +3544,7 @@ export class TypeScriptBuilder {
             ts.self(pendingKeyVar),
             ts.raw(
               // Strict accessor — inside step body under the wrap.
-              `getRuntimeContext().ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
+              `__run.ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
             ),
           ),
         );
@@ -3674,7 +3690,7 @@ export class TypeScriptBuilder {
     runPromptEntries.checkpointInfo = ts.raw("runner.getCheckpointInfo()");
 
     const runPromptCall = $(ts.id("runPrompt"))
-      .call([ts.obj(runPromptEntries)])
+      .call([ts.runtime.run, ts.obj(runPromptEntries)])
       .done();
 
     const varRef = ts.scopedVar(variableName, scope, this.moduleId);
@@ -3691,7 +3707,7 @@ export class TypeScriptBuilder {
           ts.self(pendingKeyVar),
           ts.raw(
             // Strict accessor — inside step body under the wrap.
-            `getRuntimeContext().ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
+            `__run.ctx.pendingPromises.add(${this.str(varRef)}, (val) => { ${this.str(varRef)} = val; })`,
           ),
         ),
       );
@@ -3717,7 +3733,7 @@ export class TypeScriptBuilder {
             ts.statements([
               ts.awaitMethodCall(
                 // Strict accessor — immediate deref inside step body.
-                ts.prop(ts.raw("getRuntimeContext().ctx"), "pendingPromises"),
+                ts.prop(ts.runtime.ctx, "pendingPromises"),
                 "awaitAll",
               ),
               ts.methodCall(ts.id("runner"), "halt", [haltValue]),
@@ -3960,7 +3976,10 @@ export class TypeScriptBuilder {
     if (this.names.isDirectCallFunction(handlerName)) {
       // Built-in handler (approve/reject/propagate): call with no args
       return ts.arrowFn(
-        [{ name: "__data", typeAnnotation: "any" }],
+        [
+          { name: "__run", typeAnnotation: "__Run" },
+          { name: "__data", typeAnnotation: "any" },
+        ],
         ts.call(ts.id(handlerName), []),
         { async: true },
       );
@@ -3984,12 +4003,17 @@ export class TypeScriptBuilder {
     const callee = handlerScope
       ? ts.scopedVar(handlerName, handlerScope, this.moduleId, handlerBlockFrameVar)
       : ts.id(handlerName);
-    const callArgs: TsNode[] = [callee, descriptor];
+    const callArgs: TsNode[] = [ts.runtime.run, callee, descriptor];
     if (configObj) callArgs.push(configObj);
     const callExpr = ts.call(ts.id("__call"), callArgs);
-    return ts.arrowFn([{ name: "__data", typeAnnotation: "any" }], ts.await(callExpr), {
-      async: true,
-    });
+    return ts.arrowFn(
+      [
+        { name: "__run", typeAnnotation: "__Run" },
+        { name: "__data", typeAnnotation: "any" },
+      ],
+      ts.await(callExpr),
+      { async: true },
+    );
   }
 
   private processHandleBlockWithSteps(node: HandleBlock): TsNode {
@@ -4007,8 +4031,13 @@ export class TypeScriptBuilder {
       const paramType = node.handler.param.typeHint
         ? formatTypeHintTs(node.handler.param.typeHint)
         : "any";
+      // A handler function takes the run it is called under, then the
+      // interrupt.
       handler = ts.arrowFn(
-        [{ name: node.handler.param.name, typeAnnotation: paramType }],
+        [
+          { name: "__run", typeAnnotation: "__Run" },
+          { name: node.handler.param.name, typeAnnotation: paramType },
+        ],
         ts.statements(handlerBody),
         { async: true },
       );
@@ -4391,7 +4420,9 @@ export class TypeScriptBuilder {
     // interpolation may still see uninitialized values. Synchronous
     // literal globals are populated before the function returns.
     if (this.hasDocStringInterpolation()) {
-      runtimeCtxStatements.push(ts.raw(`__initializeGlobals(__globalCtx);`));
+      runtimeCtxStatements.push(
+        ts.raw(`__runInBootstrapFrame(__globalCtx, (__run) => __initializeGlobals(__run));`),
+      );
     }
 
     const runtimeCtx: TsNode = ts.statements(runtimeCtxStatements);

@@ -3,7 +3,9 @@ import { GlobalStore } from "../state/globalStore.js";
 import { CheckpointStore } from "../state/checkpointStore.js";
 import { PendingPromiseStore } from "../state/pendingPromiseStore.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
-import { runInTestContext } from "../asyncContext.js";
+import { ThreadStore } from "../state/threadStore.js";
+import type { RuntimeContext } from "../state/context.js";
+import { ambientRun, runInTestContext, type Run } from "../asyncContext.js";
 
 type TestFn = (name: string, fn: () => unknown, timeout?: number) => unknown;
 
@@ -18,6 +20,38 @@ type TestFn = (name: string, fn: () => unknown, timeout?: number) => unknown;
 export function inTestFrame<T>(fn: () => T): T {
   const ctx = makeMockCtx();
   return runInTestContext(ctx, ctx.stateStack, ctx.threads, fn);
+}
+
+/**
+ * Run `fn` inside a frame built from the test's own context, so the run it
+ * is handed has `run.ctx === ctx` and `run.stack === stack`.
+ */
+export function inFrameOf<T>(ctx: RuntimeContext<any>, stack: StateStack, fn: (run: Run) => T): T {
+  return runInTestContext(ctx, stack, new ThreadStore(), fn);
+}
+
+/**
+ * The run of the frame a test is running in. A test passes it to a runtime
+ * function that takes a run:
+ *
+ *   await runner.step(0, testRun(), async (r, run) => { ... });
+ *
+ * Outside a frame it throws. Wrap the test with `withTestFrame`.
+ */
+export function testRun(): Run {
+  return ambientRun("A test");
+}
+
+/**
+ * Make `ctx` the context of the frame the test is running in, and return it.
+ * A test whose frame already exists when it builds its own context calls
+ * this, so `testRun().ctx` is the context the test asserts against.
+ */
+export function adoptCtx<T extends { globals: GlobalStore }>(ctx: T): T {
+  const run = testRun();
+  run.ctx = ctx as unknown as RuntimeContext<any>;
+  run.globals = ctx.globals;
+  return ctx;
 }
 
 /**
@@ -70,6 +104,9 @@ export function makeMockCtx(
     traceConfig: {},
     pushHandler(fn: any, liveGuardIds: string[] = []) {
       this.handlers.push({ fn, liveGuardIds });
+    },
+    pushRunHandler(fn: any, liveGuardIds: string[] = []) {
+      this.handlers.push({ fn, liveGuardIds, takesRun: true });
     },
     popHandler() {
       this.handlers.pop();

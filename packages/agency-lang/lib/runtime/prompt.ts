@@ -2,7 +2,7 @@ import * as smoltalk from "smoltalk";
 import { PromptResult, ToolCallJSON, UserContentInput, redactAttachments } from "smoltalk";
 import { createLogger } from "../logger.js";
 import { AgencyFunction, type FuncParam } from "./agencyFunction.js";
-import { agencyStore, getRuntimeContext, __threads } from "./asyncContext.js";
+import type { Run } from "./asyncContext.js";
 import {
   harvestReplyAttachments,
   buildReplyUserMessage,
@@ -176,14 +176,14 @@ export const _internal = {
  *  double-emit for replayed steps. Retries inside dispatchWithRetry
  *  share the one start. */
 function emitPromptStart({
-  ctx,
+  run,
   messages,
   tools,
   responseFormat,
   clientConfig,
   callLabel,
 }: {
-  ctx: RuntimeContext<GraphState>;
+  run: Run;
   messages: MessageThread;
   tools: Tool[];
   responseFormat?: any;
@@ -191,9 +191,9 @@ function emitPromptStart({
   /** This call's `llm(label:)` debug tag, or null. Observability only. */
   callLabel?: string | null;
 }): void {
-  ctx.statelogClient.promptStart({
+  run.ctx.statelogClient.promptStart({
     model: JSON.stringify(clientConfig.model),
-    threadId: __threads()?.activeId() ?? null,
+    threadId: run.threads.activeId() ?? null,
     messageCount: messages.getMessages().length,
     toolCount: tools.length,
     hasResponseFormat: responseFormat != null,
@@ -213,16 +213,16 @@ function emitPromptStart({
  *  _runPrompt's hard cancellation path. */
 function throwRetryForResumableTrip(
   cause: { kind?: string; guardId?: string } | undefined,
-  ctx: RuntimeContext<GraphState>,
+  run: Run,
   stateStack: StateStack | undefined,
 ): void {
   if (cause?.kind !== "guardTrip") return;
-  const trippedGuard = (stateStack ?? ctx.stateStack).guards.find(
+  const trippedGuard = (stateStack ?? run.ctx.stateStack).guards.find(
     (g) => g.guardId === cause.guardId,
   );
   if (!trippedGuard || trippedGuard.isRootBudget) return;
-  ctx.statelogClient.promptCancelled({
-    threadId: __threads()?.activeId() ?? null,
+  run.ctx.statelogClient.promptCancelled({
+    threadId: run.threads.activeId() ?? null,
   });
   throw new GuardTripRetry(trippedGuard.guardId);
 }
@@ -253,25 +253,26 @@ function throwRetryForResumableTrip(
 async function dispatchFailureToThrow(
   err: unknown,
   {
-    ctx,
+    run,
     stateStack,
     tools,
   }: {
-    ctx: RuntimeContext<GraphState>;
+    run: Run;
     stateStack: StateStack | undefined;
     tools: Tool[];
   },
 ): Promise<unknown> {
+  const ctx = run.ctx as RuntimeContext<GraphState>;
   const cause = readCause(err) ?? readCause(ctx.getAbortSignal(stateStack));
   // Resumable trip? Throws GuardTripRetry and never returns.
-  throwRetryForResumableTrip(cause, ctx, stateStack);
+  throwRetryForResumableTrip(cause, run, stateStack);
   if (cause || ctx.isCancelled(stateStack) || isAbortError(err)) {
     // Terminate the promptStart pair: a cancelled call (race loser, Esc,
     // timeout abort) is a NORMAL outcome, not a request failure — no
     // llmError — but leaving the start unpaired would make every healthy
     // race() render "never completed" warnings.
     ctx.statelogClient.promptCancelled({
-      threadId: __threads()?.activeId() ?? null,
+      threadId: run.threads.activeId() ?? null,
     });
     return new AgencyCancelledError(undefined, cause);
   }
@@ -329,7 +330,7 @@ async function runPostTurnMemory(
 }
 
 async function _runPrompt({
-  ctx,
+  run,
   messages,
   tools,
   prompt,
@@ -339,7 +340,7 @@ async function _runPrompt({
   retryPolicy,
   callLabel,
 }: {
-  ctx: RuntimeContext<GraphState>;
+  run: Run;
   messages: MessageThread;
   tools: Tool[];
   prompt: string | UserContentInput;
@@ -353,6 +354,7 @@ async function _runPrompt({
   /** This call's `llm(label:)` debug tag (see `emitPromptStart`), or null. */
   callLabel?: string | null;
 }): Promise<RunPromptResult> {
+  const ctx = run.ctx as RuntimeContext<GraphState>;
   if (ctx.isCancelled(stateStack)) {
     throw new AgencyCancelledError();
   }
@@ -374,8 +376,7 @@ async function _runPrompt({
   const stream = !!(clientConfig as any)?.stream;
   const startTime = performance.now();
 
-  await callHook({
-    ctx,
+  await callHook(run, {
     name: "onLLMCallStart",
     data: {
       prompt: redactPromptForLog(prompt),
@@ -400,7 +401,7 @@ async function _runPrompt({
   } as any;
 
   emitPromptStart({
-    ctx,
+    run,
     messages,
     tools,
     responseFormat,
@@ -415,6 +416,7 @@ async function _runPrompt({
   let usageKind: ProviderUsageKind;
   try {
     ({ completion, toolCalls, usageKind } = await dispatchWithRetry({
+      run,
       ctx,
       promptConfig,
       prompt,
@@ -424,7 +426,7 @@ async function _runPrompt({
       stateStack,
     }));
   } catch (err) {
-    throw await dispatchFailureToThrow(err, { ctx, stateStack, tools });
+    throw await dispatchFailureToThrow(err, { run, stateStack, tools });
   }
 
   const endTime = performance.now();
@@ -447,7 +449,7 @@ async function _runPrompt({
     // Statelog's field name; smoltalk's is `stopReason`.
     finishReason: completion.stopReason ?? completion.rawStopReason,
     stream,
-    threadId: __threads()?.activeId() ?? null,
+    threadId: run.threads.activeId() ?? null,
     threadIdentity: messages.id,
     threadLabel: messages.label,
   });
@@ -464,8 +466,7 @@ async function _runPrompt({
   recordCompletionUsage(ctx, targetStack, completion, clientConfig.model, usageKind);
   await runPostTurnMemory(ctx, targetStack, messages);
 
-  await callHook({
-    ctx,
+  await callHook(run, {
     name: "onLLMCallEnd",
     data: {
       model: modelName,
@@ -480,8 +481,7 @@ async function _runPrompt({
   return { messages, toolCalls, stopReason: completion.stopReason, usageKind };
 }
 
-// eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
-export async function runPrompt(args: {
+type RunPromptArgs = {
   prompt: string | UserContentInput;
   messages: MessageThread;
   responseFormat?: any;
@@ -512,7 +512,10 @@ export async function runPrompt(args: {
    *  (see intrinsicTools.ts). */
   draftSchema?: unknown;
   checkpointInfo?: SourceLocationOpts;
-}): Promise<any> {
+};
+
+// eslint-disable-next-line max-lines-per-function -- core prompt execution loop; refactor tracked separately
+export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
   const { prompt, responseFormat, maxToolCallRounds = 10, checkpointInfo } = args;
 
   // bail early on empty strings
@@ -538,15 +541,14 @@ export async function runPrompt(args: {
     return "";
   }
 
-  // ctx + stack come from the active ALS frame — the codegen used to
-  // pass them explicitly as `ctx` / `stateStack` keys on `args`, but
-  // post-ALS migration every Agency execution path runs inside an
-  // `agencyStore.run(...)` frame seeded with the same values.
-  const runtime = getRuntimeContext();
-  const ctx = runtime.ctx as RuntimeContext<GraphState>;
+  // `run` is the run the `llm()` call site runs under. Everything in this
+  // function outside a tool-call branch runs under it. Each tool call gets
+  // its own branch run from `pr.parallel`.
+  const ctx = run.ctx as RuntimeContext<GraphState>;
 
-  // Push a frame onto the state stack — runPrompt participates like any other function
-  const { stateStack, stack } = setupFunction();
+  // Push a frame onto the state stack — runPrompt participates like any other
+  // function. `setupFunction` also checks that `run` is the current run.
+  const { stateStack, stack } = setupFunction(run);
   // Hand-written claim (generated code claims in its preambles; runPrompt
   // is TypeScript). runPrompt's frame was the victim in the motivating
   // desync: a replayed helper stole it and runPrompt restarted blank.
@@ -823,7 +825,7 @@ export async function runPrompt(args: {
   // what makes resume sound: the gate body is idempotent (re-detect,
   // apply the recorded answer), while the llm-call bodies are not
   // (they push messages). See lib/runtime/guardTripInterrupt.ts.
-  const guardGate = () => raiseGuardTripsUntilClear(ctx, stateStack);
+  const guardGate = () => raiseGuardTripsUntilClear(run, stateStack);
 
   // Message delivery at turn boundaries (attachments, guard feedback,
   // queueMessage entries) lives in turnBoundary.ts. Built fresh at each
@@ -921,7 +923,7 @@ export async function runPrompt(args: {
       // message in the thread and duplicate it on re-issue.
       try {
         const result = await _runPrompt({
-          ctx,
+          run,
           messages,
           tools: tools || [],
           prompt,
@@ -1046,6 +1048,8 @@ export async function runPrompt(args: {
     };
 
     const runInvokeStep = async (args: {
+      /** The run of the tool call's branch. */
+      run: Run;
       handler: AgencyFunction;
       toolCall: smoltalk.ToolCallJSON;
       namedArgs: Record<string, any>;
@@ -1068,13 +1072,9 @@ export async function runPrompt(args: {
       let toolResult: any;
       ctx.enterToolCall();
       try {
-        const invokeAsTool = () =>
-          runAsToolInvocation(branchStack, () =>
-            handler.invoke({
-              type: "named",
-              positionalArgs: [],
-              namedArgs,
-            }),
+        const invokeAsTool = (threadRun: Run) =>
+          runAsToolInvocation(threadRun, branchStack, (toolRun) =>
+            handler.invoke(toolRun, { type: "named", positionalArgs: [], namedArgs }),
           );
         // A handoff continues this prompt's conversation: the body's llm()
         // calls append to `messages`, the thread that carries the marker.
@@ -1085,12 +1085,13 @@ export async function runPrompt(args: {
         const continuesCallerThread = !!handler.markers?.handoff;
         if (continuesCallerThread) {
           toolResult = await invokeOnThread(
+            args.run,
             messages,
             handoffScopeKey(messages, handler.name, toolCall.id),
             invokeAsTool,
           );
         } else {
-          toolResult = await invokeOnFreshThreadStore(ctx, invokeAsTool);
+          toolResult = await invokeOnFreshThreadStore(args.run, invokeAsTool);
         }
       } catch (error: unknown) {
         // A cancellation (user pressed Esc, race-loser, timeout) is not a
@@ -1395,6 +1396,7 @@ export async function runPrompt(args: {
           const callSlug = `${callIndex}_${toolCall.id}`;
           await pr.step(`round.${round}.tool.${callSlug}.intrinsic`, () =>
             runIntrinsicCall({
+              run,
               intrinsic,
               toolCall,
               stateStack,
@@ -1472,6 +1474,7 @@ export async function runPrompt(args: {
           `round.${round}.tool.${item.index}_${item.toolCall.id}`;
 
         const dispatchToolCall = async (
+          branchRun: Run,
           toolCall: smoltalk.ToolCallJSON,
           b: BranchRunner,
           index: number,
@@ -1590,8 +1593,7 @@ export async function runPrompt(args: {
             // `gatherCallbacks`. Callback bodies cannot interrupt
             // (typechecker-enforced), so this is purely about scope
             // discovery, not interrupt routing.
-            await invokeCallbacks({
-              ctx,
+            await invokeCallbacks(branchRun, {
               name: "onToolCallStart",
               data: { toolName: handler.name, args: namedArgs },
               stateStack: branchStack,
@@ -1628,7 +1630,7 @@ export async function runPrompt(args: {
                 toolName: handler.name,
                 args: namedArgs,
                 model: JSON.stringify(clientConfig.model),
-                threadId: __threads()?.activeId() ?? null,
+                threadId: branchRun.threads.activeId() ?? null,
               });
             });
             // Invoke step: returns the interrupts when the tool halts
@@ -1639,6 +1641,7 @@ export async function runPrompt(args: {
             // resume skips this whole block.
             await b.step(`round.${round}.tool.${callSlug}.invoke`, async () => {
               const outcome = await runInvokeStep({
+                run: branchRun,
                 handler,
                 toolCall,
                 namedArgs,
@@ -1680,8 +1683,7 @@ export async function runPrompt(args: {
             const timeTaken: number = self.runnerState.toolTimings[callSlug] ?? 0;
             await b.step(`round.${round}.tool.${callSlug}.end`, async () => {
               // Same scope-discovery rationale as the .start hook.
-              await invokeCallbacks({
-                ctx,
+              await invokeCallbacks(branchRun, {
                 name: "onToolCallEnd",
                 data: {
                   toolName: handler.name,
@@ -1702,7 +1704,7 @@ export async function runPrompt(args: {
                 output: toolResult,
                 model: JSON.stringify(clientConfig.model),
                 timeTaken,
-                threadId: __threads()?.activeId() ?? null,
+                threadId: branchRun.threads.activeId() ?? null,
               });
             });
           } finally {
@@ -1721,8 +1723,8 @@ export async function runPrompt(args: {
           if (items.length === 0) {
             return { kind: "values", values: [] };
           }
-          return pr.parallel(key, items, branchKeyFor, (item, b) =>
-            dispatchToolCall(item.toolCall, b, item.index, batch),
+          return pr.parallel(run, key, items, branchKeyFor, (item, b, _index, branchRun) =>
+            dispatchToolCall(branchRun, item.toolCall, b, item.index, batch),
           );
         };
 
@@ -1803,7 +1805,7 @@ export async function runPrompt(args: {
               .map((item) => item.index),
             responseFormat,
             thread: messages,
-            enclosingStack: agencyStore.getStore()?.toolInvocationStack ?? null,
+            enclosingStack: run.toolInvocationStack ?? null,
             warn: warnEndTurn,
           });
           self.messagesJSON = snapshotThread();
@@ -1835,7 +1837,7 @@ export async function runPrompt(args: {
         // nests under the same span as the first round's.
         await requestStepWithTripRetry(`round.${round}.nextLlmCall`, async () => {
           const nextResult = await _runPrompt({
-            ctx,
+            run,
             messages,
             tools: tools || [],
             prompt,
@@ -1917,8 +1919,7 @@ export async function runPrompt(args: {
         // "retrying" line). Inside the step so a resume replay does not
         // re-emit it. No backoff sleep: the provider is healthy, the
         // content was just wrong.
-        await callHook({
-          ctx,
+        await callHook(run, {
           name: "onLLMRetry",
           data: {
             attempt: validationAttempt + 1,
@@ -1940,7 +1941,7 @@ export async function runPrompt(args: {
       );
       await requestStepWithTripRetry(`validation.${validationAttempt}.llmCall`, async () => {
         const nextResult = await _runPrompt({
-          ctx,
+          run,
           messages,
           tools: tools || [],
           prompt,

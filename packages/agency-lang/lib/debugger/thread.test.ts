@@ -16,7 +16,7 @@ vi.mock("agency-lang/runtime", async (importOriginal) => {
     ...original,
     // Minimal mock: pushes user + assistant messages onto the thread and returns
     // the response. Skips hooks (onLLMCallStart/End), token stats, and audit logs.
-    runPrompt: async (args: any) => {
+    runPrompt: async (_run: any, args: any) => {
       const response = mockResponses.shift() ?? "(no mock response)";
 
       // Push user + assistant messages onto the thread in-place,

@@ -18,7 +18,7 @@ type PreparedEvalEvent = {
 /**
  * std::statelog TS impls. Called from the agency-side wrappers in
  * stdlib/statelog.agency, which pass through the user's value
- * argument. Each function reads the active AgencyStore from
+ * argument. Each function reads the active Run from
  * AsyncLocalStorage and emits the corresponding wire event.
  *
  * No-op when called outside an Agency execution frame (e.g. a tool

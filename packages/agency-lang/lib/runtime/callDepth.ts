@@ -1,4 +1,4 @@
-import { agencyStore, requireFrame } from "./asyncContext.js";
+import { sameRun, withRun, type Run } from "./asyncContext.js";
 import { CallDepthExceededError } from "./errors.js";
 
 /**
@@ -78,13 +78,13 @@ function collectRecentFrames(parent: CallFrame | null, name: string): string[] {
  * `maxCallDepth` once at the root of each lineage and inherited by nested calls
  * (so a deep recursion pays a single `agencyStore` lookup, not one per frame).
  */
-export function withCallDepth<T>(name: string, fn: () => T): T {
-  const frame = requireFrame("withCallDepth()");
+export function withCallDepth<T>(run: Run, name: string, fn: (run: Run) => T): T {
+  const frame = sameRun(run, "withCallDepth()");
   const parent = frame.callDepth;
   const limit = parent ? parent.limit : (frame.ctx?.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH);
   const depth = (parent?.depth ?? 0) + 1;
   if (depth > limit) {
     throw new CallDepthExceededError(limit, depth, collectRecentFrames(parent, name));
   }
-  return agencyStore.run({ ...frame, callDepth: { name, depth, limit, parent } }, fn);
+  return withRun({ ...frame, callDepth: { name, depth, limit, parent } }, fn);
 }

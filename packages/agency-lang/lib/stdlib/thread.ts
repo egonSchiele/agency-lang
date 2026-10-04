@@ -1,3 +1,4 @@
+import { ambientRun } from "../runtime/asyncContext.js";
 import * as smoltalk from "smoltalk";
 import type {
   DecideResult,
@@ -647,12 +648,15 @@ export async function _runGuarded(ids: string[], block: unknown): Promise<Result
     // guardTrip cause instead of a generic error. `stack.lastFrame()` is
     // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
     // matches what the codegen `try block()` captured via `__stack.args`.
-    return await __tryCall(() => __call(block, { type: "positional", args: [] }), {
-      ownedGuardIds: ids,
-      checkpoint: ctx.getResultCheckpoint(),
-      functionName: "guard",
-      args: stack.lastFrame()?.args,
-    });
+    return await __tryCall(
+      () => __call(ambientRun("std::thread guard"), block, { type: "positional", args: [] }),
+      {
+        ownedGuardIds: ids,
+        checkpoint: ctx.getResultCheckpoint(),
+        functionName: "guard",
+        args: stack.lastFrame()?.args,
+      },
+    );
   } finally {
     // The block has exited and the Result (or a rethrown outer trip) is
     // this guard()'s answer, whatever it is. Between here and _popGuard

@@ -9,6 +9,7 @@ import {
 import { builtinSleep } from "./builtins.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { StateStack } from "./state/stateStack.js";
+import type { Run } from "./asyncContext.js";
 import { GraphState } from "./types.js";
 import { isAbortError } from "./errors.js";
 import { hasCallbackConsumer, invokeCallbacks, type CallbackMap } from "./hooks.js";
@@ -19,6 +20,7 @@ export function isGenerator(variable: any): boolean {
 }
 
 export async function handleStreamingResponse(args: {
+  run: Run;
   ctx: RuntimeContext<GraphState>;
   completion: AsyncGenerator<StreamChunk>;
   prompt: string | UserContentInput;
@@ -74,7 +76,7 @@ export async function handleStreamingResponse(args: {
     // runtime (async); this also applies natural backpressure — we finish
     // delivering a chunk before pulling the next.
     const emit = (data: CallbackMap["onStream"]) =>
-      invokeCallbacks({ ctx, name: "onStream", data, stateStack });
+      invokeCallbacks(args.run, { name: "onStream", data, stateStack });
     // try to acquire lock
     let count = 0;
     // wait 60 seconds to acquire lock

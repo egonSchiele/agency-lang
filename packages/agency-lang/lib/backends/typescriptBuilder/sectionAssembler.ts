@@ -556,13 +556,14 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
   // Local assignments then run in topsort-order (sectionAssembler's
   // `reorderTagged` did that ordering during partition).
   const awaitPrelude = (opts.staticAwaitModules ?? []).map((m) =>
-    ts.raw(`await __awaitStaticInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __ctx);`),
+    ts.raw(`await __awaitStaticInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __run);`),
   );
   out.push(
     ts.functionDecl(
       "__initializeStatic",
-      [{ name: "__ctx" }],
+      [{ name: "__run" }],
       ts.statements([
+        ts.raw("const __ctx = __run.ctx;"),
         ...buildInitBanner(
           "static",
           opts.staticLocalOrder ?? [],
@@ -609,6 +610,7 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   // would read from ALS instead of the parameter).
   const ctxParam = ts.id("__ctx");
   const body: TsNode[] = [
+    ts.raw("const __ctx = __run.ctx;"),
     ...buildInitBanner(
       "global",
       opts.globalLocalOrder ?? [],
@@ -640,7 +642,7 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   // run; the first run is what bare static statements rely on for
   // their once-per-process semantics.
   if (opts.staticVarNames.size > 0 || opts.staticInitStatements.length > 0) {
-    body.push(ts.awaitCall(ts.id("__initializeStatic"), [ctxParam]));
+    body.push(ts.awaitCall(ts.id("__initializeStatic"), [ts.id("__run")]));
   }
   if (opts.staticVarNames.size > 0) {
     body.push(
@@ -655,14 +657,14 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
   for (const m of opts.globalAwaitModules ?? []) {
     body.push(
       ts.raw(
-        `await __awaitGlobalsInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __ctx);`,
+        `await __awaitGlobalsInit(${JSON.stringify(displayModuleId(m.sourceModuleId))}, __run);`,
       ),
     );
   }
 
   body.push(...opts.globalInitStatements);
 
-  return ts.functionDecl("__initializeGlobals", [{ name: "__ctx" }], ts.statements(body), {
+  return ts.functionDecl("__initializeGlobals", [{ name: "__run" }], ts.statements(body), {
     async: true,
   });
 }
@@ -684,8 +686,8 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
 function buildRegisterTopLevelCallbacksFn(opts: AssembleSectionsOpts): TsNode {
   // Same parameter-context rule as buildInitializeGlobalsFn — `__ctx`
   // here is the function parameter, not an ALS-installed value.
-  const body: TsNode[] = [...opts.topLevelCallbackStatements];
-  return ts.functionDecl("__registerTopLevelCallbacks", [{ name: "__ctx" }], ts.statements(body), {
+  const body: TsNode[] = [ts.raw("const __ctx = __run.ctx;"), ...opts.topLevelCallbackStatements];
+  return ts.functionDecl("__registerTopLevelCallbacks", [{ name: "__run" }], ts.statements(body), {
     async: true,
   });
 }

@@ -67,8 +67,10 @@ describe("checkpoint()", () => {
 
   it("records location from the active callsite slot", async () => {
     const ctx = makeMockCtx();
-    const id = await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () =>
-      withCallsite({ moduleId: "modA", scopeName: "scopeB", stepPath: "1.2" }, () => checkpoint()),
+    const id = await runInTestContext(ctx, ctx.stateStack, new ThreadStore(), (run) =>
+      withCallsite(run, { moduleId: "modA", scopeName: "scopeB", stepPath: "1.2" }, () =>
+        checkpoint(),
+      ),
     );
     const cp = ctx.checkpoints.get(id)!;
     expect(cp.moduleId).toBe("modA");

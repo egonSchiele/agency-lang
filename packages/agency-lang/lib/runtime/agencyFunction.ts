@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
-import { agencyStore, withPushedHandler } from "./asyncContext.js";
+import { agencyStore, withPushedHandler, type Run } from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
 import { checkFailureArgs } from "./failurePropagation.js";
 import { normalizeForeignResult } from "./result.js";
@@ -86,6 +86,10 @@ export type AgencyFunctionOpts = {
   markers?: ToolMarkers;
   isPreapproved?: boolean;
   registeredName?: string;
+  /** True when `fn` takes the run it is called under as its first argument.
+   *  Every function the compiler writes does. A function built by hand does
+   *  not, and is called with its own arguments only. */
+  takesRun?: boolean;
 };
 
 export class AgencyFunction {
@@ -103,6 +107,7 @@ export class AgencyFunction {
   readonly exported: boolean;
   readonly markers: ToolMarkers;
   private readonly _isPreapproved: boolean;
+  private readonly _takesRun: boolean;
   /** The key this function's registered ancestor is stored under in the
    *  function registry. `.rename()` changes `name` but not this, and the
    *  other derivations carry it forward — `.partial()` and `.preapprove()`
@@ -121,6 +126,7 @@ export class AgencyFunction {
     this.exported = opts.exported ?? false;
     this.markers = opts.markers ?? {};
     this._isPreapproved = opts.isPreapproved ?? false;
+    this._takesRun = opts.takesRun ?? false;
     this._unboundParams = opts.params.filter((p) => !p.isBound);
     this._nonVariadicUnbound = this._unboundParams.filter((p) => !p.variadic);
     this._hasVariadic =
@@ -162,6 +168,7 @@ export class AgencyFunction {
       markers: this.markers,
       isPreapproved: this._isPreapproved,
       registeredName: this.registeredName,
+      takesRun: this._takesRun,
     });
   }
 
@@ -173,14 +180,14 @@ export class AgencyFunction {
     return this._unboundParams;
   }
 
-  async invoke(descriptor: CallType): Promise<unknown> {
+  async invoke(outerRun: Run, descriptor: CallType): Promise<unknown> {
     // Guard every Agency call against runaway recursion. `invoke()` is the
     // single chokepoint all calls pass through, so counting logical nesting
     // here catches the async-recursion case that never trips V8's stack but
     // grows the promise chain until the process OOMs. The limit (config-
     // overridable `maxCallDepth`) is resolved from the active execution context
     // inside `withCallDepth`, once per lineage. See lib/runtime/callDepth.ts.
-    return withCallDepth(this.name, async () => {
+    return withCallDepth(outerRun, this.name, async (run) => {
       let args: unknown[];
       try {
         args = this._isBound
@@ -211,7 +218,9 @@ export class AgencyFunction {
         }
       }
       // `_fn` may be imported TypeScript that built a Result by hand.
-      return normalizeForeignResult(await this._fn(...args));
+      return normalizeForeignResult(
+        await (this._takesRun ? this._fn(run, ...args) : this._fn(...args)),
+      );
     });
   }
 
@@ -267,6 +276,7 @@ export class AgencyFunction {
       markers: this.markers,
       isPreapproved: this._isPreapproved,
       registeredName: this.registeredName,
+      takesRun: this._takesRun,
     });
   }
 
@@ -293,14 +303,18 @@ export class AgencyFunction {
     // propagate to someone who can actually grant budget.
     const autoApprove = async (intr: { effect: string }) =>
       intr.effect === "std::guard" ? pass() : approve();
-    const wrapped = (...args: any[]) => {
-      const ctx = agencyStore.getStore()?.ctx;
-      if (!ctx) return original(...args);
-      // liveGuardIds: [] is an explicit decision, not a default — this
-      // handler conceptually registers above any guard (its body never
-      // spends, so the hide-everything reading is also harmless).
-      return withPushedHandler(ctx, autoApprove, () => Promise.resolve(original(...args)), []);
-    };
+    // liveGuardIds: [] is an explicit decision, not a default — this
+    // handler conceptually registers above any guard (its body never
+    // spends, so the hide-everything reading is also harmless).
+    const takesRun = this._takesRun;
+    const wrapped = takesRun
+      ? (run: Run, ...args: any[]) =>
+          withPushedHandler(run.ctx, autoApprove, () => Promise.resolve(original(run, ...args)), [])
+      : (...args: any[]) => {
+          const ctx = agencyStore.getStore()?.ctx;
+          if (!ctx) return original(...args);
+          return withPushedHandler(ctx, autoApprove, () => Promise.resolve(original(...args)), []);
+        };
     return new AgencyFunction({
       name: this.name,
       module: this.module,
@@ -311,6 +325,7 @@ export class AgencyFunction {
       markers: this.markers,
       isPreapproved: true,
       registeredName: this.registeredName,
+      takesRun: this._takesRun,
     });
   }
 
@@ -367,6 +382,7 @@ export class AgencyFunction {
       // The registry never learns the new name, so serialization keeps the
       // registered name for revival (see FunctionRefReviver).
       registeredName: this.registeredName,
+      takesRun: this._takesRun,
     });
   }
 

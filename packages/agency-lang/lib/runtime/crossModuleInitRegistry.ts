@@ -31,7 +31,10 @@
  * should use the existing checkpoint reset machinery instead.
  */
 
-type InitFn = (ctx: unknown) => Promise<unknown>;
+import type { Run } from "./asyncContext.js";
+
+/** An init function the compiler wrote. It takes the run it is called under. */
+type InitFn = (run: Run) => Promise<unknown>;
 
 const staticInits: Record<string, InitFn> = {};
 const globalsInits: Record<string, InitFn> = {};
@@ -71,16 +74,16 @@ export function __registerCallbacksInit(moduleId: string, fn: InitFn): void {
  * register, in which case the PR-1 read-before-init trap fires as the
  * safety net).
  */
-export async function __awaitStaticInit(moduleId: string, ctx: unknown): Promise<void> {
+export async function __awaitStaticInit(moduleId: string, run: Run): Promise<void> {
   const fn = staticInits[moduleId];
   if (!fn) return;
-  await fn(ctx);
+  await fn(run);
 }
 
-export async function __awaitGlobalsInit(moduleId: string, ctx: unknown): Promise<void> {
+export async function __awaitGlobalsInit(moduleId: string, run: Run): Promise<void> {
   const fn = globalsInits[moduleId];
   if (!fn) return;
-  await fn(ctx);
+  await fn(run);
 }
 
 /**
@@ -142,8 +145,8 @@ type CtxWithGlobals = {
  * that hole by treating "imported into the closure" as enough reason
  * to initialize.
  */
-export async function __initAllRegistered(ctx: unknown): Promise<void> {
-  const globals = (ctx as CtxWithGlobals).globals;
+export async function __initAllRegistered(run: Run): Promise<void> {
+  const globals = (run.ctx as CtxWithGlobals).globals;
   for (const moduleId of Object.keys(globalsInits)) {
     // Skip modules already initialized on this execCtx. Without this
     // guard, an older / non-conforming `__initializeGlobals` (one
@@ -152,7 +155,7 @@ export async function __initAllRegistered(ctx: unknown): Promise<void> {
     // statement. The codegen-emitted guard makes this redundant for
     // current output; the registry-level check is the safety net.
     if (globals?.isInitialized(moduleId)) continue;
-    await globalsInits[moduleId](ctx);
+    await globalsInits[moduleId](run);
   }
 }
 
@@ -172,9 +175,9 @@ export async function __initAllRegistered(ctx: unknown): Promise<void> {
  * theoretical exception — a long-lived process loading several unrelated
  * closures — matches the documented globals-registry limitation above.
  */
-export async function __initAllRegisteredCallbacks(ctx: unknown): Promise<void> {
-  (ctx as { topLevelCallbacks: unknown[] }).topLevelCallbacks = [];
+export async function __initAllRegisteredCallbacks(run: Run): Promise<void> {
+  (run.ctx as { topLevelCallbacks: unknown[] }).topLevelCallbacks = [];
   for (const moduleId of Object.keys(callbackInits)) {
-    await callbackInits[moduleId](ctx);
+    await callbackInits[moduleId](run);
   }
 }

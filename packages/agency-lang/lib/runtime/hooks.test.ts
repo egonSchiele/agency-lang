@@ -2,7 +2,7 @@ import { describe, it as baseIt, expect, vi, afterEach } from "vitest";
 import { AgencyCancelledError, RestoreSignal } from "./errors.js";
 import { callHook, invokeCallbacks, isInsideCallback, registerGlobalHook } from "./hooks.js";
 import { State, StateStack } from "./state/stateStack.js";
-import { withTestFrame } from "./__tests__/testHelpers.js";
+import { inFrameOf, testRun, withTestFrame } from "./__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -23,6 +23,11 @@ function fakeCtx(): any {
     callbacks: {},
     stateStack: { collectScopedCallbacks: () => [] },
   };
+}
+
+/** Fire a hook under a frame built from the test's own ctx. */
+function fire(ctx: any, name: string, data: unknown): Promise<void> {
+  return inFrameOf(ctx, ctx.stateStack, (run) => callHook(run, { name, data } as any));
 }
 
 describe("callHook", () => {
@@ -47,7 +52,7 @@ describe("callHook", () => {
       },
     ];
     const ctx = ctxWithStack([outer, inner]);
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    await fire(ctx, "onNodeStart", { nodeName: "x" });
     expect(calls).toEqual(["inner", "outer"]);
   });
 
@@ -67,7 +72,7 @@ describe("callHook", () => {
         calls.push("ts");
       },
     });
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    await fire(ctx, "onNodeStart", { nodeName: "x" });
     expect(calls).toEqual(["scoped", "ts"]);
   });
 
@@ -75,11 +80,7 @@ describe("callHook", () => {
     const inner = new State();
     inner.scopedCallbacks = [{ name: "onLLMCallEnd", fn: () => ["whatever"] }];
     const ctx = ctxWithStack([inner]);
-    const result = await callHook({
-      ctx,
-      name: "onLLMCallEnd",
-      data: {},
-    } as any);
+    const result = await fire(ctx, "onLLMCallEnd", {});
     expect(result).toBeUndefined();
   });
 
@@ -102,7 +103,7 @@ describe("callHook", () => {
       },
     ];
     const ctx = ctxWithStack([inner]);
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    await fire(ctx, "onNodeStart", { nodeName: "x" });
     expect(calls).toEqual(["after"]);
     expect(consoleErr).toHaveBeenCalled();
     consoleErr.mockRestore();
@@ -120,9 +121,7 @@ describe("callHook", () => {
       },
     ];
     const ctx = ctxWithStack([inner]);
-    await expect(
-      callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any),
-    ).rejects.toBe(signal);
+    await expect(fire(ctx, "onNodeStart", { nodeName: "x" })).rejects.toBe(signal);
   });
 
   it("rethrows AgencyCancelledError", async () => {
@@ -137,9 +136,7 @@ describe("callHook", () => {
       },
     ];
     const ctx = ctxWithStack([inner]);
-    await expect(
-      callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any),
-    ).rejects.toBe(cancelled);
+    await expect(fire(ctx, "onNodeStart", { nodeName: "x" })).rejects.toBe(cancelled);
   });
 
   it("fires scoped → top-level → TS-passed (in that order)", async () => {
@@ -169,7 +166,7 @@ describe("callHook", () => {
         },
       ],
     );
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    await fire(ctx, "onNodeStart", { nodeName: "x" });
     expect(calls).toEqual(["scoped", "topLevel", "ts"]);
   });
 
@@ -189,7 +186,7 @@ describe("callHook", () => {
         },
       },
     ]);
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    await fire(ctx, "onNodeStart", { nodeName: "x" });
     expect(calls).toEqual(["matching"]);
   });
 
@@ -206,7 +203,7 @@ describe("callHook", () => {
       calls.push("c");
     });
     const ctx = ctxWithStack([frame]);
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    await fire(ctx, "onNodeStart", { nodeName: "x" });
     expect(calls).toEqual(["a", "b", "c"]);
   });
 
@@ -218,14 +215,15 @@ describe("callHook", () => {
       depth++;
       maxDepth = Math.max(maxDepth, depth);
       if (depth < 5) {
-        await callHook({ ctx: ctxHolder.ctx, name: "onNodeStart", data } as any);
+        // The callback body runs under its own run, so read the current one.
+        await callHook(testRun(), { name: "onNodeStart", data } as any);
       }
       depth--;
     };
     const inner = new State();
     inner.scopedCallbacks = [{ name: "onNodeStart", fn }];
     ctxHolder.ctx = ctxWithStack([inner]);
-    await callHook({ ctx: ctxHolder.ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
+    await fire(ctxHolder.ctx, "onNodeStart", { nodeName: "x" });
     expect(maxDepth).toBe(1);
   });
 });
@@ -237,7 +235,7 @@ describe("registerGlobalHook", () => {
       calls.push("global");
     });
     const ctx = fakeCtx();
-    await callHook({ ctx, name: "onEmit", data: "hello" as any });
+    await fire(ctx, "onEmit", "hello");
     expect(calls).toContain("global");
   });
 });
@@ -258,12 +256,13 @@ describe("invokeCallbacks subprocess forwarding", () => {
       return true;
     }) as any;
     const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: new StateStack() };
-    await invokeCallbacks({
-      ctx,
-      name: "onNodeStart",
-      data: { nodeName: "x" },
-      stateStack: ctx.stateStack,
-    });
+    await inFrameOf(ctx, ctx.stateStack, (run) =>
+      invokeCallbacks(run, {
+        name: "onNodeStart",
+        data: { nodeName: "x" },
+        stateStack: ctx.stateStack,
+      }),
+    );
     expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]);
   });
 
@@ -271,12 +270,13 @@ describe("invokeCallbacks subprocess forwarding", () => {
     const send = vi.fn(() => true);
     process.send = send as any;
     const ctx: any = { callbacks: {}, topLevelCallbacks: [], stateStack: new StateStack() };
-    await invokeCallbacks({
-      ctx,
-      name: "onNodeStart",
-      data: { nodeName: "x" },
-      stateStack: ctx.stateStack,
-    });
+    await inFrameOf(ctx, ctx.stateStack, (run) =>
+      invokeCallbacks(run, {
+        name: "onNodeStart",
+        data: { nodeName: "x" },
+        stateStack: ctx.stateStack,
+      }),
+    );
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -297,7 +297,9 @@ describe("invokeCallbacks subprocess forwarding", () => {
       topLevelCallbacks: [],
       stateStack: stack,
     };
-    await invokeCallbacks({ ctx, name: "onNodeStart", data: { nodeName: "x" }, stateStack: stack });
+    await inFrameOf(ctx, stack, (run) =>
+      invokeCallbacks(run, { name: "onNodeStart", data: { nodeName: "x" }, stateStack: stack }),
+    );
     expect(fired).toEqual([{ nodeName: "x" }]); // local callback still fired
     expect(sent).toEqual([{ type: "callback", name: "onNodeStart", data: { nodeName: "x" } }]); // and forwarded
   });
@@ -305,14 +307,16 @@ describe("invokeCallbacks subprocess forwarding", () => {
 
 describe("isInsideCallback", () => {
   it("is true only while a callback body runs", async () => {
-    expect(isInsideCallback()).toBe(false);
     let seen = false;
     const ctx = fakeCtx();
     ctx.callbacks.onNodeStart = async () => {
-      seen = isInsideCallback();
+      seen = isInsideCallback(testRun());
     };
-    await callHook({ ctx, name: "onNodeStart", data: { nodeName: "x" } } as any);
-    expect(seen).toBe(true);
-    expect(isInsideCallback()).toBe(false);
+    await inFrameOf(ctx, ctx.stateStack, async (run) => {
+      expect(isInsideCallback(run)).toBe(false);
+      await callHook(run, { name: "onNodeStart", data: { nodeName: "x" } });
+      expect(seen).toBe(true);
+      expect(isInsideCallback(run)).toBe(false);
+    });
   });
 });

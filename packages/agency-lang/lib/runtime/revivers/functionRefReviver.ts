@@ -2,7 +2,7 @@ import { BaseReviver } from "./baseReviver.js";
 import { AgencyFunction } from "../agencyFunction.js";
 import type { FuncParam, ToolDefinition } from "../agencyFunction.js";
 import { isBlockName, isLiftedCallbackName } from "../blockNames.js";
-import { agencyStore } from "../asyncContext.js";
+import { agencyStore, type Run } from "../asyncContext.js";
 
 type FunctionRefRegistry = Record<string, AgencyFunction>;
 
@@ -241,7 +241,10 @@ function makeLazyCallbackRef(
   return new AgencyFunction({
     name,
     module,
-    fn: async (...args: unknown[]) => {
+    // It is built during a restore, long before it is called, so it takes
+    // the run of whoever calls it and passes that on.
+    takesRun: true,
+    fn: async (run: Run, ...args: unknown[]) => {
       const real = reviver.registry ? lookupInRegistry(reviver.registry, name, module) : undefined;
       if (!real) {
         const msg =
@@ -251,7 +254,7 @@ function makeLazyCallbackRef(
         emitFunctionRefMissError(name, msg);
         throw new Error(msg);
       }
-      return real.invoke({ type: "positional", args });
+      return real.invoke(run, { type: "positional", args });
     },
     params: [{ name: "data", hasDefault: false, defaultValue: undefined, variadic: false }],
     toolDefinition: null,

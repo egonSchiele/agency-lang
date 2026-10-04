@@ -1,3 +1,4 @@
+import { ambientRun } from "../runtime/asyncContext.js";
 import { z } from "zod";
 import type { AgencyFunction } from "../runtime/agencyFunction.js";
 import type { InterruptEffect } from "../symbolTable.js";
@@ -44,7 +45,12 @@ function makeRawInvoker(
   moduleInvoke: ModuleInvokeFunction | undefined,
 ): (namedArgs: Record<string, unknown>) => Promise<unknown> {
   if (moduleInvoke) return (namedArgs) => moduleInvoke(fn, namedArgs);
-  return (namedArgs) => fn.invoke({ type: "named", positionalArgs: [], namedArgs });
+  return (namedArgs) =>
+    fn.invoke(ambientRun("The serve raw invoker"), {
+      type: "named",
+      positionalArgs: [],
+      namedArgs,
+    });
 }
 
 function toExportedFunction(

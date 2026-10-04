@@ -4,7 +4,7 @@ import * as smoltalk from "smoltalk";
 import { ToolCall } from "smoltalk";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
 import { AgencyFunction } from "./agencyFunction.js";
-import { agency } from "./agency.js";
+import { runInTestContext, type Run } from "./asyncContext.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { runPrompt } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
@@ -37,9 +37,9 @@ function makeCtx(): RuntimeContext<any> {
 function inFrame<T>(
   ctx: RuntimeContext<any>,
   threads: ThreadStore,
-  fn: () => Promise<T>,
+  fn: (run: Run) => Promise<T>,
 ): Promise<T> {
-  return agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, fn);
+  return runInTestContext(ctx, ctx.stateStack, threads, fn);
 }
 
 /** Records every PromptConfig; the FIRST response issues a saveDraft
@@ -119,8 +119,8 @@ async function runSaveDraftPrompt(opts: { draftSchema: unknown; save: unknown })
   // callerFrame() write must land here — the frame-math the spec
   // correction pinned.
   const ownerFrame = ctx.stateStack.getNewState();
-  await inFrame(ctx, threads, () =>
-    runPrompt({
+  await inFrame(ctx, threads, (run) =>
+    runPrompt(run, {
       prompt: "go",
       messages: thread,
       clientConfig: { tools: [stdlibShapedSaveDraft()] } as any,

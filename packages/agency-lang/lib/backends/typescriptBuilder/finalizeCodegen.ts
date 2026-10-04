@@ -7,6 +7,11 @@ import type { ScopeManager } from "./scopeManager.js";
 import * as renderFinalizeClosure from "../../templates/backends/typescriptGenerator/finalizeClosure.js";
 import { formatTypeHintTs } from "../../utils/formatType.js";
 
+/** How a stop site hands the finalize closure to the runtime. The runtime
+ *  calls it with the partial value only, so the site binds the run it runs
+ *  under. Each site sits inside a body that declares `__run`. */
+const FINALIZE_WITH_RUN = "(__partial: any) => __finalize(__run, __partial)";
+
 /** Everything a scope's compilation needs from its (possible) finalize
  *  block. Produced by FinalizeCodegen.compileScope for every function and
  *  block scope, whether or not one was declared. */
@@ -116,7 +121,7 @@ export class FinalizeCodegen {
     const scope = JSON.stringify(this.scopes.currentName());
     return [
       ts.raw(
-        `runner.halt(await ${abortedVar}.carryThrough(${this.frameVar()}, ${scope}).withFinalize(__finalize, ${scope}))`,
+        `runner.halt(await ${abortedVar}.carryThrough(${this.frameVar()}, ${scope}).withFinalize(${FINALIZE_WITH_RUN}, ${scope}))`,
       ),
       ts.return(),
     ];
@@ -157,7 +162,8 @@ export class FinalizeCodegen {
     let binderParam = "";
     if (binder !== undefined) {
       const tsType = binder.typeHint ? `${formatTypeHintTs(binder.typeHint)} | null` : "any";
-      binderParam = `${binder.name}: ${tsType}`;
+      // Follows the closure's own first parameter, `__run`.
+      binderParam = `, ${binder.name}: ${tsType}`;
     }
     return ts.raw(
       renderFinalizeClosure
@@ -176,7 +182,7 @@ export class FinalizeCodegen {
     const scope = JSON.stringify(scopeName);
     const fromError = `AbortedResult.fromError(${errorVar}, ${this.frameVar()}, ${scope})`;
     return hasFinalize
-      ? `return await ${fromError}.withFinalize(__finalize, ${scope});`
+      ? `return await ${fromError}.withFinalize(${FINALIZE_WITH_RUN}, ${scope});`
       : `return ${fromError};`;
   }
 

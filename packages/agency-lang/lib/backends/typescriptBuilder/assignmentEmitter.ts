@@ -113,7 +113,7 @@ export class AssignmentEmitter {
             this.deps.buildCallDescriptor(fnCall),
           ];
           if (config) callArgs.push(config);
-          const callExpr = ts.call(ts.id("__callMethod"), callArgs);
+          const callExpr = ts.call(ts.id("__callMethod"), [ts.runtime.run, ...callArgs]);
           result = ts.await(callExpr);
           break;
         }

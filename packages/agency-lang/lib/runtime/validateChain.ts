@@ -2,6 +2,7 @@ import { z } from "zod";
 import { success, failure, isFailure, isSuccess } from "./result.js";
 import type { ResultValue } from "./result.js";
 import { AgencyFunction } from "./agencyFunction.js";
+import { ambientRun } from "./asyncContext.js";
 
 /**
  * Async validator used by `@validate(...)` chains. May be:
@@ -21,7 +22,7 @@ export type AgencyValidator =
 
 async function callValidator(v: AgencyValidator, value: unknown): Promise<ResultValue> {
   if (AgencyFunction.isAgencyFunction(v)) {
-    return (await (v as AgencyFunction).invoke({
+    return (await (v as AgencyFunction).invoke(ambientRun("A validator"), {
       type: "positional",
       args: [value],
     })) as ResultValue;

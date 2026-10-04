@@ -1,3 +1,4 @@
+import { ambientRun } from "../runtime/asyncContext.js";
 import * as readline from "readline";
 import process from "process";
 import { wholePath, stat, readText, writeText, mkdir } from "./contained.js";
@@ -37,7 +38,7 @@ import { exitProcessNow } from "../runtime/exitProcess.js";
  *  path (handlers, ALS context, retries) rather than being invoked as
  *  raw JS. */
 async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
-  return (await __call(fn, { type: "positional", args })) as T;
+  return (await __call(ambientRun("std::ui/cli bridge"), fn, { type: "positional", args })) as T;
 }
 
 /** One-line summary of a multi-line buffer: its first line + a line count.

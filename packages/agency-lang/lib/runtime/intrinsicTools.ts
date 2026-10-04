@@ -2,7 +2,7 @@ import * as smoltalk from "smoltalk";
 import type { AgencyFunction, ToolDefinition } from "./agencyFunction.js";
 import type { StateStack } from "./state/stateStack.js";
 import type { MessageThread } from "./state/messageThread.js";
-import { __threads } from "./asyncContext.js";
+import type { Run } from "./asyncContext.js";
 import type { StatelogClient } from "../statelogClient.js";
 import { invokeCallbacks } from "./hooks.js";
 import { saveDraftIntrinsic } from "./saveDraftTool.js";
@@ -90,6 +90,7 @@ export function partitionIntrinsicCalls<
  * inline state write has no meaningful duration).
  */
 export async function runIntrinsicCall(opts: {
+  run: Run;
   intrinsic: IntrinsicTool;
   toolCall: { id: string; name: string; arguments: Record<string, unknown> };
   stateStack: StateStack;
@@ -112,17 +113,15 @@ export async function runIntrinsicCall(opts: {
       toolName: toolCall.name,
       args: callArgs,
       model: JSON.stringify(opts.model),
-      threadId: __threads()?.activeId() ?? null,
+      threadId: opts.run.threads.activeId() ?? null,
     });
-    await invokeCallbacks({
-      ctx: opts.ctx as any,
+    await invokeCallbacks(opts.run, {
       name: "onToolCallStart",
       data: { toolName: toolCall.name, args: callArgs },
       stateStack,
     });
     const ack = intrinsic.handle({ toolCall, stateStack, draftSchema });
-    await invokeCallbacks({
-      ctx: opts.ctx as any,
+    await invokeCallbacks(opts.run, {
       name: "onToolCallEnd",
       data: { toolName: toolCall.name, result: ack, timeTaken: 0 },
       stateStack,
@@ -133,7 +132,7 @@ export async function runIntrinsicCall(opts: {
       output: ack,
       model: JSON.stringify(opts.model),
       timeTaken: 0,
-      threadId: __threads()?.activeId() ?? null,
+      threadId: opts.run.threads.activeId() ?? null,
     });
     opts.messages.push(
       smoltalk.toolMessage(ack, {

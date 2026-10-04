@@ -47,7 +47,7 @@
  *    the generated function-body emission in
  *    `lib/backends/typescriptBuilder.ts`.
  */
-import { agencyStore, getRuntimeContext, lineageOf } from "./asyncContext.js";
+import { ambientRun, getRuntimeContext, lineageOf, withRun } from "./asyncContext.js";
 import { setupFunction } from "./node.js";
 import { Runner } from "./runner.js";
 import { claimFrameForScope } from "./state/stateStack.js";
@@ -120,7 +120,7 @@ export async function withResumableScope<T>(
 
   // Push a new frame on the active branch's stack (reads `stack` /
   // `threads` from the ALS frame, same as a generated function body).
-  const { stateStack, stack, threads } = setupFunction();
+  const { stateStack, stack, threads } = setupFunction(runtime);
   // Hand-written claim (generated code claims in its preambles; this
   // helper is TypeScript and pulls a real frame via setupFunction).
   claimFrameForScope(stack, opts.name, typeof moduleId === "string" ? moduleId : "");
@@ -152,7 +152,7 @@ export async function withResumableScope<T>(
     step: async <U>(fn: () => U | Promise<U>): Promise<U> => {
       const id = nextStepId++;
       const key = `${STEP_RESULT_PREFIX}${id}`;
-      await runner.step(id, async () => {
+      await runner.step(id, ambientRun("ResumableScope.step()"), async () => {
         stack.locals[key] = await fn();
       });
       // After a no-op short-circuit (halted, replayed substep), the
@@ -177,8 +177,8 @@ export async function withResumableScope<T>(
   };
 
   try {
-    const outer = agencyStore.getStore();
-    const bodyResult = await agencyStore.run(
+    const outer = runtime;
+    const bodyResult = await withRun(
       {
         ctx,
         stack: stateStack,
@@ -187,11 +187,11 @@ export async function withResumableScope<T>(
         // scope nested inside a fork branch sees the branch-local
         // clone instead of the canonical store. Fall back to
         // `ctx.globals` when no outer frame exists.
-        globals: outer?.globals ?? ctx.globals,
-        toolInvocationStack: outer?.toolInvocationStack,
+        globals: outer.globals,
+        toolInvocationStack: outer.toolInvocationStack,
         // Keep the enclosing arm's decision scope so a resumable scope
         // nested inside a fork branch still batches with the block.
-        decisions: outer?.decisions,
+        decisions: outer.decisions,
         callsite: { moduleId, scopeName: opts.name, stepPath: "" },
         ...lineageOf(outer),
       },

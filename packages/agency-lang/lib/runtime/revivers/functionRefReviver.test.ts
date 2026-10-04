@@ -6,7 +6,7 @@ import { runInTestContext, getRuntimeContext } from "../asyncContext.js";
 import { RuntimeContext } from "../state/context.js";
 import { StateStack } from "../state/stateStack.js";
 import { ThreadStore } from "../state/threadStore.js";
-import { withTestFrame } from "../__tests__/testHelpers.js";
+import { testRun, withTestFrame } from "../__tests__/testHelpers.js";
 
 // These tests call runtime functions that keep a value on the frame.
 const it = withTestFrame(baseIt);
@@ -96,7 +96,7 @@ describe("FunctionRefReviver", () => {
       const stub = reviver.revive({ name: "missing", module: "test.agency" });
       expect(AgencyFunction.isAgencyFunction(stub)).toBe(true);
       expect(stub.name).toBe("missing");
-      await expect(stub.invoke({ type: "positional", args: [] })).rejects.toThrow(
+      await expect(stub.invoke(testRun(), { type: "positional", args: [] })).rejects.toThrow(
         /never loaded its module/,
       );
     });
@@ -121,7 +121,7 @@ describe("FunctionRefReviver", () => {
       // invoke() may reject or convert the throw to a failure Result
       // depending on failure-propagation settings; accept either, but the
       // tripwire message must surface.
-      const outcome = await stub.invoke({ type: "positional", args: [] }).then(
+      const outcome = await stub.invoke(testRun(), { type: "positional", args: [] }).then(
         (v: unknown) => v,
         (e: unknown) => e,
       );
@@ -136,7 +136,7 @@ describe("FunctionRefReviver", () => {
       reviver.registry = {};
       for (const name of ["__blockish", "__block_"]) {
         const stub = reviver.revive({ name, module: "test.agency" });
-        await expect(stub.invoke({ type: "positional", args: [] })).rejects.toThrow(
+        await expect(stub.invoke(testRun(), { type: "positional", args: [] })).rejects.toThrow(
           /never loaded its module/,
         );
       }
@@ -478,7 +478,7 @@ describe("FunctionRefReviver with bound functions", () => {
 
     const json = JSON.stringify({ callback: bound }, nativeTypeReplacer);
     const restored = JSON.parse(json, nativeTypeReviver);
-    const result = await restored.callback.invoke({ type: "positional", args: [7] });
+    const result = await restored.callback.invoke(testRun(), { type: "positional", args: [7] });
     expect(result).toBe(12);
 
     functionRefReviver.registry = null;
@@ -507,7 +507,7 @@ describe("lazy callback refs (#544)", () => {
       // The generic stub is a tripwire: unlike the callback lazy ref, it
       // does NOT re-check the registry at invoke time.
       reviver.registry[`app.agency:${name}`] = makeAgencyFunction(name, "app.agency");
-      await expect(stub.invoke({ type: "positional", args: [] })).rejects.toThrow(
+      await expect(stub.invoke(testRun(), { type: "positional", args: [] })).rejects.toThrow(
         /never loaded its module/,
       );
     }
@@ -558,7 +558,7 @@ describe("lazy callback refs (#544)", () => {
       toolDefinition: null,
     });
 
-    await ref.invoke({ type: "positional", args: [{ cost: 1 }] });
+    await ref.invoke(testRun(), { type: "positional", args: [{ cost: 1 }] });
     expect(received).toEqual({ cost: 1 });
   });
 
@@ -592,8 +592,8 @@ describe("lazy callback refs (#544)", () => {
       dirname: process.cwd(),
     });
     await runInTestContext(ctx, new StateStack(), new ThreadStore(), async () => {
-      await real.invoke({ type: "positional", args: [{}] });
-      await lazy.invoke({ type: "positional", args: [{}] });
+      await real.invoke(testRun(), { type: "positional", args: [{}] });
+      await lazy.invoke(testRun(), { type: "positional", args: [{}] });
     });
     expect(depths).toHaveLength(2);
     expect(depths[1]).toBe(depths[0]);
@@ -603,7 +603,7 @@ describe("lazy callback refs (#544)", () => {
     const reviver = new FunctionRefReviver();
     reviver.registry = {};
     const ref = reviveRef(reviver, "__cb_main_0", "agency_abc") as AgencyFunction;
-    await expect(ref.invoke({ type: "positional", args: [{}] })).rejects.toThrow(
+    await expect(ref.invoke(testRun(), { type: "positional", args: [{}] })).rejects.toThrow(
       /__cb_main_0.*agency_abc/s,
     );
   });
@@ -653,7 +653,7 @@ describe("renamed functions round-trip (#652)", () => {
 
     expect(restored.tool.name).toBe("wikipedia_search");
     expect(restored.tool.toolDefinition.name).toBe("wikipedia_search");
-    const result = await restored.tool.invoke({ type: "positional", args: ["cats"] });
+    const result = await restored.tool.invoke(testRun(), { type: "positional", args: ["cats"] });
     expect(result).toBe("results for cats");
 
     functionRefReviver.registry = null;
@@ -669,7 +669,7 @@ describe("renamed functions round-trip (#652)", () => {
 
     expect(restored.tool.name).toBe("wikipedia_search");
     expect(restored.tool.getUnboundParams()).toHaveLength(0);
-    const result = await restored.tool.invoke({ type: "positional", args: [] });
+    const result = await restored.tool.invoke(testRun(), { type: "positional", args: [] });
     expect(result).toBe("results for dogs");
 
     functionRefReviver.registry = null;
@@ -742,7 +742,7 @@ describe("lazy callback refs resolve through the shared lookup", () => {
       toolDefinition: null,
     });
 
-    await ref.invoke({ type: "positional", args: [{}] });
+    await ref.invoke(testRun(), { type: "positional", args: [{}] });
     expect(fired).toBe(true);
   });
 });

@@ -1,7 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MessageJSON } from "smoltalk";
-import { agencyStore, getRuntimeContext, lineageOf, runInBootstrapFrame } from "./asyncContext.js";
+import {
+  agencyStore,
+  lineageOf,
+  runInBootstrapFrame,
+  sameRun,
+  withRun,
+  type Run,
+} from "./asyncContext.js";
 import { callHook } from "./hooks.js";
 import type { AgencyCallbacks } from "./hooks.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -41,14 +48,13 @@ export function setupNode(args: { state: GraphState }): {
   step: number;
   self: Record<string, any>;
   threads: ThreadStore;
+  run: Run;
 } {
   const { state } = args;
-  // `ctx` flows through the ALS frame installed by `runNode` (or by
-  // `respondToInterrupts` / `rewindFrom`). The `state.ctx` field is still
-  // populated by graph.run for backwards compat, but we no longer rely on
-  // it here — reading from ALS keeps every per-scope helper consistent
-  // with the same source of truth.
-  const ctx = getRuntimeContext().ctx;
+  // The run the graph was started under: the frame installed by `runNode`,
+  // `respondToInterrupts`, or `rewindFrom` around `graph.run`.
+  const run = sameRun(state.run, "A node body");
+  const ctx = run.ctx;
 
   const stack = ctx.stateStack.getNewState();
   const step = stack.step;
@@ -71,10 +77,10 @@ export function setupNode(args: { state: GraphState }): {
   }
   stack.threads = threads;
 
-  return { stack, step, self, threads };
+  return { stack, step, self, threads, run };
 }
 
-export function setupFunction(): {
+export function setupFunction(run: Run): {
   stateStack: StateStack;
   stack: State;
   step: number;
@@ -98,7 +104,7 @@ export function setupFunction(): {
   // would corrupt the parent's stack and break per-branch isolation
   // (interrupts, abort signals, restore on resume). The pre-migration
   // code preserved this with `state.stateStack ?? state.ctx.stateStack`.
-  const { stack: stateStack, threads } = getRuntimeContext();
+  const { stack: stateStack, threads } = sameRun(run, "A function body");
   const stack = stateStack.getNewState();
   return { stateStack, stack, step: stack.step, self: stack.locals, threads };
 }
@@ -133,7 +139,7 @@ export function setupFunction(): {
 async function initFreshExecCtx(
   execCtx: RuntimeContext<GraphState>,
   opts: {
-    initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+    initializeGlobals?: (run: Run) => void | Promise<void>;
     // The invocation's root policy (ResolvedInvocation.policy).
     policy?: Policy;
   },
@@ -192,16 +198,16 @@ async function initFreshExecCtx(
   // cheap to call on every fresh run.
   await loadProviderModules(execCtx);
   await ensureConfiguredLocalProvider(execCtx);
-  await runInBootstrapFrame(execCtx, () => __initAllRegistered(execCtx));
+  await runInBootstrapFrame(execCtx, (run) => __initAllRegistered(run));
   if (initializeGlobals) {
-    await runInBootstrapFrame(execCtx, () => initializeGlobals(execCtx));
+    await runInBootstrapFrame(execCtx, (run) => initializeGlobals(run));
   }
   // Re-register top-level callbacks for EVERY module in the closure (not
   // just the entry) AFTER global init, so imported-module callbacks fire
   // and any globals they read are already set up. The driver owns the
   // single topLevelCallbacks reset. Keep this in sync with the resume
   // (interrupts.ts) and rewind (rewind.ts) paths.
-  await runInBootstrapFrame(execCtx, () => __initAllRegisteredCallbacks(execCtx));
+  await runInBootstrapFrame(execCtx, (run) => __initAllRegisteredCallbacks(run));
 }
 
 /**
@@ -265,7 +271,7 @@ type RunExportedFunctionArgs = {
   ctx: RuntimeContext<GraphState>;
   fn: AgencyFunction;
   namedArgs: Record<string, unknown>;
-  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  initializeGlobals?: (run: Run) => void | Promise<void>;
   invocation?: InvocationOptions;
 };
 
@@ -292,7 +298,7 @@ async function runExportedFunctionCore({
   try {
     await initFreshExecCtx(execCtx, { initializeGlobals, policy: resolved.policy });
     const threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
-    const value = await agencyStore.run(
+    const value = await withRun(
       {
         ctx: execCtx,
         stack: execCtx.stateStack,
@@ -300,8 +306,8 @@ async function runExportedFunctionCore({
         globals: execCtx.globals,
         ...lineageOf(agencyStore.getStore()),
       },
-      async () => {
-        const result = await fn.invoke({ type: "named", positionalArgs: [], namedArgs });
+      async (run) => {
+        const result = await fn.invoke(run, { type: "named", positionalArgs: [], namedArgs });
         // Drain any async work the function spawned (async calls, pending
         // promises) before returning, mirroring runNode's awaitAll.
         await execCtx.pendingPromises.awaitAll();
@@ -345,7 +351,7 @@ type RunNodeArgs = {
   messages?: MessageJSON[];
   callbacks?: AgencyCallbacks;
   // initializes global variables on the execution context
-  initializeGlobals?: (ctx: RuntimeContext<GraphState>) => void | Promise<void>;
+  initializeGlobals?: (run: Run) => void | Promise<void>;
   // An AbortSignal for cancelling the agent mid-execution. When aborted,
   // in-flight LLM requests are torn down and an AgencyCancelledError is thrown.
   // See pauseSignal for the case where the work should be kept.
@@ -423,9 +429,8 @@ async function runNodeCore({
       // callbacks that reach for thread/message builtins get a clear error
       // instead of writing into a placeholder. `messages` is still
       // available to the callback via `data.messages`.
-      await runInBootstrapFrame(execCtx, () =>
-        callHook({
-          ctx: execCtx,
+      await runInBootstrapFrame(execCtx, (run) =>
+        callHook(run, {
           name: "onAgentStart",
           data: { nodeName, args: data, messages: messages || [], cancel },
         }),
@@ -446,7 +451,7 @@ async function runNodeCore({
           // bodies re-enter `agencyStore.run` inside each Runner step with
           // the scope-local stack/threads, so this top-level frame is just
           // the fallback for early code (callHook, validation, etc.).
-          const result = await agencyStore.run(
+          const result = await withRun(
             {
               ctx: execCtx,
               stack: execCtx.stateStack,
@@ -454,7 +459,7 @@ async function runNodeCore({
               globals: execCtx.globals,
               ...lineageOf(agencyStore.getStore()),
             },
-            () =>
+            (run) =>
               execCtx.graph.run(
                 nodeName,
                 {
@@ -462,6 +467,7 @@ async function runNodeCore({
                   data,
                   ctx: execCtx,
                   isResume,
+                  run,
                 },
                 {
                   onNodeEnter: (id) => execCtx.stateStack.nodesTraversed.push(id),
@@ -499,7 +505,7 @@ async function runNodeCore({
             // the real per-run ThreadStore: user callbacks that inspect
             // the final conversation through stdlib helpers see the
             // actual messages, not a sentinel.
-            await agencyStore.run(
+            await withRun(
               {
                 ctx: execCtx,
                 stack: execCtx.stateStack,
@@ -507,9 +513,8 @@ async function runNodeCore({
                 globals: execCtx.globals,
                 ...lineageOf(agencyStore.getStore()),
               },
-              () =>
-                callHook({
-                  ctx: execCtx,
+              (run) =>
+                callHook(run, {
                   name: "onAgentEnd",
                   data: {
                     nodeName,

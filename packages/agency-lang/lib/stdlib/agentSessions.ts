@@ -1,3 +1,4 @@
+import { ambientRun } from "../runtime/asyncContext.js";
 import type { MessageJSON } from "smoltalk";
 import * as path from "path";
 import { root, list, stat, mkdir, readText, writeText, type Root } from "./contained.js";
@@ -160,7 +161,7 @@ export function _installSessionHooks(onSubmit: unknown, afterTurn: unknown): voi
 }
 
 function call(fn: unknown, ...args: unknown[]): Promise<unknown> {
-  return __call(fn, { type: "positional", args });
+  return __call(ambientRun("std::agent session helper"), fn, { type: "positional", args });
 }
 
 /**

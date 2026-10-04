@@ -4,7 +4,7 @@ import { agencyStore, getRuntimeContext, runInTestContext } from "./asyncContext
 import { DecisionCollector } from "./decision/collector.js";
 import { readCause } from "./errors.js";
 import type { Interrupt } from "./interrupts.js";
-import { runBatch } from "./runBatch.js";
+import { runBatch, type RunBatchOpts, type RunBatchResult } from "./runBatch.js";
 import { GlobalStore } from "./state/globalStore.js";
 import { State, StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -49,6 +49,8 @@ function makeCtx(): StubCtx {
   let nextCpId = 1000;
   const stored: Record<number, any> = {};
   const ctx: any = {
+    // The frame's globals come from here; each branch clones them.
+    globals: new GlobalStore(),
     checkpoints: {
       create: (stack: any, _ctx: any, opts: any) => {
         const id = nextCpId++;
@@ -73,6 +75,14 @@ function makeCtx(): StubCtx {
   return { ctx, createCalls };
 }
 
+/** Start a batch under a frame built from the test's own ctx and parent
+ *  stack, so the run it is handed has that ctx. */
+function batch<T>(opts: Omit<RunBatchOpts<T>, "run">): Promise<RunBatchResult<T>> {
+  return runInTestContext(opts.ctx, opts.parentStack, new ThreadStore(), (run) =>
+    runBatch<T>({ run, ...opts }),
+  );
+}
+
 function makeParent() {
   const parentStack = new StateStack();
   const parentFrame = new State();
@@ -85,7 +95,7 @@ describe("runBatch — mode 'all'", () => {
   it("single child returning a value → kind=values", async () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
-    const result = await runBatch<number>({
+    const result = await batch<number>({
       ctx,
       parentStack,
       parentFrame,
@@ -103,7 +113,7 @@ describe("runBatch — mode 'all'", () => {
     const { parentStack, parentFrame } = makeParent();
     const leafIntr = fakeInterrupt("a", 77);
     const leafCp = leafIntr.checkpoint!;
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -126,7 +136,7 @@ describe("runBatch — mode 'all'", () => {
     const { parentStack, parentFrame } = makeParent();
     const i1 = fakeInterrupt("x", 10);
     const i2 = fakeInterrupt("y", 11);
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -159,7 +169,7 @@ describe("runBatch — mode 'all'", () => {
     let invokeCalls = 0;
     let starts = 0;
     let ends = 0;
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -189,7 +199,7 @@ describe("runBatch — mode 'all'", () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
     const ends: Array<{ index: number; outcome: string; value: unknown }> = [];
-    await runBatch<unknown>({
+    await batch<unknown>({
       ctx,
       parentStack,
       parentFrame,
@@ -213,7 +223,7 @@ describe("runBatch — mode 'all'", () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
     const ends: Array<{ outcome: string; value: unknown }> = [];
-    await runBatch({
+    await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -235,7 +245,7 @@ describe("runBatch — mode 'all'", () => {
     ctrl.abort();
 
     const seen: boolean[] = [];
-    await runBatch({
+    await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -244,7 +254,7 @@ describe("runBatch — mode 'all'", () => {
       children: [
         {
           key: "c0",
-          invoke: async (_s, sig) => {
+          invoke: async (_run, _s, sig) => {
             seen.push(sig.aborted);
             return 1;
           },
@@ -258,7 +268,7 @@ describe("runBatch — mode 'all'", () => {
     const { ctx, createCalls } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
     let propagateCalls = 0;
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -289,7 +299,7 @@ describe("runBatch — mode 'all'", () => {
     // Seed locals with a stale value the way prompt.ts line 422 does.
     parentFrame.locals.messagesJSON = ["stale"];
     const order: string[] = [];
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -331,7 +341,7 @@ describe("runBatch — mode 'all'", () => {
     const { ctx, createCalls } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
     await expect(
-      runBatch({
+      batch({
         ctx,
         parentStack,
         parentFrame,
@@ -352,7 +362,7 @@ describe("runBatch — mode 'all'", () => {
     const { parentStack, parentFrame } = makeParent();
     const err = new Error("boom");
     await expect(
-      runBatch({
+      batch({
         ctx,
         parentStack,
         parentFrame,
@@ -376,7 +386,7 @@ describe("runBatch — mode 'all'", () => {
     const { parentStack, parentFrame } = makeParent();
     let calls = 0;
     let lastLen = 0;
-    await runBatch({
+    await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -401,7 +411,7 @@ describe("runBatch — mode 'all'", () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
     const cpIds: number[] = [];
-    await runBatch({
+    await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -430,7 +440,7 @@ describe("runBatch — mode 'sequential'", () => {
         return k;
       },
     });
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -445,7 +455,7 @@ describe("runBatch — mode 'sequential'", () => {
   it("stamps a single shared checkpoint when any child interrupts", async () => {
     const { ctx, createCalls } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
-    await runBatch({
+    await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -474,7 +484,7 @@ describe("runBatch — mode 'race'", () => {
     guard.resume = vi.fn();
     parentStack.guards.push(guard);
 
-    const result = await runBatch<number>({
+    const result = await batch<number>({
       ctx,
       parentStack,
       parentFrame,
@@ -498,7 +508,7 @@ describe("runBatch — mode 'race'", () => {
   it("first to settle wins; losers are aborted and their branches deleted", async () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -512,7 +522,7 @@ describe("runBatch — mode 'race'", () => {
         },
         {
           key: "slow",
-          invoke: async (_s, sig) => {
+          invoke: async (_run, _s, sig) => {
             // Wait forever unless aborted.
             return new Promise<string>((_resolve, reject) => {
               sig.addEventListener("abort", () => reject(new Error("aborted")));
@@ -535,7 +545,7 @@ describe("runBatch — mode 'race'", () => {
     const { ctx } = makeCtx();
     const { parentStack, parentFrame } = makeParent();
     let loserReason: unknown = undefined;
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -546,7 +556,7 @@ describe("runBatch — mode 'race'", () => {
         { key: "fast", invoke: async () => "fast-value" },
         {
           key: "slow",
-          invoke: async (_s, sig) =>
+          invoke: async (_run, _s, sig) =>
             new Promise<string>((_resolve, reject) => {
               sig.addEventListener("abort", () => {
                 // Capture the abort reason the loser was cancelled with so
@@ -570,7 +580,7 @@ describe("runBatch — mode 'race'", () => {
     const { parentStack, parentFrame } = makeParent();
     const intr = fakeInterrupt("race", 50);
     const leafCp = intr.checkpoint!;
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -581,7 +591,7 @@ describe("runBatch — mode 'race'", () => {
         { key: "fast", invoke: async () => [intr] },
         {
           key: "slow",
-          invoke: async (_s, sig) =>
+          invoke: async (_run, _s, sig) =>
             new Promise<any>((_r, reject) =>
               sig.addEventListener("abort", () => reject(new Error("aborted"))),
             ),
@@ -610,7 +620,7 @@ describe("runBatch — mode 'race'", () => {
 
     let aInvoked = false;
     let bInvoked = false;
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -648,7 +658,7 @@ describe("runBatch — mode 'race'", () => {
 
     let invokes = 0;
     let winnerCostCalls = 0;
-    const result = await runBatch({
+    const result = await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -690,7 +700,7 @@ describe("runBatch — mode 'race'", () => {
     const { parentStack, parentFrame } = makeParent();
     let loserCalls = 0;
     let winnerCalls = 0;
-    await runBatch({
+    await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -701,7 +711,7 @@ describe("runBatch — mode 'race'", () => {
         { key: "c0", invoke: async () => "winner" },
         {
           key: "c1",
-          invoke: async (_s, sig) =>
+          invoke: async (_run, _s, sig) =>
             new Promise<any>((_r, reject) =>
               sig.addEventListener("abort", () => reject(new Error("aborted"))),
             ),
@@ -721,7 +731,7 @@ describe("runBatch — mode 'race'", () => {
     const { parentStack, parentFrame } = makeParent();
     let loserCalls = 0;
     let winnerCalls = 0;
-    await runBatch({
+    await batch({
       ctx,
       parentStack,
       parentFrame,
@@ -732,7 +742,7 @@ describe("runBatch — mode 'race'", () => {
         { key: "c0", invoke: async () => [fakeInterrupt("rinterrupt")] },
         {
           key: "c1",
-          invoke: async (_s, sig) =>
+          invoke: async (_run, _s, sig) =>
             new Promise<any>((_r, reject) =>
               sig.addEventListener("abort", () => reject(new Error("aborted"))),
             ),
@@ -752,7 +762,7 @@ describe("runBatch — mode 'race'", () => {
     const { parentStack, parentFrame } = makeParent();
     parentFrame.locals[WINNER_KEY] = 0;
     await expect(
-      runBatch({
+      batch({
         ctx,
         parentStack,
         parentFrame,
@@ -791,16 +801,17 @@ describe("runBatch — durable object-tag flag propagation", () => {
 
   it("propagates the flag when a branch that tagged an object settles", async () => {
     const ctx = makeTagCtx();
-    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-      runBatch(
-        batchOpts(ctx, async () => {
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
+      runBatch({
+        run,
+        ...batchOpts(ctx, async () => {
           // Runs inside the branch ALS frame → branch-local cloned store.
           const branchGlobals = getRuntimeContext().globals;
           expect(branchGlobals).not.toBe(ctx.globals);
           branchGlobals.setTag({ secret: "s" }, "redact", true);
           return "ok";
         }),
-      ),
+      }),
     );
     expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
   });
@@ -808,13 +819,14 @@ describe("runBatch — durable object-tag flag propagation", () => {
   it("propagates the flag even when the branch THROWS (parent may log the error payload)", async () => {
     const ctx = makeTagCtx();
     await expect(
-      runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-        runBatch(
-          batchOpts(ctx, async () => {
+      runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
+        runBatch({
+          run,
+          ...batchOpts(ctx, async () => {
             getRuntimeContext().globals.setTag({ secret: "s" }, "redact", true);
             throw new Error("branch failed");
           }),
-        ),
+        }),
       ),
     ).rejects.toThrow("branch failed");
     expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
@@ -822,13 +834,14 @@ describe("runBatch — durable object-tag flag propagation", () => {
 
   it("propagates the flag when the branch settles as INTERRUPTS (payload may reference a tagged object)", async () => {
     const ctx = makeTagCtx();
-    const result = await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-      runBatch(
-        batchOpts(ctx, async () => {
+    const result = await runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
+      runBatch({
+        run,
+        ...batchOpts(ctx, async () => {
           getRuntimeContext().globals.setTag({ secret: "s" }, "redact", true);
           return [fakeInterrupt("t", 9)];
         }),
-      ),
+      }),
     );
     expect(result.kind).toBe("interrupts");
     expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(true);
@@ -836,13 +849,14 @@ describe("runBatch — durable object-tag flag propagation", () => {
 
   it("does not set the parent flag when the branch tagged nothing durable", async () => {
     const ctx = makeTagCtx();
-    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
-      runBatch(
-        batchOpts(ctx, async () => {
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
+      runBatch({
+        run,
+        ...batchOpts(ctx, async () => {
           getRuntimeContext().globals.setTag("prim", "redact", true);
           return "ok";
         }),
-      ),
+      }),
     );
     expect((ctx.globals as GlobalStore).hasDurableObjectTagFlag()).toBe(false);
   });
@@ -873,8 +887,9 @@ describe("runBatch — branch primitive redaction propagation (fork/race)", () =
     const defaultSecret = "CCCCdefault-marker-secret"; // default [REDACTED], no custom label
     const captured: Record<number, unknown> = {};
 
-    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
+    await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async (run) => {
       await runBatch<string>({
+        run,
         ctx,
         parentStack,
         parentFrame,
@@ -945,8 +960,9 @@ describe("runBatch and the decision scope", () => {
     const { parentStack, parentFrame } = makeParent();
     const collector = collectorFor(["k0", "k1"]);
     const seen: Array<{ key: string; sameCollector: boolean }> = [];
-    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
       runBatch({
+        run,
         ctx,
         parentStack,
         parentFrame,
@@ -979,8 +995,9 @@ describe("runBatch and the decision scope", () => {
     const { parentStack, parentFrame } = makeParent();
     const collector = collectorFor(["outer"]);
     let innerKey = "none";
-    await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+    await runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
       runBatch({
+        run,
         ctx,
         parentStack,
         parentFrame,
@@ -990,9 +1007,10 @@ describe("runBatch and the decision scope", () => {
         children: [
           {
             key: "outer",
-            invoke: async (branchStack) => {
+            invoke: async (branchRun, branchStack) => {
               const innerFrame = new State();
               await runBatch({
+                run: branchRun,
                 ctx,
                 parentStack: branchStack,
                 parentFrame: innerFrame,
@@ -1030,8 +1048,9 @@ describe("runBatch and the decision scope", () => {
     const k1Blocks = new Promise<void>((resolve) => {
       releaseK1 = resolve;
     });
-    const run = runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
+    const run = runInTestContext(ctx, new StateStack(), new ThreadStore(), (run) =>
       runBatch({
+        run,
         ctx,
         parentStack,
         parentFrame,

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Result, PromptResult, StreamChunk } from "smoltalk";
-import { agency } from "./agency.js";
+import { runInTestContext } from "./asyncContext.js";
 import type { EmbedConfig, EmbedResult, LLMClient, PromptConfig } from "./llmClient.js";
 import { runPrompt } from "./prompt.js";
 import { RuntimeContext } from "./state/context.js";
@@ -54,9 +54,9 @@ describe("toolMessage forwarding + wire shape", () => {
     ctx.setLLMClient(client);
     const threads = ThreadStore.withDefaultActive(ctx.statelogClient);
 
-    await agency.withTestContext({ ctx, stack: ctx.stateStack, threads }, async () => {
+    await runInTestContext(ctx, ctx.stateStack, threads, async (run) => {
       await _toolMessage("saveDraft", { value: "hi" }, "Draft saved.");
-      await runPrompt({
+      await runPrompt(run, {
         prompt: "continue",
         messages: threads.getOrCreateActive(),
         clientConfig: {} as any,

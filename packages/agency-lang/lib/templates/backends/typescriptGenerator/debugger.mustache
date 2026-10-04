@@ -1,4 +1,4 @@
-const __dbg = await debugStep(__ctx, {
+const __dbg = await debugStep(__run, {
   moduleId: {{{moduleId:string}}},
   scopeName: {{{scopeName:string}}},
   stepPath: {{{stepPath:string}}},
@@ -8,7 +8,7 @@ const __dbg = await debugStep(__ctx, {
 });
 if (__dbg) {
   {{#nodeContext}}
-  return { messages: __threads(), data: __dbg };
+  return { messages: __run.threads, data: __dbg };
   {{/nodeContext}}
   {{^nodeContext}}
   return __dbg;

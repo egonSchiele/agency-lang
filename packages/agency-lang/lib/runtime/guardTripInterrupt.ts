@@ -12,6 +12,7 @@ import {
 } from "./interrupts.js";
 import renderGuardTripMessage from "../templates/runtime/guardTripMessage.js";
 import type { SourceLocationOpts } from "./state/checkpointStore.js";
+import type { Run } from "./asyncContext.js";
 
 /**
  * Cost-guard trips as interrupts (resumable-guards PR 2).
@@ -40,10 +41,11 @@ import type { SourceLocationOpts } from "./state/checkpointStore.js";
  * machinery (message snapshot, checkpoint, PromptBailout) surfaces it.
  */
 export async function raiseGuardTripsUntilClear(
-  ctx: RuntimeContext<any>,
+  run: Run,
   stack: StateStack,
   detect: () => GuardExceededError | null = () => stack.detectTrippedGuard(),
 ): Promise<Interrupt[] | void> {
+  const ctx = run.ctx;
   let err: GuardExceededError | null;
   while ((err = detect()) !== null) {
     const tripped = innermostGuardById(stack, err.guardId);
@@ -66,7 +68,7 @@ export async function raiseGuardTripsUntilClear(
       continue;
     }
 
-    const outcome = await raiseOneTrip(ctx, stack, tripped, err);
+    const outcome = await raiseOneTrip(run, ctx, stack, tripped, err);
     if (outcome !== undefined) return outcome; // unanswered: surface
   }
 }
@@ -76,6 +78,7 @@ export async function raiseGuardTripsUntilClear(
  *  it must surface, and throws on reject (the original trip error) or a
  *  defective answer (GuardApproveError). */
 async function raiseOneTrip(
+  run: Run,
   ctx: RuntimeContext<any>,
   stack: StateStack,
   tripped: Guard,
@@ -142,16 +145,16 @@ async function raiseOneTrip(
     try {
       const snapshot = scope.snapshot(tripped.dimension);
       const verdict = await interruptWithHandlers(
+        run,
         "std::guard",
         buildTripMessage(snapshot),
         { ...snapshot, draftValue: draftPreview(stack) },
         "std::guard",
-        ctx,
-        stack,
         {
           // Decision 3's visibility half: a handler registered INSIDE
           // this guard cannot adjudicate it.
           eligible: (entry) => !entry.liveGuardIds.includes(tripped.guardId),
+          stack,
         },
       );
       if (isApproved(verdict) || isRejected(verdict)) {
@@ -313,6 +316,7 @@ export class GuardTripRetry extends Error {
  *  running the step body, and Runner.step's halt handling does the
  *  rest). Returns true iff the runner halted. */
 export async function raiseGuardTripsAtStep(args: {
+  run: Run;
   ctx: RuntimeContext<any>;
   stack: StateStack;
   location: SourceLocationOpts;
@@ -327,7 +331,9 @@ export async function raiseGuardTripsAtStep(args: {
   // cost guard left over budget by a REJECTED gate question would be
   // re-asked at every following step, delivering its reject outside the
   // owning guard boundary.
-  const outcome = await raiseGuardTripsUntilClear(ctx, stack, () => stack.detectStepRaisableTrip());
+  const outcome = await raiseGuardTripsUntilClear(args.run, stack, () =>
+    stack.detectStepRaisableTrip(),
+  );
   if (outcome === undefined) return false; // clear — run the step
   // Unanswered: surface through the runner. The interrupt id is already
   // persisted in stack.other (raiseOneTrip did it); stamp the checkpoint

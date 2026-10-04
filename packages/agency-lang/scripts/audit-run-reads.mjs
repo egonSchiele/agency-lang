@@ -25,7 +25,7 @@ const files = program.getSourceFiles().filter(inScope);
 const RUN_TYPES = [
   "RuntimeContext",
   "StateStack",
-  "AgencyStore",
+  "Run",
   "Runner",
   "PromptRunner",
   "BranchRunner",

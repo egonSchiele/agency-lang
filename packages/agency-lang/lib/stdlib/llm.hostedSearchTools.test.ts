@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { clearModelData, registerModelData } from "smoltalk";
 
-import { agencyStore, type AgencyStore } from "../runtime/asyncContext.js";
+import { agencyStore, type Run } from "../runtime/asyncContext.js";
 
 import { _hostedSearchTools } from "./llm.js";
 
@@ -11,7 +11,7 @@ function withAmbient<T>(ambient: { model?: string; provider?: string }, fn: () =
   const store = {
     ctx: { smoltalkDefaults: ambient },
     stack: { other: {} },
-  } as unknown as AgencyStore;
+  } as unknown as Run;
   return agencyStore.run(store, fn);
 }
 

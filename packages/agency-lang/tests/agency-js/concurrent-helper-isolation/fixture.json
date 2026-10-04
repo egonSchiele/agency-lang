@@ -1,0 +1,10 @@
+{
+  "slow": {
+    "seenByHelper": 1,
+    "total": 1
+  },
+  "fast": {
+    "seenByHelper": 2,
+    "total": 2
+  }
+}

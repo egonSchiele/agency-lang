@@ -1,0 +1,64 @@
+import { compile, run } from "std::agency"
+
+// A handler function writes to a global while it answers an interrupt. Is
+// the write still there afterwards? It depends on where the interrupt came
+// from, because a fork branch and a subprocess call each work on their own
+// copy of the globals, and the handler runs where the interrupt was raised.
+const seen = []
+
+def ask(name: string): string {
+  raise("ask ${name}")
+  return "ok"
+}
+
+// The interrupt comes from the handler's own branch.
+node sameBranch() {
+  handle {
+    ask("x")
+  } with (e) {
+    seen.push(e.message)
+    return approve()
+  }
+  return seen
+}
+
+// The interrupts come from fork branches.
+node forkBranch() {
+  handle {
+    fork(["a", "b"]) as item {
+      return ask(item)
+    }
+  } with (e) {
+    seen.push(e.message)
+    return approve()
+  }
+  return seen
+}
+
+// One interrupt comes from starting a subprocess, and one from inside it.
+node subprocess() {
+  const source = """
+node main() {
+  raise interrupt("child asks")
+  return "child-ran"
+}
+"""
+  const compiled = compile(source)
+  if (isFailure(compiled)) {
+    return "compile failed"
+  }
+  let child: any = "not run"
+  handle {
+    const result = run(compiled: compiled.value, node: "main")
+    if (isSuccess(result)) {
+      child = result.value.data
+    }
+  } with (e) {
+    seen.push(e.message)
+    return approve()
+  }
+  return {
+    child: child,
+    seen: seen
+  }
+}

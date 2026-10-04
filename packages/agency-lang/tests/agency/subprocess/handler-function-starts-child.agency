@@ -19,7 +19,7 @@ import { compile, run } from "std::agency"
 let child = "not run"
 
 def trigger(): string {
-  raise interrupt("start the child")
+  raise("start the child")
   return "ok"
 }
 

@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "nodeName": "sameBranch",
+      "description": "A handler function writes a global while answering an interrupt from its own branch. The write is kept.",
+      "input": "",
+      "expectedOutput": "[\"ask x\"]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "forkBranch",
+      "description": "A handler function writes a global while answering interrupts from fork branches. The writes are LOST: the handler runs with the raising branch's copy of the globals, and that copy is thrown away at the join. This pins what main does today. It may not be what an author expects, since the handler is written outside the fork.",
+      "input": "",
+      "expectedOutput": "[]",
+      "evaluationCriteria": [{ "type": "exact" }]
+    },
+    {
+      "nodeName": "subprocess",
+      "description": "A handler function writes a global while answering two interrupts: the one for starting a subprocess, raised in its own branch, and one raised inside the subprocess. The first write is kept and the second is LOST, for the same reason as in forkBranch. This pins what main does today.",
+      "input": "",
+      "expectedOutput": "{\"child\":\"child-ran\",\"seen\":[\"Running agent-generated code in subprocess\"]}",
+      "evaluationCriteria": [{ "type": "exact" }]
+    }
+  ]
+}

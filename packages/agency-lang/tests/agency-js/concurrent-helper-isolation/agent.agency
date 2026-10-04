@@ -1,0 +1,13 @@
+import { getCost } from "std::thread"
+
+import { chargeLater } from "./helper.js"
+
+// A node that calls a TypeScript helper. The helper waits, then charges a
+// cost to the run it was called from. See test.js.
+node main(amount: number, waitMs: number) {
+  const seenByHelper = chargeLater(amount, waitMs)
+  return {
+    seenByHelper: seenByHelper,
+    total: getCost()
+  }
+}

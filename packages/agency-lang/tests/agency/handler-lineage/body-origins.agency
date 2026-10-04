@@ -1,0 +1,69 @@
+// The other half of function-origins.agency. Each node here raises an
+// interrupt from inside a handler BODY, by a different route. The handler
+// must be asked every time.
+//
+// The handler function rejects the interrupt for "b" and approves the rest.
+// If it were not asked, "b" would reach the caller as an unanswered
+// interrupt and the node would pause.
+def work(name: string): string {
+  raise("work ${name}")
+  return "done ${name}"
+}
+
+const completed = []
+
+// Like `work`, and it also records that it got past its interrupt.
+def record(name: string): string {
+  raise("work ${name}")
+  completed.push(name)
+  return "done ${name}"
+}
+
+def label(value: any): string {
+  if (isFailure(value)) {
+    return "rejected"
+  }
+  return value
+}
+
+node viaFork() {
+  let results: any = []
+  handle {
+    results = fork(["a", "b"]) as item {
+      return work(item)
+    }
+  } with (e) {
+    if (e.message == "work b") {
+      return reject()
+    }
+    return approve()
+  }
+  return [label(r) for r in results]
+}
+
+node viaAsync() {
+  let results: any = []
+  handle {
+    const first = async work("a")
+    const second = async work("b")
+    results = [first, second]
+  } with (e) {
+    if (e.message == "work b") {
+      return reject()
+    }
+    return approve()
+  }
+  return [label(r) for r in results]
+}
+
+node viaTool() {
+  handle {
+    llm("Call the record tool with the name b.", tools: [record])
+  } with (e) {
+    if (e.message == "work b") {
+      return reject("no work on b")
+    }
+    return approve()
+  }
+  return completed.includes("b")
+}

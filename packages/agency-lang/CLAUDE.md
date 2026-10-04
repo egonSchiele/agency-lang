@@ -163,6 +163,20 @@ We have a lot more documentation containing implementation details in docs/dev/:
 - The `with approve` shorthand is `docs/dev/language/with-approve.md`.
 - How effects propagate through function signatures is `docs/dev/compiler/effect-propagation.md`.
 
+## Agency must run without Node, with as little branching as possible
+
+Agency has two targets: Node and the browser. The goal is for Agency code to run anywhere JavaScript runs, starting with an iPad web view.
+
+A branch is any place where the code does one thing on Node and another in a browser: an `if`, a second implementation, a second build, or a compile flag that changes generated code. Every branch has to be built twice and tested twice for as long as it exists. Keep branches to a minimum.
+
+When a feature relies on Node:
+
+- If it needs Node, such as reading a file, it stays Node-only and the browser target reports it as unsupported.
+- If it relies on Node but does not need to, remove the reliance for both targets. Do not keep the Node version and add a browser version beside it. `AsyncLocalStorage` is the example: the decision is that Agency does not use it on either target.
+- Do not argue for keeping a Node-only implementation because it is faster or safer without measuring what depends on it. Agency has one user and most Agency code is in this repo, so you can count.
+
+Read `docs/dev/runtime/running-without-node.md` before proposing any difference between the two targets. It has the goals, the rule, the places the targets may differ, and the `AsyncLocalStorage` decision with its measurements.
+
 ## VERY IMPORTANT: Agency syntax rules
 
 When writing Agency code (in plans, specs, tests, or examples), you MUST use the correct syntax. Verify against `docs/site/guide/basic-syntax.md` and existing test fixtures when unsure.
@@ -244,8 +258,9 @@ Other process docs:
 
 - `docs/dev/runtime/async-behavior-checklist.md` — The case-by-case behavioral checklist the async implementation was built against.
 - `docs/dev/runtime/async-context.md` — The async-context frame that carries runtime state, and how stdlib TypeScript helpers read it.
-- `docs/dev/runtime/browser-async-context-seam.md` — The one file every runtime context store imports, so a browser build can swap `AsyncLocalStorage` for another implementation.
-- `docs/dev/runtime/portable-context-spike.md` — A spike: keeping runtime context with no `AsyncLocalStorage` by rewriting `async` functions and wrapping `.then`, the test results on Node and in a `WKWebView`, the load-time check for code that was not rewritten, what a portable build still needs, and the recommended next steps.
+- `docs/dev/runtime/running-without-node.md` — The goals for running Agency outside Node, why branching between the Node and browser targets is kept to a minimum, the rule for a feature that relies on Node, the three places the targets may differ, and the decision that Agency does not use `AsyncLocalStorage`: the two options, what each costs, and the measurements. Read it before proposing any difference between the targets.
+- `docs/dev/runtime/browser-async-context-seam.md` — The one file every context variable imports its class from, and how it picks between `AsyncLocalStorage` and `PromiseContextStorage`. This file is due to be deleted; see `running-without-node.md`.
+- `docs/dev/runtime/portable-context-spike.md` — How `PromiseContextStorage` keeps runtime context with no `AsyncLocalStorage`, by rewriting `async` functions and wrapping `.then`: the test results on Node and in a `WKWebView`, the load-time check for code that was not rewritten, what a browser build still needs, and the next steps.
 - `docs/dev/runtime/async.md` — How async function calls work, and the problems the design solves.
 - `docs/dev/runtime/callback-hooks.md` — Registering callbacks for runtime events such as node, function, and tool lifecycle, and the per-statement `onCheckpoint` hook a host uses to resume a crashed run.
 - `docs/dev/runtime/checkpoint-code-fingerprints.md` — Refusing to resume a checkpoint when the code of a module it is paused inside has changed.

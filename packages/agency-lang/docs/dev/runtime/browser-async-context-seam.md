@@ -1,7 +1,9 @@
 # Browser async-context seam
 
-**Status:** prototype. Node behaviour is unchanged. This adds the one place where
-a browser build swaps in a different context store.
+**Status:** this file describes code that is due to be deleted. The decision in
+`running-without-node.md` is that Agency does not use `AsyncLocalStorage` on
+either target, so nothing will need to pick between two classes. Until the
+removal lands, this is how the code works.
 
 ## The problem
 

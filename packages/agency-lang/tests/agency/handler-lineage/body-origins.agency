@@ -41,21 +41,6 @@ node viaFork() {
   return [label(r) for r in results]
 }
 
-node viaAsync() {
-  let results: any = []
-  handle {
-    const first = async work("a")
-    const second = async work("b")
-    results = [first, second]
-  } with (e) {
-    if (e.message == "work b") {
-      return reject()
-    }
-    return approve()
-  }
-  return [label(r) for r in results]
-}
-
 node viaTool() {
   handle {
     llm("Call the record tool with the name b.", tools: [record])

@@ -15,13 +15,6 @@
       "evaluationCriteria": [{ "type": "exact" }]
     },
     {
-      "nodeName": "viaAsync",
-      "description": "A handler function starts an async call that raises. The handler is not asked about its interrupt, and the outer handler approves it, so the call gets past its interrupt. The test starts one call and does not read its result, because two things go wrong in a handler function today: a result read there is still an unsettled promise, and two async calls to one function both run with the second call's arguments.",
-      "input": "",
-      "expectedOutput": "true",
-      "evaluationCriteria": [{ "type": "exact" }]
-    },
-    {
       "nodeName": "viaTool",
       "description": "A handler function makes an llm() call and the model calls a tool that raises. The handler is not asked about the tool's interrupt, and the outer handler approves it, so the tool gets past its interrupt.",
       "input": "",

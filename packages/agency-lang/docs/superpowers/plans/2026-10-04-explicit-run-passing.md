@@ -4,8 +4,7 @@
 review in `2026-10-04-explicit-run-passing-REVIEW.md`. All seven of the
 review's findings were checked against the code and accepted, and one was
 later found to rest on a wrong premise: see
-[Code that runs with no frame today](#code-that-runs-with-no-frame-today). Phase 1 is built. Decision 7 awaits
-the owner's confirmation before Phase 3.
+[Code that runs with no frame today](#code-that-runs-with-no-frame-today). Phase 1 is built.
 
 **Branch:** `explicit-run`, based on main. This work replaces PR
 [#1167](https://github.com/egonSchiele/agency-lang/pull/1167). It is not
@@ -306,6 +305,13 @@ function body (`lib/ir/builders.ts:588`) and one around an `async` call
 installs the same object it passes on. Phase 3 removes them. The fixtures
 are therefore rebuilt twice, once in each phase.
 
+The `async` keyword on a call is not a supported part of Agency. The guide
+does not document it, and says Agency has no async/await: concurrency is
+`fork`, `race`, `parallel`, and `seq`. The parser and code generator still
+accept the keyword and a few older tests use it, so this work keeps that
+code path compiling and keeps those tests passing. It adds no behaviour and
+no new tests for it.
+
 ### Calling a function the compiler did not write
 
 The compiler cannot tell which imported TypeScript functions want the run.
@@ -513,10 +519,11 @@ runtime. These are the answers the real one needs.
 3. **Two waits at once.** `state` holds a count of the things the run is
    waiting for, with the name of the latest. The run is usable when the
    count is 0.
-4. **`async` calls.** Starting an `async` call does not add to the caller's
-   count, because the caller keeps running. The callee does not touch the
-   caller's state when it finishes. A wrong run passed to an `async` call
-   is not caught.
+4. **The unsupported `async` call path.** Starting an `async` call does
+   not add to the caller's count, because the caller keeps running. The
+   callee does not touch the caller's state when it finishes. A wrong run
+   passed to an `async` call is not caught. The keyword is not supported,
+   so this is only about not breaking the code path that still exists.
 5. **Stored callbacks.** A stored callback does not use the stored run
    directly. It makes a child of it when it fires, with a new `state`, so
    the stored run's own state does not matter.
@@ -654,8 +661,11 @@ pins it. In Phase 3 the listener's stored run keeps the executing-handler
 list from when the subprocess was started, so both cases behave as they do
 today.
 
-*Recommendation: keep both cases as they are.* **Awaiting the owner's
-confirmation,** since the earlier answer was given on wrong information.
+*Decided: keep both cases as they are.* Both follow from the guide
+(`docs/site/guide/handlers.md`): a handler is asked about interrupts raised
+in its body, and "a handler function never triggers for an interrupt raised
+in itself". A subprocess is one more way to raise an interrupt from either
+place.
 
 **8. Handlers written in TypeScript.** `agency.withHandler(handler, fn)` is
 public and its handler takes only the interrupt. **Decided: keep that shape.** The
@@ -851,7 +861,8 @@ twice.
 
 - **A wrong run where the checks cannot see it.** After Phase 3 the
   comparison against `AsyncLocalStorage` is gone. What remains is the
-  innermost-run rule, which does not cover `async` calls, and rule 2's
+  innermost-run rule, which does not cover the unsupported `async` call
+  path, and rule 2's
   compile-time check. A new installer written after this change gets no
   automatic check.
 - **The wrong-run check may need more exemptions than planned.** It has

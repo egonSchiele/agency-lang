@@ -79,9 +79,8 @@ with the span stack. Both need callers that hold a run.
 
 The first run passed everything except two unit tests in `packages/mcp`,
 which called an Agency function with no frame. They now build a frame with
-`agency.withTestContext`. All eight Agency suite shards passed. Later pushes
-were still running in CI when this was written: check with
-`gh pr checks 1169`.
+`agency.withTestContext`. Every check passed on the later pushes. Check
+again after any new push with `gh pr checks 1169`.
 
 ## Decisions
 
@@ -95,25 +94,27 @@ All ten are in the plan under "Decisions". The short form:
 | 4 | Wrong-run check always on? | Yes. Confirm again after Phase 2 |
 | 5 | `getRuntimeContext()` | Rename to `currentRun()`, keep the old name as an alias for one release |
 | 6 | Helper code breaks | Accepted. `run.call(fn, ...)`, and `agency.*` after an `await` needs a handle |
-| 7 | A subprocess started in a handler function | **Awaiting the owner's confirmation.** See below |
+| 7 | A subprocess started in a handler function | Keep both cases as they are. The guide already says so. See below |
 | 8 | Handlers written in TypeScript | Keep the shape `(interrupt) => verdict` |
 | 9 | Console capture with two REPLs | Send output to the most recently installed REPL |
 | 10 | Work that outlives its helper | Keep the handle usable |
 
-### Decision 7 needs an answer before Phase 3
+### Decision 7 is settled by the guide
 
 The guide names the two parts of a handler: the block after `handle` is the
 **handler body**, and the block after `with` is the **handler function**.
 
 - A subprocess started in the handler body: that handler is asked about the
-  subprocess's interrupts.
+  subprocess's interrupts. The owner called this critical.
 - A subprocess started in the handler function: that handler is not asked.
-  Every handler outside it is.
+  Every handler outside it is. This is the guide's rule, "a handler function
+  never triggers for an interrupt raised in itself", applied to a
+  subprocess.
 
 Phase 1 keeps both. `tests/agency/subprocess/handler-function-starts-child`
-pins the second. The recommendation is to keep both as they are. The owner
-called "this functionality" critical while I was describing it with the
-wrong word, so ask again in the guide's terms before Phase 3.
+pins the second. I listed this as an open question for a while because I
+first asked it with "body" where I meant "function". It was never open: do
+not ask the owner again.
 
 ## Things I believed that were false
 
@@ -134,28 +135,73 @@ Each of these was caught by running something. Do not repeat them.
    and checked with a temporary trace. But `packages/mcp` tests did, and CI
    found it. Run the other packages' tests too.
 
-The lesson the owner drew, and asked me to act on: write each belief as a
-test first, run it on main, and only then change code.
+5. **"`async record("a")` is a way to run a call concurrently."** The
+   `async` keyword on a call is not supported. The guide's basic-syntax page
+   says Agency has no async/await, and the concurrency page lists `fork`,
+   `race`, `parallel`, and `seq`. I used the keyword because the parser
+   accepts it and `docs/dev/runtime/async.md` describes it. A dev doc is not
+   the guide. I then reported two "bugs" in it, which were not bugs in
+   anything supported.
+6. **"A global written by a handler function and then lost is a bug."** It
+   is branch isolation, as the guide describes under "Isolation across
+   concurrent branches". See below.
 
-## Bugs found on the way. None is filed, and none is fixed here
+The lesson the owner drew, and asked me to act on: write each belief as a
+test first, run it on main, and only then change code. And read the guide
+(`docs/site/guide/`) before using a feature. I read all of it on 2026-10-04
+after the owner asked twice. The notes that matter for this work are under
+"What the guide says that this work depends on".
+
+## Things found on the way that are not for this work
 
 1. **An interrupt raised by a call inside a method call's arguments is
    dropped.** `out.push(save(name))`: the node finishes, `save` never runs,
    and nobody is asked. `const saved = save(name)` then `out.push(saved)`
-   pauses correctly. Reproduced on main at `ad1d7ec9b`.
-2. **Two async calls to one function inside a handler function both run with
-   the second call's arguments.** `async record("a")` then
-   `async record("b")` ran `record("b")` twice. Seen on the Phase 1 branch;
-   not checked on main, but Phase 1 does not touch that code.
-3. **An async call's result read inside a handler function is an unsettled
-   promise.** It serializes as `{}`.
-4. **A global written by a handler function is lost when the interrupt came
-   from a fork branch or from inside a subprocess.** The handler runs with
-   the raising branch's copy of the globals, and that copy is thrown away at
-   the join. `tests/agency/handler-lineage/handler-global-writes` pins this
-   and says it may not be intended. Ask the owner whether it is.
+   pauses correctly. The owner already knows about this one. Do not file it
+   and do not fix it here.
+2. **A global written by a handler function goes to the raising branch's
+   copy.** When the interrupt came from a fork branch or from a subprocess
+   call, the handler function runs on that branch's copy of the globals, and
+   the copy is dropped when the branch ends. This is the documented branch
+   isolation, not a bug. `tests/agency/handler-lineage/handler-global-writes`
+   pins it so this work cannot change it by accident.
 
-Offer to file issues for these. Do not fix them inside this work.
+## What the guide says that this work depends on
+
+Every feature below reads the frame today, so each is a place where the
+wrong run would show up as wrong behaviour.
+
+- **Handlers.** Every handler in the chain is asked. Reject beats
+  propagate, which beats approve. A handler that returns nothing has
+  passed. A handler function is never asked about an interrupt raised
+  inside itself, and such an interrupt must be answered in code by an outer
+  handler: reaching the user is an error.
+- **Branches.** `fork`, `race`, `parallel`, and the `fork [...]` and
+  `race [...]` comprehensions each give a branch its own copy of the
+  globals. `shared: true`, `forkShared`, and `raceShared` share them.
+  Locals are always shared.
+- **Per-branch state besides globals.** The memory config stack
+  (`enableMemory`, `memory(...) as { }`) is per fork branch. `lastReply()`
+  reads the branch's own thread. A draft saved with `saveDraft` is per
+  branch, and a `race` loser's draft is discarded and its `finalize` does
+  not run.
+- **Guards.** A guard around a fork is one budget for all branches, and a
+  trip pauses all of them. A guard inside a branch pauses only that branch.
+  A trip raises `std::guard`. Guards also apply to subprocesses.
+  `agency.withCostGuard` and `withTimeGuard` install on the active branch's
+  stack, and `ctx.getAbortSignal(stack)` needs the branch's stack.
+- **No interrupts allowed in:** callback bodies, `finalize` blocks, and
+  splice generators.
+- **Tool calls.** `llm()` calls inside a tool run on a separate thread
+  unless the function is a `handoff def`. `endTurn()` and `handBack()` only
+  count inside a tool invocation, so they read the tool invocation stack.
+- **Decision models.** Calls in one `parallel` block batch into one
+  request. `docs/dev/llm/decision-models.md` says the collector lives on
+  the async frame. Read that doc before touching `runBatch` in Phase 2.
+- **TypeScript helpers.** `docs/site/guide/ts-helpers.md` documents the
+  `agency.*` namespace this plan changes. Phase 3 rewrites that page.
+- **Locks.** `agency.withLock` is per run, and a subprocess asks its parent
+  for the lock.
 
 ## Tests
 
@@ -165,9 +211,9 @@ Offer to file issues for these. Do not fix them inside this work.
 | --- | --- |
 | `lib/runtime/runner.test.ts`, "runInScope keeps the lineage" | A step keeps each of the four lineage values. Each test fails if `runInScope` drops the value |
 | `tests/agency/subprocess/handler-function-starts-child` | Decision 7 |
-| `tests/agency/handler-lineage/function-origins` | An interrupt raised inside a handler function, through a call, a fork, an async call, and a tool call. That handler is not asked |
-| `tests/agency/handler-lineage/body-origins` | The same routes from a handler body. The handler is asked |
-| `tests/agency/handler-lineage/handler-global-writes` | Bug 4 above |
+| `tests/agency/handler-lineage/function-origins` | An interrupt raised inside a handler function, through a call, a fork, and a tool call. That handler is not asked |
+| `tests/agency/handler-lineage/body-origins` | An interrupt raised inside a handler body, through a fork and a tool call. The handler is asked |
+| `tests/agency/handler-lineage/handler-global-writes` | A handler function's write to a global goes to the raising branch's copy |
 | `tests/agency-js/concurrent-helper-isolation` | Two runs through a TypeScript helper that waits. Each sees only its own cost |
 
 `concurrent-helper-isolation/helper.js` calls `agency.addCost` after an
@@ -188,8 +234,9 @@ Write each as a prediction and run it before changing the code it covers.
   whether a test exists before writing one.
 - **An interrupt raised from every position a call can appear.** Method
   argument, function argument, object field, array element, string
-  interpolation, condition, `return`, match scrutinee, comprehension. This
-  is the test that would have caught bug 1.
+  interpolation, condition, `return`, match scrutinee, comprehension. The
+  method argument position is known to drop the interrupt today, so leave
+  it out or mark it skipped with that reason.
 
 ## How to do Phase 2
 

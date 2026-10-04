@@ -67,25 +67,6 @@ def record(name: string): string {
   return "done ${name}"
 }
 
-// The handler function starts an async call that raises. It starts one call
-// and does not read its result: see the note in the test file.
-node viaAsync() {
-  handle {
-    handle {
-      trigger()
-    } with (e) {
-      if (e.message != "start") {
-        return reject()
-      }
-      async record("a")
-      return approve()
-    }
-  } with (e) {
-    return approve()
-  }
-  return completed.includes("a")
-}
-
 // The handler function makes an llm() call, and the model calls a tool that
 // raises.
 node viaTool() {

@@ -399,6 +399,70 @@ jobs:
         fi
         pnpm -F @agency-lang/github test:agency
 
+  # The same two suites as `agency-tests`, run a second time with the
+  # runtime's context kept by `PromiseContextStorage`, the class a browser
+  # build uses, in place of Node's `AsyncLocalStorage`. Without this job a
+  # runtime change could break that class and nothing would report it.
+  #
+  # `AGENCY_PORTABLE_CONTEXT=1` selects the class. The loader in NODE_OPTIONS
+  # rewrites every `async` function into promise code as each module loads,
+  # which the class needs. NODE_OPTIONS is inherited, so the subprocesses the
+  # tests start are rewritten too. See
+  # packages/agency-lang/docs/dev/runtime/portable-context-spike.md.
+  #
+  # No coverage is collected here: `agency-tests` already reports it.
+  agency-tests-portable:
+    permissions:
+      contents: read
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+
+    env:
+      SHARD_COUNT: "8"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        # Same reason as `agency-tests`: this job runs PR-controlled code.
+        persist-credentials: false
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      with:
+        run_install: false
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: 22.x
+        cache: 'pnpm'
+    - run: pnpm install
+    - run: make ci
+    - name: Agency execution tests, portable context (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_USE_TEST_LLM_PROVIDER: "1"
+        AGENCY_PORTABLE_CONTEXT: "1"
+      run: |
+        export NODE_OPTIONS="--import $PWD/scripts/portable-loader.mjs"
+        time node ./dist/scripts/agency.js test tests/agency -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }}
+    - name: Agency-JS integration tests, portable context (shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }})
+      working-directory: packages/agency-lang
+      env:
+        AGENCY_USE_TEST_LLM_PROVIDER: "1"
+        AGENCY_PORTABLE_CONTEXT: "1"
+      # Run even when the step above failed, so one push shows every failure.
+      if: ${{ always() && !cancelled() }}
+      run: |
+        export NODE_OPTIONS="--import $PWD/scripts/portable-loader.mjs"
+        time node ./dist/scripts/agency.js test js tests/agency-js -p 12 --shard ${{ matrix.shard }}/${{ env.SHARD_COUNT }}
+
   # Merge the per-shard coverage and render the report text. Coverage is only
   # meaningful once every shard has contributed its hits; `loadCoverageData`
   # (lib/cli/coverage.ts) unions every `cov-*.json` in the dir, so "merging"

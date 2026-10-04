@@ -280,6 +280,11 @@ pass in full. `promise-context-storage.md` has the numbers.
 `promise-context-storage.md` lists them under "Limits and open questions".
 The ones that follow from this decision:
 
+- A TypeScript helper that uses `agency.*` after an `await` works under some
+  commands and fails under others, depending on who built its file. This is
+  the largest cost of the decision.
+  `docs/superpowers/specs/2026-10-03-ts-helpers-after-await.md` describes it
+  and proposes a fix, `agency.current()`. The fix is not built.
 - A callback that is not a promise callback or a timer runs with an empty
   context. An event listener that runs runtime code has to be wrapped with
   `bindToCurrentFrame`. One listener needed this. Others on paths the tests

@@ -161,6 +161,11 @@ every chunk. smoltalk never calls back into the runtime.
 `docs/site/guide/ts-helpers.md` tells a helper's author what to do when a
 helper is not rewritten.
 
+A helper that uses `agency.*` after an `await` works under some commands and
+fails under others, depending on who built its file.
+`docs/superpowers/specs/2026-10-03-ts-helpers-after-await.md` has the full
+table and proposes a fix, `agency.current()`. The fix is not built.
+
 ## The load-time check
 
 An empty context is not always an error. The main context variable throws

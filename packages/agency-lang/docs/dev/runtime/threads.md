@@ -158,7 +158,7 @@ if (node.async) {
 
 An async prompt forks a subthread. It therefore sees the conversation so far, but its own messages never land on the shared active thread.
 
-The expression becomes the `messages` field of the `runPrompt` config. `ctx` and `stateStack` are not passed at the call site; `runPrompt` reads them from the active ALS frame through `getRuntimeContext()`.
+The expression becomes the `messages` field of the `runPrompt` config. `ctx` and `stateStack` are not passed at the call site; `runPrompt` reads them from the active context frame through `getRuntimeContext()`.
 
 The runtime (`lib/runtime/prompt.ts`) uses `messages.getMessages()` to build the LLM API call, and appends assistant/tool responses back to the same `MessageThread`.
 
@@ -166,7 +166,7 @@ The runtime (`lib/runtime/prompt.ts`) uses `messages.getMessages()` to build the
 
 ## How are threads passed into functions?
 
-A call site no longer passes the ThreadStore. Since the AsyncLocalStorage migration, `setupFunction()` in `lib/runtime/node.ts` reads `threads` off the active `agencyStore` frame, which the caller seeded (a `runner.step` body, `runNode`'s top-level frame, or `runBatch.runInBranchAlsFrame`). See [async-context.md](./async-context.md).
+A call site no longer passes the ThreadStore. Since the move to an ambient context frame, `setupFunction()` in `lib/runtime/node.ts` reads `threads` off the active `agencyStore` frame, which the caller seeded (a `runner.step` body, `runNode`'s top-level frame, or `runBatch.runInBranchContextFrame`). See [async-context.md](./async-context.md).
 
 This means **functions share the same ThreadStore as their caller**, so they participate in the same thread scoping. The active stack is shared. A direct JS caller of `__foo_impl` from outside an Agency frame has to wrap the call in `runInTestContext`.
 
@@ -180,7 +180,7 @@ The function receives `__threads` (the caller's ThreadStore) via the internal fu
 - The function can also create nested threads/subthreads (they push/pop on the same active stack)
 - When the function returns, the active stack is unchanged (the caller's thread is still active)
 
-**Exception — when called as a tool by the LLM** (`lib/runtime/prompt.ts`): the tool loop runs `handler.invoke` inside a copy of the parent ALS frame whose `threads` slot is a **fresh, isolated** `ThreadStore`. Everything else in the frame is inherited, because branch-aware cancellation and per-branch state depend on it.
+**Exception — when called as a tool by the LLM** (`lib/runtime/prompt.ts`): the tool loop runs `handler.invoke` inside a copy of the parent context frame whose `threads` slot is a **fresh, isolated** `ThreadStore`. Everything else in the frame is inherited, because branch-aware cancellation and per-branch state depend on it.
 
 The isolation is not cosmetic. Without it, an `llm()` call inside a tool body would push messages onto the outer prompt's thread, whose last message is `assistant(tool_calls=[this tool])`. OpenAI rejects that shape with "An assistant message with 'tool_calls' must be followed by tool messages".
 
@@ -236,7 +236,7 @@ The variable receives a **deep clone** of the thread's accumulated messages (`sm
 
 ## Accessing the active ThreadStore from stdlib TS
 
-Stdlib helpers that push messages onto the active thread (e.g. `_systemMessage`, `_userMessage`, `_assistantMessage` in `lib/stdlib/thread.ts`) read the live `ThreadStore` from the AsyncLocalStorage frame via `getRuntimeContext().threads`. That's the same `ThreadStore` `setupNode` installs on the frame — see [async-context.md](./async-context.md) for the seeding points.
+Stdlib helpers that push messages onto the active thread (e.g. `_systemMessage`, `_userMessage`, `_assistantMessage` in `lib/stdlib/thread.ts`) read the live `ThreadStore` from the context frame via `getRuntimeContext().threads`. That's the same `ThreadStore` `setupNode` installs on the frame — see [async-context.md](./async-context.md) for the seeding points.
 
 ## Message-thread identity
 

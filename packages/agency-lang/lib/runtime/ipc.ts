@@ -473,7 +473,7 @@ export type RunSession = {
   limits: RunLimits;
   ctx: any;
   stateStack: any;
-  /** The parent's full ALS store frame captured at run() time. Forwarded
+  /** The parent's full context frame captured at run() time. Forwarded
    * callbacks (handleCallbackMessage) fire from the event-loop message handler,
    * OUTSIDE any agencyStore frame; re-establishing this frame lets an
    * AgencyFunction callback body resolve __globals()/__threads() against the
@@ -1015,7 +1015,7 @@ function handleErrorMessage(s: RunSession, msg: any): void {
  * getCost() may slightly undercount on abnormal termination. Budgets
  * never undercount; do not "fix" this by skipping post-settle billing. */
 /** Account a child's usage delta against THIS session's parent target (out of
- * any ALS frame — we pass `s.ctx`/`s.stateStack` explicitly): bill the parent's
+ * any context frame — we pass `s.ctx`/`s.stateStack` explicitly): bill the parent's
  * cost guards, merge the parent's invocation meter, and re-relay the delta once
  * if this process is itself a subprocess (grandchild propagation). Billing is
  * unconditional (the spend already happened, even post-settle); enforcement only
@@ -1120,7 +1120,7 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
   if (!isForwardableCallbackName(msg.name)) return; // child is less-trusted
 
   const data = msg.name === "onAgentStart" ? withParentCancel(s, msg.data) : msg.data;
-  // Fire within the parent's captured ALS frame so an AgencyFunction callback
+  // Fire within the parent's captured context frame so an AgencyFunction callback
   // body resolves __globals()/__threads() against the parent's real state (we
   // run from the event-loop message handler, outside any agencyStore frame).
   // Firing is fire-and-forget, but NOT bare `void`: fireWithGuard re-throws
@@ -1492,7 +1492,7 @@ export async function _run(
   cwd?: string,
   maxDepth: number = DEFAULT_MAX_SUBPROCESS_DEPTH,
 ): Promise<any> {
-  // Post-ALS: read `ctx` and the per-scope `stateStack` from the active
+  // Since the context-frame migration: read `ctx` and the per-scope `stateStack` from the active
   // `agencyStore` frame. The trailing `__state` positional that AgencyFunction
   // .invoke() still passes is now harmlessly ignored.
   const store = getRuntimeContext();
@@ -1531,7 +1531,7 @@ export async function _run(
   try {
     const batchResult = await runBatch<any>({
       ctx,
-      parentStack: stateStack, // the local slice from ALS — slice rule
+      parentStack: stateStack, // the local slice from the context frame — slice rule
       parentFrame,
       // `store.callsite` is set by Runner.runInScope for every generated
       // step; it is undefined only in bootstrap-frame contexts, where the

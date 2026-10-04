@@ -19,7 +19,7 @@ import path from "node:path";
  * first. Do not re-implement the policy locally.
  *
  * Layering: `expandPath` is a pure string transform with no async, no
- * ALS access, and no base-directory awareness. Resolving against the
+ * the context frame access, and no base-directory awareness. Resolving against the
  * cwd and refusing symlinks live one layer up in `contained.ts`.
  * Keeping the layers split means `expandPath` is testable in isolation.
  *

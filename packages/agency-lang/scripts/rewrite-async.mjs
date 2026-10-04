@@ -4,7 +4,7 @@
 // The runtime keeps its context with PromiseContextStorage, which restores
 // the context inside `.then` callbacks. A real `await` is syntax that no
 // library can attach to, so code that still has one loses its context at the
-// first pause. See docs/dev/runtime/portable-context-spike.md.
+// first pause. See docs/dev/runtime/promise-context-storage.md.
 //
 // A file with a top-level `await` cannot be rewritten: esbuild refuses it.
 // The build fails and names the file, unless the file is listed in

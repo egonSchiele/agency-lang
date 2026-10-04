@@ -63,7 +63,7 @@ export function runAsToolInvocation<T>(
 }
 
 /**
- * Run `invoke` in a copy of the current ALS frame whose `threads` slot is
+ * Run `invoke` in a copy of the current context frame whose `threads` slot is
  * a fresh, empty ThreadStore. The body keeps the frame's `ctx` and
  * `stack`, which branch-aware cancellation and per-branch state depend
  * on. It must not keep `threads`: an `llm()` call in the body would push
@@ -89,7 +89,7 @@ export async function invokeOnFreshThreadStore<T>(
 }
 
 /**
- * Run `invoke` in a copy of the current ALS frame whose `threads` slot is
+ * Run `invoke` in a copy of the current context frame whose `threads` slot is
  * a view of the caller's store with `thread` active. The view has its own
  * active stack, so two prompts running at once (two `async llm()` calls,
  * say) cannot interleave pushes and pops on a shared one.

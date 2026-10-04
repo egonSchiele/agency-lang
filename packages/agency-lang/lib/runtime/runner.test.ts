@@ -850,7 +850,7 @@ describe("Runner", () => {
     });
   });
 
-  describe("runInScope seeds the ALS callsite slot", () => {
+  describe("runInScope seeds the context frame's callsite slot", () => {
     it("populates moduleId / scopeName / stepPath for a single step", async () => {
       const frame = makeFrame();
       const runner = new Runner(makeMockCtx(), frame, {

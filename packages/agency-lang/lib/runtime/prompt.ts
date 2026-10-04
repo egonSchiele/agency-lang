@@ -538,9 +538,9 @@ export async function runPrompt(args: {
     return "";
   }
 
-  // ctx + stack come from the active ALS frame — the codegen used to
+  // ctx + stack come from the active context frame — the codegen used to
   // pass them explicitly as `ctx` / `stateStack` keys on `args`, but
-  // post-ALS migration every Agency execution path runs inside an
+  // since the context-frame migration every Agency execution path runs inside an
   // `agencyStore.run(...)` frame seeded with the same values.
   const runtime = getRuntimeContext();
   const ctx = runtime.ctx as RuntimeContext<GraphState>;

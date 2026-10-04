@@ -128,7 +128,7 @@ describe("StatelogClient redaction", () => {
     const ctx = makeStdoutCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     execCtx.globals.markRedacted("sk-final");
-    // NO runInTestContext: this post fires outside any ALS frame, exactly like
+    // NO runInTestContext: this post fires outside any context frame, exactly like
     // the result-bearing agentEnd event after the run's frame has ended. The
     // client's fallbackGlobals (wired by createExecutionContext) must kick in.
     await execCtx.statelogClient.post({
@@ -144,7 +144,7 @@ describe("StatelogClient redaction", () => {
     const ctx = makeStdoutCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     // Tag on the parent store, then run post() against a CLONE of it — exactly
-    // what runInBranchAlsFrame does when entering a fork/parallel/race branch.
+    // what runInBranchContextFrame does when entering a fork/parallel/race branch.
     // This pins the headline claim: a primitive redact tag set before a fork is
     // still honored inside the branch's post().
     execCtx.globals.markRedacted("sk-fork");

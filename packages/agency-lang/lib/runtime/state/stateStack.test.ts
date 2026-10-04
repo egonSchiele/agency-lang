@@ -5,8 +5,8 @@ import { CostGuard, GuardExceededError, TimeGuard } from "../guard.js";
 import { runInTestContext } from "../asyncContext.js";
 import { ThreadStore } from "./threadStore.js";
 
-// Post-ALS migration: `_callbackImpl` reads `ctx` from
-// `getRuntimeContext()`, so each call must run inside an ALS frame
+// Since the context-frame migration: `_callbackImpl` reads `ctx` from
+// `getRuntimeContext()`, so each call must run inside a context frame
 // seeded with the fake ctx. Wrap _callbackImpl invocations here.
 function callCallback(ctx: any, name: string, fn: unknown): void {
   runInTestContext(ctx, ctx.stateStack, new ThreadStore(), () => {

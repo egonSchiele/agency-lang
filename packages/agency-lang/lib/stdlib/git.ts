@@ -65,7 +65,7 @@ export async function gitRunImpl(
   return res.stdout;
 }
 
-/** ALS-reading wrapper Agency calls; mirrors `_exec` in shell.ts. */
+/** context-reading wrapper Agency calls; mirrors `_exec` in shell.ts. */
 export async function _gitRun(cwd: string, args: string[]): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
   return gitRunImpl(cwd, args, { signal: ctx.getAbortSignal(stack) });

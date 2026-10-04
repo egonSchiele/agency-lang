@@ -401,7 +401,7 @@ export const ts = {
    * `!` sites whose resolved type carries at least one `@validate(...)` tag
    * anywhere in the tree. The descriptor is a TS expression built via
    * `buildValidationDescriptor(...)`. Validators read `ctx` from the
-   * active `agencyStore` ALS frame, so no explicit ctx arg is threaded.
+   * active `agencyStore` context frame, so no explicit ctx arg is threaded.
    */
   validateChainRecursive(value: TsNode, descriptor: TsNode): TsAwait {
     return ts.awaitCall(ts.id("__validateChainRecursive"), [value, descriptor]);
@@ -530,7 +530,7 @@ export const ts = {
    * `await agencyStore.run({ ctx, stack, threads }, async () => { ... })`.
    *
    * Defense-in-depth: every function/node body's try block carries an
-   * ALS frame so stdlib helpers and `__threads()` / `__stateStack()`
+   * context frame so stdlib helpers and `__threads()` / `__stateStack()`
    * reads resolve correctly even for code that runs between Runner
    * steps. Today the gap is empty (every callback emission uses
    * `runner.step`/`runner.hook`/etc. which re-seed the frame
@@ -547,7 +547,7 @@ export const ts = {
    * returns, the outer `if (runner.halted) return runner.haltResult;`
    * check picks up the halted result.
    */
-  withAlsFrame({
+  withContextFrame({
     ctx,
     stack,
     threads,
@@ -558,7 +558,7 @@ export const ts = {
     threads: TsNode;
     body: TsNode[];
   }): TsNode {
-    // Spread the outer ALS frame first so non-overridden slots
+    // Spread the outer context frame first so non-overridden slots
     // (globals, callsite, runner) are inherited here instead of being
     // silently reset to undefined for stdlib helpers invoked from
     // inside this body frame.
@@ -610,7 +610,7 @@ export const ts = {
     // No `__threads` or `__stateStack` const declaration here: those
     // per-scope values are now read on demand via the `__threads()`
     // and `__stateStack()` accessors (which resolve through the active
-    // `agencyStore` ALS frame). The `__graph` and `statelogClient`
+    // `agencyStore` context frame). The `__graph` and `statelogClient`
     // locals that used to be declared here were dead code — no
     // template or codegen path referenced them — so they were dropped
     // entirely. See `ts.runtime.threads` / `ts.runtime.stateStack` and
@@ -621,8 +621,8 @@ export const ts = {
       ts.constDeclId(ts.runtime.self, self),
       // `ts.runtime.ctx` is now the `__ctx()` accessor; the const-decl
       // target must be the literal identifier `__ctx`. The local stays
-      // because pre-wrap code (Runner ctor, withAlsFrame seed,
-      // __initializeGlobals call) needs a lexical handle to seed ALS.
+      // because pre-wrap code (Runner ctor, withContextFrame seed,
+      // __initializeGlobals call) needs a lexical handle to seed the context frame.
       ts.constDeclId(ts.id("__ctx"), ctx),
       ts.letDecl("__forked"),
 
@@ -797,11 +797,11 @@ export const ts = {
 
   /** Predefined runtime identifiers. `threads` and `stateStack` are
    *  `__threads()` / `__stateStack()` accessor calls (not bare
-   *  identifiers) because post-ALS migration the per-scope
+   *  identifiers) because since the context-frame migration the per-scope
    *  `ThreadStore` and `StateStack` live on the active `agencyStore`
    *  frame instead of in codegen-emitted `const __threads` / `const
    *  __stateStack` locals. Every site that referenced the old locals
-   *  now emits the accessor call, which reads from ALS and returns
+   *  now emits the accessor call, which reads from the context frame and returns
    *  the live store (or `undefined` outside any frame — see
    *  `runtime/asyncContext.ts`).
    *
@@ -820,16 +820,16 @@ export const ts = {
     ctx: { kind: "raw", code: "getRuntimeContext().ctx" } as TsRaw,
     threads: { kind: "raw", code: "__threads()" } as TsRaw,
     stateStack: { kind: "raw", code: "__stateStack()" } as TsRaw,
-    /** Per-scope GlobalStore accessor. Reads from the active ALS
+    /** Per-scope GlobalStore accessor. Reads from the active the context frame
      *  frame's `globals` slot — pointer-shared with the canonical
      *  store at every frame builder (Stage 1) and the branch-local
-     *  clone inside `runInBranchAlsFrame` (Stage 2). Replaces the
-     *  pre-ALS `__ctx.globals.…` codegen pattern: every user-visible
+     *  clone inside `runInBranchContextFrame` (Stage 2). Replaces the
+     *  pre-migration `__ctx.globals.…` codegen pattern: every user-visible
      *  global read/write is now routed through this accessor so the
      *  branch-local view participates without further codegen
      *  changes. The non-null assertion (`!`) is appropriate because
      *  every emission site runs inside an Agency execution frame
-     *  (function/node body wrapped in `withAlsFrame`, Runner step
+     *  (function/node body wrapped in `withContextFrame`, Runner step
      *  body, or bootstrap frame). */
     globals: { kind: "raw", code: "__globals()!" } as TsRaw,
     stack: { kind: "identifier", name: "__stack" } as TsIdentifier,

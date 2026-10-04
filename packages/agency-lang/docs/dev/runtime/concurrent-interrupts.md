@@ -93,7 +93,7 @@ The two callers-must-observe rules are:
 
 - **Per-child branch lifecycle.** Calls `parentFrame.getOrCreateBranch(child.key)`. On resume, finds the existing branch (idempotent).
 - **AbortController + signal composition.** Each branch gets a fresh `AbortController`. The branch's stack `abortSignal` is composed via `AbortSignal.any([parentSig, child.signal])` so nested aborts cascade down.
-- **ALS-isolated invocation.** Each `invoke` runs inside `ctx.statelogClient.runInBranchContext(parentSpanStack, …)` so concurrent branches don't interleave their span pushes/pops on the parent's stack.
+- **context-isolated invocation.** Each `invoke` runs inside `ctx.statelogClient.runInBranchContext(parentSpanStack, …)` so concurrent branches don't interleave their span pushes/pops on the parent's stack.
 - **Three modes:**
   - `"all"` — `Promise.allSettled`; every child runs concurrently.
   - `"sequential"` — `for...of` loop; each child runs after the previous resolves. Used for hook-callback batching (preserves today's `callHook` strict-ordering semantics).
@@ -451,9 +451,9 @@ When `runBatch` aborts a race loser:
 
 Synchronous code that has already begun executing (e.g., an `interrupt()` call mid-flight) will complete; it can't be unwound. But its resolved value is orphaned (no one awaits it) and gets GC'd.
 
-### Why a stack-based signal instead of AsyncLocalStorage
+### Why a stack-based signal instead of a context variable
 
-ALS would make `ctx.aborted` magically branch-aware without any call-site changes — but it's Node-only. Agency is meant to run anywhere TS runs. The stack-based approach requires explicit `stack` args at the sites that check cancellation, but it has no platform dependency and aligns with Agency's pattern of threading state through `stateStack`.
+the context frame would make `ctx.aborted` magically branch-aware without any call-site changes — but it's Node-only. Agency is meant to run anywhere TS runs. The stack-based approach requires explicit `stack` args at the sites that check cancellation, but it has no platform dependency and aligns with Agency's pattern of threading state through `stateStack`.
 
 ---
 

@@ -88,7 +88,7 @@ const callsite = (): CallsiteLocation | undefined => agencyStore.getStore()?.cal
  *  `globals.get(moduleId, name)`. `moduleId` defaults to `""`
  *  (the bare/anonymous module).
  *
- *  Reads from the active ALS frame's `globals` slot — the same source
+ *  Reads from the active context frame's `globals` slot — the same source
  *  generated user code reads via `__globals()`. Inside a `fork` /
  *  `parallel` / `race` branch this is the branch's per-branch
  *  snapshot, NOT the parent's canonical `ctx.globals`. Outside any
@@ -242,7 +242,7 @@ const threadsCurrent = (): string | undefined => {
 // ---- Checkpoints -------------------------------------------------------
 
 /** Capture a checkpoint of the current execution state. The recorded
- *  location is read from the active ALS callsite slot. */
+ *  location is read from the active context frame's callsite slot. */
 const checkpoint = (): Promise<number> => _checkpoint();
 
 /** Look up a previously-created checkpoint by id. Throws if missing. */
@@ -254,7 +254,7 @@ const restore = (idOrCp: number | Checkpoint, opts: RestoreOptions = {}): void =
   _restore(idOrCp, opts);
 
 /** Run `fn` with a custom `callsite` (`{moduleId, scopeName, stepPath}`)
- *  installed on the active ALS frame; restore the prior callsite when
+ *  installed on the active context frame; restore the prior callsite when
  *  `fn` returns. The callsite is the source location used to attribute
  *  any `checkpoint()` made inside `fn` — `Runner.runInScope` seeds it
  *  automatically for every Agency step, but TS helpers that subdivide
@@ -284,7 +284,7 @@ const withHandler = <T>(handler: HandlerFn, fn: () => Promise<T>): Promise<T> =>
 /** Install a `CostGuard(maxCost)` on the active branch's `StateStack.guards`
  *  for the duration of `fn`; pop in finally.
  *
- *  Pushes onto `getRuntimeContext().stack` — the ALS-resolved
+ *  Pushes onto `getRuntimeContext().stack` — the frame-resolved
  *  per-branch stack — NOT `ctx().stateStack` (which is the top-level
  *  stack). Inside a fork/race branch the two stacks differ; pushing
  *  on the wrong one would leak the guard into sibling branches. */
@@ -299,7 +299,7 @@ const withCostGuard = async <T>(maxCost: number, fn: () => Promise<T>): Promise<
 };
 
 /** Install a `TimeGuard(maxMs)` on the active branch's stack for the
- *  duration of `fn`; pop in finally. Same ALS-stack semantics as
+ *  duration of `fn`; pop in finally. Same the context frame-stack semantics as
  *  `withCostGuard`. */
 const withTimeGuard = async <T>(maxMs: number, fn: () => Promise<T>): Promise<T> => {
   const stack = getRuntimeContext().stack;
@@ -388,7 +388,7 @@ const memoryForget = (query: string): Promise<void> => _forget(query);
 
 /**
  * @internal
- * Install an ALS frame from explicit `{ctx, stack, threads}` for
+ * Install a context frame from explicit `{ctx, stack, threads}` for
  * tests that exercise stdlib helpers directly. Mirrors
  * `runInTestContext` with an object-arg signature so test bodies
  * compose with the rest of the namespace. Not intended for

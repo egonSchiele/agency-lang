@@ -74,7 +74,7 @@ async function openUrlImpl(
   }
 }
 
-/** Deprecated context-injected wrapper kept during the ALS migration;
+/** Deprecated context-injected wrapper kept during the context-frame migration;
  *  see `_openUrl`. */
 export async function __internal_openUrl(
   ctx: RuntimeContext<any>,
@@ -85,7 +85,7 @@ export async function __internal_openUrl(
   return openUrlImpl(ctx, stack, url);
 }
 
-/** ALS-reading replacement for `__internal_openUrl`. */
+/** context-reading replacement for `__internal_openUrl`. */
 export async function _openUrl(url: string): Promise<void> {
   const { ctx, stack } = getRuntimeContext();
   return openUrlImpl(ctx, stack, url);
@@ -157,7 +157,7 @@ export async function __internal_screenshot(
   return screenshotImpl(ctx, stack, filepath, x, y, width, height);
 }
 
-/** ALS-reading replacement for `__internal_screenshot`. */
+/** context-reading replacement for `__internal_screenshot`. */
 export async function _screenshot(
   filepath: string,
   x: number,

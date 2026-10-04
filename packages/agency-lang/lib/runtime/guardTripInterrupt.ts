@@ -83,8 +83,8 @@ async function raiseOneTrip(
 ): Promise<Interrupt[] | undefined> {
   const scope = GuardScope.resolve(stack, tripped)!;
   const key = guardTripKey(tripped);
-  // Reads the STACK mark, not the executing-handlers ALS: the pause
-  // refusals must survive the ALS coming up empty (issue #616), and the
+  // Reads the STACK mark, not the executing-handlers the context frame: the pause
+  // refusals must survive the context variable coming up empty (issue #616), and the
   // stack is reachable here as a plain parameter.
   const inHandler = stack.executingHandlerEntries.length > 0;
 
@@ -163,8 +163,8 @@ async function raiseOneTrip(
       // checkpoint + bailout machinery.
       const interrupts = verdict as Interrupt[];
       // Inside a handler, renderVerdict already refuses unanswered
-      // raises when its ALS is intact — this stack-read check is the
-      // one that holds when the ALS is not. Reaching it means a pause
+      // raises when its context variable is intact — this stack-read check is the
+      // one that holds when the context variable is not. Reaching it means a pause
       // was about to be persisted from inside a handler; fail as the
       // rejection it must be, never as serialized state.
       if (inHandler) {

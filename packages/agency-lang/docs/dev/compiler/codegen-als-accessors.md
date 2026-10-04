@@ -1,6 +1,6 @@
-# Codegen ALS accessors: `__threads()`, `__stateStack()`, `__globals()`
+# Codegen the context frame accessors: `__threads()`, `__stateStack()`, `__globals()`
 
-This doc covers how generated Agency code reads runtime values (the `ThreadStore`, `RuntimeContext`, `StateStack`) from the active `agencyStore` ALS frame, the file layout for the codegen → runtime → template path, and the recipe for adding a new accessor or pruning an existing setup-block local.
+This doc covers how generated Agency code reads runtime values (the `ThreadStore`, `RuntimeContext`, `StateStack`) from the active `agencyStore` context frame, the file layout for the codegen → runtime → template path, and the recipe for adding a new accessor or pruning an existing setup-block local.
 
 Sister doc: [docs/dev/runtime/async-context.md](../runtime/async-context.md) describes `agencyStore` itself and where frames are installed. Read that first.
 
@@ -17,7 +17,7 @@ runner.halt({ messages: __threads, data: result });
 runner.halt({ messages: __threads(), data: result });
 ```
 
-The cost is one ALS read per access (negligible — `AsyncLocalStorage.getStore()` is a fast atomic read on Node's async hook stack). The benefit is that setup blocks stop carrying a five-line preamble of `const` declarations and the codegen doesn't have to plumb names through every emission path.
+The cost is one context read per access (negligible: `getStore()` reads one module-level variable). The benefit is that setup blocks stop carrying a five-line preamble of `const` declarations and the codegen doesn't have to plumb names through every emission path.
 
 ## Current status
 
@@ -27,11 +27,11 @@ The cost is one ALS read per access (negligible — `AsyncLocalStorage.getStore(
 | `__stateStack` | pruned | `__stateStack()` |
 | `__graph` | pruned (was dead code) | — |
 | `statelogClient` | pruned (was dead code) | — |
-| `__ctx` | still a `const`, but seeded FROM ALS | `getRuntimeContext().ctx`, see below |
+| `__ctx` | still a `const`, but seeded FROM the context frame | `getRuntimeContext().ctx`, see below |
 
 `__globals()` is a fourth accessor. It never replaced a setup-block local; it exists so a fork branch's generated code reads the branch-local `GlobalStore` view rather than the canonical one.
 
-Alongside the accessor migrations, function and node body try blocks wrap in `await agencyStore.run({...getRuntimeContext(), ctx, stack, threads}, async () => { ... })`. This is defense in depth: it closes the gap between Runner-managed steps where a future refactor could lose the outer ALS frame.
+Alongside the accessor migrations, function and node body try blocks wrap in `await agencyStore.run({...getRuntimeContext(), ctx, stack, threads}, async () => { ... })`. This is defense in depth: it closes the gap between Runner-managed steps where a future refactor could lose the outer context frame.
 
 Migration roadmap: [docs/superpowers/plans/2026-05-26-als-migration-phase-4-cleanup.md](../../superpowers/plans/2026-05-26-als-migration-phase-4-cleanup.md).
 
@@ -41,7 +41,7 @@ Migration roadmap: [docs/superpowers/plans/2026-05-26-als-migration-phase-4-clea
 
 `setupEnv` emits `const __ctx = getRuntimeContext().ctx;` in every function and node body. That local shares its name with the `__ctx` runtime export. The esbuild TypeScript transform resolves the clash by renaming the local to `__ctx2` and rewriting *every* `__ctx` reference in that scope, including ones bound to the import. A sibling template emitting `__ctx()` would therefore print `__ctx2()`, and `__ctx2` is a `RuntimeContext` value, not a function. The result is `__ctx2 is not a function` at runtime.
 
-So `ts.runtime.ctx` prints `getRuntimeContext().ctx` ([lib/ir/builders.ts](../../../lib/ir/builders.ts)), which no local can shadow. The local stays because pre-wrap code needs a lexical handle to seed ALS: the `Runner` constructor, the `agencyStore.run` seed object, and the `__initializeGlobals` call all run before the frame exists. Those three sites emit `ts.id("__ctx")` directly.
+So `ts.runtime.ctx` prints `getRuntimeContext().ctx` ([lib/ir/builders.ts](../../../lib/ir/builders.ts)), which no local can shadow. The local stays because pre-wrap code needs a lexical handle to seed the context frame: the `Runner` constructor, the `agencyStore.run` seed object, and the `__initializeGlobals` call all run before the frame exists. Those three sites emit `ts.id("__ctx")` directly.
 
 The `__ctx()` accessor still exists in `lib/runtime/asyncContext.ts` and is exported from `lib/runtime/index.ts`, but `imports.mustache` does not import it, so no generated code calls it.
 
@@ -49,7 +49,7 @@ Two complications that used to make this migration look larger are simply gone. 
 
 ## Why two flavors: `__X()` vs `getRuntimeContext().X`
 
-Both shapes read from the same ALS frame, but they behave differently when **no frame is installed**:
+Both shapes read from the same context frame, but they behave differently when **no frame is installed**:
 
 - **`__X()`** (lenient) — `agencyStore.getStore()?.X`. Returns `undefined` when no frame is installed. Safe at sites where the consumer tolerates `undefined`, or where the value is assigned into an object property and a missing value surfaces later as a clearer error.
 - **`getRuntimeContext().X`** (strict) — throws `"getRuntimeContext() called outside an Agency execution frame..."`. Use at sites where `undefined` would dereference unactionably. Without the throw, `__threads().active().push(...)` gives you a cryptic `Cannot read properties of undefined (reading 'active')`.
@@ -141,7 +141,7 @@ graph.node("main", async (__state: GraphState) => {
 
 ## Recipe: adding a new accessor
 
-If you find yourself wanting to prune another setup-block local (or simply add a new read-from-ALS helper for stdlib JS code), follow this recipe. Estimated time: ~30 min for the code change, plus fixture regen.
+If you find yourself wanting to prune another setup-block local (or simply add a new read-from-the context frame helper for stdlib JS code), follow this recipe. Estimated time: ~30 min for the code change, plus fixture regen.
 
 ### 1. Define the accessor
 
@@ -293,19 +293,19 @@ You're outside an `agencyStore.run(...)` frame. Three cases:
 
 If you find yourself tempted to write `const __stateStack = somethingElse;` (or any other rebind that shares a name with the runtime import) inside a `.mustache` template, **don't**. The runtime import is a function; the local would shadow it; TypeScript renames the local to `__stateStack2` (or similar); any other template that emits `__stateStack()` then resolves to `__stateStack2` — a `StateStack` value, not a function — and crashes with `__stateStack2 is not a function`.
 
-This bit us specifically in `forkBlockSetup.mustache`: an earlier `const __stateStack = __forkBranchStack;` rebind was kept "to make the branch stack visible inside the body". It turned out to be unnecessary: `runBatch.runInBranchAlsFrame` (lib/runtime/runBatch.ts) already seeds the branch ALS frame with `stack: branchStack`, so `__stateStack()` inside the branch body resolves to the branch stack automatically. The rebind was removed; the gotcha here is "don't reintroduce it".
+This bit us specifically in `forkBlockSetup.mustache`: an earlier `const __stateStack = __forkBranchStack;` rebind was kept "to make the branch stack visible inside the body". It turned out to be unnecessary: `runBatch.runInBranchContextFrame` (lib/runtime/runBatch.ts) already seeds the branch context frame with `stack: branchStack`, so `__stateStack()` inside the branch body resolves to the branch stack automatically. The rebind was removed; the gotcha here is "don't reintroduce it".
 
-If you genuinely need a *different* StateStack visible inside a sub-scope, install a new ALS frame for that scope (`agencyStore.run({...}, ...)`) rather than rebinding the name.
+If you genuinely need a *different* StateStack visible inside a sub-scope, install a new context frame for that scope (`agencyStore.run({...}, ...)`) rather than rebinding the name.
 
 ### Runner constructor needs explicit `threads`
 
-`Runner.runInScope` re-enters ALS with `this.threads`. If the constructor didn't get `threads`, ALS frames inside steps would use the OUTER frame's `ThreadStore`, which for a tool-called function is the per-run store (wrong — should be a fresh store). Codegen MUST pass `threads: __setupData.threads` (or the equivalent) to every Runner. See PR [#200](https://github.com/egonSchiele/agency-lang/pull/200) for the bug this fixed.
+`Runner.runInScope` re-enters the context frame with `this.threads`. If the constructor didn't get `threads`, context frames inside steps would use the OUTER frame's `ThreadStore`, which for a tool-called function is the per-run store (wrong — should be a fresh store). Codegen MUST pass `threads: __setupData.threads` (or the equivalent) to every Runner. See PR [#200](https://github.com/egonSchiele/agency-lang/pull/200) for the bug this fixed.
 
 ### `Runner.thread(id, method, opts, callback)` reads `this.threads`
 
 Pre-migration, the signature was `Runner.thread(id, threads, method, callback)` and the codegen emitted `runner.thread(0, __threads, "create", ...)`. After PR [#201](https://github.com/egonSchiele/agency-lang/pull/201), the Runner sources `threads` from its own `this.threads` field and the codegen emits `runner.thread(0, "create", ...)`. If you build a `Runner` manually in a test you MUST pass `threads:` to the constructor, or wrap the call in `agencyStore.run(...)`. Otherwise `runner.thread(...)` throws a clear error.
 
-## Reference: every "ALS frame" site in the runtime
+## Reference: every "context frame" site in the runtime
 
 For grep-friendliness when adding a new field to `AgencyStore`:
 
@@ -316,8 +316,8 @@ For grep-friendliness when adding a new field to `AgencyStore`:
 | `runNode` `onAgentEnd` | [lib/runtime/node.ts](../../../lib/runtime/node.ts) | node | Fires after the run completes; uses the real ThreadStore. |
 | `runNode` `onAgentStart` | [lib/runtime/node.ts](../../../lib/runtime/node.ts) | bootstrap | Fires before any node runs. |
 | `initializeGlobals` + `registerTopLevelCallbacks` | [lib/runtime/node.ts](../../../lib/runtime/node.ts) | bootstrap | Module-level setup. |
-| `Runner.runInScope` | [lib/runtime/runner.ts](../../../lib/runtime/runner.ts) | node | Per-step ALS re-wrap. The only site that seeds `callsite` and `runner`. |
-| `runBatch.runInBranchAlsFrame` | [lib/runtime/runBatch.ts](../../../lib/runtime/runBatch.ts) | node (branch) | Per-fork-branch ALS with branch stack, threads, and globals. |
+| `Runner.runInScope` | [lib/runtime/runner.ts](../../../lib/runtime/runner.ts) | node | Per-step the context frame re-wrap. The only site that seeds `callsite` and `runner`. |
+| `runBatch.runInBranchContextFrame` | [lib/runtime/runBatch.ts](../../../lib/runtime/runBatch.ts) | node (branch) | Per-fork-branch the context frame with branch stack, threads, and globals. |
 | `withResumableScope` | [lib/runtime/resumableScope.ts](../../../lib/runtime/resumableScope.ts) | node | Scope body frame; inherits `globals` from the outer frame. |
 | Tool invocation in `runPrompt` | [lib/runtime/prompt.ts](../../../lib/runtime/prompt.ts) | node | Re-enters the parent frame with a FRESH `ThreadStore`. |
 | Scoped callback dispatch | [lib/runtime/hooks.ts](../../../lib/runtime/hooks.ts) | node | Re-enters the parent frame with the callback's own stack. |
@@ -337,7 +337,7 @@ Use this as a checklist when pruning another setup-block local:
 - Backend: `lib/backends/typescriptBuilder.ts` — search for the bare name. Two sites call `setupEnv`, one for function bodies and one for node bodies. Other raw-string emissions of `__X.method(...)` need updating individually.
 - Templates in `lib/templates/backends/typescriptGenerator/`:
   - `blockSetup.mustache`
-  - `forkBlockSetup.mustache` (note: no `__stateStack` rebind, because the branch ALS frame from `runBatch.runInBranchAlsFrame` carries the branch stack)
+  - `forkBlockSetup.mustache` (note: no `__stateStack` rebind, because the branch context frame from `runBatch.runInBranchContextFrame` carries the branch stack)
   - `interruptAssignment.mustache`
   - `interruptReturn.mustache`
   - `resultCheckpointSetup.mustache`

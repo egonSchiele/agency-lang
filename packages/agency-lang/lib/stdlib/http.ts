@@ -235,7 +235,7 @@ async function fetchImpl(
   }, url);
 }
 
-/** Deprecated context-injected wrapper kept during the ALS migration;
+/** Deprecated context-injected wrapper kept during the context-frame migration;
  *  see `_fetch`. */
 export async function __internal_fetch(
   ctx: RuntimeContext<any>,
@@ -251,7 +251,7 @@ export async function __internal_fetch(
   return fetchImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
-/** ALS-reading replacement for `__internal_fetch`. */
+/** context-reading replacement for `__internal_fetch`. */
 export async function _fetch(
   baseUrl: string,
   urlPath: string,
@@ -304,7 +304,7 @@ export async function __internal_fetchJSON(
   return fetchJSONImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
-/** ALS-reading replacement for `__internal_fetchJSON`. */
+/** context-reading replacement for `__internal_fetchJSON`. */
 export async function _fetchJSON(
   baseUrl: string,
   urlPath: string,
@@ -357,7 +357,7 @@ export async function __internal_fetchMarkdown(
   return fetchMarkdownImpl(ctx, stack, baseUrl, urlPath, headers, allowedDomains, method, body);
 }
 
-/** ALS-reading replacement for `__internal_fetchMarkdown`. */
+/** context-reading replacement for `__internal_fetchMarkdown`. */
 export async function _fetchMarkdown(
   baseUrl: string,
   urlPath: string,

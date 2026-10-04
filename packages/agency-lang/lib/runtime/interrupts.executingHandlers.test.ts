@@ -38,7 +38,7 @@ describe("stack-carried handler execution mark", () => {
     expect(stack.executingHandlerEntries).toEqual([]);
   });
 
-  // Exclusion is decided by the executingHandlers ALS, not the stack
+  // Exclusion is decided by the executingHandlers the context frame, not the stack
   // mark; this pins that the carrier work did not disturb it.
   it("a handler never hears a raise made from its own body", async () => {
     const ctx = makeCtx();

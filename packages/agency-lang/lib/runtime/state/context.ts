@@ -543,7 +543,7 @@ export class RuntimeContext<T> {
     // is that branch's own slice (seeded from the parent at fork time via
     // `inheritMemoryFrom`), so `enableMemory`/`setMemoryId` inside a branch
     // are visible to that branch and don't leak to siblings/parent. At the
-    // top level (and outside any ALS frame) this is `this.stateStack`.
+    // top level (and outside any context frame) this is `this.stateStack`.
     const stack = agencyStore.getStore()?.stack ?? this.stateStack;
     if (!stack) return undefined;
     let frame = stack.activeMemoryFrame();
@@ -551,7 +551,7 @@ export class RuntimeContext<T> {
       !frame &&
       // TOP-LEVEL ONLY. `stack === this.stateStack` is true at the top
       // level and in bootstrap frames, false inside any fork/race/tool
-      // branch (a branch's ALS stack is its own slice — see node.ts).
+      // branch (a branch's context frame's stack is its own slice — see node.ts).
       // This back-compat re-seed must never run on a branch: branches
       // receive memory via `inheritMemoryFrom` at fork time, so a branch
       // with `jsonMemoryConfig` set already has a frame array
@@ -596,7 +596,7 @@ export class RuntimeContext<T> {
         // access (not a captured one): this manager is cached per
         // configKey and shared across concurrent branches, so each
         // branch's get/set must resolve to ITS own stack. Falls back to
-        // `this.stateStack` outside any ALS frame.
+        // `this.stateStack` outside any context frame.
         get: () => {
           const s = agencyStore.getStore()?.stack ?? this.stateStack;
           const id = s?.other?.memoryId;

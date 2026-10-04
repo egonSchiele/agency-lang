@@ -103,7 +103,7 @@ export class ThreadStore {
   }
 
   /**
-   * Build a per-branch view of this store. Used by `runInBranchAlsFrame`
+   * Build a per-branch view of this store. Used by `runInBranchContextFrame`
    * so each fork / parallel / race branch gets its own active-thread
    * pointer without losing access to the shared registry — explicit
    * cross-branch coordination via `thread(session: ...)` or
@@ -149,7 +149,7 @@ export class ThreadStore {
   /**
    * Build a per-branch view that restores a previously-captured
    * `activeStack` rather than seeding a fresh subthread. Called by
-   * `runInBranchAlsFrame` on resume after an interrupt inside a fork
+   * `runInBranchContextFrame` on resume after an interrupt inside a fork
    * branch: the pre-interrupt active-thread pointer was snapshotted
    * onto `BranchState.activeStack` and serialized; on re-entry we
    * recreate a branch view aliasing the (now-deserialized) parent's

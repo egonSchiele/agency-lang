@@ -278,13 +278,13 @@ export function printTs(node: TsNode, indent = 0): string {
         //     eager-evaluated tool description docstrings): use
         //     `__globalCtx.globals` directly. The eager tool-
         //     registration object literal runs at module load, before
-        //     any ALS frame is installed, so the accessor would throw.
+        //     any context frame is installed, so the accessor would throw.
         //     The canonical store on `__globalCtx` is also the right
         //     read target there — tool descriptions are computed once
         //     at module load, not per-branch.
         //   - default (inside any function/node body, under the
-        //     `withAlsFrame` wrap): use `__globals()!`, the per-
-        //     scope accessor. Routing through the ALS slot is what
+        //     `withContextFrame` wrap): use `__globals()!`, the per-
+        //     scope accessor. Routing through the context frame slot is what
         //     gives per-branch isolation in Stage 2: the branch's
         //     cloned GlobalStore is read here instead of the
         //     canonical one.

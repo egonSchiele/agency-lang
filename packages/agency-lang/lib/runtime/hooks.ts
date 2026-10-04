@@ -129,19 +129,19 @@ export type AgencyCallbacks = {
 // scope, so A's added key is visible only inside A's continuation
 // chain, not inside B's. That's why parallel fork/tool branches can
 // each fire the same callback without dropping sibling invocations.
-// (Note: `statelogClient.runInBranchContext` scopes a different ALS
+// (Note: `statelogClient.runInBranchContext` scopes a different context variable
 // — `spanStorage` for Statelog spans — and does NOT touch this
 // callback guard. Sibling isolation here comes purely from each fire
-// allocating its own Set and entering its own ALS scope.)
+// allocating its own Set and entering its own context scope.)
 //
-// Why ALS rather than a per-stack or module-level WeakSet:
+// Why the context frame rather than a per-stack or module-level WeakSet:
 //   - Module-level WeakSet (pre-Task 5 behaviour) dropped legitimate
 //     parallel-branch invocations because every branch shared the
 //     same set.
 //   - Per-stack WeakSet didn't catch recursion: each runBatch call
 //     creates a NEW branch stack, so the recursive fire (which
 //     happens on the new stack) never sees the outer fire's entry.
-//   - ALS naturally inherits the set through both sync calls and
+//   - the context frame naturally inherits the set through both sync calls and
 //     awaited continuations, and each fire's `.run(...)` scope
 //     isolates siblings from one another.
 //
@@ -179,7 +179,7 @@ async function invokeCallback(
   stateStack?: StateStack,
 ): Promise<void> {
   if (AgencyFunction.isAgencyFunction(fn)) {
-    // When `stateStack` is set, install an ALS frame overriding the
+    // When `stateStack` is set, install a context frame overriding the
     // active stack so the callback body sees the branch's isolated
     // stack via `getRuntimeContext().stack`. This matters inside
     // parallel tool branches: scoped callbacks registered inside a
@@ -206,8 +206,8 @@ async function fireWithGuard(
   stateStack?: StateStack,
 ): Promise<void> {
   const key = fn as object;
-  // Recursion guard scoped to the current ALS context. See
-  // `_activeCallbacksContext` docstring for why ALS (not module-level
+  // Recursion guard scoped to the current context frame. See
+  // `_activeCallbacksContext` docstring for why the context frame (not module-level
   // WeakSet, not per-stack WeakSet).
   const inherited = _activeCallbacksContext.getStore();
   if (inherited?.has(key)) return;
@@ -282,20 +282,20 @@ export function hasCallbackConsumer<K extends keyof CallbackMap>(
  *  per-tool `onToolCallStart` / `onToolCallEnd` in `prompt.ts`). The
  *  public `callHook` is now a thin wrapper that omits `stateStack`.
  *
- *  `ctx` is optional — when omitted, it's resolved from the active ALS
+ *  `ctx` is optional — when omitted, it's resolved from the active the context frame
  *  frame via `getRuntimeContext()`. Every codegen-emitted `callHook(...)`
  *  site omits it. Within this repo, the remaining explicit-ctx callers
- *  are all in runtime code where an ALS frame *is* installed and the
+ *  are all in runtime code where a context frame *is* installed and the
  *  param is redundant:
  *    - `node.ts` — `onAgentStart` (inside `runInBootstrapFrame`) and
  *      `onAgentEnd` (inside `agencyStore.run` with the real threads).
  *    - `prompt.ts` — `onLLMCallStart`/`End` and the per-tool
  *      `onToolCallStart`/`End`, all called from inside a
  *      `Runner.runInScope` frame seeded by the generated node body.
- *  Those sites pass `ctx` defensively (predating the ALS migration)
+ *  Those sites pass `ctx` defensively (predating the context-frame migration)
  *  and could be tightened in a follow-up by dropping the param and
- *  making it required-via-ALS again. The slot stays optional so
- *  external callers that have a ctx but no ALS frame still work. */
+ *  making it required-via-the context frame again. The slot stays optional so
+ *  external callers that have a ctx but no context frame still work. */
 export async function invokeCallbacks<K extends keyof CallbackMap>(args: {
   ctx?: RuntimeContext<any>;
   name: K;

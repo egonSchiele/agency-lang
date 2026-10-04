@@ -147,7 +147,7 @@ async function browserUseImpl(
   };
 }
 
-/** Deprecated context-injected wrapper kept during the ALS migration;
+/** Deprecated context-injected wrapper kept during the context-frame migration;
  *  see `_browserUse`. */
 export async function __internal_browserUse(
   ctx: RuntimeContext<any>,
@@ -159,7 +159,7 @@ export async function __internal_browserUse(
   return browserUseImpl(ctx, stack, task, options);
 }
 
-/** ALS-reading replacement for `__internal_browserUse`. */
+/** context-reading replacement for `__internal_browserUse`. */
 export async function _browserUse(
   task: string,
   options?: BrowserUseOptions,

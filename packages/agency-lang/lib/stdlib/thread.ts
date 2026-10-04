@@ -53,7 +53,7 @@ export async function __internal_systemMessage(
   threads.getOrCreateActive().push(smoltalk.systemMessage(msg));
 }
 
-/** ALS-reading replacement for `__internal_systemMessage`. `label` is an
+/** context-reading replacement for `__internal_systemMessage`. `label` is an
  *  observability-only debug tag shown in statelog; "" means unlabeled and
  *  is normalized to null. Never sent to the provider. */
 export async function _systemMessage(msg: string, label: string = ""): Promise<void> {
@@ -70,7 +70,7 @@ export async function __internal_userMessage(
   threads.getOrCreateActive().push(smoltalk.userMessage(msg));
 }
 
-/** ALS-reading replacement for `__internal_userMessage`. Accepts a plain
+/** context-reading replacement for `__internal_userMessage`. Accepts a plain
  *  string or an array of text strings and image()/file() attachments.
  *  `label` is an observability-only debug tag (see `_systemMessage`). */
 export async function _userMessage(
@@ -138,7 +138,7 @@ export async function __internal_assistantMessage(
   threads.getOrCreateActive().push(smoltalk.assistantMessage(msg));
 }
 
-/** ALS-reading replacement for `__internal_assistantMessage`. `label` is
+/** context-reading replacement for `__internal_assistantMessage`. `label` is
  *  an observability-only debug tag (see `_systemMessage`). */
 export async function _assistantMessage(msg: string, label: string = ""): Promise<void> {
   const { threads } = getRuntimeContext();
@@ -349,7 +349,7 @@ export async function __internal_getCost(
   return stack.localCost;
 }
 
-/** ALS-reading replacement for `__internal_getCost`. */
+/** context-reading replacement for `__internal_getCost`. */
 export async function _getCost(): Promise<number> {
   const { stack } = getRuntimeContext();
   return stack.localCost;
@@ -363,7 +363,7 @@ export async function __internal_getTokens(
   return stack.localTokens;
 }
 
-/** ALS-reading replacement for `__internal_getTokens`. */
+/** context-reading replacement for `__internal_getTokens`. */
 export async function _getTokens(): Promise<number> {
   const { stack } = getRuntimeContext();
   return stack.localTokens;
@@ -571,7 +571,7 @@ export async function __internal_pushGuard(
   return pushGuardImpl(stack, costLimit, timeLimit);
 }
 
-/** ALS-reading replacement for `__internal_pushGuard`. */
+/** context-reading replacement for `__internal_pushGuard`. */
 export async function _pushGuard(
   costLimit: number | null,
   timeLimit: number | null,
@@ -601,7 +601,7 @@ export async function __internal_popGuard(
   popGuardImpl(stack, ids);
 }
 
-/** ALS-reading replacement for `__internal_popGuard`. */
+/** context-reading replacement for `__internal_popGuard`. */
 export async function _popGuard(ids: string[]): Promise<void> {
   const { stack } = getRuntimeContext();
   popGuardImpl(stack, ids);

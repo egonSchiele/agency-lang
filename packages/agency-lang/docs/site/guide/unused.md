@@ -62,7 +62,7 @@ export function summarize(text: string): Promise<string> {
 }
 ```
 
-Every method on `agency.*` reads its dependencies from an AsyncLocalStorage frame the runtime installs around each step. When you call a TS helper from Agency code, the frame is already in place — your helper sees the same context the surrounding Agency function saw. (Most methods throw with a clear error if called outside an Agency frame; the `*Maybe` variants return `undefined` instead.)
+Every method on `agency.*` reads its dependencies from a context frame the runtime installs around each step. When you call a TS helper from Agency code, the frame is already in place — your helper sees the same context the surrounding Agency function saw. (Most methods throw with a clear error if called outside an Agency frame; the `*Maybe` variants return `undefined` instead.)
 
 Common patterns:
 

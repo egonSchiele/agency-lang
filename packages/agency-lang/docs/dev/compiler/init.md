@@ -133,7 +133,7 @@ runtime has since grown around it. Today:
    `agencyStore` frame with no `Runner`, no callsite, and a `BootstrapThreadStore`
    that throws on every thread builtin. See `docs/dev/runtime/async-context.md`.
 3. There is no `const __state = {}` hack any more. Call sites read their context
-   from the ALS frame through `getRuntimeContext()`, so nothing in generated code
+   from the context frame through `getRuntimeContext()`, so nothing in generated code
    needs a `__state` local.
 4. Creating a checkpoint with no current node id now throws instead of returning a
    sentinel. `Checkpoint.fromStateStack` (`lib/runtime/state/checkpointStore.ts`)

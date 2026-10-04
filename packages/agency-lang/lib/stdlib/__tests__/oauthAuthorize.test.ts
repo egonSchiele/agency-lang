@@ -29,7 +29,7 @@ import { RuntimeContext } from "../../runtime/state/context.js";
 import { StateStack } from "../../runtime/state/stateStack.js";
 import { ThreadStore } from "../../runtime/state/threadStore.js";
 
-// Wrap calls into ALS-reading stdlib helpers so getRuntimeContext()
+// Wrap calls into context-reading stdlib helpers so getRuntimeContext()
 // finds a frame. These tests don't exercise checkpoint or guard
 // state, so a minimal context suffices.
 function withCtx<T>(fn: () => Promise<T>): Promise<T> {

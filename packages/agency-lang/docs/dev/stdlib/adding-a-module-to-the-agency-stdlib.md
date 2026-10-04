@@ -12,7 +12,7 @@ Adding a new module to the agency standard library follows a general pattern.
 
 ## Accessing runtime state from a TS binding
 
-If a stdlib TS helper needs to read or mutate per-run state, such as the memory manager, the statelog client, or the abort controller, it MUST read the `RuntimeContext` from the active `AsyncLocalStorage` frame. Do not reach for a module-level singleton. Several `runNode` calls can share one Node.js process and would race on it.
+If a stdlib TS helper needs to read or mutate per-run state, such as the memory manager, the statelog client, or the abort controller, it MUST read the `RuntimeContext` from the active context frame. Do not reach for a module-level singleton. Several `runNode` calls can share one Node.js process and would race on it.
 
 `getRuntimeContext()` returns the `{ctx, stack, threads}` triple of the currently-running Agency scope, and it always returns the innermost frame. [`docs/dev/runtime/async-context.md`](../runtime/async-context.md) owns that mechanism: where frames are installed, the frame kinds, and how to wrap a test.
 
@@ -42,7 +42,7 @@ That is all there is to it. From the codegen's perspective `_doThing` is an ordi
 
 The `agency-lang/stdlib-lib/*` subpath in the `.agency` import maps to `dist/lib/stdlib/*`, which is why the TS file goes under `lib/stdlib/`. See the `exports` map in `package.json`.
 
-If you call `_doThing` directly from another stdlib TS file, because one helper delegates to another, it works automatically. The ALS frame the outermost Agency call established is inherited through every `await`.
+If you call `_doThing` directly from another stdlib TS file, because one helper delegates to another, it works automatically. The context frame the outermost Agency call established is inherited through every `await`.
 
 For tests that call `_doThing` from non-Agency code, wrap the call in `runInTestContext`:
 

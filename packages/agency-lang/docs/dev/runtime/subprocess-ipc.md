@@ -184,7 +184,7 @@ child-side sender live in the dependency-light leaf `callbackForwarding.ts`
   `isForwardableCallbackName` against `VALID_CALLBACK_NAMES`
   (the child is the less-trusted party), drops post-settle events, then
   `void invokeCallbacks(...)` fire-and-forget so a slow/throwing parent callback
-  cannot wedge the message pump. It fires inside the parent's captured ALS store
+  cannot wedge the message pump. It fires inside the parent's captured context frame
   frame (`RunSession.parentStore`) and walks the parent's full `ctx.stateStack`,
   so an AgencyFunction callback body resolves `__globals()`/`__threads()` and a
   callback registered on an ancestor frame (e.g. a node-level

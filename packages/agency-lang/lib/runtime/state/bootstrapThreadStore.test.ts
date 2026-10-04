@@ -23,13 +23,13 @@ describe("BootstrapThreadStore", () => {
     }
   });
 
-  it("instanceof ThreadStore so it satisfies the ALS store contract", () => {
+  it("instanceof ThreadStore so it satisfies the context frame contract", () => {
     const store = new BootstrapThreadStore();
-    // ALS frames type their `threads` slot as ThreadStore — the sentinel
+    // context frames type their `threads` slot as ThreadStore — the sentinel
     // must pass that nominal check.
     expect(store).toBeInstanceOf(ThreadStore);
     // Constructor does not auto-create a default thread, so no throws fire
-    // during ALS frame setup. The throw only happens when user code tries
+    // during context frame setup. The throw only happens when user code tries
     // to actually use the store.
     expect(store.activeStack).toEqual([]);
   });

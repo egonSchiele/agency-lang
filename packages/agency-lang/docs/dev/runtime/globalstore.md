@@ -48,7 +48,7 @@ When the preprocessor marks a variable assignment as `scope: "global"`, the buil
 __globals()!.set("foo.agency", "counter", 0);
 ```
 
-This is produced by the `ts.globalSet(moduleId, varName, value)` IR builder, which emits `__globals()!.set(moduleId, varName, value)`. `__globals()` is an AsyncLocalStorage accessor that returns the GlobalStore on the active ALS frame (see [async-context.md](./async-context.md)). The `!` is a non-null assertion — generated user code always runs inside a frame.
+This is produced by the `ts.globalSet(moduleId, varName, value)` IR builder, which emits `__globals()!.set(moduleId, varName, value)`. `__globals()` is a context-frame accessor that returns the GlobalStore on the active context frame (see [async-context.md](./async-context.md)). The `!` is a non-null assertion — generated user code always runs inside a frame.
 
 ### Reading globals
 
@@ -66,11 +66,11 @@ This is produced by the `ts.scopedVar(name, "global", moduleId)` IR node, which 
 
 ### Top-level reads (`scope: "topLevel"`)
 
-There's one exception: eager tool-description docstrings that run at module-load time before any ALS frame is installed. Those emit `__globalCtx.globals.get(...)` against the bootstrap context directly — the `__globals()` accessor would throw a "no active frame" error in that context.
+There's one exception: eager tool-description docstrings that run at module-load time before any context frame is installed. Those emit `__globalCtx.globals.get(...)` against the bootstrap context directly — the `__globals()` accessor would throw a "no active frame" error in that context.
 
 ### `__initializeGlobals` writes against the param
 
-Inside `__initializeGlobals(__ctx)` itself, top-level global-assignment statements emit `__ctx.globals.set(...)` (using the function param, not the ALS accessor) so writes land deterministically on the canonical store regardless of any outer per-branch frame that might exist when the function happens to be invoked.
+Inside `__initializeGlobals(__ctx)` itself, top-level global-assignment statements emit `__ctx.globals.set(...)` (using the function param, not the context variable accessor) so writes land deterministically on the canonical store regardless of any outer per-branch frame that might exist when the function happens to be invoked.
 
 ### Global initialization
 
@@ -146,15 +146,15 @@ Where the record lives depends on the value:
 
 The canonical `GlobalStore` instance is held on the `RuntimeContext` as `ctx.globals`. The `RuntimeContext` is created once per execution and threaded through all nodes and functions.
 
-At runtime, generated code reads/writes the `GlobalStore` on the **active ALS frame** via `__globals()` — NOT directly from `ctx.globals`. The frame's `globals` slot points at `ctx.globals` in most code paths (so behavior is identical to reading `ctx.globals`), but is replaced by a per-branch clone inside fork/parallel/race branches (see below).
+At runtime, generated code reads/writes the `GlobalStore` on the **active context frame** via `__globals()` — NOT directly from `ctx.globals`. The frame's `globals` slot points at `ctx.globals` in most code paths (so behavior is identical to reading `ctx.globals`), but is replaced by a per-branch clone inside fork/parallel/race branches (see below).
 
-Stdlib TS helpers that need the `GlobalStore` (or any other runtime field) read from the ALS frame via `getRuntimeContext()` instead of taking it as a parameter — see [async-context.md](./async-context.md).
+Stdlib TS helpers that need the `GlobalStore` (or any other runtime field) read from the context frame via `getRuntimeContext()` instead of taking it as a parameter — see [async-context.md](./async-context.md).
 
 ## Per-branch isolation
 
 Each branch of a user-facing concurrency primitive (`fork`, `parallel`, `race`) gets its own snapshot of the parent's GlobalStore by default. The mechanism:
 
-1. **At fork time**, `runInBranchAlsFrame` (in `lib/runtime/runBatch.ts`) installs a new ALS frame for the branch body. The frame's `globals` slot is seeded with `parent.globals.clone()` — a fresh `GlobalStore` round-tripped through `toJSON`/`fromJSON` so Maps, Sets, and Dates copy correctly. `initializedModules` is preserved so `__initializeGlobals` is a no-op in branches.
+1. **At fork time**, `runInBranchContextFrame` (in `lib/runtime/runBatch.ts`) installs a new context frame for the branch body. The frame's `globals` slot is seeded with `parent.globals.clone()` — a fresh `GlobalStore` round-tripped through `toJSON`/`fromJSON` so Maps, Sets, and Dates copy correctly. `initializedModules` is preserved so `__initializeGlobals` is a no-op in branches.
 
 2. **During branch execution**, the branch body reads and writes its own clone via `__globals()`. Sibling branches and the parent are invisible — writes only land on the branch's local copy.
 
@@ -162,7 +162,7 @@ Each branch of a user-facing concurrency primitive (`fork`, `parallel`, `race`) 
 
 ### Interrupt resume
 
-When an interrupt fires inside a branch body, `runInBranchAlsFrame` snapshots the branch's GlobalStore onto `BranchState.globalsJSON` before the interrupt propagates up. The snapshot happens only when the body settles as an `Interrupt[]`. A successful return is discarded at the join, so capturing then would be a wasted JSON round-trip. The snapshot rides along through the normal `BranchStateJSON` serialization path. On resume, `runInBranchAlsFrame` checks for an existing `globalsJSON` on the branch and uses `GlobalStore.fromJSON()` to restore it instead of cloning fresh from the parent. This ensures any global writes a branch made before the interrupt are still visible after resume.
+When an interrupt fires inside a branch body, `runInBranchContextFrame` snapshots the branch's GlobalStore onto `BranchState.globalsJSON` before the interrupt propagates up. The snapshot happens only when the body settles as an `Interrupt[]`. A successful return is discarded at the join, so capturing then would be a wasted JSON round-trip. The snapshot rides along through the normal `BranchStateJSON` serialization path. On resume, `runInBranchContextFrame` checks for an existing `globalsJSON` on the branch and uses `GlobalStore.fromJSON()` to restore it instead of cloning fresh from the parent. This ensures any global writes a branch made before the interrupt are still visible after resume.
 
 ### `shared: true` opt-out
 
@@ -174,7 +174,7 @@ fork(items, shared: true) as item { ... }
 race(items, shared: true) as item { ... }
 ```
 
-When set, `runInBranchAlsFrame` skips the clone and seeds the branch's frame with `parent.globals` directly. Writes in the branch land on the parent's store; siblings see them; the parent observes them after join. Use for cooperative-worker patterns (shared todo lists, progress meters, dedup caches).
+When set, `runInBranchContextFrame` skips the clone and seeds the branch's frame with `parent.globals` directly. Writes in the branch land on the parent's store; siblings see them; the parent observes them after join. Use for cooperative-worker patterns (shared todo lists, progress meters, dedup caches).
 
 ### Stdlib tool dispatch
 

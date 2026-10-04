@@ -39,7 +39,7 @@ threw a plain JS error, because `fireWithGuard` logs and drops those. A
 control-flow signal is different: it propagates and ends the chain. See below.
 
 `ctx` is optional on both functions. When omitted it resolves from the active
-ALS frame via `getRuntimeContext()`, which is what every codegen-emitted
+context frame via `getRuntimeContext()`, which is what every codegen-emitted
 `callHook(...)` site does.
 
 `hasCallbackConsumer(ctx, name, stateStack?)` answers "is anyone listening?"
@@ -66,19 +66,19 @@ be wrong.
 
 ## Recursion guard
 
-`fireWithGuard` uses an `AsyncLocalStorage`-scoped Set to prevent a
+`fireWithGuard` uses a Set held in a context variable to prevent a
 callback that synchronously re-fires its own hook, through a helper
 function call, from recursing into itself. Fixture:
 `tests/agency/callback-recursion.agency`.
 
-Each `fireWithGuard` call enters its own `_activeCallbacksALS.run(...)`
+Each `fireWithGuard` call enters its own `_activeCallbacksContext.run(...)`
 scope with a freshly-allocated `new Set<object>(inherited)` containing
 the parent scope's entries plus the current callback's key. Within
 that scope the Set is inherited through `await` boundaries and nested
 sync calls, so a synchronous re-fire of the same callback sees its
 own key and is skipped. Concurrent sibling branches each enter their
 OWN `.run(...)` scope, so parallel fork/tool branches can each fire
-the same callback without dropping sibling invocations. ALS state is
+the same callback without dropping sibling invocations. the context frame state is
 live-only — never serialised, automatically released when the scope
 exits.
 

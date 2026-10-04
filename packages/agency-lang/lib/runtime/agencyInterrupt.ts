@@ -36,7 +36,7 @@
  *       restore replay relies on reading the id from the restored
  *       frame.)
  *     - Create a checkpoint via `ctx.checkpoints.create` with the
- *       location attached to the active ALS callsite, attach the
+ *       location attached to the active context frame's callsite, attach the
  *       resulting id + checkpoint object onto the propagated
  *       interrupt, and `runner.halt(...)` with the interrupt array.
  *     - Throw `HaltSignal`, which the surrounding `Runner.step`
@@ -83,13 +83,13 @@
  * the first pass. `Runner.step` catches `HaltSignal` when
  * `this.halted` is set; the user never sees it.
  *
- * # Required ALS frame
+ * # Required context frame
  *
  * Throws if called outside a frame seeded with a `Runner`. In practice
  * this means: inside `s.step(...)` of `agency.withResumableScope`, or
  * inside a TS function called from a generated Agency step body. Calls
  * from the top-level `withResumableScope` body (outside any
- * `s.step(...)`) intentionally have no runner in the ALS frame and
+ * `s.step(...)`) intentionally have no runner in the context frame and
  * will throw — wrap the interrupt in `s.step(async () => { ... })`.
  */
 import { getRuntimeContext } from "./asyncContext.js";

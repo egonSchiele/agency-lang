@@ -348,7 +348,7 @@ async function authorizeImpl(
 }
 
 /**
- * Deprecated context-injected wrapper kept in place during the ALS
+ * Deprecated context-injected wrapper kept in place during the context variable
  * migration so the registry/codegen path keeps working until the
  * follow-up cleanup PR removes it. New stdlib `.agency` files should
  * call `_authorize` instead.
@@ -368,7 +368,7 @@ export async function __internal_authorize(
 }
 
 /**
- * ALS-reading replacement for `__internal_authorize`. Reads ctx/stack
+ * context-reading replacement for `__internal_authorize`. Reads ctx/stack
  * from the context frame so callers (both agency-side and
  * internal stdlib callers like `calendar.ts`'s `_authorizeCalendar`)
  * get full cancellation without needing to thread params.
@@ -430,7 +430,7 @@ async function getAccessTokenImpl(name: string, signal: AbortSignal | undefined)
 }
 
 /**
- * Deprecated context-injected wrapper kept in place during the ALS
+ * Deprecated context-injected wrapper kept in place during the context variable
  * migration; see comment on `__internal_authorize`. New stdlib
  * `.agency` files should call `_getAccessToken` instead.
  *
@@ -447,7 +447,7 @@ export async function __internal_getAccessToken(
 }
 
 /**
- * ALS-reading replacement for `__internal_getAccessToken`. Reads
+ * context-reading replacement for `__internal_getAccessToken`. Reads
  * ctx/stack from the context frame so callers (both
  * agency-side and internal stdlib callers like `calendar.ts`) get
  * full refresh-token cancellation without needing to thread params.

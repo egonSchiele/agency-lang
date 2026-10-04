@@ -153,7 +153,7 @@ export function partitionProgram(program: AgencyProgram, deps: PartitionDeps): P
       // parameter exposes the canonical store directly, so pass
       // `__ctx.globals` as the receiver — keeping writes on the
       // canonical store regardless of whether the caller installed an
-      // ALS frame whose `globals` slot points at a clone. (Bootstrap
+      // context frame whose `globals` slot points at a clone. (Bootstrap
       // is the normal caller and pointer-shares the canonical store
       // anyway; this is just defensive against future callers.)
       const setNode = ts.globalSet(
@@ -603,10 +603,10 @@ function buildStaticVarSetup(opts: AssembleSectionsOpts): TsNode[] {
  *   }
  */
 function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
-  // Inside this function body `__ctx` is the parameter (no ALS frame
+  // Inside this function body `__ctx` is the parameter (no context frame
   // installed by the caller), so every receiver must be `ts.id("__ctx")`
   // — NOT `ts.runtime.ctx` (which is now the `__ctx()` accessor and
-  // would read from ALS instead of the parameter).
+  // would read from the context frame instead of the parameter).
   const ctxParam = ts.id("__ctx");
   const body: TsNode[] = [
     ...buildInitBanner(
@@ -683,7 +683,7 @@ function buildInitializeGlobalsFn(opts: AssembleSectionsOpts): TsNode {
  */
 function buildRegisterTopLevelCallbacksFn(opts: AssembleSectionsOpts): TsNode {
   // Same parameter-context rule as buildInitializeGlobalsFn — `__ctx`
-  // here is the function parameter, not an ALS-installed value.
+  // here is the function parameter, not an frame-installed value.
   const body: TsNode[] = [...opts.topLevelCallbackStatements];
   return ts.functionDecl("__registerTopLevelCallbacks", [{ name: "__ctx" }], ts.statements(body), {
     async: true,

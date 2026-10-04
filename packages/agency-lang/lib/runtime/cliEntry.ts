@@ -104,7 +104,7 @@ type CliMainArgs = CliEntryArgs<any> & {
  *
  * Generated code calls this without `await`. A generated file must have no
  * top-level `await`, because the build cannot rewrite the `async` functions
- * of a file that has one (see docs/dev/runtime/portable-context-spike.md).
+ * of a file that has one (see docs/dev/runtime/promise-context-storage.md).
  *
  * An error is rethrown after it is reported. Nothing awaits the returned
  * promise, so Node ends the process with a non-zero exit code.

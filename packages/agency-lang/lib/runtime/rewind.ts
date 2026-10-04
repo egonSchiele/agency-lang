@@ -41,8 +41,8 @@ export async function rewindFrom(args: {
         // See `runResumeLoop` in lib/runtime/interrupts.ts — stdlib
         // helpers and `callHook` lookups go through
         // `getRuntimeContext()` now, so the rewind path needs to
-        // seed its own ALS frame too. This is a bootstrap frame:
-        // generated node bodies re-enter ALS inside each
+        // seed its own context frame too. This is a bootstrap frame:
+        // generated node bodies re-enter the context frame inside each
         // `Runner.runInScope` with the per-scope ThreadStore
         // reconstituted by `setupNode` — nothing user-facing should
         // reach for `threads` in the slice covered by this wrap.

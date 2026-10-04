@@ -1,7 +1,7 @@
 import { ThreadStore } from "./threadStore.js";
 
 /**
- * A sentinel `ThreadStore` placed on the `agencyStore` ALS frame for code
+ * A sentinel `ThreadStore` placed on the `agencyStore` context frame for code
  * that runs **outside** any agent node body — specifically:
  *
  *  - module-level global-init (`__initializeGlobals`)
@@ -9,8 +9,8 @@ import { ThreadStore } from "./threadStore.js";
  *  - the resume / rewind bootstrap loops before `setupNode` reconstitutes
  *    the per-node ThreadStore from `stack.threads` JSON
  *
- * After the ALS migration these scopes still need *some* `ThreadStore` on
- * the ALS frame so `getRuntimeContext()` returns a valid object. Pre-fix,
+ * After the context-frame migration these scopes still need *some* `ThreadStore` on
+ * the context frame so `getRuntimeContext()` returns a valid object. Pre-fix,
  * we put a plain `ThreadStore.withDefaultActive(...)` there — but any
  * accidental write from those scopes (e.g. someone calling
  * `systemMessage("…")` at module top-level) would silently disappear when

@@ -87,7 +87,7 @@ describe("StatelogClient", () => {
       // `runInBranchContext()` unconditionally. When the client is a
       // no-op, neither call should allocate a fresh stack copy or set
       // up a context frame. We verify behavior — same
-      // empty array reference, no ALS plumbing — to keep the no-op
+      // empty array reference, no context plumbing — to keep the no-op
       // mode genuinely free of per-fork overhead.
       const client = fileClient(newLogFile("disabled-fork"), { observability: false });
       const snap1 = client.snapshotStack();
@@ -97,9 +97,9 @@ describe("StatelogClient", () => {
       expect(snap1).toBe(snap2);
 
       // runInBranchContext just calls fn() directly when disabled, so
-      // we observe no ALS context inside it.
+      // we observe no context frame inside it.
       const inside = await client.runInBranchContext(snap1, async () => {
-        // currentSpan stays undefined (no rootStack pushes, no ALS store).
+        // currentSpan stays undefined (no rootStack pushes, no context frame).
         return client.currentSpan;
       });
       expect(inside).toBeUndefined();

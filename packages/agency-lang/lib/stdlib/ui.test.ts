@@ -507,7 +507,7 @@ describe("std::ui bridge — choice prompts", () => {
   });
 
   it("isolates choice prompts and exit signals across concurrent RuntimeContexts", async () => {
-    // Drive two concurrent ALS frames (simulating two Agency runs in
+    // Drive two concurrent context frames (simulating two Agency runs in
     // the same process — e.g. an agent orchestrating a subagent that
     // also calls repl()). Each one opens a choice prompt and signals
     // exit; we then verify the state slots don't bleed across frames.

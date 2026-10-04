@@ -17,11 +17,50 @@ There are no individual named exports for the helpers — `agency.<method>` is t
 
 ## When a TS helper "participates" in a run
 
-Every method on `agency.*` reads its dependencies from an [AsyncLocalStorage](https://nodejs.org/api/async_context.html) frame the runtime installs around each Agency execution step. When you call a TS function from Agency code, that frame is already in place — your helper sees the same `ctx`, `stack`, and `ThreadStore` the surrounding Agency function saw.
+Every method on `agency.*` reads its dependencies from a context frame the runtime installs around each Agency execution step. When you call a TS function from Agency code, that frame is already in place — your helper sees the same `ctx`, `stack`, and `ThreadStore` the surrounding Agency function saw.
 
 The corollary: most `agency.*` methods **throw if called outside an Agency frame**. Calling `agency.thread.current()` from a script's top level, or from a setTimeout callback that escaped the run, raises a clear error pointing at the cause. For the lax-read methods (`agency.ctxMaybe()`, `agency.thread.storeMaybe()`), the throw is replaced with `undefined`.
 
 The one place this contract is relaxed is `agency.withTestContext({ctx, stack, threads}, fn)` — covered in [Testing TS helpers](#testing-ts-helpers).
+
+### Helpers that `await`
+
+```ts
+// helper.ts
+import { agency } from "agency-lang/runtime";
+
+export async function lookup(id: string) {
+  const row = await db.get(id);
+  agency.checkpoint(); // runs after an await
+  return row;
+}
+```
+
+This helper uses `agency.*` after an `await`. Whether that works depends on how the helper was built.
+
+Agency keeps the context frame across a pause by rewriting each `await` into a `.then` call when it builds a file. The frame survives a `.then`. It does not survive a real `await`.
+
+- **A `.ts` helper run with `agency run`** works. Agency builds the helper and rewrites it.
+- **A hand-written `.js` helper** is loaded as written. After its first `await`, `agency.*` throws the "outside an Agency frame" error.
+- **A helper built by your own TypeScript build**, which is the case with `agency compile`, behaves like the `.js` helper.
+
+The same applies to a helper that awaits something and then calls an Agency function it was handed.
+
+For a helper Agency does not build, do one of these:
+
+1. Call `agency.*` before the first `await`.
+2. Chain with `.then` in place of `await`:
+
+```js
+export function lookup(id) {
+  return db.get(id).then((row) => {
+    agency.checkpoint();
+    return row;
+  });
+}
+```
+
+TypeScript that calls an exported node is not affected. Each call to a node sets up its own frame.
 
 ## Setup
 
@@ -47,7 +86,7 @@ node main(name: string) {
 }
 ```
 
-The compiled `main.js` calls `greetingPrompt(name)` from inside an active Runner step; the ALS frame is already installed, so `agency.thread.current()` resolves.
+The compiled `main.js` calls `greetingPrompt(name)` from inside an active Runner step; the context frame is already installed, so `agency.thread.current()` resolves.
 
 ---
 
@@ -506,7 +545,7 @@ Pick whichever reads better for the task. Agency wins when the workflow uses nam
 
 ## Testing TS helpers
 
-`agency.withTestContext({ctx, stack, threads}, fn)` installs an ALS frame from explicit dependencies so unit tests can exercise TS helpers directly:
+`agency.withTestContext({ctx, stack, threads}, fn)` installs a context frame from explicit dependencies so unit tests can exercise TS helpers directly:
 
 ```ts
 import { describe, it, expect } from "vitest";

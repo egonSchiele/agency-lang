@@ -358,7 +358,7 @@ export class GlobalStore {
   }
 
   /**
-   * Deep-snapshot copy. Used by `runInBranchAlsFrame` so each fork /
+   * Deep-snapshot copy. Used by `runInBranchContextFrame` so each fork /
    * parallel / race branch sees its own GlobalStore: at fork time the
    * branch starts with the parent's values, then reads/writes inside
    * the branch only touch the clone; the parent is untouched on

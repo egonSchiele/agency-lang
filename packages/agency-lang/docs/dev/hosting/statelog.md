@@ -161,7 +161,7 @@ values and also scrubs redacted strings **contained inside** larger strings
 (`GlobalStore.redactContainedStrings`), because a tagged string interpolated
 into a new string would otherwise log verbatim. The pass is skipped entirely
 when the caller's `GlobalStore.hasAnyTags()` is false, so the common case is
-byte-identical to no redaction. Events posted outside an AsyncLocalStorage frame (e.g.
+byte-identical to no redaction. Events posted outside a context frame (e.g.
 `agentEnd`, resume-path finalization) fall back to the execution's top-level
 store via `setFallbackGlobals`. Prompt/embed/image previews are capped at
 `PROMPT_PREVIEW_MAX = 200` chars; embedding vectors and generated image bytes
@@ -176,7 +176,7 @@ parent/child tree.
   consume a span id. `endSpan` tolerates a missing inner `endSpan` by dropping
   everything above the matched span.
 - `snapshotStack()` / `runInBranchContext(parentStack, fn)` — concurrent
-  fork/race branches each get a private, AsyncLocalStorage-backed stack seeded
+  fork/race branches each get a private stack, held in a context variable, seeded
   from the parent, so their spans never interleave with siblings or the parent.
 - `adoptExternalParentSpan(spanId)` — a subprocess adopts the parent process's
   `subprocessRun` span as a synthetic, never-emitted root so its spans chain

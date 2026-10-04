@@ -162,7 +162,7 @@ export type RunBatchOpts<T> = {
    * fields. Used by runPrompt's tool loop where the body manages the
    * real tool result on the branch. */
   recordBranchOutcomes?: boolean;
-  /** When `true`, the branch's ALS frame pointer-shares the parent's
+  /** When `true`, the branch's context frame pointer-shares the parent's
    * `GlobalStore`. Writes inside the branch land on the parent's store;
    * siblings see them; the parent observes them after join. User
    * `fork(..., shared: true)` / `parallel(shared: true)` /
@@ -175,7 +175,7 @@ export type RunBatchOpts<T> = {
    * `GlobalStore` (via `GlobalStore.clone`). Writes stay branch-local
    * and are discarded at join. */
   shareGlobals?: boolean;
-  /** When `true`, the branch's ALS frame pointer-shares the parent's
+  /** When `true`, the branch's context frame pointer-shares the parent's
    * `ThreadStore` (and its `activeStack`). Reserved for
    * implementation-internal batching — most notably `runPrompt`'s
    * tool-dispatch loop, where multiple tool calls in one LLM round
@@ -381,7 +381,7 @@ function startInvoke<T>(
       : { collector: opts.decisionCollector, armKey: t.child.key };
   return ctx.statelogClient
     .runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, t.branch, shareGlobals, shareThreads, decisions, () =>
+      runInBranchContextFrame(ctx, t.branch, shareGlobals, shareThreads, decisions, () =>
         t.child.invoke(t.branch.stack, signal),
       ),
     )
@@ -427,7 +427,7 @@ function startInvoke<T>(
  *  fallback path is dead code for the migration's existing call sites
  *  and exists purely to keep `runBatch` usable from future contexts
  *  that haven't installed a top-level frame yet. */
-function runInBranchAlsFrame<T>(
+function runInBranchContextFrame<T>(
   ctx: RuntimeContext<any>,
   branch: BranchState,
   shareGlobals: boolean,
@@ -919,7 +919,7 @@ async function runRaceResume<T>(
     const shareGlobals = opts.shareGlobals ?? false;
     const shareThreads = opts.shareThreads ?? false;
     value = await ctx.statelogClient.runInBranchContext(parentSpanStack, () =>
-      runInBranchAlsFrame(ctx, branch, shareGlobals, shareThreads, undefined, () =>
+      runInBranchContextFrame(ctx, branch, shareGlobals, shareThreads, undefined, () =>
         child.invoke(branch.stack, signal),
       ),
     );

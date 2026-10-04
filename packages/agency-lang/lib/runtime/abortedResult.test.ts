@@ -33,7 +33,7 @@ function frameWithDraft(value: unknown): State {
 
 type RecordedEvent = Record<string, unknown>;
 
-/** Run fn inside an ALS frame whose ctx carries a stub statelog client,
+/** Run fn inside a context frame whose ctx carries a stub statelog client,
  *  and return the events + span types it recorded. */
 function withStubStatelog<T>(fn: () => T): {
   result: T;
@@ -128,7 +128,7 @@ describe("AbortedResult.fromError (the frame-boundary conversion)", () => {
     expect(spans).toHaveLength(0);
   });
 
-  it("works with no statelog client and no ALS frame at all", () => {
+  it("works with no statelog client and no context frame at all", () => {
     const aborted = AbortedResult.fromError(abortError(), frameWithDraft("draft-v"), "code");
     expect(aborted.partial).toEqual({ value: "draft-v" });
   });

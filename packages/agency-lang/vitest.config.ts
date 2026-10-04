@@ -25,7 +25,7 @@ export default defineConfig({
   // Rewrite every `async` function in the code under test into promise code.
   // The runtime's context class only works on rewritten code, and the built
   // package is rewritten the same way by scripts/rewrite-async.mjs. See
-  // docs/dev/runtime/portable-context-spike.md.
+  // docs/dev/runtime/promise-context-storage.md.
   esbuild: {
     supported: { "async-await": false, "async-generator": false, "for-await": false },
   },

@@ -54,11 +54,11 @@ let bridgeActiveScreen: Screen | null = null;
 // of as a module-level singleton. That way concurrent Agency
 // executions in the same process — e.g. an agent orchestrating
 // subagents that each spin up their own repl(), or vitest cases
-// running in parallel — each get their own slot via ALS lookup and
+// running in parallel — each get their own slot via context lookup and
 // don't clobber each other's pending promises / exit signals /
 // transcripts.
 //
-// `fallbackUiState` is used when no ALS frame is active, which only
+// `fallbackUiState` is used when no context frame is active, which only
 // happens for the unit-level tests in `ui.test.ts` that drive the
 // helpers directly without `runInTestContext`. Production code always
 // runs inside an Agency execution frame so `__ctx()` returns the
@@ -225,7 +225,7 @@ export function _triggerRender(): void {
 /** Adapt either a plain JS function or an AgencyFunction-like callback
  *  passed across the bridge into an async callable. Uses `__call` so
  *  AgencyFunction values dispatch through the runtime's normal call
- *  path (preserving handlers, ALS context, retry semantics) rather
+ *  path (preserving handlers, context frame, retry semantics) rather
  *  than being invoked as raw JS. */
 async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
   return (await __call(fn, { type: "positional", args })) as T;
@@ -274,7 +274,7 @@ type ConsoleSinks = {
 // rows into) lives in the per-context `UiContextState` so concurrent
 // REPLs each write into their own transcript. The installed
 // overrides route to `getUiState().captureTarget`, so dispatch
-// follows the active ALS frame automatically.
+// follows the active context frame automatically.
 //
 // Install / uninstall is reference-counted because multiple concurrent
 // contexts may each call `repl()` (and therefore _installConsoleCapture)
@@ -345,7 +345,7 @@ function pushCaptured(prefix: string, text: string): void {
 export function _installConsoleCapture(messages: string[]): void {
   // The capture target is per-context — set it whether or not we're
   // the first installer. (Re-install in a nested REPL inside the same
-  // ALS frame is a no-op; a nested REPL in a *different* ALS frame
+  // context frame is a no-op; a nested REPL in a *different* context frame
   // gets its own slot.) The console overrides themselves are a
   // process singleton, installed once and routed to whichever
   // context is currently active.
@@ -379,7 +379,7 @@ export function _installConsoleCapture(messages: string[]): void {
 }
 
 export function _uninstallConsoleCapture(): void {
-  // Clear the per-context target first so a stale ALS frame can't keep
+  // Clear the per-context target first so a stale context frame can't keep
   // routing captured writes into a buffer the caller has dropped.
   getUiState().captureTarget = null;
   if (captureInstallCount > 0) captureInstallCount -= 1;
@@ -417,7 +417,7 @@ export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
 // boolean — `{...state, ...}` in subsequent reducer calls copies it
 // at the time of spread, so a later mutation on the stale record is
 // invisible to the current loop state. Lives on `UiContextState` so
-// concurrent REPLs in different ALS frames don't trip each other's
+// concurrent REPLs in different context frames don't trip each other's
 // exit flag.
 
 /** Signal that the active `repl()` should exit on its next isDone
@@ -959,7 +959,7 @@ export async function _promptsConfirm(message: string, initial: boolean): Promis
 //
 // The slot lives on the per-context `UiContextState` (see top of
 // file). At most one prompt is open per context at a time;
-// concurrent REPLs in different ALS frames each get their own slot.
+// concurrent REPLs in different context frames each get their own slot.
 // ---------------------------------------------------------------------------
 
 /**

@@ -486,7 +486,7 @@ the original trip error instead) while the list is non-empty. Every
 interrupt-pause checkpoint site calls
 `stack.assertNoExecutingHandlers()`, which walks the branch subtree and
 fails loudly if the impossible happens. The `executingHandlers.ts`
-AsyncLocalStorage remains, but only for what the stack cannot express:
+Context variables remain, but only for what the stack cannot express:
 per-lineage precision, so self-exclusion and the `renderVerdict`
 refusal can tell a handler's OWN raises apart from concurrent sibling
 dispatches on the same branch. The design rationale lives in

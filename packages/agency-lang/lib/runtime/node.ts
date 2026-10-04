@@ -43,10 +43,10 @@ export function setupNode(args: { state: GraphState }): {
   threads: ThreadStore;
 } {
   const { state } = args;
-  // `ctx` flows through the ALS frame installed by `runNode` (or by
+  // `ctx` flows through the context frame installed by `runNode` (or by
   // `respondToInterrupts` / `rewindFrom`). The `state.ctx` field is still
   // populated by graph.run for backwards compat, but we no longer rely on
-  // it here — reading from ALS keeps every per-scope helper consistent
+  // it here — reading from the context frame keeps every per-scope helper consistent
   // with the same source of truth.
   const ctx = getRuntimeContext().ctx;
 
@@ -81,9 +81,9 @@ export function setupFunction(): {
   self: Record<string, any>;
   threads: ThreadStore;
 } {
-  // Post-ALS migration: `ctx` / `stack` / `threads` come from the active
+  // Since the context-frame migration: `ctx` / `stack` / `threads` come from the active
   // `agencyStore` frame seeded by the caller (a `runner.step` body,
-  // `runNode`'s top-level frame, or `runBatch.runInBranchAlsFrame`).
+  // `runNode`'s top-level frame, or `runBatch.runInBranchContextFrame`).
   // Tool-dispatch from the LLM also runs inside the issuing
   // `runner.step` frame, so the previously-needed "called as tool with
   // no state" fallback (fresh StateStack + empty ThreadStore) cannot
@@ -91,9 +91,9 @@ export function setupFunction(): {
   // Agency execution frame must wrap their call in `runInTestContext`
   // (see lib/runtime/asyncContext.ts).
   //
-  // CRITICAL: read `stack` from ALS, not from `ctx.stateStack`. Inside
-  // a fork/parallel/race branch, `runBatch.runInBranchAlsFrame` installs
-  // an ALS frame whose `stack` is the per-branch StateStack — distinct
+  // CRITICAL: read `stack` from the context frame, not from `ctx.stateStack`. Inside
+  // a fork/parallel/race branch, `runBatch.runInBranchContextFrame` installs
+  // a context frame whose `stack` is the per-branch StateStack — distinct
   // from `ctx.stateStack`. Pushing a new frame onto `ctx.stateStack`
   // would corrupt the parent's stack and break per-branch isolation
   // (interrupts, abort signals, restore on resume). The pre-migration
@@ -106,7 +106,7 @@ export function setupFunction(): {
 /**
  * Run the fresh-run bootstrap on a freshly created execution context:
  * cross-module statics/globals, then this module's globals, then top-level
- * callback registration — each inside a bootstrap ALS frame.
+ * callback registration — each inside a bootstrap context frame.
  *
  * Shared by the two fresh-run entry points (`runNode`, `runExportedFunction`).
  * The resume family does NOT use this — it restores statics/globals from a
@@ -146,8 +146,8 @@ async function initFreshExecCtx(
 
   // initializeGlobals + callback registration both invoke Agency
   // code that goes through `__call` — and `__call` reads `ctx` /
-  // `threads` / `stateStack` from the ALS frame after the
-  // drop-per-call-context-plumbing migration. Without an ALS frame
+  // `threads` / `stateStack` from the context frame after the
+  // drop-per-call-context-plumbing migration. Without a context frame
   // installed here, calls to user-defined stdlib helpers (e.g. the
   // `callback(...)` wrapper that the codegen emits inside
   // `__registerTopLevelCallbacks`) would invoke `_callbackImpl(name,
@@ -164,7 +164,7 @@ async function initFreshExecCtx(
   //    that this function discards on return.
   //  - The `insideGlobalInit` codegen branch still emits an explicit
   //    `{ ctx }` bag on `__call`, and `__call`'s merge prefers extras
-  //    over the ALS-read fields — so `ctx` resolution inside generated
+  //    over the frame-read fields — so `ctx` resolution inside generated
   //    global-init code does not depend on this frame's `ctx` either.
   //    The frame is mostly here to satisfy the "every helper must see
   //    *some* frame" contract.
@@ -245,7 +245,7 @@ async function finalizeExecCtx(execCtx: RuntimeContext<GraphState>): Promise<voi
  * init, top-level callback registration) against a fresh execution
  * context so the function sees fully-initialized statics/globals and any
  * module-level `callback(...)` blocks, then runs the call inside a
- * node-grade ALS frame with a real `ThreadStore` (so functions that use
+ * node-grade context frame with a real `ThreadStore` (so functions that use
  * `llm()` / message threads work), and tears it down like `runNode` does
  * (persist memory, flush statelog).
  *
@@ -493,7 +493,7 @@ async function runNodeCore({
               timeTaken: performance.now() - agentStartTime,
               tokenStats: tokenStatsOf(execCtx.invocationUsage.snapshot()),
             });
-            // onAgentEnd fires AFTER the run finished, so seed ALS with
+            // onAgentEnd fires AFTER the run finished, so seed the context frame with
             // the real per-run ThreadStore: user callbacks that inspect
             // the final conversation through stdlib helpers see the
             // actual messages, not a sentinel.

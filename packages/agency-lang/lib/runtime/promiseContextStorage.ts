@@ -23,7 +23,7 @@
  * context. An event listener is the common case. Wrap such a callback with
  * `bindToCurrentFrame` when you register it.
  *
- * See docs/dev/runtime/portable-context-spike.md for the mechanism and
+ * See docs/dev/runtime/promise-context-storage.md for the mechanism and
  * docs/dev/runtime/running-without-node.md for why Agency uses this class
  * on every target.
  */
@@ -160,7 +160,7 @@ export function assertAsyncRewritten(fn: unknown, label: string): void {
       `${label} is a real async function. Agency keeps its context by ` +
         "rewriting async functions into promise code, and this one was not " +
         "rewritten. Compile it with the Agency compiler. See " +
-        "docs/dev/runtime/portable-context-spike.md.",
+        "docs/dev/runtime/promise-context-storage.md.",
     );
   }
 }

@@ -15,7 +15,7 @@ import { findPackageRoot } from "../importPaths.js";
  * `cwd` argument of `_exec`/`_bash`. Uses the ctx-injected
  * `__internal_*` wrappers (same pattern as
  * lib/stdlib/abortable.test.ts) so the tests run without needing an
- * ALS frame installed.
+ * context frame installed.
  *
  * Regression target: before PR #222 the `cwd` was passed through to
  * `spawn()` literally — `cwd: "~/proj"` would fail with ENOENT.

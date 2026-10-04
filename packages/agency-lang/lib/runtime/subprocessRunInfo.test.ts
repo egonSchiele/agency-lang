@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe("ipcChildDebug", () => {
-  it("posts a statelog debug event when an ALS frame has a statelog client", () => {
+  it("posts a statelog debug event when a context frame has a statelog client", () => {
     const debugCalls: any[] = [];
     const store: any = {
       ctx: {
@@ -26,7 +26,7 @@ describe("ipcChildDebug", () => {
     expect(debugCalls).toEqual([["[ipc:child] callback_send_failed onNodeStart boom", {}]]);
   });
 
-  it("does not throw when there is no active ALS frame / statelog client", () => {
+  it("does not throw when there is no active context frame / statelog client", () => {
     expect(() => ipcChildDebug("callback_dropped_oversize onNodeStart")).not.toThrow();
   });
 

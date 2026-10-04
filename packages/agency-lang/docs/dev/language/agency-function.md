@@ -19,7 +19,7 @@
 
 ## What it is NOT
 
-`AgencyFunction` does **not** participate in per-call runtime-context plumbing. `ctx`, `stack`, and `threads` flow through the active `agencyStore` ALS frame (see [async-context.md](../runtime/async-context.md)). The wrapper is purely about argument resolution and tool metadata.
+`AgencyFunction` does **not** participate in per-call runtime-context plumbing. `ctx`, `stack`, and `threads` flow through the active `agencyStore` context frame (see [async-context.md](../runtime/async-context.md)). The wrapper is purely about argument resolution and tool metadata.
 
 The trailing `state` positional argument that `invoke` used to accept was removed in #207 (and the per-codegen `__state` parameter to `def`-generated functions was removed in #206). No call site or wrapped function should pass or receive a runtime-state object as a positional arg.
 
@@ -28,7 +28,7 @@ The trailing `state` positional argument that `invoke` used to accept was remove
 | Code shape | Wrap? |
 | --- | --- |
 | Agency-source `def foo(...) { ... }` | yes — codegen does it for you |
-| Plain TS function called from Agency as `foo(arg)` | no — reads context from ALS, returns its value directly |
+| Plain TS function called from Agency as `foo(arg)` | no — reads context from the context frame, returns its value directly |
 | TS function you want to expose as an LLM tool | not supported — define a thin Agency `def` that delegates to your TS function and pass that `def` to `llm(...)` as a tool |
 | TS function that needs `.partial()` / `.preapprove()` | not supported, those are codegen-only metaprogramming methods |
 

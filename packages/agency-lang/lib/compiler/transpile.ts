@@ -12,7 +12,7 @@ import { transformSync } from "esbuild";
  * esbuild refuses to rewrite a file that has a top-level `await`, so the
  * input must not have one.
  *
- * See docs/dev/runtime/portable-context-spike.md.
+ * See docs/dev/runtime/promise-context-storage.md.
  */
 export function transpileToJs(tsCode: string): string {
   const result = transformSync(tsCode, {

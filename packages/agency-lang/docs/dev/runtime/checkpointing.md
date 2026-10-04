@@ -50,7 +50,7 @@ Each execution context, built by `RuntimeContext.createExecutionContext()`, gets
 
 ### Runtime functions
 
-All three functions live in `lib/runtime/checkpoint.ts`. None of them take a `__state` parameter. Each reads the ambient frame with `getRuntimeContext()`, the `agencyStore` AsyncLocalStorage seam described in [`async-context.md`](./async-context.md).
+All three functions live in `lib/runtime/checkpoint.ts`. None of them take a `__state` parameter. Each reads the ambient frame with `getRuntimeContext()`, the `agencyStore` context variable seam described in [`async-context.md`](./async-context.md).
 
 **`checkpoint()`**:
 1. Awaits all pending async promises, so the snapshot is consistent

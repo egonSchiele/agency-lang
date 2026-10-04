@@ -219,7 +219,7 @@ export class DeterministicClient implements LLMClient {
 
   /**
    * Picks the mock queue for the currently-executing module. The module
-   * id comes from the ALS frame's callsite (seeded by `Runner.runInScope`
+   * id comes from the context frame's callsite (seeded by `Runner.runInScope`
    * for every step body); outside any frame — or when no scope matches —
    * the "*" queue applies.
    */

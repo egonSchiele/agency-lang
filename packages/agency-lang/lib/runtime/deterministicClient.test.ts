@@ -14,7 +14,7 @@ const baseConfig: PromptConfig = {
   messages: [],
 };
 
-/** Runs `fn` inside a minimal ALS frame whose callsite names `moduleId`,
+/** Runs `fn` inside a minimal context frame whose callsite names `moduleId`,
  *  mimicking what `Runner.runInScope` seeds for a step body. */
 function inModule<T>(moduleId: string, fn: () => T): T {
   return agencyStore.run(

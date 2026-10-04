@@ -90,7 +90,7 @@ describe("agency.global", () => {
 
   it("reads from the frame's globals slot (per-branch view), not ctx.globals", () => {
     // Mirrors the per-branch isolation invariant: inside a fork
-    // branch the ALS frame's `globals` slot points at a clone of
+    // branch the context frame's `globals` slot points at a clone of
     // the parent's store. `agency.global` must read from THAT slot
     // (same as user code's `__globals()`), not from the canonical
     // `ctx.globals`. Otherwise a TS helper called from a branch
@@ -101,7 +101,7 @@ describe("agency.global", () => {
     const branchClone = env.ctx.globals.clone();
     branchClone.set("", "k", "branch-value");
     // Install a frame whose `globals` slot points at the clone,
-    // simulating what `runInBranchAlsFrame` does for a fork branch.
+    // simulating what `runInBranchContextFrame` does for a fork branch.
     agencyStore.run(
       {
         ctx: env.ctx,
@@ -329,7 +329,7 @@ describe("agency.withHandler", () => {
 });
 
 describe("agency.withCostGuard", () => {
-  it("pushes a CostGuard onto the ALS stack for the duration of fn", async () => {
+  it("pushes a CostGuard onto the context frame's stack for the duration of fn", async () => {
     const env = setup();
     await agency.withTestContext(env, async () => {
       const before = env.stack.guards.length;
@@ -345,9 +345,9 @@ describe("agency.withCostGuard", () => {
     });
   });
 
-  it("targets the ALS stack, not ctx.stateStack (per-branch isolation)", async () => {
-    // Simulates a fork branch: pass a fresh stack as the ALS stack,
-    // distinct from ctx.stateStack. The guard must land on the ALS
+  it("targets the context frame's stack, not ctx.stateStack (per-branch isolation)", async () => {
+    // Simulates a fork branch: pass a fresh stack as the context frame's stack,
+    // distinct from ctx.stateStack. The guard must land on the context variable
     // stack so it stays branch-local.
     const env = setup();
     const branchStack = new StateStack();
@@ -379,7 +379,7 @@ describe("agency.withCostGuard", () => {
 });
 
 describe("agency.withTimeGuard", () => {
-  it("pushes a TimeGuard onto the ALS stack and pops on return", async () => {
+  it("pushes a TimeGuard onto the context frame's stack and pops on return", async () => {
     const env = setup();
     await agency.withTestContext(env, async () => {
       const before = env.stack.guards.length;
@@ -410,7 +410,7 @@ describe("agency.withTimeGuard", () => {
 });
 
 describe("agency.addCost", () => {
-  it("adds to the ALS stack's localCost", () => {
+  it("adds to the context frame's stack's localCost", () => {
     const env = setup();
     agency.withTestContext(env, () => {
       const before = env.stack.localCost;

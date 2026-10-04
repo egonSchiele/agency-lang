@@ -4,9 +4,9 @@ import { ThreadStore } from "../state/threadStore.js";
 import { StateStack } from "../state/stateStack.js";
 import { runInTestContext } from "../asyncContext.js";
 
-// Post-ALS migration: setupNode reads `ctx` from `getRuntimeContext()`,
+// Since the context-frame migration: setupNode reads `ctx` from `getRuntimeContext()`,
 // not from `state.ctx`. Each test wraps the call in `runInTestContext`
-// so the ALS frame is installed before setupNode dereferences it.
+// so the context frame is installed before setupNode dereferences it.
 describe("setupNode", () => {
   it("uses state.messages ThreadStore when stack.threads is null", () => {
     const threadStore = new ThreadStore();

@@ -109,8 +109,8 @@ __self.__pendingKey_x = getRuntimeContext().ctx.pendingPromises.add(
 getRuntimeContext().ctx.pendingPromises.add(__call(func, /* … */));
 ```
 
-`getRuntimeContext()` is the strict ALS accessor. Codegen uses it everywhere
-post-ALS-migration, so a missing frame fails with an actionable error instead of
+`getRuntimeContext()` is the strict the context frame accessor. Codegen uses it everywhere
+since the context-frame migration, so a missing frame fails with an actionable error instead of
 a cryptic property read on `undefined`.
 
 The key is stored in `__self.__pendingKey_x`, which is per-stack-frame. Concurrent calls to the same function each have their own `__self`, so each gets a unique key. Loop iterations also get unique keys from the counter.

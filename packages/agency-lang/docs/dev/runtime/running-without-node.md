@@ -82,12 +82,9 @@ files by name, such as `file_js.go`. Dart has conditional imports.
 
 ## Decision: Agency does not use `AsyncLocalStorage`
 
-Decided on 2026-10-03.
-
-The code does not match this decision yet. PR
-[#1167](https://github.com/egonSchiele/agency-lang/pull/1167) still builds
-the context variables from `AsyncLocalStorage` on Node. See
-[What the removal involves](#what-the-removal-involves).
+Decided on 2026-10-03, and done in PR
+[#1167](https://github.com/egonSchiele/agency-lang/pull/1167). Nothing in the
+codebase imports `node:async_hooks`.
 
 ### Background
 
@@ -103,15 +100,15 @@ about the current run.
 | `_activeCallbacksContext` | `lib/runtime/hooks.ts` | which callbacks are running |
 | `spanStorage` | `lib/statelogClient.ts` | the current logging span |
 
-Each one is built from a context class. Today that class is Node's
-`AsyncLocalStorage`, which keeps a value attached to a chain of `async` calls
-even while other chains run in between. Browsers do not have it.
+Each one is built from a context class. Until this decision that class was
+Node's `AsyncLocalStorage`, which keeps a value attached to a chain of `async`
+calls even while other chains run in between. Browsers do not have it.
 
 The replacement is `PromiseContextStorage`, in
-`lib/runtime/platform/promiseContextStorage.ts`. It needs no Node. It works
-only in rewritten code. "Rewritten" means that a build step turned each
-`await` in a file into a `.then` call. `portable-context-spike.md` explains
-why, and how the class works.
+`lib/runtime/promiseContextStorage.ts`. It needs no Node. It works only in
+rewritten code. "Rewritten" means that a build step turned each `await` in a
+file into a `.then` call. `promise-context-storage.md` explains why, and how
+the class works.
 
 ### The two options
 
@@ -146,7 +143,8 @@ rewrite does not already cover.
 
 ### What Option B costs, measured
 
-These were measured on 2026-10-03 on the branch for PR #1167.
+These were measured on 2026-10-03 on the branch for PR #1167, before the
+removal, by running the same code both ways.
 
 **Speed.** The same code ran both ways, with 900,000 `await`s that each read
 a context variable.
@@ -234,10 +232,13 @@ helper above. It passes when the helper is rewritten. The `tests/agency`
 failure has a different cause and is listed under
 [Open problems](#open-problems).
 
-The compiler already processes each `.ts` file that Agency code imports, in
-`lib/importStrategy.ts`. It can rewrite them in the same step, so a `.ts`
-helper would need nothing from its author. A `.js` helper is loaded as
-written. Neither case has been tested.
+Under `agency run`, the compiler builds each `.ts` file that Agency code
+imports, in `lib/importStrategy.ts`, and rewrites it in the same step. A
+`.ts` helper therefore needs nothing from its author. A hand-written `.js`
+helper is loaded as written, and so is TypeScript built by a user's own
+build. Both cases were tested: the `.ts` helper reads the context after an
+`await`, and the `.js` helper gets the "outside an Agency frame" error.
+`docs/site/guide/ts-helpers.md` tells a helper's author what to do.
 
 ### Other options that were set aside
 
@@ -254,36 +255,39 @@ written. Neither case has been tested.
 - **Compile Agency to Swift.** This needs a second code generator and a
   second runtime.
 
-### What the removal involves
+### What the removal changed
 
-1. Build every context variable from `PromiseContextStorage`. Delete
-   `lib/runtime/platform/asyncLocalStorage.ts`,
-   `asyncLocalStorage.browser.ts`, and the `AGENCY_PORTABLE_CONTEXT`
-   variable.
-2. Rewrite generated code as the compiler emits it. Generated files end with
-   a block that uses a top-level `await`, and esbuild refuses to rewrite a
-   file that has one. That block has to change first.
-3. Rewrite the runtime and the stdlib helpers as part of `make`.
-4. Rewrite `.ts` files that Agency code imports.
-5. Turn the load-time check on for every run. `AgencyFunction.create` then
-   refuses any Agency function that was not rewritten.
-6. Delete what existed only to test a second class:
-   `scripts/portable-loader.mjs`, `vitest.portable.config.ts`, and the
-   `agency-tests-portable` job in `.github/workflows/test.yml`.
+1. Every context variable is built from `PromiseContextStorage`. The file
+   that picked a class, its browser twin, the `"browser"` field in
+   `package.json`, and the `AGENCY_PORTABLE_CONTEXT` variable are deleted.
+2. The compiler rewrites generated code and the `.ts` files Agency code
+   imports, through `lib/compiler/transpile.ts`.
+3. `make build` rewrites `dist`, with `scripts/rewrite-async.mjs`.
+4. The unit tests run on rewritten code.
+5. No file Agency builds has a top-level `await`, because esbuild refuses to
+   rewrite a file that has one. The block at the end of a generated file is
+   now one call to `runCliMain`.
+6. `AgencyFunction.create` refuses any Agency function that was not
+   rewritten, on every run.
+7. The listener for a child process's messages is bound to the run that
+   started the child.
+
+After the removal, the unit tests, `tests/agency`, and `tests/agency-js` all
+pass in full. `promise-context-storage.md` has the numbers.
 
 ### Open problems
 
-- **`tests/agency/always-scope-over-ipc` fails on `PromiseContextStorage`.**
-  A child process raises an interrupt, and the parent should learn the
-  child's `@always` scope from it. The parent's handler is called, so no
-  handler is skipped. The scope arrives empty. The cause is not known.
-- **9 unit test files fail to load on rewritten code.** vitest moves
-  `vi.mock` above the helper that the rewrite adds. The files are listed in
-  `portable-context-spike.md`.
-- **Callbacks that are not promises or timers.** `PromiseContextStorage`
-  wraps `.then`, `setTimeout`, `setInterval`, `setImmediate`,
-  `queueMicrotask`, and `process.nextTick`. A runtime callback registered as
-  an event listener runs with an empty context.
-- **Agency's own error locations.** These come from the runtime and not from
-  JavaScript stack traces. Whether the rewrite changes them has not been
-  checked.
+`promise-context-storage.md` lists them under "Limits and open questions".
+The ones that follow from this decision:
+
+- A callback that is not a promise callback or a timer runs with an empty
+  context. An event listener that runs runtime code has to be wrapped with
+  `bindToCurrentFrame`. One listener needed this. Others on paths the tests
+  do not cover could too.
+- `agency compile --ts` writes TypeScript and leaves the build to the user.
+  That build does not rewrite `async` functions, so the load-time check
+  refuses the output.
+- No library that also replaces `Promise.prototype.then` has been tested with
+  Agency.
+- Whether the rewrite changes Agency's own error locations has not been
+  checked. These come from the runtime and not from JavaScript stack traces.

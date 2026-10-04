@@ -13,7 +13,7 @@ import { AgencyFunction } from "./agencyFunction.js";
  *    go through the same call infrastructure as `__call(...)`.
  *
  * Validators that need access to the execution context read it from the
- * active `agencyStore` ALS frame via `getRuntimeContext()`. There is no
+ * active `agencyStore` context frame via `getRuntimeContext()`. There is no
  * `ctx` arg to thread through.
  */
 export type AgencyValidator =

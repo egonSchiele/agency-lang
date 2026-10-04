@@ -68,7 +68,7 @@ const VALID_CALLBACK_NAME_SET: ReadonlySet<string> = new Set(VALID_CALLBACK_NAME
 // Exported as `_callbackImpl` so unit tests can call it directly without
 // going through the AgencyFunction wrapper / `invoke()` indirection.
 // Direct JS callers must wrap their invocation in `runInTestContext` so
-// `getRuntimeContext()` finds an active ALS frame.
+// `getRuntimeContext()` finds an active context frame.
 export function _callbackImpl(name: string, fn: unknown): void {
   if (!VALID_CALLBACK_NAME_SET.has(name)) {
     throw new Error(`Unknown callback '${name}'. Valid: ${VALID_CALLBACK_NAMES.join(", ")}`);

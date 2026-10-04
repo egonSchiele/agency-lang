@@ -49,7 +49,7 @@ export function _parseJSON(text: string): any {
 /**
  * Shared implementation for both the legacy `__internal_input`
  * (still called by `CONTEXT_INJECTED_BUILTINS`-rewritten call sites
- * during the ALS migration) and the new `_input` (ALS-reading). Both
+ * during the context-frame migration) and the new `_input` (context-reading). Both
  * paths must take the same code path so subtle differences cannot
  * sneak in while the registry is still populated. Cancellation:
  * Readline holds stdin exclusively, so a blocked `input("?")` after
@@ -131,7 +131,7 @@ function inputImpl(ctx: RuntimeContext<any>, stack: StateStack, prompt: string):
  *  reaction to a newly-visible prompt is 150ms+). */
 const BUFFERED_BLANK_LINE_MS = 25;
 
-/** Deprecated context-injected wrapper kept in place during the ALS
+/** Deprecated context-injected wrapper kept in place during the context variable
  *  migration so the registry/codegen path keeps working until the
  *  follow-up cleanup PR removes it. New stdlib `.agency` files should
  *  call `_input` instead. */
@@ -175,7 +175,7 @@ export function _advanceTimeImpl(ms: number): void {
   ctx.clock.advance(ms);
 }
 
-/** ALS-reading replacement. Same body as `__internal_input`. */
+/** context-reading replacement. Same body as `__internal_input`. */
 export function _input(prompt: string): Promise<string> {
   const { ctx, stack } = getRuntimeContext();
   return inputImpl(ctx, stack, prompt);
@@ -196,7 +196,7 @@ export function __internal_sleep(
   return sleepImpl(ctx, stack, ms);
 }
 
-/** ALS-reading replacement for `__internal_sleep`. */
+/** context-reading replacement for `__internal_sleep`. */
 export function _sleep(ms: number): Promise<void> {
   const { ctx, stack } = getRuntimeContext();
   return sleepImpl(ctx, stack, ms);

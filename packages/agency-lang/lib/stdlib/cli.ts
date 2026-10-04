@@ -34,7 +34,7 @@ import { exitProcessNow } from "../runtime/exitProcess.js";
  *  passed across the bridge into an async callable. Mirrors the
  *  helper of the same name in `ui.ts` — uses `__call` so
  *  AgencyFunction values dispatch through the runtime's normal call
- *  path (handlers, ALS context, retries) rather than being invoked as
+ *  path (handlers, context frame, retries) rather than being invoked as
  *  raw JS. */
 async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
   return (await __call(fn, { type: "positional", args })) as T;

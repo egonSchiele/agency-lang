@@ -136,7 +136,7 @@ async function executeRun(mod: any, msg: RunInstruction): Promise<any> {
   // wrapper invokes it, and the per-step `agencyStore.run` inside
   // generated function/node bodies re-establishes the scope frame.
   // Wrapping again here would attach the subprocess's parent-process
-  // context (which doesn't even exist as a peer ALS) instead of the
+  // context (which doesn't even exist as a peer context variable) instead of the
   // child's own `RuntimeContext`.
   // The trailing options object names the input explicitly, so the runtime
   // records it on agentStart without guessing from the parameters. Absent

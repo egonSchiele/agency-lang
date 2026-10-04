@@ -136,7 +136,7 @@ enforces guards.
 Sources wired in:
 
 - `prompt.ts` and `llmDispatch.ts` — completion.
-- `memory/manager.ts` — completion and embedding. It no-ops without an ALS
+- `memory/manager.ts` — completion and embedding. It no-ops without a context variable
   frame, and it re-raises guard errors.
 - `lib/stdlib/image.ts` — records cost and tokens for BOTH a returned image and an
   empty result, because the provider charged either way. It emits the

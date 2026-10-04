@@ -38,7 +38,7 @@ export type BranchState = {
   // re-entries in the same run.
   guardsRehydrated?: boolean;
 
-  /** Per-branch GlobalStore snapshot, captured by `runInBranchAlsFrame`
+  /** Per-branch GlobalStore snapshot, captured by `runInBranchContextFrame`
    *  when the branch body settles as an `Interrupt[]`. Persisted on
    *  serialization so that on resume the branch sees the same globals
    *  it had pre-interrupt instead of a fresh clone of the parent's
@@ -265,7 +265,7 @@ export class State {
         if (branch.interruptData) branchJson.interruptData = branch.interruptData;
         if (branch.result !== undefined) branchJson.result = deepClone(branch.result);
         // Per-branch globals + activeStack snapshots captured by
-        // `runInBranchAlsFrame` so a resumed branch sees its own
+        // `runInBranchContextFrame` so a resumed branch sees its own
         // pre-interrupt state instead of a freshly-cloned parent.
         // Absent for pointer-shared dials: `shareGlobals: true`
         // (runPrompt tool dispatch + user `shared: true`) skips the
@@ -307,7 +307,7 @@ export class State {
         if (branch.interruptData) branchState.interruptData = branch.interruptData;
         if (branch.result !== undefined) branchState.result = branch.result;
         // Per-branch globals + activeStack snapshots captured by
-        // `runInBranchAlsFrame` before the interrupt. On re-entry
+        // `runInBranchContextFrame` before the interrupt. On re-entry
         // the resumed branch restores them instead of cloning fresh
         // from the parent, so writes made before the interrupt are
         // preserved across the resume boundary.
@@ -342,7 +342,7 @@ export type StateJSON = {
  *  site forgot its name (Runner defaults scopeName to "").
  *  The statelog emit is not redundant with the throw: throws convert
  *  to Failures at def boundaries and can be laundered downstream; the
- *  event is the signal that survives. Best-effort via the ALS pattern
+ *  event is the signal that survives. Best-effort through the context frame
  *  (no store in bare unit tests means no emit; the throw still fires). */
 export function claimFrameForScope(frame: State, scopeName: string, moduleId: string): void {
   if (!scopeName) return;
@@ -497,7 +497,7 @@ export class StateStack {
    *  the guard-trip refusals and the interrupt-pause checkpoint
    *  assertions read it. Self-exclusion (a handler never hears its own
    *  raises) does NOT read it — that stays on the executingHandlers.ts
-   *  ALS, because exclusion needs per-lineage precision this per-branch
+   *  the context frame, because exclusion needs per-lineage precision this per-branch
    *  list cannot give (a concurrent sibling dispatch must still reach a
    *  handler another dispatch is executing). Lives on the stack rather
    *  than a context variable so every pause-side reader reaches it

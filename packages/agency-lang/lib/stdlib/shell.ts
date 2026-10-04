@@ -154,7 +154,7 @@ async function execImpl(
   return abortableSpawn(command, args, buildSpawnOptions(cwdResolved, timeout, stdin, signal));
 }
 
-/** Deprecated context-injected wrapper kept during the ALS migration;
+/** Deprecated context-injected wrapper kept during the context-frame migration;
  *  see `_exec`. */
 export async function __internal_exec(
   ctx: RuntimeContext<any>,
@@ -170,7 +170,7 @@ export async function __internal_exec(
   return execImpl(ctx, stack, command, args, cwd, timeout, stdin, options);
 }
 
-/** ALS-reading replacement for `__internal_exec`. */
+/** context-reading replacement for `__internal_exec`. */
 export async function _exec(
   command: string,
   args: string[],
@@ -230,7 +230,7 @@ async function bashImpl(
   );
 }
 
-/** Deprecated context-injected wrapper kept during the ALS migration;
+/** Deprecated context-injected wrapper kept during the context-frame migration;
  *  see `_bash`. */
 export async function __internal_bash(
   ctx: RuntimeContext<any>,
@@ -245,7 +245,7 @@ export async function __internal_bash(
   return bashImpl(ctx, stack, command, cwd, timeout, stdin, options);
 }
 
-/** ALS-reading replacement for `__internal_bash`. */
+/** context-reading replacement for `__internal_bash`. */
 export async function _bash(
   command: string,
   cwd: string,

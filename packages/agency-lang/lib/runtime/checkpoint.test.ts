@@ -6,7 +6,7 @@ import { CheckpointStore } from "./index.js";
 import { runInTestContext, withCallsite } from "./asyncContext.js";
 import { ThreadStore } from "./state/threadStore.js";
 
-// Post-ALS migration: the checkpoint stdlib helpers read `ctx` and
+// Since the context-frame migration: the checkpoint stdlib helpers read `ctx` and
 // `stateStack` from `getRuntimeContext()`. Each test wraps its
 // invocations in an `agencyStore` frame via `runInTestContext`.
 function wrap<T>(ctx: any, fn: () => T): T {

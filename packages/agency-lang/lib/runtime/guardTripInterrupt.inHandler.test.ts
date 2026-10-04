@@ -45,8 +45,8 @@ describe("in-handler guard trips refuse to surface", () => {
   it("unanswered dispatch: throws the trip error, persists nothing, checkpoints nothing", async () => {
     const { ctx, stack, err } = arrangeTrippedInHandler();
     ctx.handlers = []; // nobody can answer
-    // The stack is marked but there is deliberately no ALS scope: this is
-    // the lost-ALS shape from the issue-616 investigation. The stack-read
+    // The stack is marked but there is deliberately no context scope: this is
+    // the lost-the context frame shape from the issue-616 investigation. The stack-read
     // refusal must hold on its own.
     await expect(raiseGuardTripsUntilClear(ctx, stack, () => err)).rejects.toBe(err);
     expect(guardTripKeys(stack)).toEqual([]);

@@ -5,7 +5,7 @@
  * that get the codegen-rewrite treatment to prepend `__ctx, __stateStack,
  * __threads` as the first three args). Stdlib functions that need access
  * to `ctx`/`stack`/`threads` call `getRuntimeContext()` to read them from
- * an ALS store seeded at three well-defined points:
+ * a context frame seeded at three well-defined points:
  *
  *  1. `runNode` (lib/runtime/node.ts) — wraps every fresh agent run in
  *     the top-level `agencyStore.run(...)` frame.
@@ -13,11 +13,11 @@
  *     method (step, hook, pipe, fork) re-enters `agencyStore.run(...)`
  *     so the scope-local `stack` (and per-fork branch stack) is visible
  *     to stdlib helpers running inside that step.
- *  3. `runBatch`'s `runInBranchAlsFrame` (lib/runtime/runBatch.ts) —
+ *  3. `runBatch`'s `runInBranchContextFrame` (lib/runtime/runBatch.ts) —
  *     each branch body sees its own branch stack (and thus its own
  *     abort signal) before invoking the child body.
  *
- * Note: subprocess bootstrap deliberately does NOT install its own ALS
+ * Note: subprocess bootstrap deliberately does NOT install its own context variable
  * frame. Each child process re-enters runNode (which installs the
  * frame) on its own, so threading a frame across the IPC boundary
  * would be redundant.
@@ -69,9 +69,9 @@ export type AgencyStore = {
   /**
    * Per-scope GlobalStore. Today pointer-shares the `RuntimeContext`'s
    * canonical store at every frame builder, so behavior matches the
-   * pre-ALS code that emitted `__ctx.globals.…` directly. The slot
+   * pre-migration code that emitted `__ctx.globals.…` directly. The slot
    * exists separately from `ctx.globals` to allow per-branch
-   * snapshotting (Stage 2): when `runInBranchAlsFrame` clones the
+   * snapshotting (Stage 2): when `runInBranchContextFrame` clones the
    * parent's store, the branch's frame holds the clone and the
    * generated `__globals()!` accessor sees the branch-local view
    * without disturbing the parent's globals.
@@ -93,10 +93,10 @@ export type AgencyStore = {
    * (`checkpoint()`) read this slot instead of receiving the location
    * as a trailing positional arg from generated code.
    *
-   * Optional because not every ALS frame has one: the top-level
+   * Optional because not every context frame has one: the top-level
    * `runNode` frame and `runInBootstrapFrame` deliberately omit it
    * (any checkpoint created in bootstrap scope gets the empty
-   * `""::""::""` fallback, matching pre-ALS behaviour).
+   * `""::""::""` fallback, matching pre-migration behaviour).
    */
   callsite?: CallsiteLocation;
   /**
@@ -119,7 +119,7 @@ export type AgencyStore = {
 export const agencyStore = new PromiseContextStorage<AgencyStore>();
 
 /**
- * Push a new ALS frame copying the current ctx/stack/threads but
+ * Push a new context frame copying the current ctx/stack/threads but
  * overriding `callsite`. For TS helpers that want to attach a
  * per-internal-substep checkpoint location to nested `checkpoint()`
  * calls. Throws if called outside any agency frame (no inheritable
@@ -164,7 +164,7 @@ export async function withPushedHandler<T>(
 }
 
 /**
- * Read the current Agency runtime context from ALS. Throws if called
+ * Read the current Agency runtime context from the context frame. Throws if called
  * outside an `agencyStore.run(...)` frame — which in practice means a
  * stdlib helper was called from non-Agency code. Tests that exercise
  * stdlib functions directly should wrap their bodies in
@@ -185,12 +185,12 @@ export function getRuntimeContext(): AgencyStore {
 
 /**
  * Generated-code accessor for the current per-scope ThreadStore. Replaces
- * the codegen-emitted `__threads` local that the pre-ALS pipeline used to
+ * the codegen-emitted `__threads` local that the pre-migration pipeline used to
  * declare in every function/node body's setup block. Every call site that
  * used to reference the `__threads` local now invokes this helper, which
  * reads through `agencyStore` — the same path that stdlib helpers take.
  *
- * Returns the store from the active ALS frame when one is present:
+ * Returns the store from the active context frame when one is present:
  * Runner step bodies (set up by `Runner.runInScope`), node/function setup
  * code that runs inside `runNode` (top-level frame), and bootstrap scopes
  * (where the store is a `BootstrapThreadStore` sentinel that loudly
@@ -237,18 +237,18 @@ export function __ctx(): RuntimeContext<any> | undefined {
 /**
  * Generated-code accessor for the current per-scope GlobalStore. Mirrors
  * `__threads()` / `__stateStack()` / `__ctx()`. Returns the GlobalStore
- * from the active ALS frame when one is present (every Runner step body,
- * node/function setup code, `runInBranchAlsFrame` body, and
+ * from the active context frame when one is present (every Runner step body,
+ * node/function setup code, `runInBranchContextFrame` body, and
  * `runInBootstrapFrame` body all seed this slot). Returns `undefined`
  * when no frame is installed.
  *
  * Generated code typically dereferences this with `__globals()!.…`
  * because every code-emission site that uses it runs inside an Agency
- * execution frame by construction. The pre-ALS counterpart was
+ * execution frame by construction. The pre-migration counterpart was
  * `__ctx.globals.…` against the setupEnv-emitted local.
  *
  * The slot is distinct from `ctx.globals` so that Stage 2 can clone the
- * parent's store at fork-time into the branch's ALS frame without
+ * parent's store at fork-time into the branch's context frame without
  * mutating the canonical `RuntimeContext.globals` reference.
  */
 export function __globals(): GlobalStore | undefined {
@@ -257,7 +257,7 @@ export function __globals(): GlobalStore | undefined {
 
 /**
  * Convenience wrapper for tests that construct a RuntimeContext manually
- * and need to invoke stdlib helpers that read from ALS. Mirrors
+ * and need to invoke stdlib helpers that read from the context frame. Mirrors
  * `agencyStore.run(...)` but with explicit named parameters so test
  * bodies don't have to import `agencyStore` directly.
  */
@@ -271,7 +271,7 @@ export function runInTestContext<T>(
 }
 
 /**
- * Wrap `fn` in an ALS frame suitable for code that runs *outside* any
+ * Wrap `fn` in a context frame suitable for code that runs *outside* any
  * agent node body — module-level global-init, top-level callback
  * registration, and the resume/rewind prelude. The `threads` slot is a
  * `BootstrapThreadStore` sentinel: any attempt to use a message-thread
@@ -286,7 +286,7 @@ export function runInTestContext<T>(
  * `__initializeGlobals` always expected. At the resume / rewind
  * `graph.run` call sites it's the restored stack carrying the
  * checkpoint frames; that's also fine because `Runner.runInScope` on
- * the first step re-enters ALS with the per-node ThreadStore.
+ * the first step re-enters the context frame with the per-node ThreadStore.
  *
  * Declared `async` so synchronous throws inside `fn` (including the
  * very common case of the `BootstrapThreadStore` sentinel throwing)
@@ -304,7 +304,7 @@ export async function runInBootstrapFrame<T>(
       threads: new BootstrapThreadStore(),
       // Seed the canonical store. Bootstrap frames are never inside a
       // fork branch (init / top-level callback registration / lifecycle
-      // hooks all run outside any per-branch ALS frame), so pointer-
+      // hooks all run outside any per-branch context frame), so pointer-
       // sharing is exactly right: writes done by `__initializeGlobals`
       // land on the RuntimeContext's store and persist across the run.
       globals: ctx.globals,

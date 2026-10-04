@@ -34,7 +34,7 @@ describe("doc string interpolation — runtime resolution", () => {
 
     // Description in the tool definition uses the template literal with
     // the global interpolation expression. Reads through `__globalCtx`
-    // (not the strict ALS accessor) because the description object
+    // (not the strict the context frame accessor) because the description object
     // literal is eagerly evaluated at module load time, before any
     // `agencyStore.run(...)` frame is installed. The `topLevel: true`
     // flag on the TsScopedVar in the description subtree is what
@@ -48,7 +48,7 @@ describe("doc string interpolation — runtime resolution", () => {
     // the description template literal evaluates. The previously
     // emitted `const __ctx = __globalCtx;` top-level rebind was
     // removed — it would now shadow the `__ctx` runtime import (which
-    // is a function in the post-ALS migration) and break every
+    // is a function in the since the context-frame migration) and break every
     // accessor call.
     expect(compiled).toContain("__initializeGlobals(__globalCtx);");
   });

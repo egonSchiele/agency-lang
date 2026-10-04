@@ -11,7 +11,7 @@ import type { HandlerEntry } from "./types.js";
  * handler functions safe — re-entering the raising handler was the only
  * source of the recursion that AG3010 used to ban.
  *
- * ALS because exclusion is a property of the async call tree, not a
+ * the context frame because exclusion is a property of the async call tree, not a
  * global. Fork branches share the handler chain — branch B's handler is
  * invoked for branch A's interrupt — so a handler executing in one branch
  * must still hear raises from another. `handlerChainDepthContext` in
@@ -22,14 +22,14 @@ import type { HandlerEntry } from "./types.js";
  * activation is skipped. Sibling activations of the same source handler
  * still hear the raise; MAX_HANDLER_CHAIN_DEPTH backstops that shape.
  *
- * This ALS is NOT what keeps pauses out of handlers, and it is never
+ * This context variable is NOT what keeps pauses out of handlers, and it is never
  * checkpointed. The pause guarantee lives on the stack instead:
  * runHandlerChain mirrors each executing entry into
  * `StateStack.executingHandlerEntries`, the guard-trip machinery refuses
  * to surface while that list is non-empty, and every interrupt-pause
- * checkpoint site asserts it empty (issue #616). The ALS carries only
+ * checkpoint site asserts it empty (issue #616). The context variable carries only
  * the per-lineage precision that the stack mark cannot: which raises
- * are a handler's OWN. If this ALS ever loses a read, exclusion can
+ * are a handler's OWN. If this context variable ever loses a read, exclusion can
  * misfire (bounded by MAX_HANDLER_CHAIN_DEPTH) — but the run still
  * cannot pause mid-handler, because the pause refusals read the stack.
  */

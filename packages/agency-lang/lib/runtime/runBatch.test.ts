@@ -794,7 +794,7 @@ describe("runBatch — durable object-tag flag propagation", () => {
     await runInTestContext(ctx, new StateStack(), new ThreadStore(), () =>
       runBatch(
         batchOpts(ctx, async () => {
-          // Runs inside the branch ALS frame → branch-local cloned store.
+          // Runs inside the branch context frame → branch-local cloned store.
           const branchGlobals = getRuntimeContext().globals;
           expect(branchGlobals).not.toBe(ctx.globals);
           branchGlobals.setTag({ secret: "s" }, "redact", true);

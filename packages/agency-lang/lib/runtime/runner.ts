@@ -70,7 +70,7 @@ const FORK_VALUE_CHAR_CAP = 4000;
  *  event. The redact check composes with the shared nativeTypeReplacer
  *  (like deepClone) so untagged natives and non-redact tags still round-trip
  *  intact for the small path. Reads the caller's store leniently: both call
- *  sites run at the fork join inside the parent's ALS frame; with no frame
+ *  sites run at the fork join inside the parent's context frame; with no frame
  *  this degrades to tag-preserving cloning, which post() still redacts on
  *  the un-truncated path. */
 export function safeStatelogValue(value: unknown): unknown {
@@ -165,12 +165,12 @@ export class Runner {
     this.state = opts?.state ?? {};
     this.moduleId = opts?.moduleId ?? "";
     this.scopeName = opts?.scopeName ?? "";
-    // Post-ALS migration the codegen no longer emits `stack` / `threads`
+    // Since the context-frame migration the codegen no longer emits `stack` / `threads`
     // as part of the Runner opts — both values live in the active
     // `agencyStore` frame and are recovered here. Direct test usages of
-    // `new Runner(ctx, frame)` outside an ALS frame fall back to
+    // `new Runner(ctx, frame)` outside a context frame fall back to
     // `undefined`, which matches the pre-migration behaviour (no
-    // guard/abort-signal observation, no per-step ALS re-wrap).
+    // guard/abort-signal observation, no per-step the context frame re-wrap).
     const als = agencyStore.getStore();
     this.stack = opts?.stack ?? als?.stack;
     this.threads = opts?.threads ?? als?.threads;
@@ -182,7 +182,7 @@ export class Runner {
    *  matching what the deprecated `__ctx, __stateStack, __threads`
    *  positional args would have carried. If `stack` or `threads` is
    *  missing (older test harnesses that build a Runner without them),
-   *  fall through to whatever frame is already on the ALS stack to
+   *  fall through to whatever frame is already on the context frame's stack to
    *  avoid clobbering an outer frame with `undefined`. */
   private runInScope<T>(fn: () => Promise<T>): Promise<T> {
     if (this.stack && this.threads) {
@@ -195,7 +195,7 @@ export class Runner {
           // Propagate the outer frame's `globals` so a Runner spun up
           // inside a fork branch sees the branch-local clone instead of
           // the canonical store. Fall back to `ctx.globals` for harness
-          // entries that build a Runner outside any ALS frame (older
+          // entries that build a Runner outside any context frame (older
           // tests, direct invocation paths).
           globals: outer?.globals ?? this.ctx.globals,
           toolInvocationStack: outer?.toolInvocationStack,
@@ -691,12 +691,12 @@ export class Runner {
 
     this.ctx.coverageCollector?.hit(this.moduleId, this.scopeName, this.stepPath(id));
 
-    // Post-ALS migration the ThreadStore is captured on `this.threads`
+    // Since the context-frame migration the ThreadStore is captured on `this.threads`
     // (seeded by the constructor from explicit opts or the active
-    // ALS frame). Generated `runner.thread(...)` call sites no longer
+    // context frame). Generated `runner.thread(...)` call sites no longer
     // need to pass it explicitly. Throw a clear error if absent — that
     // only happens when a Runner is constructed in a test harness
-    // without `threads:` and outside any ALS frame.
+    // without `threads:` and outside any context frame.
     const threads = this.threads;
     if (!threads) {
       throw new Error(
@@ -1273,11 +1273,11 @@ export class Runner {
       this.frame.popBranches();
     } finally {
       this.path.pop();
-      // Each branch ran inside its own span context, so
+      // Each branch ran inside its own spa context, so
       // its pushes/pops are isolated from the parent. We can safely emit
       // forkEnd and pop the fork span here even while loser race branches
       // are still draining in the background — their stacks live in
-      // independent ALS contexts and cannot touch the parent's stack.
+      // independent context frames and cannot touch the parent's stack.
       this.ctx.statelogClient.forkEnd({
         forkId,
         mode,
@@ -1326,7 +1326,7 @@ export class Runner {
         return decide.call(this.ctx.llmClient, state, questions, config, signal);
       },
       {
-        // The round's span opens in the block's own span context, captured
+        // The round's span opens in the block's own spa context, captured
         // here, so it does not depend on which arm happened to trigger the
         // round and cannot be cut short when that arm ends its own span.
         runRound: (report, work) =>

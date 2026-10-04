@@ -223,7 +223,7 @@ const MAX_HANDLER_CHAIN_DEPTH = 10;
  *  handler whose own body raises another interrupt runs INSIDE this scope, so
  *  genuine self-re-entry still climbs the depth until it trips the guard.
  *
- *  ALS is never serialized, so there is nothing to reset across checkpoints or
+ *  the context frame is never serialized, so there is nothing to reset across checkpoints or
  *  resumes — each scope unwinds automatically when its dispatch returns or
  *  throws. */
 const handlerChainDepthContext = new PromiseContextStorage<number>();
@@ -277,7 +277,7 @@ async function runHandlerChain(
         if (eligible && !eligible(entry)) continue;
         // A handler never hears its own raises: an entry currently
         // executing in this lineage is skipped and the rest of the chain
-        // decides. Per-LINEAGE (the ALS), not the per-branch stack mark:
+        // decides. Per-LINEAGE (the context variable), not the per-branch stack mark:
         // concurrent sibling dispatches on one branch must still reach a
         // handler that another dispatch is executing — only a raise from
         // within the handler's own body is its own. The stack mark below
@@ -707,14 +707,14 @@ async function runResumeLoop(
   let nodeName = startNodeName;
   while (true) {
     try {
-      // Seed an ALS frame so stdlib helpers and `callHook` reads (which
-      // post-ALS-migration look up `ctx` / `stack` / `threads` via
+      // Seed a context frame so stdlib helpers and `callHook` reads (which
+      // since the context-frame migration look up `ctx` / `stack` / `threads` via
       // `getRuntimeContext()`) see the resumed run's context.
       //
       // This is a bootstrap frame: it only covers the small slice of
       // execution between entering `graph.run` and the first
       // `Runner.runInScope` inside the resumed node body — generated
-      // node bodies re-install ALS with the actual per-node
+      // node bodies re-install the context frame with the actual per-node
       // `ThreadStore` (reconstituted by `setupNode` from
       // `stack.threads` JSON) on every step. So the threads slot here
       // is intentionally a `BootstrapThreadStore` — if anything inside

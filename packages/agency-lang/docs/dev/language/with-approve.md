@@ -53,13 +53,13 @@ The second `pushHandler` argument is the handler's live guard ids, and it is del
 
 `withHandler` deliberately needs no step id, which is why it works where `runner.handle()` cannot. The handler stack lives on the context, not on the runner. When the called function raises an interrupt through `interruptWithHandlers()`, the runtime walks `ctx.handlers`, finds the `approve` handler, and resolves the interrupt immediately. No state serialization, step counters, or runner machinery are involved.
 
-`getRuntimeContext()` is the strict accessor, so it throws if no ALS frame is installed. That is on purpose. Handlers are safety infrastructure, and a missing frame is a real bug that should fail loudly rather than skip a registration.
+`getRuntimeContext()` is the strict accessor, so it throws if no context frame is installed. That is on purpose. Handlers are safety infrastructure, and a missing frame is a real bug that should fail loudly rather than skip a registration.
 
 ### Other differences in global scope
 
 **Early `markInitialized`.** The `markInitialized` call is emitted *before* the init statements. Without it, a global init expression that calls a function defined in the same module would trigger `__initializeGlobals` again through the `isInitialized` check in every function preamble, and recurse forever.
 
-Call sites themselves need no special handling any more. Every call goes through the `__call` dispatcher (`lib/runtime/call.ts`), which reads the context, stack, and threads from the active ALS frame rather than from a config object passed by codegen. The bootstrap frame supplies all three.
+Call sites themselves need no special handling any more. Every call goes through the `__call` dispatcher (`lib/runtime/call.ts`), which reads the context, stack, and threads from the active context frame rather than from a config object passed by codegen. The bootstrap frame supplies all three.
 
 ## Limitations
 

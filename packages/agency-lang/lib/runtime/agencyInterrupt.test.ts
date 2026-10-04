@@ -7,7 +7,7 @@ import { makeMockCtx } from "./__tests__/testHelpers.js";
 // `agency.interrupt()` only works inside a Runner-driven step body.
 // The standard test harness for that is `withResumableScope` — its
 // `s.step(...)` callback runs inside `Runner.step`, which seeds the
-// ALS frame with the runner that `agency.interrupt` needs to halt.
+// context frame with the runner that `agency.interrupt` needs to halt.
 function inFrame<T>(ctx: ReturnType<typeof makeMockCtx>, fn: () => Promise<T>): Promise<T> {
   return agency.withTestContext({ ctx, stack: ctx.stateStack, threads: new ThreadStore() }, fn);
 }
@@ -266,7 +266,7 @@ describe("agency.interrupt — option defaults", () => {
 });
 
 describe("agency.interrupt — frame requirements", () => {
-  it("throws when called without a Runner in the ALS frame", async () => {
+  it("throws when called without a Runner in the context frame", async () => {
     const ctx = makeMockCtx();
     await expect(
       inFrame(ctx, () => agency.interrupt({ effect: "test", message: "x", data: {} })),

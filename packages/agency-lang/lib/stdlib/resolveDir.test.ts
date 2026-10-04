@@ -56,7 +56,7 @@ describe("resolveDir", () => {
     await expect(resolveDir(path.join(tmpRoot, "outside"), [allowed])).rejects.toThrow(/not under/);
   });
 
-  it("stays cwd-anchored inside an active ALS frame", async () => {
+  it("stays cwd-anchored inside an active context frame", async () => {
     const result = await agencyStore.run(
       {
         ctx: {} as any,

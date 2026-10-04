@@ -168,12 +168,12 @@ export class StatelogClient {
   private metadata?: RunMetadata;
   private code?: CodeIdentity;
   private requestTimeoutMs: number;
-  // Fallback tag-store accessor for posts that fire OUTSIDE any ALS frame
+  // Fallback tag-store accessor for posts that fire OUTSIDE any context frame
   // (agentEnd and the resume-path finalization events post after the run's
   // agencyStore frame has ended). Wired by the execution context to read the
   // CURRENT top-level GlobalStore — a getter, not a captured reference,
   // because checkpoint restore reassigns execCtx.globals. Branch posts are
-  // unaffected: they run inside an ALS frame, where __globals() wins.
+  // unaffected: they run inside a context frame, where __globals() wins.
   private fallbackGlobals: (() => GlobalStore | undefined) | null = null;
 
   constructor(config: StatelogConfig) {
@@ -259,7 +259,7 @@ export class StatelogClient {
   }
 
   // Run `fn` with a fresh, branch-local span stack seeded from
-  // `parentStack`. Each call to this method creates an independent ALS
+  // `parentStack`. Each call to this method creates an independent context scope
   // context; sibling calls (e.g. concurrent fork branches) see
   // independent stacks even though they share this StatelogClient.
   //
@@ -267,9 +267,9 @@ export class StatelogClient {
   // never the parent. Defensively copies `parentStack` so the caller's
   // array is never mutated.
   //
-  // When observability is disabled the ALS plumbing is skipped entirely
+  // When observability is disabled the context plumbing is skipped entirely
   // — we just invoke `fn()` directly. The runner can therefore always
-  // wrap branches in this call without paying ALS overhead in no-op
+  // wrap branches in this call without paying context overhead in no-op
   // mode.
   runInBranchContext<T>(parentStack: SpanContext[], fn: () => Promise<T>): Promise<T> {
     if (!this.enabled) return fn();
@@ -1497,7 +1497,7 @@ export class StatelogClient {
    *  emits nothing. `partial` and `functionArgs` are pre-truncated string
    *  previews, nested under `data` so post()'s redaction replacer covers
    *  them. `spanId` is the abort's unwind span, carried explicitly
-   *  because an abort can cross span contexts (e.g. out of a fork
+   *  because an abort can cross spa contexts (e.g. out of a fork
    *  branch), where currentSpan attribution alone would split the trail. */
   async abortSalvage({
     action,
@@ -1570,10 +1570,10 @@ export class StatelogClient {
     // ordinary object construction — no string surgery.
     //
     // Reads the caller's branch tag store via __globals() (the lenient,
-    // returns-undefined accessor — post() can fire outside an ALS frame, so it
+    // returns-undefined accessor — post() can fire outside a context frame, so it
     // must not throw like getRuntimeContext() would). hasAnyTags() skips the
     // whole redaction pass when nothing is tagged, so the common case is one
-    // stringify, byte-identical to before. Events posted outside an ALS frame
+    // stringify, byte-identical to before. Events posted outside a context frame
     // fall back to the execution's top-level store (fallbackGlobals) — the
     // result-bearing agentEnd event posts after the run's frame has ended and
     // must still redact. See docs/dev/runtime/globalstore.md on per-branch isolation:

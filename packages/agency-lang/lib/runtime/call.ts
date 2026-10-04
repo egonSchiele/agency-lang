@@ -65,10 +65,10 @@ function findAbortedArg(descriptor: CallType): AbortedResult | undefined {
  * (named-arg aware, preapprove handler wiring) or a plain TS callable.
  *
  * All execution context (`ctx`, `stack`, `threads`, per-call-site
- * `callsite`) is read from the active `agencyStore` ALS frame seeded
+ * `callsite`) is read from the active `agencyStore` context frame seeded
  * by `Runner.runInScope`. No state extras pass through this layer —
  * call sites that need to override the active branch stack (e.g. the
- * async-fork operator) install their own ALS frame around the
+ * async-fork operator) install their own context frame around the
  * `__call(...)` invocation in codegen.
  */
 export async function __call(

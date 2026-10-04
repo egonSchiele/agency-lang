@@ -190,7 +190,7 @@ const COMPOUND_RUNNER_KINDS: ReadonlySet<TsNode["kind"]> = new Set([
  * path: a `description: "version ${toolVersion}"` interpolation is
  * eagerly evaluated as part of the module-load tool registration
  * object literal, BEFORE any function or node body runs and BEFORE
- * any `agencyStore.run(...)` wrap installs an ALS frame. The pretty
+ * any `agencyStore.run(...)` wrap installs a context frame. The pretty
  * printer reads `topLevel` to emit `__globalCtx.globals.get(...)`
  * instead of `getRuntimeContext().ctx.globals.get(...)` — the strict
  * accessor would throw at module load.
@@ -450,7 +450,7 @@ export class TypeScriptBuilder {
           elseBody: ts.assign(
             forked,
             // Immediate deref inside a step body — use the strict
-            // accessor so a missing ALS frame throws the dedicated
+            // accessor so a missing context frame throws the dedicated
             // error instead of `Cannot read 'forkStack' of undefined`.
             ts.call(ts.prop(ts.raw("getRuntimeContext().ctx"), "forkStack")),
           ),
@@ -1403,7 +1403,7 @@ export class TypeScriptBuilder {
     const scope = this.scopes.current();
     if (scope.type === "function") {
       const opts: Record<string, TsNode> = {
-        // Inside the function body's withAlsFrame wrap — strict
+        // Inside the function body's withContextFrame wrap — strict
         // accessor so a missing frame throws cleanly instead of a
         // generic "Cannot read 'getResultCheckpoint' of undefined".
         checkpoint: ts.raw("getRuntimeContext().ctx.getResultCheckpoint()"),
@@ -1464,7 +1464,7 @@ export class TypeScriptBuilder {
   }
 
   /**
-   * After the ALS migration AND the trailing-`state`-arg drop, every
+   * After the context-frame migration AND the trailing-`state`-arg drop, every
    * Agency call site reads `ctx` / `stack` / `threads` / `callsite`
    * from the active `agencyStore` frame. `__call` / `__callMethod` no
    * longer accept a state-extras object, and the codegen never emits
@@ -2081,9 +2081,9 @@ export class TypeScriptBuilder {
       description:
         trimmedDocSegments.length > 0
           ? // Flip `topLevel` on every TsScopedVar so the pretty-printer
-            // reads through `__globalCtx` instead of the strict ALS
+            // reads through `__globalCtx` instead of the strict the context frame
             // accessor — this subtree is eagerly evaluated at module
-            // load when no ALS frame is installed.
+            // load when no context frame is installed.
             markTopLevelScopedVars(this.generateStringLiteralNode(trimmedDocSegments))
           : ts.str("No description provided."),
       schema: $.z()
@@ -2202,9 +2202,9 @@ export class TypeScriptBuilder {
     }
 
     // Setup block. `setupFunction()` reads `ctx` / `threads` from the
-    // active `agencyStore` ALS frame seeded by the caller (a
+    // active `agencyStore` context frame seeded by the caller (a
     // `runner.step` body, `runNode`'s top-level frame, or
-    // `runBatch.runInBranchAlsFrame`). Tool dispatch by an LLM also runs
+    // `runBatch.runInBranchContextFrame`). Tool dispatch by an LLM also runs
     // inside the issuing `runner.step` frame, so a frame is always
     // active here.
     const setupStmts: TsNode[] = [
@@ -2226,7 +2226,7 @@ export class TypeScriptBuilder {
 
       // Ensure this module's globals are initialized on the
       // current per-scope view. Runs BEFORE this function's own
-      // `withAlsFrame` wrap, but the caller's ALS frame is still
+      // `withContextFrame` wrap, but the caller's context frame is still
       // active (every entry to a generated function body comes from
       // a Runner step body, runNode's top-level frame, or a fork
       // branch frame — all of which seed `globals`). Reading via
@@ -2270,7 +2270,7 @@ export class TypeScriptBuilder {
 
     // Create runner for step execution. `threads` is read directly from
     // the setup-function result, which now resolves it from the active
-    // ALS frame instead of an `__state` positional.
+    // context frame instead of an `__state` positional.
     setupStmts.push(
       ts.raw(
         `const runner = new Runner(__ctx, __stack, { state: __stack, moduleId: ${JSON.stringify(this.moduleId)}, scopeName: ${JSON.stringify(functionName)}, threads: __setupData.threads });`,
@@ -2330,8 +2330,8 @@ export class TypeScriptBuilder {
           // async callback.
           ...validationGuards,
           ...hoistedAliases,
-          // Body-level ALS frame (defense-in-depth). Today every
-          // callback site re-seeds ALS via Runner.runInScope, but the
+          // Body-level context frame (defense-in-depth). Today every
+          // callback site re-seeds the context frame via Runner.runInScope, but the
           // wrap closes the gap for code that runs between steps and
           // makes the per-scope frame contract explicit.
           //
@@ -2340,7 +2340,7 @@ export class TypeScriptBuilder {
           // __setupData.stateStack;` line used to bind, so
           // `__stateStack()` reads inside the wrap return a real
           // StateStack rather than a per-frame State.
-          ts.withAlsFrame({
+          ts.withContextFrame({
             ctx: ts.id("__ctx"),
             stack: $(ts.id("__setupData")).prop("stateStack").done(),
             threads: $(ts.id("__setupData")).prop("threads").done(),
@@ -2370,7 +2370,7 @@ export class TypeScriptBuilder {
         "__error",
         // finally block: pop state stack and conditionally fire onFunctionEnd.
         // The optional chain handles the rare case where the finally
-        // runs outside any ALS frame (e.g. a function invoked as a tool
+        // runs outside any context frame (e.g. a function invoked as a tool
         // without an outer agencyStore.run wrap).
         ts.statements([
           ts.raw("__stateStack()?.pop()"),
@@ -2421,7 +2421,7 @@ export class TypeScriptBuilder {
 
     // Build function params from the source signature. The legacy
     // trailing `__state: InternalFunctionState | undefined` positional
-    // is gone — `ctx` / `threads` / `stateStack` flow through ALS.
+    // is gone — `ctx` / `threads` / `stateStack` flow through the context frame.
     const fnParams: TsParam[] = parameters.map((p) => {
       const baseType = p.typeHint ? formatTypeHintTs(p.typeHint) : "any";
       if (p.defaultValue) {
@@ -2593,7 +2593,7 @@ export class TypeScriptBuilder {
           statements = ts.statementsPush(
             statements,
             // Strict accessor inside a step body (under the
-            // withAlsFrame wrap) — keeps missing-frame failures
+            // withContextFrame wrap) — keeps missing-frame failures
             // actionable instead of "Cannot read 'add' of undefined".
             ts.raw(`getRuntimeContext().ctx.pendingPromises.add(${this.str(callWithStack)})`),
           );
@@ -2643,7 +2643,7 @@ export class TypeScriptBuilder {
         data,
         ts.raw(
           // Strict accessor — emitted inside the function body's
-          // withAlsFrame wrap. See processTryExpression above for the
+          // withContextFrame wrap. See processTryExpression above for the
           // sibling shape.
           `{ checkpoint: getRuntimeContext().ctx.getResultCheckpoint(), functionName: ${JSON.stringify(scope.functionName)}, args: __stack.args }`,
         ),
@@ -2739,7 +2739,7 @@ export class TypeScriptBuilder {
 
     // Async-fork sites need the branch's isolated stack visible to the
     // callee (so its checkpoints/handlers/etc. push/pop on the branch
-    // stack rather than the parent's). Install a fresh ALS frame
+    // stack rather than the parent's). Install a fresh context frame
     // inline at the call site that overrides `stack`; the callee picks
     // it up via `getRuntimeContext()`.
     if (options?.stateStack) {
@@ -2916,7 +2916,7 @@ export class TypeScriptBuilder {
         blockFn,
         ts.str(mode),
         // `runner.fork` requires the current StateStack to push branch
-        // frames onto. Use the strict accessor so a missing ALS frame
+        // frames onto. Use the strict accessor so a missing context frame
         // throws the actionable error instead of producing a generic
         // TypeError deep inside the fork machinery.
         ts.raw("getRuntimeContext().stack"),
@@ -2968,7 +2968,7 @@ export class TypeScriptBuilder {
 
     return ts.statements([
       // Pop the current node's frame before transitioning — it won't be re-entered on resume.
-      // Optional chain defends against the rare goto reached outside any ALS frame.
+      // Optional chain defends against the rare goto reached outside any context frame.
       ts.raw("__stateStack()?.pop()"),
       ts.functionReturn(ts.goToNode(functionName, goToArgs)),
     ]);
@@ -3020,12 +3020,12 @@ export class TypeScriptBuilder {
         self: $(ts.id("__setupData")).prop("self").done(),
         // `runNode` (and the resume / rewind variants) install the
         // top-level `agencyStore` frame before `graph.run` invokes
-        // this node body. Read `ctx` from ALS so the local matches
+        // this node body. Read `ctx` from the context frame so the local matches
         // the same per-run context that `setupNode` just used.
         ctx: ts.raw("getRuntimeContext().ctx"),
       }),
 
-      // Pass `threads` explicitly so the Runner's ALS frame is seeded
+      // Pass `threads` explicitly so the Runner's context frame is seeded
       // with the per-node ThreadStore that `setupNode` reconstituted
       // from `stack.threads` JSON (or created fresh). `__threads()`
       // accessors emitted inside step bodies will then resolve to this
@@ -3082,7 +3082,7 @@ export class TypeScriptBuilder {
     stmts.push(
       ts.tryCatch(
         ts.statements([
-          // Body-level ALS frame (defense-in-depth). The onNodeStart
+          // Body-level context frame (defense-in-depth). The onNodeStart
           // hook and user body go inside the wrap. The post-body
           // halted check and onNodeEnd hook stay outside: the wrap's
           // inner callback may bare-`return` from `runner.halt(...)`
@@ -3094,7 +3094,7 @@ export class TypeScriptBuilder {
           // __state.ctx.stateStack;` line used to bind, so
           // `__stateStack()` reads inside the wrap return a real
           // StateStack rather than a per-frame State.
-          ts.withAlsFrame({
+          ts.withContextFrame({
             ctx: ts.id("__ctx"),
             stack: ts.raw("__ctx.stateStack"),
             threads: $(ts.id("__setupData")).prop("threads").done(),
@@ -3629,7 +3629,7 @@ export class TypeScriptBuilder {
 
     // Build runPrompt config object. `ctx` and `stateStack` are no longer
     // passed at the call site — `runPrompt` reads them from the active
-    // ALS frame via `getRuntimeContext()`.
+    // context frame via `getRuntimeContext()`.
     const runPromptEntries: Record<string, TsNode> = {
       prompt: promptNode,
       messages: $(threadExpr).done(),
@@ -4372,7 +4372,7 @@ export class TypeScriptBuilder {
     // as a module-top-level rebind so descriptions could read
     // `__ctx.globals.get(...)`. That rebind is gone: it would now
     // shadow the `__ctx` runtime import (which is a function in the
-    // post-ALS migration) and break every accessor call. The
+    // since the context-frame migration) and break every accessor call. The
     // topLevel-flagged scopedVars handle the description case directly.
     //
     // Caveat: `__initializeGlobals` is async; for modules with

@@ -51,7 +51,7 @@ import { RuntimeContext } from "../../runtime/state/context.js";
 import { StateStack } from "../../runtime/state/stateStack.js";
 import { ThreadStore } from "../../runtime/state/threadStore.js";
 
-// Wrap calls into ALS-reading stdlib helpers so getRuntimeContext()
+// Wrap calls into context-reading stdlib helpers so getRuntimeContext()
 // finds a frame. Each call gets its own fresh ctx/stack/threads —
 // these tests don't exercise checkpoint or guard state, so a minimal
 // context suffices.

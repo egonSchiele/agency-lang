@@ -73,7 +73,7 @@ export type ResumableScopeOpts = {
    *  globals is a real per-keystroke cost. Pair this with the
    *  resultCheckpointSetup template which has the same behavior for
    *  compiled Agency function bodies. Not related to the debugger —
-   *  for that, see `agency.callsite()` and the per-step ALS frame. */
+   *  for that, see `agency.callsite()` and the per-step context frame. */
   pinResultCheckpoint?: boolean;
 };
 
@@ -119,7 +119,7 @@ export async function withResumableScope<T>(
   const ctx = runtime.ctx;
 
   // Push a new frame on the active branch's stack (reads `stack` /
-  // `threads` from the ALS frame, same as a generated function body).
+  // `threads` from the context frame, same as a generated function body).
   const { stateStack, stack, threads } = setupFunction();
   // Hand-written claim (generated code claims in its preambles; this
   // helper is TypeScript and pulls a real frame via setupFunction).
@@ -183,7 +183,7 @@ export async function withResumableScope<T>(
         ctx,
         stack: stateStack,
         threads,
-        // Inherit `globals` from any outer ALS frame so a resumable
+        // Inherit `globals` from any outer context frame so a resumable
         // scope nested inside a fork branch sees the branch-local
         // clone instead of the canonical store. Fall back to
         // `ctx.globals` when no outer frame exists.

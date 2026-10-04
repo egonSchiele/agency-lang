@@ -5,7 +5,7 @@ import { ThreadStore } from "./state/threadStore.js";
 import { makeMockCtx } from "./__tests__/testHelpers.js";
 
 // `withResumableScope` calls `setupFunction()`, which itself reads
-// from the active ALS frame and pushes a new State frame onto the
+// from the active context frame and pushes a new State frame onto the
 // stack. Every test wraps its body in `withTestContext` over a
 // `makeMockCtx()` whose `stateStack` is pre-seeded with a node id
 // (matches the harness checkpoint.test.ts uses).

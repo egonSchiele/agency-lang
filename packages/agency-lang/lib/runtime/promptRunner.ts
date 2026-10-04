@@ -141,7 +141,7 @@ export class PromptRunner {
    * Thin adapter over {@link runBatch} with `mode: "all"` and
    * `recordBranchOutcomes: false` (the caller's `branchFn` body manages
    * branch state itself via `stack.setResultOnBranch` / `deleteBranch`).
-   * `runBatch` owns: per-branch abort composition, ALS-isolated invoke,
+   * `runBatch` owns: per-branch abort composition, context-isolated invoke,
    * settle, shared checkpoint stamp at
    * `${checkpointInfo.stepPath}/${keyPrefix}` with
    * `intr.checkpoint`/`checkpointId` overwrite, and `popBranches` on

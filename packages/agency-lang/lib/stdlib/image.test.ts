@@ -33,7 +33,7 @@ function makeStack() {
   return stack;
 }
 
-/** Run `fn` inside a real ALS frame whose ctx carries a mock image client +
+/** Run `fn` inside a real context frame whose ctx carries a mock image client +
  *  statelog. Returns the frame's stack + statelog spy for assertions. */
 async function withClient(
   imageImpl: ImageImpl | undefined,

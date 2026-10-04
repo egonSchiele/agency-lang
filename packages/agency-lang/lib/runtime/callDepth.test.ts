@@ -59,7 +59,7 @@ describe("call-depth guard", () => {
   test("concurrent sibling calls do not accumulate depth (per-lineage, not global)", async () => {
     // root is depth 1; each of 10 concurrent siblings is depth 2. With a naive
     // global counter, 10 in-flight siblings would read depth ~11 and trip a
-    // limit of 3. With per-lineage ALS tracking, each sibling independently
+    // limit of 3. With per-lineage context tracking, each sibling independently
     // sees depth 2, so a limit of 3 is never exceeded.
     const run = () =>
       withCallDepth("root", () =>

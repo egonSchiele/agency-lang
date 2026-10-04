@@ -45,7 +45,7 @@ export function isIpcMode(): boolean {
  * costTelemetry.ts (ipcLog in ipc.ts is unreachable from these leaves without
  * violating the layering rule). Two independent sinks:
  *   - statelog `debug` event (best-effort) so the diagnostic is visible in the
- *     trace when observability is on — resolved from the active ALS frame's
+ *     trace when observability is on — resolved from the active context frame's
  *     ctx.statelogClient; no-ops with no frame/client, never throws;
  *   - stderr, gated on AGENCY_IPC_DEBUG=1, for local IPC debugging. */
 export function ipcChildDebug(line: string): void {

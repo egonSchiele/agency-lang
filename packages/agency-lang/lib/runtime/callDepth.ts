@@ -51,7 +51,7 @@ type CallFrame = {
  * deep recursion; only a call whose own body calls further descends inside this
  * scope and climbs the depth. Mirrors `handlerChainDepthContext` in interrupts.ts.
  *
- * ALS is never serialized, so there is nothing to reset across checkpoints or
+ * the context frame is never serialized, so there is nothing to reset across checkpoints or
  * resumes — each frame unwinds automatically when its call returns or throws.
  */
 const callDepthContext = new PromiseContextStorage<CallFrame>();

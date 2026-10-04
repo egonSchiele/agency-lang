@@ -265,7 +265,7 @@ export function isAborted(value: unknown): value is AbortedResult {
   return value instanceof AbortedResult;
 }
 
-/** Statelog access without requiring an ALS frame: aborts can surface
+/** Statelog access without requiring a context frame: aborts can surface
  *  outside any Agency execution frame (e.g. at process teardown), and
  *  telemetry must never crash the unwind. */
 function statelogClient(): StatelogClient | undefined {

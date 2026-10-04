@@ -222,7 +222,7 @@ The pieces:
   (`lib/runtime/decision/collector.ts`) per block and passes it to
   `runBatch`, which puts `{ collector, armKey }` on each arm's async-context
   frame as `decisions`. The three frame builders that copy fields by name
-  (`Runner.runInScope`, `withResumableScope`, `runInBranchAlsFrame`)
+  (`Runner.runInScope`, `withResumableScope`, `runInBranchContextFrame`)
   forward it; the builders that spread the outer frame carry it for free.
   A `race` block installs none.
 - `dispatchDecision` reads the frame. With a scope it submits
@@ -265,7 +265,7 @@ The pieces:
 - Each round is a `decisionBatch` span holding one `decisionBatch` event
   with the groups, the reason, and the time. The logs viewer summarizes it
   as `decisionBatch 2 requests · 4 questions · 3 calls (idle, 120ms)`. The
-  span opens in the block's own span context, not the triggering arm's.
+  span opens in the block's own spa context, not the triggering arm's.
 
 What does not batch: a call outside any block; the arms of a `race`; a
 call in a nested `parallel` with the outer block's calls (the inner block

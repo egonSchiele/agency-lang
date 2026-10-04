@@ -122,7 +122,7 @@ export async function __internal_forget(
   await manager.forget(query);
 }
 
-// ── ALS-reading replacements for the `__internal_*` exports above ──
+// ── context-reading replacements for the `__internal_*` exports above ──
 // All memory helpers only need `ctx`; `stack`/`threads` are unused.
 
 export async function _setMemoryId(id: string): Promise<void> {

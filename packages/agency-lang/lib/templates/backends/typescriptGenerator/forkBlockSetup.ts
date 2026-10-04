@@ -16,8 +16,8 @@ const {{{frameVar}}} = __bstack;
 // Claim site: this branch just pulled its frame from the branch stack.
 // A mismatched claim on resume replay is a frame desync and throws.
 claimFrameForScope(__bstack, {{{scopeName}}}, {{{moduleId}}});
-// \`__stateStack\` is read from ALS via the \`__stateStack()\` accessor.
-// The branch ALS frame seeded by \`runBatch.runInBranchAlsFrame\`
+// \`__stateStack\` is read from the context frame via the \`__stateStack()\` accessor.
+// The branch context frame seeded by \`runBatch.runInBranchContextFrame\`
 // (lib/runtime/runBatch.ts) already carries \`stack: __forkBranchStack\`,
 // so accessor calls inside the branch body resolve to the branch
 // stack automatically — no local rebind needed. The earlier

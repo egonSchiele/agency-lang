@@ -97,10 +97,10 @@ about the current run.
 | Context variable | File | What it holds |
 | --- | --- | --- |
 | `agencyStore` | `lib/runtime/asyncContext.ts` | the main run context |
-| `callDepthALS` | `lib/runtime/callDepth.ts` | how deep the call stack is |
-| `handlerChainDepthALS` | `lib/runtime/interrupts.ts` | how deep the handler chain is |
-| `executingHandlersALS` | `lib/runtime/executingHandlers.ts` | which handlers are running |
-| `_activeCallbacksALS` | `lib/runtime/hooks.ts` | which callbacks are running |
+| `callDepthContext` | `lib/runtime/callDepth.ts` | how deep the call stack is |
+| `handlerChainDepthContext` | `lib/runtime/interrupts.ts` | how deep the handler chain is |
+| `executingHandlersContext` | `lib/runtime/executingHandlers.ts` | which handlers are running |
+| `_activeCallbacksContext` | `lib/runtime/hooks.ts` | which callbacks are running |
 | `spanStorage` | `lib/statelogClient.ts` | the current logging span |
 
 Each one is built from a context class. Today that class is Node's

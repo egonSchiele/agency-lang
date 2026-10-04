@@ -139,7 +139,7 @@ export class Runner {
    * (e.g., a race loser whose winner already resolved). */
   private stack?: StateStack;
   /** ThreadStore active for this Runner's scope. Captured into the
-   *  per-step AsyncLocalStorage frame so stdlib helpers that read
+   *  per-step context frame so stdlib helpers that read
    *  `getRuntimeContext().threads` (e.g. the std::thread `*Message`
    *  builtins migrated off the context-injected pattern) see the same
    *  ThreadStore the codegen would otherwise have prepended as a
@@ -1273,7 +1273,7 @@ export class Runner {
       this.frame.popBranches();
     } finally {
       this.path.pop();
-      // Each branch ran inside its own AsyncLocalStorage span context, so
+      // Each branch ran inside its own span context, so
       // its pushes/pops are isolated from the parent. We can safely emit
       // forkEnd and pop the fork span here even while loser race branches
       // are still draining in the background — their stacks live in

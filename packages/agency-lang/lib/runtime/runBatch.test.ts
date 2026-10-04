@@ -66,7 +66,7 @@ function makeCtx(): StubCtx {
     },
     statelogClient: {
       snapshotStack: () => undefined,
-      // Pass-through; AsyncLocalStorage isolation isn't observable here.
+      // Pass-through; context isolation isn't observable here.
       runInBranchContext: (_s: any, fn: () => any) => fn(),
     },
   };

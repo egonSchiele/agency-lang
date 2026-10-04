@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
+import { PromiseContextStorage } from "./promiseContextStorage.js";
 import type { HandlerEntry } from "./types.js";
 
 /**
@@ -14,7 +14,7 @@ import type { HandlerEntry } from "./types.js";
  * ALS because exclusion is a property of the async call tree, not a
  * global. Fork branches share the handler chain — branch B's handler is
  * invoked for branch A's interrupt — so a handler executing in one branch
- * must still hear raises from another. `handlerChainDepthALS` in
+ * must still hear raises from another. `handlerChainDepthContext` in
  * interrupts.ts relies on the same per-lineage property.
  *
  * Per ENTRY, not per source handler: a recursive function containing a
@@ -33,17 +33,17 @@ import type { HandlerEntry } from "./types.js";
  * misfire (bounded by MAX_HANDLER_CHAIN_DEPTH) — but the run still
  * cannot pause mid-handler, because the pause refusals read the stack.
  */
-const executingHandlersALS = new AsyncLocalStorage<HandlerEntry[]>();
+const executingHandlersContext = new PromiseContextStorage<HandlerEntry[]>();
 
 /** Run a handler body, recording its entry as executing for the duration. */
 export function runAsHandler<T>(entry: HandlerEntry, fn: () => Promise<T>): Promise<T> {
-  const current = executingHandlersALS.getStore() ?? [];
-  return executingHandlersALS.run([...current, entry], fn);
+  const current = executingHandlersContext.getStore() ?? [];
+  return executingHandlersContext.run([...current, entry], fn);
 }
 
 /** The entries executing in this lineage, outermost first. */
 export function executingHandlers(): HandlerEntry[] {
-  return executingHandlersALS.getStore() ?? [];
+  return executingHandlersContext.getStore() ?? [];
 }
 
 /** True when any handler body is executing in this lineage. */

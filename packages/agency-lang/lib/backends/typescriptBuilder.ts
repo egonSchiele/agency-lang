@@ -4494,7 +4494,7 @@ export class TypeScriptBuilder {
     if (this.compilationUnit.graphNodes.length > 0) {
       // The direct-run block starts a node by name through runNode, the same
       // call every exported node wrapper makes, so `agency run file.agency:node`
-      // can pick any node in this file. runCliEntry starts `main` unless the
+      // can pick any node in this file. runCliMain starts `main` unless the
       // CLI names another. The names are this file's own: the graph also holds
       // every node merged in from imports, which are not entry points.
       //
@@ -4524,69 +4524,25 @@ export class TypeScriptBuilder {
             ts.call(ts.id("fileURLToPath"), [$(ts.id("import")).prop("meta").prop("url").done()]),
           ),
           ts.statements([
-            ts.tryCatch(
-              ts.statements([
-                ts.varDecl(
-                  "const",
-                  "initialState",
-                  ts.obj({
-                    messages: ts.newThreadStore(),
-                    data: ts.obj({}),
-                  }),
-                ),
-                ts.varDecl(
-                  "const",
-                  "__result",
-                  ts.await(
-                    ts.call(ts.id("runCliEntry"), [
-                      ts.obj({
-                        nodeNames,
-                        startNode,
-                        resume: ts.id("__resumeFromCheckpoint"),
-                      }),
-                    ]),
-                  ),
-                ),
-                // Running a node directly from the CLI: interrupts that no
-                // handler settled have surfaced to the user. resolveCliInterrupts
-                // is that user endpoint — under a run policy it decides each one
-                // (prompting with --interactive, rejecting otherwise) and resumes
-                // via respondToInterrupts; without a policy it reports the
-                // unhandled interrupt and exits non-zero. Skipped when imported
-                // from TS (guard above is false), where the caller handles
-                // interrupts itself.
-                ts.await(
-                  ts.call(ts.id("resolveCliInterrupts"), [
-                    ts.id("__result"),
-                    ts.id("respondToInterrupts"),
-                  ]),
-                ),
-              ]),
-              ts.statements([
-                // A root budget trip (--max-cost/--max-time) exits 3 with a
-                // user-facing overrun message and never returns; every other
-                // error falls through to the crash path below. User guard()
-                // trips never reach here — _runGuarded converts them to
-                // Results at their boundary.
-                ts.await(ts.call(ts.id("reportBudgetExceededAndExit"), [ts.id("__error")])),
-                ts.consoleError(
-                  ts.template([
-                    {
-                      // Real newline char: template part text is raw runtime
-                      // characters; the printer escapes, not the caller.
-                      text: "\nAgent crashed: ",
-                      expr: $(ts.id("__error")).prop("message").done(),
-                    },
-                  ]),
-                ),
-                // The uncaught throw below ends the process at once, which
-                // would kill any log requests still on their way. The
-                // message is already printed, so it does not wait on them.
-                ts.await(ts.call(ts.id("flushPendingStatelogPosts"), [])),
-                ts.throw("__error"),
-              ]),
-              "__error: any",
+            ts.varDecl(
+              "const",
+              "initialState",
+              ts.obj({
+                messages: ts.newThreadStore(),
+                data: ts.obj({}),
+              }),
             ),
+            // Not awaited: a generated file must have no top-level `await`.
+            // runCliMain reports a crash itself and rethrows, which ends the
+            // process with a non-zero exit code.
+            ts.call(ts.id("runCliMain"), [
+              ts.obj({
+                nodeNames,
+                startNode,
+                resume: ts.id("__resumeFromCheckpoint"),
+                respondToInterrupts: ts.id("respondToInterrupts"),
+              }),
+            ]),
           ]),
         ),
       );

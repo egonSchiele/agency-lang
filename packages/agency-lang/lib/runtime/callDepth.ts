@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
+import { PromiseContextStorage } from "./promiseContextStorage.js";
 import { agencyStore } from "./asyncContext.js";
 import { CallDepthExceededError } from "./errors.js";
 
@@ -44,17 +44,17 @@ type CallFrame = {
  * Current call frame for the active async lineage.
  *
  * Depth is a property of the async call TREE, not a global count — storing it
- * in AsyncLocalStorage (rather than a counter on `ctx`) means concurrent
+ * in a context variable (rather than a counter on `ctx`) means concurrent
  * siblings (a `parallel`/`fork` fan-out, or an LLM firing many tool calls in
  * one round) each inherit the SAME parent depth and independently descend one
  * level. Their breadth never accumulates, so a wide fan-out is not mistaken for
  * deep recursion; only a call whose own body calls further descends inside this
- * scope and climbs the depth. Mirrors `handlerChainDepthALS` in interrupts.ts.
+ * scope and climbs the depth. Mirrors `handlerChainDepthContext` in interrupts.ts.
  *
  * ALS is never serialized, so there is nothing to reset across checkpoints or
  * resumes — each frame unwinds automatically when its call returns or throws.
  */
-const callDepthALS = new AsyncLocalStorage<CallFrame>();
+const callDepthContext = new PromiseContextStorage<CallFrame>();
 
 /** How many of the most-recent frame names to surface in the overflow error. */
 const RECENT_FRAMES = 8;
@@ -80,7 +80,7 @@ function collectRecentFrames(parent: CallFrame | null, name: string): string[] {
  * (so a deep recursion pays a single `agencyStore` lookup, not one per frame).
  */
 export function withCallDepth<T>(name: string, fn: () => T): T {
-  const parent = callDepthALS.getStore();
+  const parent = callDepthContext.getStore();
   const limit = parent
     ? parent.limit
     : (agencyStore.getStore()?.ctx?.maxCallDepth ?? DEFAULT_MAX_CALL_DEPTH);
@@ -88,5 +88,5 @@ export function withCallDepth<T>(name: string, fn: () => T): T {
   if (depth > limit) {
     throw new CallDepthExceededError(limit, depth, collectRecentFrames(parent ?? null, name));
   }
-  return callDepthALS.run({ name, depth, limit, parent: parent ?? null }, fn);
+  return callDepthContext.run({ name, depth, limit, parent: parent ?? null }, fn);
 }

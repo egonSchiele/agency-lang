@@ -12,7 +12,7 @@ import {
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   __codeLiteral,
-  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
@@ -41,7 +41,7 @@ import {
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
   createLogger as __createLogger,
-  runCliEntry,
+  runCliMain,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -625,30 +625,22 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
 }
 export const __mainNodeParams = [];
 if (__process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    const initialState = {
-      messages: new ThreadStore(),
-      data: {}
-    };
-    const __result = await runCliEntry({
-      nodeNames: ["main"],
-      startNode: (nodeName: string) => runNode({
-        ctx: __globalCtx,
-        nodeName: nodeName,
-        data: initialState.data,
-        messages: initialState.messages,
-        initializeGlobals: __initializeGlobals
-      }),
-      resume: __resumeFromCheckpoint
-    });
-    await resolveCliInterrupts(__result, respondToInterrupts)
-  } catch (__error: any) {
-    await reportBudgetExceededAndExit(__error)
-    console.error(`
-Agent crashed: ${__error.message}`)
-    await flushPendingStatelogPosts()
-    throw __error
-  }
+  const initialState = {
+    messages: new ThreadStore(),
+    data: {}
+  };
+  runCliMain({
+    nodeNames: ["main"],
+    startNode: (nodeName: string) => runNode({
+      ctx: __globalCtx,
+      nodeName: nodeName,
+      data: initialState.data,
+      messages: initialState.messages,
+      initializeGlobals: __initializeGlobals
+    }),
+    resume: __resumeFromCheckpoint,
+    respondToInterrupts: respondToInterrupts
+  })
 }
 export default graph
 export const __sourceMap = {"euler-0008.agency:toDigit":{"1":{"line":5,"col":2},"2":{"line":6,"col":2},"3":{"line":7,"col":2},"4":{"line":8,"col":2},"5":{"line":9,"col":2},"6":{"line":10,"col":2},"7":{"line":11,"col":2},"8":{"line":12,"col":2},"9":{"line":13,"col":2},"10":{"line":14,"col":2},"1.0":{"line":5,"col":18},"2.0":{"line":6,"col":18},"3.0":{"line":7,"col":18},"4.0":{"line":8,"col":18},"5.0":{"line":9,"col":18},"6.0":{"line":10,"col":18},"7.0":{"line":11,"col":18},"8.0":{"line":12,"col":18},"9.0":{"line":13,"col":18}},"euler-0008.agency:main":{"1":{"line":18,"col":2},"2":{"line":19,"col":2},"3":{"line":20,"col":2},"4":{"line":21,"col":2},"5":{"line":33,"col":2},"4.0":{"line":22,"col":4},"4.1":{"line":23,"col":4},"4.2.0":{"line":25,"col":26},"4.2.1":{"line":25,"col":6},"4.2.2":{"line":26,"col":6},"4.2":{"line":24,"col":4},"4.3.0":{"line":29,"col":6},"4.3":{"line":28,"col":4},"4.4":{"line":31,"col":4}}};

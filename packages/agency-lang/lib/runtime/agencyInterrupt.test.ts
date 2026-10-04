@@ -393,7 +393,7 @@ describe("agency.interrupt — raising inside a handler", () => {
         return "done";
       }),
     );
-    // Exclusion and depth both live in AsyncLocalStorage, so the refused
+    // Exclusion and depth both live in context variables, so the refused
     // dispatch's scope has fully unwound — a fresh dispatch must start
     // clean and resolve normally rather than inheriting stale executing
     // entries or a stale depth count.

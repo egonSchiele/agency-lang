@@ -1,4 +1,7 @@
-// SPIKE: bundle a compiled Agency program for an engine that is not Node.
+// Bundle a compiled Agency program for an engine that is not Node.
+//
+// The bundle needs no `async` rewrite of its own. The compiler rewrites the
+// program, and `make` rewrites the runtime (scripts/rewrite-async.mjs).
 import { build } from "esbuild";
 import { readFileSync, writeFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
@@ -100,10 +103,6 @@ const nodeStubs = {
 const agencyResolve = {
   name: "agency-resolve",
   setup(b) {
-    // What the "browser" field in package.json does for a bundler that reads it.
-    b.onResolve({ filter: /platform\/asyncLocalStorage\.js$/ }, () => ({
-      path: join(root, "dist/lib/runtime/platform/asyncLocalStorage.browser.js"),
-    }));
     b.onResolve({ filter: /^agency-lang$/ }, () => ({ path: join(here, "agency-lang-shim.js") }));
     b.onResolve({ filter: /^agency-lang\/runtime$/ }, () => ({ path: join(root, "dist/lib/runtime/index.js") }));
     b.onResolve({ filter: /^agency-lang\/zod$/ }, () => ({ path: join(root, "dist/lib/zod.js") }));
@@ -113,25 +112,10 @@ const agencyResolve = {
     b.onResolve({ filter: /^agency-lang\/stdlib\// }, (args) => ({
       path: join(root, "stdlib", args.path.replace("agency-lang/stdlib/", "")),
     }));
-    // Generated files end with a block that runs the program when the file is
-    // the script Node was started with. It uses a top-level await, which a
-    // single-file bundle cannot hold. A portable compile target would not
-    // emit it; here it is cut out as the file loads.
-    b.onLoad({ filter: /\.js$/ }, (args) => {
-      if (args.path.includes("/node_modules/")) return undefined;
-      const source = readFileSync(args.path, "utf-8");
-      const start = source.indexOf("if (__process.argv[1] === fileURLToPath(import.meta.url)) {");
-      if (start === -1) return undefined;
-      const end = source.indexOf("\nvar stdin_default = graph;", start);
-      if (end === -1) throw new Error("could not find the end of the CLI block in " + args.path);
-      return { contents: source.slice(0, start) + source.slice(end), loader: "js" };
-    });
   },
 };
 
 const PROCESS_GLOBAL = `globalThis.process = globalThis.process || { env: {}, argv: [], execArgv: [], cwd: () => "/", platform: "browser", versions: {}, on() {}, off() {}, once() {}, emitWarning() {}, stderr: { write() {} }, stdout: { write() {} }, exit() {}, nextTick: (f, ...a) => Promise.resolve().then(() => f(...a)) };`;
-
-const lower = process.env.SPIKE_NO_LOWER === "1" ? {} : { "async-await": false, "async-generator": false, "for-await": false };
 
 const result = await build({
   entryPoints: [join(here, "entry.js")],
@@ -139,7 +123,6 @@ const result = await build({
   format: "iife",
   platform: "browser",
   outfile: join(here, "bundle.js"),
-  supported: lower,
   define: { "import.meta.url": JSON.stringify("file:///agent.js"), global: "globalThis" },
   plugins: [agencyResolve, nodeStubs],
   // 22 bundled modules read the \`process\` global without importing it.

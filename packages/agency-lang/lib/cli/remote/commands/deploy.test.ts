@@ -15,7 +15,8 @@ vi.mock("../confirmation.js", () => ({
 }));
 vi.mock("../exportedEndpoints.js", () => ({ countExportedEndpoints: () => countFn() }));
 
-const { runDeploy } = await import("./deploy.js");
+// vitest moves every vi.mock above the imports, so deploy.ts binds the mocks.
+import { runDeploy } from "./deploy.js";
 
 class ProcessExit extends Error {}
 

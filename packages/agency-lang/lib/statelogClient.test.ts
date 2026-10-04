@@ -86,7 +86,7 @@ describe("StatelogClient", () => {
       // The runner calls `snapshotStack()` and wraps every branch in
       // `runInBranchContext()` unconditionally. When the client is a
       // no-op, neither call should allocate a fresh stack copy or set
-      // up an AsyncLocalStorage context. We verify behavior — same
+      // up a context frame. We verify behavior — same
       // empty array reference, no ALS plumbing — to keep the no-op
       // mode genuinely free of per-fork overhead.
       const client = fileClient(newLogFile("disabled-fork"), { observability: false });
@@ -494,7 +494,7 @@ describe("StatelogClient", () => {
     });
   });
 
-  describe("branch span isolation (AsyncLocalStorage)", () => {
+  describe("branch span isolation (context variable)", () => {
     it("snapshotStack copies the active stack and decouples it from later pushes", () => {
       const client = fileClient(newLogFile("snapshot"));
       const a = client.startSpan("agentRun")!;

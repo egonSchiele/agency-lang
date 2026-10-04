@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
+import { PromiseContextStorage } from "./promiseContextStorage.js";
 import type {
   CostEstimate,
   MessageJSON,
@@ -117,7 +117,7 @@ export type AgencyCallbacks = {
 // (tests/agency/callback-recursion).
 //
 // Each `fireWithGuard` call wraps the callback in
-// `_activeCallbacksALS.run(active, ...)` with a freshly-allocated
+// `_activeCallbacksContext.run(active, ...)` with a freshly-allocated
 // `new Set<object>(inherited)` that adds the current callback's key.
 // The Set is inherited through `await` boundaries and nested sync
 // calls inside that scope, so a synchronous re-fire of the same
@@ -125,7 +125,7 @@ export type AgencyCallbacks = {
 // its own key in the set and is skipped.
 //
 // Concurrent sibling branches (e.g. `Promise.allSettled([fireA(),
-// fireB()])`) each enter their OWN `_activeCallbacksALS.run(...)`
+// fireB()])`) each enter their OWN `_activeCallbacksContext.run(...)`
 // scope, so A's added key is visible only inside A's continuation
 // chain, not inside B's. That's why parallel fork/tool branches can
 // each fire the same callback without dropping sibling invocations.
@@ -146,16 +146,16 @@ export type AgencyCallbacks = {
 //     isolates siblings from one another.
 //
 // Set entries are live-only — never serialized. Cleanup is automatic:
-// the entry is only visible inside the `_activeCallbacksALS.run(...)`
+// the entry is only visible inside the `_activeCallbacksContext.run(...)`
 // scope of its fire, which exits when the callback resolves, so a
 // checkpoint can never capture a "stuck" entry.
-const _activeCallbacksALS = new AsyncLocalStorage<Set<object>>();
+const _activeCallbacksContext = new PromiseContextStorage<Set<object>>();
 
 /** True while a callback body is executing on this async path. The runner
  *  defers an external pause here, because a checkpoint taken inside a
  *  callback dispatch is not a place a resume can re-enter. */
 export function isInsideCallback(): boolean {
-  return _activeCallbacksALS.getStore() !== undefined;
+  return _activeCallbacksContext.getStore() !== undefined;
 }
 
 // Global hook registry: allows external packages (e.g., @agency-lang/mcp) to
@@ -207,9 +207,9 @@ async function fireWithGuard(
 ): Promise<void> {
   const key = fn as object;
   // Recursion guard scoped to the current ALS context. See
-  // `_activeCallbacksALS` docstring for why ALS (not module-level
+  // `_activeCallbacksContext` docstring for why ALS (not module-level
   // WeakSet, not per-stack WeakSet).
-  const inherited = _activeCallbacksALS.getStore();
+  const inherited = _activeCallbacksContext.getStore();
   if (inherited?.has(key)) return;
   // Always allocate a fresh set per fire — we need our own copy so a
   // deeper fire can safely re-enter without corrupting the outer set.
@@ -217,7 +217,7 @@ async function fireWithGuard(
   const active = new Set<object>(inherited);
   active.add(key);
   try {
-    await _activeCallbacksALS.run(active, () => invokeCallback(fn, data, ctx, stateStack));
+    await _activeCallbacksContext.run(active, () => invokeCallback(fn, data, ctx, stateStack));
   } catch (error) {
     // Never swallow real control-flow exceptions used by the runtime.
     // AgencyAbort covers BOTH a cancellation and a guard trip — a guard trip

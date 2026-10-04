@@ -500,7 +500,7 @@ export class StateStack {
    *  ALS, because exclusion needs per-lineage precision this per-branch
    *  list cannot give (a concurrent sibling dispatch must still reach a
    *  handler another dispatch is executing). Lives on the stack rather
-   *  than an AsyncLocalStorage so every pause-side reader reaches it
+   *  than a context variable so every pause-side reader reaches it
    *  through a plain object reference it already holds — there is no
    *  ambient lookup to lose. Never serialized: no interrupt-pause
    *  checkpoint may exist while it is non-empty

@@ -184,7 +184,7 @@ An empty context is not always an error. The main store throws when it is
 empty, but the five small stores treat empty as a normal answer:
 
 ```ts
-const parent = callDepthALS.getStore();
+const parent = callDepthContext.getStore();
 const depth = (parent?.depth ?? 0) + 1;
 ```
 

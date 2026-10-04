@@ -23,7 +23,8 @@ vi.mock("../../statelog/projectClient.js", () => ({
   }),
 }));
 
-const { runCall } = await import("./call.js");
+// vitest moves every vi.mock above the imports, so call.ts binds the mocks.
+import { runCall } from "./call.js";
 
 class ProcessExit extends Error {
   constructor(public code: number) {

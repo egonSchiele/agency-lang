@@ -369,7 +369,7 @@ export async function __internal_authorize(
 
 /**
  * ALS-reading replacement for `__internal_authorize`. Reads ctx/stack
- * from the AsyncLocalStorage frame so callers (both agency-side and
+ * from the context frame so callers (both agency-side and
  * internal stdlib callers like `calendar.ts`'s `_authorizeCalendar`)
  * get full cancellation without needing to thread params.
  */
@@ -448,7 +448,7 @@ export async function __internal_getAccessToken(
 
 /**
  * ALS-reading replacement for `__internal_getAccessToken`. Reads
- * ctx/stack from the AsyncLocalStorage frame so callers (both
+ * ctx/stack from the context frame so callers (both
  * agency-side and internal stdlib callers like `calendar.ts`) get
  * full refresh-token cancellation without needing to thread params.
  */

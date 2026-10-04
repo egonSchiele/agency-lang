@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { transformSync } from "esbuild";
+import { transpileToJs } from "./compiler/transpile.js";
 
 export type CompileOptions = {
   /** Extension for .agency rewrites: ".js" or ".ts" */
@@ -93,12 +93,7 @@ export class RunStrategy extends CompileStrategy {
     }
 
     // Then compile this file
-    const result = transformSync(tsCode, {
-      loader: "ts",
-      format: "esm",
-      supported: { "top-level-await": true },
-    });
-    fs.writeFileSync(normalized, result.code);
+    fs.writeFileSync(normalized, transpileToJs(tsCode));
   }
 
   /** Extract relative .js imports from TypeScript source code. */

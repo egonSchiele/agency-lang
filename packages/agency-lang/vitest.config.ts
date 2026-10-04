@@ -1,7 +1,34 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
 
+// esbuild declares the helper that rewritten `async` functions call with
+// `var __async = ...`. A `vi.mock` factory runs while the test file's imports
+// load, which is before that assignment has run, so an `async` factory would
+// fail with "__async is not a function". A function declaration exists from
+// the start of the file, so this plugin turns the helper into one.
+const ASYNC_HELPER = "var __async = (__this, __arguments, generator) => {";
+const hoistAsyncHelper = {
+  name: "agency:hoist-async-helper",
+  transform(code: string) {
+    if (!code.includes(ASYNC_HELPER)) {
+      return null;
+    }
+    return {
+      code: code.replace(ASYNC_HELPER, "function __async(__this, __arguments, generator) {"),
+      map: null,
+    };
+  },
+};
+
 export default defineConfig({
+  plugins: [hoistAsyncHelper],
+  // Rewrite every `async` function in the code under test into promise code.
+  // The runtime's context class only works on rewritten code, and the built
+  // package is rewritten the same way by scripts/rewrite-async.mjs. See
+  // docs/dev/runtime/portable-context-spike.md.
+  esbuild: {
+    supported: { "async-await": false, "async-generator": false, "for-await": false },
+  },
   test: {
     globals: true,
     environment: "node",

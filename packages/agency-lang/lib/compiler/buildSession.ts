@@ -41,7 +41,7 @@ import {
 } from "./manifestTracker.js";
 import { deriveConfigKey } from "./buildManifest.js";
 import { dependencyFingerprint } from "./depFingerprint.js";
-import { transformSync } from "esbuild";
+import { transpileToJs } from "./transpile.js";
 import * as fs from "fs";
 import * as path from "path";
 import {
@@ -513,14 +513,10 @@ export class BuildSession {
     if (options?.ts) {
       fs.writeFileSync(outputFile, "// @ts-nocheck\n" + generatedCode, "utf-8");
     } else {
-      const result = timed(`Transformed code for ${absoluteInputFile} with esbuild`, verbose, () =>
-        transformSync(generatedCode, {
-          loader: "ts",
-          format: "esm",
-          supported: { "top-level-await": true },
-        }),
+      const jsCode = timed(`Transformed code for ${absoluteInputFile} with esbuild`, verbose, () =>
+        transpileToJs(generatedCode),
       );
-      fs.writeFileSync(outputFile, result.code, "utf-8");
+      fs.writeFileSync(outputFile, jsCode, "utf-8");
       // Record ONLY when the module's deps are knowable. Stdlib modules
       // compile closure-free by design; their deps come from
       // dependencyFingerprint (std::-resolved), which also reports whether

@@ -1,5 +1,5 @@
 import * as smoltalk from "smoltalk";
-import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
+import { PromiseContextStorage } from "./promiseContextStorage.js";
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
@@ -202,7 +202,7 @@ export type InterruptInfo = {
 };
 
 /** Maximum nested-dispatch depth for `runHandlerChain`. Each dispatch descends
- *  one level in `handlerChainDepthALS`; exceeding this limit throws
+ *  one level in `handlerChainDepthContext`; exceeding this limit throws
  *  `HandlerRecursionError`. Picked to be well above any plausible legitimate
  *  nesting (a handler that calls one nested handler-aware operation, that itself
  *  calls another, etc.) but small enough that a runaway recursion is caught
@@ -215,7 +215,7 @@ const MAX_HANDLER_CHAIN_DEPTH = 10;
 /** Current handler-chain nesting depth for the *active async lineage*.
  *
  *  Recursion depth is a property of the async call tree, NOT a global count.
- *  Storing it in AsyncLocalStorage (rather than a single counter on `ctx`) means
+ *  Storing it in a context variable (rather than a single counter on `ctx`) means
  *  concurrent dispatches — e.g. an LLM firing 15 tool calls in one round, each of
  *  which interrupts while its siblings are still in flight — each inherit the
  *  SAME parent depth and independently descend one level. Their breadth never
@@ -226,7 +226,7 @@ const MAX_HANDLER_CHAIN_DEPTH = 10;
  *  ALS is never serialized, so there is nothing to reset across checkpoints or
  *  resumes — each scope unwinds automatically when its dispatch returns or
  *  throws. */
-const handlerChainDepthALS = new AsyncLocalStorage<number>();
+const handlerChainDepthContext = new PromiseContextStorage<number>();
 
 /** Run all registered handlers for an interrupt (top of the stack first).
  * Emits handlerDecision/interruptResolved events along the way and returns
@@ -239,7 +239,7 @@ async function runHandlerChain(
   eligible?: (entry: HandlerEntry) => boolean,
 ): Promise<HandlerChainOutcome> {
   // Descend one level in the CURRENT async lineage (see
-  // `handlerChainDepthALS`). Concurrent sibling dispatches each read the same
+  // `handlerChainDepthContext`). Concurrent sibling dispatches each read the same
   // inherited parent depth, so fan-out breadth never accumulates; only a
   // handler whose body re-enters the chain nests inside the `run(...)` scope
   // below and climbs the depth.
@@ -254,11 +254,11 @@ async function runHandlerChain(
         "interruptWithHandlers or gatherChainOutcome.",
     );
   }
-  const depth = (handlerChainDepthALS.getStore() ?? 0) + 1;
+  const depth = (handlerChainDepthContext.getStore() ?? 0) + 1;
   if (depth > MAX_HANDLER_CHAIN_DEPTH) {
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
-  return handlerChainDepthALS.run(depth, async () => {
+  return handlerChainDepthContext.run(depth, async () => {
     // Approvals collect in chain-walk order (innermost handler first) and
     // are merged once at the end via the effect's merge (effectMerge.ts).
     // For effects with no specific merge the default reproduces the

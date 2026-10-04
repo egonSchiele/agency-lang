@@ -5,7 +5,7 @@ import { State, StateStack } from "./state/stateStack.js";
 /** Stub statelog client. Includes the minimum surface PromptRunner touches:
  *  checkpointCreated for `step()`, snapshotStack / runInBranchContext for
  *  `parallel()`. The branch-context stub just calls the fn directly — the
- *  AsyncLocalStorage isolation isn't relevant to these unit tests. */
+ *  Context isolation isn't relevant to these unit tests. */
 function stubStatelogClient(extras: Partial<any> = {}) {
   return {
     checkpointCreated: () => {},

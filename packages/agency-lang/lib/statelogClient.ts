@@ -1,7 +1,7 @@
 import type { CodeIdentity } from "@/runDirectory/codeIdentity.js";
 import * as fs from "fs";
 import * as path from "path";
-import { AsyncLocalStorage } from "./runtime/platform/asyncLocalStorage.js";
+import { PromiseContextStorage } from "./runtime/promiseContextStorage.js";
 import { nanoid } from "nanoid";
 import { ModelName } from "smoltalk";
 import { JSONEdge } from "./types.js";
@@ -47,7 +47,7 @@ export type SpanType =
   | "decisionBatch"
   // Memory-subsystem umbrella spans. Each one wraps a single
   // user-facing memory operation; the inner `llmCall`/`embedding`
-  // spans nest underneath via AsyncLocalStorage so a viewer can
+  // spans nest underneath via a context variable so a viewer can
   // collapse the whole operation into one row.
   | "memoryRemember"
   | "memoryRecall"
@@ -158,13 +158,13 @@ export class StatelogClient {
   private remoteEnabled: boolean = false;
   // The "root" span stack — used by the outer agent run thread. Code
   // running inside `runInBranchContext` sees a branch-local stack
-  // delivered via AsyncLocalStorage instead.
+  // delivered via a context variable instead.
   private rootStack: SpanContext[] = [];
-  // Per-branch span stacks live in this AsyncLocalStorage. Each concurrent
+  // Per-branch span stacks live in this context variable. Each concurrent
   // fork/race branch gets its own stack so its `startSpan`/`endSpan`
   // calls never bleed into the parent or siblings — even though they all
   // share this single StatelogClient instance.
-  private spanStorage = new AsyncLocalStorage<SpanContext[]>();
+  private spanStorage = new PromiseContextStorage<SpanContext[]>();
   private metadata?: RunMetadata;
   private code?: CodeIdentity;
   private requestTimeoutMs: number;

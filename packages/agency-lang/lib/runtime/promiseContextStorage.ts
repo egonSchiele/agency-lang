@@ -1,7 +1,7 @@
 /**
- * SPIKE: a context store that needs no `node:async_hooks` and no native
- * `AsyncContext`. It satisfies the same contract as the seam in
- * `asyncLocalStorage.ts`.
+ * The class every runtime context variable is built from. It keeps a value
+ * attached to a chain of `async` calls while other chains run in between,
+ * and it needs nothing from Node, so it works in a browser.
  *
  * How it works. The current context is one module-level variable,
  * `currentFrame`. Two things keep it right across a pause:
@@ -13,16 +13,23 @@
  *      runs.
  *
  * So a function that pauses at an `await` gets its own context back when it
- * wakes up, which is what `AsyncLocalStorage` does.
+ * wakes up.
  *
- * Code that was NOT rewritten (a dependency, an imported TypeScript file)
- * still works as a callee: its caller's context is saved by the caller's own
- * `.then`. Inside that code, after its first real `await`, the context is
- * empty.
+ * Code that was not rewritten, such as a dependency, still works as a callee:
+ * its caller's context is saved by the caller's own `.then`. Inside that
+ * code, after its first real `await`, the context is empty.
+ *
+ * A callback that is not a promise callback or a timer runs with an empty
+ * context. An event listener is the common case. Wrap such a callback with
+ * `bindToCurrentFrame` when you register it.
+ *
+ * See docs/dev/runtime/portable-context-spike.md for the mechanism and
+ * docs/dev/runtime/running-without-node.md for why Agency uses this class
+ * on every target.
  */
 
 /**
- * One value per store, keyed by the store's id. A frame is never changed
+ * One value per context variable, keyed by its id. A frame is never changed
  * after it is made: `run` builds a new one. That is what lets a paused
  * function hold on to its frame by reference.
  */
@@ -36,8 +43,12 @@ let installed = false;
 
 type AnyFunction = (this: unknown, ...args: unknown[]) => unknown;
 
-/** Return `fn` wrapped so it runs inside the frame that is current right now. */
-function bindToCurrentFrame<F>(fn: F): F {
+/**
+ * Return `fn` wrapped so it runs inside the frame that is current right now.
+ * Use it for a callback that something other than a promise or a timer will
+ * call later, such as an event listener.
+ */
+export function bindToCurrentFrame<F>(fn: F): F {
   if (typeof fn !== "function") {
     return fn;
   }
@@ -74,7 +85,7 @@ function patchScheduler(owner: Record<string, unknown>, name: string): void {
 
 /**
  * Install the `.then` wrapper and the timer wrappers. Runs once, the first
- * time a store is created.
+ * time a context variable is created.
  */
 function install(): void {
   if (installed) {
@@ -134,7 +145,7 @@ export class PromiseContextStorage<T> {
 }
 
 /**
- * Throw if `fn` is a real `async` function, meaning the build did not rewrite
+ * Throw if `fn` is a real `async` function, meaning no build step rewrote
  * it. Such a function reads an empty context after its first `await`, and
  * some reads treat empty as a normal answer: the call-depth guard would count
  * every call as the first, so runaway recursion would never be stopped.
@@ -146,9 +157,10 @@ export class PromiseContextStorage<T> {
 export function assertAsyncRewritten(fn: unknown, label: string): void {
   if (Object.prototype.toString.call(fn) === "[object AsyncFunction]") {
     throw new Error(
-      `${label} is a real async function, but this build keeps context by ` +
-        "rewriting async functions into promise code. Build it with that " +
-        "rewrite switched on.",
+      `${label} is a real async function. Agency keeps its context by ` +
+        "rewriting async functions into promise code, and this one was not " +
+        "rewritten. Compile it with the Agency compiler. See " +
+        "docs/dev/runtime/portable-context-spike.md.",
     );
   }
 }

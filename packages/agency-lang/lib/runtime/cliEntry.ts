@@ -10,6 +10,9 @@ import { verifyCheckpointChecksum } from "./checkpointChecksum.js";
 import { exitProcessNow } from "./exitProcess.js";
 import type { ResumeOverrides } from "./resumeSetup.js";
 import { Checkpoint } from "./state/checkpointStore.js";
+import { reportBudgetExceededAndExit } from "./budgetExit.js";
+import { resolveCliInterrupts } from "./cliInterruptResolution.js";
+import { flushPendingStatelogPosts } from "../statelogSender.js";
 
 const DEFAULT_ENTRY_NODE = "main";
 
@@ -89,4 +92,40 @@ export async function runCliEntry<T>(args: CliEntryArgs<T>): Promise<T> {
     throw new Error(`Checkpoint file "${filename}" failed checksum verification`);
   }
   return args.resume(checkpoint, parseOverrides(process.env[AGENCY_RESUME_OVERRIDES]));
+}
+
+type CliMainArgs = CliEntryArgs<any> & {
+  /** The compiled file's `respondToInterrupts`, which resumes the run. */
+  respondToInterrupts: Parameters<typeof resolveCliInterrupts>[1];
+};
+
+/**
+ * Run a compiled file that was started directly, as `node file.js`.
+ *
+ * Generated code calls this without `await`. A generated file must have no
+ * top-level `await`, because the build cannot rewrite the `async` functions
+ * of a file that has one (see docs/dev/runtime/portable-context-spike.md).
+ *
+ * An error is rethrown after it is reported. Nothing awaits the returned
+ * promise, so Node ends the process with a non-zero exit code.
+ */
+export async function runCliMain(args: CliMainArgs): Promise<void> {
+  try {
+    const result = await runCliEntry(args);
+    // Interrupts that no handler settled have reached the user.
+    // resolveCliInterrupts decides each one under a run policy, prompting
+    // with --interactive and rejecting otherwise, then resumes. Without a
+    // policy it reports the unhandled interrupt and exits non-zero.
+    await resolveCliInterrupts(result, args.respondToInterrupts);
+  } catch (error) {
+    // A root budget trip (--max-cost/--max-time) exits 3 with its own
+    // message and never returns. Every other error is a crash. User guard()
+    // trips never reach here: _runGuarded converts them to Results.
+    await reportBudgetExceededAndExit(error);
+    console.error(`\nAgent crashed: ${(error as Error).message}`);
+    // The throw below ends the process, which would kill any log requests
+    // still on their way.
+    await flushPendingStatelogPosts();
+    throw error;
+  }
 }

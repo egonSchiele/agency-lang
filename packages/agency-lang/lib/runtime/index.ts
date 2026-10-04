@@ -100,7 +100,7 @@ export type { ResumeCliFromCheckpointArgs, ResumeFromCheckpointArgs } from "./in
 export { checkPolicy, checkPolicyExplicit, validatePolicy, escapeGlob } from "./policy.js";
 
 export { resolveCliInterrupts } from "./cliInterruptResolution.js";
-export { runCliEntry } from "./cliEntry.js";
+export { runCliEntry, runCliMain } from "./cliEntry.js";
 
 export { isGenerator, handleStreamingResponse } from "./streaming.js";
 

@@ -12,7 +12,7 @@ import {
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   __codeLiteral,
-  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
@@ -41,7 +41,7 @@ import {
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
   createLogger as __createLogger,
-  runCliEntry,
+  runCliMain,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);

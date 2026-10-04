@@ -21,7 +21,7 @@
  * this module's load, which registers the hook.
  *
  * Naming follows stdlib conventions: every export is `_`-prefixed and
- * reads its runtime context from AsyncLocalStorage via `agency.*`.
+ * reads its runtime context from the context frame via `agency.*`.
  */
 import { z } from "zod";
 import * as smoltalk from "smoltalk";

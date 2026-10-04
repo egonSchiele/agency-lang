@@ -2735,7 +2735,11 @@ const isMain =
   import.meta.url === pathToFileURL(fs.realpathSync(process.argv[1])).href;
 
 if (isMain) {
-  await runCli();
+  // Not awaited: the build cannot rewrite the `async` functions of a file
+  // that has a top-level `await` (see scripts/rewrite-async.mjs). An error
+  // from runCli becomes an unhandled rejection, which ends the process with
+  // a non-zero exit code.
+  void runCli();
 } else {
   console.warn("Not executing Agency CLI because it was imported as a module.");
 }

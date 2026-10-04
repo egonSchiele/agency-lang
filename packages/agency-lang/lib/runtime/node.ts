@@ -437,7 +437,7 @@ async function runNodeCore({
       let threadStore = ThreadStore.withDefaultActive(execCtx.statelogClient);
       while (true) {
         try {
-          // Install an initial AsyncLocalStorage frame so stdlib helpers
+          // Install an initial context frame so stdlib helpers
           // that read `getRuntimeContext()` (the post-migration replacement
           // for the `__ctx, __stateStack, __threads` codegen-injected
           // args) see a sensible context even on code paths that run

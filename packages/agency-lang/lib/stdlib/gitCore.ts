@@ -1,5 +1,5 @@
 // Pure git helpers: shared types, argv builders, and validators. NO mutable
-// module state, NO process spawning, NO fs, NO AsyncLocalStorage — everything
+// module state, NO process spawning, NO fs, NO runtime context — everything
 // here is request/response so it is trivially unit-testable and safe under
 // Agency's per-run isolation. The output parsers live in gitParse.ts;
 // path-containment (async + symlink-aware) lives in git.ts.

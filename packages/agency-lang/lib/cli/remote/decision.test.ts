@@ -7,8 +7,9 @@ vi.mock("@/cli/runPolicy.js", () => ({
   resolveRunPolicy: (...args: unknown[]) => resolveRunPolicy(...args),
 }));
 
-// Imported after the mock so decision.ts binds the mocked resolveRunPolicy.
-const { resolveRemoteDecision } = await import("./decision.js");
+// vitest moves vi.mock above the imports, so decision.ts binds the mocked
+// resolveRunPolicy.
+import { resolveRemoteDecision } from "./decision.js";
 
 function intr(effect: string): Interrupt {
   return {

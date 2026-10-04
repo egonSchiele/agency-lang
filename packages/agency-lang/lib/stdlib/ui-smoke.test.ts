@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 // paths. The compiled `stdlib/ui.js` imports from `agency-lang/runtime`
 // which resolves to `dist/lib/runtime/index.js`; using `../runtime/...`
 // here would load a separate module instance with its own
-// `AsyncLocalStorage`, so `runInTestContext()` wouldn't propagate to
+// the context variable, so `runInTestContext()` wouldn't propagate to
 // `getRuntimeContext()` calls inside the compiled stdlib.
 import {
   __call,

@@ -100,6 +100,10 @@ build:
 	rm -rf dist/lib/stdlib/providers
 	cp lib/stdlib/mcpBridge.mjs dist/lib/stdlib/mcpBridge.mjs
 	cp lib/stdlib/visionOcr.jxa dist/lib/stdlib/visionOcr.jxa
+	# Rewrite every `async` function in dist into promise code. The runtime's
+	# context class needs it: see docs/dev/runtime/portable-context-spike.md.
+	# Last, so the copied .mjs files are rewritten too.
+	node scripts/rewrite-async.mjs dist
 
 # Full reset: compiled TS, incremental scratch state, and the gitignored
 # stdlib .js siblings. Both dist/ AND stdlib/**/*.js ship in the npm

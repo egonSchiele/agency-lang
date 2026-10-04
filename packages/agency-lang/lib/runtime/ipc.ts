@@ -4,6 +4,7 @@
  * over Node's built-in IPC channel instead of being returned as Interrupt[].
  */
 
+import { bindToCurrentFrame } from "./promiseContextStorage.js";
 import { adoptAlwaysScope, type ScopedField } from "./alwaysScope.js";
 import path from "path";
 import { dirname } from "path";
@@ -1259,9 +1260,16 @@ export function attachSessionHandlers(
     settleWithLimitFailure(s, "wall_clock", s.limits.wallClock, elapsed);
   }, s.limits.wallClock);
 
-  s.child.on("message", (msg: any) => {
-    void handleChildMessage(s, msg);
-  });
+  // The child's messages arrive through an event listener, which would run
+  // with an empty context. A message can carry an interrupt, and this
+  // process's handlers answer it, so the listener has to run in the context
+  // of the run that started the child.
+  s.child.on(
+    "message",
+    bindToCurrentFrame((msg: any) => {
+      void handleChildMessage(s, msg);
+    }),
+  );
   s.child.on("close", (code, signal) => handleChildClose(s, code, signal));
   s.child.on("error", (err: Error) =>
     settle(s, s.rejectPromise, new Error(`Subprocess error: ${err.message}`)),

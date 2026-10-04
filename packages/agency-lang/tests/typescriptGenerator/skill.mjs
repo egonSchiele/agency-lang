@@ -12,7 +12,7 @@ import {
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   __codeLiteral,
-  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
@@ -41,7 +41,7 @@ import {
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
   createLogger as __createLogger,
-  runCliEntry,
+  runCliMain,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -309,30 +309,22 @@ export async function analyzeData(input: string, { messages: __invocationMessage
 }
 export const __analyzeDataNodeParams = ["input"];
 if (__process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    const initialState = {
-      messages: new ThreadStore(),
-      data: {}
-    };
-    const __result = await runCliEntry({
-      nodeNames: ["analyzeData"],
-      startNode: (nodeName: string) => runNode({
-        ctx: __globalCtx,
-        nodeName: nodeName,
-        data: initialState.data,
-        messages: initialState.messages,
-        initializeGlobals: __initializeGlobals
-      }),
-      resume: __resumeFromCheckpoint
-    });
-    await resolveCliInterrupts(__result, respondToInterrupts)
-  } catch (__error: any) {
-    await reportBudgetExceededAndExit(__error)
-    console.error(`
-Agent crashed: ${__error.message}`)
-    await flushPendingStatelogPosts()
-    throw __error
-  }
+  const initialState = {
+    messages: new ThreadStore(),
+    data: {}
+  };
+  runCliMain({
+    nodeNames: ["analyzeData"],
+    startNode: (nodeName: string) => runNode({
+      ctx: __globalCtx,
+      nodeName: nodeName,
+      data: initialState.data,
+      messages: initialState.messages,
+      initializeGlobals: __initializeGlobals
+    }),
+    resume: __resumeFromCheckpoint,
+    respondToInterrupts: respondToInterrupts
+  })
 }
 export default graph
 export const __sourceMap = {"skill.agency:analyzeData":{"1":{"line":2,"col":2}}};

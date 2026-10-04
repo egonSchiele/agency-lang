@@ -19,7 +19,7 @@ type PreparedEvalEvent = {
  * std::statelog TS impls. Called from the agency-side wrappers in
  * stdlib/statelog.agency, which pass through the user's value
  * argument. Each function reads the active AgencyStore from
- * AsyncLocalStorage and emits the corresponding wire event.
+ * the context frame and emits the corresponding wire event.
  *
  * No-op when called outside an Agency execution frame (e.g. a tool
  * function invoked directly from a test). This is the lenient pattern

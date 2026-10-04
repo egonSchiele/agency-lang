@@ -1,5 +1,5 @@
 /**
- * AsyncLocalStorage-based runtime context for stdlib functions.
+ * The runtime context that stdlib functions read, kept in a context variable.
  *
  * Replaces the "context-injected builtin" pattern (`__internal_foo` names
  * that get the codegen-rewrite treatment to prepend `__ctx, __stateStack,
@@ -45,7 +45,7 @@
  *
  * See docs/dev/runtime/async-context.md for the full picture.
  */
-import { AsyncLocalStorage } from "./platform/asyncLocalStorage.js";
+import { PromiseContextStorage } from "./promiseContextStorage.js";
 import process from "node:process";
 import { BootstrapThreadStore } from "./state/bootstrapThreadStore.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -116,7 +116,7 @@ export type AgencyStore = {
   decisions?: DecisionScope;
 };
 
-export const agencyStore = new AsyncLocalStorage<AgencyStore>();
+export const agencyStore = new PromiseContextStorage<AgencyStore>();
 
 /**
  * Push a new ALS frame copying the current ctx/stack/threads but

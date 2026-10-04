@@ -12,7 +12,7 @@ import {
   setupNode, setupFunction, claimFrameForScope, runNode, runPrompt, callHook,
   checkpoint as __checkpoint_impl, getCheckpoint as __getCheckpoint_impl, restore as __restore_impl, _run as __runtime_run_impl,
   __codeLiteral,
-  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, resolveCliInterrupts, reportBudgetExceededAndExit, flushPendingStatelogPosts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
+  interrupt, isInterrupt, hasInterrupts, reportUnhandledInterrupts, isDebugger, isRejected, isApproved, interruptWithHandlers, debugStep,
   isPaused,
   respondToInterrupts as _respondToInterrupts,
   respondToInterruptsForServe as _respondToInterruptsForServe,
@@ -41,7 +41,7 @@ import {
   DeterministicClient as __DeterministicClient,
   installFetchMock as __installFetchMock,
   createLogger as __createLogger,
-  runCliEntry,
+  runCliMain,
 } from "agency-lang/runtime";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -715,30 +715,22 @@ export async function main({ messages: __invocationMessages, callbacks: __invoca
 }
 export const __mainNodeParams = [];
 if (__process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    const initialState = {
-      messages: new ThreadStore(),
-      data: {}
-    };
-    const __result = await runCliEntry({
-      nodeNames: ["main"],
-      startNode: (nodeName: string) => runNode({
-        ctx: __globalCtx,
-        nodeName: nodeName,
-        data: initialState.data,
-        messages: initialState.messages,
-        initializeGlobals: __initializeGlobals
-      }),
-      resume: __resumeFromCheckpoint
-    });
-    await resolveCliInterrupts(__result, respondToInterrupts)
-  } catch (__error: any) {
-    await reportBudgetExceededAndExit(__error)
-    console.error(`
-Agent crashed: ${__error.message}`)
-    await flushPendingStatelogPosts()
-    throw __error
-  }
+  const initialState = {
+    messages: new ThreadStore(),
+    data: {}
+  };
+  runCliMain({
+    nodeNames: ["main"],
+    startNode: (nodeName: string) => runNode({
+      ctx: __globalCtx,
+      nodeName: nodeName,
+      data: initialState.data,
+      messages: initialState.messages,
+      initializeGlobals: __initializeGlobals
+    }),
+    resume: __resumeFromCheckpoint,
+    respondToInterrupts: respondToInterrupts
+  })
 }
 export default graph
 export const __sourceMap = {"matchBlock.agency:main":{"2":{"line":4,"col":2},"3":{"line":5,"col":2},"5":{"line":13,"col":2},"6":{"line":14,"col":2},"8":{"line":22,"col":2},"9":{"line":23,"col":2},"10":{"line":24,"col":2},"12":{"line":33,"col":2},"13":{"line":34,"col":2},"15":{"line":42,"col":2},"16":{"line":43,"col":2},"18":{"line":53,"col":2},"19":{"line":54,"col":2},"3.0":{"line":6,"col":15},"3.1":{"line":7,"col":14},"3.2":{"line":8,"col":17},"3.3":{"line":9,"col":9},"6.0":{"line":15,"col":11},"6.1":{"line":16,"col":11},"6.2":{"line":17,"col":11},"6.3":{"line":18,"col":9},"10.0":{"line":25,"col":11},"10.1":{"line":26,"col":11},"10.2":{"line":27,"col":11},"10.3":{"line":28,"col":11},"10.4":{"line":29,"col":9},"13.0":{"line":35,"col":15},"13.1":{"line":36,"col":14},"13.2":{"line":37,"col":14},"13.3":{"line":38,"col":15},"16.0":{"line":44,"col":15},"16.1":{"line":45,"col":16},"16.2":{"line":49,"col":9},"19.0":{"line":55,"col":13},"19.1":{"line":59,"col":14},"19.2":{"line":63,"col":13},"19.3":{"line":67,"col":9}}};

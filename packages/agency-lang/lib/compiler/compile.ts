@@ -8,7 +8,7 @@ import { initPlanForModule, type InitPlanForModule } from "@/backends/typescript
 import { describeDiagnostic, prepareProgram, throwImportFailures } from "./prepareProgram.js";
 import { formatErrors, typeCheck } from "@/typeChecker/index.js";
 import { buildCompiledClosure, CompileClosureError } from "./compileClosure.js";
-import { transformSync } from "esbuild";
+import { transpileToJs } from "./transpile.js";
 import { nanoid } from "nanoid";
 import * as fs from "fs";
 import * as path from "path";
@@ -223,15 +223,9 @@ export function compileSource(source: string, config: CompileSourceOptions): Com
     );
 
     // 8. Transpile TS → JS
-    const result = transformSync(generatedCode, {
-      loader: "ts",
-      format: "esm",
-      supported: { "top-level-await": true },
-    });
-
     return {
       success: true,
-      code: result.code,
+      code: transpileToJs(generatedCode),
       moduleId,
     };
   } catch (error) {

@@ -3,7 +3,7 @@
 // the type annotation on `llm()`, so structured-output enforcement
 // flows through the same path as user-defined typed prompts.
 
-// `_*` exports read ctx from AsyncLocalStorage (see
+// `_*` exports read ctx from the context frame (see
 // `lib/runtime/asyncContext.ts`); no `__ctx` arg is plumbed at the
 // call site. The deprecated `__internal_*` exports remain in
 // `lib/stdlib/memory.ts` for the migration window.

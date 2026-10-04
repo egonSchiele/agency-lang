@@ -40,7 +40,7 @@ against the rule in this repo:
 | Phase 1 worktree | `/Users/adit/agency-lang/packages/agency-lang/.worktrees/explicit-run` |
 | Phase 1 branch and PR | `explicit-run`, PR [#1169](https://github.com/egonSchiele/agency-lang/pull/1169), based on main at `ad1d7ec9b` |
 | The other design, for comparison | PR [#1167](https://github.com/egonSchiele/agency-lang/pull/1167), branch `spike/portable-context`, worktree `.worktrees/portable-context`. Leave it open. |
-| The prototype | `.worktrees/explicit-context/packages/agency-lang/scripts/explicit-context-spike/`, branch `spike/explicit-context`. **It is not committed.** Cleaning up that worktree deletes it. |
+| The prototype | `.worktrees/explicit-context/packages/agency-lang/scripts/explicit-context-spike/`, branch `spike/explicit-context`, committed at `34350cf36`. The branch is local and not pushed. |
 | The audit script | `scripts/audit-run-reads.mjs`, committed in Phase 1 |
 
 The Phase 1 worktree has `node_modules` and a built `dist`. `make build`

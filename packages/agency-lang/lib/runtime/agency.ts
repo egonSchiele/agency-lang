@@ -31,8 +31,10 @@ import {
   agencyStore,
   ambientRun,
   callPlain,
+  detachedRun,
   getRuntimeContext,
   runInTestContext,
+  withRun,
   withCallsite as _withCallsite,
   withPushedHandler,
   type CallsiteLocation,
@@ -443,8 +445,12 @@ export type RunHandle = {
 const current = (): RunHandle => {
   const run = getRuntimeContext();
   return {
-    call: (fn, ...args) => __call(run, fn, { type: "positional", args }),
-    callWith: (fn, descriptor) => __call(run, fn, descriptor),
+    // Each call gets its own copy of the run, so two calls made at once
+    // through one handle are not counted against each other.
+    call: (fn, ...args) =>
+      withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, { type: "positional", args })),
+    callWith: (fn, descriptor) =>
+      withRun(detachedRun(run, {}), (callRun) => __call(callRun, fn, descriptor)),
     addCost: (amount) => addCostTo(run, amount),
     addTokens: (amount) => addTokensTo(run, amount),
     ctx: run.ctx,

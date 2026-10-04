@@ -47,7 +47,7 @@
  *    the generated function-body emission in
  *    `lib/backends/typescriptBuilder.ts`.
  */
-import { ambientRun, getRuntimeContext, lineageOf, withRun } from "./asyncContext.js";
+import { ambientRun, freshState, getRuntimeContext, lineageOf, withRun } from "./asyncContext.js";
 import { setupFunction } from "./node.js";
 import { Runner } from "./runner.js";
 import { claimFrameForScope } from "./state/stateStack.js";
@@ -193,6 +193,7 @@ export async function withResumableScope<T>(
         // nested inside a fork branch still batches with the block.
         decisions: outer.decisions,
         log: outer.log,
+        state: freshState(),
         callsite: { moduleId, scopeName: opts.name, stepPath: "" },
         ...lineageOf(outer),
       },

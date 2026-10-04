@@ -1,6 +1,6 @@
 import { withThreadEndHooksEvents } from "./threadEndHooksEvents.js";
 import { nanoid } from "nanoid";
-import { __globals, sameRun, withRun, type Run } from "./asyncContext.js";
+import { __globals, assertUsable, sameRun, withChildRun, type Run } from "./asyncContext.js";
 import { raiseGuardTripsAtStep } from "./guardTripInterrupt.js";
 import { debugStep } from "./debugger.js";
 import { RunControlSignal, readCause } from "./errors.js";
@@ -184,9 +184,10 @@ export class Runner {
   private runInScope<T>(run: Run, fn: (run: Run) => Promise<T>): Promise<T> {
     if (this.stack && this.threads) {
       sameRun(run, "A Runner step");
-      return withRun(
+      assertUsable(run, "run a step");
+      return withChildRun(
+        run,
         {
-          ...run,
           ctx: this.ctx,
           stack: this.stack,
           threads: this.threads,
@@ -197,6 +198,7 @@ export class Runner {
           },
           runner: this,
         },
+        `step ${this.path.join(".")} of ${this.scopeName}`,
         fn,
       );
     }

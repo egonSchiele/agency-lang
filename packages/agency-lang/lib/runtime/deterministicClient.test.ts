@@ -24,6 +24,7 @@ function inModule<T>(moduleId: string, fn: () => T): T {
       threads: {} as any,
       globals: {} as any,
       log: {} as any,
+      state: { waiting: 0, waitingFor: "" },
       callsite: { moduleId, scopeName: "main", stepPath: "" },
       ...lineageOf(undefined),
     },

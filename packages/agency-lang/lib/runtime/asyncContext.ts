@@ -143,7 +143,108 @@ export type Run = {
    * branch's tag store and span stack. Every run in a branch shares one.
    */
   log: StatelogClient;
+  /**
+   * What this run is waiting for, for the wrong-run check. Unlike every
+   * other field it is written to. A child run always gets its own.
+   */
+  state: RunState;
 };
+
+/**
+ * How many things a run has started and is waiting for, and the name of
+ * the latest. A run is usable when the count is 0.
+ */
+export type RunState = { waiting: number; waitingFor: string };
+
+/** The state of a run that is waiting for nothing. */
+export function freshState(): RunState {
+  return { waiting: 0, waitingFor: "" };
+}
+
+/**
+ * Thrown when code starts work with a run that is waiting for something it
+ * started. Only the innermost run can be used: the code inside a step, a
+ * call, or a fork branch must use the run it was given.
+ */
+export class RunInUseError extends Error {
+  constructor(what: string, run: Run) {
+    super(
+      `Wrong run: cannot ${what} with a run that is waiting for ${run.state.waitingFor}. ` +
+        "Code inside that must use the run it was given.",
+    );
+    this.name = "RunInUseError";
+  }
+}
+
+/**
+ * Check that `run` is not waiting for something it started. The operations
+ * that start work for Agency code or a helper call this: a call, a Runner
+ * step, an interrupt, a callback. `what` says what was attempted.
+ *
+ * Every run has the same type, so the type checker cannot tell the right
+ * run from the wrong one. This catches the mistake where it happens, and it
+ * keeps working after `AsyncLocalStorage` is gone.
+ */
+export function assertUsable(run: Run, what: string): Run {
+  if (run.state.waiting > 0) {
+    throw new RunInUseError(what, run);
+  }
+  return run;
+}
+
+/**
+ * A copy of `run` with `overrides` and its own state, for work the caller
+ * does not wait for. The caller keeps running, so nothing is counted
+ * against `run`.
+ */
+export function detachedRun(run: Run, overrides: Partial<Run>): Run {
+  return { ...run, ...overrides, state: freshState() };
+}
+
+/**
+ * Run `fn` under a child of `parent`, and count `parent` as waiting until
+ * `fn` has finished. `what` names the wait, for the error.
+ *
+ * The child is `parent` with `overrides` and its own state. This is how
+ * every step, call, handler, and callback gets its run.
+ */
+export function withChildRun<T>(
+  parent: Run,
+  overrides: Partial<Run>,
+  what: string,
+  fn: (run: Run) => T,
+): T {
+  const child = detachedRun(parent, overrides);
+  const state = parent.state;
+  const previous = state.waitingFor;
+  state.waiting++;
+  state.waitingFor = what;
+  const done = () => {
+    state.waiting--;
+    state.waitingFor = previous;
+  };
+  let result: T;
+  try {
+    result = withRun(child, fn);
+  } catch (error) {
+    done();
+    throw error;
+  }
+  if (result instanceof Promise) {
+    return result.then(
+      (value) => {
+        done();
+        return value;
+      },
+      (error) => {
+        done();
+        throw error;
+      },
+    ) as T;
+  }
+  done();
+  return result;
+}
 
 /**
  * The logger for a run made at the root of a branch that already exists:
@@ -338,7 +439,7 @@ export function requireFrame(caller: string): Run {
  */
 export function withCallsite<T>(run: Run, loc: CallsiteLocation, fn: (run: Run) => T): T {
   sameRun(run, "withCallsite()");
-  return withRun({ ...run, callsite: loc }, fn);
+  return withChildRun(run, { callsite: loc }, "its callsite scope", fn);
 }
 
 /**
@@ -472,6 +573,7 @@ export function runInTestContext<T>(
       threads,
       globals: ctx.globals,
       log: logOf(ctx, ctx.globals),
+      state: freshState(),
       ...lineageOf(agencyStore.getStore()),
     },
     fn,
@@ -517,6 +619,7 @@ export async function runInBootstrapFrame<T>(
       // land on the RuntimeContext's store and persist across the run.
       globals: ctx.globals,
       log: logOf(ctx, ctx.globals),
+      state: freshState(),
       ...lineageOf(agencyStore.getStore()),
     },
     fn,

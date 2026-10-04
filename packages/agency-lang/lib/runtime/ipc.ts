@@ -13,7 +13,14 @@ import type { ForkOptions } from "child_process";
 import { rmSync, writeFileSync, mkdirSync } from "fs";
 import { nanoid } from "nanoid";
 import type { AgencyConfig } from "../config/config.js";
-import { ambientRun, getRuntimeContext, sameRun, withRun, type Run } from "./asyncContext.js";
+import {
+  ambientRun,
+  detachedRun,
+  getRuntimeContext,
+  sameRun,
+  withRun,
+  type Run,
+} from "./asyncContext.js";
 import type { SpanContext } from "../statelogClient.js";
 import { gatherChainOutcome, type HandlerChainOutcome, type Interrupt } from "./interrupts.js";
 import { runBatch } from "./runBatch.js";
@@ -907,7 +914,9 @@ async function handleInterruptMessage(s: RunSession, msg: any): Promise<void> {
     const { outcome } = await s.ctx.statelogClient.runInBranchContext(
       s.ctx.statelogClient.snapshotStack(),
       (spans: SpanContext[]) =>
-        withRun({ ...stored, log: stored.log.forBranch(stored.globals, spans) }, (run) =>
+        // A copy with its own state: several interrupts from one child can be
+        // answered at once, and none of them is counted against the stored run.
+        withRun(detachedRun(stored, { log: stored.log.forBranch(stored.globals, spans) }), (run) =>
           gatherChainOutcome(
             run,
             { effect, message, data, origin, expectsValue },
@@ -1157,7 +1166,7 @@ export function handleCallbackMessage(s: RunSession, msg: IpcCallbackMessage): v
       });
     });
   if (s.parentStore) {
-    withRun(s.parentStore, fire);
+    withRun(detachedRun(s.parentStore, {}), fire);
   } else {
     fire(ambientRun("handleCallbackMessage()"));
   }

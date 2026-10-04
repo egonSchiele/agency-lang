@@ -587,13 +587,10 @@ export const ts = {
     // inside this body frame.
     // The body is handed the run it runs under, as `__run`. That name hides
     // the function's own `__run` parameter inside the body.
-    return ts.awaitCall(ts.id("__withRun"), [
-      ts.obj([
-        ts.setSpread(ts.id("__run")),
-        ts.set("ctx", ctx),
-        ts.set("stack", stack),
-        ts.set("threads", threads),
-      ]),
+    return ts.awaitCall(ts.id("__withChildRun"), [
+      ts.id("__run"),
+      ts.obj([ts.set("ctx", ctx), ts.set("stack", stack), ts.set("threads", threads)]),
+      ts.str("its body"),
       ts.arrowFn([{ name: "__run" }], ts.statements(body), { async: true }),
     ]);
   },

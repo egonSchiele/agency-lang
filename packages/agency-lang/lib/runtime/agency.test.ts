@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { agency } from "./agency.js";
-import { agencyStore, lineageOf, withRun } from "./asyncContext.js";
+import { agencyStore, freshState, lineageOf, withRun } from "./asyncContext.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
@@ -109,6 +109,7 @@ describe("agency.global", () => {
         threads: env.threads,
         globals: branchClone,
         log: env.ctx.statelogClient.logFor(branchClone),
+        state: freshState(),
         ...lineageOf(undefined),
       },
       () => {

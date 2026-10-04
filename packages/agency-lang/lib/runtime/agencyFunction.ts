@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
-import { agencyStore, callPlain, withPushedHandler, type Run } from "./asyncContext.js";
+import {
+  agencyStore,
+  assertUsable,
+  callPlain,
+  withPushedHandler,
+  type Run,
+} from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
 import { checkFailureArgs } from "./failurePropagation.js";
 import { normalizeForeignResult } from "./result.js";
@@ -187,6 +193,7 @@ export class AgencyFunction {
     // grows the promise chain until the process OOMs. The limit (config-
     // overridable `maxCallDepth`) is resolved from the active execution context
     // inside `withCallDepth`, once per lineage. See lib/runtime/callDepth.ts.
+    assertUsable(outerRun, `call ${this.name}()`);
     return withCallDepth(outerRun, this.name, async (run) => {
       let args: unknown[];
       try {

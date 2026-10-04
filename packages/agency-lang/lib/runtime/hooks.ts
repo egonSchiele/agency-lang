@@ -10,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { callPlain, sameRun, withRun, type Run } from "./asyncContext.js";
+import { assertUsable, callPlain, sameRun, withChildRun, type Run } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -174,7 +174,9 @@ async function invokeCallback(
     const af = fn as AgencyFunction;
     const desc = { type: "positional" as const, args: [data] };
     if (stateStack) {
-      await withRun({ ...run, stack: stateStack }, (branchRun) => af.invoke(branchRun, desc));
+      await withChildRun(run, { stack: stateStack }, "a callback", (branchRun) =>
+        af.invoke(branchRun, desc),
+      );
     } else {
       await af.invoke(run, desc);
     }
@@ -194,13 +196,13 @@ async function fireWithGuard(
   const key = fn as object;
   // Recursion guard scoped to the current frame. See the comment above
   // `isInsideCallback` for why the list lives on the frame.
-  const frame = sameRun(run, "fireWithGuard()");
+  const frame = assertUsable(sameRun(run, "fireWithGuard()"), "fire a callback");
   if (frame.activeCallbacks.includes(key)) return;
   // A new list per fire, holding the inherited entries plus our own key, so
   // a deeper fire can re-enter without changing the outer list.
   const active = [...frame.activeCallbacks, key];
   try {
-    await withRun({ ...frame, activeCallbacks: active }, (callbackRun) =>
+    await withChildRun(frame, { activeCallbacks: active }, "a callback", (callbackRun) =>
       invokeCallback(callbackRun, fn, data, stateStack),
     );
   } catch (error) {

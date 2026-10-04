@@ -60,7 +60,7 @@
  *    returning — letting runBatch then call `setResultOnBranch(key,
  *    undefined)` would overwrite the meaningful value with undefined.
  */
-import { lineageOf, sameRun, withRun, type Run } from "./asyncContext.js";
+import { freshState, lineageOf, sameRun, withRun, type Run } from "./asyncContext.js";
 import type { SpanContext, StatelogClient } from "../statelogClient.js";
 import type { DecisionCollector, DecisionScope } from "./decision/collector.js";
 import { AgencyCancelledError, makeAbortCause } from "./errors.js";
@@ -493,6 +493,7 @@ function runInBranchAlsFrame<T>(
       decisions: decisions ?? parent.decisions,
       // The branch's own logger: its tag store and its span stack.
       log: branchLog(parent, branchGlobals, spans),
+      state: freshState(),
       ...lineageOf(parent),
     },
     async (branchRun) => {
@@ -560,6 +561,22 @@ function stampSharedCheckpoint<T>(opts: RunBatchOpts<T>, interrupts: Interrupt[]
 }
 
 export async function runBatch<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>> {
+  // The parent run waits for the batch, not for each branch. A race returns
+  // while its losers are still running, and the parent is usable again from
+  // that moment. Each loser keeps its own run until it stops.
+  const state = opts.run.state;
+  const previous = state.waitingFor;
+  state.waiting++;
+  state.waitingFor = "its branches";
+  try {
+    return await runBranches(opts);
+  } finally {
+    state.waiting--;
+    state.waitingFor = previous;
+  }
+}
+
+async function runBranches<T>(opts: RunBatchOpts<T>): Promise<RunBatchResult<T>> {
   const { ctx, parentStack, parentFrame, mode, children, hooks } = opts;
 
   // 0a. Cheap insurance against caller bugs.

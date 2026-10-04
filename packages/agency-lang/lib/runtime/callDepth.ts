@@ -1,4 +1,4 @@
-import { sameRun, withRun, type Run } from "./asyncContext.js";
+import { sameRun, withChildRun, type Run } from "./asyncContext.js";
 import { CallDepthExceededError } from "./errors.js";
 
 /**
@@ -86,5 +86,10 @@ export function withCallDepth<T>(run: Run, name: string, fn: (run: Run) => T): T
   if (depth > limit) {
     throw new CallDepthExceededError(limit, depth, collectRecentFrames(parent, name));
   }
-  return withRun({ ...frame, callDepth: { name, depth, limit, parent } }, fn);
+  return withChildRun(
+    frame,
+    { callDepth: { name, depth, limit, parent } },
+    `its call to ${name}()`,
+    fn,
+  );
 }

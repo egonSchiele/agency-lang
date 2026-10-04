@@ -2764,7 +2764,12 @@ export class TypeScriptBuilder {
     // inline at the call site that overrides `stack`; the callee picks
     // it up via `getRuntimeContext()`.
     if (options?.stateStack) {
-      const frame = ts.obj([ts.setSpread(ts.runtime.run), ts.set("stack", options.stateStack)]);
+      // The caller does not wait for this call, so the run is a detached
+      // copy: nothing is counted against the caller's run.
+      const frame = ts.call(ts.id("__detachedRun"), [
+        ts.runtime.run,
+        ts.obj([ts.set("stack", options.stateStack)]),
+      ]);
       // The call is built inside an arrow that declares `__run`, so it is
       // handed the run with the branch's stack.
       const wrapped = ts.call(ts.id("__withRun"), [

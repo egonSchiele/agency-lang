@@ -5,7 +5,7 @@
  * to call them.
  */
 import type { FuncParam } from "./agencyFunction.js";
-import { sameRun, withRun, type Run } from "./asyncContext.js";
+import { sameRun, withChildRun, type Run } from "./asyncContext.js";
 import { isSuccess } from "./result.js";
 import type { RuntimeContext } from "./state/context.js";
 import type { MessageThread } from "./state/messageThread.js";
@@ -57,7 +57,7 @@ export function runAsToolInvocation<T>(
   invoke: (run: Run) => Promise<T>,
 ): Promise<T> {
   sameRun(run, "runAsToolInvocation()");
-  return withRun({ ...run, toolInvocationStack: branchStack }, invoke);
+  return withChildRun(run, { toolInvocationStack: branchStack }, "a tool call", invoke);
 }
 
 /**
@@ -80,7 +80,7 @@ export async function invokeOnFreshThreadStore<T>(
   sameRun(run, "invokeOnFreshThreadStore()");
   const freshThreads = new ThreadStore();
   freshThreads.setStatelogClient(run.ctx.statelogClient);
-  return withRun({ ...run, threads: freshThreads }, invoke);
+  return withChildRun(run, { threads: freshThreads }, "a tool call", invoke);
 }
 
 /**
@@ -102,7 +102,7 @@ export async function invokeOnThread<T>(
   try {
     sameRun(run, "invokeOnThread()");
     const view = run.threads.viewWithActive(thread);
-    return await withRun({ ...run, threads: view }, invoke);
+    return await withChildRun(run, { threads: view }, "a handoff", invoke);
   } finally {
     thread.exitHandoffScope();
   }

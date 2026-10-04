@@ -5,10 +5,11 @@ import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
 import {
   agencyStore,
+  assertUsable,
   callPlain,
   runInBootstrapFrame,
   sameRun,
-  withRun,
+  withChildRun,
   type Run,
 } from "./asyncContext.js";
 import { exitProcess } from "./exitProcess.js";
@@ -267,7 +268,7 @@ async function runHandlerChain(
   if (depth > MAX_HANDLER_CHAIN_DEPTH) {
     throw new HandlerRecursionError(interruptObj.effect, MAX_HANDLER_CHAIN_DEPTH);
   }
-  return withRun({ ...frame, handlerChainDepth: depth }, async (run) => {
+  return withChildRun(frame, { handlerChainDepth: depth }, "its handlers", async (run) => {
     // Approvals collect in chain-walk order (innermost handler first) and
     // are merged once at the end via the effect's merge (effectMerge.ts).
     // For effects with no specific merge the default reproduces the
@@ -635,6 +636,7 @@ export async function interruptWithHandlers<T = any>(
   },
 ): Promise<Interrupt<T>[] | Approved | Rejected> {
   sameRun(run, "interruptWithHandlers()");
+  assertUsable(run, "raise an interrupt");
   const stack = opts?.stack ?? run.stack;
   const interruptObj: InterruptInfo = { effect, message, data, origin };
   if (opts?.expectsValue) interruptObj.expectsValue = true;

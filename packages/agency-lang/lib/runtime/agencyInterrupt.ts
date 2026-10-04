@@ -92,7 +92,7 @@
  * `s.step(...)`) intentionally have no runner in the ALS frame and
  * will throw — wrap the interrupt in `s.step(async () => { ... })`.
  */
-import { getRuntimeContext } from "./asyncContext.js";
+import { getRuntimeContext, detachedRun, withRun } from "./asyncContext.js";
 import { HaltSignal } from "./haltSignal.js";
 import {
   interruptWithHandlers,
@@ -163,10 +163,14 @@ export async function interrupt<T = unknown>(opts: InterruptOpts<T>): Promise<In
   const effect = opts.effect ?? "unknown";
   const data = opts.data;
   const origin = callsite.moduleId;
-  const handlerResult = await interruptWithHandlers(rt, effect, opts.message, data, origin, {
-    expectsValue: opts.expectsValue,
-    stack,
-  });
+  // A helper may raise several interrupts at once from one run. Each raise
+  // gets its own copy of the run, so none is counted against another.
+  const handlerResult = await withRun(detachedRun(rt, {}), (raiseRun) =>
+    interruptWithHandlers(raiseRun, effect, opts.message, data, origin, {
+      expectsValue: opts.expectsValue,
+      stack,
+    }),
+  );
 
   if (isRejected(handlerResult)) return handlerResult;
   if (isApproved(handlerResult)) return handlerResult;

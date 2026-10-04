@@ -1,6 +1,6 @@
 import { AgencyFunction } from "./agencyFunction.js";
 import type { CallType } from "./agencyFunction.js";
-import { callPlain, type Run } from "./asyncContext.js";
+import { assertUsable, callPlain, type Run } from "./asyncContext.js";
 import {
   checkTsFunctionArgs,
   checkResultMethodCall,
@@ -78,6 +78,7 @@ export async function __call(
   if (optional && (target === null || target === undefined)) {
     return undefined;
   }
+  assertUsable(run, "make a call");
   // An aborted callee's result must never enter another call as an
   // argument. The call does not run; the abort continues as this call's
   // own result, minus the partial (see droppedAtArgPosition).
@@ -135,6 +136,7 @@ export async function __callMethod(
   if (optional && (obj === null || obj === undefined)) {
     return undefined;
   }
+  assertUsable(run, "make a call");
 
   // Same argument rules as __call: an aborted result never enters a
   // method call (the abort continues without its partial), and an

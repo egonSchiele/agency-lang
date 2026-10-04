@@ -3,6 +3,7 @@ import * as path from "path";
 import { MessageJSON } from "smoltalk";
 import {
   agencyStore,
+  freshState,
   lineageOf,
   logOf,
   runInBootstrapFrame,
@@ -306,6 +307,7 @@ async function runExportedFunctionCore({
         threads: threadStore,
         globals: execCtx.globals,
         log: logOf(execCtx, execCtx.globals),
+        state: freshState(),
         ...lineageOf(agencyStore.getStore()),
       },
       async (run) => {
@@ -460,6 +462,7 @@ async function runNodeCore({
               threads: threadStore,
               globals: execCtx.globals,
               log: logOf(execCtx, execCtx.globals),
+              state: freshState(),
               ...lineageOf(agencyStore.getStore()),
             },
             (run) =>
@@ -515,6 +518,7 @@ async function runNodeCore({
                 threads: threadStore,
                 globals: execCtx.globals,
                 log: logOf(execCtx, execCtx.globals),
+                state: freshState(),
                 ...lineageOf(agencyStore.getStore()),
               },
               (run) =>

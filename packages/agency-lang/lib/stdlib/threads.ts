@@ -192,6 +192,8 @@ export async function _eagerSummarizeIfNeeded(evt: {
   eagerSummarize: boolean;
   messages: smoltalk.MessageJSON[];
 }): Promise<void> {
+  // Read before the first await. The failure paths below report through it.
+  const ctx = agency.ctxMaybe();
   if (!evt.eagerSummarize) return;
   if (!evt.messages || evt.messages.length === 0) return;
   // Skip if a summary is already present (e.g. set by lazy path
@@ -234,17 +236,16 @@ export async function _eagerSummarizeIfNeeded(evt: {
     // model's summary did not validate (issue #494). Treat it like the
     // other best-effort failures: record it, keep the thread usable.
     if (isFailure(result)) {
-      const ctxMaybe = agency.ctxMaybe();
-      createLogger(ctxMaybe?.logLevel ?? "info").debug(
+      createLogger(ctx?.logLevel ?? "info").debug(
         `eager summarize failed validation for thread ${evt.threadId}: ${(result as any).error}`,
       );
-      ctxMaybe?.statelogClient?.threadEndHookError?.({
+      ctx?.statelogClient?.threadEndHookError?.({
         threadId: evt.threadId,
         error: (result as any).error,
       });
       return;
     }
-    _setThreadSummary(evt.threadId, result.summary);
+    thread.summary = result.summary;
   } catch (e) {
     // Best-effort — lazy summarize will retry on next listThreads().
     // Surface the failure two ways: a `logger.debug` line for local
@@ -254,7 +255,6 @@ export async function _eagerSummarizeIfNeeded(evt: {
     // it. Mirrors the belt-and-braces failure-reporting pattern in
     // `Runner.thread`'s finally block.
     const message = e instanceof Error ? e.message : String(e);
-    const ctx = agency.ctxMaybe();
     createLogger(ctx?.logLevel ?? "info").debug(
       `eager summarize failed for thread ${evt.threadId}: ${message}`,
     );

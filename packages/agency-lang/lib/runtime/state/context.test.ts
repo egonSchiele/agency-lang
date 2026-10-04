@@ -137,43 +137,43 @@ describe("RuntimeContext memory frames", () => {
   it("getActiveMemoryManager() returns undefined when nothing is configured", async () => {
     const ctx = makeCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
-    expect(execCtx.getActiveMemoryManager()).toBeUndefined();
+    expect(execCtx.getActiveMemoryManager(execCtx.stateStack)).toBeUndefined();
   });
 
   it("returns a JSON-seeded manager when only agency.json is set", async () => {
     const ctx = makeCtx({ dir: dirJson });
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
-    const m = execCtx.getActiveMemoryManager();
+    const m = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(m).toBeDefined();
   });
 
   it("frame push overrides JSON; pop returns to JSON manager (same instance)", async () => {
     const ctx = makeCtx({ dir: dirJson });
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
-    const jsonManager = execCtx.getActiveMemoryManager();
+    const jsonManager = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(jsonManager).toBeDefined();
 
     execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }));
-    const aManager = execCtx.getActiveMemoryManager();
+    const aManager = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(aManager).toBeDefined();
     expect(aManager).not.toBe(jsonManager);
 
     execCtx.stateStack.popMemoryFrame();
-    expect(execCtx.getActiveMemoryManager()).toBe(jsonManager);
+    expect(execCtx.getActiveMemoryManager(execCtx.stateStack)).toBe(jsonManager);
   });
 
   it("manager cache survives push/pop/push (pop back returns the cached A)", async () => {
     const ctx = makeCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirA }));
-    const a1 = execCtx.getActiveMemoryManager();
+    const a1 = execCtx.getActiveMemoryManager(execCtx.stateStack);
 
     execCtx.stateStack.pushMemoryFrame(new MemoryFrame({ dir: dirB }));
-    const b = execCtx.getActiveMemoryManager();
+    const b = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(b).not.toBe(a1);
 
     execCtx.stateStack.popMemoryFrame();
-    const a2 = execCtx.getActiveMemoryManager();
+    const a2 = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(a2).toBe(a1);
   });
 
@@ -187,7 +187,7 @@ describe("RuntimeContext memory frames", () => {
     stack.other.memoryId = "alice";
     execCtx.stateStack = stack;
 
-    const m = execCtx.getActiveMemoryManager();
+    const m = execCtx.getActiveMemoryManager(execCtx.stateStack);
     expect(m).toBeDefined();
     expect(execCtx.stateStack.activeMemoryFrame()?.configKey).toBe(fs.realpathSync(dirJson));
   });
@@ -202,10 +202,10 @@ describe("RuntimeContext memory frames", () => {
     // emptied."
     const ctx = makeCtx({ dir: dirJson });
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
-    expect(execCtx.getActiveMemoryManager()).toBeDefined();
+    expect(execCtx.getActiveMemoryManager(execCtx.stateStack)).toBeDefined();
 
     execCtx.stateStack.popMemoryFrame();
-    expect(execCtx.getActiveMemoryManager()).toBeUndefined();
+    expect(execCtx.getActiveMemoryManager(execCtx.stateStack)).toBeUndefined();
   });
 });
 

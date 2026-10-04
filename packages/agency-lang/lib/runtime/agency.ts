@@ -30,13 +30,14 @@ import { nanoid } from "nanoid";
 import {
   agencyStore,
   ambientRun,
+  callPlain,
   getRuntimeContext,
   runInTestContext,
   withCallsite as _withCallsite,
   withPushedHandler,
   type CallsiteLocation,
 } from "./asyncContext.js";
-import { addCost, addTokens } from "./cost.js";
+import { addCost, addCostTo, addTokens, addTokensTo } from "./cost.js";
 import { __call } from "./call.js";
 import type { CallType } from "./agencyFunction.js";
 import { interrupt, type InterruptOpts } from "./agencyInterrupt.js";
@@ -327,15 +328,19 @@ const withLock = async <T>(
   const store = getRuntimeContext();
   const ownerId = opts.ownerId ?? lockOwnerIdForActiveStack();
   const lockOpts = { ...opts, ownerId };
+  // `fn` starts after an await (the wait for the lock). Calling it under
+  // the run lets it read the run on its own first line, as a nested
+  // `agency.withLock` does.
+  const body = (): T | Promise<T> => callPlain(store, fn, []);
   if (isIpcMode()) {
     const release = await sendLockAcquireToParent(name, lockOpts);
     try {
-      return await fn();
+      return await body();
     } finally {
       release();
     }
   }
-  return withLockOnCtx(store.ctx, name, fn, lockOpts);
+  return withLockOnCtx(store.ctx, name, body, lockOpts);
 };
 
 function lockOwnerIdForActiveStack(): string {
@@ -423,6 +428,13 @@ const withTestContext = <T>(
 export type RunHandle = {
   call: (fn: unknown, ...args: unknown[]) => Promise<unknown>;
   callWith: (fn: unknown, descriptor: CallType) => Promise<unknown>;
+  /** `agency.addCost` and `agency.addTokens`, charged to this run. */
+  addCost: (amount: number) => void;
+  addTokens: (amount: number) => void;
+  /** The run's context, branch stack, and thread store. */
+  ctx: RuntimeContext<any>;
+  stack: StateStack;
+  threads: ThreadStore;
 };
 
 const current = (): RunHandle => {
@@ -430,6 +442,11 @@ const current = (): RunHandle => {
   return {
     call: (fn, ...args) => __call(run, fn, { type: "positional", args }),
     callWith: (fn, descriptor) => __call(run, fn, descriptor),
+    addCost: (amount) => addCostTo(run, amount),
+    addTokens: (amount) => addTokensTo(run, amount),
+    ctx: run.ctx,
+    stack: run.stack,
+    threads: run.threads,
   };
 };
 

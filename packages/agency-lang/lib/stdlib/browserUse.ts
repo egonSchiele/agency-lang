@@ -1,6 +1,6 @@
 import { runHttp } from "./http.js";
 import { abortableSleep } from "./abortable.js";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRun } from "../runtime/asyncContext.js";
 import type { RuntimeContext } from "../runtime/state/context.js";
 import type { StateStack } from "../runtime/state/stateStack.js";
 import type { ThreadStore } from "../runtime/state/threadStore.js";
@@ -47,21 +47,25 @@ async function pollSession(
   const url = `${BASE_URL}/sessions/${sessionId}`;
 
   while (Date.now() - start < timeout) {
-    const data = await runHttp(async () => {
-      const response = await fetch(url, {
-        headers: {
-          "X-Browser-Use-API-Key": apiKey,
-        },
-        signal,
-      });
+    const data = await runHttp(
+      async () => {
+        const response = await fetch(url, {
+          headers: {
+            "X-Browser-Use-API-Key": apiKey,
+          },
+          signal,
+        });
 
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(`Browser Use API error polling session (${response.status}): ${body}`);
-      }
+        if (!response.ok) {
+          const body = await response.text();
+          throw new Error(`Browser Use API error polling session (${response.status}): ${body}`);
+        }
 
-      return (await response.json()) as SessionResponse;
-    }, url);
+        return (await response.json()) as SessionResponse;
+      },
+      url,
+      signal,
+    );
 
     if (isTerminal(data.status)) {
       return data;
@@ -110,24 +114,28 @@ async function browserUseImpl(
 
   const signal = ctx.getAbortSignal(stack);
   const sessionsUrl = `${BASE_URL}/sessions`;
-  const session = await runHttp(async () => {
-    const response = await fetch(sessionsUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Browser-Use-API-Key": apiKey,
-      },
-      body: JSON.stringify(body),
-      signal,
-    });
+  const session = await runHttp(
+    async () => {
+      const response = await fetch(sessionsUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Browser-Use-API-Key": apiKey,
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
 
-    if (!response.ok) {
-      const responseBody = await response.text();
-      throw new Error(`Browser Use API error (${response.status}): ${responseBody}`);
-    }
+      if (!response.ok) {
+        const responseBody = await response.text();
+        throw new Error(`Browser Use API error (${response.status}): ${responseBody}`);
+      }
 
-    return (await response.json()) as SessionResponse;
-  }, sessionsUrl);
+      return (await response.json()) as SessionResponse;
+    },
+    sessionsUrl,
+    signal,
+  );
   const sessionId = session.id;
 
   if (isTerminal(session.status)) {
@@ -164,6 +172,6 @@ export async function _browserUse(
   task: string,
   options?: BrowserUseOptions,
 ): Promise<BrowserUseResult> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = currentRun();
   return browserUseImpl(ctx, stack, task, options);
 }

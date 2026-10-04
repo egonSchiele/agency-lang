@@ -222,7 +222,78 @@ export function ambientRun(caller: string): Run {
  * is handed and the frame `AsyncLocalStorage` holds are the same object.
  */
 export function withRun<T>(run: Run, fn: (run: Run) => T): T {
-  return agencyStore.run(run, () => fn(run));
+  return agencyStore.run(run, () => callPlain(run, fn, [run]));
+}
+
+/**
+ * The run that a plain function was called under. It is set for the
+ * synchronous part of one call and put back afterwards.
+ *
+ * JavaScript runs one thing at a time, and a promise continuation never
+ * runs inside another call's synchronous part. So from the start of a call
+ * to the function's first `await`, this holds the run of that call. After
+ * the first `await` it holds whatever some other call left there, which is
+ * why `currentRun()` is only for a function's first lines.
+ */
+let plainCallRun: Run | undefined;
+
+/**
+ * Call a function that does not take a run. The function can read the run
+ * with `currentRun()` until its first `await`.
+ *
+ * The previous value is restored in a `finally`. If a throw skipped the
+ * restore, the next helper to run would read another request's run: its
+ * globals, its thread, and its handlers.
+ */
+export function callPlain<A extends unknown[], T>(
+  run: Run,
+  fn: (...args: A) => T,
+  args: A,
+  thisArg?: unknown,
+): T {
+  const previous = plainCallRun;
+  plainCallRun = run;
+  try {
+    return fn.apply(thisArg, args);
+  } finally {
+    plainCallRun = previous;
+  }
+}
+
+/**
+ * The run this function was called under. Call it on the function's first
+ * line, before any `await`, and keep the result:
+ *
+ *   export async function _fetch(url: string) {
+ *     const run = currentRun();
+ *     ...
+ *   }
+ *
+ * It throws after the first `await`. A helper that needs the run later must
+ * have taken it at the top.
+ */
+export function currentRun(): Run {
+  const run = plainCallRun;
+  const frame = agencyStore.getStore();
+  if (run === undefined) {
+    if (frame) {
+      throw new Error(
+        "The current run was read after an await. " +
+          "Take it on the function's first line and keep it: " +
+          "`const run = agency.current()` in your own helper, " +
+          "or `const run = currentRun()` inside the runtime.",
+      );
+    }
+    throw new Error(
+      "The current run was read outside an Agency run. " +
+        "This usually means a helper was called from code that Agency did not call. " +
+        "In a test, wrap the call in runInTestContext().",
+    );
+  }
+  if (frame !== run) {
+    throw new WrongRunError("currentRun()", frame);
+  }
+  return run;
 }
 
 /**
@@ -285,23 +356,13 @@ export async function withPushedHandler<T>(
 }
 
 /**
- * Read the current Agency runtime context from ALS. Throws if called
- * outside an `agencyStore.run(...)` frame — which in practice means a
- * stdlib helper was called from non-Agency code. Tests that exercise
- * stdlib functions directly should wrap their bodies in
- * `runInTestContext(ctx, stack, threads, fn)`.
+ * The old name for `currentRun()`.
+ *
+ * @deprecated Use `currentRun()` inside the runtime, and `agency.current()`
+ * in your own helpers. This name stays exported for one release.
  */
 export function getRuntimeContext(): Run {
-  const s = agencyStore.getStore();
-  if (!s) {
-    throw new Error(
-      "getRuntimeContext() called outside an Agency execution frame. " +
-        "This usually means a stdlib helper was called from non-Agency code. " +
-        "Wrap your invocation in agencyStore.run({ctx, stack, threads}, fn) " +
-        "or use runInTestContext().",
-    );
-  }
-  return s;
+  return currentRun();
 }
 
 /**

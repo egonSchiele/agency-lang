@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getRuntimeContext } from "../../runtime/asyncContext.js";
+import type { Run } from "../../runtime/asyncContext.js";
 import { runHttp, readBodyBytesCapped } from "../http.js";
 import { isAbortError } from "../../runtime/errors.js";
 import { resolveGithubToken, invalidateGithubCredentialCache } from "./credential.js";
@@ -51,26 +51,31 @@ function buildUrl<Params>(endpoint: GithubEndpoint<Params, unknown>, params: Par
  * globalThis.fetch, and a saved reference would dodge it.
  */
 export async function _githubRequest<Params, Out>(
+  run: Run,
   endpoint: GithubEndpoint<Params, Out>,
   params: Params,
 ): Promise<Out> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = run;
   const signal = ctx.getAbortSignal(stack);
   const token = await resolveGithubToken();
   const url = buildUrl(endpoint, params);
-  return await runHttp(async () => {
-    const response = await fetch(url, buildRequestInit(endpoint, params, token, signal));
-    const text = await readBodyText(response, url, signal, isPaginated(endpoint, params));
-    if (!response.ok) {
-      if (response.status === 401) {
-        invalidateGithubCredentialCache();
+  return await runHttp(
+    async () => {
+      const response = await fetch(url, buildRequestInit(endpoint, params, token, signal));
+      const text = await readBodyText(response, url, signal, isPaginated(endpoint, params));
+      if (!response.ok) {
+        if (response.status === 401) {
+          invalidateGithubCredentialCache();
+        }
+        throw new Error(
+          githubFailureMessage(response.status, response.headers, text, endpoint.method, url),
+        );
       }
-      throw new Error(
-        githubFailureMessage(response.status, response.headers, text, endpoint.method, url),
-      );
-    }
-    return validateResponse(endpoint, decodeBody(endpoint, text));
-  }, url);
+      return validateResponse(endpoint, decodeBody(endpoint, text));
+    },
+    url,
+    signal,
+  );
 }
 
 function buildRequestInit<Params>(

@@ -1,4 +1,3 @@
-import { ambientRun } from "../runtime/asyncContext.js";
 import * as smoltalk from "smoltalk";
 import type {
   DecideResult,
@@ -9,7 +8,7 @@ import type {
 } from "smoltalk";
 import { nanoid } from "nanoid";
 import * as path from "node:path";
-import { agencyStore, getRuntimeContext } from "../runtime/asyncContext.js";
+import { agencyStore, currentRun, getRuntimeContext } from "../runtime/asyncContext.js";
 import { wholePath, stat as statUnder } from "./contained.js";
 import { MIME_TYPES } from "./mediaPathScan.js";
 import { MAX_REPLY_ATTACHMENT_BYTES } from "../config/config.js";
@@ -640,7 +639,8 @@ export async function _saveDraft(value: unknown): Promise<void> {
  * / args (retry + reporting depend on them) — only `ownedGuardIds` is added.
  */
 export async function _runGuarded(ids: string[], block: unknown): Promise<ResultValue> {
-  const { ctx, stack } = getRuntimeContext();
+  const run = currentRun();
+  const { ctx, stack } = run;
   try {
     // Invoke the block through __call (NOT a plain block()) so it runs through
     // the same Agency call machinery the codegen `try block()` used — that is
@@ -648,15 +648,12 @@ export async function _runGuarded(ids: string[], block: unknown): Promise<Result
     // guardTrip cause instead of a generic error. `stack.lastFrame()` is
     // guard()'s own frame here (a TS call pushes no agency frame), so `.args`
     // matches what the codegen `try block()` captured via `__stack.args`.
-    return await __tryCall(
-      () => __call(ambientRun("std::thread guard"), block, { type: "positional", args: [] }),
-      {
-        ownedGuardIds: ids,
-        checkpoint: ctx.getResultCheckpoint(),
-        functionName: "guard",
-        args: stack.lastFrame()?.args,
-      },
-    );
+    return await __tryCall(() => __call(run, block, { type: "positional", args: [] }), {
+      ownedGuardIds: ids,
+      checkpoint: ctx.getResultCheckpoint(),
+      functionName: "guard",
+      args: stack.lastFrame()?.args,
+    });
   } finally {
     // The block has exited and the Result (or a rethrown outer trip) is
     // this guard()'s answer, whatever it is. Between here and _popGuard

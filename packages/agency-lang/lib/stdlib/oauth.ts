@@ -205,33 +205,37 @@ async function exchangeCodeForTokens(
 ): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
   const body = new URLSearchParams(params);
 
-  return runHttp(async () => {
-    const response = await fetch(tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-      signal,
-    });
+  return runHttp(
+    async () => {
+      const response = await fetch(tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+        signal,
+      });
 
-    if (!response.ok) {
-      const responseBody = await response.text();
-      const truncated =
-        responseBody.length > 200 ? responseBody.slice(0, 200) + "..." : responseBody;
-      throw new Error(`OAuth token exchange failed (${response.status}): ${truncated}`);
-    }
+      if (!response.ok) {
+        const responseBody = await response.text();
+        const truncated =
+          responseBody.length > 200 ? responseBody.slice(0, 200) + "..." : responseBody;
+        throw new Error(`OAuth token exchange failed (${response.status}): ${truncated}`);
+      }
 
-    const data = (await response.json()) as Record<string, unknown>;
+      const data = (await response.json()) as Record<string, unknown>;
 
-    if (!data.access_token) {
-      throw new Error("OAuth token response missing access_token");
-    }
+      if (!data.access_token) {
+        throw new Error("OAuth token response missing access_token");
+      }
 
-    return {
-      access_token: data.access_token as string,
-      refresh_token: (data.refresh_token as string) ?? "",
-      expires_in: Number(data.expires_in) || 3600,
-    };
-  }, tokenUrl);
+      return {
+        access_token: data.access_token as string,
+        refresh_token: (data.refresh_token as string) ?? "",
+        expires_in: Number(data.expires_in) || 3600,
+      };
+    },
+    tokenUrl,
+    signal,
+  );
 }
 
 async function saveTokens(name: string, tokens: StoredTokens): Promise<void> {

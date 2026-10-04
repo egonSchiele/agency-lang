@@ -3,14 +3,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { agency } from "./agency.js";
-import { agencyStore, lineageOf } from "./asyncContext.js";
+import { agencyStore, lineageOf, withRun } from "./asyncContext.js";
 import { RuntimeContext } from "./state/context.js";
 import { StateStack } from "./state/stateStack.js";
 import { ThreadStore } from "./state/threadStore.js";
 import { RestoreSignal } from "./errors.js";
 import { CostGuard, TimeGuard } from "./guard.js";
 import { _resetStoreRegistry } from "./memory/index.js";
-import { makeMockCtx } from "./__tests__/testHelpers.js";
+import { callHelper, makeMockCtx } from "./__tests__/testHelpers.js";
 
 function setup() {
   const ctx = new RuntimeContext({
@@ -32,7 +32,7 @@ describe("agency.ctx / agency.ctxMaybe", () => {
   });
 
   it("ctx throws when called outside any frame", () => {
-    expect(() => agency.ctx()).toThrow(/outside an Agency execution frame/);
+    expect(() => agency.ctx()).toThrow(/outside an Agency run/);
   });
 
   it("ctxMaybe returns undefined outside any frame", () => {
@@ -102,7 +102,7 @@ describe("agency.global", () => {
     branchClone.set("", "k", "branch-value");
     // Install a frame whose `globals` slot points at the clone,
     // simulating what `runInBranchAlsFrame` does for a fork branch.
-    agencyStore.run(
+    withRun(
       {
         ctx: env.ctx,
         stack: env.stack,
@@ -480,7 +480,7 @@ describe("agency.memory.*", () => {
     agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       () => {
-        expect(agency.memory.enabled()).toBe(false);
+        expect(callHelper(agency.memory.enabled)).toBe(false);
       },
     );
   });
@@ -491,8 +491,8 @@ describe("agency.memory.*", () => {
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
-        await agency.memory.enable({ dir: tmpRoot });
-        expect(agency.memory.enabled()).toBe(true);
+        await callHelper(agency.memory.enable, { dir: tmpRoot });
+        expect(callHelper(agency.memory.enabled)).toBe(true);
       },
     );
   });
@@ -503,10 +503,10 @@ describe("agency.memory.*", () => {
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
-        await agency.memory.enable({ dir: tmpRoot });
-        expect(agency.memory.enabled()).toBe(true);
-        agency.memory.disable();
-        expect(agency.memory.enabled()).toBe(false);
+        await callHelper(agency.memory.enable, { dir: tmpRoot });
+        expect(callHelper(agency.memory.enabled)).toBe(true);
+        callHelper(agency.memory.disable);
+        expect(callHelper(agency.memory.enabled)).toBe(false);
       },
     );
   });
@@ -517,8 +517,8 @@ describe("agency.memory.*", () => {
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
-        await agency.memory.enable({ dir: tmpRoot });
-        await agency.memory.setId("alice");
+        await callHelper(agency.memory.enable, { dir: tmpRoot });
+        await callHelper(agency.memory.setId, "alice");
         expect(execCtx.stateStack.other.memoryId).toBe("alice");
       },
     );
@@ -530,12 +530,12 @@ describe("agency.memory.*", () => {
     await agency.withTestContext(
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
-        await agency.memory.enable({ dir: tmpRoot });
-        await agency.memory.setId("alice");
+        await callHelper(agency.memory.enable, { dir: tmpRoot });
+        await callHelper(agency.memory.setId, "alice");
         // remember + forget rely on LLM calls so we skip them here;
         // call recall to exercise the wiring and assert it returns a
         // string (empty when there is nothing to recall).
-        const r = await agency.memory.recall("anything");
+        const r = await callHelper(agency.memory.recall, "anything");
         expect(typeof r).toBe("string");
       },
     );
@@ -548,7 +548,7 @@ describe("agency.memory.*", () => {
       { ctx: execCtx, stack: execCtx.stateStack, threads: new ThreadStore() },
       async () => {
         // No enableMemory call → forget should resolve to undefined.
-        await expect(agency.memory.forget("anything")).resolves.toBeUndefined();
+        await expect(callHelper(agency.memory.forget, "anything")).resolves.toBeUndefined();
       },
     );
   });

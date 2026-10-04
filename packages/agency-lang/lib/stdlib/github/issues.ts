@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { currentRun } from "../../runtime/asyncContext.js";
 import { _githubRequest, type GithubEndpoint } from "./request.js";
 import { pagingQuery } from "./args.js";
 import { repoPath, RawUser, CommentInfoSchema, type CommentInfo } from "./prs.js";
@@ -148,7 +149,7 @@ export async function _ghIssueGet(
   owner: string,
   repo: string,
 ): Promise<IssueSummary> {
-  return _githubRequest(issueGet, { owner, repo, number });
+  return _githubRequest(currentRun(), issueGet, { owner, repo, number });
 }
 
 export async function _ghIssueList(
@@ -159,7 +160,7 @@ export async function _ghIssueList(
   owner: string,
   repo: string,
 ): Promise<IssueSummary[]> {
-  return _githubRequest(issueList, { owner, repo, state, labels, perPage, page });
+  return _githubRequest(currentRun(), issueList, { owner, repo, state, labels, perPage, page });
 }
 
 export async function _ghIssueComments(
@@ -169,7 +170,7 @@ export async function _ghIssueComments(
   owner: string,
   repo: string,
 ): Promise<CommentInfo[]> {
-  return _githubRequest(issueComments, { owner, repo, number, perPage, page });
+  return _githubRequest(currentRun(), issueComments, { owner, repo, number, perPage, page });
 }
 
 export async function _ghIssueSearch(
@@ -177,7 +178,7 @@ export async function _ghIssueSearch(
   perPage: number,
   page: number,
 ): Promise<IssueSummary[]> {
-  return _githubRequest(issueSearch, { scopedQuery, perPage, page });
+  return _githubRequest(currentRun(), issueSearch, { scopedQuery, perPage, page });
 }
 
 // --- Write endpoints ---------------------------------------------------------
@@ -236,7 +237,7 @@ export async function _ghIssueCreate(
   owner: string,
   repo: string,
 ): Promise<IssueSummary> {
-  return _githubRequest(issueCreate, { owner, repo, title, body, labels, assignees });
+  return _githubRequest(currentRun(), issueCreate, { owner, repo, title, body, labels, assignees });
 }
 
 export async function _ghIssueComment(
@@ -245,7 +246,7 @@ export async function _ghIssueComment(
   owner: string,
   repo: string,
 ): Promise<CommentInfo> {
-  return _githubRequest(issueCommentCreate, { owner, repo, number, body });
+  return _githubRequest(currentRun(), issueCommentCreate, { owner, repo, number, body });
 }
 
 export async function _ghIssueClose(
@@ -254,7 +255,7 @@ export async function _ghIssueClose(
   owner: string,
   repo: string,
 ): Promise<IssueSummary> {
-  return _githubRequest(issueClose, { owner, repo, number, reason });
+  return _githubRequest(currentRun(), issueClose, { owner, repo, number, reason });
 }
 
 export async function _ghIssueLabel(
@@ -263,5 +264,5 @@ export async function _ghIssueLabel(
   owner: string,
   repo: string,
 ): Promise<string[]> {
-  return _githubRequest(issueLabelAdd, { owner, repo, number, labels });
+  return _githubRequest(currentRun(), issueLabelAdd, { owner, repo, number, labels });
 }

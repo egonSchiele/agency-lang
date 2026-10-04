@@ -60,7 +60,7 @@ describe("_githubRequest", () => {
   it("sends auth, accept, api-version, and user-agent headers to the pinned base", async () => {
     stubToken();
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ ok: true }));
-    const out = await withCtx(() => _githubRequest(pingEndpoint, { n: 1 }));
+    const out = await withCtx((run) => _githubRequest(run, pingEndpoint, { n: 1 }));
     expect(out).toEqual({ fine: true });
     const [url, init] = spy.mock.calls[0];
     expect(String(url)).toBe(`${GITHUB_API_BASE}/repos/o/r/pulls/1`);
@@ -74,7 +74,7 @@ describe("_githubRequest", () => {
   it("fails loudly, naming the endpoint, when the response shape is wrong", async () => {
     stubToken();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ ok: "not-a-boolean" }));
-    await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(
+    await expect(withCtx((run) => _githubRequest(run, pingEndpoint, { n: 1 }))).rejects.toThrow(
       /GET \/repos\/o\/r\/pulls\/\{n\}.*expected shape/s,
     );
   });
@@ -82,14 +82,14 @@ describe("_githubRequest", () => {
   it("validates and returns raw text for a diff accept type", async () => {
     stubToken();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("diff --git a b"));
-    const out = await withCtx(() => _githubRequest(diffEndpoint, { n: 1 }));
+    const out = await withCtx((run) => _githubRequest(run, diffEndpoint, { n: 1 }));
     expect(out).toBe("diff --git a b");
   });
 
   it("serializes query parameters", async () => {
     stubToken();
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse([]));
-    await withCtx(() => _githubRequest(listEndpoint, { state: "open" }));
+    await withCtx((run) => _githubRequest(run, listEndpoint, { state: "open" }));
     expect(String(spy.mock.calls[0][0])).toBe(
       `${GITHUB_API_BASE}/repos/o/r/pulls?state=open&per_page=30&page=1`,
     );
@@ -98,7 +98,7 @@ describe("_githubRequest", () => {
   it("posts a JSON body with content-type", async () => {
     stubToken();
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: 1 }, 201));
-    await withCtx(() => _githubRequest(postEndpoint, { title: "t" }));
+    await withCtx((run) => _githubRequest(run, postEndpoint, { title: "t" }));
     const init = spy.mock.calls[0][1]!;
     expect(init.body).toBe('{"title":"t"}');
     expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");
@@ -109,7 +109,7 @@ describe("_githubRequest", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ message: "Bad credentials" }, 401),
     );
-    await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(
+    await expect(withCtx((run) => _githubRequest(run, pingEndpoint, { n: 1 }))).rejects.toThrow(
       /gh auth login/,
     );
   });
@@ -119,7 +119,9 @@ describe("_githubRequest", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ message: "Bad credentials" }, 401),
     );
-    await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(/401/);
+    await expect(withCtx((run) => _githubRequest(run, pingEndpoint, { n: 1 }))).rejects.toThrow(
+      /401/,
+    );
     // With the cache still holding "test-token-value" this would return it.
     const fresh = {
       env: { GITHUB_TOKEN: "fresh" },
@@ -132,7 +134,7 @@ describe("_githubRequest", () => {
   it("names the endpoint when a successful response is not JSON", async () => {
     stubToken();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>oops</html>"));
-    await expect(withCtx(() => _githubRequest(pingEndpoint, { n: 1 }))).rejects.toThrow(
+    await expect(withCtx((run) => _githubRequest(run, pingEndpoint, { n: 1 }))).rejects.toThrow(
       /GET \/repos\/o\/r\/pulls\/\{n\}.*not valid JSON/s,
     );
   });
@@ -140,11 +142,11 @@ describe("_githubRequest", () => {
   it("suggests a smaller perPage only when the endpoint is paginated", async () => {
     stubToken();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(oversizedResponse());
-    await expect(withCtx(() => _githubRequest(listEndpoint, { state: "open" }))).rejects.toThrow(
-      /exceeds.*perPage/s,
-    );
+    await expect(
+      withCtx((run) => _githubRequest(run, listEndpoint, { state: "open" })),
+    ).rejects.toThrow(/exceeds.*perPage/s);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(oversizedResponse());
-    const diffFailure = withCtx(() => _githubRequest(diffEndpoint, { n: 1 }));
+    const diffFailure = withCtx((run) => _githubRequest(run, diffEndpoint, { n: 1 }));
     await expect(diffFailure).rejects.toThrow(/exceeds/);
     await expect(diffFailure).rejects.not.toThrow(/perPage/);
     await expect(diffFailure).rejects.toThrow(/ghPrFiles/);

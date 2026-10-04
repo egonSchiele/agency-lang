@@ -5,12 +5,13 @@ import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import * as smoltalk from "smoltalk";
-import { agencyStore } from "../runtime/asyncContext.js";
+import { withRun } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { _generateImage, _generateImageLocal, _imageSources, _imageDestination } from "./image.js";
 import { MAX_IMAGE_BYTES } from "./vision.js";
 import { registerMlxImageProvider } from "./mlxImage.js";
 import type { LocalImageInputs } from "./localImageInputs.js";
+import { callHelper } from "../runtime/__tests__/testHelpers.js";
 
 /** The input images of a call with none. */
 const NO_INPUTS: LocalImageInputs = { files: [], settings: {} };
@@ -59,7 +60,7 @@ async function withClient(
     globals: {},
     callsite: { moduleId: "test", scopeName: "main", stepPath: "" },
   } as any;
-  await agencyStore.run(store, () => fn({ stack, imageGeneration, meter }));
+  await withRun(store, () => fn({ stack, imageGeneration, meter }));
 }
 
 const okResult = (overrides: any = {}) => ({
@@ -78,7 +79,7 @@ describe("_generateImage", () => {
     await withClient(
       async () => okResult(),
       async ({ stack, imageGeneration }) => {
-        const r = await _generateImage("a red bike", "", "", "", "", [], "", "");
+        const r = await callHelper(_generateImage, "a red bike", "", "", "", "", [], "", "");
         expect(r.success).toBe(true);
         if (r.success) {
           expect(r.value.mimeType).toBe("image/png");
@@ -97,7 +98,7 @@ describe("_generateImage", () => {
     await withClient(
       async () => okResult(),
       async ({ stack }) => {
-        await _generateImage("x", "", "", "", "", [], "", "");
+        await callHelper(_generateImage, "x", "", "", "", "", [], "", "");
         const chargeOrder = stack.chargeGuards.mock.invocationCallOrder[0];
         const enforceOrder = stack.enforceGuards.mock.invocationCallOrder[0];
         expect(chargeOrder).toBeLessThan(enforceOrder);
@@ -112,7 +113,7 @@ describe("_generateImage", () => {
         stack.enforceGuards.mockImplementation(() => {
           throw new Error("budget exceeded");
         });
-        await expect(_generateImage("x", "", "", "", "", [], "", "")).rejects.toThrow(
+        await expect(callHelper(_generateImage, "x", "", "", "", "", [], "", "")).rejects.toThrow(
           /budget exceeded/,
         );
         // The generation already cost money — tokens counted + event traced
@@ -127,7 +128,7 @@ describe("_generateImage", () => {
     await withClient(
       async () => okResult({ images: [] }),
       async ({ stack, imageGeneration }) => {
-        const r = await _generateImage("x", "", "", "", "", [], "", "");
+        const r = await callHelper(_generateImage, "x", "", "", "", "", [], "", "");
         expect(r.success).toBe(false);
         if (!r.success) expect(r.error).toMatch(/returned no images/);
         // The provider still charged us: full usage + tokens are accounted and the
@@ -145,7 +146,7 @@ describe("_generateImage", () => {
     await withClient(
       async () => ({ success: false, error: "no api key" }),
       async ({ stack, imageGeneration }) => {
-        const r = await _generateImage("secret prompt", "", "", "", "", [], "", "");
+        const r = await callHelper(_generateImage, "secret prompt", "", "", "", "", [], "", "");
         expect(r.success).toBe(false);
         if (!r.success) expect(r.error).toMatch(/no api key/);
         expect(stack.chargeGuards).not.toHaveBeenCalled();
@@ -160,7 +161,7 @@ describe("_generateImage", () => {
         throw new Error("provider 500 after dispatch");
       },
       async ({ meter }) => {
-        await expect(_generateImage("x", "", "", "", "", [], "", "")).rejects.toThrow(
+        await expect(callHelper(_generateImage, "x", "", "", "", "", [], "", "")).rejects.toThrow(
           /provider 500/,
         );
         await Promise.resolve();
@@ -173,7 +174,7 @@ describe("_generateImage", () => {
 
   it("returns a descriptive failure when the client has no image() support", async () => {
     await withClient(undefined, async () => {
-      const r = await _generateImage("x", "", "", "", "", [], "", "");
+      const r = await callHelper(_generateImage, "x", "", "", "", "", [], "", "");
       expect(r.success).toBe(false);
       if (!r.success) expect(r.error).toMatch(/does not support image generation/);
     });
@@ -194,7 +195,7 @@ describe("_generateImage", () => {
           { source: file, local: true },
           { source: "https://x/b.png", local: false },
         ];
-        await _generateImage("edit", "", "", "", "", sources, "", "");
+        await callHelper(_generateImage, "edit", "", "", "", "", sources, "", "");
         expect(captured.prompt).toBe("edit");
         expect(captured.images).toEqual([
           { kind: "bytes", data: new Uint8Array(Buffer.from("png bytes")), mimeType: "image/png" },
@@ -214,7 +215,7 @@ describe("_generateImage", () => {
     try {
       await withClient(impl, async () => {
         const sources = [{ source: path.join(dir, "a.png"), local: true }];
-        const r = await _generateImage("edit", "", "", "", "", sources, "", "");
+        const r = await callHelper(_generateImage, "edit", "", "", "", "", sources, "", "");
         expect(r.success).toBe(false);
         expect(impl).not.toHaveBeenCalled();
       });
@@ -313,7 +314,8 @@ describe("_generateImageLocal", () => {
   it("sends the served name and only the settings given, and returns the seed", async () => {
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 42 }] });
     await withClient(realImage, async ({ stack, imageGeneration }) => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "a lighthouse",
         "z-image-turbo",
         "1024x768",
@@ -351,7 +353,8 @@ describe("_generateImageLocal", () => {
   it("sends steps, guidance, seed, and a negative prompt when they are set", async () => {
     serve(200, { output_format: "webp", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     await withClient(realImage, async () => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "a cat",
         "chroma1-hd",
         "512x512",
@@ -379,7 +382,8 @@ describe("_generateImageLocal", () => {
   it("passes the server's refusal through as the failure", async () => {
     serve(400, { error: { message: "steps must be between 1 and 50 for Z-Image Turbo." } });
     await withClient(realImage, async ({ stack }) => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "a cat",
         "z-image-turbo",
         "1024x1024",
@@ -404,7 +408,8 @@ describe("_generateImageLocal", () => {
   it("says how to start the server when nothing answers", async () => {
     process.env.MLX_BASE_URL = "http://127.0.0.1:9/v1";
     await withClient(realImage, async () => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "a cat",
         "z-image-turbo",
         "1024x1024",
@@ -426,7 +431,8 @@ describe("_generateImageLocal", () => {
   it("refuses a chat or GGUF model, a bad format, and an empty prompt before any request", async () => {
     serve(200, {});
     await withClient(realImage, async () => {
-      const mlx = await _generateImageLocal(
+      const mlx = await callHelper(
+        _generateImageLocal,
         "a cat",
         "qwen3-tts-mlx",
         "1024x1024",
@@ -442,7 +448,8 @@ describe("_generateImageLocal", () => {
       expect(mlx.success === false && mlx.error).toMatch(
         /is an MLX model\. Local image models are diffusers models/,
       );
-      const controlnet = await _generateImageLocal(
+      const controlnet = await callHelper(
+        _generateImageLocal,
         "a cat",
         "controlnet-scribble-sdxl",
         "1024x1024",
@@ -458,7 +465,8 @@ describe("_generateImageLocal", () => {
       expect(controlnet.success === false && controlnet.error).toBe(
         'generateImageLocal failed: "controlnet-scribble-sdxl" is a ControlNet, not an image model. Pass it as the controlnet argument, with a controlImage, and name an SDXL image model as the model.',
       );
-      const gguf = await _generateImageLocal(
+      const gguf = await callHelper(
+        _generateImageLocal,
         "a cat",
         "smollm2-135m",
         "1024x1024",
@@ -472,7 +480,8 @@ describe("_generateImageLocal", () => {
         NO_INPUTS,
       );
       expect(gguf.success === false && gguf.error).toMatch(/is a GGUF model/);
-      const gif = await _generateImageLocal(
+      const gif = await callHelper(
+        _generateImageLocal,
         "a cat",
         "z-image-turbo",
         "1024x1024",
@@ -488,7 +497,8 @@ describe("_generateImageLocal", () => {
       expect(gif.success === false && gif.error).toBe(
         'generateImageLocal failed: format "gif" is not supported. Use png, jpeg, or webp.',
       );
-      const empty = await _generateImageLocal(
+      const empty = await callHelper(
+        _generateImageLocal,
         "  ",
         "z-image-turbo",
         "1024x1024",
@@ -519,7 +529,8 @@ describe("_generateImageLocal", () => {
     fs.truncateSync(path.join(dir, "huge.png"), MAX_IMAGE_BYTES + 1);
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     const generate = (image: string) =>
-      _generateImageLocal(
+      callHelper(
+        _generateImageLocal,
         "a cat",
         "diffusers:Laxhar/noobai-XL-1.1",
         "1024x1024",
@@ -586,7 +597,8 @@ describe("_generateImageLocal", () => {
       question: "",
     });
     await withClient(realImage, async () => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "add a hat to the cat",
         "flux2-klein-4b",
         "",
@@ -615,7 +627,8 @@ describe("_generateImageLocal", () => {
     fs.writeFileSync(photo, PNG);
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     await withClient(realImage, async () => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "a watercolor painting",
         "z-image-turbo",
         "",
@@ -649,7 +662,8 @@ describe("_generateImageLocal", () => {
     fs.writeFileSync(mask, MASK);
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     await withClient(realImage, async () => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "a vase of sunflowers",
         "z-image-turbo",
         "",
@@ -680,7 +694,8 @@ describe("_generateImageLocal", () => {
   it("sends the adapter name and scale when a LoRA is asked for", async () => {
     serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
     await withClient(realImage, async () => {
-      const r = await _generateImageLocal(
+      const r = await callHelper(
+        _generateImageLocal,
         "a cat",
         "diffusers:Laxhar/noobai-XL-1.1",
         "1024x1024",
@@ -703,7 +718,8 @@ describe("_generateImageLocal", () => {
       // scale are the server's defaults, not settings.
       expect(Object.keys(requests[0])).not.toContain("negative_prompt");
       serve(200, { output_format: "png", data: [{ b64_json: PNG.toString("base64"), seed: 7 }] });
-      await _generateImageLocal(
+      await callHelper(
+        _generateImageLocal,
         "a cat",
         "diffusers:Laxhar/noobai-XL-1.1",
         "1024x1024",

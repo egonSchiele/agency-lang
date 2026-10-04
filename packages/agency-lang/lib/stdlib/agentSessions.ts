@@ -1,9 +1,9 @@
-import { ambientRun } from "../runtime/asyncContext.js";
+import { currentRun, type Run } from "../runtime/asyncContext.js";
 import type { MessageJSON } from "smoltalk";
 import * as path from "path";
 import { root, list, stat, mkdir, readText, writeText, type Root } from "./contained.js";
 import { __call } from "../runtime/call.js";
-import { checkpoint, getCheckpoint } from "../runtime/checkpoint.js";
+import { checkpointFor, getCheckpointFor } from "../runtime/checkpoint.js";
 import { Checkpoint } from "../runtime/state/checkpointStore.js";
 import { _contentToString } from "./threads.js";
 
@@ -160,8 +160,8 @@ export function _installSessionHooks(onSubmit: unknown, afterTurn: unknown): voi
   hooks = { onSubmit, afterTurn };
 }
 
-function call(fn: unknown, ...args: unknown[]): Promise<unknown> {
-  return __call(ambientRun("std::agent session helper"), fn, { type: "positional", args });
+function call(run: Run, fn: unknown, ...args: unknown[]): Promise<unknown> {
+  return __call(run, fn, { type: "positional", args });
 }
 
 /**
@@ -172,12 +172,13 @@ function call(fn: unknown, ...args: unknown[]): Promise<unknown> {
  * that frame to the next `onSubmit` call.)
  */
 export async function _sessionOnSubmit(line: string): Promise<unknown> {
+  const run = currentRun();
   if (!hooks) throw new Error("_installSessionHooks was not called");
-  const reply = await call(hooks.onSubmit, line);
+  const reply = await call(run, hooks.onSubmit, line);
   if (reply === false) return reply;
-  const target = (await call(hooks.afterTurn, line)) as SaveTarget;
+  const target = (await call(run, hooks.afterTurn, line)) as SaveTarget;
   if (target) {
-    const cp = getCheckpoint(await checkpoint());
+    const cp = getCheckpointFor(run, await checkpointFor(run));
     const error = _saveSession(target.dir, target.record, cp);
     if (error) process.stdout.write(`Could not save this session: ${error}\n`);
   }

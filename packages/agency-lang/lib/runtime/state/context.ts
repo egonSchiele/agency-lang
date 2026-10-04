@@ -9,7 +9,6 @@ import { CoverageCollector } from "../coverageCollector.js";
 import { AgencyCancelledError, makeAbortCause } from "../errors.js";
 import type { AbortCause } from "../errors.js";
 import { Clock, realClock, FakeClock } from "../clock.js";
-import { agencyStore } from "../asyncContext.js";
 import { DEFAULT_MAX_CALL_DEPTH } from "../callDepth.js";
 import { InvocationUsageMeter } from "../invocationUsage.js";
 import { getSubprocessRunInfo } from "../subprocessRunInfo.js";
@@ -537,15 +536,15 @@ export class RuntimeContext<T> {
    * push/pop/push of the same dir reuses one instance — important
    * for the "pop back to A returns A's manager" semantics.
    */
-  getActiveMemoryManager(): MemoryManager | undefined {
+  getActiveMemoryManager(branchStack: StateStack): MemoryManager | undefined {
     // Resolve memory against the ACTIVE branch stack, not the top-level
     // `this.stateStack`. Inside a fork/race/tool branch the active stack
     // is that branch's own slice (seeded from the parent at fork time via
     // `inheritMemoryFrom`), so `enableMemory`/`setMemoryId` inside a branch
-    // are visible to that branch and don't leak to siblings/parent. At the
-    // top level (and outside any ALS frame) this is `this.stateStack`.
-    const stack = agencyStore.getStore()?.stack ?? this.stateStack;
-    if (!stack) return undefined;
+    // are visible to that branch and don't leak to siblings/parent.
+    //
+    // The caller passes its run's stack.
+    const stack = branchStack;
     let frame = stack.activeMemoryFrame();
     if (
       !frame &&
@@ -592,20 +591,16 @@ export class RuntimeContext<T> {
       memoryIdRef: {
         // memoryId is orthogonal to which frame is active — it lives
         // on `<stack>.other.memoryId` and persists across frame
-        // pushes/pops. Read the ACTIVE branch stack dynamically on each
-        // access (not a captured one): this manager is cached per
-        // configKey and shared across concurrent branches, so each
-        // branch's get/set must resolve to ITS own stack. Falls back to
-        // `this.stateStack` outside any ALS frame.
-        get: () => {
-          const s = agencyStore.getStore()?.stack ?? this.stateStack;
-          const id = s?.other?.memoryId;
+        // pushes/pops. Each access takes the run of the call it serves
+        // (not a captured one): this manager is cached per configKey and
+        // shared across concurrent branches, so each branch's get/set
+        // must resolve to ITS own stack.
+        get: (run) => {
+          const id = run.stack.other.memoryId;
           return typeof id === "string" ? id : "default";
         },
-        set: (id: string) => {
-          const s = agencyStore.getStore()?.stack ?? this.stateStack;
-          if (!s) return;
-          s.other.memoryId = id;
+        set: (run, id: string) => {
+          run.stack.other.memoryId = id;
         },
       },
     });

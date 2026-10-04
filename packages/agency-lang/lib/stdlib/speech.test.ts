@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm, readFile, stat, symlink, chmod } from "fs/promi
 import os from "os";
 import path from "path";
 import { realpathSync } from "fs";
-import { agencyStore } from "../runtime/asyncContext.js";
+import { withRun } from "../runtime/asyncContext.js";
 import { InvocationUsageMeter } from "../runtime/invocationUsage.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import {
@@ -16,6 +16,7 @@ import {
 } from "./speech.js";
 import { assertFfmpegAvailable, transcode } from "./ffmpeg.js";
 import type * as ffmpegModule from "./ffmpeg.js";
+import { callHelper } from "../runtime/__tests__/testHelpers.js";
 
 // No ffmpeg here: speech.ffmpeg.test.ts runs the real one.
 vi.mock("./ffmpeg.js", async (importOriginal) => ({
@@ -78,9 +79,7 @@ async function withClient(
     globals: {},
     callsite: { moduleId: "test", scopeName: "main", stepPath: "" },
   } as any;
-  await agencyStore.run(store, () =>
-    fn({ stack, transcription, speechSynthesis, meter, controller }),
-  );
+  await withRun(store, () => fn({ stack, transcription, speechSynthesis, meter, controller }));
 }
 
 const trOk = (overrides: any = {}) => ({
@@ -128,7 +127,17 @@ describe("_transcribe", () => {
       return trOk();
     };
     await withClient({ transcribe }, async ({ stack, transcription, meter }) => {
-      const text = await _transcribe(filepath, "en", [root], "whisper-1", "", "", "", "");
+      const text = await callHelper(
+        _transcribe,
+        filepath,
+        "en",
+        [root],
+        "whisper-1",
+        "",
+        "",
+        "",
+        "",
+      );
       expect(text).toBe("hello world");
       // the real path as a BlobRef + complete config forwarded
       expect(captured.source).toEqual({ kind: "path", path: realpathSync(filepath) });
@@ -155,7 +164,7 @@ describe("_transcribe", () => {
         usage: { totalTokens: 7, inputAudioTokens: 4 },
       });
     await withClient({ transcribe }, async ({ transcription }) => {
-      await _transcribe(filepath, "", [root], "whisper-1", "", "", "", "");
+      await callHelper(_transcribe, filepath, "", [root], "whisper-1", "", "", "", "");
       const arg = transcription.mock.calls[0][0];
       expect(arg.textPreview).toBe("secret words");
       expect(arg).not.toHaveProperty("raw");
@@ -169,9 +178,9 @@ describe("_transcribe", () => {
     await symlink(target, linkPath);
     const transcribe = vi.fn();
     await withClient({ transcribe: transcribe as any }, async () => {
-      await expect(_transcribe(linkPath, "", [root], "whisper-1", "", "", "", "")).rejects.toThrow(
-        /symlink/,
-      );
+      await expect(
+        callHelper(_transcribe, linkPath, "", [root], "whisper-1", "", "", "", ""),
+      ).rejects.toThrow(/symlink/);
       expect(transcribe).not.toHaveBeenCalled();
     });
   });
@@ -179,9 +188,9 @@ describe("_transcribe", () => {
   it("throws a clear error when the client has no transcribe() support", async () => {
     const filepath = await makeAudioFile();
     await withClient({}, async () => {
-      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toThrow(
-        /does not support transcription/,
-      );
+      await expect(
+        callHelper(_transcribe, filepath, "", [root], "whisper-1", "", "", "", ""),
+      ).rejects.toThrow(/does not support transcription/);
     });
   });
 
@@ -189,9 +198,9 @@ describe("_transcribe", () => {
     const filepath = await makeAudioFile();
     const transcribe: TranscribeImpl = async () => ({ success: false, error: "boom" });
     await withClient({ transcribe }, async ({ stack, transcription, meter }) => {
-      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toThrow(
-        /transcribe failed: boom/,
-      );
+      await expect(
+        callHelper(_transcribe, filepath, "", [root], "whisper-1", "", "", "", ""),
+      ).rejects.toThrow(/transcribe failed: boom/);
       const usage = meter.snapshot();
       expect(usage.unpricedCallCount).toBe(1);
       expect(usage.unpricedCallCount).toBeGreaterThan(0);
@@ -204,7 +213,17 @@ describe("_transcribe", () => {
     const transcribe = vi.fn();
     await withClient({ transcribe: transcribe as any }, async ({ meter }) => {
       await expect(
-        _transcribe(path.join(root, "nope.wav"), "", [root], "whisper-1", "", "", "", ""),
+        callHelper(
+          _transcribe,
+          path.join(root, "nope.wav"),
+          "",
+          [root],
+          "whisper-1",
+          "",
+          "",
+          "",
+          "",
+        ),
       ).rejects.toThrow();
       expect(transcribe).not.toHaveBeenCalled();
       expect(meter.snapshot().unpricedCallCount).toBe(0);
@@ -217,9 +236,9 @@ describe("_transcribe", () => {
     await withClient({ transcribe: transcribe as any }, async ({ controller, meter }) => {
       const reason = new AgencyCancelledError("cancelled early");
       controller.abort(reason);
-      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toBe(
-        reason,
-      );
+      await expect(
+        callHelper(_transcribe, filepath, "", [root], "whisper-1", "", "", "", ""),
+      ).rejects.toBe(reason);
       expect(transcribe).not.toHaveBeenCalled();
       expect(meter.snapshot().unpricedCallCount).toBe(0);
     });
@@ -234,9 +253,9 @@ describe("_transcribe", () => {
       throw reason;
     };
     await withClient({ transcribe }, async ({ meter, transcription }) => {
-      await expect(_transcribe(filepath, "", [root], "whisper-1", "", "", "", "")).rejects.toBe(
-        reason,
-      );
+      await expect(
+        callHelper(_transcribe, filepath, "", [root], "whisper-1", "", "", "", ""),
+      ).rejects.toBe(reason);
       const usage = meter.snapshot();
       expect(usage.unpricedCallCount).toBe(1); // meteredDispatch records it
       expect(usage.unpricedCallCount).toBeGreaterThan(0);
@@ -250,7 +269,8 @@ describe("_synthesizeSpeech", () => {
     const out = path.join(root, "out.mp3");
     const speak: SpeakImpl = async () => speakOk();
     await withClient({ speak }, async ({ stack, speechSynthesis, meter }) => {
-      const returned = await _synthesizeSpeech(
+      const returned = await callHelper(
+        _synthesizeSpeech,
         "hi",
         out,
         "alloy",
@@ -280,7 +300,8 @@ describe("_synthesizeSpeech", () => {
       return speakOk();
     };
     await withClient({ speak }, async () => {
-      await _synthesizeSpeech(
+      await callHelper(
+        _synthesizeSpeech,
         "hi",
         path.join(root, "calm.mp3"),
         "alloy",
@@ -292,7 +313,8 @@ describe("_synthesizeSpeech", () => {
         "",
         "Calm and slow.",
       );
-      await _synthesizeSpeech(
+      await callHelper(
+        _synthesizeSpeech,
         "hi",
         path.join(root, "plain.mp3"),
         "alloy",
@@ -314,7 +336,7 @@ describe("_synthesizeSpeech", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async ({ meter, stack }) => {
       await expect(
-        _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
+        callHelper(_synthesizeSpeech, "hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/already exists/);
       expect(speak).not.toHaveBeenCalled();
       expect(meter.snapshot().unpricedCallCount).toBe(0);
@@ -327,7 +349,7 @@ describe("_synthesizeSpeech", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async () => {
       await expect(
-        _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
+        callHelper(_synthesizeSpeech, "hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/does not match format/);
       expect(speak).not.toHaveBeenCalled();
     });
@@ -341,7 +363,7 @@ describe("_synthesizeSpeech", () => {
         throw new Error("budget exceeded");
       });
       await expect(
-        _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
+        callHelper(_synthesizeSpeech, "hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/budget exceeded/);
       // usage + statelog already recorded before the trip; no artifact on disk
       expect(speechSynthesis).toHaveBeenCalledTimes(1);
@@ -354,7 +376,7 @@ describe("_synthesizeSpeech", () => {
     const speak: SpeakImpl = async () => speakOk({ mimeType: "audio/wav" }); // != mp3's audio/mpeg
     await withClient({ speak }, async ({ stack }) => {
       await expect(
-        _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
+        callHelper(_synthesizeSpeech, "hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/provider returned/);
       expect(stack.localCost).toBeCloseTo(0.015); // accounted
       await expect(stat(out)).rejects.toThrow(); // not published
@@ -366,7 +388,7 @@ describe("_synthesizeSpeech", () => {
     const speak: SpeakImpl = async () => ({ success: false, error: "no key" });
     await withClient({ speak }, async ({ meter, stack }) => {
       await expect(
-        _synthesizeSpeech("hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
+        callHelper(_synthesizeSpeech, "hi", out, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/speak failed: no key/);
       expect(meter.snapshot().unpricedCallCount).toBe(1);
       expect(stack.localCost).toBe(0); // an unresolved attempt bills no money
@@ -380,7 +402,8 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async ({ meter }) => {
       await expect(
-        _synthesizeSpeech(
+        callHelper(
+          _synthesizeSpeech,
           "hi",
           path.join(root, "o.mp3"),
           "alloy",
@@ -401,7 +424,8 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async () => {
       await expect(
-        _synthesizeSpeech(
+        callHelper(
+          _synthesizeSpeech,
           "hi",
           path.join(root, "o.mp3"),
           "alloy",
@@ -414,7 +438,8 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
         ),
       ).rejects.toThrow(/speed/);
       await expect(
-        _synthesizeSpeech(
+        callHelper(
+          _synthesizeSpeech,
           "hi",
           path.join(root, "o2.mp3"),
           "alloy",
@@ -437,7 +462,18 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
       return speakOk();
     };
     await withClient({ speak }, async () => {
-      const out = await _synthesizeSpeech("hi", "", "alloy", "tts-1", "", ".MP3", 1, [root], "");
+      const out = await callHelper(
+        _synthesizeSpeech,
+        "hi",
+        "",
+        "alloy",
+        "tts-1",
+        "",
+        ".MP3",
+        1,
+        [root],
+        "",
+      );
       expect(seenFormat).toBe("mp3");
       expect(out.endsWith(".mp3")).toBe(true);
     });
@@ -448,7 +484,7 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     const transcribe = vi.fn();
     await withClient({ transcribe: transcribe as any }, async ({ meter }) => {
       await expect(
-        _transcribe(filepath, "", [root], "whisper-1", "", "", "bogus", ""),
+        callHelper(_transcribe, filepath, "", [root], "whisper-1", "", "", "bogus", ""),
       ).rejects.toThrow(/timestampGranularity/);
       expect(transcribe).not.toHaveBeenCalled();
       expect(meter.snapshot().unpricedCallCount).toBe(0);
@@ -461,7 +497,7 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async () => {
       await expect(
-        _synthesizeSpeech("hi", link, "alloy", "tts-1", "", "mp3", 1, [root], ""),
+        callHelper(_synthesizeSpeech, "hi", link, "alloy", "tts-1", "", "mp3", 1, [root], ""),
       ).rejects.toThrow(/symlink/);
       expect(speak).not.toHaveBeenCalled();
     });
@@ -475,7 +511,7 @@ describe("argument validation + preflight (before any paid dispatch)", () => {
     const transcribe = vi.fn();
     await withClient({ transcribe: transcribe as any }, async ({ meter }) => {
       await expect(
-        _transcribe(filepath, "", [root], "whisper-1", "", "", "", ""),
+        callHelper(_transcribe, filepath, "", [root], "whisper-1", "", "", "", ""),
       ).rejects.toThrow();
       expect(transcribe).not.toHaveBeenCalled();
       expect(meter.snapshot().unpricedCallCount).toBe(0);
@@ -536,7 +572,8 @@ describe("_speakLocal", () => {
       return pcmOk([1, 0, 2, 0]);
     };
     await withClient({ speak }, async ({ stack, speechSynthesis, meter }) => {
-      const returned = await _speakLocal(
+      const returned = await callHelper(
+        _speakLocal,
         "Hello there.",
         out,
         "qwen3-tts-mlx",
@@ -574,8 +611,9 @@ describe("_speakLocal", () => {
       return pcmOk([0, 0]);
     };
     await withClient({ speak }, async () => {
-      await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "pcm", [], 1);
-      await _speakLocal(
+      await callHelper(_speakLocal, "Hi.", "", "qwen3-tts-mlx", "", "", "pcm", [], 1);
+      await callHelper(
+        _speakLocal,
         "Hi.",
         "",
         "mlx:mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit",
@@ -603,7 +641,7 @@ describe("_speakLocal", () => {
       (_, i) => `Sentence number ${i} says something short.`,
     ).join(" ");
     await withClient({ speak }, async () => {
-      await _speakLocal(text, out, "qwen3-tts-mlx", "", "", "pcm", [root], 1);
+      await callHelper(_speakLocal, text, out, "qwen3-tts-mlx", "", "", "pcm", [root], 1);
     });
     const bytes = [...new Uint8Array(await readFile(out))];
     expect(bytes.length).toBeGreaterThan(1);
@@ -621,7 +659,7 @@ describe("_speakLocal", () => {
       (_, i) => `Sentence number ${i} says something short.`,
     ).join(" ");
     await withClient({ speak }, async ({ speechSynthesis, meter }) => {
-      await _speakLocal(text, "", "qwen3-tts-mlx", "ryan", "Calm.", "wav", [], 1);
+      await callHelper(_speakLocal, text, "", "qwen3-tts-mlx", "ryan", "Calm.", "wav", [], 1);
       expect(calls.length).toBeGreaterThan(3);
       expect(calls.every((c) => c.text.length <= LOCAL_PIECE_CHARS)).toBe(true);
       expect(
@@ -658,7 +696,7 @@ describe("_speakLocal", () => {
         (_, i) => `Sentence number ${i} says something short.`,
       ).join(" ");
       await expect(
-        _speakLocal(text, "", "qwen3-tts-mlx", "", "", "wav", [], 1),
+        callHelper(_speakLocal, text, "", "qwen3-tts-mlx", "", "", "wav", [], 1),
       ).rejects.toBeInstanceOf(AgencyCancelledError);
       expect(calls).toBe(1);
     });
@@ -674,7 +712,9 @@ describe("_speakLocal", () => {
         return { success: false, error: "Connection error." };
       };
       await withClient({ speak }, async () => {
-        await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [], 1)).rejects.toThrow(
+        await expect(
+          callHelper(_speakLocal, "Hi.", "", "qwen3-tts-mlx", "", "", "wav", [], 1),
+        ).rejects.toThrow(
           "speakLocal failed: no MLX server answered at http://127.0.0.1:9100/v1. Start one with:\n  agency local serve --speech qwen3-tts-mlx",
         );
       });
@@ -694,7 +734,7 @@ describe("_speakLocal", () => {
     const speak = vi.fn();
     await withClient({ speak: speak as any }, async () => {
       await expect(
-        _speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root], 1),
+        callHelper(_speakLocal, "Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root], 1),
       ).rejects.toThrow(/already exists/);
       expect(speak).not.toHaveBeenCalled();
     });
@@ -705,14 +745,14 @@ describe("_speakLocal", () => {
       { speak: async () => ({ success: false, error: '"alloy" is not a voice of this model.' }) },
       async () => {
         await expect(
-          _speakLocal("Hi.", "", "qwen3-tts-mlx", "alloy", "", "wav", [], 1),
+          callHelper(_speakLocal, "Hi.", "", "qwen3-tts-mlx", "alloy", "", "wav", [], 1),
         ).rejects.toThrow(/not a voice of this model/);
       },
     );
     await withClient({ speak: async () => speakOk({ mimeType: "audio/wav" }) }, async () => {
-      await expect(_speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "wav", [], 1)).rejects.toThrow(
-        /returned "audio\/wav"/,
-      );
+      await expect(
+        callHelper(_speakLocal, "Hi.", "", "qwen3-tts-mlx", "", "", "wav", [], 1),
+      ).rejects.toThrow(/returned "audio\/wav"/);
     });
   });
 
@@ -761,7 +801,7 @@ describe("_speakLocal formats and speed", () => {
   it("takes the format from the extension, and transcodes the joined wav to mp3", async () => {
     const out = path.join(root, "out.mp3");
     await withClient({ speak }, async () => {
-      await _speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1);
+      await callHelper(_speakLocal, "Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1);
     });
     expect(transcode).toHaveBeenCalledTimes(1);
     const [wav, format, speed] = vi.mocked(transcode).mock.calls[0];
@@ -775,7 +815,7 @@ describe("_speakLocal formats and speed", () => {
   it("lets an explicit format win over the extension", async () => {
     const out = path.join(root, "out.mp3");
     await withClient({ speak }, async () => {
-      await _speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root], 1);
+      await callHelper(_speakLocal, "Hi.", out, "qwen3-tts-mlx", "", "", "wav", [root], 1);
     });
     expect(transcode).not.toHaveBeenCalled();
     expect(isWav(new Uint8Array(await readFile(out)))).toBe(true);
@@ -785,8 +825,8 @@ describe("_speakLocal formats and speed", () => {
     let wavPath = "";
     let m4aPath = "";
     await withClient({ speak }, async () => {
-      wavPath = await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "", [], 1);
-      m4aPath = await _speakLocal("Hi.", "", "qwen3-tts-mlx", "", "", "m4a", [], 1);
+      wavPath = await callHelper(_speakLocal, "Hi.", "", "qwen3-tts-mlx", "", "", "", [], 1);
+      m4aPath = await callHelper(_speakLocal, "Hi.", "", "qwen3-tts-mlx", "", "", "m4a", [], 1);
     });
     try {
       expect(path.extname(wavPath)).toBe(".wav");
@@ -801,8 +841,28 @@ describe("_speakLocal formats and speed", () => {
 
   it("stretches wav and pcm through ffmpeg when the speed is not 1, starting from a wav", async () => {
     await withClient({ speak }, async () => {
-      await _speakLocal("Hi.", path.join(root, "a.wav"), "qwen3-tts-mlx", "", "", "", [root], 1.5);
-      await _speakLocal("Hi.", path.join(root, "b.pcm"), "qwen3-tts-mlx", "", "", "", [root], 0.5);
+      await callHelper(
+        _speakLocal,
+        "Hi.",
+        path.join(root, "a.wav"),
+        "qwen3-tts-mlx",
+        "",
+        "",
+        "",
+        [root],
+        1.5,
+      );
+      await callHelper(
+        _speakLocal,
+        "Hi.",
+        path.join(root, "b.pcm"),
+        "qwen3-tts-mlx",
+        "",
+        "",
+        "",
+        [root],
+        0.5,
+      );
     });
     const calls = vi.mocked(transcode).mock.calls;
     expect(calls.map((c) => [c[1], c[2]])).toEqual([
@@ -817,9 +877,9 @@ describe("_speakLocal formats and speed", () => {
     vi.mocked(transcode).mockRejectedValue(new Error("ffmpeg exited with code 1: no codec"));
     const out = path.join(root, "out.mp3");
     await withClient({ speak }, async ({ meter, speechSynthesis }) => {
-      await expect(_speakLocal("Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1)).rejects.toThrow(
-        "no codec",
-      );
+      await expect(
+        callHelper(_speakLocal, "Hi.", out, "qwen3-tts-mlx", "", "", "", [root], 1),
+      ).rejects.toThrow("no codec");
       const usage = meter.snapshot();
       expect(usage.entries).toHaveLength(1);
       expect(usage.unpricedCallCount).toBe(0);

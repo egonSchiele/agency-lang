@@ -24,6 +24,8 @@ export type { CallsiteLocation } from "./asyncContext.js";
 export {
   agencyStore,
   getRuntimeContext,
+  currentRun,
+  callPlain,
   runInTestContext,
   runInBootstrapFrame,
   withRun,

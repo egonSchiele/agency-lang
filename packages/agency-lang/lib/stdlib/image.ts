@@ -1,7 +1,7 @@
 import { performance } from "node:perf_hooks";
 import * as path from "node:path";
 import * as smoltalk from "smoltalk";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { success, failure, type ResultValue } from "../runtime/result.js";
 import { recordUsage, meteredDispatch } from "../runtime/recordPaidUsage.js";
 import { classifySource } from "./thread.js";
@@ -89,12 +89,13 @@ type OneImage = { image: ImageGenResult["images"][number] } | { error: string };
  *  every image function shares: usage and tokens (only on success), the
  *  `imageGeneration` statelog event, and the guards. */
 async function generateOne(
+  run: Run,
   prompt: string,
   input: ImageInput,
   config: Partial<ImageConfig>,
   configuredModel: string,
 ): Promise<OneImage> {
-  const { ctx, stack } = getRuntimeContext();
+  const { ctx, stack } = run;
   if (!ctx.llmClient.image) {
     return {
       error:
@@ -166,6 +167,7 @@ export async function _generateImage(
   apiKey: string,
   baseUrl: string,
 ): Promise<ResultValue> {
+  const run = currentRun();
   // Declarative config. n:1 is explicit so a provider default of >1 can never
   // silently drop images.
   const config: Partial<ImageConfig> = omitEmpty({
@@ -185,7 +187,7 @@ export async function _generateImage(
   } catch (err) {
     return failure(`Image generation failed: ${(err as Error).message}`);
   }
-  const out = await generateOne(prompt, input, config, model);
+  const out = await generateOne(run, prompt, input, config, model);
   if ("error" in out) {
     return failure(`Image generation failed: ${out.error}`);
   }
@@ -301,6 +303,7 @@ export async function _generateImageLocal(
   loraScale: number | null,
   inputs: LocalImageInputs,
 ): Promise<ResultValue> {
+  const run = currentRun();
   const fail = (message: string) => failure(`generateImageLocal failed: ${message}`);
   const checked = checkLocalImageArgs(prompt, model, format);
   if ("error" in checked) {
@@ -325,7 +328,7 @@ export async function _generateImageLocal(
       references: referenceCount(inputs),
     },
   };
-  const out = await generateOne(prompt, prompt, config, checked.servedName);
+  const out = await generateOne(run, prompt, prompt, config, checked.servedName);
   if ("error" in out) {
     if (isNoServerError(out.error)) {
       return fail(

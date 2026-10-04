@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   agencyStore,
+  callPlain,
   getRuntimeContext,
+  withRun,
   runInBootstrapFrame,
   runInTestContext,
   withCallsite,
@@ -27,13 +29,14 @@ function makeStore() {
 
 describe("agencyStore", () => {
   it("throws when called outside a frame", () => {
-    expect(() => getRuntimeContext()).toThrow(/outside an Agency execution frame/);
+    expect(() => getRuntimeContext()).toThrow(/outside an Agency run/);
   });
 
-  it("returns the store inside agencyStore.run", () => {
+  it("returns the run inside withRun", () => {
     const seed = makeStore();
-    agencyStore.run(seed, () => {
+    withRun(seed, (run) => {
       const s = getRuntimeContext();
+      expect(s).toBe(run);
       expect(s.ctx).toBe(seed.ctx);
       expect(s.stack).toBe(seed.stack);
       expect(s.threads).toBe(seed.threads);
@@ -48,38 +51,80 @@ describe("agencyStore", () => {
     });
   });
 
-  it("propagates across await", async () => {
+  it("is readable until the first await, and throws after it", async () => {
     const seed = makeStore();
-    await agencyStore.run(seed, async () => {
-      await Promise.resolve();
-      const s = getRuntimeContext();
-      expect(s.ctx).toBe(seed.ctx);
-      await new Promise((r) => setTimeout(r, 1));
+    await withRun(seed, async () => {
       expect(getRuntimeContext().ctx).toBe(seed.ctx);
+      await Promise.resolve();
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
+      await new Promise((r) => setTimeout(r, 1));
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
+      // The frame itself still follows the async flow.
+      expect(agencyStore.getStore()).toBe(seed);
     });
   });
 
-  it("propagates across setImmediate", async () => {
+  it("the frame propagates across setImmediate, and the run is not readable there", async () => {
     const seed = makeStore();
-    await agencyStore.run(seed, async () => {
-      await new Promise<void>((resolve) =>
+    await withRun(seed, async () => {
+      const seen = await new Promise<{ frame: unknown; error: unknown }>((resolve) =>
         setImmediate(() => {
-          expect(getRuntimeContext().ctx).toBe(seed.ctx);
-          resolve();
+          let error: unknown;
+          try {
+            getRuntimeContext();
+          } catch (e) {
+            error = e;
+          }
+          resolve({ frame: agencyStore.getStore(), error });
         }),
       );
+      expect(seen.frame).toBe(seed);
+      expect(String(seen.error)).toMatch(/read after an await/);
     });
   });
 
-  it("propagates across Promise.all branches", async () => {
+  it("the frame propagates across Promise.all branches", async () => {
     const seed = makeStore();
-    await agencyStore.run(seed, async () => {
+    await withRun(seed, async () => {
       const results = await Promise.all([
-        Promise.resolve().then(() => getRuntimeContext().ctx),
-        Promise.resolve().then(() => getRuntimeContext().ctx),
+        Promise.resolve().then(() => agencyStore.getStore()?.ctx),
+        Promise.resolve().then(() => agencyStore.getStore()?.ctx),
       ]);
       expect(results[0]).toBe(seed.ctx);
       expect(results[1]).toBe(seed.ctx);
+    });
+  });
+
+  it("callPlain makes the run readable for the synchronous part of one call", async () => {
+    const seed = makeStore();
+    await withRun(seed, async (run) => {
+      await Promise.resolve();
+      expect(callPlain(run, getRuntimeContext, [])).toBe(run);
+      // The call is over, so the run is no longer readable.
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
+    });
+  });
+
+  it("callPlain puts the previous run back when the function throws", async () => {
+    // One module variable serves the whole process. If a throw skipped the
+    // restore, the next helper would read another request's run.
+    const outer = makeStore();
+    const inner = makeStore();
+    await withRun(outer, async (outerRun) => {
+      await Promise.resolve();
+      callPlain(outerRun, () => {
+        expect(() =>
+          withRun(inner, (innerRun) =>
+            callPlain(innerRun, () => {
+              throw new Error("helper failed");
+            }, []),
+          ),
+        ).toThrow("helper failed");
+        // Back in the outer call: the outer run is readable again.
+        expect(getRuntimeContext()).toBe(outerRun);
+      }, []);
+      // And after the outer call nothing is left behind.
+      expect(() => getRuntimeContext()).toThrow(/read after an await/);
     });
   });
 
@@ -87,14 +132,14 @@ describe("agencyStore", () => {
     const outer = makeStore();
     const innerStack = new StateStack();
     const innerThreads = new ThreadStore();
-    await agencyStore.run(outer, async () => {
+    await withRun(outer, async (outerRun) => {
       expect(getRuntimeContext().stack).toBe(outer.stack);
-      await agencyStore.run({ ...outer, stack: innerStack, threads: innerThreads }, async () => {
+      await withRun({ ...outer, stack: innerStack, threads: innerThreads }, async () => {
         expect(getRuntimeContext().stack).toBe(innerStack);
         expect(getRuntimeContext().threads).toBe(innerThreads);
         expect(getRuntimeContext().ctx).toBe(outer.ctx);
       });
-      expect(getRuntimeContext().stack).toBe(outer.stack);
+      expect(callPlain(outerRun, getRuntimeContext, []).stack).toBe(outer.stack);
     });
   });
 
@@ -104,13 +149,15 @@ describe("agencyStore", () => {
     const sawA: any[] = [];
     const sawB: any[] = [];
     await Promise.all([
-      agencyStore.run(a, async () => {
+      withRun(a, async (run) => {
         await new Promise((r) => setTimeout(r, 5));
-        sawA.push(getRuntimeContext().ctx);
+        sawA.push(callPlain(run, getRuntimeContext, []).ctx);
+        // The other branch's run is not this branch's frame.
+        expect(() => callPlain(b, getRuntimeContext, [])).toThrow(WrongRunError);
       }),
-      agencyStore.run(b, async () => {
+      withRun(b, async (run) => {
         await new Promise((r) => setTimeout(r, 2));
-        sawB.push(getRuntimeContext().ctx);
+        sawB.push(callPlain(run, getRuntimeContext, []).ctx);
       }),
     ]);
     expect(sawA[0]).toBe(a.ctx);

@@ -1,16 +1,14 @@
-import { ambientRun } from "../runtime/asyncContext.js";
 import * as readline from "readline";
 import process from "process";
 import { wholePath, stat, readText, writeText, mkdir } from "./contained.js";
 import { __call } from "../runtime/call.js";
-import { getRuntimeContext } from "../runtime/asyncContext.js";
+import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { modifiers, RESET, styles } from "@/utils/termcolors.js";
 import { color, colors, bgColors } from "../utils/termcolors.js";
 import { _promptsAutocomplete } from "./ui.js";
 import { visualWidth, wrapText } from "./layout/ansi.js";
 import { isFailure } from "../runtime/result.js";
 import { isAbortError, makeAbortCause, AgencyCancelledError } from "../runtime/errors.js";
-import type { AbortCause } from "../runtime/errors.js";
 import { normalizeModelUsage } from "../runtime/utils.js";
 import { exitProcessNow } from "../runtime/exitProcess.js";
 // ---------------------------------------------------------------------------
@@ -37,8 +35,8 @@ import { exitProcessNow } from "../runtime/exitProcess.js";
  *  AgencyFunction values dispatch through the runtime's normal call
  *  path (handlers, ALS context, retries) rather than being invoked as
  *  raw JS. */
-async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
-  return (await __call(ambientRun("std::ui/cli bridge"), fn, { type: "positional", args })) as T;
+async function callBridgeFn<T>(run: Run, fn: unknown, ...args: unknown[]): Promise<T> {
+  return (await __call(run, fn, { type: "positional", args })) as T;
 }
 
 /** One-line summary of a multi-line buffer: its first line + a line count.
@@ -1088,21 +1086,6 @@ function installCancelKey(
   };
 }
 
-/** Safely fetch the active RuntimeContext, or null when none is bound
- *  (e.g. tests drive `_runLineRepl` without a runtime). */
-function activeCtxOrNull(): {
-  cancel: (r?: string, cause?: AbortCause) => void;
-  resetCancel: () => void;
-  readonly aborted: boolean;
-} | null {
-  try {
-    const { ctx } = getRuntimeContext();
-    return (ctx as any) ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Snapshot of the per-turn stats `_runLineRepl` collects before
  * calling `onSubmit` and after it returns. `printFooter` projects the
@@ -1139,14 +1122,12 @@ type TokenSnapshot = {
 };
 
 /** Read the cumulative input/output token counts (and per-model
- *  breakdown) from the active RuntimeContext's GlobalStore. Returns
- *  zeros when no context is active or the token-stats slot is missing
- *  (defensive — `_runLineRepl` always runs inside a context, but tests
- *  sometimes don't). */
-function readTokenSnapshot(): TokenSnapshot {
+ *  breakdown) from the REPL's RuntimeContext's GlobalStore. Returns
+ *  zeros when the token-stats slot is missing (defensive — a test's
+ *  context sometimes has none). */
+function readTokenSnapshot(ctx: Run["ctx"]): TokenSnapshot {
   const empty: TokenSnapshot = { inputTokens: 0, outputTokens: 0, models: {} };
   try {
-    const { ctx } = getRuntimeContext();
     const stats = ctx?.globals?.getTokenStats?.();
     if (!stats || typeof stats !== "object") return empty;
     // Per-model breakdown (updateTokenStats). Snapshotted so the footer
@@ -1247,6 +1228,7 @@ function fmtModels(models: string[]): string {
 }
 
 async function printFooter(
+  run: Run,
   status: unknown,
   useTTY: boolean,
   turn: TurnStats | null = null,
@@ -1254,7 +1236,7 @@ async function printFooter(
   if (!useTTY || status == null) return;
   let info: { left?: unknown; right?: unknown; context?: unknown } | null;
   try {
-    info = (await callBridgeFn(status)) as typeof info;
+    info = (await callBridgeFn(run, status)) as typeof info;
   } catch {
     return;
   }
@@ -1329,6 +1311,7 @@ export async function _runLineRepl(
   historyMax: number,
   paletteCommands: unknown,
 ): Promise<void> {
+  const run = currentRun();
   const { entries: initialHistory, expansions } = loadHistory(historyFile, historyMax);
   const palette = _slashPalette(paletteCommands);
   const rl = readline.createInterface({
@@ -1389,7 +1372,7 @@ export async function _runLineRepl(
   // readline. Stops any running spinner first (see comment above).
   // Installed on THIS execution's context (not globalThis) so the
   // override lives and dies with the run that owns the readline.
-  const { ctx: replCtx } = getRuntimeContext();
+  const replCtx = run.ctx;
   const prevOverride = replCtx.inputOverride;
   replCtx.inputOverride = (p: string): Promise<string> => {
     stopActiveSpinner();
@@ -1489,14 +1472,13 @@ export async function _runLineRepl(
       // it returns zeros if the runtime context or token-stats slot
       // is missing, so the footer never breaks a working turn.
       const turnStartMs = Date.now();
-      const tokensBefore = readTokenSnapshot();
+      const tokensBefore = readTokenSnapshot(replCtx);
       activeStopSpinner = startSpinner(useTTY);
 
       // Esc cancels the in-flight request. The watcher calls `ctx.cancel`,
       // which aborts the active LLM fetch; an AgencyCancelledError then
       // propagates out of `onSubmit` and is caught below. Torn down in the
       // `finally` so idle-prompt Esc is unaffected.
-      const turnCtx = activeCtxOrNull();
       const teardownCancelKey = installCancelKey(rl, useTTY, () => {
         // Stop the spinner the instant Esc is pressed so the user gets
         // immediate feedback, then abort the in-flight request. The
@@ -1506,14 +1488,14 @@ export async function _runLineRepl(
         // Esc is a recoverable interrupt: stop this turn's work and hand
         // control back, but keep the REPL session alive (vs a terminal
         // userKill from TS `cancel()`).
-        turnCtx?.cancel("cancelled by user", makeAbortCause({ kind: "userInterrupt" }));
+        replCtx.cancel("cancelled by user", makeAbortCause({ kind: "userInterrupt" }));
       });
 
       try {
-        reply = await callBridgeFn(onSubmit, line);
+        reply = await callBridgeFn(run, onSubmit, line);
       } catch (err: any) {
         stopActiveSpinner();
-        const tokensAfter = readTokenSnapshot();
+        const tokensAfter = readTokenSnapshot(replCtx);
         if (isAbortError(err)) {
           // User pressed Esc: the turn was cancelled, not a real failure.
           // The thread was already repaired in runPrompt; the abort
@@ -1526,7 +1508,7 @@ export async function _runLineRepl(
         }
         // Still print the footer so the user sees how long the turn ran
         // and whether tokens flowed (useful on both cancel and error).
-        await printFooter(status, useColor, {
+        await printFooter(run, status, useColor, {
           elapsedMs: Date.now() - turnStartMs,
           inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
           outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,
@@ -1540,21 +1522,21 @@ export async function _runLineRepl(
         // where Esc fired but the turn finished before hitting a
         // cancellation checkpoint. Without this, the next turn's first LLM
         // call would see an already-aborted signal and fail immediately.
-        if (turnCtx?.aborted) turnCtx.resetCancel();
+        if (replCtx.aborted) replCtx.resetCancel();
       }
       stopActiveSpinner();
       if (reply === false) break;
       if (typeof reply === "string" && reply.length > 0) {
         process.stdout.write(reply + "\n");
       }
-      const tokensAfter = readTokenSnapshot();
+      const tokensAfter = readTokenSnapshot(replCtx);
       // Per-turn footer (WL2). Reads the same `status` callback the
       // TUI's status bar uses, plus our locally-tracked turn stats
       // (elapsed + tokens up/down), so a future "the agent stopped
       // mid-sentence" report can be diagnosed at a glance: `↓0`
       // means our render pipeline ate it, non-zero means the LLM
       // actually streamed nothing further.
-      await printFooter(status, useColor, {
+      await printFooter(run, status, useColor, {
         elapsedMs: Date.now() - turnStartMs,
         inputTokens: tokensAfter.inputTokens - tokensBefore.inputTokens,
         outputTokens: tokensAfter.outputTokens - tokensBefore.outputTokens,

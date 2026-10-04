@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { stripBoundParams } from "./stripBoundParams.js";
 import { approve, pass } from "./interrupts.js";
-import { agencyStore, withPushedHandler, type Run } from "./asyncContext.js";
+import { agencyStore, callPlain, withPushedHandler, type Run } from "./asyncContext.js";
 import { withCallDepth } from "./callDepth.js";
 import { checkFailureArgs } from "./failurePropagation.js";
 import { normalizeForeignResult } from "./result.js";
@@ -219,7 +219,7 @@ export class AgencyFunction {
       }
       // `_fn` may be imported TypeScript that built a Result by hand.
       return normalizeForeignResult(
-        await (this._takesRun ? this._fn(run, ...args) : this._fn(...args)),
+        await (this._takesRun ? this._fn(run, ...args) : callPlain(run, this._fn, args)),
       );
     });
   }

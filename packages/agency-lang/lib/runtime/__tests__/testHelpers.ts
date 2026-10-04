@@ -5,7 +5,7 @@ import { PendingPromiseStore } from "../state/pendingPromiseStore.js";
 import type { DebuggerState } from "../../debugger/debuggerState.js";
 import { ThreadStore } from "../state/threadStore.js";
 import type { RuntimeContext } from "../state/context.js";
-import { ambientRun, runInTestContext, type Run } from "../asyncContext.js";
+import { ambientRun, callPlain, runInTestContext, type Run } from "../asyncContext.js";
 
 type TestFn = (name: string, fn: () => unknown, timeout?: number) => unknown;
 
@@ -40,6 +40,20 @@ export function inFrameOf<T>(ctx: RuntimeContext<any>, stack: StateStack, fn: (r
  */
 export function testRun(): Run {
   return ambientRun("A test");
+}
+
+/**
+ * Call a helper the way the runtime does: under the run of the frame the
+ * test is in, so the helper can read the run on its first line.
+ *
+ * A test body that has already awaited something needs this. After the
+ * first `await` in the body, a bare `_helper()` call is no longer inside
+ * the synchronous part that `runInTestContext` set the run for.
+ *
+ *   const result = await callHelper(_fetch, url, "", {}, [], "GET", null);
+ */
+export function callHelper<A extends unknown[], T>(fn: (...args: A) => T, ...args: A): T {
+  return callPlain(testRun(), fn, args);
 }
 
 /**

@@ -3,7 +3,14 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { approve, reject } from "./interruptResponse.js";
 import type { InterruptApprove, InterruptReject, InterruptResponse } from "./interruptResponse.js";
-import { agencyStore, runInBootstrapFrame, sameRun, withRun, type Run } from "./asyncContext.js";
+import {
+  agencyStore,
+  callPlain,
+  runInBootstrapFrame,
+  sameRun,
+  withRun,
+  type Run,
+} from "./asyncContext.js";
 import { exitProcess } from "./exitProcess.js";
 import {
   resolveInvocation,
@@ -313,7 +320,7 @@ async function runHandlerChain(
           result = await runAsHandler(run, entry, (handlerRun) =>
             entry.takesRun
               ? (entry.fn as RunHandlerFn)(handlerRun, interruptObj)
-              : (entry.fn as HandlerFn)(interruptObj),
+              : callPlain(handlerRun, entry.fn as HandlerFn, [interruptObj]),
           );
         } finally {
           try {

@@ -10,7 +10,7 @@ import type {
 import type { CallbackName } from "../types/function.js";
 import type { LLMRetryReason } from "./llmRetry.js";
 import { AgencyFunction } from "./agencyFunction.js";
-import { sameRun, withRun, type Run } from "./asyncContext.js";
+import { callPlain, sameRun, withRun, type Run } from "./asyncContext.js";
 import { sendCallbackToParent } from "./callbackForwarding.js";
 import { AgencyAbort, RunControlSignal } from "./errors.js";
 import type { RuntimeContext } from "./state/context.js";
@@ -181,7 +181,7 @@ async function invokeCallback(
     return;
   }
   // Plain JS callbacks (from AgencyCallbacks TS arg) — just async funcs.
-  await fn(data);
+  await callPlain(run, fn, [data]);
 }
 
 async function fireWithGuard(

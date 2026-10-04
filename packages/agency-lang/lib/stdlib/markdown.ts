@@ -1,4 +1,4 @@
-import { ambientRun } from "../runtime/asyncContext.js";
+import { currentRun, type Run } from "../runtime/asyncContext.js";
 import { Block, markdownParser } from "tarsec/parsers/markdown";
 import { __call } from "../runtime/call.js";
 import { color } from "@/utils/termcolors.js";
@@ -43,26 +43,26 @@ export function _parseMarkdown(input: string): MarkdownParseResult {
 
 type Node = Record<string, unknown>;
 
-async function callFn(fn: unknown, node: Node): Promise<Node> {
-  return (await __call(ambientRun("std::markdown callFn"), fn, {
+async function callFn(run: Run, fn: unknown, node: Node): Promise<Node> {
+  return (await __call(run, fn, {
     type: "positional",
     args: [node],
   })) as Node;
 }
 
-async function walkChildren(nodes: unknown[], fn: unknown): Promise<unknown[]> {
+async function walkChildren(run: Run, nodes: unknown[], fn: unknown): Promise<unknown[]> {
   const out: unknown[] = [];
   for (const n of nodes) {
     if (n == null || typeof n !== "object") {
       out.push(n);
       continue;
     }
-    out.push(await walkNode(n as Node, fn));
+    out.push(await walkNode(run, n as Node, fn));
   }
   return out;
 }
 
-async function walkListItems(items: unknown[], fn: unknown): Promise<unknown[]> {
+async function walkListItems(run: Run, items: unknown[], fn: unknown): Promise<unknown[]> {
   const out: unknown[] = [];
   for (const raw of items) {
     if (raw == null || typeof raw !== "object") {
@@ -73,24 +73,24 @@ async function walkListItems(items: unknown[], fn: unknown): Promise<unknown[]> 
     // ListItem.content is now an array of Blocks (was inline nodes before
     // tarsec's nested-blocks change). Walk each entry as a node either way.
     if (Array.isArray(item.content)) {
-      item.content = await walkChildren(item.content as unknown[], fn);
+      item.content = await walkChildren(run, item.content as unknown[], fn);
     }
     out.push(item);
   }
   return out;
 }
 
-async function walkNode(node: Node, fn: unknown): Promise<Node> {
-  const transformed = await callFn(fn, node);
+async function walkNode(run: Run, node: Node, fn: unknown): Promise<Node> {
+  const transformed = await callFn(run, fn, node);
   if (transformed == null || typeof transformed !== "object") {
     return transformed as unknown as Node;
   }
   const out: Node = { ...transformed };
   if (Array.isArray(out.content)) {
-    out.content = await walkChildren(out.content as unknown[], fn);
+    out.content = await walkChildren(run, out.content as unknown[], fn);
   }
   if (Array.isArray(out.items)) {
-    out.items = await walkListItems(out.items as unknown[], fn);
+    out.items = await walkListItems(run, out.items as unknown[], fn);
   }
   return out;
 }
@@ -99,6 +99,7 @@ async function walkNode(node: Node, fn: unknown): Promise<Node> {
  *  top-down. `fn` returns a (possibly new) node; children of the returned
  *  node are then walked. The input AST is not mutated. */
 export async function _walkMarkdown(blocks: unknown, fn: unknown): Promise<unknown[]> {
+  const run = currentRun();
   if (!Array.isArray(blocks)) return [];
   const out: unknown[] = [];
   for (const b of blocks as unknown[]) {
@@ -106,7 +107,7 @@ export async function _walkMarkdown(blocks: unknown, fn: unknown): Promise<unkno
       out.push(b);
       continue;
     }
-    out.push(await walkNode(b as Node, fn));
+    out.push(await walkNode(run, b as Node, fn));
   }
   return out;
 }

@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import { DeterministicClient } from "./deterministicClient.js";
 import { DETERMINISTIC_IMAGE_COST } from "../constants.js";
 import { _generateImage } from "../stdlib/image.js";
-import { agencyStore } from "./asyncContext.js";
+import { withRun } from "./asyncContext.js";
 import { StateStack } from "./state/stateStack.js";
 import { CostGuard } from "./guard.js";
 import { InvocationUsageMeter } from "./invocationUsage.js";
+import { callHelper } from "./__tests__/testHelpers.js";
 
 // Note: SmoltalkClient.image's `{ model: DEFAULT_IMAGE_MODEL, ...config }` spread
 // (default applied only when config sets no model) is trivial by construction and
@@ -50,8 +51,8 @@ function imageFrame(stack: StateStack) {
 describe("deterministic image cost/guard path (regression)", () => {
   it("bills the deterministic image cost against the branch", async () => {
     const stack = new StateStack();
-    await agencyStore.run(imageFrame(stack), async () => {
-      const r = await _generateImage("a red bike", "", "", "", "", [], "", "");
+    await withRun(imageFrame(stack), async () => {
+      const r = await callHelper(_generateImage, "a red bike", "", "", "", "", [], "", "");
       expect(r.success).toBe(true);
     });
     expect(stack.localCost).toBeCloseTo(DETERMINISTIC_IMAGE_COST);
@@ -60,8 +61,10 @@ describe("deterministic image cost/guard path (regression)", () => {
   it("trips a guard tighter than the deterministic image cost", async () => {
     const stack = new StateStack();
     stack.guards.push(new CostGuard(DETERMINISTIC_IMAGE_COST / 2));
-    await agencyStore.run(imageFrame(stack), async () => {
-      await expect(_generateImage("x", "", "", "", "", [], "", "")).rejects.toBeTruthy();
+    await withRun(imageFrame(stack), async () => {
+      await expect(
+        callHelper(_generateImage, "x", "", "", "", "", [], "", ""),
+      ).rejects.toBeTruthy();
     });
   });
 });

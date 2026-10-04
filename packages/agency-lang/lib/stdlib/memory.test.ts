@@ -23,13 +23,13 @@ import { __internal_setMemoryId, __internal_shouldRunMemory } from "./memory.js"
 
 type FakeManager = {
   setMemoryIdCalls: string[];
-  setMemoryId(id: string): void;
+  setMemoryId(run: unknown, id: string): void;
 };
 
 function makeFakeCtx(): { ctx: any; manager: FakeManager } {
   const manager: FakeManager = {
     setMemoryIdCalls: [],
-    setMemoryId(id: string) {
+    setMemoryId(_run: unknown, id: string) {
       this.setMemoryIdCalls.push(id);
     },
   };
@@ -89,6 +89,7 @@ import { beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { callHelper } from "../runtime/__tests__/testHelpers.js";
 
 describe("std::memory enable/disable/block", () => {
   let tmpRoot: string;
@@ -129,7 +130,7 @@ describe("std::memory enable/disable/block", () => {
   it("_enableMemory pushes a frame on top of nothing", async () => {
     const ctx = makeCtx();
     await withCtx(ctx, async () => {
-      await _enableMemory({ dir: dirA });
+      await callHelper(_enableMemory, { dir: dirA });
     });
   });
 
@@ -137,9 +138,9 @@ describe("std::memory enable/disable/block", () => {
     const ctx = makeCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
-      await _enableMemory({ dir: dirA });
+      await callHelper(_enableMemory, { dir: dirA });
       const beforeFrames = (execCtx.stateStack.other.memoryFrames as any[]).length;
-      await _enableMemory({ dir: dirA });
+      await callHelper(_enableMemory, { dir: dirA });
       const afterFrames = (execCtx.stateStack.other.memoryFrames as any[]).length;
       expect(afterFrames).toBe(beforeFrames);
     });
@@ -149,8 +150,8 @@ describe("std::memory enable/disable/block", () => {
     const ctx = makeCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
-      await _enableMemory({ dir: dirA });
-      await _enableMemory({ dir: dirB });
+      await callHelper(_enableMemory, { dir: dirA });
+      await callHelper(_enableMemory, { dir: dirB });
       const frames = execCtx.stateStack.other.memoryFrames as any[];
       expect(frames.length).toBe(2);
       expect(frames[1].configKey).toBe(fs.realpathSync(dirB));
@@ -161,9 +162,9 @@ describe("std::memory enable/disable/block", () => {
     const ctx = makeCtx();
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
-      await _enableMemory({ dir: dirA });
-      await _enableMemory({ dir: dirB });
-      _disableMemory();
+      await callHelper(_enableMemory, { dir: dirA });
+      await callHelper(_enableMemory, { dir: dirB });
+      callHelper(_disableMemory);
       const frames = execCtx.stateStack.other.memoryFrames as any[];
       expect(frames.length).toBe(1);
       expect(frames[0].configKey).toBe(fs.realpathSync(dirA));
@@ -181,7 +182,7 @@ describe("std::memory enable/disable/block", () => {
       embeddings: { model: "emb-1" },
     };
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
-      await _enableMemory(richConfig);
+      await callHelper(_enableMemory, richConfig);
     });
     const json = execCtx.stateStack.toJSON();
     const restored = StateStack.fromJSON(json);
@@ -195,10 +196,10 @@ describe("std::memory enable/disable/block", () => {
     fs.mkdirSync(dirJson);
     const ctx = makeCtx({ dir: dirJson });
     const execCtx = await ctx.createExecutionContext({ runId: "r1" });
-    expect(execCtx.getActiveMemoryManager()).toBeDefined();
+    expect(execCtx.getActiveMemoryManager(execCtx.stateStack)).toBeDefined();
     await runInTestContext(execCtx, execCtx.stateStack, new ThreadStore(), async () => {
-      _disableMemory();
+      callHelper(_disableMemory);
     });
-    expect(execCtx.getActiveMemoryManager()).toBeUndefined();
+    expect(execCtx.getActiveMemoryManager(execCtx.stateStack)).toBeUndefined();
   });
 });

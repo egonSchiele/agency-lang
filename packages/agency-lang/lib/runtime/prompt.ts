@@ -294,16 +294,17 @@ async function dispatchFailureToThrow(
  *  past the cap. A memory failure is logged, not fatal — except a guard-
  *  exceeded error, which must keep unwinding. */
 async function runPostTurnMemory(
-  ctx: RuntimeContext<GraphState>,
+  run: Run,
   targetStack: StateStack,
   messages: MessageThread,
 ): Promise<void> {
-  const memoryManager = targetStack.anyGuardOverBudget() ? null : ctx.getActiveMemoryManager();
+  if (targetStack.anyGuardOverBudget()) return;
+  const memoryManager = run.ctx.getActiveMemoryManager(run.stack);
   if (!memoryManager) return;
   try {
     const original = messages.getMessages();
-    await memoryManager.onTurn(original);
-    const plan = await memoryManager.compactIfNeeded(original);
+    await memoryManager.onTurn(run, original);
+    const plan = await memoryManager.compactIfNeeded(run, original);
     if (plan) {
       // Reassemble the thread from the ORIGINAL smoltalk Message
       // instances so tool_call metadata, ids, and other class-level
@@ -325,7 +326,9 @@ async function runPostTurnMemory(
     }
   } catch (err) {
     if (isGuardExceededError(err)) throw err;
-    createLogger(ctx.logLevel).warn(`[memory] post-turn hook failed: ${(err as Error).message}`);
+    createLogger(run.ctx.logLevel).warn(
+      `[memory] post-turn hook failed: ${(err as Error).message}`,
+    );
   }
 }
 
@@ -355,9 +358,7 @@ async function _runPrompt({
   callLabel?: string | null;
 }): Promise<RunPromptResult> {
   const ctx = run.ctx as RuntimeContext<GraphState>;
-  if (ctx.isCancelled(stateStack)) {
-    throw new AgencyCancelledError();
-  }
+  if (ctx.isCancelled(stateStack)) throw new AgencyCancelledError();
 
   // Pre-call cost-guard gate. If any active guard (including shared
   // parent guards inherited by this branch) is already over budget —
@@ -464,7 +465,7 @@ async function _runPrompt({
   });
 
   recordCompletionUsage(ctx, targetStack, completion, clientConfig.model, usageKind);
-  await runPostTurnMemory(ctx, targetStack, messages);
+  await runPostTurnMemory(run, targetStack, messages);
 
   await callHook(run, {
     name: "onLLMCallEnd",
@@ -900,10 +901,10 @@ export async function runPrompt(run: Run, args: RunPromptArgs): Promise<any> {
     // (re-entries after a later tool-batch bailout skip this step).
     await requestStepWithTripRetry("initialLlmCall", async () => {
       let injectedFactsContent: string | null = null;
-      const recallManager = ctx.getActiveMemoryManager();
+      const recallManager = ctx.getActiveMemoryManager(run.stack);
       if (memoryOption && recallManager) {
         try {
-          const facts = await recallManager.recallForInjection(promptText(prompt));
+          const facts = await recallManager.recallForInjection(run, promptText(prompt));
           if (facts) {
             injectedFactsContent = `Relevant context from memory:\n${facts}`;
             messages.push(smoltalk.systemMessage(injectedFactsContent));

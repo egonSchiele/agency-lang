@@ -1,4 +1,3 @@
-import { ambientRun } from "../runtime/asyncContext.js";
 import process from "process";
 import {
   Screen,
@@ -14,7 +13,7 @@ import type { Frame } from "@/tui/frame.js";
 import { toANSI } from "@/tui/render/ansi.js";
 import { withBottomCursor, installRegion, resetRegion } from "./ui-region.js";
 import { __call } from "../runtime/call.js";
-import { __ctx } from "../runtime/asyncContext.js";
+import { __ctx, currentRun, type Run } from "../runtime/asyncContext.js";
 import { isFailure, success, failure } from "../runtime/result.js";
 import { AgencyCancelledError } from "../runtime/errors.js";
 import prompts from "prompts";
@@ -104,7 +103,12 @@ const uiStateByCtx = new WeakMap<object, UiContextState>();
 const fallbackUiState: UiContextState = makeUiContextState();
 
 function getUiState(): UiContextState {
-  const ctx = __ctx();
+  return uiStateFor(__ctx());
+}
+
+/** The UI state of one run's context. A helper that works across an
+ *  `await` takes it once, from its run, and keeps it. */
+function uiStateFor(ctx: object | undefined): UiContextState {
   if (!ctx) return fallbackUiState;
   let s = uiStateByCtx.get(ctx);
   if (!s) {
@@ -228,8 +232,8 @@ export function _triggerRender(): void {
  *  AgencyFunction values dispatch through the runtime's normal call
  *  path (preserving handlers, ALS context, retry semantics) rather
  *  than being invoked as raw JS. */
-async function callBridgeFn<T>(fn: unknown, ...args: unknown[]): Promise<T> {
-  return (await __call(ambientRun("std::ui bridge"), fn, { type: "positional", args })) as T;
+async function callBridgeFn<T>(run: Run, fn: unknown, ...args: unknown[]): Promise<T> {
+  return (await __call(run, fn, { type: "positional", args })) as T;
 }
 
 /** Shape of the `state` arg `_beginSubmit` mutates while the async
@@ -380,9 +384,13 @@ export function _installConsoleCapture(messages: string[]): void {
 }
 
 export function _uninstallConsoleCapture(): void {
+  uninstallConsoleCapture(getUiState());
+}
+
+function uninstallConsoleCapture(ui: UiContextState): void {
   // Clear the per-context target first so a stale ALS frame can't keep
   // routing captured writes into a buffer the caller has dropped.
-  getUiState().captureTarget = null;
+  ui.captureTarget = null;
   if (captureInstallCount > 0) captureInstallCount -= 1;
   // Keep the overrides installed while any other context is still
   // capturing. Restoring the originals here would silently blank that
@@ -426,7 +434,11 @@ export function _spinnerFrame(startedAtMs: number, nowMs = Date.now()): string {
  *  and from any future "force exit" plumbing. Wakes the loop so
  *  `_replIsDone` runs immediately. */
 export function _signalReplExit(): void {
-  getUiState().replExitSignaled = true;
+  signalReplExit(getUiState());
+}
+
+function signalReplExit(ui: UiContextState): void {
+  ui.replExitSignaled = true;
   _triggerRender();
 }
 
@@ -446,6 +458,7 @@ export function _resetReplExitSignal(): void {
 }
 
 export function _beginSubmit(state: SubmitTargetState, submitted: string, onSubmit: unknown): void {
+  const run = currentRun();
   state.transcript.messages.push(`{bright-blue-fg}You{/bright-blue-fg} ${submitted}`);
   if (state.submit) {
     state.submit.busy = true;
@@ -456,14 +469,14 @@ export function _beginSubmit(state: SubmitTargetState, submitted: string, onSubm
   setTimeout(() => {
     void (async () => {
       try {
-        const reply = await callBridgeFn<unknown>(onSubmit, submitted);
+        const reply = await callBridgeFn<unknown>(run, onSubmit, submitted);
         if (reply === false) {
           // Signal exit via the bridge instead of mutating
           // `state.done`. The reducer can't see mutations on this
           // stale `state` record once subsequent keys have produced
           // new states (e.g. a modal that opened and closed during
           // onSubmit). See `_signalReplExit` comment above.
-          _signalReplExit();
+          signalReplExit(uiStateFor(run.ctx));
           return;
         }
         // Surface Failure-typed returns explicitly. Agency functions
@@ -517,6 +530,17 @@ export async function _runLoop(
   isDoneFn: unknown,
   tickMs?: number | null,
 ): Promise<any> {
+  return runLoop(currentRun(), initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
+}
+
+async function runLoop(
+  run: Run,
+  initialState: any,
+  renderFn: unknown,
+  handleKeyFn: unknown,
+  isDoneFn: unknown,
+  tickMs?: number | null,
+): Promise<any> {
   // Coerce `null` / `0` / negative to undefined so Screen.runLoop's
   // `if (opts.tickMs !== undefined)` guard treats them as "no tick".
   // The Agency wrapper passes a default of `null` to mean "off" — JS
@@ -530,9 +554,9 @@ export async function _runLoop(
   try {
     return await screen.runLoop({
       initialState,
-      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
-      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
-      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
+      render: async (s) => await callBridgeFn<TuiElement>(run, renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(run, handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(run, isDoneFn, s),
       tickMs: effectiveTickMs,
     });
   } finally {
@@ -561,21 +585,23 @@ export async function _runReplLoop(
   tickMs: number | null | undefined,
   transcriptMessages: string[],
 ): Promise<any> {
+  const run = currentRun();
+  const ui = uiStateFor(run.ctx);
   // Reset the exit signal so a leftover flag from a previous REPL
   // doesn't immediately terminate this one.
-  _resetReplExitSignal();
+  ui.replExitSignaled = false;
   _installConsoleCapture(transcriptMessages);
   try {
-    return await _runLoop(initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
+    return await runLoop(run, initialState, renderFn, handleKeyFn, isDoneFn, tickMs);
   } finally {
-    _uninstallConsoleCapture();
+    uninstallConsoleCapture(ui);
     // Clear the exit signal so it can't leak across REPL invocations
     // in the same process (e.g. nested test runs).
-    _resetReplExitSignal();
+    ui.replExitSignaled = false;
     // Cancel any choice prompt left dangling by an exception path so
     // the awaiting Agency caller sees a rejection instead of a hang.
     // No-op when no prompt is open.
-    _cancelChoice("REPL loop exited before choice was made");
+    cancelChoice(ui, "REPL loop exited before choice was made");
   }
 }
 
@@ -1028,7 +1054,10 @@ export function _resolveChoice(answer: string): void {
  *  break out of any prompt left hanging by an exception. No-op when
  *  no prompt is open. */
 export function _cancelChoice(reason: string): void {
-  const ui = getUiState();
+  cancelChoice(getUiState(), reason);
+}
+
+function cancelChoice(ui: UiContextState, reason: string): void {
   if (!ui.pendingChoice) return;
   const { reject } = ui.pendingChoice;
   ui.pendingChoice = null;
@@ -1090,6 +1119,7 @@ export async function _runLoopHybrid(
   tickMs: number,
   bottomRows: number,
 ): Promise<any> {
+  const run = currentRun();
   ensureBridgeState();
   const hybridOutput: OutputTarget =
     bridgeOutputTarget instanceof FrameRecorder
@@ -1105,9 +1135,9 @@ export async function _runLoopHybrid(
   try {
     return await hybridScreen.runLoop({
       initialState,
-      render: async (s) => await callBridgeFn<TuiElement>(renderFn, s),
-      handleKey: async (s, ev) => await callBridgeFn(handleKeyFn, s, ev),
-      isDone: async (s) => await callBridgeFn<boolean>(isDoneFn, s),
+      render: async (s) => await callBridgeFn<TuiElement>(run, renderFn, s),
+      handleKey: async (s, ev) => await callBridgeFn(run, handleKeyFn, s, ev),
+      isDone: async (s) => await callBridgeFn<boolean>(run, isDoneFn, s),
       tickMs,
     });
   } finally {

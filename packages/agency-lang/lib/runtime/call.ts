@@ -1,6 +1,6 @@
 import { AgencyFunction } from "./agencyFunction.js";
 import type { CallType } from "./agencyFunction.js";
-import type { Run } from "./asyncContext.js";
+import { callPlain, type Run } from "./asyncContext.js";
 import {
   checkTsFunctionArgs,
   checkResultMethodCall,
@@ -120,7 +120,9 @@ export async function __call(
     target.name || "(anonymous)",
     descriptor.args,
   );
-  return normalizeForeignResult(await target(...descriptor.args));
+  return normalizeForeignResult(
+    await callPlain(run, target as (...args: unknown[]) => unknown, descriptor.args),
+  );
 }
 
 export async function __callMethod(
@@ -219,5 +221,5 @@ export async function __callMethod(
     throw new Error(`Named arguments are not supported for non-Agency function '${String(prop)}'`);
   }
   // Reuse the single property lookup while preserving `this` binding.
-  return Reflect.apply(target, obj, descriptor.args);
+  return callPlain(run, target as (...args: unknown[]) => unknown, descriptor.args, obj);
 }
